@@ -657,6 +657,8 @@ export async function updateDownPayment(id: number, formData: FormData) {
 }
 export async function deleteSalesOrder(id: number) {
   "use server"
+  // Fix #23: Add permission check
+  await requirePermission("delete_sales_orders")
   await prisma.salesOrder.delete({ where: { id } })
   revalidatePath("/sales/orders")
   return { success: true }
@@ -664,6 +666,8 @@ export async function deleteSalesOrder(id: number) {
 
 export async function deleteSalesInvoice(id: number) {
   "use server"
+  // Fix #23: Add permission check
+  await requirePermission("delete_sales_invoices")
   await prisma.salesInvoice.delete({ where: { id } })
   revalidatePath("/sales/invoices")
   return { success: true }
@@ -671,6 +675,8 @@ export async function deleteSalesInvoice(id: number) {
 
 export async function deleteSalesReturn(id: number) {
   "use server"
+  // Fix #23: Add permission check
+  await requirePermission("delete_sales_returns")
   await prisma.salesReturn.delete({ where: { id } })
   revalidatePath("/sales/returns")
   return { success: true }

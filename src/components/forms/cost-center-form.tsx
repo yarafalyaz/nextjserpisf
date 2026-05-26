@@ -4,7 +4,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label, Textarea, Checkbox } from "@heroui/react"
+import { Input, Label, TextArea, Checkbox } from "@heroui/react"
 
 export function CostCenterForm({ costCenter }: { costCenter?: any } = {}) {
   const router = useRouter()
@@ -39,7 +39,7 @@ export function CostCenterForm({ costCenter }: { costCenter?: any } = {}) {
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <Textarea id="description" name="description" rows={2} placeholder="Deskripsi cost center" defaultValue={costCenter?.description ?? ""} />
+          <TextArea id="description" name="description" rows={2} placeholder="Deskripsi cost center" defaultValue={costCenter?.description ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Checkbox name="isActive" defaultSelected={costCenter?.isActive !== false}>Aktif</Checkbox>

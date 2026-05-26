@@ -29,7 +29,11 @@ export default async function EditLeadPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit Lead: {lead.name}</h1>
       </div>
-      <LeadForm lead={lead} />
+      <LeadForm lead={{
+        ...lead,
+        estimatedValue: lead.estimatedValue ? Number(lead.estimatedValue) : null,
+        expectedCloseDate: lead.expectedCloseDate ? lead.expectedCloseDate.toISOString() : null,
+      }} />
     </div>
   )
 }

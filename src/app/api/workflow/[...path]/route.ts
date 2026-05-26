@@ -1,22 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
+import { auth } from "@/lib/auth/auth"
 import { revalidatePath } from "next/cache"
 
-const MODULE_MAP: Record<string, { model: string; revalidate: string }> = {
-  "sales/quotations": { model: "quotation", revalidate: "/sales/quotations" },
-  "sales/orders": { model: "salesOrder", revalidate: "/sales/orders" },
-  "sales/invoices": { model: "salesInvoice", revalidate: "/sales/invoices" },
-  "purchase/requests": { model: "purchaseRequest", revalidate: "/purchase/requests" },
-  "purchase/orders": { model: "purchaseOrder", revalidate: "/purchase/orders" },
-  "purchase/bills": { model: "vendorBill", revalidate: "/purchase/bills" },
-  "hrm/leave": { model: "leaveRequest", revalidate: "/hrm/leave" },
-  "hrm/overtime": { model: "overtimeRequest", revalidate: "/hrm/overtime" },
+const MODULE_MAP: Record<string, { model: string; revalidate: string; permission: string }> = {
+  "sales/quotations": { model: "quotation", revalidate: "/sales/quotations", permission: "approve_quotations" },
+  "sales/orders": { model: "salesOrder", revalidate: "/sales/orders", permission: "approve_sales_orders" },
+  "sales/invoices": { model: "salesInvoice", revalidate: "/sales/invoices", permission: "approve_sales_invoices" },
+  "purchase/requests": { model: "purchaseRequest", revalidate: "/purchase/requests", permission: "approve_purchase_requests" },
+  "purchase/orders": { model: "purchaseOrder", revalidate: "/purchase/orders", permission: "approve_purchase_orders" },
+  "purchase/bills": { model: "vendorBill", revalidate: "/purchase/bills", permission: "approve_vendor_bills" },
+  "hrm/leave": { model: "leaveRequest", revalidate: "/hrm/leave", permission: "approve_leave_requests" },
+  "hrm/overtime": { model: "overtimeRequest", revalidate: "/hrm/overtime", permission: "approve_overtime_requests" },
 }
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  // Auth check — reject unauthenticated requests
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const { path } = await params
   // path = ["sales", "quotations", "123", "approve"]
   const action = path[path.length - 1] // "approve" or "reject"
@@ -26,6 +33,17 @@ export async function POST(
   const config = MODULE_MAP[module]
   if (!config) {
     return NextResponse.json({ error: "Module not found" }, { status: 404 })
+  }
+
+  // Permission check — super_admin bypasses
+  const userRoles = session.user.roles as string[] | undefined
+  const userPermissions = session.user.permissions as string[] | undefined
+  if (!userRoles?.includes("super_admin") && !userPermissions?.includes(config.permission)) {
+    return NextResponse.json({ error: "Forbidden: Anda tidak memiliki izin untuk aksi ini" }, { status: 403 })
+  }
+
+  if (action !== "approve" && action !== "reject") {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   }
 
   const newStatus = action === "approve" ? "approved" : "rejected"

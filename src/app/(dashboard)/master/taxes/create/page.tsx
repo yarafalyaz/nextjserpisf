@@ -6,7 +6,7 @@ import { useTransition } from "react"
 import { createTax } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { Input, Textarea, Select, ListBox, Checkbox } from "@heroui/react"
+import { Input, TextArea, Select, ListBox, Checkbox } from "@heroui/react"
 
 export default function CreateTaxPage() {
   const router = useRouter()
@@ -69,7 +69,7 @@ export default function CreateTaxPage() {
           <AppDatePicker label="Berlaku Sampai" name="effectiveTo" className="w-full" />
 
           <div className="sm:col-span-2">
-            <Textarea label="Deskripsi" name="description" placeholder="Deskripsi pajak (opsional)" className="w-full" />
+            <TextArea label="Deskripsi" name="description" placeholder="Deskripsi pajak (opsional)" className="w-full" />
           </div>
 
           <div className="sm:col-span-2 flex flex-wrap gap-6">

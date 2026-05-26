@@ -2,6 +2,7 @@
 
 import { signIn, signOut } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
 
@@ -31,7 +32,10 @@ export async function logoutAction() {
 }
 
 export async function changePassword(formData: FormData) {
-  const userId = Number(formData.get("userId"))
+  // Fix #17: Validate userId from session, not formData (IDOR prevention)
+  const sessionUser = await requireAuth()
+  const userId = Number(sessionUser.id)
+
   const currentPassword = formData.get("currentPassword") as string
   const newPassword = formData.get("newPassword") as string
 
@@ -63,6 +67,9 @@ export async function changePassword(formData: FormData) {
 }
 
 export async function createUser(formData: FormData) {
+  // Fix #19: Add permission check
+  await requirePermission("manage_users")
+
   const name = formData.get("name") as string
   const email = formData.get("email") as string
   const password = formData.get("password") as string
@@ -96,6 +103,9 @@ export async function createUser(formData: FormData) {
 }
 
 export async function updateUserRoles(userId: number, roleIds: number[]) {
+  // Fix #20: Add permission check — prevents privilege escalation
+  await requirePermission("manage_users")
+
   await prisma.user.update({
     where: { id: userId },
     data: {
@@ -110,6 +120,9 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
 }
 
 export async function toggleUserActive(userId: number) {
+  // Fix #21: Add permission check
+  await requirePermission("manage_users")
+
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
   })
@@ -124,7 +137,10 @@ export async function toggleUserActive(userId: number) {
 }
 
 export async function updateProfile(formData: FormData) {
-  const userId = Number(formData.get("userId"))
+  // Fix #18: Validate userId from session (IDOR prevention)
+  const sessionUser = await requireAuth()
+  const userId = Number(sessionUser.id)
+
   const name = formData.get("name") as string
   const email = formData.get("email") as string
 

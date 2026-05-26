@@ -37,7 +37,8 @@ export async function createTicket(formData: FormData) {
 export async function updateTicket(id: number, formData: FormData) {
   "use server"
 
-  const user = await requirePermission("create_tickets")
+  // Fix #35: Harusnya edit_tickets, bukan create_tickets
+  const user = await requirePermission("edit_tickets")
 
   const ticket = await prisma.crmTicket.update({
     where: { id },
@@ -60,6 +61,8 @@ export async function updateTicket(id: number, formData: FormData) {
 }
 export async function deleteTicket(id: number) {
   "use server"
+  // Fix #22: Add permission check
+  await requirePermission("delete_tickets")
   await prisma.crmTicket.delete({ where: { id } })
   revalidatePath("/crm/tickets")
   return { success: true }
@@ -67,6 +70,8 @@ export async function deleteTicket(id: number) {
 
 export async function deleteLead(id: number) {
   "use server"
+  // Fix #22: Add permission check
+  await requirePermission("delete_leads")
   await prisma.lead.delete({ where: { id } })
   revalidatePath("/crm/leads")
   return { success: true }
