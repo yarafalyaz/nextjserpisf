@@ -12,6 +12,7 @@ export async function createAssetCategory(formData: FormData) {
   const category = await prisma.assetCategory.create({
     data: {
       name: formData.get("name") as string,
+      code: formData.get("code") as string | null,
       depreciationRate: formData.get("depreciationRate") ? Number(formData.get("depreciationRate")) : null,
       usefulLife: formData.get("usefulLife") ? Number(formData.get("usefulLife")) : null,
     },
@@ -49,6 +50,8 @@ export async function createAssetTransfer(formData: FormData) {
       assetId,
       fromLocation: formData.get("fromLocation") as string | null,
       toLocation,
+      fromEmployeeId: formData.get("fromEmployeeId") ? Number(formData.get("fromEmployeeId")) : null,
+      toEmployeeId: formData.get("toEmployeeId") ? Number(formData.get("toEmployeeId")) : null,
       transferDate: new Date(formData.get("transferDate") as string),
       notes: formData.get("notes") as string | null,
       createdBy: Number(user.id),
@@ -121,6 +124,7 @@ export async function updateAssetCategory(id: number, formData: FormData) {
     where: { id },
     data: {
       name: formData.get("name") as string,
+      code: formData.get("code") as string | null,
       depreciationRate: formData.get("depreciationRate") ? Number(formData.get("depreciationRate")) : null,
       usefulLife: formData.get("usefulLife") ? Number(formData.get("usefulLife")) : null,
     },
@@ -144,6 +148,8 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
       assetId,
       fromLocation: formData.get("fromLocation") as string | null,
       toLocation,
+      fromEmployeeId: formData.get("fromEmployeeId") ? Number(formData.get("fromEmployeeId")) : null,
+      toEmployeeId: formData.get("toEmployeeId") ? Number(formData.get("toEmployeeId")) : null,
       transferDate: new Date(formData.get("transferDate") as string),
       notes: formData.get("notes") as string | null,
       createdBy: Number(user.id),

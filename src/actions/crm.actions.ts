@@ -9,11 +9,19 @@ import { revalidatePath } from "next/cache"
 export async function createTicket(formData: FormData) {
   const user = await requirePermission("create_tickets")
 
+  const { generateDocumentNumber } = await import("@/lib/utils/document-number")
+  const ticketNumber = await generateDocumentNumber("TKT", "simple")
+
   const ticket = await prisma.crmTicket.create({
     data: {
+      ticketNumber,
       subject: formData.get("subject") as string,
       description: formData.get("description") as string | null,
       customerId: formData.get("customerId") ? Number(formData.get("customerId")) : null,
+      customerName: formData.get("customerName") as string | null,
+      customerEmail: formData.get("customerEmail") as string | null,
+      customerPhone: formData.get("customerPhone") as string | null,
+      type: formData.get("type") as string | null,
       priority: formData.get("priority") as string || "medium",
       assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
       status: "open",
@@ -37,10 +45,13 @@ export async function updateTicket(id: number, formData: FormData) {
       subject: formData.get("subject") as string,
       description: formData.get("description") as string | null,
       customerId: formData.get("customerId") ? Number(formData.get("customerId")) : null,
+      customerName: formData.get("customerName") as string | null,
+      customerEmail: formData.get("customerEmail") as string | null,
+      customerPhone: formData.get("customerPhone") as string | null,
+      type: formData.get("type") as string | null,
       priority: formData.get("priority") as string || "medium",
       assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
-      status: "open",
-      createdBy: Number(user.id),
+      resolutionNotes: formData.get("resolutionNotes") as string | null,
     },
   })
 
