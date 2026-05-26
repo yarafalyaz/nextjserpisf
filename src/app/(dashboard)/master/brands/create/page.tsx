@@ -5,6 +5,7 @@ import { useTransition } from "react"
 import { createBrand } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, Label } from "@heroui/react"
 
 export default function CreateBrandPage() {
   const router = useRouter()
@@ -39,8 +40,8 @@ export default function CreateBrandPage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Brand *</label>
-            <input id="name" name="name" className="form-input" placeholder="Nama brand" required />
+            <Label htmlFor="name">Nama Brand *</Label>
+            <Input id="name" name="name" placeholder="Nama brand" required />
           </div>
         </div>
 

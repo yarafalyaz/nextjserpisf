@@ -10,6 +10,7 @@ import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function VendorBillDetailPage({
   params,
@@ -34,7 +35,7 @@ export default async function VendorBillDetailPage({
       <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Purchase",href:"/purchase"},{label:"Bills",href:"/purchase/bills"},{label:"Detail"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tagihan {bill.documentNo}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div className="flex gap-2 items-center">
           <span className={`status-badge status-${bill.status}`}>{bill.status}</span>
   <div className="flex gap-2">
           <Link href={`/purchase/bills/${bill.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
@@ -80,7 +81,7 @@ export default async function VendorBillDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted uppercase tracking-wide">Grand Total</span>
-            <span className="text-[0.9375rem] text-foreground font-medium" style={{ fontSize: "1.25rem" }}>{formatCurrency(Number(bill.grandTotal))}</span>
+            <span className="text-xl text-foreground font-medium">{formatCurrency(Number(bill.grandTotal))}</span>
           </div>
         </div>
       </div>
@@ -91,32 +92,30 @@ export default async function VendorBillDetailPage({
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Item</h2>
         </div>
         <div className="p-4 px-5">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Deskripsi</th>
-                <th style={{ textAlign: "right" }}>Qty</th>
-                <th style={{ textAlign: "right" }}>Harga</th>
-                <th style={{ textAlign: "right" }}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Deskripsi</DetailTableTh>
+              <DetailTableTh align="right">Qty</DetailTableTh>
+              <DetailTableTh align="right">Harga</DetailTableTh>
+              <DetailTableTh align="right">Total</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {bill.items.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.description || "-"}</td>
-                  <td className="text-right">{Number(item.qty)}</td>
-                  <td className="text-right">{formatCurrency(Number(item.unitPrice))}</td>
-                  <td className="text-right">{formatCurrency(Number(item.total))}</td>
-                </tr>
+                <DetailTableRow key={item.id}>
+                  <DetailTableTd>{item.description || "-"}</DetailTableTd>
+                  <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(Number(item.unitPrice))}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(Number(item.total))}</DetailTableTd>
+                </DetailTableRow>
               ))}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
 
       {/* Summary */}
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+        <div className="grid grid-cols-3 gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted uppercase tracking-wide">Subtotal</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(bill.subtotal))}</span>

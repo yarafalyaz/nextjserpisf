@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTaxGroup } from "@/actions/master.actions"
+import { Input, Label } from "@heroui/react"
 
 interface Props {
   taxes: { id: number; name: string; rate: number }[]
@@ -26,14 +27,14 @@ export function TaxGroupForm({ taxes }: Props) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Grup *</label>
-          <input id="name" name="name" className="form-input" required />
+          <Label htmlFor="name">Nama Grup *</Label>
+          <Input id="name" name="name" required />
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">Pajak</label>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <div className="flex flex-col gap-2">
             {taxes.map((tax) => (
-              <label key={tax.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <label key={tax.id} className="flex items-center gap-2">
                 <input type="checkbox" name="taxIds" value={tax.id} />
                 {tax.name} ({tax.rate}%)
               </label>

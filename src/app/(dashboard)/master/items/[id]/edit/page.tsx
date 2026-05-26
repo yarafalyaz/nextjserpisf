@@ -57,6 +57,7 @@ export default async function EditItemPage({
           standardCost: item.standardCost ? Number(item.standardCost) : null,
           costingMethod: item.costingMethod,
           purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : null,
+          isProduct: item.isProduct,
         }}
         categories={categories}
         brands={brands as any}

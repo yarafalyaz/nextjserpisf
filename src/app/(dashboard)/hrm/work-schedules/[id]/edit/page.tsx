@@ -18,17 +18,23 @@ export default async function EditPage({
 
   if (!data) notFound()
 
+  const departments = await prisma.department.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "hrm", href: "/hrm/work-schedules" },
-  { label: "Edit" },
-]} />
+        { label: "Dashboard", href: "/" },
+        { label: "HRM", href: "/hrm/work-schedules" },
+        { label: "Jadwal Kerja", href: "/hrm/work-schedules" },
+        { label: "Edit" },
+      ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit</h1>
+        <h1 className="text-2xl font-bold text-foreground">Edit Jadwal Kerja</h1>
       </div>
-      <WorkScheduleForm schedule={data as any} />
+      <WorkScheduleForm schedule={data as any} departments={departments} />
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { onMaterialIssueCompleted as onMaterialIssueStock } from "@/lib/hooks/ma
 import { onWorkOrderCompleted as onWorkOrderStock } from "@/lib/hooks/work-order.hook"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
+import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
 
@@ -20,7 +21,7 @@ export async function createStockAdjustment(formData: FormData) {
   const adjustment = await prisma.stockAdjustment.create({
     data: {
       documentNo,
-      warehouseId: Number(formData.get("warehouseId")),
+      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
       date: new Date(formData.get("date") as string),
       reason: formData.get("reason") as string | null,
       type: formData.get("type") as string || "increase",
@@ -73,8 +74,8 @@ export async function createInventoryTransfer(formData: FormData) {
   const transfer = await prisma.inventoryTransfer.create({
     data: {
       documentNo,
-      sourceWarehouseId: Number(formData.get("sourceWarehouseId")),
-      destinationWarehouseId: Number(formData.get("destinationWarehouseId")),
+      sourceWarehouseId: requireId(formData.get("sourceWarehouseId"), "sourceWarehouseId"),
+      destinationWarehouseId: requireId(formData.get("destinationWarehouseId"), "destinationWarehouseId"),
       date: new Date(formData.get("date") as string),
       notes: formData.get("notes") as string | null,
       status: "draft",
@@ -144,9 +145,9 @@ export async function createMaterialIssue(formData: FormData) {
   const issue = await prisma.materialIssue.create({
     data: {
       documentNo,
-      warehouseId: Number(formData.get("warehouseId")),
-      projectId: formData.get("projectId") ? Number(formData.get("projectId")) : null,
-      workOrderId: formData.get("workOrderId") ? Number(formData.get("workOrderId")) : null,
+      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+      projectId: safeId(formData.get("projectId")),
+      workOrderId: safeId(formData.get("workOrderId")),
       date: new Date(formData.get("date") as string),
       notes: formData.get("notes") as string | null,
       status: "draft",
@@ -191,22 +192,75 @@ export async function createWorkOrder(formData: FormData) {
   const user = await requirePermission("create_work_orders")
 
   const documentNo = await generateDocumentNumber("WO")
+  const itemsJson = formData.get("items") as string | null
+  const items = safeJsonParse<{ itemId: number; qty: number; cost: number; description?: string; status?: string }[]>(itemsJson) ?? []
 
   const wo = await prisma.workOrder.create({
     data: {
       documentNo,
-      quotationId: formData.get("quotationId") ? Number(formData.get("quotationId")) : null,
-      projectId: formData.get("projectId") ? Number(formData.get("projectId")) : null,
-      customerId: Number(formData.get("customerId")),
+      quotationId: safeId(formData.get("quotationId")),
+      projectId: safeId(formData.get("projectId")),
+      customerId: requireId(formData.get("customerId"), "customerId"),
       date: new Date(formData.get("date") as string),
       notes: formData.get("notes") as string | null,
       status: "draft",
       createdBy: Number(user.id),
+      items: {
+        create: items
+          .filter((i) => i.itemId > 0)
+          .map((i) => ({
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost || 0,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
+      },
     },
   })
 
   revalidatePath("/manufacturing/work-orders")
   return { success: true, id: wo.id }
+}
+
+export async function updateWorkOrder(id: number, formData: FormData) {
+  const user = await requirePermission("edit_work_orders")
+
+  const itemsJson = formData.get("items") as string | null
+  const items = safeJsonParse<{ itemId: number; qty: number; cost: number; description?: string; status?: string }[]>(itemsJson) ?? []
+
+  await prisma.$transaction(async (tx) => {
+    await tx.workOrder.update({
+      where: { id },
+      data: {
+        customerId: requireId(formData.get("customerId"), "customerId"),
+        quotationId: safeId(formData.get("quotationId")),
+        projectId: safeId(formData.get("projectId")),
+        date: new Date(formData.get("date") as string),
+        notes: formData.get("notes") as string | null,
+      },
+    })
+
+    // Recreate items with description and status
+    await tx.workOrderItem.deleteMany({ where: { workOrderId: id } })
+    if (items.length > 0) {
+      await tx.workOrderItem.createMany({
+        data: items
+          .filter((i) => i.itemId > 0)
+          .map((i) => ({
+            workOrderId: id,
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost || 0,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
+      })
+    }
+  })
+
+  revalidatePath("/manufacturing/work-orders")
+  return { success: true }
 }
 
 export async function completeWorkOrder(workOrderId: number) {
@@ -245,7 +299,7 @@ export async function createRack(formData: FormData) {
     data: {
       code: formData.get("code") as string,
       name: formData.get("name") as string,
-      warehouseId: Number(formData.get("warehouseId")),
+      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
     },
   })
 
@@ -297,19 +351,15 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
   const user = await requirePermission("create_stock_adjustments")
 
-  const documentNo = await generateDocumentNumber("ADJ")
-
+  // Fix #2: Jangan generate documentNo baru saat update
   const adjustment = await prisma.stockAdjustment.update({
     where: { id },
     data: {
-      documentNo,
-      warehouseId: Number(formData.get("warehouseId")),
+      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
       date: new Date(formData.get("date") as string),
       reason: formData.get("reason") as string | null,
       type: formData.get("type") as string || "increase",
       notes: formData.get("notes") as string | null,
-      status: "draft",
-      createdBy: Number(user.id),
     },
   })
 
@@ -322,19 +372,15 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
   const user = await requirePermission("create_material_issues")
 
-  const documentNo = await generateDocumentNumber("MI")
-
+  // Fix #2: Jangan generate documentNo baru saat update
   const issue = await prisma.materialIssue.update({
     where: { id },
     data: {
-      documentNo,
-      warehouseId: Number(formData.get("warehouseId")),
-      projectId: formData.get("projectId") ? Number(formData.get("projectId")) : null,
-      workOrderId: formData.get("workOrderId") ? Number(formData.get("workOrderId")) : null,
+      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+      projectId: safeId(formData.get("projectId")),
+      workOrderId: safeId(formData.get("workOrderId")),
       date: new Date(formData.get("date") as string),
       notes: formData.get("notes") as string | null,
-      status: "draft",
-      createdBy: Number(user.id),
     },
   })
 
@@ -347,21 +393,71 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
 
   const user = await requirePermission("create_inventory_transfers")
 
-  const documentNo = await generateDocumentNumber("TRF")
-
+  // Fix #2: Jangan generate documentNo baru saat update
   const transfer = await prisma.inventoryTransfer.update({
     where: { id },
     data: {
-      documentNo,
-      sourceWarehouseId: Number(formData.get("sourceWarehouseId")),
-      destinationWarehouseId: Number(formData.get("destinationWarehouseId")),
+      sourceWarehouseId: requireId(formData.get("sourceWarehouseId"), "sourceWarehouseId"),
+      destinationWarehouseId: requireId(formData.get("destinationWarehouseId"), "destinationWarehouseId"),
       date: new Date(formData.get("date") as string),
       notes: formData.get("notes") as string | null,
-      status: "draft",
-      createdBy: Number(user.id),
     },
   })
 
   revalidatePath("/inventory/transfers")
   return { success: true, id: transfer.id }
+}
+
+// ==================== RACK ROW ACTIONS ====================
+
+export async function createRackRow(formData: FormData) {
+  await requirePermission("manage_inventory")
+
+  const settings = await prisma.systemSetting.findFirst()
+  const enableAutoCode = settings?.enableAutoRowCode !== false
+  const prefix = settings?.rowCodePrefix || "ROW-"
+
+  let code = formData.get("code") as string | null
+
+  if (enableAutoCode || !code) {
+    const maxId = await prisma.rackRow.aggregate({ _max: { id: true } })
+    const nextId = (maxId._max.id ?? 0) + 1
+    code = prefix + String(nextId).padStart(4, "0")
+  }
+
+  const rackRow = await prisma.rackRow.create({
+    data: {
+      rackId: requireId(formData.get("rackId"), "rackId"),
+      code,
+      name: formData.get("name") as string,
+    },
+  })
+
+  revalidatePath("/inventory/rack-rows")
+  return { success: true, id: rackRow.id }
+}
+
+export async function updateRackRow(id: number, formData: FormData) {
+  await requirePermission("manage_inventory")
+
+  await prisma.rackRow.update({
+    where: { id },
+    data: {
+      rackId: requireId(formData.get("rackId"), "rackId"),
+      code: formData.get("code") as string | null,
+      name: formData.get("name") as string,
+    },
+  })
+
+  revalidatePath("/inventory/rack-rows")
+  return { success: true }
+}
+
+export async function deleteRackRow(id: number) {
+  await requirePermission("manage_inventory")
+
+  await prisma.rackRow.delete({ where: { id } })
+
+  revalidatePath("/inventory/rack-rows")
+  return { success: true }
 }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -10,7 +9,7 @@ import { Input, ComboBox, ListBox, Label } from "@heroui/react"
 interface TransferFormProps {
   warehouses: { id: number; name: string
 }[]
-  transfer?: any
+  transfer?: { id: number; sourceWarehouseId: number; destinationWarehouseId: number; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number }> }
   items: { id: number; sku: string; name: string; qtyOnHand: string }[]
 }
 
@@ -25,7 +24,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
 
   function addItem() { setTransferItems([...transferItems, { itemId: 0, qty: 1 }]) }
   function removeItem(i: number) { setTransferItems(transferItems.filter((_, idx) => idx !== i)) }
-  function updateItem(i: number, field: keyof TransferItem, value: any) {
+  function updateItem(i: number, field: keyof TransferItem, value: string | number) {
     const updated = [...transferItems]; updated[i] = { ...updated[i], [field]: value }; setTransferItems(updated)
   }
 

@@ -82,27 +82,118 @@ model Permission {
 
 model SystemSetting {
   id                           Int      @id @default(autoincrement())
+
+  // Company Info
   companyName                  String?  @map("company_name")
   companyEmail                 String?  @map("company_email")
   companyPhone                 String?  @map("company_phone")
   companyAddress               String?  @map("company_address") @db.Text
+  companyProvince              String?  @map("company_province")
+  companyCity                  String?  @map("company_city")
+  companyDistrict              String?  @map("company_district")
+  companyVillage               String?  @map("company_village")
+  companyPostalCode            String?  @map("company_postal_code")
   companyLogo                  String?  @map("company_logo")
+  companyWebsite               String?  @map("company_website")
+  companyTaxId                 String?  @map("company_tax_id")
+  companyLatitude              Decimal? @map("company_latitude") @db.Decimal(10, 8)
+  companyLongitude             Decimal? @map("company_longitude") @db.Decimal(11, 8)
+
+  // General Settings
   costingMethod                String   @default("FIFO") @map("costing_method")
   fiscalYearStartMonth         Int      @default(1) @map("fiscal_year_start_month")
   currencyCode                 String   @default("IDR") @map("currency_code")
   currencySymbol               String   @default("Rp ") @map("currency_symbol")
+  currencyLocale               String   @default("id_ID") @map("currency_locale")
+  documentNumberFormat         String   @default("YRA-{d}/{m}/{Y}-{0001}") @map("document_number_format")
+  periodLockDate               DateTime? @map("period_lock_date")
+  showIsActiveField            Boolean  @default(true) @map("show_is_active_field")
+  showTaxId                    Boolean  @default(true) @map("show_tax_id")
+
+  // Auto-Code Prefixes
+  itemCodePrefix               String?  @default("ITM-") @map("item_code_prefix")
+  enableAutoItemCode           Boolean  @default(true) @map("enable_auto_item_code")
+  warehouseCodePrefix          String?  @default("WH-") @map("warehouse_code_prefix")
+  enableAutoWarehouseCode      Boolean  @default(true) @map("enable_auto_warehouse_code")
+  rackCodePrefix               String?  @default("RCK-") @map("rack_code_prefix")
+  enableAutoRackCode           Boolean  @default(true) @map("enable_auto_rack_code")
+  rowCodePrefix                String?  @default("ROW-") @map("row_code_prefix")
+  enableAutoRowCode            Boolean  @default(true) @map("enable_auto_row_code")
+  customerCodePrefix           String?  @default("CUST-") @map("customer_code_prefix")
+  enableAutoCustomerCode       Boolean  @default(true) @map("enable_auto_customer_code")
+  employeeCodePrefix           String?  @default("EMP-") @map("employee_code_prefix")
+  enableAutoEmployeeCode       Boolean  @default(true) @map("enable_auto_employee_code")
+  vendorCodePrefix             String?  @default("VEND-") @map("vendor_code_prefix")
+  enableAutoVendorCode         Boolean  @default(true) @map("enable_auto_vendor_code")
+
+  // Document Prefixes
+  quotationCodePrefix          String   @default("QUO") @map("quotation_code_prefix")
+  assetPrefix                  String?  @default("ISF") @map("asset_prefix")
+  salesOrderPrefix             String   @default("SO") @map("sales_order_prefix")
+  salesInvoicePrefix           String   @default("INV") @map("sales_invoice_prefix")
+  salesPaymentPrefix           String   @default("PAY") @map("sales_payment_prefix")
+  salesReturnPrefix            String   @default("SR") @map("sales_return_prefix")
+  purchaseRequestPrefix        String   @default("PR") @map("purchase_request_prefix")
+  purchaseOrderPrefix          String   @default("PO") @map("purchase_order_prefix")
+  inventoryTransferPrefix      String   @default("TRF") @map("inventory_transfer_prefix")
+  stockAdjustmentPrefix        String   @default("ADJ") @map("stock_adjustment_prefix")
+  workOrderPrefix              String   @default("WO") @map("work_order_prefix")
+  timesheetPrefix              String   @default("TS") @map("timesheet_prefix")
+
+  // Overtime Settings
+  overtimeMultiplier           Decimal  @default(0.00578035) @map("overtime_multiplier") @db.Decimal(10, 8)
+  overtimeMealBreakStart       String   @default("17:00") @map("overtime_meal_break_start")
+  overtimeMealBreakEnd         String   @default("19:00") @map("overtime_meal_break_end")
+  overtimeCoefficient          Decimal  @default(1.10) @map("overtime_coefficient") @db.Decimal(5, 2)
+
+  // Attendance Settings
+  attendanceRadiusKm           Decimal  @default(1.00) @map("attendance_radius_km") @db.Decimal(8, 2)
+  latePenaltyPerMinute         Decimal  @default(5000) @map("late_penalty_per_minute") @db.Decimal(15, 2)
+  maxLatePenaltyMinutes        Int      @default(120) @map("max_late_penalty_minutes")
+
+  // Quotation Settings
+  quotationFooterNotes         String?  @map("quotation_footer_notes") @db.Text
+  quotationSignatureName       String?  @map("quotation_signature_name")
+  quotationSignatureImage      String?  @map("quotation_signature_image")
+
+  // Accounting - Sales
   salesReceivableAccountId     Int?     @map("sales_receivable_account_id")
   salesRevenueAccountId        Int?     @map("sales_revenue_account_id")
   salesTaxAccountId            Int?     @map("sales_tax_account_id")
+  salesReturnAccountId         Int?     @map("sales_return_account_id")
+  salesAccountId               Int?     @map("sales_account_id")
+
+  // Accounting - Purchase
   purchasePayableAccountId     Int?     @map("purchase_payable_account_id")
   purchaseInventoryAccountId   Int?     @map("purchase_inventory_account_id")
   purchaseTaxAccountId         Int?     @map("purchase_tax_account_id")
+  purchaseExpenseAccountId     Int?     @map("purchase_expense_account_id")
+  purchaseDiscountAccountId    Int?     @map("purchase_discount_account_id")
+  purchaseShippingAccountId    Int?     @map("purchase_shipping_account_id")
+  purchaseReturnAccountId      Int?     @map("purchase_return_account_id")
+
+  // Accounting - Inventory & Manufacturing
   inventoryAccountId           Int?     @map("inventory_account_id")
   inventoryAdjustmentAccountId Int?     @map("inventory_adjustment_account_id")
+  stockAdjustmentAccountId     Int?     @map("stock_adjustment_account_id")
+  cogsAccountId                Int?     @map("cogs_account_id")
   wipAccountId                 Int?     @map("wip_account_id")
   materialExpenseAccountId     Int?     @map("material_expense_account_id")
+  materialIssueExpenseAccountId Int?    @map("material_issue_expense_account_id")
+
+  // Accounting - General
   pettyCashAccountId           Int?     @map("petty_cash_account_id")
-  salesReturnAccountId         Int?     @map("sales_return_account_id")
+  cashBankAccountId            Int?     @map("cash_bank_account_id")
+  generalExpenseAccountId      Int?     @map("general_expense_account_id")
+  defaultCashAccountId         Int?     @map("default_cash_account_id")
+
+  // Accounting - Payroll
+  salaryExpenseAccountId       Int?     @map("salary_expense_account_id")
+  salariesPayableAccountId     Int?     @map("salaries_payable_account_id")
+  payrollBankAccountId         Int?     @map("payroll_bank_account_id")
+  employeeReceivableAccountId  Int?     @map("employee_receivable_account_id")
+  payrollJournalTypeId         Int?     @map("payroll_journal_type_id")
+
   createdAt                    DateTime @default(now()) @map("created_at")
   updatedAt                    DateTime @updatedAt @map("updated_at")
 
@@ -247,6 +338,7 @@ model Item {
   standardCost       Decimal   @default(0) @map("standard_cost") @db.Decimal(15, 2)
   costingMethod      String    @default("average") @map("costing_method")
   purchasePrice      Decimal   @default(0) @map("purchase_price") @db.Decimal(15, 2)
+  isProduct          Boolean   @default(false) @map("is_product")
   isActive           Boolean   @default(true) @map("is_active")
   deletedAt          DateTime? @map("deleted_at")
   createdAt          DateTime  @default(now()) @map("created_at")
@@ -311,6 +403,7 @@ model Rack {
 model RackRow {
   id        Int      @id @default(autoincrement())
   rackId    Int      @map("rack_id")
+  code      String?  @map("code")
   name      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -331,6 +424,7 @@ model Department {
 
   positions Position[]
   employees Employee[]
+  holidays  DepartmentHoliday[]
 
   @@map("departments")
 }
@@ -390,6 +484,9 @@ model Employee {
   overtimeRequests OvertimeRequest[]
   employeeLoans    EmployeeLoan[]
   timesheets       Timesheet[]
+  appreciations    Appreciation[]
+  tasks            Task[]
+  payrolls         Payroll[]
 
   @@map("employees")
 }
@@ -481,6 +578,7 @@ model QuotationItem {
   sectionId   Int      @map("section_id")
   itemId      Int?     @map("item_id")
   description String?
+  uom         String?
   qty         Decimal  @default(1) @db.Decimal(15, 2)
   unitPrice   Decimal  @default(0) @map("unit_price") @db.Decimal(15, 2)
   discount    Decimal  @default(0) @db.Decimal(15, 2)
@@ -625,11 +723,13 @@ model SalesInvoiceItem {
 model SalesPayment {
   id             Int      @id @default(autoincrement())
   documentNo     String   @unique @map("document_no")
+  customerId     Int?     @map("customer_id")
   salesInvoiceId Int      @map("sales_invoice_id")
   amount         Decimal  @db.Decimal(15, 2)
   paymentDate    DateTime @map("payment_date")
   paymentMethod  String   @map("payment_method")
   accountId      Int?     @map("account_id")
+  referenceNo    String?  @map("reference_no")
   notes          String?  @db.Text
   createdBy      Int?     @map("created_by")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -672,17 +772,22 @@ model SalesReturnItem {
 // ==================== PURCHASE ====================
 
 model PurchaseRequest {
-  id          Int      @id @default(autoincrement())
-  documentNo  String   @unique @map("document_no")
-  title       String?  @map("title")
-  requestedBy Int      @map("requested_by")
-  date        DateTime
-  notes       String?  @db.Text
-  status      String   @default("draft")
-  approvedBy  Int?     @map("approved_by")
-  createdBy   Int?     @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id              Int       @id @default(autoincrement())
+  documentNo      String    @unique @map("document_no")
+  title           String?   @map("title")
+  requestDate     DateTime? @map("request_date")
+  requestedBy     Int       @map("requested_by")
+  requesterId     Int?      @map("requester_id")
+  date            DateTime
+  description     String?   @db.Text
+  notes           String?   @db.Text
+  status          String    @default("draft")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  approvedBy      Int?      @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   items          PurchaseRequestItem[]
   purchaseOrders PurchaseOrder[]
@@ -718,6 +823,7 @@ model PurchaseOrder {
   tax               Decimal   @default(0) @db.Decimal(15, 2)
   grandTotal        Decimal   @default(0) @map("grand_total") @db.Decimal(15, 2)
   status            String    @default("draft")
+  description       String?   @db.Text
   approvedBy        Int?      @map("approved_by")
   notes             String?   @db.Text
   createdBy         Int?      @map("created_by")
@@ -773,8 +879,11 @@ model GoodsReceiptItem {
   id             Int     @id @default(autoincrement())
   goodsReceiptId Int     @map("goods_receipt_id")
   itemId         Int     @map("item_id")
+  warehouseId    Int?    @map("warehouse_id")
+  qtyOrdered     Decimal @default(0) @map("qty_ordered") @db.Decimal(15, 2)
   qty            Decimal @db.Decimal(15, 2)
   unitCost       Decimal @default(0) @map("unit_cost") @db.Decimal(15, 2)
+  stockMoveId    Int?    @map("stock_move_id")
 
   goodsReceipt GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
 
@@ -905,7 +1014,9 @@ model VendorPaymentAllocation {
 
 model DeliveryOrder {
   id                 Int       @id @default(autoincrement())
+  doNumber           String?   @map("do_number")
   customerId         Int?      @map("customer_id")
+  deliveryDate       DateTime? @map("delivery_date")
   shippingAddress    String?   @map("shipping_address") @db.Text
   shippingProvince   String?   @map("shipping_province")
   shippingCity       String?   @map("shipping_city")
@@ -937,12 +1048,17 @@ model DeliveryOrder {
 model StockMove {
   id            Int             @id @default(autoincrement())
   documentNo    String          @unique @map("document_no")
+  date          DateTime?       @map("transaction_date")
+  moveType      String?         @map("type")
   itemId        Int             @map("item_id")
   warehouseId   Int?            @map("warehouse_id")
+  rackId        Int?            @map("rack_id")
+  rackRowId     Int?            @map("rack_row_id")
   qty           Decimal         @db.Decimal(15, 2)
   cost          Decimal         @default(0) @db.Decimal(15, 2)
   impact        StockMoveImpact
   status        StockMoveStatus @default(draft)
+  description   String?         @db.Text
   referenceType String?         @map("reference_type")
   referenceId   Int?            @map("reference_id")
   notes         String?         @db.Text
@@ -1080,15 +1196,21 @@ model MaterialIssueItem {
 
 model Product {
   id           Int      @id @default(autoincrement())
+  code         String?  @unique
   name         String
   sku          String?  @unique
   description  String?  @db.Text
   standardCost Decimal  @default(0) @map("standard_cost") @db.Decimal(15, 2)
+  vehicleBrandId Int?   @map("vehicle_brand_id")
+  vehicleModelId Int?   @map("vehicle_model_id")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  vehicleBrand     VehicleBrand?      @relation(fields: [vehicleBrandId], references: [id])
+  vehicleModel     VehicleModel?      @relation(fields: [vehicleModelId], references: [id])
   materials        ProductMaterial[]
   productionOrders ProductionOrder[]
+  productVehicleModels ProductVehicleModel[]
 
   @@map("products")
 }
@@ -1166,8 +1288,10 @@ model WorkOrderItem {
   id          Int     @id @default(autoincrement())
   workOrderId Int     @map("work_order_id")
   itemId      Int     @map("item_id")
+  description String?
   qty         Decimal @db.Decimal(15, 2)
   cost        Decimal @default(0) @db.Decimal(15, 2)
+  status      String  @default("pending")
 
   workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
 
@@ -1177,15 +1301,21 @@ model WorkOrderItem {
 // ==================== HRM ====================
 
 model Attendance {
-  id         Int       @id @default(autoincrement())
-  employeeId Int       @map("employee_id")
-  date       DateTime
-  checkIn    DateTime? @map("check_in")
-  checkOut   DateTime? @map("check_out")
-  status     String    @default("present")
-  notes      String?
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  id               Int       @id @default(autoincrement())
+  employeeId       Int       @map("employee_id")
+  date             DateTime
+  checkIn          DateTime? @map("check_in")
+  checkOut         DateTime? @map("check_out")
+  checkInLatitude  Decimal?  @map("check_in_latitude") @db.Decimal(10, 7)
+  checkInLongitude Decimal?  @map("check_in_longitude") @db.Decimal(10, 7)
+  checkOutLatitude Decimal?  @map("check_out_latitude") @db.Decimal(10, 7)
+  checkOutLongitude Decimal? @map("check_out_longitude") @db.Decimal(10, 7)
+  status           String    @default("present")
+  overtimeMinutes  Int?      @map("overtime_minutes")
+  overtimeApproved Boolean   @default(false) @map("overtime_approved")
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -1211,60 +1341,86 @@ model LeaveRequest {
 }
 
 model OvertimeRequest {
-  id         Int      @id @default(autoincrement())
-  employeeId Int      @map("employee_id")
-  date       DateTime
-  hours      Decimal  @db.Decimal(5, 2)
-  reason     String?  @db.Text
-  status     String   @default("pending")
-  approvedBy Int?     @map("approved_by")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id                    Int       @id @default(autoincrement())
+  employeeId            Int       @map("employee_id")
+  projectId             Int?      @map("project_id")
+  date                  DateTime
+  hours                 Decimal   @db.Decimal(5, 2)
+  totalHours            Decimal?  @map("total_hours") @db.Decimal(5, 2)
+  mealHours             Decimal?  @map("meal_hours") @db.Decimal(5, 2)
+  billableHours         Decimal?  @map("billable_hours") @db.Decimal(5, 2)
+  calculatedValue       Decimal?  @map("calculated_value") @db.Decimal(15, 2)
+  reason                String?   @db.Text
+  rejectionReason       String?   @map("rejection_reason") @db.Text
+  status                String    @default("pending")
+  approvedBy            Int?      @map("approved_by")
+  approvedBySupervisor  Int?      @map("approved_by_supervisor")
+  approvedAt            DateTime? @map("approved_at")
+  supervisorApprovedAt  DateTime? @map("supervisor_approved_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
+  project  Project?  @relation(fields: [projectId], references: [id])
 
   @@map("overtime_requests")
 }
 
 model Payroll {
-  id          Int      @id @default(autoincrement())
-  documentNo  String   @unique @map("document_no")
-  period      String
-  startDate   DateTime @map("start_date")
-  endDate     DateTime @map("end_date")
-  totalAmount Decimal  @default(0) @map("total_amount") @db.Decimal(15, 2)
-  status      String   @default("draft")
-  approvedBy  Int?     @map("approved_by")
-  createdBy   Int?     @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                Int      @id @default(autoincrement())
+  documentNo        String   @unique @map("document_no")
+  employeeId        Int?     @map("employee_id")
+  period            String
+  startDate         DateTime @map("start_date")
+  endDate           DateTime @map("end_date")
+  baseSalary        Decimal  @default(0) @map("base_salary") @db.Decimal(15, 2)
+  allowances        Decimal  @default(0) @db.Decimal(15, 2)
+  deductions        Decimal  @default(0) @db.Decimal(15, 2)
+  overtimeTotal     Decimal  @default(0) @map("overtime_total") @db.Decimal(15, 2)
+  appreciationTotal Decimal  @default(0) @map("appreciation_total") @db.Decimal(15, 2)
+  loanDeduction     Decimal  @default(0) @map("loan_deduction") @db.Decimal(15, 2)
+  lateDeduction     Decimal  @default(0) @map("late_deduction") @db.Decimal(15, 2)
+  lateMinutes       Int      @default(0) @map("late_minutes")
+  netSalary         Decimal  @default(0) @map("net_salary") @db.Decimal(15, 2)
+  totalAmount       Decimal  @default(0) @map("total_amount") @db.Decimal(15, 2)
+  paymentDate       DateTime? @map("payment_date")
+  status            String   @default("draft")
+  approvedBy        Int?     @map("approved_by")
+  createdBy         Int?     @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
 
   @@map("payrolls")
 }
 
 model WorkSchedule {
-  id        Int      @id @default(autoincrement())
-  name      String
-  dayOfWeek Int      @map("day_of_week")
-  startTime String   @map("start_time")
-  endTime   String   @map("end_time")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                   Int      @id @default(autoincrement())
+  name                 String
+  departmentId         Int?     @map("department_id")
+  dayOfWeek            Int      @map("day_of_week")
+  startTime            String   @map("start_time")
+  endTime              String   @map("end_time")
+  lateToleranceMinutes Int      @default(0) @map("late_tolerance_minutes")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("work_schedules")
 }
 
 model EmployeeLoan {
-  id                Int      @id @default(autoincrement())
-  employeeId        Int      @map("employee_id")
-  amount            Decimal  @db.Decimal(15, 2)
-  installmentAmount Decimal  @map("installment_amount") @db.Decimal(15, 2)
-  remainingAmount   Decimal  @map("remaining_amount") @db.Decimal(15, 2)
-  startDate         DateTime @map("start_date")
-  reason            String?  @db.Text
-  status            String   @default("active")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                 Int      @id @default(autoincrement())
+  employeeId         Int      @map("employee_id")
+  loanDate           DateTime @map("loan_date")
+  totalAmount        Decimal  @map("total_amount") @db.Decimal(15, 2)
+  monthlyInstallment Decimal  @map("monthly_installment") @db.Decimal(15, 2)
+  remainingAmount    Decimal  @map("remaining_amount") @db.Decimal(15, 2)
+  status             String   @default("active")
+  notes              String?  @db.Text
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -1274,15 +1430,19 @@ model EmployeeLoan {
 model Timesheet {
   id          Int      @id @default(autoincrement())
   employeeId  Int      @map("employee_id")
-  projectId   Int?     @map("project_id")
+  projectId   Int      @map("project_id")
   taskId      Int?     @map("task_id")
   date        DateTime
-  hours       Decimal  @db.Decimal(5, 2)
+  startTime   String?  @map("start_time")
+  endTime     String?  @map("end_time")
+  hours       Decimal  @db.Decimal(8, 2)
   description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
+  project  Project  @relation(fields: [projectId], references: [id])
+  task     Task?    @relation(fields: [taskId], references: [id])
 
   @@map("timesheets")
 }
@@ -1333,10 +1493,13 @@ model Expense {
   employeeId        Int?     @map("employee_id")
   accountId         Int      @map("account_id")
   paidFromAccountId Int?     @map("paid_from_account_id")
+  projectId         Int?     @map("project_id")
   amount            Decimal  @db.Decimal(15, 2)
   date              DateTime
+  referenceNo       String?  @map("reference_no")
   description       String?  @db.Text
   category          String?
+  receiptImage      String?  @map("receipt_image")
   status            String   @default("draft")
   approvedBy        Int?     @map("approved_by")
   costCenterId      Int?     @map("cost_center_id")
@@ -1348,16 +1511,22 @@ model Expense {
 }
 
 model PettyCash {
-  id          Int      @id @default(autoincrement())
-  documentNo  String   @unique @map("document_no")
-  type        String
-  amount      Decimal  @db.Decimal(15, 2)
-  date        DateTime
-  accountId   Int?     @map("account_id")
-  description String?  @db.Text
-  createdBy   Int?     @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id              Int      @id @default(autoincrement())
+  documentNo      String   @unique @map("document_no")
+  type            String
+  amount          Decimal  @db.Decimal(15, 2)
+  balanceBefore   Decimal  @default(0) @map("balance_before") @db.Decimal(15, 2)
+  balanceAfter    Decimal  @default(0) @map("balance_after") @db.Decimal(15, 2)
+  date            DateTime
+  transactionDate DateTime? @map("transaction_date")
+  accountId       Int?     @map("account_id")
+  sourceAccountId Int?     @map("source_account_id")
+  expenseAccountId Int?    @map("expense_account_id")
+  referenceNo     String?  @map("reference_no")
+  description     String?  @db.Text
+  createdBy       Int?     @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("petty_cash")
 }
@@ -1658,6 +1827,7 @@ model Asset {
   condition         String    @default("good") @map("condition")
   employeeId        Int?      @map("employee_id")
   assetBrandModelId Int?      @map("asset_brand_model_id")
+  assetBrandId      Int?      @map("asset_brand_id")
   code              String    @unique
   name              String
   categoryId        Int?      @map("category_id")
@@ -1719,7 +1889,8 @@ model VehicleBrand {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  models VehicleModel[]
+  models   VehicleModel[]
+  products Product[]
 
   @@map("vehicle_brands")
 }
@@ -1733,6 +1904,8 @@ model VehicleModel {
 
   brand    VehicleBrand     @relation(fields: [vehicleBrandId], references: [id])
   variants VehicleVariant[]
+  products Product[]
+  productVehicleModels ProductVehicleModel[]
 
   @@map("vehicle_models")
 }
@@ -1766,17 +1939,25 @@ model Vehicle {
 }
 
 model CustomerVehicle {
-  id           Int      @id @default(autoincrement())
-  customerId   Int      @map("customer_id")
-  vehicleId    Int      @map("vehicle_id")
-  vehicleType  String?  @map("vehicle_type")
-  transmission String?
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id              Int      @id @default(autoincrement())
+  customerId      Int      @map("customer_id")
+  vehicleId       Int      @map("vehicle_id")
+  licensePlate    String?  @map("license_plate")
+  year            Int?
+  color           String?
+  vehicleType     String?  @map("vehicle_type")
+  transmission    String?
+  chassisNumber   String?  @map("chassis_number")
+  engineNumber    String?  @map("engine_number")
+  isActive        Boolean  @default(true) @map("is_active")
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   customer   Customer    @relation(fields: [customerId], references: [id])
   vehicle    Vehicle     @relation(fields: [vehicleId], references: [id])
   quotations Quotation[]
+  projects   Project[]
 
   @@map("customer_vehicles")
 }
@@ -1784,21 +1965,29 @@ model CustomerVehicle {
 // ==================== PROJECTS ====================
 
 model Project {
-  id         Int       @id @default(autoincrement())
-  name       String
-  customerId Int       @map("customer_id")
-  status     String    @default("active")
-  startDate  DateTime? @map("start_date")
-  endDate    DateTime? @map("end_date")
-  notes      String?   @db.Text
-  createdBy  Int?      @map("created_by")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  id                Int       @id @default(autoincrement())
+  documentNo        String?   @unique @map("document_no")
+  name              String
+  customerId        Int       @map("customer_id")
+  customerVehicleId Int?      @map("customer_vehicle_id")
+  workOrderId       Int?      @map("work_order_id")
+  status            String    @default("active")
+  startDate         DateTime? @map("start_date")
+  endDate           DateTime? @map("end_date")
+  description       String?   @db.Text
+  notes             String?   @db.Text
+  createdBy         Int?      @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  customer Customer       @relation(fields: [customerId], references: [id])
-  items    ProjectItem[]
-  stages   ProjectStage[]
-  logs     ProjectLog[]
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  customerVehicle CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
+  items           ProjectItem[]
+  stages          ProjectStage[]
+  logs            ProjectLog[]
+  tasks           Task[]
+  overtimeRequests OvertimeRequest[]
+  timesheets       Timesheet[]
 
   @@map("projects")
 }
@@ -2285,4 +2474,64 @@ model UnitOfMeasure {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("unit_of_measures")
+}
+
+model Appreciation {
+  id         Int      @id @default(autoincrement())
+  employeeId Int      @map("employee_id")
+  date       DateTime
+  type       String   @default("bonus")
+  amount     Decimal  @db.Decimal(15, 2)
+  notes      String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@map("appreciations")
+}
+
+model Task {
+  id          Int       @id @default(autoincrement())
+  projectId   Int       @map("project_id")
+  name        String
+  description String?   @db.Text
+  status      String    @default("pending")
+  assignedTo  Int?      @map("assigned_to")
+  startDate   DateTime? @map("start_date")
+  dueDate     DateTime? @map("due_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee Employee? @relation(fields: [assignedTo], references: [id])
+  timesheets Timesheet[]
+
+  @@map("tasks")
+}
+
+model DepartmentHoliday {
+  id           Int      @id @default(autoincrement())
+  departmentId Int      @map("department_id")
+  name         String
+  date         DateTime
+  isRecurring  Boolean  @default(false) @map("is_recurring")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@map("department_holidays")
+}
+
+model ProductVehicleModel {
+  id             Int @id @default(autoincrement())
+  productId      Int @map("product_id")
+  vehicleModelId Int @map("vehicle_model_id")
+
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vehicleModel VehicleModel @relation(fields: [vehicleModelId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, vehicleModelId])
+  @@map("product_vehicle_models")
 }

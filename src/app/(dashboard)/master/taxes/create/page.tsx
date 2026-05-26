@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -6,7 +5,8 @@ import { useTransition } from "react"
 import { createTax } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { Input, TextArea, Select, ListBox, Checkbox } from "@heroui/react"
+import { ListBox, Checkbox, Select as HeroSelect } from "@heroui/react"
+import { Input, TextArea, SelectValue, SelectLabel } from "@/components/ui/heroui-compat"
 
 export default function CreateTaxPage() {
   const router = useRouter()
@@ -41,28 +41,28 @@ export default function CreateTaxPage() {
 
           <Input label="Kode" name="code" placeholder="Contoh: PPN11" className="w-full" />
 
-          <Select name="type" className="w-full">
-            <Select.Label>Tipe</Select.Label>
-            <Select.Trigger><Select.Value placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+          <HeroSelect name="type" className="w-full">
+            <SelectLabel>Tipe</SelectLabel>
+            <HeroSelect.Trigger><SelectValue placeholder="Pilih Tipe" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="percentage" textValue="Percentage">Percentage<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="fixed" textValue="Fixed">Fixed<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
-          </Select>
+            </HeroSelect.Popover>
+          </HeroSelect>
 
-          <Select name="scope" className="w-full">
-            <Select.Label>Lingkup</Select.Label>
-            <Select.Trigger><Select.Value placeholder="Pilih Lingkup" /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+          <HeroSelect name="scope" className="w-full">
+            <SelectLabel>Lingkup</SelectLabel>
+            <HeroSelect.Trigger><SelectValue placeholder="Pilih Lingkup" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="sales" textValue="Sales">Sales<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="purchase" textValue="Purchase">Purchase<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="both" textValue="Both">Both<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
-          </Select>
+            </HeroSelect.Popover>
+          </HeroSelect>
 
           <AppDatePicker label="Berlaku Dari" name="effectiveFrom" className="w-full" />
 

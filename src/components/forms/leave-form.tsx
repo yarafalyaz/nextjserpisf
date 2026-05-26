@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -6,12 +5,12 @@ import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createLeaveRequest, updateLeaveRequest } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { TextArea, Label, Select, ComboBox, Input, ListBox } from "@heroui/react"
+import { TextArea, Label, Select, ComboBox, Input, ListBox , Select as HeroSelect} from "@heroui/react"
 
 interface LeaveFormProps {
   employees: { id: number; name: string
 }[]
-  leave?: any
+  leave?: { id: number; employeeId: number; leaveType: string; startDate: string; endDate: string; reason?: string | null }
 }
 
 const leaveTypes = [
@@ -66,8 +65,8 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
         <div className="flex flex-col gap-1.5">
           <Select name="type" isRequired defaultSelectedKey="annual" className="w-full">
             <Label>Tipe Cuti *</Label>
-            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+            <HeroSelect.Trigger><Select.Value /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 {leaveTypes.map((lt) => (
                   <ListBox.Item key={lt.id} id={lt.id} textValue={lt.name}>
@@ -76,7 +75,7 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
                   </ListBox.Item>
                 ))}
               </ListBox>
-            </Select.Popover>
+            </HeroSelect.Popover>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">

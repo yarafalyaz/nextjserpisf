@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateDepartment } from "@/actions/master.actions"
+import { Input, TextArea, Label } from "@heroui/react"
 
 interface EditDepartmentFormProps {
   department: {
@@ -31,18 +32,18 @@ export function EditDepartmentForm({ department }: EditDepartmentFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="code" className="text-sm font-medium text-foreground">Kode</label>
-          <input id="code" name="code" className="form-input" placeholder="Contoh: DEPT-01" defaultValue={department.code || ""} />
+          <Label htmlFor="code">Kode</Label>
+          <Input id="code" name="code" placeholder="Contoh: DEPT-01" defaultValue={department.code || ""} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium text-foreground">Nama *</label>
-          <input id="name" name="name" className="form-input" placeholder="Nama departemen" required defaultValue={department.name} />
+          <Label htmlFor="name">Nama *</Label>
+          <Input id="name" name="name" placeholder="Nama departemen" required defaultValue={department.name} />
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">
-          <label htmlFor="description" className="text-sm font-medium text-foreground">Deskripsi</label>
-          <textarea id="description" name="description" className="form-input" rows={3} placeholder="Deskripsi departemen" defaultValue={department.description || ""} />
+          <Label htmlFor="description">Deskripsi</Label>
+          <TextArea id="description" name="description" rows={3} placeholder="Deskripsi departemen" defaultValue={department.description || ""} />
         </div>
       </div>
 

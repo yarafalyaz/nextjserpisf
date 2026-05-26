@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { PrismaClient, Prisma, StockMove } from '@prisma/client'
 import { notificationService } from './notification.service'
 
@@ -137,13 +137,13 @@ export class InventoryService {
     }
 
     // Check low stock threshold and notify asynchronously
-    const updatedItem = await tx.item.findUnique({ where: { id: move.itemId } })
+        const updatedItem = await tx.item.findUnique({ where: { id: move.itemId } })
     if (
       updatedItem &&
-      updatedItem.minStock > 0 &&
-      updatedItem.qtyOnHand <= updatedItem.minStock
+      Number(updatedItem.minStock) > 0 &&
+      Number(updatedItem.qtyOnHand) <= Number(updatedItem.minStock)
     ) {
-      setTimeout(() => notificationService.checkAndNotifyLowStock(updatedItem), 0)
+      setTimeout(() => notificationService.checkAndNotifyLowStock(updatedItem as any), 0)
     }
   }
 
@@ -213,13 +213,14 @@ export async function issueProjectMaterials(
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { items: { include: { item: true } } },
+    include: { items: true },
   })
   if (!project) throw new Error('Project not found')
 
   const results: number[] = []
 
   for (const pi of project.items) {
+    if (!pi.itemId) continue
     const documentNo = await generateDocumentNumber('SM')
 
     const move = await prisma.stockMove.create({
@@ -233,7 +234,7 @@ export async function issueProjectMaterials(
         status: 'draft',
         referenceType: 'project_material_issue',
         referenceId: projectId,
-        notes: `Material Issue - ${project.documentNo} - ${pi.item?.name ?? ''}`,
+        notes: `Material Issue - Project #${projectId} - Item #${pi.itemId}`,
       },
     })
 

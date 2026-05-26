@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency } from '@/lib/utils/format'
 import { Scale } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 
 export default async function TrialBalancePage({
   searchParams,
@@ -53,14 +54,14 @@ export default async function TrialBalancePage({
   { label: "Trial Balance" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="flex items-center gap-2">
           <Scale size={24} />
           <h1>Neraca Saldo (Trial Balance)</h1>
         </div>
         <p>Per tanggal: {asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
       </div>
 
-      <form style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <form className="mb-6 flex items-center gap-3">
         <label htmlFor="date">Tanggal:</label>
         <input
           type="date"
@@ -68,7 +69,7 @@ export default async function TrialBalancePage({
           name="date"
           defaultValue={params.date || asOfDate.toISOString().split('T')[0]}
         />
-        <button type="submit">Generate</button>
+        <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Generate</button>
       </form>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -78,50 +79,48 @@ export default async function TrialBalancePage({
         <div className="p-4 px-5">
           <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th>Kode Akun</th>
-                    <th>Nama Akun</th>
-                    <th>Tipe</th>
-                    <th style={{ textAlign: 'right' }}>Total Debit</th>
-                    <th style={{ textAlign: 'right' }}>Total Kredit</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <DetailTable>
+                <DetailTableHead>
+                  <DetailTableTh>Kode Akun</DetailTableTh>
+                  <DetailTableTh>Nama Akun</DetailTableTh>
+                  <DetailTableTh>Tipe</DetailTableTh>
+                  <DetailTableTh align="right">Total Debit</DetailTableTh>
+                  <DetailTableTh align="right">Total Kredit</DetailTableTh>
+                </DetailTableHead>
+                <DetailTableBody>
                   {data.map((acc) => (
-                    <tr key={acc.id}>
-                      <td>{acc.code}</td>
-                      <td>{acc.name}</td>
-                      <td>{acc.type}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(acc.totalDebit)}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(acc.totalCredit)}</td>
-                    </tr>
+                    <DetailTableRow key={acc.id}>
+                      <DetailTableTd>{acc.code}</DetailTableTd>
+                      <DetailTableTd>{acc.name}</DetailTableTd>
+                      <DetailTableTd>{acc.type}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(acc.totalDebit)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(acc.totalCredit)}</DetailTableTd>
+                    </DetailTableRow>
                   ))}
                   {data.length === 0 && (
-                    <tr>
-                      <td colSpan={5} style={{ textAlign: 'center' }}>Tidak ada data jurnal yang sudah diposting</td>
-                    </tr>
+                    <DetailTableRow>
+                      <DetailTableTd colSpan={5} className="text-center">Tidak ada data jurnal yang sudah diposting</DetailTableTd>
+                    </DetailTableRow>
                   )}
-                </tbody>
+                </DetailTableBody>
                 {data.length > 0 && (
-                  <tfoot>
-                    <tr style={{ fontWeight: 'bold' }}>
-                      <td colSpan={3}>TOTAL</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(grandTotalDebit)}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(grandTotalCredit)}</td>
-                    </tr>
-                  </tfoot>
+                  <DetailTableFoot>
+                    <DetailTableFootRow className="font-bold">
+                      <DetailTableTd colSpan={3}>TOTAL</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(grandTotalDebit)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(grandTotalCredit)}</DetailTableTd>
+                    </DetailTableFootRow>
+                  </DetailTableFoot>
                 )}
-              </table>
+              </DetailTable>
             </div>
           </div>
         </div>
       </div>
 
       {/* Balance Check */}
-      <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ marginTop: '1.5rem', borderColor: isBalanced ? 'var(--color-success, green)' : 'var(--color-danger, red)' }}>
-        <div className="text-xl font-bold text-foreground" style={{ color: isBalanced ? 'var(--color-success, green)' : 'var(--color-danger, red)' }}>
+      <div className={`bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md mt-6 ${isBalanced ? "border-success" : "border-danger"}`}>
+        <div className={`text-xl font-bold ${isBalanced ? "text-success" : "text-danger"}`}>
           {isBalanced ? 'SEIMBANG' : 'TIDAK SEIMBANG'}
         </div>
         <div className="text-[0.8125rem] text-muted font-medium">

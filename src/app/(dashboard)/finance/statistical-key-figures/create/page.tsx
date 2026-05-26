@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createStatisticalKeyFigure } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, Label } from "@heroui/react"
 
 export default function CreateStatisticalKeyFigurePage() {
   const router = useRouter()
@@ -27,16 +28,16 @@ export default function CreateStatisticalKeyFigurePage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama *</label>
-            <input id="name" name="name" className="form-input" required />
+            <Label htmlFor="name">Nama *</Label>
+            <Input id="name" name="name" required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="unit" className="text-sm font-medium text-foreground">Satuan *</label>
-            <input id="unit" name="unit" className="form-input" required />
+            <Label htmlFor="unit">Satuan *</Label>
+            <Input id="unit" name="unit" required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="value" className="text-sm font-medium text-foreground">Nilai</label>
-            <input id="value" name="value" type="number" step="0.01" defaultValue="0" className="form-input" />
+            <Label htmlFor="value">Nilai</Label>
+            <Input id="value" name="value" type="number" step="0.01" defaultValue="0" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

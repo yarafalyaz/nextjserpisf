@@ -1,5 +1,6 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
+import { SalesInvoiceStatus } from "@prisma/client";
 
 /**
  * Sales Payment Hook - Observer pattern replacement.
@@ -22,7 +23,6 @@ export async function onSalesPaymentCreated(
     const allPayments = await tx.salesPayment.findMany({
       where: {
         salesInvoiceId: payment.salesInvoiceId,
-        status: { notIn: ["cancelled", "rejected"] },
       },
     });
 
@@ -60,7 +60,7 @@ export async function onSalesPaymentCreated(
       data: {
         paidAmount: totalPaid,
         paymentStatus,
-        status: invoiceStatus,
+        status: invoiceStatus as SalesInvoiceStatus,
       },
     });
   });
@@ -73,7 +73,7 @@ export async function onSalesPaymentUpdated(
   invoiceId: number
 ): Promise<void> {
   const payments = await prisma.salesPayment.findMany({
-    where: { salesInvoiceId: invoiceId, status: { notIn: ["cancelled", "rejected"] } },
+    where: { salesInvoiceId: invoiceId },
   });
   const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   const invoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
@@ -94,7 +94,7 @@ export async function onSalesPaymentUpdated(
 
   await prisma.salesInvoice.update({
     where: { id: invoiceId },
-    data: { paidAmount: totalPaid, paymentStatus, status },
+    data: { paidAmount: totalPaid, paymentStatus, status: status as SalesInvoiceStatus },
   });
 }
 

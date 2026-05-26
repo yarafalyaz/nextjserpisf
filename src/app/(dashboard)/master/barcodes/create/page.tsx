@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createBarcode } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, Select, ListBox, Label } from "@heroui/react"
 
 export default function CreateBarcodePage() {
   const router = useRouter()
@@ -33,25 +34,30 @@ export default function CreateBarcodePage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="barcode" className="text-sm font-medium text-foreground">Barcode *</label>
-            <input id="barcode" name="barcode" className="form-input" placeholder="Kode barcode" required />
+            <Label htmlFor="barcode">Barcode *</Label>
+            <Input id="barcode" name="barcode" placeholder="Kode barcode" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="itemId" className="text-sm font-medium text-foreground">Item ID *</label>
-            <input id="itemId" name="itemId" type="number" className="form-input" placeholder="ID item" required />
+            <Label htmlFor="itemId">Item ID *</Label>
+            <Input id="itemId" name="itemId" type="number" placeholder="ID item" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="type" className="text-sm font-medium text-foreground">Tipe</label>
-            <select id="type" name="type" className="form-input">
-              <option value="EAN13">EAN13</option>
-              <option value="EAN8">EAN8</option>
-              <option value="UPC">UPC</option>
-              <option value="CODE128">CODE128</option>
-              <option value="CODE39">CODE39</option>
-              <option value="QR">QR</option>
-            </select>
+            <Select name="type" defaultSelectedKey="EAN13" className="w-full">
+              <Label htmlFor="type">Tipe</Label>
+              <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "EAN13"}</Select.Value><Select.Indicator /></Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item key="EAN13" id="EAN13" textValue="EAN13">EAN13<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item key="EAN8" id="EAN8" textValue="EAN8">EAN8<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item key="UPC" id="UPC" textValue="UPC">UPC<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item key="CODE128" id="CODE128" textValue="CODE128">CODE128<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item key="CODE39" id="CODE39" textValue="CODE39">CODE39<ListBox.ItemIndicator /></ListBox.Item>
+                  <ListBox.Item key="QR" id="QR" textValue="QR">QR<ListBox.ItemIndicator /></ListBox.Item>
+                </ListBox>
+              </Select.Popover>
+            </Select>
           </div>
         </div>
 

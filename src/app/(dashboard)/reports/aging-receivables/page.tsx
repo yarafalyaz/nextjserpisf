@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { FileText } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 function getAgeGroup(days: number): string {
   if (days <= 30) return '0-30 hari'
@@ -66,7 +67,7 @@ export default async function AgingReceivablesPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.5rem' }}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex flex-col">
             <span className="text-[0.8125rem] text-muted font-medium">Total Outstanding</span>
@@ -86,34 +87,32 @@ export default async function AgingReceivablesPage() {
       {/* Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Pelanggan</th>
-                <th>No. Invoice</th>
-                <th>Jatuh Tempo</th>
-                <th style={{ textAlign: 'right' }}>Sisa Tagihan</th>
-                <th style={{ textAlign: 'right' }}>Umur (Hari)</th>
-                <th>Kelompok Umur</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Pelanggan</DetailTableTh>
+              <DetailTableTh>No. Invoice</DetailTableTh>
+              <DetailTableTh>Jatuh Tempo</DetailTableTh>
+              <DetailTableTh align="right">Sisa Tagihan</DetailTableTh>
+              <DetailTableTh align="right">Umur (Hari)</DetailTableTh>
+              <DetailTableTh>Kelompok Umur</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {data.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada piutang jatuh tempo</td></tr>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted">Tidak ada piutang jatuh tempo</DetailTableTd></DetailTableRow>
               ) : (
                 data.map((row) => (
-                  <tr key={row.id}>
-                    <td className="font-medium">{row.customerName}</td>
-                    <td className="font-mono">{row.documentNo}</td>
-                    <td>{formatDate(row.dueDate, { format: 'short' })}</td>
-                    <td style={{ textAlign: 'right' }}>{formatCurrency(row.amount)}</td>
-                    <td style={{ textAlign: 'right' }}>{row.ageDays}</td>
-                    <td><span className={`status-badge status-${row.ageDays > 90 ? 'danger' : row.ageDays > 60 ? 'warning' : 'default'}`}>{row.ageGroup}</span></td>
-                  </tr>
+                  <DetailTableRow key={row.id}>
+                    <DetailTableTd className="font-medium">{row.customerName}</DetailTableTd>
+                    <DetailTableTd className="font-mono">{row.documentNo}</DetailTableTd>
+                    <DetailTableTd>{formatDate(row.dueDate, { format: 'short' })}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(row.amount)}</DetailTableTd>
+                    <DetailTableTd align="right">{row.ageDays}</DetailTableTd>
+                    <DetailTableTd><span className={`status-badge status-${row.ageDays > 90 ? 'danger' : row.ageDays > 60 ? 'warning' : 'default'}`}>{row.ageGroup}</span></DetailTableTd>
+                  </DetailTableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
     </div>

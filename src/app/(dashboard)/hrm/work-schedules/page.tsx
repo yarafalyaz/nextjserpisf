@@ -28,12 +28,21 @@ export default async function WorkSchedulesPage({
     orderBy: [{ name: "asc" }, { dayOfWeek: "asc" }],
   })
 
+  // Fetch department names for schedules that have departmentId
+  const departmentIds = [...new Set(schedules.map((s) => s.departmentId).filter(Boolean))] as number[]
+  const departments = departmentIds.length > 0
+    ? await prisma.department.findMany({ where: { id: { in: departmentIds } }, select: { id: true, name: true } })
+    : []
+  const deptMap = new Map(departments.map((d) => [d.id, d.name]))
+
   const data = schedules.map((s) => ({
     id: s.id,
     name: s.name,
     dayOfWeek: s.dayOfWeek,
     startTime: s.startTime,
     endTime: s.endTime,
+    departmentName: s.departmentId ? deptMap.get(s.departmentId) ?? "-" : "-",
+    isActive: s.isActive,
   }))
 
   return (

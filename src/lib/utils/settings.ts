@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from '@/lib/db/prisma'
 import { cache } from 'react'
 
@@ -22,16 +22,62 @@ export const getSystemSettings = cache(async () => {
         fiscalYearStartMonth: 1,
         currencyCode: 'IDR',
         currencySymbol: 'Rp ',
-        taxRate: 11,
-        defaultPaymentTermDays: 30,
+        currencyLocale: 'id_ID',
+        documentNumberFormat: 'YRA-{d}/{m}/{Y}-{0001}',
+        // Auto-code prefixes
+        itemCodePrefix: 'ITM-',
+        enableAutoItemCode: true,
+        warehouseCodePrefix: 'WH-',
+        enableAutoWarehouseCode: true,
+        rackCodePrefix: 'RCK-',
+        enableAutoRackCode: true,
+        rowCodePrefix: 'ROW-',
+        enableAutoRowCode: true,
+        customerCodePrefix: 'CUST-',
+        enableAutoCustomerCode: true,
+        employeeCodePrefix: 'EMP-',
+        enableAutoEmployeeCode: true,
+        vendorCodePrefix: 'VEND-',
+        enableAutoVendorCode: true,
+        // Document prefixes
+        quotationCodePrefix: 'QUO',
+        assetPrefix: 'ISF',
+        salesOrderPrefix: 'SO',
+        salesInvoicePrefix: 'INV',
+        salesPaymentPrefix: 'PAY',
+        salesReturnPrefix: 'SR',
+        purchaseRequestPrefix: 'PR',
+        purchaseOrderPrefix: 'PO',
+        inventoryTransferPrefix: 'TRF',
+        stockAdjustmentPrefix: 'ADJ',
+        workOrderPrefix: 'WO',
+        timesheetPrefix: 'TS',
+        // Overtime
+        overtimeMultiplier: 0.00578035,
+        overtimeCoefficient: 1.10,
+        overtimeMealBreakStart: '17:00',
+        overtimeMealBreakEnd: '19:00',
+        // Attendance
+        attendanceRadiusKm: 1.00,
+        latePenaltyPerMinute: 5000,
+        maxLatePenaltyMinutes: 120,
+        // Accounting defaults
         salesReceivableAccountId: null,
         salesRevenueAccountId: null,
         salesTaxAccountId: null,
         purchasePayableAccountId: null,
+        purchaseInventoryAccountId: null,
+        purchaseTaxAccountId: null,
         purchaseExpenseAccountId: null,
         inventoryAccountId: null,
-        cashAccountId: null,
-        bankAccountId: null,
+        inventoryAdjustmentAccountId: null,
+        wipAccountId: null,
+        materialExpenseAccountId: null,
+        pettyCashAccountId: null,
+        salesReturnAccountId: null,
+        cashBankAccountId: null,
+        generalExpenseAccountId: null,
+        stockAdjustmentAccountId: null,
       },
     })
   }

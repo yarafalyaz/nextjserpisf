@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -15,7 +15,7 @@ export async function onPurchaseReturnProcessed(
   await prisma.$transaction(async (tx) => {
     const purchaseReturn = await tx.purchaseReturn.findUniqueOrThrow({
       where: { id: returnId },
-      include: { items: { include: { item: true } } },
+      include: { items: true, purchaseOrder: true },
     });
 
     // Idempotency: check if stock moves already exist
@@ -34,6 +34,13 @@ export async function onPurchaseReturnProcessed(
       throw new Error("Purchase Return sudah diproses sebelumnya.");
     }
 
+    // Get warehouse from related goods receipt of the same PO
+    const goodsReceipt = await tx.goodsReceipt.findFirst({
+      where: { purchaseOrderId: purchaseReturn.purchaseOrderId },
+      select: { warehouseId: true },
+    });
+    const warehouseId = goodsReceipt?.warehouseId ?? 1;
+
     // Create Stock Move OUT per item (goods returned to vendor)
     for (const item of purchaseReturn.items) {
       const smDocNo = await generateDocumentNumber("SM");
@@ -42,14 +49,14 @@ export async function onPurchaseReturnProcessed(
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
-          warehouseId: purchaseReturn.warehouseId,
+          warehouseId,
           qty: item.qty,
-          cost: item.unitCost ?? 0,
+          cost: item.cost,
           impact: "OUT",
           status: "draft",
           referenceType: "PurchaseReturn",
           referenceId: purchaseReturn.id,
-          notes: `Retur Pembelian ${purchaseReturn.documentNo} - ${item.item?.name ?? ""}`,
+          notes: `Retur Pembelian ${purchaseReturn.documentNo}`,
           createdBy: userId ?? null,
         },
       });
@@ -60,8 +67,6 @@ export async function onPurchaseReturnProcessed(
       where: { id: returnId },
       data: {
         status: "processed",
-        processedAt: new Date(),
-        processedBy: userId ?? null,
       },
     });
   });

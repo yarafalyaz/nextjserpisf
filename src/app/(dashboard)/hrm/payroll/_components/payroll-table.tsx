@@ -11,6 +11,11 @@ interface PayrollData {
   id: number
   documentNo: string
   period: string
+  employeeName: string | null
+  baseSalary: number
+  allowances: number
+  deductions: number
+  netSalary: number
   totalAmount: number
   status: string
 }
@@ -30,9 +35,25 @@ const columns = [
       </Link>
     ),
   }),
-  columnHelper.accessor("totalAmount", {
-    header: "Total",
-    cell: (info) => formatCurrency(info.getValue()),
+  columnHelper.accessor("employeeName", {
+    header: "Karyawan",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor("baseSalary", {
+    header: "Gaji Pokok",
+    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+  }),
+  columnHelper.accessor("allowances", {
+    header: "Tunjangan",
+    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+  }),
+  columnHelper.accessor("deductions", {
+    header: "Potongan",
+    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+  }),
+  columnHelper.accessor("netSalary", {
+    header: "Gaji Bersih",
+    cell: (info) => <span className="text-right block font-medium">{formatCurrency(info.getValue())}</span>,
   }),
   columnHelper.accessor("status", {
     header: "Status",

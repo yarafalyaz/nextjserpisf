@@ -10,9 +10,13 @@ export async function POST(
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { id } = await params
+  const notificationId = Number.parseInt(id, 10)
+  const userId = Number.parseInt(String(session.user.id), 10)
+  if (!Number.isInteger(notificationId) || notificationId <= 0) return NextResponse.json({ error: "Invalid notification id" }, { status: 400 })
+  if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user" }, { status: 400 })
 
   await prisma.notification.update({
-    where: { id: Number(id), userId: Number(session.user.id) },
+    where: { id: notificationId, userId },
     data: { readAt: new Date() },
   })
 

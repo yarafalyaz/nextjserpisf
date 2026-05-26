@@ -5,10 +5,13 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { StatusChip } from '@/components/ui/status-chip'
+import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAssetTransfer } from "@/actions/asset.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { Pencil } from "lucide-react"
 
 export default async function AssetDetailPage({
   params,
@@ -34,59 +37,31 @@ export default async function AssetDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Assets", href: "/assets" },
-  { label: "[id]" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">{asset.name}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <StatusChip status={asset.status} />
-  <div className="flex gap-2">
-          <Link href={`/assets/${asset.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
+      <PageHeader
+        title={asset.name}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Assets", href: "/assets" },
+          { label: asset.name },
+        ]}
+        badge={<StatusChip status={asset.status} />}
+        actions={<>
+          <Button href={`/assets/${asset.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={asset.id} action={deleteAssetTransfer} />
-                  <Link href="/assets" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-        </div>
-      </div>
+          <BackButton href="/assets" />
+        </>}
+      />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Kode Aset</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{asset.code}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Kategori</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{asset.category?.name || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Grup</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{asset.group?.name || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Lokasi</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{asset.location || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal Beli</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(asset.purchaseDate)}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Nilai Beli</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(asset.purchaseCost))}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Nilai Saat Ini</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(asset.currentValue))}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Akumulasi Penyusutan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium text-danger">{formatCurrency(depreciation)}</span>
-          </div>
-        </div>
-      </div>
+      <DetailCard>
+        <DetailField label="Kode Aset" value={asset.code} mono />
+        <DetailField label="Kategori" value={asset.category?.name || "-"} />
+        <DetailField label="Grup" value={asset.group?.name || "-"} />
+        <DetailField label="Lokasi" value={asset.location || "-"} />
+        <DetailField label="Tanggal Beli" value={formatDate(asset.purchaseDate)} />
+        <DetailField label="Nilai Beli" value={formatCurrency(Number(asset.purchaseCost))} />
+        <DetailField label="Nilai Saat Ini" value={formatCurrency(Number(asset.currentValue))} />
+        <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrency(depreciation)}</span>} />
+      </DetailCard>
 
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -97,21 +72,24 @@ export default async function AssetDetailPage({
           {asset.histories.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada riwayat</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr><th>Tanggal</th><th>Tipe</th><th>Deskripsi</th><th style={{ textAlign: "right" }}>Nilai</th></tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Tanggal</DetailTableTh>
+                <DetailTableTh>Tipe</DetailTableTh>
+                <DetailTableTh>Deskripsi</DetailTableTh>
+                <DetailTableTh align="right">Nilai</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {asset.histories.map((h) => (
-                  <tr key={h.id}>
-                    <td>{formatDate(h.date)}</td>
-                    <td><span className="px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground cursor-pointer transition-all capitalize hover:border-primary hover:text-primary">{h.type}</span></td>
-                    <td>{h.description || "-"}</td>
-                    <td className="text-right">{h.amount ? formatCurrency(Number(h.amount)) : "-"}</td>
-                  </tr>
+                  <DetailTableRow key={h.id}>
+                    <DetailTableTd>{formatDate(h.date)}</DetailTableTd>
+                    <DetailTableTd><span className="px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground cursor-pointer transition-all capitalize hover:border-primary hover:text-primary">{h.type}</span></DetailTableTd>
+                    <DetailTableTd>{h.description || "-"}</DetailTableTd>
+                    <DetailTableTd align="right">{h.amount ? formatCurrency(Number(h.amount)) : "-"}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           )}
         </div>
       </div>
@@ -123,21 +101,24 @@ export default async function AssetDetailPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Transfer</h2>
           </div>
           <div className="p-4 px-5">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr><th>Tanggal</th><th>Dari</th><th>Ke</th><th>Catatan</th></tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Tanggal</DetailTableTh>
+                <DetailTableTh>Dari</DetailTableTh>
+                <DetailTableTh>Ke</DetailTableTh>
+                <DetailTableTh>Catatan</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {asset.transfers.map((t) => (
-                  <tr key={t.id}>
-                    <td>{formatDate(t.transferDate)}</td>
-                    <td>{t.fromLocation || "-"}</td>
-                    <td>{t.toLocation}</td>
-                    <td>{t.notes || "-"}</td>
-                  </tr>
+                  <DetailTableRow key={t.id}>
+                    <DetailTableTd>{formatDate(t.transferDate)}</DetailTableTd>
+                    <DetailTableTd>{t.fromLocation || "-"}</DetailTableTd>
+                    <DetailTableTd>{t.toLocation}</DetailTableTd>
+                    <DetailTableTd>{t.notes || "-"}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           </div>
         </div>
       )}

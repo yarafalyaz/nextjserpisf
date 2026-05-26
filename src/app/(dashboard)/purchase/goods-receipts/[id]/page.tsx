@@ -8,6 +8,7 @@ import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteGoodsReceipt } from "@/actions/purchase.actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function GoodsReceiptDetailPage({
   params,
@@ -19,7 +20,7 @@ export default async function GoodsReceiptDetailPage({
   const receipt = await prisma.goodsReceipt.findUnique({
     where: { id: Number(id) },
     include: {
-      purchaseOrder: { include: { vendor: true } },
+      purchaseOrder: { include: { vendor: true, items: true } },
       warehouse: true,
       items: true,
     },
@@ -27,12 +28,16 @@ export default async function GoodsReceiptDetailPage({
 
   if (!receipt) notFound()
 
+  // Load warehouses for per-item display
+  const warehouses = await prisma.warehouse.findMany({ select: { id: true, name: true } })
+  const warehouseMap = new Map(warehouses.map((w) => [w.id, w.name]))
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Purchase",href:"/purchase"},{label:"Goods Receipts",href:"/purchase/goods-receipts"},{label:"Detail"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Penerimaan Barang {receipt.documentNo}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div className="flex gap-2 items-center">
           <span className={`status-badge status-${receipt.status}`}>{receipt.status}</span>
   <div className="flex gap-2">
           <Link href={`/purchase/goods-receipts/${receipt.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
@@ -87,24 +92,35 @@ export default async function GoodsReceiptDetailPage({
           {receipt.items.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Item ID</th>
-                  <th style={{ textAlign: "right" }}>Qty</th>
-                  <th style={{ textAlign: "right" }}>Biaya Satuan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receipt.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.itemId}</td>
-                    <td className="text-right">{Number(item.qty)}</td>
-                    <td className="text-right">{formatCurrency(Number(item.unitCost))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Item ID</DetailTableTh>
+                <DetailTableTh align="right">Qty Ordered</DetailTableTh>
+                <DetailTableTh align="right">Qty Diterima</DetailTableTh>
+                <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
+                <DetailTableTh>Gudang</DetailTableTh>
+                <DetailTableTh>Stock Move</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {receipt.items.map((item: any) => {
+                  const poItem = receipt.purchaseOrder.items?.find((pi: any) => pi.itemId === item.itemId)
+                  return (
+                    <DetailTableRow key={item.id}>
+                      <DetailTableTd>{item.itemId}</DetailTableTd>
+                      <DetailTableTd align="right">{item.qtyOrdered != null ? Number(item.qtyOrdered) : (poItem ? Number(poItem.qty) : "-")}</DetailTableTd>
+                      <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(Number(item.unitCost))}</DetailTableTd>
+                      <DetailTableTd>{warehouseMap.get(item.warehouseId) || receipt.warehouse.name}</DetailTableTd>
+                      <DetailTableTd>
+                        {item.stockMoveId ? (
+                          <Link href={`/inventory/stock-moves?id=${item.stockMoveId}`} className="text-primary hover:underline">SM-{item.stockMoveId}</Link>
+                        ) : "-"}
+                      </DetailTableTd>
+                    </DetailTableRow>
+                  )
+                })}
+              </DetailTableBody>
+            </DetailTable>
           )}
         </div>
       </div>

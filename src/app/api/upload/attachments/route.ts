@@ -37,32 +37,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ukuran file maksimal 10MB" }, { status: 400 })
   }
 
+  if (!/^\d+$/.test(referenceId)) {
+    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+  }
+  const referenceIdNum = Number.parseInt(referenceId, 10)
+  const userId = Number.parseInt(String(session.user.id), 10)
+  if (!Number.isInteger(referenceIdNum) || referenceIdNum <= 0) {
+    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+  }
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return NextResponse.json({ error: "Invalid user" }, { status: 400 })
+  }
+
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
+  // Sanitize referenceType to prevent path traversal
+  const safeRefType = referenceType.replace(/[^a-zA-Z0-9_-]/g, "")
+  if (!safeRefType || safeRefType !== referenceType) {
+    return NextResponse.json({ error: "Invalid referenceType" }, { status: 400 })
+  }
+
   // Save to public/uploads/attachments/{referenceType}
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "attachments", referenceType)
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "attachments", safeRefType)
   await mkdir(uploadDir, { recursive: true })
 
-  const ext = file.name.split(".").pop() || "bin"
-  const filename = `${referenceType}-${referenceId}-${Date.now()}.${ext}`
+  // Sanitize extension - only allow alphanumeric
+  const rawExt = (file.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "")
+  const ext = rawExt.slice(0, 10) || "bin"
+  const filename = `${safeRefType}-${referenceId}-${Date.now()}.${ext}`
   const filepath = path.join(uploadDir, filename)
+
+  // Final path traversal guard
+  if (!filepath.startsWith(uploadDir)) {
+    return NextResponse.json({ error: "Invalid file path" }, { status: 400 })
+  }
 
   await writeFile(filepath, buffer)
 
-  const fileUrl = `/uploads/attachments/${referenceType}/${filename}`
+  const fileUrl = `/uploads/attachments/${safeRefType}/${filename}`
 
   // Save to database
   const attachment = await prisma.transactionAttachment.create({
     data: {
       referenceType,
-      referenceId: Number(referenceId),
+      referenceId: referenceIdNum,
       filename,
       originalName: file.name,
       fileUrl,
       fileSize: file.size,
       mimeType: file.type,
-      uploadedBy: Number(session.user.id),
+      uploadedBy: userId,
     },
   })
 
@@ -83,10 +108,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "referenceType and referenceId are required" }, { status: 400 })
   }
 
+  if (!/^\d+$/.test(referenceId)) {
+    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+  }
+  const referenceIdNum = Number.parseInt(referenceId, 10)
+  if (!Number.isInteger(referenceIdNum) || referenceIdNum <= 0) {
+    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+  }
+
   const attachments = await prisma.transactionAttachment.findMany({
     where: {
       referenceType,
-      referenceId: Number(referenceId),
+      referenceId: referenceIdNum,
     },
     orderBy: { createdAt: "desc" },
   })

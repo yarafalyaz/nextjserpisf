@@ -29,7 +29,7 @@ export default async function NotificationsPage() {
         <span className="text-muted">{unread.length} belum dibaca</span>
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-5" style={{ gridTemplateColumns: "1fr" }}>
+      <div className="grid grid-cols-1 gap-5">
         {notifications.length === 0 ? (
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada notifikasi</p>
@@ -38,22 +38,17 @@ export default async function NotificationsPage() {
           notifications.map((n) => (
             <div
               key={n.id}
-              className="bg-surface rounded-xl border border-default shadow-sm p-6"
-              style={{
-                padding: "16px 20px",
-                borderLeft: !n.readAt ? "3px solid var(--color-primary)" : "3px solid transparent",
-                opacity: n.readAt ? 0.7 : 1,
-              }}
+              className={`bg-surface rounded-xl border border-default shadow-sm px-5 py-4 border-l-3 ${!n.readAt ? "border-l-primary" : "border-l-transparent"} ${n.readAt ? "opacity-70" : ""}`}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+              <div className="flex justify-between items-start">
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "0.9375rem", fontWeight: 600 }}>{n.title}</span>
-                    {!n.readAt && <span className="notification-badge" style={{ position: "static", width: "6px", height: "6px" }} />}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[0.9375rem] font-semibold">{n.title}</span>
+                    {!n.readAt && <span className="notification-badge static w-1.5 h-1.5" />}
                   </div>
-                  <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", margin: 0 }}>{n.body}</p>
+                  <p className="text-[0.8125rem] text-secondary m-0">{n.body}</p>
                 </div>
-                <span className="text-muted" style={{ fontSize: "0.75rem", whiteSpace: "nowrap" }}>
+                <span className="text-muted text-xs whitespace-nowrap">
                   {formatDate(n.createdAt)}
                 </span>
               </div>

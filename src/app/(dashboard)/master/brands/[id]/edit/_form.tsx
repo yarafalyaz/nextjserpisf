@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateBrand } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { Input, Label } from "@heroui/react"
 
 interface BrandEditFormProps {
   brand: { id: number; name: string }
@@ -32,8 +33,8 @@ export function BrandEditForm({ brand }: BrandEditFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Brand *</label>
-          <input id="name" name="name" className="form-input" placeholder="Nama brand" defaultValue={brand.name} required />
+          <Label htmlFor="name">Nama Brand *</Label>
+          <Input id="name" name="name" placeholder="Nama brand" defaultValue={brand.name} required />
         </div>
       </div>
 

@@ -55,15 +55,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id ?? "";
         token.name = user.name;
         token.roles = (user as any).roles;
         token.permissions = (user as any).permissions;
       }
-      // Always fetch avatar from DB (lightweight query)
-      if (token.id) {
+      // Fetch avatar only on sign-in or every 5 minutes (not every request)
+      const now = Date.now();
+      const lastFetch = (token as any)._avatarFetchedAt as number | undefined;
+      if (token.id && (!lastFetch || now - lastFetch > 5 * 60 * 1000)) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: Number(token.id) },
@@ -73,6 +75,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.name = dbUser.name;
             token.avatar = dbUser.avatar;
           }
+          (token as any)._avatarFetchedAt = now;
         } catch {
           // Silently fail - don't break auth flow
         }

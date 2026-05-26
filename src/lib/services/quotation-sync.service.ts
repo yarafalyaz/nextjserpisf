@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { PrismaClient, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { generateDocumentNumber } from '@/lib/utils/document-number'
@@ -248,6 +248,7 @@ export class QuotationSyncService {
   /**
    * Re-sync linked Sales Orders and Sales Invoices when a Quotation is edited.
    * Only updates documents still in updatable statuses (draft/confirmed for SO, draft for Invoice).
+   * Fix #43: Wrap in $transaction to prevent partial updates
    */
   async resyncOnEdit(quotationId: number): Promise<void> {
     const quotation = await this.prisma.quotation.findUnique({
@@ -262,58 +263,60 @@ export class QuotationSyncService {
 
     const items = this.flattenQuotationItems(quotation.sections)
 
-    // Find linked SOs in updatable status
-    const salesOrders = await this.prisma.salesOrder.findMany({
-      where: { quotationId, status: { in: ['draft', 'confirmed'] } },
-    })
+    await this.prisma.$transaction(async (tx) => {
+      // Find linked SOs in updatable status
+      const salesOrders = await tx.salesOrder.findMany({
+        where: { quotationId, status: { in: ['draft', 'confirmed'] } },
+      })
 
-    for (const so of salesOrders) {
-      // Delete old items
-      await this.prisma.salesOrderItem.deleteMany({ where: { salesOrderId: so.id } })
-      // Create new items from quotation
-      if (items.length > 0) {
-        await this.prisma.salesOrderItem.createMany({
-          data: items.map((qi) => ({
-            salesOrderId: so.id,
-            itemId: qi.itemId,
-            qty: qi.qty,
-            unitPrice: qi.unitPrice,
-            discount: qi.discount,
-            subtotal: qi.qty * qi.unitPrice - qi.discount,
-          })),
+      for (const so of salesOrders) {
+        // Delete old items
+        await tx.salesOrderItem.deleteMany({ where: { salesOrderId: so.id } })
+        // Create new items from quotation
+        if (items.length > 0) {
+          await tx.salesOrderItem.createMany({
+            data: items.map((qi) => ({
+              salesOrderId: so.id,
+              itemId: qi.itemId,
+              qty: qi.qty,
+              unitPrice: qi.unitPrice,
+              discount: qi.discount,
+              subtotal: qi.qty * qi.unitPrice - qi.discount,
+            })),
+          })
+        }
+        // Update SO total
+        await tx.salesOrder.update({
+          where: { id: so.id },
+          data: { grandTotal: quotation.grandTotal },
         })
       }
-      // Update SO total
-      await this.prisma.salesOrder.update({
-        where: { id: so.id },
-        data: { grandTotal: quotation.grandTotal },
+
+      // Same for invoices in draft status
+      const invoices = await tx.salesInvoice.findMany({
+        where: { quotationId, status: 'draft' },
       })
-    }
 
-    // Same for invoices in draft status
-    const invoices = await this.prisma.salesInvoice.findMany({
-      where: { quotationId, status: 'draft' },
-    })
-
-    for (const inv of invoices) {
-      await this.prisma.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: inv.id } })
-      if (items.length > 0) {
-        await this.prisma.salesInvoiceItem.createMany({
-          data: items.map((qi) => ({
-            salesInvoiceId: inv.id,
-            itemId: qi.itemId,
-            qty: qi.qty,
-            unitPrice: qi.unitPrice,
-            discount: qi.discount,
-            subtotal: qi.qty * qi.unitPrice - qi.discount,
-          })),
+      for (const inv of invoices) {
+        await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: inv.id } })
+        if (items.length > 0) {
+          await tx.salesInvoiceItem.createMany({
+            data: items.map((qi) => ({
+              salesInvoiceId: inv.id,
+              itemId: qi.itemId,
+              qty: qi.qty,
+              unitPrice: qi.unitPrice,
+              discount: qi.discount,
+              subtotal: qi.qty * qi.unitPrice - qi.discount,
+            })),
+          })
+        }
+        await tx.salesInvoice.update({
+          where: { id: inv.id },
+          data: { grandTotal: quotation.grandTotal },
         })
       }
-      await this.prisma.salesInvoice.update({
-        where: { id: inv.id },
-        data: { grandTotal: quotation.grandTotal },
-      })
-    }
+    })
   }
 }
 

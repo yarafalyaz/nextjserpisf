@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -8,11 +7,12 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, Label } from "@heroui/react"
+import { CurrencyInput } from "@/components/ui/currency-input"
 
 interface JournalFormProps {
   accounts: { id: number; code: string; name: string
 }[]
-  journal?: any
+  journal?: { id: number; date: string; description?: string | null; entries?: Array<{ accountId: number; debit: number; credit: number; description?: string }> }
 }
 
 interface JournalEntry { accountId: number; debit: number; credit: number; memo: string }
@@ -29,7 +29,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
 
   function addEntry() { setEntries([...entries, { accountId: 0, debit: 0, credit: 0, memo: "" }]) }
   function removeEntry(i: number) { setEntries(entries.filter((_, idx) => idx !== i)) }
-  function updateEntry(i: number, field: keyof JournalEntry, value: any) {
+  function updateEntry(i: number, field: keyof JournalEntry, value: string | number) {
     const updated = [...entries]; updated[i] = { ...updated[i], [field]: value }; setEntries(updated)
   }
 
@@ -73,7 +73,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Deskripsi</Label>
-          <Input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full" placeholder="Deskripsi jurnal" isRequired />
+          <Input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full" placeholder="Deskripsi jurnal" required />
         </div>
       </div>
 
@@ -93,8 +93,8 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
                     {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
                   </select>
                 </td>
-                <td><input type="number" step="0.01" value={entry.debit} onChange={(e) => updateEntry(i, "debit", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "110px" }} /></td>
-                <td><input type="number" step="0.01" value={entry.credit} onChange={(e) => updateEntry(i, "credit", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "110px" }} /></td>
+                <td><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="form-input" /></td>
+                <td><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="form-input" /></td>
                 <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
                 <td>{entries.length > 2 && <button type="button" onClick={() => removeEntry(i)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost" style={{ color: "var(--color-danger)" }}>×</button>}</td>
               </tr>

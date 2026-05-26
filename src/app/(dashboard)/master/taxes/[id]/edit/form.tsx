@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateTax } from "@/actions/master.actions"
+import { Input, Label } from "@heroui/react"
 
 interface TaxEditFormProps {
   tax: { id: number; name: string; rate: number }
@@ -26,12 +27,12 @@ export function TaxEditForm({ tax }: TaxEditFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Nama *</label>
-          <input name="name" className="form-input" required defaultValue={tax.name} placeholder="Nama pajak" />
+          <Label>Nama *</Label>
+          <Input name="name" required defaultValue={tax.name} placeholder="Nama pajak" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Rate (%) *</label>
-          <input name="rate" type="number" step="0.01" className="form-input" required defaultValue={tax.rate} placeholder="0.00" />
+          <Label>Rate (%) *</Label>
+          <Input name="rate" type="number" step="0.01" required defaultValue={tax.rate} placeholder="0.00" />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

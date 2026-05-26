@@ -15,6 +15,7 @@ interface PettyCashData {
   type: string
   description: string | null
   amount: number
+  balanceAfter: number
 }
 
 const columnHelper = createColumnHelper<PettyCashData>()
@@ -42,6 +43,10 @@ const columns = [
   }),
   columnHelper.accessor("amount", {
     header: "Jumlah",
+    cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
+  }),
+  columnHelper.accessor("balanceAfter", {
+    header: "Saldo Setelah",
     cell: (info) => <span className="text-right block">{formatCurrency(info.getValue())}</span>,
   }),
   columnHelper.display({

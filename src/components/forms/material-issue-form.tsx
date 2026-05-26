@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -11,7 +10,7 @@ import { Input, ComboBox, ListBox, Label } from "@heroui/react"
 interface MaterialIssueFormProps {
   warehouses: { id: number; name: string
 }[]
-  issue?: any
+  issue?: { id: number; workOrderId: number; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; warehouseId?: number }> }
   items: { id: number; sku: string; name: string; qtyOnHand: string; cost: string }[]
 }
 
@@ -25,7 +24,7 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
 
   function addItem() { setMiItems([...miItems, { itemId: 0, qty: 1, unitCost: 0 }]) }
   function removeItem(i: number) { setMiItems(miItems.filter((_, idx) => idx !== i)) }
-  function updateItem(i: number, field: keyof MIItem, value: any) {
+  function updateItem(i: number, field: keyof MIItem, value: string | number) {
     const updated = [...miItems]; updated[i] = { ...updated[i], [field]: value }
     if (field === "itemId") {
       const item = items.find((it) => it.id === Number(value))

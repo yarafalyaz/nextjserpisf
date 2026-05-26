@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma, TxClient } from "@/lib/db/prisma";
 
 /**
@@ -121,7 +121,7 @@ export async function onSalesPaymentCreated(
 
   const payment = await prisma.salesPayment.findUniqueOrThrow({
     where: { id: paymentId },
-    include: { invoice: true },
+    include: { salesInvoice: true },
   });
 
   // Idempotency check
@@ -145,7 +145,7 @@ export async function onSalesPaymentCreated(
         transactionDate: payment.paymentDate ?? new Date(),
         referenceType: "SalesPayment",
         referenceId: payment.id,
-        description: `Pembayaran Invoice ${payment.invoice?.documentNo ?? ""}`,
+        description: `Pembayaran Invoice ${payment.salesInvoice?.documentNo ?? ""}`,
         type: "GENERAL",
         status: "POSTED",
         totalDebit: payment.amount,
@@ -204,7 +204,7 @@ export async function onPurchaseOrderReceived(
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PO-RCV", orderId);
 
-    const taxAmount = Number(order.taxAmount ?? 0);
+    const taxAmount = Number(order.tax ?? 0);
     const subtotal = Number(order.totalAmount) - taxAmount;
 
     const journal = await tx.journal.create({
@@ -288,7 +288,7 @@ export async function onStockAdjustmentProcessed(
   let totalNegative = 0;
 
   for (const item of adjustment.items) {
-    const diff = Number(item.newQty) - Number(item.currentQty);
+    const diff = Number(item.actualQty) - Number(item.systemQty);
     const value = Math.abs(diff) * Number(item.unitCost ?? 0);
     if (diff > 0) totalPositive += value;
     else if (diff < 0) totalNegative += value;
@@ -407,7 +407,7 @@ export async function onWorkOrderCompleted(
 
   // Calculate total material cost
   const totalCost = workOrder.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.unitCost ?? 0),
+    (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
     0
   );
 
@@ -483,7 +483,7 @@ export async function onExpenseApproved(
     const journal = await tx.journal.create({
       data: {
         journalNumber,
-        transactionDate: expense.expenseDate ?? new Date(),
+        transactionDate: expense.date ?? new Date(),
         referenceType: "Expense",
         referenceId: expense.id,
         description: `Pengeluaran: ${expense.description ?? expense.documentNo}`,
@@ -633,6 +633,7 @@ export async function onSalesReturnCompleted(
 
   const salesReturn = await prisma.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
+    include: { items: true },
   });
 
   // Idempotency check
@@ -640,6 +641,13 @@ export async function onSalesReturnCompleted(
     where: { referenceType: "SalesReturn", referenceId: returnId },
   });
   if (existing) return;
+
+  // Compute total from items (SalesReturn has no totalAmount field)
+  const totalAmount = salesReturn.items.reduce(
+    (sum, item) => sum + Number(item.qty) * Number(item.cost),
+    0
+  );
+  if (totalAmount <= 0) return;
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "SR", returnId);
@@ -653,8 +661,8 @@ export async function onSalesReturnCompleted(
         description: `Retur Penjualan ${salesReturn.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: salesReturn.totalAmount,
-        totalCredit: salesReturn.totalAmount,
+        totalDebit: totalAmount,
+        totalCredit: totalAmount,
         createdBy: userId ?? null,
       },
     });
@@ -664,7 +672,7 @@ export async function onSalesReturnCompleted(
       data: {
         journalId: journal.id,
         accountId: settings.salesReturnAccountId!,
-        debit: salesReturn.totalAmount,
+        debit: totalAmount,
         credit: 0,
         memo: "Retur Penjualan",
       },
@@ -676,7 +684,7 @@ export async function onSalesReturnCompleted(
         journalId: journal.id,
         accountId: settings.salesReceivableAccountId!,
         debit: 0,
-        credit: salesReturn.totalAmount,
+        credit: totalAmount,
         memo: "Pengurangan Piutang (Retur)",
       },
     });
@@ -698,6 +706,7 @@ export async function onPurchaseReturnProcessed(
 
   const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({
     where: { id: returnId },
+    include: { items: true },
   });
 
   // Idempotency check
@@ -705,6 +714,13 @@ export async function onPurchaseReturnProcessed(
     where: { referenceType: "PurchaseReturn", referenceId: returnId },
   });
   if (existing) return;
+
+  // Compute total from items (PurchaseReturn has no totalAmount field)
+  const totalAmount = purchaseReturn.items.reduce(
+    (sum, item) => sum + Number(item.qty) * Number(item.cost),
+    0
+  );
+  if (totalAmount <= 0) return;
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PR", returnId);
@@ -718,8 +734,8 @@ export async function onPurchaseReturnProcessed(
         description: `Retur Pembelian ${purchaseReturn.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: purchaseReturn.totalAmount,
-        totalCredit: purchaseReturn.totalAmount,
+        totalDebit: totalAmount,
+        totalCredit: totalAmount,
         createdBy: userId ?? null,
       },
     });
@@ -729,7 +745,7 @@ export async function onPurchaseReturnProcessed(
       data: {
         journalId: journal.id,
         accountId: settings.purchasePayableAccountId!,
-        debit: purchaseReturn.totalAmount,
+        debit: totalAmount,
         credit: 0,
         memo: "Pengurangan Hutang (Retur)",
       },
@@ -741,7 +757,7 @@ export async function onPurchaseReturnProcessed(
         journalId: journal.id,
         accountId: settings.inventoryAccountId!,
         debit: 0,
-        credit: purchaseReturn.totalAmount,
+        credit: totalAmount,
         memo: "Pengembalian Persediaan",
       },
     });
@@ -774,7 +790,7 @@ export async function onMaterialIssueCompleted(
 
   // Calculate total cost
   const totalCost = issue.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.unitCost ?? 0),
+    (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
     0
   );
 
@@ -833,7 +849,8 @@ export async function onDownPaymentReceived(
   userId?: number
 ): Promise<void> {
   const settings = await getSystemSettings();
-  if (!settings.salesReceivableAccountId) return;
+  // Fix #27: Harus punya cashBankAccountId untuk Dr. Bank/Cash
+  if (!settings.cashBankAccountId || !settings.salesReceivableAccountId) return;
 
   const dp = await prisma.downPayment.findUniqueOrThrow({
     where: { id: dpId },
@@ -861,8 +878,10 @@ export async function onDownPaymentReceived(
         createdBy: userId,
         entries: {
           create: [
-            { accountId: settings.salesReceivableAccountId!, debit: dp.amount, credit: 0, memo: "Bank/Cash received" },
-            { accountId: settings.salesRevenueAccountId || settings.salesReceivableAccountId!, debit: 0, credit: dp.amount, memo: "Uang Muka Penjualan" },
+            // Fix #27: Dr. Bank/Cash (bukan Piutang)
+            { accountId: settings.cashBankAccountId!, debit: dp.amount, credit: 0, memo: "Bank/Cash received" },
+            // Fix #27: Cr. Uang Muka Penjualan (bukan Revenue)
+            { accountId: settings.salesReceivableAccountId!, debit: 0, credit: dp.amount, memo: "Uang Muka Penjualan" },
           ],
         },
       },
@@ -929,7 +948,8 @@ export async function onVendorPaymentCreated(
   userId?: number
 ): Promise<void> {
   const settings = await getSystemSettings();
-  if (!settings.purchasePayableAccountId) return;
+  // Fix #28: Harus punya cashBankAccountId untuk Cr. Bank/Cash
+  if (!settings.purchasePayableAccountId || !settings.cashBankAccountId) return;
 
   const payment = await prisma.vendorPayment.findUniqueOrThrow({
     where: { id: paymentId },
@@ -957,8 +977,10 @@ export async function onVendorPaymentCreated(
         createdBy: userId,
         entries: {
           create: [
+            // Dr. Hutang Usaha
             { accountId: settings.purchasePayableAccountId!, debit: payment.amount, credit: 0, memo: "Accounts Payable" },
-            { accountId: settings.salesReceivableAccountId || settings.purchasePayableAccountId!, debit: 0, credit: payment.amount, memo: "Bank/Cash paid" },
+            // Fix #28: Cr. Bank/Cash (bukan salesReceivableAccountId!)
+            { accountId: payment.accountId ?? settings.cashBankAccountId!, debit: 0, credit: payment.amount, memo: "Bank/Cash paid" },
           ],
         },
       },

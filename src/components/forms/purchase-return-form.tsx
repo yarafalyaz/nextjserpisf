@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -11,7 +10,7 @@ import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
 interface PurchaseReturnFormProps {
   purchaseOrders: { id: number; documentNo: string
 }[]
-  returnData?: any
+  returnData?: { id: number; purchaseOrderId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
   items: { id: number; sku: string; name: string }[]
 }
 

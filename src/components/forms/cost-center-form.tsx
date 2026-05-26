@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -6,7 +5,7 @@ import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, Label, TextArea, Checkbox } from "@heroui/react"
 
-export function CostCenterForm({ costCenter }: { costCenter?: any } = {}) {
+export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code: string; name: string; description?: string | null; isActive?: boolean } } = {}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 

@@ -12,6 +12,7 @@ import { bulkDelete } from "@/actions/bulk.actions"
 interface OvertimeRequest {
   id: number
   employee: { name: string }
+  project?: { name: string } | null
   date: Date | string
   hours: number | string
   reason: string | null
@@ -29,6 +30,11 @@ const columns = [
         {info.getValue()}
       </Link>
     ),
+  }),
+  columnHelper.accessor((row) => row.project?.name ?? null, {
+    id: "projectName",
+    header: "Proyek",
+    cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("date", {
     header: "Tanggal",

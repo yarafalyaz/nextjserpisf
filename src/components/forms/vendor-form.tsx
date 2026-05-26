@@ -1,15 +1,17 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useTransition, type FormEvent } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { vendorSchema, type VendorInput } from "@/lib/validators"
 import { createVendor, updateVendor } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Label, Select, ListBox } from "@heroui/react"
+import { Label, Select, ListBox, Select as HeroSelect } from "@heroui/react"
 import { AddressPicker } from "@/components/ui/address-picker"
+import { SelectValue, Input, TextArea } from "@/components/ui/heroui-compat"
+import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
+import { Button } from "@/components/ui/page-header"
 
 interface VendorFormProps {
   vendor?: {
@@ -43,9 +45,7 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
       address: vendor?.address || "",
       city: vendor?.city || "",
       npwp: vendor?.npwp || "",
-      paymentTermId: vendor?.paymentTermId || undefined,
-    },
-  })
+      paymentTermId: vendor?.paymentTermId || undefined}})
 
   function onSubmit(data: VendorInput) {
     startTransition(async () => {
@@ -70,80 +70,72 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="code">ID Pemasok</Label>
-          <Input id="code" {...register("code")} readOnly className="bg-muted" />
-        </div>
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <FormCard>
+        <FormSection title="Informasi Umum">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="code">ID Pemasok</Label>
+            <Input id="code" {...register("code")} readOnly className="bg-muted" />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama Vendor *</Label>
-          <Input id="name" {...register("name")} placeholder="Nama vendor" />
-          {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="name">Nama Vendor *</Label>
+            <Input id="name" {...register("name")} placeholder="Nama vendor" />
+            {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="phone">Telepon</Label>
-          <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: any) => { e.target.value = e.target.value.replace(/[^0-9+\-() ]/g, '') }} placeholder="08xxxxxxxxxx" />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="phone">Telepon</Label>
+            <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="npwp">NPWP</Label>
-          <Input id="npwp" {...register("npwp")} placeholder="XX.XXX.XXX.X-XXX.XXX" />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="npwp">NPWP</Label>
+            <Input id="npwp" {...register("npwp")} placeholder="XX.XXX.XXX.X-XXX.XXX" />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Controller
-            name="paymentTermId"
-            control={control}
-            render={({ field }) => (
-              <Select selectedKey={field.value ? String(field.value) : ""} onSelectionChange={(key) => field.onChange(key ? Number(key) : null)} className="w-full">
-                <Label>Termin Pembayaran</Label>
-                <Select.Trigger><Select.Value placeholder="Pilih termin" /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    {paymentTerms.map((pt) => (
-                      <ListBox.Item key={String(pt.id)} id={String(pt.id)} textValue={pt.name}>{pt.name}<ListBox.ItemIndicator /></ListBox.Item>
-                    ))}
-                  </ListBox>
-                </Select.Popover>
-              </Select>
-            )}
-          />
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Controller
+              name="paymentTermId"
+              control={control}
+              render={({ field }) => (
+                <Select selectedKey={field.value ? String(field.value) : ""} onSelectionChange={(key) => field.onChange(key ? Number(key) : null)} className="w-full">
+                  <Label>Termin Pembayaran</Label>
+                  <HeroSelect.Trigger><SelectValue placeholder="Pilih termin" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+                  <HeroSelect.Popover>
+                    <ListBox>
+                      {paymentTerms.map((pt) => (
+                        <ListBox.Item key={String(pt.id)} id={String(pt.id)} textValue={pt.name}>{pt.name}<ListBox.ItemIndicator /></ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </HeroSelect.Popover>
+                </Select>
+              )}
+            />
+          </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" {...register("email")} placeholder="email@vendor.com" />
-          {errors.email && <span className="text-xs text-danger mt-1">{errors.email.message}</span>}
-        </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" {...register("email")} placeholder="email@vendor.com" />
+            {errors.email && <span className="text-xs text-danger mt-1">{errors.email.message}</span>}
+          </div>
+        </FormSection>
 
-        <div className="flex flex-col gap-1.5 col-span-full">
-          <Label htmlFor="street">Alamat Jalan</Label>
-          <TextArea id="street" {...register("street")} rows={2} placeholder="Alamat jalan lengkap" />
-        </div>
-        <AddressPicker defaultValues={{ province: vendor?.province, city: vendor?.city, district: vendor?.districtVendor, village: vendor?.villageVendor, postalCode: vendor?.postalCode }} />
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bankName">Nama Bank</Label>
-          <Input id="bankName" {...register("bankName")} placeholder="Nama bank" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bankAccountNumber">No. Rekening</Label>
-          <Input id="bankAccountNumber" inputMode="numeric" {...register("bankAccountNumber")} onInput={(e: any) => { e.target.value = e.target.value.replace(/[^0-9]/g, '') }} placeholder="No. rekening" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="bankAccountHolder">Atas Nama</Label>
-          <Input id="bankAccountHolder" {...register("bankAccountHolder")} placeholder="Nama pemilik rekening" />
-        </div>
-      </div>
+        <FormSection title="Alamat">
+          <div className="flex flex-col gap-1.5 col-span-full">
+            <Label htmlFor="street">Alamat Jalan</Label>
+            <TextArea id="address" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
+          </div>
+          <AddressPicker defaultValues={{ city: vendor?.city ?? undefined }} />
+        </FormSection>
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="submit-vendor">
-          {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
-        </button>
-      </div>
+        <FormActions>
+          <Button onClick={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" disabled={isPending}>
+            {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
+          </Button>
+        </FormActions>
+      </FormCard>
     </form>
   )
 }

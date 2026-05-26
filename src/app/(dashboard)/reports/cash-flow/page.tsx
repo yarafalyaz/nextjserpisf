@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency } from '@/lib/utils/format'
 import { Wallet } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function CashFlowPage({
   searchParams,
@@ -84,7 +85,7 @@ export default async function CashFlowPage({
   { label: "Cash Flow" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="flex items-center gap-2">
           <Wallet size={24} />
           <h1>Laporan Arus Kas</h1>
         </div>
@@ -93,7 +94,7 @@ export default async function CashFlowPage({
         </p>
       </div>
 
-      <form style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+      <form className="mb-6 flex items-center gap-3 flex-wrap">
         <label htmlFor="startDate">Dari:</label>
         <input
           type="date"
@@ -108,25 +109,25 @@ export default async function CashFlowPage({
           name="endDate"
           defaultValue={params.endDate || endDate.toISOString().split('T')[0]}
         />
-        <button type="submit">Generate</button>
+        <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Generate</button>
       </form>
 
       {/* KPI Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-xl font-bold text-foreground" style={{ color: 'var(--color-success, green)' }}>
+          <div className="text-xl font-bold text-success">
             {formatCurrency(totalInflow)}
           </div>
           <div className="text-[0.8125rem] text-muted font-medium">Total Penerimaan Kas</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-xl font-bold text-foreground" style={{ color: 'var(--color-danger, red)' }}>
+          <div className="text-xl font-bold text-danger">
             {formatCurrency(totalOutflow)}
           </div>
           <div className="text-[0.8125rem] text-muted font-medium">Total Pengeluaran Kas</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-xl font-bold text-foreground" style={{ color: netCashFlow >= 0 ? 'var(--color-success, green)' : 'var(--color-danger, red)' }}>
+          <div className={`text-xl font-bold ${netCashFlow >= 0 ? "text-success" : "text-danger"}`}>
             {formatCurrency(netCashFlow)}
           </div>
           <div className="text-[0.8125rem] text-muted font-medium">Arus Kas Bersih</div>
@@ -134,32 +135,30 @@ export default async function CashFlowPage({
       </div>
 
       {/* Cash Accounts */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden" style={{ marginBottom: '1.5rem' }}>
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Akun Kas/Bank</h2>
         </div>
         <div className="p-4 px-5">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Kode</th>
-                <th>Nama Akun</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Kode</DetailTableTh>
+              <DetailTableTh>Nama Akun</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {cashAccounts.map((acc) => (
-                <tr key={acc.id}>
-                  <td>{acc.code}</td>
-                  <td>{acc.name}</td>
-                </tr>
+                <DetailTableRow key={acc.id}>
+                  <DetailTableTd>{acc.code}</DetailTableTd>
+                  <DetailTableTd>{acc.name}</DetailTableTd>
+                </DetailTableRow>
               ))}
               {cashAccounts.length === 0 && (
-                <tr>
-                  <td colSpan={2} style={{ textAlign: 'center' }}>Tidak ada akun kas/bank ditemukan</td>
-                </tr>
+                <DetailTableRow>
+                  <DetailTableTd colSpan={2} className="text-center">Tidak ada akun kas/bank ditemukan</DetailTableTd>
+                </DetailTableRow>
               )}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
 
@@ -171,41 +170,39 @@ export default async function CashFlowPage({
         <div className="p-4 px-5">
           <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th>Bulan</th>
-                    <th style={{ textAlign: 'right' }}>Penerimaan</th>
-                    <th style={{ textAlign: 'right' }}>Pengeluaran</th>
-                    <th style={{ textAlign: 'right' }}>Arus Bersih</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <DetailTable>
+                <DetailTableHead>
+                  <DetailTableTh>Bulan</DetailTableTh>
+                  <DetailTableTh align="right">Penerimaan</DetailTableTh>
+                  <DetailTableTh align="right">Pengeluaran</DetailTableTh>
+                  <DetailTableTh align="right">Arus Bersih</DetailTableTh>
+                </DetailTableHead>
+                <DetailTableBody>
                   {sortedMonths.map(([month, data]) => (
-                    <tr key={month}>
-                      <td>{month}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(data.inflow)}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(data.outflow)}</td>
-                      <td style={{ textAlign: 'right', color: data.inflow - data.outflow >= 0 ? 'var(--color-success, green)' : 'var(--color-danger, red)' }}>
+                    <DetailTableRow key={month}>
+                      <DetailTableTd>{month}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(data.inflow)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(data.outflow)}</DetailTableTd>
+                      <DetailTableTd align="right" className={data.inflow - data.outflow >= 0 ? "text-success" : "text-danger"}>
                         {formatCurrency(data.inflow - data.outflow)}
-                      </td>
-                    </tr>
+                      </DetailTableTd>
+                    </DetailTableRow>
                   ))}
                   {sortedMonths.length === 0 && (
-                    <tr>
-                      <td colSpan={4} style={{ textAlign: 'center' }}>Tidak ada data arus kas pada periode ini</td>
-                    </tr>
+                    <DetailTableRow>
+                      <DetailTableTd colSpan={4} className="text-center">Tidak ada data arus kas pada periode ini</DetailTableTd>
+                    </DetailTableRow>
                   )}
                   {sortedMonths.length > 0 && (
-                    <tr style={{ fontWeight: 'bold' }}>
-                      <td>Total</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(totalInflow)}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(totalOutflow)}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(netCashFlow)}</td>
-                    </tr>
+                    <DetailTableRow className="font-bold">
+                      <DetailTableTd>Total</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(totalInflow)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(totalOutflow)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(netCashFlow)}</DetailTableTd>
+                    </DetailTableRow>
                   )}
-                </tbody>
-              </table>
+                </DetailTableBody>
+              </DetailTable>
             </div>
           </div>
         </div>

@@ -1,16 +1,16 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTicket, updateTicket } from "@/actions/crm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label } from "@heroui/react"
+import {Select, ComboBox, ListBox, Label , Select as HeroSelect} from "@heroui/react"
+import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 
 interface TicketFormProps {
   customers: { id: number; name: string
 }[]
-  ticket?: any
+  ticket?: { id: number; subject: string; description?: string | null; priority: string; status: string; assignedTo?: number | null; ticketNumber?: string; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null; type?: string | null; resolutionNotes?: string | null }
   users: { id: number; name: string }[]
 }
 
@@ -81,8 +81,8 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
         <div className="flex flex-col gap-1.5">
           <Select name="type" defaultSelectedKey={ticket?.type || undefined} className="w-full">
             <Label>Tipe</Label>
-            <Select.Trigger><Select.Value placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+            <HeroSelect.Trigger><SelectValue placeholder="Pilih Tipe" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="inquiry" textValue="Inquiry">Inquiry<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="complaint" textValue="Complaint">Complaint<ListBox.ItemIndicator /></ListBox.Item>
@@ -90,20 +90,20 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
                 <ListBox.Item id="feedback" textValue="Feedback">Feedback<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="other" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
+            </HeroSelect.Popover>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <Select name="priority" defaultSelectedKey={ticket?.priority || "medium"} className="w-full">
             <Label>Prioritas *</Label>
-            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+            <HeroSelect.Trigger><Select.Value /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="low" textValue="Low">Low<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="medium" textValue="Medium">Medium<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="high" textValue="High">High<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
+            </HeroSelect.Popover>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">

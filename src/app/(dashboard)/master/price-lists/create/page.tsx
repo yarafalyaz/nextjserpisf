@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createPriceList } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, TextArea, Label } from "@heroui/react"
 
 export default function CreatePriceListPage() {
   const router = useRouter()
@@ -33,13 +34,13 @@ export default function CreatePriceListPage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama *</label>
-            <input id="name" name="name" className="form-input" placeholder="Nama daftar harga" required />
+            <Label htmlFor="name">Nama *</Label>
+            <Input id="name" name="name" placeholder="Nama daftar harga" required />
           </div>
 
           <div className="flex flex-col gap-1.5 col-span-full">
-            <label htmlFor="description" className="text-sm font-medium text-foreground">Deskripsi</label>
-            <textarea id="description" name="description" className="form-input" rows={3} placeholder="Deskripsi (opsional)" />
+            <Label htmlFor="description">Deskripsi</Label>
+            <TextArea id="description" name="description" rows={3} placeholder="Deskripsi (opsional)" />
           </div>
         </div>
 

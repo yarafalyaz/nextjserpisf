@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -15,7 +15,7 @@ export async function onSalesReturnCompleted(
   await prisma.$transaction(async (tx) => {
     const salesReturn = await tx.salesReturn.findUniqueOrThrow({
       where: { id: returnId },
-      include: { items: { include: { item: true } } },
+      include: { items: true },
     });
 
     // Idempotency: check if stock moves already exist
@@ -34,6 +34,12 @@ export async function onSalesReturnCompleted(
       throw new Error("Sales Return sudah selesai sebelumnya.");
     }
 
+    // Get default warehouse (first active warehouse)
+    const warehouse = await tx.warehouse.findFirst({
+      select: { id: true },
+    });
+    const warehouseId = warehouse?.id ?? 1;
+
     // Create Stock Move IN per item (goods returned to warehouse)
     for (const item of salesReturn.items) {
       const smDocNo = await generateDocumentNumber("SM");
@@ -42,14 +48,14 @@ export async function onSalesReturnCompleted(
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
-          warehouseId: salesReturn.warehouseId,
+          warehouseId,
           qty: item.qty,
-          cost: item.unitCost ?? 0,
+          cost: item.cost,
           impact: "IN",
           status: "draft",
           referenceType: "SalesReturn",
           referenceId: salesReturn.id,
-          notes: `Retur Penjualan ${salesReturn.documentNo} - ${item.item?.name ?? ""}`,
+          notes: `Retur Penjualan ${salesReturn.documentNo}`,
           createdBy: userId ?? null,
         },
       });
@@ -60,7 +66,6 @@ export async function onSalesReturnCompleted(
       where: { id: returnId },
       data: {
         status: "completed",
-        completedAt: new Date(),
       },
     });
   });

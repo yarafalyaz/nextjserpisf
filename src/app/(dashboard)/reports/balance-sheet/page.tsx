@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency } from '@/lib/utils/format'
 import { BarChart3 } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function BalanceSheetPage({
   searchParams,
@@ -71,14 +72,14 @@ export default async function BalanceSheetPage({
   { label: "Balance Sheet" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="flex items-center gap-2">
           <BarChart3 size={24} />
           <h1>Neraca (Balance Sheet)</h1>
         </div>
         <p>Per tanggal: {asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
       </div>
 
-      <form style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+      <form className="mb-6 flex items-center gap-3">
         <label htmlFor="date">Tanggal:</label>
         <input
           type="date"
@@ -86,105 +87,99 @@ export default async function BalanceSheetPage({
           name="date"
           defaultValue={params.date || asOfDate.toISOString().split('T')[0]}
         />
-        <button type="submit">Generate</button>
+        <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Generate</button>
       </form>
 
       {/* ASET */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden" style={{ marginBottom: '1.5rem' }}>
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">ASET</h2>
         </div>
         <div className="p-4 px-5">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Kode</th>
-                <th>Nama Akun</th>
-                <th style={{ textAlign: 'right' }}>Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Kode</DetailTableTh>
+              <DetailTableTh>Nama Akun</DetailTableTh>
+              <DetailTableTh align="right">Saldo</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {assets.map((a) => (
-                <tr key={a.code}>
-                  <td>{a.code}</td>
-                  <td>{a.name}</td>
-                  <td style={{ textAlign: 'right' }}>{formatCurrency(a.balance)}</td>
-                </tr>
+                <DetailTableRow key={a.code}>
+                  <DetailTableTd>{a.code}</DetailTableTd>
+                  <DetailTableTd>{a.name}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(a.balance)}</DetailTableTd>
+                </DetailTableRow>
               ))}
-              <tr style={{ fontWeight: 'bold' }}>
-                <td colSpan={2}>Total Aset</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(totalAssets)}</td>
-              </tr>
-            </tbody>
-          </table>
+              <DetailTableRow className="font-bold">
+                <DetailTableTd colSpan={2}>Total Aset</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrency(totalAssets)}</DetailTableTd>
+              </DetailTableRow>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
 
       {/* KEWAJIBAN */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden" style={{ marginBottom: '1.5rem' }}>
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">KEWAJIBAN</h2>
         </div>
         <div className="p-4 px-5">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Kode</th>
-                <th>Nama Akun</th>
-                <th style={{ textAlign: 'right' }}>Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Kode</DetailTableTh>
+              <DetailTableTh>Nama Akun</DetailTableTh>
+              <DetailTableTh align="right">Saldo</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {liabilities.map((a) => (
-                <tr key={a.code}>
-                  <td>{a.code}</td>
-                  <td>{a.name}</td>
-                  <td style={{ textAlign: 'right' }}>{formatCurrency(a.balance)}</td>
-                </tr>
+                <DetailTableRow key={a.code}>
+                  <DetailTableTd>{a.code}</DetailTableTd>
+                  <DetailTableTd>{a.name}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(a.balance)}</DetailTableTd>
+                </DetailTableRow>
               ))}
-              <tr style={{ fontWeight: 'bold' }}>
-                <td colSpan={2}>Total Kewajiban</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(totalLiabilities)}</td>
-              </tr>
-            </tbody>
-          </table>
+              <DetailTableRow className="font-bold">
+                <DetailTableTd colSpan={2}>Total Kewajiban</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrency(totalLiabilities)}</DetailTableTd>
+              </DetailTableRow>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
 
       {/* EKUITAS */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden" style={{ marginBottom: '1.5rem' }}>
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">EKUITAS</h2>
         </div>
         <div className="p-4 px-5">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Kode</th>
-                <th>Nama Akun</th>
-                <th style={{ textAlign: 'right' }}>Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Kode</DetailTableTh>
+              <DetailTableTh>Nama Akun</DetailTableTh>
+              <DetailTableTh align="right">Saldo</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {equity.map((a) => (
-                <tr key={a.code}>
-                  <td>{a.code}</td>
-                  <td>{a.name}</td>
-                  <td style={{ textAlign: 'right' }}>{formatCurrency(a.balance)}</td>
-                </tr>
+                <DetailTableRow key={a.code}>
+                  <DetailTableTd>{a.code}</DetailTableTd>
+                  <DetailTableTd>{a.name}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(a.balance)}</DetailTableTd>
+                </DetailTableRow>
               ))}
-              <tr style={{ fontWeight: 'bold' }}>
-                <td colSpan={2}>Total Ekuitas</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(totalEquity)}</td>
-              </tr>
-            </tbody>
-          </table>
+              <DetailTableRow className="font-bold">
+                <DetailTableTd colSpan={2}>Total Ekuitas</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrency(totalEquity)}</DetailTableTd>
+              </DetailTableRow>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
 
       {/* Balance Check */}
-      <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: isBalanced ? 'var(--color-success, green)' : 'var(--color-danger, red)' }}>
-        <div className="text-xl font-bold text-foreground" style={{ color: isBalanced ? 'var(--color-success, green)' : 'var(--color-danger, red)' }}>
+      <div className={`bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md ${isBalanced ? "border-success" : "border-danger"}`}>
+        <div className={`text-xl font-bold ${isBalanced ? "text-success" : "text-danger"}`}>
           {isBalanced ? 'SEIMBANG' : 'TIDAK SEIMBANG'}
         </div>
         <div className="text-[0.8125rem] text-muted font-medium">

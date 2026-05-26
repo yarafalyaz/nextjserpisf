@@ -6,14 +6,17 @@ export async function GET() {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+  const userId = Number.parseInt(String(session.user.id), 10)
+  if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user" }, { status: 400 })
+
   const notifications = await prisma.notification.findMany({
-    where: { userId: Number(session.user.id) },
+    where: { userId },
     orderBy: { createdAt: "desc" },
     take: 10,
   })
 
   const unreadCount = await prisma.notification.count({
-    where: { userId: Number(session.user.id), readAt: null },
+    where: { userId, readAt: null },
   })
 
   return NextResponse.json({ notifications, unreadCount })

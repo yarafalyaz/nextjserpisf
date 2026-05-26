@@ -2,12 +2,13 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
-import { StatusChip } from '@/components/ui/status-chip'
+import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteStockAdjustment } from "@/actions/inventory.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function StockAdjustmentDetailPage({
   params,
@@ -28,67 +29,43 @@ export default async function StockAdjustmentDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Inventory",href:"/inventory"},{label:"Adjustments",href:"/inventory/adjustments"},{label:"Detail"}]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Penyesuaian Stok {adjustment.documentNo}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <StatusChip status={adjustment.status} />
-  <div className="flex gap-2">
-          <Link href={`/inventory/adjustments/${adjustment.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
-          <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
-                  <Link href="/inventory/adjustments" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-        </div>
-      </div>
+      <PageHeader
+        title={`Penyesuaian Stok ${adjustment.documentNo}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Inventory", href: "/inventory" },
+          { label: "Penyesuaian", href: "/inventory/adjustments" },
+          { label: adjustment.documentNo },
+        ]}
+        badge={<StatusChip status={adjustment.status} />}
+        actions={
+          <>
+            <Button href={`/inventory/adjustments/${adjustment.id}/edit`} variant="primary">Edit</Button>
+            <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
+            <BackButton href="/inventory/adjustments" />
+          </>
+        }
+      />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Dokumen</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{adjustment.documentNo}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Gudang</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{adjustment.warehouse.name}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(adjustment.date)}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
-            <span className="text-[0.9375rem] text-foreground font-medium"><StatusChip status={adjustment.status} /></span>
-          </div>
-          {adjustment.reason && (
-            <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Alasan</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{adjustment.reason}</span>
-            </div>
-          )}
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tipe</span>
-            <span className="text-[0.9375rem] text-foreground font-medium capitalize">{adjustment.type}</span>
-          </div>
-          {adjustment.notes && (
-            <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{adjustment.notes}</span>
-            </div>
-          )}
-          {adjustment.approvedBy && (
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Disetujui Oleh</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">User #{adjustment.approvedBy}</span>
-            </div>
-          )}
-          {adjustment.approvedAt && (
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Disetujui Pada</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(adjustment.approvedAt)}</span>
-            </div>
-          )}
-        </div>
-      </div>
+      <DetailCard>
+        <DetailField label="No. Dokumen" value={adjustment.documentNo} mono />
+        <DetailField label="Gudang" value={adjustment.warehouse.name} />
+        <DetailField label="Tanggal" value={formatDate(adjustment.date)} />
+        <DetailField label="Status" value={<StatusChip status={adjustment.status} />} />
+        <DetailField label="Tipe" value={<span className="capitalize">{adjustment.type}</span>} />
+        {adjustment.reason && (
+          <DetailField label="Alasan" value={adjustment.reason} colSpan="full" />
+        )}
+        {adjustment.notes && (
+          <DetailField label="Catatan" value={adjustment.notes} colSpan="full" />
+        )}
+        {adjustment.approvedBy && (
+          <DetailField label="Disetujui Oleh" value={`User #${adjustment.approvedBy}`} />
+        )}
+        {adjustment.approvedAt && (
+          <DetailField label="Disetujui Pada" value={formatDate(adjustment.approvedAt)} />
+        )}
+      </DetailCard>
 
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -99,26 +76,24 @@ export default async function StockAdjustmentDetailPage({
           {adjustment.items.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Item ID</th>
-                  <th style={{ textAlign: "right" }}>Qty Sistem</th>
-                  <th style={{ textAlign: "right" }}>Qty Aktual</th>
-                  <th style={{ textAlign: "right" }}>Selisih</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Item ID</DetailTableTh>
+                <DetailTableTh align="right">Qty Sistem</DetailTableTh>
+                <DetailTableTh align="right">Qty Aktual</DetailTableTh>
+                <DetailTableTh align="right">Selisih</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {adjustment.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>Item #{item.itemId}</td>
-                    <td className="text-right">{Number(item.systemQty)}</td>
-                    <td className="text-right">{Number(item.actualQty)}</td>
-                    <td className="text-right">{Number(item.difference)}</td>
-                  </tr>
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.systemQty)}</DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.actualQty)}</DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.difference)}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           )}
         </div>
       </div>

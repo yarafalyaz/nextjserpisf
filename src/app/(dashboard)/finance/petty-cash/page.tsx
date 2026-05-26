@@ -25,7 +25,15 @@ export default async function PettyCashPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const data = JSON.parse(JSON.stringify(records))
+  const data = records.map((r) => ({
+    id: r.id,
+    documentNo: r.documentNo,
+    date: r.date.toISOString(),
+    type: r.type,
+    description: r.description,
+    amount: Number(r.amount),
+    balanceAfter: Number(r.balanceAfter),
+  }))
 
   return (
     <div className="flex flex-col gap-6">

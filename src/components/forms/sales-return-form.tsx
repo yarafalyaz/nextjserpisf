@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -11,7 +10,7 @@ import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
 interface SalesReturnFormProps {
   invoices: { id: number; documentNo: string
 }[]
-  returnData?: any
+  returnData?: { id: number; salesInvoiceId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
   customers: { id: number; name: string }[]
   items: { id: number; sku: string; name: string }[]
 }
@@ -134,7 +133,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                 <td>
                   <select
                     value={ri.itemId}
-                    onChange={(e) => updateItem(index, "itemId", Number(e.target.value))}
+                    onChange={(e) => updateItem(index, "itemId", (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0))}
                     className="form-input"
                     style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
                   >
@@ -148,7 +147,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                   <input
                     type="number"
                     value={ri.qty}
-                    onChange={(e) => updateItem(index, "qty", Number(e.target.value))}
+                    onChange={(e) => updateItem(index, "qty", (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0))}
                     className="form-input"
                     style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
                     min={1}

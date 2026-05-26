@@ -1,11 +1,10 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createWorkSchedule, updateWorkSchedule } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label } from "@heroui/react"
+import { Input, Label, ComboBox, ListBox, Checkbox } from "@heroui/react"
 
 const DAYS = [
   { value: 1, label: "Senin" },
@@ -17,7 +16,21 @@ const DAYS = [
   { value: 0, label: "Minggu" },
 ]
 
-export function WorkScheduleForm({ schedule }: { schedule?: any } = {}) {
+interface WorkScheduleFormProps {
+  schedule?: {
+    id: number
+    name: string
+    startTime: string
+    endTime: string
+    workDays: string
+    departmentId?: number | null
+    lateToleranceMinutes?: number
+    isActive?: boolean
+  }
+  departments?: { id: number; name: string }[]
+}
+
+export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -44,12 +57,38 @@ export function WorkScheduleForm({ schedule }: { schedule?: any } = {}) {
           <Input id="name" name="name" required placeholder="Contoh: Shift Pagi" defaultValue={schedule?.name ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
+          <ComboBox name="departmentId" className="w-full" defaultSelectedKey={schedule?.departmentId ? String(schedule.departmentId) : undefined}>
+            <Label>Departemen</Label>
+            <ComboBox.InputGroup>
+              <Input placeholder="Cari departemen..." />
+              <ComboBox.Trigger />
+            </ComboBox.InputGroup>
+            <ComboBox.Popover>
+              <ListBox>
+                {departments.map((dept) => (
+                  <ListBox.Item key={dept.id} id={String(dept.id)} textValue={dept.name}>
+                    {dept.name}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </ComboBox.Popover>
+          </ComboBox>
+        </div>
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="startTime">Jam Masuk *</Label>
           <Input id="startTime" name="startTime" type="time" required defaultValue={schedule?.startTime ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="endTime">Jam Keluar *</Label>
           <Input id="endTime" name="endTime" type="time" required defaultValue={schedule?.endTime ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="lateToleranceMinutes">Toleransi Keterlambatan (menit)</Label>
+          <Input id="lateToleranceMinutes" name="lateToleranceMinutes" type="number" min="0" placeholder="0" defaultValue={String(schedule?.lateToleranceMinutes ?? 0)} />
+        </div>
+        <div className="flex flex-col gap-1.5 justify-end">
+          <Checkbox name="isActive" defaultSelected={schedule?.isActive !== false}>Aktif</Checkbox>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label>Hari Kerja *</Label>

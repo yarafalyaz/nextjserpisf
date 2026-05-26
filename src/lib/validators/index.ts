@@ -28,6 +28,11 @@ export const customerSchema = z.object({
   contactPerson: z.string().optional(),
   gender: z.string().optional(),
   code: z.string().optional(),
+  street: z.string().optional(),
+  province: z.string().optional(),
+  district: z.string().optional(),
+  village: z.string().optional(),
+  postalCode: z.string().optional(),
 })
 
 export const vendorSchema = z.object({
@@ -40,6 +45,14 @@ export const vendorSchema = z.object({
   npwp: z.string().optional(),
   contactPerson: z.string().optional(),
   paymentTermId: z.number().optional(),
+  street: z.string().optional(),
+  province: z.string().optional(),
+  district: z.string().optional(),
+  village: z.string().optional(),
+  postalCode: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  bankAccountHolder: z.string().optional(),
 })
 
 export const itemSchema = z.object({
@@ -57,6 +70,9 @@ export const itemSchema = z.object({
   minStock: z.number().min(0).default(0),
   cost: z.number().min(0).default(0),
   price: z.number().min(0).default(0),
+  standardCost: z.number().min(0).optional(),
+  purchasePrice: z.number().min(0).optional(),
+  costingMethod: z.string().optional(),
 })
 
 export const warehouseSchema = z.object({
@@ -78,6 +94,19 @@ export const employeeSchema = z.object({
   joinDate: z.string().min(1, "Tanggal masuk wajib diisi"),
   paymentFrequency: z.string().default("MONTHLY"),
   baseSalary: z.number().min(0).default(0),
+  idNumber: z.string().optional(),
+  npwp: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  bankAccountHolder: z.string().optional(),
+  bpjsKetenagakerjaan: z.string().optional(),
+  bpjsKesehatan: z.string().optional(),
+  street: z.string().optional(),
+  province: z.string().optional(),
+  city: z.string().optional(),
+  district: z.string().optional(),
+  village: z.string().optional(),
+  postalCode: z.string().optional(),
 })
 
 export const accountSchema = z.object({
@@ -203,10 +232,13 @@ export const journalEntrySchema = z.object({
 export const expenseSchema = z.object({
   accountId: z.number().min(1, "Akun beban wajib dipilih"),
   paidFromAccountId: z.number().optional(),
+  projectId: z.number().optional(),
   amount: z.number().min(0.01, "Jumlah harus lebih dari 0"),
   date: z.string().min(1, "Tanggal wajib diisi"),
+  referenceNo: z.string().optional(),
   description: z.string().optional(),
   category: z.string().optional(),
+  receiptImage: z.string().optional(),
 })
 
 export const pettyCashSchema = z.object({
@@ -256,3 +288,5 @@ export type JournalInput = z.infer<typeof journalSchema>
 export type ExpenseInput = z.infer<typeof expenseSchema>
 export type PettyCashInput = z.infer<typeof pettyCashSchema>
 export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>
+
+export type SalesPaymentInput = z.infer<typeof salesPaymentSchema>

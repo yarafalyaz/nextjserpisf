@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createRack } from "@/actions/inventory.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, Label } from "@heroui/react"
 
 export default function CreateRackPage() {
   const router = useRouter()
@@ -33,18 +34,18 @@ export default function CreateRackPage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="code" className="text-sm font-medium text-foreground">Kode Rak *</label>
-            <input id="code" name="code" className="form-input" placeholder="Contoh: R-001" required />
+            <Label htmlFor="code">Kode Rak *</Label>
+            <Input id="code" name="code" placeholder="Contoh: R-001" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Rak *</label>
-            <input id="name" name="name" className="form-input" placeholder="Nama rak" required />
+            <Label htmlFor="name">Nama Rak *</Label>
+            <Input id="name" name="name" placeholder="Nama rak" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="warehouseId" className="text-sm font-medium text-foreground">Warehouse ID *</label>
-            <input id="warehouseId" name="warehouseId" type="number" className="form-input" placeholder="ID gudang" required />
+            <Label htmlFor="warehouseId">Warehouse ID *</Label>
+            <Input id="warehouseId" name="warehouseId" type="number" placeholder="ID gudang" required />
           </div>
         </div>
 

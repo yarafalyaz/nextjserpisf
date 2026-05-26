@@ -12,6 +12,7 @@ import { bulkDelete } from "@/actions/bulk.actions"
 interface ProjectData {
   id: number
   name: string | null
+  documentNo: string | null
   customer: { name: string }
   startDate: string | null
   status: string
@@ -21,6 +22,13 @@ interface ProjectData {
 const columnHelper = createColumnHelper<ProjectData>()
 
 const columns = [
+  columnHelper.accessor("documentNo", {
+    header: "No. Dokumen",
+    cell: (info) => {
+      const val = info.getValue()
+      return val ? <span className="font-mono text-xs">{val}</span> : "-"
+    },
+  }),
   columnHelper.accessor("customer.name", {
     header: "Customer",
     cell: (info) => info.getValue(),

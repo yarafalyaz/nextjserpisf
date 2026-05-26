@@ -6,6 +6,7 @@ import { notFound } from "next/navigation"
 import { formatDate } from "@/lib/utils/format"
 import { Pencil } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function BrandDetailPage({
   params,
@@ -33,7 +34,7 @@ export default async function BrandDetailPage({
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">{brand.name}</h1>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div className="flex gap-2">
           <Link href={`/master/brands/${id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
           <Link href="/master/brands" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
@@ -62,19 +63,20 @@ export default async function BrandDetailPage({
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Item dengan Brand ini</h2>
           </div>
           <div className="p-4 px-5">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr><th>SKU</th><th>Nama Item</th></tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>SKU</DetailTableTh>
+                <DetailTableTh>Nama Item</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {brand.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="font-mono">{item.sku}</td>
-                    <td><Link href={`/master/items/${item.id}`} className="text-primary hover:underline">{item.name}</Link></td>
-                  </tr>
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd className="font-mono">{item.sku}</DetailTableTd>
+                    <DetailTableTd><Link href={`/master/items/${item.id}`} className="text-primary hover:underline">{item.name}</Link></DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           </div>
         </div>
       )}

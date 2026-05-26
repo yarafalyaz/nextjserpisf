@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { DollarSign, Receipt, Users, Package, AlertTriangle } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 async function getDashboardData() {
   const [
@@ -116,61 +117,57 @@ export default async function DashboardPage() {
             <Link href="/sales/invoices" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
           </div>
           <div className="p-4 px-5">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>No. Dokumen</th>
-                  <th>Customer</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>No. Dokumen</DetailTableTh>
+                <DetailTableTh>Customer</DetailTableTh>
+                <DetailTableTh>Total</DetailTableTh>
+                <DetailTableTh>Status</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {data.recentInvoices.map((inv) => (
-                  <tr key={inv.id}>
-                    <td className="font-mono">{inv.documentNo}</td>
-                    <td>{inv.customer.name}</td>
-                    <td>{formatCurrency(Number(inv.grandTotal))}</td>
-                    <td>
+                  <DetailTableRow key={inv.id}>
+                    <DetailTableTd className="font-mono">{inv.documentNo}</DetailTableTd>
+                    <DetailTableTd>{inv.customer.name}</DetailTableTd>
+                    <DetailTableTd>{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
+                    <DetailTableTd>
                       <span className={`status-badge status-${inv.status}`}>
                         {inv.status}
                       </span>
-                    </td>
-                  </tr>
+                    </DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           </div>
         </div>
 
         {/* Low Stock Alert */}
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground"><AlertTriangle size={16} style={{display:'inline',marginRight:'6px'}} />Stok Menipis</h2>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground"><AlertTriangle size={16} className="inline mr-1.5" />Stok Menipis</h2>
             <Link href="/master/items" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
           </div>
           <div className="p-4 px-5">
             {data.lowStockItems.length === 0 ? (
               <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Semua stok aman</p>
             ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Stok</th>
-                    <th>Min</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <DetailTable>
+                <DetailTableHead>
+                  <DetailTableTh>Item</DetailTableTh>
+                  <DetailTableTh>Stok</DetailTableTh>
+                  <DetailTableTh>Min</DetailTableTh>
+                </DetailTableHead>
+                <DetailTableBody>
                   {data.lowStockItems.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.name}</td>
-                      <td className="text-danger">{Number(item.qtyOnHand)}</td>
-                      <td>{Number(item.minStock)}</td>
-                    </tr>
+                    <DetailTableRow key={item.id}>
+                      <DetailTableTd>{item.name}</DetailTableTd>
+                      <DetailTableTd className="text-danger">{Number(item.qtyOnHand)}</DetailTableTd>
+                      <DetailTableTd>{Number(item.minStock)}</DetailTableTd>
+                    </DetailTableRow>
                   ))}
-                </tbody>
-              </table>
+                </DetailTableBody>
+              </DetailTable>
             )}
           </div>
         </div>
@@ -182,26 +179,24 @@ export default async function DashboardPage() {
             <Link href="/sales/payments" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
           </div>
           <div className="p-4 px-5">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>No. Dokumen</th>
-                  <th>Customer</th>
-                  <th>Jumlah</th>
-                  <th>Tanggal</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>No. Dokumen</DetailTableTh>
+                <DetailTableTh>Customer</DetailTableTh>
+                <DetailTableTh>Jumlah</DetailTableTh>
+                <DetailTableTh>Tanggal</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {data.recentPayments.map((pay) => (
-                  <tr key={pay.id}>
-                    <td className="font-mono">{pay.documentNo}</td>
-                    <td>{pay.salesInvoice?.customer?.name || "-"}</td>
-                    <td>{formatCurrency(Number(pay.amount))}</td>
-                    <td>{formatDate(pay.paymentDate)}</td>
-                  </tr>
+                  <DetailTableRow key={pay.id}>
+                    <DetailTableTd className="font-mono">{pay.documentNo}</DetailTableTd>
+                    <DetailTableTd>{pay.salesInvoice?.customer?.name || "-"}</DetailTableTd>
+                    <DetailTableTd>{formatCurrency(Number(pay.amount))}</DetailTableTd>
+                    <DetailTableTd>{formatDate(pay.paymentDate)}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           </div>
         </div>
       </div>

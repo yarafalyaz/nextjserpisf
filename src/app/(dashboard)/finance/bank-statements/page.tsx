@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function BankStatementsPage({
   searchParams,
@@ -42,34 +43,32 @@ export default async function BankStatementsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Akun Bank</th>
-                <th>Tanggal</th>
-                <th>Referensi</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>ID</DetailTableTh>
+              <DetailTableTh>Akun Bank</DetailTableTh>
+              <DetailTableTh>Tanggal</DetailTableTh>
+              <DetailTableTh>Referensi</DetailTableTh>
+              <DetailTableTh>Aksi</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {statements.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-10 px-4 text-muted">Tidak ada data bank statement</td></tr>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 px-4 text-muted">Tidak ada data bank statement</DetailTableTd></DetailTableRow>
               ) : (
                 statements.map((stmt) => (
-                  <tr key={stmt.id}>
-                    <td className="font-mono">{stmt.id}</td>
-                    <td>Account #{stmt.accountId}</td>
-                    <td>{formatDate(stmt.date)}</td>
-                    <td>{stmt.reference || "-"}</td>
-                    <td>
+                  <DetailTableRow key={stmt.id}>
+                    <DetailTableTd className="font-mono">{stmt.id}</DetailTableTd>
+                    <DetailTableTd>Account #{stmt.accountId}</DetailTableTd>
+                    <DetailTableTd>{formatDate(stmt.date)}</DetailTableTd>
+                    <DetailTableTd>{stmt.reference || "-"}</DetailTableTd>
+                    <DetailTableTd>
                       <Link href={`/finance/bank-statements/${stmt.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost"><Eye size={16} /></Link>
-                    </td>
-                  </tr>
+                    </DetailTableTd>
+                  </DetailTableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
 
         {totalPages > 1 && (

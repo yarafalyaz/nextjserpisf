@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 "use server"
 
 import { prisma } from "@/lib/db/prisma"
@@ -33,19 +33,33 @@ export async function getActivityLogs(
   modelId?: number,
   limit: number = 50
 ) {
-  const where: any = {}
-  if (modelType) where.modelType = modelType
-  if (modelId) where.modelId = modelId
-
-  // Using raw query since activity_logs table might not be in Prisma schema yet
-  const logs = await prisma.$queryRaw`
-    SELECT al.*, u.name as user_name
-    FROM activity_logs al
-    LEFT JOIN users u ON u.id = al.user_id
-    ${modelType ? prisma.$queryRaw`WHERE al.model_type = ${modelType}` : prisma.$queryRaw``}
-    ORDER BY al.created_at DESC
-    LIMIT ${limit}
-  `
-
-  return logs
+  // Fix #42: Prisma tagged template literals cannot be concatenated/nested
+  // Use separate queries based on filter conditions
+  if (modelType && modelId) {
+    return prisma.$queryRaw`
+      SELECT al.*, u.name as user_name
+      FROM activity_logs al
+      LEFT JOIN users u ON u.id = al.user_id
+      WHERE al.model_type = ${modelType} AND al.model_id = ${modelId}
+      ORDER BY al.created_at DESC
+      LIMIT ${limit}
+    `
+  } else if (modelType) {
+    return prisma.$queryRaw`
+      SELECT al.*, u.name as user_name
+      FROM activity_logs al
+      LEFT JOIN users u ON u.id = al.user_id
+      WHERE al.model_type = ${modelType}
+      ORDER BY al.created_at DESC
+      LIMIT ${limit}
+    `
+  } else {
+    return prisma.$queryRaw`
+      SELECT al.*, u.name as user_name
+      FROM activity_logs al
+      LEFT JOIN users u ON u.id = al.user_id
+      ORDER BY al.created_at DESC
+      LIMIT ${limit}
+    `
+  }
 }

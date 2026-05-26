@@ -2,12 +2,13 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
-import { StatusChip } from '@/components/ui/status-chip'
+import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteInventoryTransfer } from "@/actions/inventory.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function InventoryTransferDetailPage({
   params,
@@ -29,54 +30,34 @@ export default async function InventoryTransferDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Inventory", href: "/inventory" },
-  { label: "Transfers", href: "/inventory/transfers" },
-  { label: "Detail" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Transfer Stok {transfer.documentNo}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <StatusChip status={transfer.status} />
-  <div className="flex gap-2">
-          <Link href={`/inventory/transfers/${transfer.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
-          <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
-                  <Link href="/inventory/transfers" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-        </div>
-      </div>
+      <PageHeader
+        title={`Transfer Stok ${transfer.documentNo}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Inventory", href: "/inventory" },
+          { label: "Transfer", href: "/inventory/transfers" },
+          { label: transfer.documentNo },
+        ]}
+        badge={<StatusChip status={transfer.status} />}
+        actions={
+          <>
+            <Button href={`/inventory/transfers/${transfer.id}/edit`} variant="primary">Edit</Button>
+            <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
+            <BackButton href="/inventory/transfers" />
+          </>
+        }
+      />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Dokumen</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{transfer.documentNo}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(transfer.date)}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Gudang Asal</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{transfer.sourceWarehouse.name}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Gudang Tujuan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{transfer.destinationWarehouse.name}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
-            <span className="text-[0.9375rem] text-foreground font-medium"><StatusChip status={transfer.status} /></span>
-          </div>
-          {transfer.notes && (
-            <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{transfer.notes}</span>
-            </div>
-          )}
-        </div>
-      </div>
+      <DetailCard>
+        <DetailField label="No. Dokumen" value={transfer.documentNo} mono />
+        <DetailField label="Tanggal" value={formatDate(transfer.date)} />
+        <DetailField label="Gudang Asal" value={transfer.sourceWarehouse.name} />
+        <DetailField label="Gudang Tujuan" value={transfer.destinationWarehouse.name} />
+        <DetailField label="Status" value={<StatusChip status={transfer.status} />} />
+        {transfer.notes && (
+          <DetailField label="Catatan" value={transfer.notes} colSpan="full" />
+        )}
+      </DetailCard>
 
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -87,22 +68,20 @@ export default async function InventoryTransferDetailPage({
           {transfer.items.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Item ID</th>
-                  <th style={{ textAlign: "right" }}>Qty</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Item ID</DetailTableTh>
+                <DetailTableTh align="right">Qty</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {transfer.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>Item #{item.itemId}</td>
-                    <td className="text-right">{Number(item.qty)}</td>
-                  </tr>
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           )}
         </div>
       </div>

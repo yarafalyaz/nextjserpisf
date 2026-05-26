@@ -1,11 +1,11 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createCurrency } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Input, Select, Label, ListBox, Checkbox } from "@heroui/react"
+import { ListBox, Checkbox, Select as HeroSelect, Label } from "@heroui/react"
+import { Input, SelectValue } from "@/components/ui/heroui-compat"
 
 export default function CreateCurrencyPage() {
   const router = useRouter()
@@ -42,16 +42,16 @@ export default function CreateCurrencyPage() {
 
           <Input name="symbol" label="Simbol" placeholder="e.g. Rp, $, €" />
 
-          <Select name="symbolPosition" className="w-full">
+          <HeroSelect name="symbolPosition" className="w-full">
             <Label>Posisi Simbol</Label>
-            <Select.Trigger><Select.Value placeholder="Pilih posisi" /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+            <HeroSelect.Trigger><SelectValue placeholder="Pilih posisi" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="before" textValue="Before">Before<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="after" textValue="After">After<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
-          </Select>
+            </HeroSelect.Popover>
+          </HeroSelect>
 
           <Input name="decimalSeparator" label="Pemisah Desimal" placeholder="e.g. , or ." />
 

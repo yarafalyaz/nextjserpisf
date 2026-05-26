@@ -43,18 +43,26 @@ export function AssetForm({ categories, brands, asset }: AssetFormProps) {
           <Input id="code" name="code" placeholder="Kode aset" defaultValue={asset?.code || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="categoryId">Kategori</Label>
-          <select id="categoryId" name="categoryId" className="form-input" defaultValue={asset?.categoryId || ""}>
-            <option value="">Pilih Kategori</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <Select name="categoryId" defaultSelectedKey={asset?.categoryId ? String(asset.categoryId) : undefined} className="w-full">
+            <Label htmlFor="categoryId">Kategori</Label>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Kategori"}</Select.Value><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {categories.map(c => <ListBox.Item key={String(c.id)} id={String(c.id)} textValue={c.name}>{c.name}<ListBox.ItemIndicator /></ListBox.Item>)}
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="brandId">Merek</Label>
-          <select id="brandId" name="brandId" className="form-input" defaultValue={asset?.brandId || ""}>
-            <option value="">Pilih Merek</option>
-            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
+          <Select name="brandId" defaultSelectedKey={asset?.brandId ? String(asset.brandId) : undefined} className="w-full">
+            <Label htmlFor="brandId">Merek</Label>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Merek"}</Select.Value><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {brands.map(b => <ListBox.Item key={String(b.id)} id={String(b.id)} textValue={b.name}>{b.name}<ListBox.ItemIndicator /></ListBox.Item>)}
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="purchaseDate">Tanggal Pembelian</Label>
@@ -69,16 +77,21 @@ export function AssetForm({ categories, brands, asset }: AssetFormProps) {
           <Input id="location" name="location" placeholder="Lokasi aset" defaultValue={asset?.location || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="status">Status</Label>
-          <select id="status" name="status" className="form-input" defaultValue={asset?.status || "active"}>
-            <option value="active">Active</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="disposed">Disposed</option>
-          </select>
+          <Select name="status" defaultSelectedKey={asset?.status || "active"} className="w-full">
+            <Label htmlFor="status">Status</Label>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Active"}</Select.Value><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item key="active" id="active" textValue="Active">Active<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item key="maintenance" id="maintenance" textValue="Maintenance">Maintenance<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item key="disposed" id="disposed" textValue="Disposed">Disposed<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <textarea id="description" name="description" className="form-input" rows={3} placeholder="Deskripsi aset" defaultValue={asset?.description || ""} />
+          <TextArea id="description" name="description" rows={3} placeholder="Deskripsi aset" defaultValue={asset?.description || ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

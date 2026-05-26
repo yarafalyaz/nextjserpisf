@@ -7,8 +7,9 @@ import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Avatar } from "@heroui/react"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function VendorDetailPage({
   params,
@@ -44,24 +45,21 @@ export default async function VendorDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Master Data", href: "/master" },
-  { label: "Vendors", href: "/master/vendors" },
-  { label: "Detail" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Avatar size="lg" color="accent">
-            <Avatar.Fallback>{getInitials(vendor.name)}</Avatar.Fallback>
-          </Avatar>
-          <h1 className="text-2xl font-bold text-foreground">{vendor.name}</h1>
-        </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Link href={`/master/vendors/${id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
-          <Link href="/master/vendors" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-      </div>
+      <PageHeader
+        title={vendor.name}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Master Data", href: "/master" },
+          { label: "Vendors", href: "/master/vendors" },
+          { label: "Detail" },
+        ]}
+        actions={
+          <>
+            <Button href={`/master/vendors/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <BackButton href="/master/vendors" />
+          </>
+        }
+      />
 
       <DetailTabs
         ariaLabel="Vendor detail tabs"
@@ -70,34 +68,14 @@ export default async function VendorDetailPage({
             id: "info",
             label: "Info",
             content: (
-              <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Email</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{vendor.email || "-"}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Telepon</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{vendor.phone || "-"}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Kota</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{vendor.city || "-"}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">NPWP</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium font-mono">{vendor.npwp || "-"}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Terdaftar</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(vendor.createdAt)}</span>
-                  </div>
-                  <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Alamat</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{vendor.address || "-"}</span>
-                  </div>
-                </div>
-              </div>
+              <DetailCard>
+                <DetailField label="Email" value={vendor.email || "-"} />
+                <DetailField label="Telepon" value={vendor.phone || "-"} />
+                <DetailField label="Kota" value={vendor.city || "-"} />
+                <DetailField label="NPWP" value={vendor.npwp || "-"} mono />
+                <DetailField label="Terdaftar" value={formatDate(vendor.createdAt)} />
+                <DetailField label="Alamat" value={vendor.address || "-"} colSpan="full" />
+              </DetailCard>
             ),
           },
           {
@@ -113,21 +91,24 @@ export default async function VendorDetailPage({
                   {vendor.purchaseOrders.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada purchase order</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Tanggal</th><th>Total</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh align="right">Total</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {vendor.purchaseOrders.map((po) => (
-                          <tr key={po.id}>
-                            <td className="font-mono"><Link href={`/purchase/orders/${po.id}`}>{po.documentNo}</Link></td>
-                            <td>{formatDate(po.date)}</td>
-                            <td className="text-right">{formatCurrency(Number(po.grandTotal))}</td>
-                            <td><StatusChip status={po.status} /></td>
-                          </tr>
+                          <DetailTableRow key={po.id}>
+                            <DetailTableTd className="font-mono"><Link href={`/purchase/orders/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd>{formatDate(po.date)}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(po.grandTotal))}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -146,22 +127,26 @@ export default async function VendorDetailPage({
                   {goodsReceipts.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada penerimaan barang</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Tanggal</th><th>No. PO</th><th>Gudang</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>No. PO</DetailTableTh>
+                        <DetailTableTh>Gudang</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {goodsReceipts.map((gr) => (
-                          <tr key={gr.id}>
-                            <td className="font-mono">{gr.documentNo}</td>
-                            <td>{formatDate(gr.date)}</td>
-                            <td className="font-mono"><Link href={`/purchase/orders/${gr.purchaseOrder.id}`}>{gr.purchaseOrder.documentNo}</Link></td>
-                            <td>{gr.warehouse?.name || "-"}</td>
-                            <td><StatusChip status={gr.status} /></td>
-                          </tr>
+                          <DetailTableRow key={gr.id}>
+                            <DetailTableTd className="font-mono">{gr.documentNo}</DetailTableTd>
+                            <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/purchase/orders/${gr.purchaseOrder.id}`}>{gr.purchaseOrder.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd>{gr.warehouse?.name || "-"}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -180,21 +165,24 @@ export default async function VendorDetailPage({
                   {purchaseReturns.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada retur</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Tanggal</th><th>No. PO</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>No. PO</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {purchaseReturns.map((pr) => (
-                          <tr key={pr.id}>
-                            <td className="font-mono">{pr.documentNo}</td>
-                            <td>{formatDate(pr.date)}</td>
-                            <td className="font-mono"><Link href={`/purchase/orders/${pr.purchaseOrder.id}`}>{pr.purchaseOrder.documentNo}</Link></td>
-                            <td><StatusChip status={pr.status} /></td>
-                          </tr>
+                          <DetailTableRow key={pr.id}>
+                            <DetailTableTd className="font-mono">{pr.documentNo}</DetailTableTd>
+                            <DetailTableTd>{formatDate(pr.date)}</DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/purchase/orders/${pr.purchaseOrder.id}`}>{pr.purchaseOrder.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd><StatusChip status={pr.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -213,22 +201,26 @@ export default async function VendorDetailPage({
                   {vendor.vendorBills.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada tagihan</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Tanggal</th><th>Total</th><th>Terbayar</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh align="right">Total</DetailTableTh>
+                        <DetailTableTh align="right">Terbayar</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {vendor.vendorBills.map((bill) => (
-                          <tr key={bill.id}>
-                            <td className="font-mono"><Link href={`/purchase/bills/${bill.id}`}>{bill.documentNo}</Link></td>
-                            <td>{formatDate(bill.date)}</td>
-                            <td className="text-right">{formatCurrency(Number(bill.grandTotal))}</td>
-                            <td className="text-right">{formatCurrency(Number(bill.paidAmount))}</td>
-                            <td><StatusChip status={bill.status} /></td>
-                          </tr>
+                          <DetailTableRow key={bill.id}>
+                            <DetailTableTd className="font-mono"><Link href={`/purchase/bills/${bill.id}`}>{bill.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd>{formatDate(bill.date)}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(bill.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(bill.paidAmount))}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>

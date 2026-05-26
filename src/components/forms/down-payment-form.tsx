@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -9,23 +8,24 @@ import { z } from "zod"
 import { createDownPayment, updateDownPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label, InputGroup, TextField } from "@heroui/react"
+import {Select, ComboBox, ListBox, Label, InputGroup, TextField , Select as HeroSelect} from "@heroui/react"
+import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
+import { CurrencyInput } from "@/components/ui/currency-input"
 
 const downPaymentSchema = z.object({
-  customerId: z.number({ required_error: "Customer wajib dipilih" }).min(1, "Customer wajib dipilih"),
-  quotationId: z.number({ required_error: "Quotation wajib dipilih" }).min(1, "Quotation wajib dipilih"),
-  amount: z.number({ required_error: "Jumlah wajib diisi" }).min(1, "Jumlah harus lebih dari 0"),
+  customerId: z.number({ error: "Customer wajib dipilih" }).min(1, "Customer wajib dipilih"),
+  quotationId: z.number({ error: "Quotation wajib dipilih" }).min(1, "Quotation wajib dipilih"),
+  amount: z.number({ error: "Jumlah wajib diisi" }).min(1, "Jumlah harus lebih dari 0"),
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi"),
   paymentMethod: z.string().min(1, "Metode pembayaran wajib dipilih"),
-  notes: z.string().optional(),
-})
+  notes: z.string().optional()})
 
 type DownPaymentInput = z.infer<typeof downPaymentSchema>
 
 interface DownPaymentFormProps {
   customers: { id: number; name: string
 }[]
-  downPayment?: any
+  downPayment?: { id: number; customerId: number; amount: number; date: string; accountId?: number | null; notes?: string | null; salesOrderId?: number | null }
   quotations: { id: number; documentNo: string; customerId: number }[]
   defaultQuotationId?: number
   defaultCustomerId?: number
@@ -41,9 +41,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
     defaultValues: {
       paymentDate: new Date().toISOString().split("T")[0],
       paymentMethod: "",
-      notes: "",
-    },
-  })
+      notes: ""}})
 
   const selectedCustomerId = watch("customerId")
   const filteredQuotations = quotations.filter(
@@ -141,7 +139,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
           <Label htmlFor="amount">Jumlah DP (Rp) *</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <InputGroup.Input id="amount" type="number" step="0.01" {...register("amount", { valueAsNumber: true })} placeholder="0" />
+            <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" />} />
           </InputGroup>
           {errors.amount && <span className="text-xs text-danger mt-1">{errors.amount.message}</span>}
         </div>
@@ -164,14 +162,14 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
             render={({ field }) => (
               <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                 <Label>Metode Pembayaran *</Label>
-                <Select.Trigger><Select.Value placeholder="Pilih Metode" /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
+                <HeroSelect.Trigger><SelectValue placeholder="Pilih Metode" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+                <HeroSelect.Popover>
                   <ListBox>
                     <ListBox.Item id="transfer" textValue="Transfer">Transfer<ListBox.ItemIndicator /></ListBox.Item>
                     <ListBox.Item id="cash" textValue="Cash">Cash<ListBox.ItemIndicator /></ListBox.Item>
                     <ListBox.Item id="giro" textValue="Giro">Giro<ListBox.ItemIndicator /></ListBox.Item>
                   </ListBox>
-                </Select.Popover>
+                </HeroSelect.Popover>
               </Select>
             )}
           />

@@ -3,6 +3,7 @@
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
+import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 
 // ==================== CRM TICKET ACTIONS ====================
 
@@ -17,13 +18,13 @@ export async function createTicket(formData: FormData) {
       ticketNumber,
       subject: formData.get("subject") as string,
       description: formData.get("description") as string | null,
-      customerId: formData.get("customerId") ? Number(formData.get("customerId")) : null,
+      customerId: safeId(formData.get("customerId")),
       customerName: formData.get("customerName") as string | null,
       customerEmail: formData.get("customerEmail") as string | null,
       customerPhone: formData.get("customerPhone") as string | null,
       type: formData.get("type") as string | null,
       priority: formData.get("priority") as string || "medium",
-      assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
+      assignedTo: safeId(formData.get("assignedTo")),
       status: "open",
       createdBy: Number(user.id),
     },
@@ -45,13 +46,13 @@ export async function updateTicket(id: number, formData: FormData) {
     data: {
       subject: formData.get("subject") as string,
       description: formData.get("description") as string | null,
-      customerId: formData.get("customerId") ? Number(formData.get("customerId")) : null,
+      customerId: safeId(formData.get("customerId")),
       customerName: formData.get("customerName") as string | null,
       customerEmail: formData.get("customerEmail") as string | null,
       customerPhone: formData.get("customerPhone") as string | null,
       type: formData.get("type") as string | null,
       priority: formData.get("priority") as string || "medium",
-      assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
+      assignedTo: safeId(formData.get("assignedTo")),
       resolutionNotes: formData.get("resolutionNotes") as string | null,
     },
   })

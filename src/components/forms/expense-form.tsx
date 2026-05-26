@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -10,15 +9,18 @@ import { createExpense, updateExpense } from "@/actions/finance.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label, InputGroup } from "@heroui/react"
+import {Select, ComboBox, ListBox, Label, InputGroup , Select as HeroSelect} from "@heroui/react"
+import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
+import { CurrencyInput } from "@/components/ui/currency-input"
 
 interface ExpenseFormProps {
   accounts: { id: number; code: string; name: string; type: string }[]
   costCenters?: { id: number; code: string; name: string }[]
-  expense?: any
+  projects?: { id: number; name: string; documentNo: string | null }[]
+  expense?: { id: number; date: string; description?: string | null; amount: number; accountId: number; costCenterId?: number | null; projectId?: number | null; referenceNo?: string | null; receiptImage?: string | null; notes?: string | null; status?: string }
 }
 
-export function ExpenseForm({ accounts, costCenters = [], expense }: ExpenseFormProps) {
+export function ExpenseForm({ accounts, costCenters = [], projects = [], expense }: ExpenseFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -32,8 +34,9 @@ export function ExpenseForm({ accounts, costCenters = [], expense }: ExpenseForm
       amount: 0,
       description: "",
       category: "",
-    },
-  })
+      referenceNo: "",
+      receiptImage: "",
+    }})
 
   function onSubmit(data: ExpenseInput, event?: React.BaseSyntheticEvent) {
     startTransition(async () => {
@@ -123,7 +126,7 @@ export function ExpenseForm({ accounts, costCenters = [], expense }: ExpenseForm
           <Label htmlFor="amount">Jumlah (Rp) *</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <InputGroup.Input id="amount" type="number" step="0.01" {...register("amount", { valueAsNumber: true })} placeholder="0" />
+            <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" />} />
           </InputGroup>
           {errors.amount && <span className="text-xs text-danger mt-1">{errors.amount.message}</span>}
         </div>
@@ -146,8 +149,8 @@ export function ExpenseForm({ accounts, costCenters = [], expense }: ExpenseForm
             render={({ field }) => (
               <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                 <Label>Kategori</Label>
-                <Select.Trigger><Select.Value placeholder="Pilih Kategori" /><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
+                <HeroSelect.Trigger><SelectValue placeholder="Pilih Kategori" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+                <HeroSelect.Popover>
                   <ListBox>
                     <ListBox.Item id="operasional" textValue="Operasional">Operasional<ListBox.ItemIndicator /></ListBox.Item>
                     <ListBox.Item id="transportasi" textValue="Transportasi">Transportasi<ListBox.ItemIndicator /></ListBox.Item>
@@ -157,7 +160,7 @@ export function ExpenseForm({ accounts, costCenters = [], expense }: ExpenseForm
                     <ListBox.Item id="maintenance" textValue="Maintenance">Maintenance<ListBox.ItemIndicator /></ListBox.Item>
                     <ListBox.Item id="lainnya" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
                   </ListBox>
-                </Select.Popover>
+                </HeroSelect.Popover>
               </Select>
             )}
           />
@@ -185,6 +188,46 @@ export function ExpenseForm({ accounts, costCenters = [], expense }: ExpenseForm
             </ComboBox>
           </div>
         )}
+
+        <div className="flex flex-col gap-1.5">
+          <Controller
+            name="projectId"
+            control={control}
+            render={({ field }) => (
+              <ComboBox
+                selectedKey={field.value ? String(field.value) : null}
+                onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                className="w-full"
+              >
+                <Label>Proyek</Label>
+                <ComboBox.InputGroup>
+                  <Input placeholder="Cari proyek..." />
+                  <ComboBox.Trigger />
+                </ComboBox.InputGroup>
+                <ComboBox.Popover>
+                  <ListBox>
+                    {projects.map((p) => (
+                      <ListBox.Item key={p.id} id={String(p.id)} textValue={`${p.documentNo || ''} - ${p.name}`}>
+                        {p.documentNo ? `${p.documentNo} - ` : ""}{p.name}
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    ))}
+                  </ListBox>
+                </ComboBox.Popover>
+              </ComboBox>
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="referenceNo">No. Referensi</Label>
+          <Input id="referenceNo" {...register("referenceNo")} placeholder="Nomor referensi..." />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="receiptImage">Bukti / Kwitansi (URL)</Label>
+          <Input id="receiptImage" {...register("receiptImage")} placeholder="URL gambar bukti..." />
+        </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>

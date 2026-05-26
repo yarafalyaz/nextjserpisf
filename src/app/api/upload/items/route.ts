@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
   const uploadDir = path.join(process.cwd(), "public", "uploads", "items")
   await mkdir(uploadDir, { recursive: true })
 
-  const ext = file.name.split(".").pop() || "jpg"
+  // Sanitize extension
+  const rawExt = (file.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
+  const ext = rawExt.slice(0, 10) || "jpg"
   const filename = `item-${Date.now()}.${ext}`
   const filepath = path.join(uploadDir, filename)
 

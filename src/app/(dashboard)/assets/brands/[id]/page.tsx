@@ -6,7 +6,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAssetBrand } from "@/actions/asset.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { Pencil } from "lucide-react"
 
 export default async function AssetBrandDetailPage({
   params,
@@ -26,33 +29,25 @@ export default async function AssetBrandDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Assets", href: "/assets" },
-  { label: "Brands", href: "/assets/brands" },
-  { label: "Detail" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Merek Aset: {brand.name}</h1>
-<div className="flex gap-2">
-          <Link href={`/assets/brands/${brand.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
+      <PageHeader
+        title={`Merek Aset: ${brand.name}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Assets", href: "/assets" },
+          { label: "Brands", href: "/assets/brands" },
+          { label: brand.name },
+        ]}
+        actions={<>
+          <Button href={`/assets/brands/${brand.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={brand.id} action={deleteAssetBrand} />
-                  <Link href="/assets/brands" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-      </div>
+          <BackButton href="/assets/brands" />
+        </>}
+      />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Nama</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{brand.name}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(brand.createdAt)}</span>
-          </div>
-        </div>
-      </div>
+      <DetailCard>
+        <DetailField label="Nama" value={brand.name} />
+        <DetailField label="Dibuat" value={formatDate(brand.createdAt)} />
+      </DetailCard>
 
       {/* Models */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -63,22 +58,20 @@ export default async function AssetBrandDetailPage({
           {brand.models.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada model</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Nama Model</th>
-                  <th>Dibuat</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Nama Model</DetailTableTh>
+                <DetailTableTh>Dibuat</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {brand.models.map((model) => (
-                  <tr key={model.id}>
-                    <td>{model.name}</td>
-                    <td>{formatDate(model.createdAt)}</td>
-                  </tr>
+                  <DetailTableRow key={model.id}>
+                    <DetailTableTd>{model.name}</DetailTableTd>
+                    <DetailTableTd>{formatDate(model.createdAt)}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           )}
         </div>
       </div>

@@ -8,11 +8,25 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function CreateProjectPage() {
   await requirePermission("view_projects")
 
-  const customers = await prisma.customer.findMany({
-    where: { isActive: true, deletedAt: null },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  })
+  const [customers, customerVehiclesRaw] = await Promise.all([
+    prisma.customer.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.customerVehicle.findMany({
+      where: { isActive: true },
+      include: { vehicle: { include: { variant: { include: { model: { include: { brand: true } } } } } } },
+      orderBy: { licensePlate: "asc" },
+    }),
+  ])
+
+  const customerVehicles = customerVehiclesRaw.map((cv) => ({
+    id: cv.id,
+    licensePlate: cv.licensePlate,
+    vehicleName: [cv.vehicle.variant?.model?.brand?.name, cv.vehicle.variant?.model?.name, cv.vehicle.variant?.name].filter(Boolean).join(" ") || `Vehicle #${cv.vehicleId}`,
+    customerId: cv.customerId,
+  }))
 
   return (
     <div className="flex flex-col gap-6">
@@ -20,7 +34,7 @@ export default async function CreateProjectPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Proyek</h1>
       </div>
-      <ProjectForm customers={customers} />
+      <ProjectForm customers={customers} customerVehicles={customerVehicles} />
     </div>
   )
 }

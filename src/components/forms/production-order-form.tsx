@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -10,7 +9,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 
 interface ProductionOrderFormProps {
   products: { id: number; name: string; sku: string | null }[]
-  order?: any
+  order?: { id: number; workOrderId: number; itemId: number; productId?: number | null; qty: number; startDate?: string | null; endDate?: string | null; notes?: string | null }
 }
 
 export function ProductionOrderForm({ products, order }: ProductionOrderFormProps) {

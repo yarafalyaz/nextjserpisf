@@ -6,14 +6,15 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteEmployeeLoan } from "@/actions/hrm.actions"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 
 interface LoanData {
   id: number
   employee: { name: string }
-  amount: number
-  installmentAmount: number
+  loanDate: string
+  totalAmount: number
+  monthlyInstallment: number
   remainingAmount: number
   status: string
 }
@@ -29,12 +30,16 @@ const columns = [
       </Link>
     ),
   }),
-  columnHelper.accessor("amount", {
+  columnHelper.accessor("loanDate", {
+    header: "Tanggal",
+    cell: (info) => formatDate(info.getValue()),
+  }),
+  columnHelper.accessor("totalAmount", {
     header: "Jumlah",
     cell: (info) => formatCurrency(info.getValue()),
   }),
-  columnHelper.accessor("installmentAmount", {
-    header: "Angsuran",
+  columnHelper.accessor("monthlyInstallment", {
+    header: "Angsuran/Bulan",
     cell: (info) => formatCurrency(info.getValue()),
   }),
   columnHelper.accessor("remainingAmount", {

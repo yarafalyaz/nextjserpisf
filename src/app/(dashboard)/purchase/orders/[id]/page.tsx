@@ -11,7 +11,9 @@ import { DeleteButton } from "@/components/ui/delete-button"
 import { deletePurchaseOrder } from "@/actions/purchase.actions"
 import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 
 export default async function PurchaseOrderDetailPage({
   params,
@@ -36,19 +38,24 @@ export default async function PurchaseOrderDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Purchase",href:"/purchase"},{label:"Orders",href:"/purchase/orders"},{label:"Detail"}]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">PO {po.documentNo}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <StatusChip status={po.status} />
-  <div className="flex gap-2">
-          <Link href={`/purchase/orders/${po.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
-          <PrintButton />
-          <DeleteButton id={po.id} action={deletePurchaseOrder} />
-                  <Link href="/purchase/orders" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-        </div>
-      </div>
+      <PageHeader
+        title={`PO ${po.documentNo}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Purchase", href: "/purchase" },
+          { label: "Orders", href: "/purchase/orders" },
+          { label: "Detail" },
+        ]}
+        badge={<StatusChip status={po.status} />}
+        actions={
+          <>
+            <Button href={`/purchase/orders/${po.id}/edit`} variant="primary">Edit</Button>
+            <PrintButton />
+            <DeleteButton id={po.id} action={deletePurchaseOrder} />
+            <BackButton href="/purchase/orders" />
+          </>
+        }
+      />
 
       <DetailTabs
         ariaLabel="Purchase order detail tabs"
@@ -59,43 +66,23 @@ export default async function PurchaseOrderDetailPage({
             content: (
               <>
                 <StatusActions
-        status={po.status}
-        id={po.id}
-        module="purchase/orders"
-      />
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Vendor</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{po.vendor.name}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(po.date)}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Expected</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(po.expectedDate)}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">PR Ref</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium font-mono">{po.purchaseRequest?.documentNo || "-"}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Grand Total</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(po.grandTotal))}</span>
-                    </div>
-                  </div>
-                </div>
+                  status={po.status}
+                  id={po.id}
+                  module="purchase/orders"
+                />
+                <DetailCard>
+                  <DetailField label="Vendor" value={po.vendor.name} />
+                  <DetailField label="Tanggal" value={formatDate(po.date)} />
+                  <DetailField label="Expected" value={formatDate(po.expectedDate)} />
+                  <DetailField label="PR Ref" value={po.purchaseRequest?.documentNo || "-"} mono />
+                  <DetailField label="Grand Total" value={formatCurrency(Number(po.grandTotal))} />
+                </DetailCard>
 
                 {/* Notes */}
                 {po.notes && (
-                  <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{po.notes}</span>
-                    </div>
-                  </div>
+                  <DetailCard>
+                    <DetailField label="Catatan" value={po.notes} colSpan="full" />
+                  </DetailCard>
                 )}
               </>
             ),
@@ -109,34 +96,32 @@ export default async function PurchaseOrderDetailPage({
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Items</h2>
                 </div>
                 <div className="p-4 px-5">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr>
-                        <th>Item ID</th>
-                        <th style={{ textAlign: "right" }}>Qty</th>
-                        <th style={{ textAlign: "right" }}>Received</th>
-                        <th style={{ textAlign: "right" }}>Harga</th>
-                        <th style={{ textAlign: "right" }}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <DetailTable>
+                    <DetailTableHead>
+                      <DetailTableTh>Item ID</DetailTableTh>
+                      <DetailTableTh align="right">Qty</DetailTableTh>
+                      <DetailTableTh align="right">Received</DetailTableTh>
+                      <DetailTableTh align="right">Harga</DetailTableTh>
+                      <DetailTableTh align="right">Total</DetailTableTh>
+                    </DetailTableHead>
+                    <DetailTableBody>
                       {po.items.map((item) => (
-                        <tr key={item.id}>
-                          <td>Item #{item.itemId}</td>
-                          <td className="text-right">{Number(item.qty)}</td>
-                          <td className="text-right">{Number(item.receivedQty)}</td>
-                          <td className="text-right">{formatCurrency(Number(item.unitPrice))}</td>
-                          <td className="text-right">{formatCurrency(Number(item.total))}</td>
-                        </tr>
+                        <DetailTableRow key={item.id}>
+                          <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                          <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                          <DetailTableTd align="right">{Number(item.receivedQty)}</DetailTableTd>
+                          <DetailTableTd align="right">{formatCurrency(Number(item.unitPrice))}</DetailTableTd>
+                          <DetailTableTd align="right">{formatCurrency(Number(item.total))}</DetailTableTd>
+                        </DetailTableRow>
                       ))}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td colSpan={4} className="text-right"><strong>Grand Total</strong></td>
-                        <td className="text-right"><strong>{formatCurrency(Number(po.grandTotal))}</strong></td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                    </DetailTableBody>
+                    <DetailTableFoot>
+                      <DetailTableFootRow>
+                        <DetailTableTd colSpan={4} align="right"><strong>Grand Total</strong></DetailTableTd>
+                        <DetailTableTd align="right"><strong>{formatCurrency(Number(po.grandTotal))}</strong></DetailTableTd>
+                      </DetailTableFootRow>
+                    </DetailTableFoot>
+                  </DetailTable>
                 </div>
               </div>
             ),
@@ -149,28 +134,31 @@ export default async function PurchaseOrderDetailPage({
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Goods Receipts</h2>
                   {po.status === "ordered" && (
-                    <Link href={`/purchase/goods-receipts/create?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -primary">+ Buat GR</Link>
+                    <Link href={`/purchase/goods-receipts/create?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat GR</Link>
                   )}
                 </div>
                 <div className="p-4 px-5">
                   {po.goodsReceipts.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada goods receipt</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Tanggal</th><th>Items</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>Items</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {po.goodsReceipts.map((gr) => (
-                          <tr key={gr.id}>
-                            <td className="font-mono"><Link href={`/purchase/goods-receipts/${gr.id}`}>{gr.documentNo}</Link></td>
-                            <td>{formatDate(gr.date)}</td>
-                            <td>{gr.items.length} item</td>
-                            <td><StatusChip status={gr.status} /></td>
-                          </tr>
+                          <DetailTableRow key={gr.id}>
+                            <DetailTableTd className="font-mono"><Link href={`/purchase/goods-receipts/${gr.id}`}>{gr.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
+                            <DetailTableTd>{gr.items.length} item</DetailTableTd>
+                            <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>

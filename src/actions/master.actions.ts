@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
+import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 
 // ==================== CUSTOMER ACTIONS ====================
 
@@ -98,7 +99,7 @@ export async function createVendor(formData: FormData) {
       city: formData.get("city") as string | null,
       npwp: formData.get("npwp") as string | null,
       contactPerson: formData.get("contactPerson") as string | null,
-      paymentTermId: formData.get("paymentTermId") ? Number(formData.get("paymentTermId")) : null,
+      paymentTermId: safeId(formData.get("paymentTermId")),
       street: formData.get("street") as string | null,
       province: formData.get("province") as string | null,
       postalCode: formData.get("postalCode") as string | null,
@@ -128,7 +129,7 @@ export async function updateVendor(vendorId: number, formData: FormData) {
       city: formData.get("city") as string | null,
       npwp: formData.get("npwp") as string | null,
       contactPerson: formData.get("contactPerson") as string | null,
-      paymentTermId: formData.get("paymentTermId") ? Number(formData.get("paymentTermId")) : null,
+      paymentTermId: safeId(formData.get("paymentTermId")),
       street: formData.get("street") as string | null,
       province: formData.get("province") as string | null,
       postalCode: formData.get("postalCode") as string | null,
@@ -160,20 +161,21 @@ export async function createItem(formData: FormData) {
       name: formData.get("name") as string,
       description: formData.get("description") as string | null,
       image: formData.get("image") as string | null,
-      categoryId: formData.get("categoryId") ? Number(formData.get("categoryId")) : null,
-      brandId: formData.get("brandId") ? Number(formData.get("brandId")) : null,
-      vendorId: formData.get("vendorId") ? Number(formData.get("vendorId")) : null,
-      defaultWarehouseId: formData.get("defaultWarehouseId") ? Number(formData.get("defaultWarehouseId")) : null,
-      defaultRackId: formData.get("defaultRackId") ? Number(formData.get("defaultRackId")) : null,
-      defaultRackRowId: formData.get("defaultRackRowId") ? Number(formData.get("defaultRackRowId")) : null,
+      categoryId: safeId(formData.get("categoryId")),
+      brandId: safeId(formData.get("brandId")),
+      vendorId: safeId(formData.get("vendorId")),
+      defaultWarehouseId: safeId(formData.get("defaultWarehouseId")),
+      defaultRackId: safeId(formData.get("defaultRackId")),
+      defaultRackRowId: safeId(formData.get("defaultRackRowId")),
       unitOfMeasure: formData.get("unitOfMeasure") as string || "PCS",
       qtyOnHand: 0,
-      minStock: Number(formData.get("minStock") || 0),
-      cost: Number(formData.get("cost") || 0),
-      price: Number(formData.get("price") || 0),
-      standardCost: formData.get("standardCost") ? Number(formData.get("standardCost")) : undefined,
+      minStock: (safeNumber(formData.get("minStock")) ?? 0),
+      cost: (safeNumber(formData.get("cost")) ?? 0),
+      price: (safeNumber(formData.get("price")) ?? 0),
+      standardCost: safeNumber(formData.get("standardCost")) ?? undefined,
       costingMethod: (formData.get("costingMethod") as string) || undefined,
-      purchasePrice: formData.get("purchasePrice") ? Number(formData.get("purchasePrice")) : undefined,
+      purchasePrice: safeNumber(formData.get("purchasePrice")) ?? undefined,
+      isProduct: formData.get("isProduct") === "true",
       isActive: true,
     },
   })
@@ -192,19 +194,20 @@ export async function updateItem(itemId: number, formData: FormData) {
       name: formData.get("name") as string,
       description: formData.get("description") as string | null,
       image: formData.get("image") as string | null,
-      categoryId: formData.get("categoryId") ? Number(formData.get("categoryId")) : null,
-      brandId: formData.get("brandId") ? Number(formData.get("brandId")) : null,
-      vendorId: formData.get("vendorId") ? Number(formData.get("vendorId")) : null,
-      defaultWarehouseId: formData.get("defaultWarehouseId") ? Number(formData.get("defaultWarehouseId")) : null,
-      defaultRackId: formData.get("defaultRackId") ? Number(formData.get("defaultRackId")) : null,
-      defaultRackRowId: formData.get("defaultRackRowId") ? Number(formData.get("defaultRackRowId")) : null,
+      categoryId: safeId(formData.get("categoryId")),
+      brandId: safeId(formData.get("brandId")),
+      vendorId: safeId(formData.get("vendorId")),
+      defaultWarehouseId: safeId(formData.get("defaultWarehouseId")),
+      defaultRackId: safeId(formData.get("defaultRackId")),
+      defaultRackRowId: safeId(formData.get("defaultRackRowId")),
       unitOfMeasure: formData.get("unitOfMeasure") as string,
-      minStock: Number(formData.get("minStock") || 0),
-      cost: Number(formData.get("cost") || 0),
-      price: Number(formData.get("price") || 0),
-      standardCost: formData.get("standardCost") ? Number(formData.get("standardCost")) : undefined,
+      minStock: (safeNumber(formData.get("minStock")) ?? 0),
+      cost: (safeNumber(formData.get("cost")) ?? 0),
+      price: (safeNumber(formData.get("price")) ?? 0),
+      standardCost: safeNumber(formData.get("standardCost")) ?? undefined,
       costingMethod: (formData.get("costingMethod") as string) || undefined,
-      purchasePrice: formData.get("purchasePrice") ? Number(formData.get("purchasePrice")) : undefined,
+      purchasePrice: safeNumber(formData.get("purchasePrice")) ?? undefined,
+      isProduct: formData.get("isProduct") === "true",
     },
   })
 
@@ -270,11 +273,11 @@ export async function createEmployee(formData: FormData) {
       gender: formData.get("gender") as string | null || null,
       dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : null,
       maritalStatus: formData.get("maritalStatus") as string | null || null,
-      departmentId: formData.get("departmentId") ? Number(formData.get("departmentId")) : null,
-      positionId: formData.get("positionId") ? Number(formData.get("positionId")) : null,
+      departmentId: safeId(formData.get("departmentId")),
+      positionId: safeId(formData.get("positionId")),
       joinDate: new Date(formData.get("joinDate") as string),
       paymentFrequency: (formData.get("paymentFrequency") as string) || "MONTHLY",
-      baseSalary: Number(formData.get("baseSalary") || 0),
+      baseSalary: (safeNumber(formData.get("baseSalary")) ?? 0),
       idNumber: formData.get("idNumber") as string | null,
       npwp: formData.get("npwp") as string | null,
       bankName: formData.get("bankName") as string | null,
@@ -308,10 +311,10 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       gender: formData.get("gender") as string | null || null,
       dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : null,
       maritalStatus: formData.get("maritalStatus") as string | null || null,
-      departmentId: formData.get("departmentId") ? Number(formData.get("departmentId")) : null,
-      positionId: formData.get("positionId") ? Number(formData.get("positionId")) : null,
+      departmentId: safeId(formData.get("departmentId")),
+      positionId: safeId(formData.get("positionId")),
       paymentFrequency: (formData.get("paymentFrequency") as string) || "MONTHLY",
-      baseSalary: Number(formData.get("baseSalary") || 0),
+      baseSalary: (safeNumber(formData.get("baseSalary")) ?? 0),
       idNumber: formData.get("idNumber") as string | null,
       npwp: formData.get("npwp") as string | null,
       bankName: formData.get("bankName") as string | null,
@@ -347,7 +350,7 @@ export async function createAccount(formData: FormData) {
       code,
       name: formData.get("name") as string,
       type: formData.get("type") as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE",
-      parentId: formData.get("parentId") ? Number(formData.get("parentId")) : null,
+      parentId: safeNumber(formData.get("parentId")),
       isActive: true,
     },
   })
@@ -365,7 +368,7 @@ export async function createItemCategory(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       description: formData.get("description") as string | null,
-      parentId: formData.get("parentId") ? Number(formData.get("parentId")) : null,
+      parentId: safeNumber(formData.get("parentId")),
     },
   })
 
@@ -381,7 +384,7 @@ export async function updateItemCategory(id: number, formData: FormData) {
     data: {
       name: formData.get("name") as string,
       description: formData.get("description") as string | null,
-      parentId: formData.get("parentId") ? Number(formData.get("parentId")) : null,
+      parentId: safeNumber(formData.get("parentId")),
     },
   })
 
@@ -441,7 +444,7 @@ export async function createPosition(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code,
-      departmentId: formData.get("departmentId") ? Number(formData.get("departmentId")) : null,
+      departmentId: safeId(formData.get("departmentId")),
     },
   })
 
@@ -456,7 +459,7 @@ export async function updatePosition(id: number, formData: FormData) {
     where: { id },
     data: {
       name: formData.get("name") as string,
-      departmentId: formData.get("departmentId") ? Number(formData.get("departmentId")) : null,
+      departmentId: safeId(formData.get("departmentId")),
     },
   })
 
@@ -478,12 +481,12 @@ export async function createLead(formData: FormData) {
     contactName: formData.get("contactName") as string || null,
     position: formData.get("position") as string || null,
     industry: formData.get("industry") as string || null,
-    estimatedValue: formData.get("estimatedValue") ? Number(formData.get("estimatedValue")) : null,
+    estimatedValue: safeNumber(formData.get("estimatedValue")),
     expectedCloseDate: formData.get("expectedCloseDate") ? new Date(formData.get("expectedCloseDate") as string) : null,
     address: formData.get("address") as string || null,
     source: formData.get("source") as string || null,
     notes: formData.get("notes") as string || null,
-    assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
+    assignedTo: safeId(formData.get("assignedTo")),
     status: "new",
   }
 
@@ -505,12 +508,12 @@ export async function updateLead(id: number, formData: FormData) {
       contactName: formData.get("contactName") as string || null,
       position: formData.get("position") as string || null,
       industry: formData.get("industry") as string || null,
-      estimatedValue: formData.get("estimatedValue") ? Number(formData.get("estimatedValue")) : null,
+      estimatedValue: safeNumber(formData.get("estimatedValue")),
       expectedCloseDate: formData.get("expectedCloseDate") ? new Date(formData.get("expectedCloseDate") as string) : null,
       address: formData.get("address") as string || null,
       source: formData.get("source") as string || null,
       notes: formData.get("notes") as string || null,
-      assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
+      assignedTo: safeId(formData.get("assignedTo")),
     },
   })
 
@@ -527,7 +530,7 @@ export async function createBank(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code: formData.get("code") as string,
-      accountId: formData.get("accountId") ? Number(formData.get("accountId")) : null,
+      accountId: safeId(formData.get("accountId")),
       isActive: true,
     },
   })
@@ -544,7 +547,7 @@ export async function updateBank(id: number, formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code: formData.get("code") as string,
-      accountId: formData.get("accountId") ? Number(formData.get("accountId")) : null,
+      accountId: safeId(formData.get("accountId")),
     },
   })
 
@@ -560,7 +563,7 @@ export async function createTax(formData: FormData) {
   const tax = await prisma.tax.create({
     data: {
       name: formData.get("name") as string,
-      rate: Number(formData.get("rate") || 0),
+      rate: (safeNumber(formData.get("rate")) ?? 0),
       code: (formData.get("code") as string) || undefined,
       description: (formData.get("description") as string) || undefined,
       type: (formData.get("type") as string) || undefined,
@@ -584,7 +587,7 @@ export async function updateTax(id: number, formData: FormData) {
     where: { id },
     data: {
       name: formData.get("name") as string,
-      rate: Number(formData.get("rate") || 0),
+      rate: (safeNumber(formData.get("rate")) ?? 0),
       code: (formData.get("code") as string) || undefined,
       description: (formData.get("description") as string) || undefined,
       type: (formData.get("type") as string) || undefined,
@@ -626,12 +629,12 @@ export async function createCurrency(formData: FormData) {
     data: {
       code: formData.get("code") as string,
       name: formData.get("name") as string,
-      rate: Number(formData.get("rate") || 0),
+      rate: (safeNumber(formData.get("rate")) ?? 0),
       symbol: (formData.get("symbol") as string) || undefined,
       symbolPosition: (formData.get("symbolPosition") as string) || undefined,
       decimalSeparator: (formData.get("decimalSeparator") as string) || undefined,
       thousandsSeparator: (formData.get("thousandsSeparator") as string) || undefined,
-      decimalPlaces: formData.get("decimalPlaces") ? Number(formData.get("decimalPlaces")) : undefined,
+      decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
       isBase: formData.get("isBase") === "on",
       isActive: true,
     },
@@ -649,12 +652,12 @@ export async function updateCurrency(id: number, formData: FormData) {
     data: {
       code: formData.get("code") as string,
       name: formData.get("name") as string,
-      rate: Number(formData.get("rate") || 0),
+      rate: (safeNumber(formData.get("rate")) ?? 0),
       symbol: (formData.get("symbol") as string) || undefined,
       symbolPosition: (formData.get("symbolPosition") as string) || undefined,
       decimalSeparator: (formData.get("decimalSeparator") as string) || undefined,
       thousandsSeparator: (formData.get("thousandsSeparator") as string) || undefined,
-      decimalPlaces: formData.get("decimalPlaces") ? Number(formData.get("decimalPlaces")) : undefined,
+      decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
       isBase: formData.get("isBase") === "on",
     },
   })
@@ -671,7 +674,7 @@ export async function createBarcode(formData: FormData) {
   const barcodeEntry = await prisma.barcode.create({
     data: {
       barcode: formData.get("barcode") as string,
-      itemId: Number(formData.get("itemId")),
+      itemId: requireNumber(formData.get("itemId"), "itemId"),
       type: (formData.get("type") as string) || "EAN13",
     },
   })
@@ -710,7 +713,7 @@ export async function createStatisticalKeyFigure(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       unit: formData.get("unit") as string,
-      value: Number(formData.get("value") || 0),
+      value: (safeNumber(formData.get("value")) ?? 0),
     },
   })
 
@@ -727,7 +730,7 @@ export async function createPaymentTerm(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code: formData.get("code") as string,
-      days: Number(formData.get("days") || 0),
+      days: (safeNumber(formData.get("days")) ?? 0),
       isActive: true,
     },
   })
@@ -744,7 +747,7 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code: formData.get("code") as string,
-      days: Number(formData.get("days") || 0),
+      days: (safeNumber(formData.get("days")) ?? 0),
     },
   })
 
@@ -909,7 +912,7 @@ export async function updateAccount(id: number, formData: FormData) {
       code,
       name: formData.get("name") as string,
       type: formData.get("type") as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE",
-      parentId: formData.get("parentId") ? Number(formData.get("parentId")) : null,
+      parentId: safeNumber(formData.get("parentId")),
       isActive: true,
     },
   })

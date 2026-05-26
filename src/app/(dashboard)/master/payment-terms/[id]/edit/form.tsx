@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updatePaymentTerm } from "@/actions/master.actions"
+import { Input, Label } from "@heroui/react"
 
 interface EditPaymentTermFormProps {
   paymentTerm: {
@@ -31,18 +32,18 @@ export function EditPaymentTermForm({ paymentTerm }: EditPaymentTermFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Termin *</label>
-          <input id="name" name="name" className="form-input" placeholder="Contoh: Net 30" required defaultValue={paymentTerm.name} />
+          <Label htmlFor="name">Nama Termin *</Label>
+          <Input id="name" name="name" placeholder="Contoh: Net 30" required defaultValue={paymentTerm.name} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="code" className="text-sm font-medium text-foreground">Kode *</label>
-          <input id="code" name="code" className="form-input" placeholder="Contoh: NET30" required defaultValue={paymentTerm.code} />
+          <Label htmlFor="code">Kode *</Label>
+          <Input id="code" name="code" placeholder="Contoh: NET30" required defaultValue={paymentTerm.code} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="days" className="text-sm font-medium text-foreground">Jumlah Hari</label>
-          <input id="days" name="days" type="number" className="form-input" placeholder="0" defaultValue={paymentTerm.days} min={0} />
+          <Label htmlFor="days">Jumlah Hari</Label>
+          <Input id="days" name="days" type="number" placeholder="0" defaultValue={paymentTerm.days} min={0} />
         </div>
       </div>
 

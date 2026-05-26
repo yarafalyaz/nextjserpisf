@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -9,7 +8,10 @@ import { quotationSchema, type QuotationInput } from "@/lib/validators"
 import { createQuotation } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Label, ComboBox, ListBox, Select, SelectItem } from "@heroui/react"
+import { Input, TextArea, Label, ComboBox, ListBox, Select } from "@heroui/react"
+import { CurrencyInput } from "@/components/ui/currency-input"
+import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
+import { Button } from "@/components/ui/page-header"
 
 // ==================== TYPES ====================
 
@@ -33,7 +35,7 @@ interface QuotationFormProps {
   customerVehicles: CustomerVehicle[]
   items: ItemOption[]
   generatedCode?: string
-  quotation?: any // for edit mode
+  quotation?: Record<string, unknown> // for edit mode
 }
 
 // ==================== SECTION ITEMS COMPONENT ====================
@@ -222,7 +224,7 @@ function SectionItemRow({
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
           onChange={(e) => {
-            setValue(`${prefix}.qty`, Number(e.target.value) || 0)
+            setValue(`${prefix}.qty`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
             setTimeout(() => onRecalc(itemIndex), 0)
           }}
         />
@@ -231,8 +233,8 @@ function SectionItemRow({
         <input
           {...register(`${prefix}.uom`)}
           className="form-input"
-          style={{ fontSize: "0.8125rem", padding: "6px 8px", background: "var(--color-surface-alt)" }}
-          readOnly
+          style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+          placeholder="pcs"
         />
       </td>
       <td>
@@ -244,7 +246,7 @@ function SectionItemRow({
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
           onChange={(e) => {
-            setValue(`${prefix}.unitPrice`, Number(e.target.value) || 0)
+            setValue(`${prefix}.unitPrice`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
             setTimeout(() => onRecalc(itemIndex), 0)
           }}
         />
@@ -271,7 +273,7 @@ function SectionItemRow({
             className="form-input"
             style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", flex: 1 }}
             onChange={(e) => {
-              setValue(`${prefix}.discount`, Number(e.target.value) || 0)
+              setValue(`${prefix}.discount`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
               setTimeout(() => onRecalc(itemIndex), 0)
             }}
           />
@@ -358,7 +360,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
               className="form-input"
               style={{ fontSize: "0.875rem", padding: "6px 8px", textAlign: "right", maxWidth: "160px" }}
               defaultValue={discount}
-              onChange={(e) => setValue("discount", Number(e.target.value) || 0)}
+              onChange={(e) => setValue("discount", (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))}
             />
           </div>
         </div>
@@ -373,7 +375,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
               className="form-input"
               style={{ fontSize: "0.875rem", padding: "6px 8px", textAlign: "right", maxWidth: "160px" }}
               defaultValue={tax}
-              onChange={(e) => setValue("tax", Number(e.target.value) || 0)}
+              onChange={(e) => setValue("tax", (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))}
             />
           </div>
         </div>
@@ -400,7 +402,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
     control,
     formState: { errors },
   } = useForm<QuotationInput>({
-    resolver: zodResolver(quotationSchema),
+    resolver: zodResolver(quotationSchema) as any,
     defaultValues: quotation
       ? quotation
       : {
@@ -464,12 +466,9 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-      {/* Header Section */}
-      <div className="form-section-header">
-        <h3>Informasi Quotation</h3>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <FormCard>
+        <FormSection title="Informasi Quotation">
         {/* Document Number (read-only) */}
         <div className="flex flex-col gap-1.5">
           <Label>No. Dokumen</Label>
@@ -577,12 +576,11 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
             onChange={(val) => setValue("validUntil", val)}
           />
         </div>
-      </div>
+        </FormSection>
 
-      {/* Sections */}
-      <div style={{ marginTop: "32px" }}>
-        <div className="form-section-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3>Item Quotation</h3>
+      <FormSection title="Item Quotation" columns={1}>
+        <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <button
             type="button"
             onClick={() =>
@@ -606,6 +604,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
           >
             + Tambah Section
           </button>
+        </div>
         </div>
 
         {sectionFields.map((sectionField, sectionIndex) => (
@@ -642,33 +641,26 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
         {errors.sections && typeof errors.sections.message === "string" && (
           <span className="text-xs text-danger mt-1">{errors.sections.message}</span>
         )}
-      </div>
+      </FormSection>
 
-      {/* Totals */}
-      <div style={{ marginTop: "32px" }}>
-        <div className="form-section-header">
-          <h3>Total</h3>
-        </div>
+      <FormSection title="Total" columns={1}>
         <QuotationTotals control={control} setValue={setValue} />
-      </div>
+      </FormSection>
 
-      {/* Notes */}
-      <div style={{ marginTop: "24px" }}>
-        <div className="flex flex-col gap-1.5 col-span-full">
+      <FormSection title="Lainnya" columns={1}>
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="notes">Catatan</Label>
           <TextArea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk quotation ini..." />
         </div>
-      </div>
+      </FormSection>
 
-      {/* Actions */}
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
-          Batal
-        </button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="submit-quotation">
+      <FormActions>
+        <Button onClick={() => router.back()}>Batal</Button>
+        <Button type="submit" variant="primary" disabled={isPending}>
           {isPending ? "Menyimpan..." : "Buat Quotation"}
-        </button>
-      </div>
+        </Button>
+      </FormActions>
+      </FormCard>
     </form>
   )
 }

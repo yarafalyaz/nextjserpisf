@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -10,7 +9,7 @@ import { Input, ComboBox, ListBox, Label } from "@heroui/react"
 interface VehicleModelFormProps {
   brands: { id: number; name: string
 }[]
-  model?: any
+  model?: { id: number; name: string; brandId: number }
 }
 
 export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {

@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { DocumentSequenceService } from '@/lib/services/document-sequence.service'
 import { getSystemSettings } from './settings'
 

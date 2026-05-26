@@ -44,6 +44,12 @@ export default async function AttendancePage({
     checkIn: a.checkIn ? a.checkIn.toISOString() : null,
     checkOut: a.checkOut ? a.checkOut.toISOString() : null,
     status: a.status,
+    checkInLatitude: a.checkInLatitude ? Number(a.checkInLatitude) : null,
+    checkInLongitude: a.checkInLongitude ? Number(a.checkInLongitude) : null,
+    checkOutLatitude: a.checkOutLatitude ? Number(a.checkOutLatitude) : null,
+    checkOutLongitude: a.checkOutLongitude ? Number(a.checkOutLongitude) : null,
+    overtimeMinutes: a.overtimeMinutes,
+    overtimeApproved: a.overtimeApproved,
   }))
 
   return (

@@ -13,6 +13,8 @@ interface WorkScheduleData {
   dayOfWeek: number
   startTime: string
   endTime: string
+  departmentName: string
+  isActive: boolean
 }
 
 const DAY_NAMES: Record<number, string> = {
@@ -36,6 +38,10 @@ const columns = [
       </Link>
     ),
   }),
+  columnHelper.accessor("departmentName", {
+    header: "Departemen",
+    cell: (info) => info.getValue(),
+  }),
   columnHelper.accessor("dayOfWeek", {
     header: "Hari",
     cell: (info) => DAY_NAMES[info.getValue()] || String(info.getValue()),
@@ -45,6 +51,15 @@ const columns = [
   }),
   columnHelper.accessor("endTime", {
     header: "Jam Keluar",
+  }),
+  columnHelper.accessor("isActive", {
+    header: "Status",
+    cell: (info) =>
+      info.getValue() ? (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Aktif</span>
+      ) : (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Nonaktif</span>
+      ),
   }),
   columnHelper.display({
     id: "actions",

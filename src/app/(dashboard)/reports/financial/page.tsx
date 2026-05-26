@@ -5,9 +5,9 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 
 /**
- * Trial Balance Report
  * Shows all accounts with their debit and credit totals
  */
 async function getTrialBalanceData(startDate?: string, endDate?: string) {
@@ -138,7 +138,7 @@ export default async function FinancialReportsPage({
       </div>
 
       {/* Report Selector */}
-      <form className="bg-surface rounded-xl border border-default shadow-sm p-6" action="/reports/financial" style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "end" }}>
+      <form className="bg-surface rounded-xl border border-default shadow-sm p-6 flex gap-3 flex-wrap items-end" action="/reports/financial">
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">Jenis Laporan</label>
           <select name="report" className="form-input" defaultValue={reportType}>
@@ -161,73 +161,71 @@ export default async function FinancialReportsPage({
       {reportType === "trial-balance" && trialBalance && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Kode</th>
-                  <th>Nama Akun</th>
-                  <th>Tipe</th>
-                  <th style={{ textAlign: "right" }}>Debit</th>
-                  <th style={{ textAlign: "right" }}>Credit</th>
-                  <th style={{ textAlign: "right" }}>Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Kode</DetailTableTh>
+                <DetailTableTh>Nama Akun</DetailTableTh>
+                <DetailTableTh>Tipe</DetailTableTh>
+                <DetailTableTh align="right">Debit</DetailTableTh>
+                <DetailTableTh align="right">Credit</DetailTableTh>
+                <DetailTableTh align="right">Saldo</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {trialBalance.accounts.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-10 px-4 text-muted">Belum ada data journal</td></tr>
+                  <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted">Belum ada data journal</DetailTableTd></DetailTableRow>
                 ) : (
                   trialBalance.accounts.map((acc) => (
-                    <tr key={acc.code}>
-                      <td className="font-mono">{acc.code}</td>
-                      <td>{acc.name}</td>
-                      <td><span className="px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground cursor-pointer transition-all capitalize hover:border-primary hover:text-primary">{acc.type}</span></td>
-                      <td className="text-right">{formatCurrency(acc.totalDebit)}</td>
-                      <td className="text-right">{formatCurrency(acc.totalCredit)}</td>
-                      <td className="text-right"><strong>{formatCurrency(acc.totalDebit - acc.totalCredit)}</strong></td>
-                    </tr>
+                    <DetailTableRow key={acc.code}>
+                      <DetailTableTd className="font-mono">{acc.code}</DetailTableTd>
+                      <DetailTableTd>{acc.name}</DetailTableTd>
+                      <DetailTableTd><span className="px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground cursor-pointer transition-all capitalize hover:border-primary hover:text-primary">{acc.type}</span></DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(acc.totalDebit)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(acc.totalCredit)}</DetailTableTd>
+                      <DetailTableTd align="right" className="font-bold">{formatCurrency(acc.totalDebit - acc.totalCredit)}</DetailTableTd>
+                    </DetailTableRow>
                   ))
                 )}
-              </tbody>
-              <tfoot>
-                <tr style={{ fontWeight: "bold", borderTop: "2px solid var(--border-color)" }}>
-                  <td colSpan={3}>TOTAL</td>
-                  <td className="text-right">{formatCurrency(trialBalance.grandTotalDebit)}</td>
-                  <td className="text-right">{formatCurrency(trialBalance.grandTotalCredit)}</td>
-                  <td className="text-right">
+              </DetailTableBody>
+              <DetailTableFoot>
+                <DetailTableFootRow className="font-bold border-t-2 border-default">
+                  <DetailTableTd colSpan={3}>TOTAL</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(trialBalance.grandTotalDebit)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(trialBalance.grandTotalCredit)}</DetailTableTd>
+                  <DetailTableTd align="right">
                     {Math.abs(trialBalance.grandTotalDebit - trialBalance.grandTotalCredit) < 0.01
                       ? "✅ BALANCED"
                       : `❌ Selisih: ${formatCurrency(trialBalance.grandTotalDebit - trialBalance.grandTotalCredit)}`}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                  </DetailTableTd>
+                </DetailTableFootRow>
+              </DetailTableFoot>
+            </DetailTable>
           </div>
         </div>
       )}
 
       {/* Income Statement */}
       {reportType === "income-statement" && incomeStatement && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-5" style={{ gridTemplateColumns: "1fr" }}>
+        <div className="grid grid-cols-1 gap-5">
           <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
             <div className="flex items-center justify-between p-4 px-5 border-b border-default">
               <h2 className="text-[0.9375rem] font-semibold text-foreground">PENDAPATAN</h2>
               <span className="text-xl font-bold text-foreground text-success">{formatCurrency(incomeStatement.totalRevenue)}</span>
             </div>
             <div className="p-4 px-5">
-              <table className="w-full border-collapse">
-                <tbody>
+              <DetailTable>
+                <DetailTableBody>
                   {incomeStatement.revenues.map((r) => (
-                    <tr key={r.code}>
-                      <td className="font-mono">{r.code}</td>
-                      <td>{r.name}</td>
-                      <td className="text-right">{formatCurrency(r.amount)}</td>
-                    </tr>
+                    <DetailTableRow key={r.code}>
+                      <DetailTableTd className="font-mono">{r.code}</DetailTableTd>
+                      <DetailTableTd>{r.name}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(r.amount)}</DetailTableTd>
+                    </DetailTableRow>
                   ))}
                   {incomeStatement.revenues.length === 0 && (
-                    <tr><td colSpan={3} className="text-muted text-center">Belum ada data</td></tr>
+                    <DetailTableRow><DetailTableTd colSpan={3} className="text-muted text-center">Belum ada data</DetailTableTd></DetailTableRow>
                   )}
-                </tbody>
-              </table>
+                </DetailTableBody>
+              </DetailTable>
             </div>
           </div>
 
@@ -237,25 +235,25 @@ export default async function FinancialReportsPage({
               <span className="text-xl font-bold text-foreground text-danger">{formatCurrency(incomeStatement.totalExpense)}</span>
             </div>
             <div className="p-4 px-5">
-              <table className="w-full border-collapse">
-                <tbody>
+              <DetailTable>
+                <DetailTableBody>
                   {incomeStatement.expenses.map((e) => (
-                    <tr key={e.code}>
-                      <td className="font-mono">{e.code}</td>
-                      <td>{e.name}</td>
-                      <td className="text-right">{formatCurrency(e.amount)}</td>
-                    </tr>
+                    <DetailTableRow key={e.code}>
+                      <DetailTableTd className="font-mono">{e.code}</DetailTableTd>
+                      <DetailTableTd>{e.name}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(e.amount)}</DetailTableTd>
+                    </DetailTableRow>
                   ))}
                   {incomeStatement.expenses.length === 0 && (
-                    <tr><td colSpan={3} className="text-muted text-center">Belum ada data</td></tr>
+                    <DetailTableRow><DetailTableTd colSpan={3} className="text-muted text-center">Belum ada data</DetailTableTd></DetailTableRow>
                   )}
-                </tbody>
-              </table>
+                </DetailTableBody>
+              </DetailTable>
             </div>
           </div>
 
-          <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md" style={{ justifyContent: "center" }}>
-            <div className="flex flex-col" style={{ alignItems: "center" }}>
+          <div className="bg-surface rounded-xl p-5 px-6 flex items-center justify-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
+            <div className="flex flex-col items-center">
               <span className="text-[0.8125rem] text-muted font-medium">LABA / RUGI BERSIH</span>
               <span className={`kpi-value ${incomeStatement.netIncome >= 0 ? "text-success" : "text-danger"}`}>
                 {formatCurrency(incomeStatement.netIncome)}

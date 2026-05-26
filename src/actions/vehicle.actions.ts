@@ -3,6 +3,7 @@
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
+import { requireId, safeId, safeNumber } from "@/lib/utils/safe-parse"
 
 // ==================== VEHICLE BRAND ACTIONS ====================
 
@@ -103,7 +104,6 @@ export async function deleteVehicleModel(id: number) {
   return { success: true }
 }
 
-
 export async function updateVehicleBrand(id: number, formData: FormData) {
   "use server"
 
@@ -171,5 +171,113 @@ export async function deleteVehicle(id: number) {
   "use server"
   await prisma.vehicle.delete({ where: { id } })
   revalidatePath("/vehicles")
+  return { success: true }
+}
+
+// ==================== CUSTOMER VEHICLE ACTIONS ====================
+
+export async function createCustomerVehicle(formData: FormData) {
+  await requirePermission("create_customers")
+
+  const customerId = requireId(formData.get("customerId"), "customerId")
+
+  // Find or create Vehicle from variantId
+  const variantId = safeId(formData.get("variantId"))
+  let vehicleId: number
+
+  if (variantId) {
+    // Create a new Vehicle record linked to the variant
+    const vehicle = await prisma.vehicle.create({
+      data: {
+        vehicleVariantId: variantId,
+        plateNumber: formData.get("licensePlate") as string | null,
+        year: safeNumber(formData.get("year")),
+        color: formData.get("color") as string | null,
+      },
+    })
+    vehicleId = vehicle.id
+  } else {
+    vehicleId = requireId(formData.get("vehicleId"), "vehicleId")
+  }
+
+  const customerVehicle = await prisma.customerVehicle.create({
+    data: {
+      customerId,
+      vehicleId,
+      licensePlate: formData.get("licensePlate") as string | null,
+      year: safeNumber(formData.get("year")),
+      color: formData.get("color") as string | null,
+      vehicleType: formData.get("vehicleType") as string | null,
+      transmission: formData.get("transmission") as string | null,
+      chassisNumber: formData.get("chassisNumber") as string | null,
+      engineNumber: formData.get("engineNumber") as string | null,
+      isActive: formData.get("isActive") === "true" || formData.get("isActive") === "on",
+      notes: formData.get("notes") as string | null,
+    },
+  })
+
+  revalidatePath(`/master/customers/${customerId}/vehicles`)
+  return { success: true, id: customerVehicle.id }
+}
+
+export async function updateCustomerVehicle(id: number, formData: FormData) {
+  await requirePermission("edit_customers")
+
+  const customerId = requireId(formData.get("customerId"), "customerId")
+
+  // Find or create Vehicle from variantId
+  const variantId = safeId(formData.get("variantId"))
+  let vehicleId: number
+
+  const existing = await prisma.customerVehicle.findUniqueOrThrow({ where: { id } })
+
+  if (variantId) {
+    // Update existing vehicle record
+    const updatedVehicle = await prisma.vehicle.update({
+      where: { id: existing.vehicleId },
+      data: {
+        vehicleVariantId: variantId,
+        plateNumber: formData.get("licensePlate") as string | null,
+        year: safeNumber(formData.get("year")),
+        color: formData.get("color") as string | null,
+      },
+    })
+    vehicleId = updatedVehicle.id
+  } else {
+    vehicleId = requireId(formData.get("vehicleId"), "vehicleId")
+  }
+
+  await prisma.customerVehicle.update({
+    where: { id },
+    data: {
+      vehicleId,
+      licensePlate: formData.get("licensePlate") as string | null,
+      year: safeNumber(formData.get("year")),
+      color: formData.get("color") as string | null,
+      vehicleType: formData.get("vehicleType") as string | null,
+      transmission: formData.get("transmission") as string | null,
+      chassisNumber: formData.get("chassisNumber") as string | null,
+      engineNumber: formData.get("engineNumber") as string | null,
+      isActive: formData.get("isActive") === "true" || formData.get("isActive") === "on",
+      notes: formData.get("notes") as string | null,
+    },
+  })
+
+  revalidatePath(`/master/customers/${customerId}/vehicles`)
+  return { success: true }
+}
+
+export async function deleteCustomerVehicle(id: number) {
+  await requirePermission("delete_customers")
+
+  const vehicle = await prisma.customerVehicle.findUniqueOrThrow({
+    where: { id },
+  })
+
+  await prisma.customerVehicle.delete({
+    where: { id },
+  })
+
+  revalidatePath(`/master/customers/${vehicle.customerId}/vehicles`)
   return { success: true }
 }

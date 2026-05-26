@@ -20,6 +20,11 @@ export default async function EditPage({
 
   const employees = await prisma.employee.findMany({ orderBy: { name: "asc" } })
 
+  const projects = await prisma.project.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -30,7 +35,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit</h1>
       </div>
-      <OvertimeForm overtime={data as any} employees={employees as any}/>
+      <OvertimeForm overtime={data as any} employees={employees as any} projects={projects} />
     </div>
   )
 }

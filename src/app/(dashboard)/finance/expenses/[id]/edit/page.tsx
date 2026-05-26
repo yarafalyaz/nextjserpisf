@@ -18,7 +18,13 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const accounts = await prisma.account.findMany({ where: { type: "EXPENSE" }, orderBy: { code: "asc" } })
+  const accounts = await prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" } })
+
+  const projects = await prisma.project.findMany({
+    where: { status: "active" },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, documentNo: true },
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,7 +36,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit</h1>
       </div>
-      <ExpenseForm expense={data as any} accounts={accounts as any}/>
+      <ExpenseForm expense={data as any} accounts={accounts as any} projects={projects} />
     </div>
   )
 }

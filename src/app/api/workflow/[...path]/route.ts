@@ -26,8 +26,17 @@ export async function POST(
 
   const { path } = await params
   // path = ["sales", "quotations", "123", "approve"]
+  if (!Array.isArray(path) || path.length < 3) {
+    return NextResponse.json({ error: "Invalid path" }, { status: 400 })
+  }
+
   const action = path[path.length - 1] // "approve" or "reject"
-  const id = Number(path[path.length - 2])
+  const idRaw = path[path.length - 2]
+  const id = Number.parseInt(idRaw, 10)
+  if (!Number.isInteger(id) || id <= 0) {
+    return NextResponse.json({ error: "Invalid id" }, { status: 400 })
+  }
+
   const module = path.slice(0, path.length - 2).join("/")
 
   const config = MODULE_MAP[module]
@@ -57,6 +66,9 @@ export async function POST(
     revalidatePath(config.revalidate)
     return NextResponse.json({ success: true, status: newStatus })
   } catch (error) {
+    if (error instanceof Error && "code" in error && (error as { code?: string }).code === "P2025") {
+      return NextResponse.json({ error: "Data tidak ditemukan" }, { status: 404 })
+    }
     return NextResponse.json({ error: "Failed to update status" }, { status: 500 })
   }
 }

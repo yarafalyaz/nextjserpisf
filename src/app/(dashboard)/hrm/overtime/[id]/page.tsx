@@ -1,14 +1,14 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
+import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
-import { StatusChip } from '@/components/ui/status-chip'
+import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteOvertimeRequest } from "@/actions/hrm.actions"
 import { StatusActions } from "@/components/ui/status-actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 export default async function OvertimeRequestDetailPage({
   params,
@@ -26,60 +26,69 @@ export default async function OvertimeRequestDetailPage({
 
   if (!overtime) notFound()
 
+  const project = overtime.projectId
+    ? await prisma.project.findUnique({ where: { id: overtime.projectId }, select: { name: true } })
+    : null
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"HRM",href:"/hrm"},{label:"Overtime",href:"/hrm/overtime"},{label:"Detail"}]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Pengajuan Lembur</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <StatusChip status={overtime.status} />
-  <div className="flex gap-2">
-          <Link href={`/hrm/overtime/${overtime.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
-          <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />
-                  <Link href="/hrm/overtime" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Pengajuan Lembur"
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "HRM", href: "/hrm" },
+          { label: "Lembur", href: "/hrm/overtime" },
+          { label: "Detail" },
+        ]}
+        badge={<StatusChip status={overtime.status} />}
+        actions={
+          <>
+            <Button href={`/hrm/overtime/${overtime.id}/edit`} variant="primary">Edit</Button>
+            <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />
+            <BackButton href="/hrm/overtime" />
+          </>
+        }
+      />
 
       <StatusActions
         status={overtime.status}
         id={overtime.id}
         module="hrm/overtime"
       />
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Karyawan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{overtime.employee.name}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Karyawan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{overtime.employee.employeeNo}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(overtime.date)}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Jam Lembur</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{Number(overtime.hours)} jam</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
-            <span className="text-[0.9375rem] text-foreground font-medium"><StatusChip status={overtime.status} /></span>
-          </div>
-          {overtime.reason && (
-            <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Alasan</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{overtime.reason}</span>
-            </div>
-          )}
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Diajukan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(overtime.createdAt)}</span>
-          </div>
-        </div>
-      </div>
+
+      <DetailCard>
+        <DetailField label="Karyawan" value={overtime.employee.name} />
+        <DetailField label="No. Karyawan" value={overtime.employee.employeeNo} mono />
+        {project && <DetailField label="Proyek" value={project.name} />}
+        <DetailField label="Tanggal" value={formatDate(overtime.date)} />
+        <DetailField label="Jam Lembur" value={`${Number(overtime.hours)} jam`} />
+        {overtime.totalHours != null && (
+          <DetailField label="Total Jam" value={`${Number(overtime.totalHours)} jam`} />
+        )}
+        {overtime.mealHours != null && (
+          <DetailField label="Jam Makan" value={`${Number(overtime.mealHours)} jam`} />
+        )}
+        {overtime.billableHours != null && (
+          <DetailField label="Jam Billable" value={`${Number(overtime.billableHours)} jam`} />
+        )}
+        {overtime.calculatedValue != null && (
+          <DetailField label="Nilai Kalkulasi" value={formatCurrency(Number(overtime.calculatedValue))} />
+        )}
+        <DetailField label="Status" value={<StatusChip status={overtime.status} />} />
+        {overtime.reason && (
+          <DetailField label="Alasan" value={overtime.reason} colSpan="full" />
+        )}
+        {overtime.rejectionReason && (
+          <DetailField label="Alasan Penolakan" value={overtime.rejectionReason} colSpan="full" />
+        )}
+        <DetailField label="Diajukan" value={formatDate(overtime.createdAt)} />
+        {overtime.approvedAt && (
+          <DetailField label="Disetujui Pada" value={formatDate(overtime.approvedAt)} />
+        )}
+        {overtime.supervisorApprovedAt && (
+          <DetailField label="Disetujui Supervisor" value={formatDate(overtime.supervisorApprovedAt)} />
+        )}
+      </DetailCard>
     </div>
   )
 }

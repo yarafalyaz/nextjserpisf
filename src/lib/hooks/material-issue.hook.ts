@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -15,7 +15,7 @@ export async function onMaterialIssueCompleted(
   await prisma.$transaction(async (tx) => {
     const issue = await tx.materialIssue.findUniqueOrThrow({
       where: { id: issueId },
-      include: { items: { include: { item: true } } },
+      include: { items: true },
     });
 
     // Idempotency: check if stock moves already exist
@@ -44,12 +44,12 @@ export async function onMaterialIssueCompleted(
           itemId: item.itemId,
           warehouseId: issue.warehouseId,
           qty: item.qty,
-          cost: item.unitCost ?? 0,
+          cost: item.cost,
           impact: "OUT",
           status: "draft",
           referenceType: "MaterialIssue",
           referenceId: issue.id,
-          notes: `Pengeluaran Material ${issue.documentNo} - ${item.item?.name ?? ""}`,
+          notes: `Pengeluaran Material ${issue.documentNo}`,
           createdBy: userId ?? null,
         },
       });
@@ -60,8 +60,6 @@ export async function onMaterialIssueCompleted(
       where: { id: issueId },
       data: {
         status: "completed",
-        completedAt: new Date(),
-        completedBy: userId ?? null,
       },
     });
   });

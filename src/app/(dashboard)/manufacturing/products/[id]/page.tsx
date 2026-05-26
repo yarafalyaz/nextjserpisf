@@ -7,7 +7,9 @@ import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteProduct } from "@/actions/manufacturing.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function ProductDetailPage({
   params,
@@ -21,6 +23,8 @@ export default async function ProductDetailPage({
     include: {
       materials: true,
       productionOrders: { take: 5, orderBy: { createdAt: "desc" } },
+      vehicleBrand: true,
+      vehicleModel: true,
     },
   })
 
@@ -28,103 +32,80 @@ export default async function ProductDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Manufacturing", href: "/manufacturing" },
-  { label: "Products", href: "/manufacturing/products" },
-  { label: "Detail" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">{product.name}</h1>
-<div className="flex gap-2">
-          <Link href={`/manufacturing/products/${product.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
-          <DeleteButton id={product.id} action={deleteProduct} />
-                  <Link href="/manufacturing/products" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-      </div>
+      <PageHeader
+        title={product.name}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Manufacturing", href: "/manufacturing" },
+          { label: "Products", href: "/manufacturing/products" },
+          { label: "Detail" },
+        ]}
+        actions={
+          <>
+            <Button href={`/manufacturing/products/${product.id}/edit`} variant="primary">Edit</Button>
+            <DeleteButton id={product.id} action={deleteProduct} />
+            <BackButton href="/manufacturing/products" />
+          </>
+        }
+      />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">SKU</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{product.sku || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Nama</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{product.name}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(product.createdAt)}</span>
-          </div>
-          {product.description && (
-            <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Deskripsi</span>
-              <span className="text-[0.9375rem] text-foreground font-medium">{product.description}</span>
-            </div>
-          )}
-        </div>
-      </div>
+      <DetailCard>
+        <DetailField label="SKU" value={product.sku || "-"} mono />
+        <DetailField label="Kode Produk" value={product.code || "-"} mono />
+        <DetailField label="Nama" value={product.name} />
+        <DetailField label="Vehicle Brand" value={product.vehicleBrand?.name || "-"} />
+        <DetailField label="Vehicle Model" value={product.vehicleModel?.name || "-"} />
+        <DetailField label="Dibuat" value={formatDate(product.createdAt)} />
+        {product.description && (
+          <DetailField label="Deskripsi" value={product.description} colSpan="full" />
+        )}
+      </DetailCard>
 
       {/* Bill of Materials */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Bill of Materials</h2>
-        </div>
-        <div className="p-4 px-5">
-          {product.materials.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada material</p>
-          ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Item ID</th>
-                  <th style={{ textAlign: "right" }}>Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {product.materials.map((mat) => (
-                  <tr key={mat.id}>
-                    <td>Item #{mat.itemId}</td>
-                    <td className="text-right">{Number(mat.qty)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+      <DetailSection title="Bill of Materials">
+        {product.materials.length === 0 ? (
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada material</p>
+        ) : (
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Item ID</DetailTableTh>
+              <DetailTableTh align="right">Qty</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {product.materials.map((mat) => (
+                <DetailTableRow key={mat.id}>
+                  <DetailTableTd>Item #{mat.itemId}</DetailTableTd>
+                  <DetailTableTd align="right">{Number(mat.qty)}</DetailTableTd>
+                </DetailTableRow>
+              ))}
+            </DetailTableBody>
+          </DetailTable>
+        )}
+      </DetailSection>
 
       {/* Recent Production Orders */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Production Order Terbaru</h2>
-        </div>
-        <div className="p-4 px-5">
-          {product.productionOrders.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada production order</p>
-          ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>No. Dokumen</th>
-                  <th style={{ textAlign: "right" }}>Qty</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {product.productionOrders.map((po) => (
-                  <tr key={po.id}>
-                    <td className="font-mono"><Link href={`/manufacturing/production-orders/${po.id}`}>{po.documentNo}</Link></td>
-                    <td className="text-right">{Number(po.qty)}</td>
-                    <td><StatusChip status={po.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+      <DetailSection title="Production Order Terbaru">
+        {product.productionOrders.length === 0 ? (
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada production order</p>
+        ) : (
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>No. Dokumen</DetailTableTh>
+              <DetailTableTh align="right">Qty</DetailTableTh>
+              <DetailTableTh>Status</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {product.productionOrders.map((po) => (
+                <DetailTableRow key={po.id}>
+                  <DetailTableTd className="font-mono"><Link href={`/manufacturing/production-orders/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
+                  <DetailTableTd align="right">{Number(po.qty)}</DetailTableTd>
+                  <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
+                </DetailTableRow>
+              ))}
+            </DetailTableBody>
+          </DetailTable>
+        )}
+      </DetailSection>
     </div>
   )
 }

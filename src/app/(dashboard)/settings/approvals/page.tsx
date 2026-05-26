@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth/auth"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function ApprovalsPage({
   searchParams,
@@ -51,36 +52,34 @@ export default async function ApprovalsPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Workflow</th>
-                <th>Reference</th>
-                <th>Step</th>
-                <th>Status</th>
-                <th>Dibuat</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Workflow</DetailTableTh>
+              <DetailTableTh>Reference</DetailTableTh>
+              <DetailTableTh>Step</DetailTableTh>
+              <DetailTableTh>Status</DetailTableTh>
+              <DetailTableTh>Dibuat</DetailTableTh>
+              <DetailTableTh>Aksi</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {approvals.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada approval pending</td></tr>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted">Tidak ada approval pending</DetailTableTd></DetailTableRow>
               ) : (
                 approvals.map((a) => (
-                  <tr key={a.id}>
-                    <td className="font-medium">{a.workflow.name}</td>
-                    <td className="font-mono">{a.referenceType} #{a.referenceId}</td>
-                    <td>Step {a.currentStep}</td>
-                    <td><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
-                    <td>{formatDate(a.createdAt)}</td>
-                    <td>
+                  <DetailTableRow key={a.id}>
+                    <DetailTableTd className="font-medium">{a.workflow.name}</DetailTableTd>
+                    <DetailTableTd className="font-mono">{a.referenceType} #{a.referenceId}</DetailTableTd>
+                    <DetailTableTd>Step {a.currentStep}</DetailTableTd>
+                    <DetailTableTd><span className={`status-badge status-${a.status}`}>{a.status}</span></DetailTableTd>
+                    <DetailTableTd>{formatDate(a.createdAt)}</DetailTableTd>
+                    <DetailTableTd>
                       <Link href={`/settings/approvals/${a.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">Eye</Link>
-                    </td>
-                  </tr>
+                    </DetailTableTd>
+                  </DetailTableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
     </div>

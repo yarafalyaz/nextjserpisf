@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -7,7 +6,7 @@ import { createVehicleBrand, updateVehicleBrand } from "@/actions/vehicle.action
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, Label } from "@heroui/react"
 
-export function VehicleBrandForm({ brand }: { brand?: any } = {}) {
+export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string } } = {}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 

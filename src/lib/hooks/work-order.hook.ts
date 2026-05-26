@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -15,7 +15,7 @@ export async function onWorkOrderCompleted(
   await prisma.$transaction(async (tx) => {
     const workOrder = await tx.workOrder.findUniqueOrThrow({
       where: { id: workOrderId },
-      include: { items: { include: { item: true } } },
+      include: { items: true },
     });
 
     // Idempotency: check if stock moves already exist
@@ -34,6 +34,12 @@ export async function onWorkOrderCompleted(
       throw new Error("Work Order sudah selesai sebelumnya.");
     }
 
+    // Get default warehouse for stock moves
+    const warehouse = await tx.warehouse.findFirst({
+      select: { id: true },
+    });
+    const warehouseId = warehouse?.id ?? 1;
+
     // Create Stock Move OUT per item (materials consumed in production)
     for (const item of workOrder.items) {
       if (Number(item.qty) <= 0) continue;
@@ -44,14 +50,14 @@ export async function onWorkOrderCompleted(
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
-          warehouseId: workOrder.warehouseId,
+          warehouseId,
           qty: item.qty,
-          cost: item.unitCost ?? 0,
+          cost: item.cost,
           impact: "OUT",
           status: "draft",
           referenceType: "WorkOrder",
           referenceId: workOrder.id,
-          notes: `Pemakaian Material WO ${workOrder.documentNo} - ${item.item?.name ?? ""}`,
+          notes: `Pemakaian Material WO ${workOrder.documentNo}`,
           createdBy: userId ?? null,
         },
       });
@@ -62,8 +68,7 @@ export async function onWorkOrderCompleted(
       where: { id: workOrderId },
       data: {
         status: "completed",
-        completedAt: new Date(),
-        completedBy: userId ?? null,
+        endDate: new Date(),
       },
     });
   });

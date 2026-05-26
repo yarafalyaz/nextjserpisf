@@ -17,6 +17,7 @@ interface PurchaseRequest {
   id: number
   documentNo: string
   date: Date | string
+  requestDate?: Date | string | null
   status: string
   items: PurchaseRequestItem[]
 }
@@ -35,6 +36,13 @@ const columns = [
   columnHelper.accessor("date", {
     header: "Tanggal",
     cell: (info) => formatDate(info.getValue()),
+  }),
+  columnHelper.accessor("requestDate", {
+    header: "Tgl Permintaan",
+    cell: (info) => {
+      const val = info.getValue()
+      return val ? formatDate(val) : "-"
+    },
   }),
   columnHelper.display({
     id: "itemCount",

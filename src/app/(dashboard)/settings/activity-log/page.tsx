@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function ActivityLogPage({
   searchParams,
@@ -64,38 +65,36 @@ export default async function ActivityLogPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Waktu</th>
-                <th>Action</th>
-                <th>Model</th>
-                <th>ID</th>
-                <th>Deskripsi</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Waktu</DetailTableTh>
+              <DetailTableTh>Action</DetailTableTh>
+              <DetailTableTh>Model</DetailTableTh>
+              <DetailTableTh>ID</DetailTableTh>
+              <DetailTableTh>Deskripsi</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {logs.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-10 px-4 text-muted">Belum ada activity log</td></tr>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 text-muted">Belum ada activity log</DetailTableTd></DetailTableRow>
               ) : (
                 logs.map((log) => (
-                  <tr key={log.id}>
-                    <td style={{ whiteSpace: "nowrap" }}>{formatDate(log.createdAt)}</td>
-                    <td>
+                  <DetailTableRow key={log.id}>
+                    <DetailTableTd className="whitespace-nowrap">{formatDate(log.createdAt)}</DetailTableTd>
+                    <DetailTableTd>
                       <span className={`status-badge ${
                         log.action === "CREATE" ? "status-received" :
                         log.action === "UPDATE" ? "status-posted" :
                         log.action === "DELETE" ? "status-cancelled" : "status-draft"
                       }`}>{log.action}</span>
-                    </td>
-                    <td className="font-mono">{log.modelType}</td>
-                    <td className="font-mono">#{log.modelId}</td>
-                    <td>{log.description || "-"}</td>
-                  </tr>
+                    </DetailTableTd>
+                    <DetailTableTd className="font-mono">{log.modelType}</DetailTableTd>
+                    <DetailTableTd className="font-mono">#{log.modelId}</DetailTableTd>
+                    <DetailTableTd>{log.description || "-"}</DetailTableTd>
+                  </DetailTableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
 
         {totalPages > 1 && (

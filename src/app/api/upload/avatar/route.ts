@@ -35,7 +35,9 @@ export async function POST(req: NextRequest) {
   const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars")
   await mkdir(uploadDir, { recursive: true })
 
-  const ext = file.name.split(".").pop() || "jpg"
+  // Sanitize extension
+  const rawExt = (file.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
+  const ext = rawExt.slice(0, 10) || "jpg"
   const filename = `user-${session.user.id}-${Date.now()}.${ext}`
   const filepath = path.join(uploadDir, filename)
 
@@ -43,9 +45,12 @@ export async function POST(req: NextRequest) {
 
   const avatarUrl = `/uploads/avatars/${filename}`
 
+  const userId = Number.parseInt(String(session.user.id), 10)
+  if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user" }, { status: 400 })
+
   // Update user avatar in database
   await prisma.user.update({
-    where: { id: Number(session.user.id) },
+    where: { id: userId },
     data: { avatar: avatarUrl },
   })
 

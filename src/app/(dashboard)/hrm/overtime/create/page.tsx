@@ -14,12 +14,17 @@ export default async function CreateOvertimePage() {
     select: { id: true, name: true },
   })
 
+  const projects = await prisma.project.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ajukan Lembur</h1>
       </div>
-      <OvertimeForm employees={employees} />
+      <OvertimeForm employees={employees} projects={projects} />
     </div>
   )
 }

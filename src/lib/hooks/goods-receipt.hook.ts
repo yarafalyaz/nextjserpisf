@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -18,7 +18,7 @@ export async function onGoodsReceiptVerified(
     const goodsReceipt = await tx.goodsReceipt.findUniqueOrThrow({
       where: { id: goodsReceiptId },
       include: {
-        items: { include: { item: true } },
+        items: true,
         purchaseOrder: true,
       },
     });
@@ -44,11 +44,13 @@ export async function onGoodsReceiptVerified(
         where: { purchaseOrderId: goodsReceipt.purchaseOrderId },
       });
 
+      // Fix #44: Exclude current GR from the query to prevent double-counting
       const allGRItems = await tx.goodsReceiptItem.findMany({
         where: {
           goodsReceipt: {
             purchaseOrderId: goodsReceipt.purchaseOrderId,
             status: { in: ["verified", "completed"] },
+            id: { not: goodsReceiptId }, // Exclude current GR
           },
         },
       });

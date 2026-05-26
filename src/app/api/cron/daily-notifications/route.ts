@@ -61,16 +61,15 @@ export async function GET(request: Request) {
 
     const body = itemList + (count > 5 ? `\n...dan ${count - 5} lainnya` : "")
 
-    for (const admin of admins) {
-      await prisma.notification.create({
-        data: {
-          userId: admin.id,
-          title: `⚠️ ${count} Barang Stok Menipis`,
-          body,
-          type: "warning",
-        },
-      })
-    }
+    // Fix #50: Use createMany instead of loop
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        userId: admin.id,
+        title: `⚠️ ${count} Barang Stok Menipis`,
+        body,
+        type: "warning",
+      })),
+    })
     results.lowStock = count
   }
 
@@ -91,16 +90,15 @@ export async function GET(request: Request) {
       0
     )
 
-    for (const admin of admins) {
-      await prisma.notification.create({
-        data: {
-          userId: admin.id,
-          title: `🔴 ${count} Invoice Jatuh Tempo`,
-          body: `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}`,
-          type: "danger",
-        },
-      })
-    }
+    // Fix #50: Use createMany instead of loop
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        userId: admin.id,
+        title: `🔴 ${count} Invoice Jatuh Tempo`,
+        body: `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}`,
+        type: "danger",
+      })),
+    })
     results.overdueInvoices = count
   }
 
@@ -120,16 +118,15 @@ export async function GET(request: Request) {
   if (stalePOs.length > 0) {
     const count = stalePOs.length
 
-    for (const admin of admins) {
-      await prisma.notification.create({
-        data: {
-          userId: admin.id,
-          title: `📦 ${count} PO Belum Diterima (>7 hari)`,
-          body: `Ada ${count} pesanan pembelian yang sudah lebih dari 7 hari belum diterima barangnya.`,
-          type: "warning",
-        },
-      })
-    }
+    // Fix #50: Use createMany instead of loop
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        userId: admin.id,
+        title: `📦 ${count} PO Belum Diterima (>7 hari)`,
+        body: `Ada ${count} pesanan pembelian yang sudah lebih dari 7 hari belum diterima barangnya.`,
+        type: "warning",
+      })),
+    })
     results.stalePOs = count
   }
 
@@ -156,16 +153,15 @@ export async function GET(request: Request) {
 
     const body = names + (count > 5 ? `\n...dan ${count - 5} lainnya` : "")
 
-    for (const admin of admins) {
-      await prisma.notification.create({
-        data: {
-          userId: admin.id,
-          title: `⏰ ${count} Karyawan Telat Hari Ini`,
-          body,
-          type: "warning",
-        },
-      })
-    }
+    // Fix #50: Use createMany instead of loop
+    await prisma.notification.createMany({
+      data: admins.map((admin) => ({
+        userId: admin.id,
+        title: `⏰ ${count} Karyawan Telat Hari Ini`,
+        body,
+        type: "warning",
+      })),
+    })
     results.lateAttendance = count
   }
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -10,20 +9,21 @@ import { AddressPicker } from "@/components/ui/address-picker"
 
 interface DeliveryOrderFormProps {
   salesOrders: { id: number; documentNo: string; customer: { name: string } }[]
-  deliveryOrder?: any
+  deliveryOrder?: { id: number; salesOrderId: number; date: string; doNumber?: string | null; deliveryDate?: string | null; notes?: string | null; shippingAddress?: string | null; shippingProvince?: string | null; shippingCity?: string | null; shippingDistrict?: string | null; shippingVillage?: string | null; shippingPostalCode?: string | null; shippingPhone?: string | null; vehicleNumber?: string | null; items?: Array<{ itemId: number; qty: number }> }
 }
 
 export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(deliveryOrder?.date ?? new Date().toISOString().split("T")[0])
+  const [deliveryDate, setDeliveryDate] = useState(deliveryOrder?.deliveryDate ?? "")
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        const { createDeliveryOrder } = await import("@/actions/sales.actions")
+        const { createDeliveryOrder, updateDeliveryOrder } = await import("@/actions/sales.actions")
         deliveryOrder?.id ? await updateDeliveryOrder(deliveryOrder.id, formData) : await createDeliveryOrder(formData)
         showSuccess(deliveryOrder?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/sales/delivery-orders")
@@ -51,7 +51,14 @@ export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderF
           </ComboBox>
         </div>
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="doNumber">No. DO</Label>
+          <Input id="doNumber" name="doNumber" placeholder="Otomatis jika kosong" defaultValue={deliveryOrder?.doNumber ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
           <AppDatePicker label="Tanggal *" name="date" value={date} onChange={setDate} required />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <AppDatePicker label="Tanggal Pengiriman" name="deliveryDate" value={deliveryDate} onChange={setDeliveryDate} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
@@ -61,7 +68,7 @@ export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderF
           <Label htmlFor="shippingAddress">Alamat Pengiriman</Label>
           <TextArea id="shippingAddress" name="shippingAddress" rows={3} placeholder="Alamat lengkap pengiriman" defaultValue={deliveryOrder?.shippingAddress ?? ""} />
         </div>
-        <AddressPicker prefix="shipping" defaultValues={{ province: deliveryOrder?.shippingProvince, city: deliveryOrder?.shippingCity, district: deliveryOrder?.shippingDistrict, village: deliveryOrder?.shippingVillage, postalCode: deliveryOrder?.shippingPostalCode }} />
+        <AddressPicker prefix="shipping" defaultValues={{ province: deliveryOrder?.shippingProvince ?? undefined, city: deliveryOrder?.shippingCity ?? undefined, district: deliveryOrder?.shippingDistrict ?? undefined, village: deliveryOrder?.shippingVillage ?? undefined, postalCode: deliveryOrder?.shippingPostalCode ?? undefined }} />
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="shippingPhone">Telepon Penerima</Label>
           <Input id="shippingPhone" name="shippingPhone" placeholder="08xxxxxxxxxx" defaultValue={deliveryOrder?.shippingPhone ?? ""} />

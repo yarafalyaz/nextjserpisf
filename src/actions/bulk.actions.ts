@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
+import { Prisma } from "@prisma/client"
 
 type ModelName =
   | "purchaseRequest"
@@ -47,6 +48,7 @@ type ModelName =
   | "stockTransfer"
   | "materialIssue"
   | "rack"
+  | "rackRow"
   | "productionOrder"
   | "workOrder"
   | "bomProduct"
@@ -58,6 +60,8 @@ type ModelName =
   | "vehicleBrand"
   | "vehicleModel"
   | "vehicle"
+  | "appreciation"
+  | "departmentHoliday"
 
 const modelPermissionMap: Record<ModelName, string> = {
   purchaseRequest: "delete_purchase_requests",
@@ -102,6 +106,7 @@ const modelPermissionMap: Record<ModelName, string> = {
   stockTransfer: "delete_transfers",
   materialIssue: "delete_material_issues",
   rack: "delete_racks",
+  rackRow: "manage_inventory",
   productionOrder: "delete_production_orders",
   workOrder: "delete_work_orders",
   bomProduct: "delete_bom_products",
@@ -113,6 +118,8 @@ const modelPermissionMap: Record<ModelName, string> = {
   vehicleBrand: "delete_vehicle_brands",
   vehicleModel: "delete_vehicle_models",
   vehicle: "delete_vehicles",
+  appreciation: "delete_appreciations",
+  departmentHoliday: "delete_holidays",
 }
 
 const modelRevalidateMap: Record<ModelName, string> = {
@@ -158,6 +165,7 @@ const modelRevalidateMap: Record<ModelName, string> = {
   stockTransfer: "/inventory/transfers",
   materialIssue: "/inventory/material-issues",
   rack: "/inventory/racks",
+  rackRow: "/inventory/rack-rows",
   productionOrder: "/manufacturing/production-orders",
   workOrder: "/manufacturing/work-orders",
   bomProduct: "/manufacturing/products",
@@ -169,17 +177,31 @@ const modelRevalidateMap: Record<ModelName, string> = {
   vehicleBrand: "/vehicles/brands",
   vehicleModel: "/vehicles/models",
   vehicle: "/vehicles",
+  appreciation: "/hrm/appreciations",
+  departmentHoliday: "/hrm/department-holidays",
 }
 
+const dmmfModelMap = new Map(
+  Prisma.dmmf.datamodel.models.map((model) => [
+    model.name.charAt(0).toLowerCase() + model.name.slice(1),
+    model,
+  ])
+)
+
+const BULK_DELETE_MAX = 500
+
 export async function bulkDelete(model: ModelName, ids: number[]) {
-  if (!ids.length) return { success: false, message: "Tidak ada data yang dipilih" }
+  const safeIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)))
+  if (!safeIds.length) return { success: false, message: "Tidak ada data valid yang dipilih" }
+  if (safeIds.length > BULK_DELETE_MAX) {
+    return { success: false, message: `Maksimal ${BULK_DELETE_MAX} data per sekali hapus` }
+  }
 
   const permission = modelPermissionMap[model]
   if (permission) {
     await requirePermission(permission)
   }
 
-  // Use soft delete (deletedAt) if available, otherwise hard delete
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const prismaModel = (prisma as any)[model]
@@ -187,16 +209,21 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
       return { success: false, message: `Model ${model} tidak ditemukan` }
     }
 
-    // Try soft delete first
-    try {
+    const schemaModel = dmmfModelMap.get(model)
+    if (!schemaModel) {
+      return { success: false, message: `Skema model ${model} tidak ditemukan` }
+    }
+
+    const hasSoftDelete = schemaModel.fields.some((field) => field.name === "deletedAt")
+
+    if (hasSoftDelete) {
       await prismaModel.updateMany({
-        where: { id: { in: ids } },
+        where: { id: { in: safeIds } },
         data: { deletedAt: new Date() },
       })
-    } catch {
-      // If soft delete fails (no deletedAt field), do hard delete
+    } else {
       await prismaModel.deleteMany({
-        where: { id: { in: ids } },
+        where: { id: { in: safeIds } },
       })
     }
 
@@ -205,7 +232,7 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
       revalidatePath(path)
     }
 
-    return { success: true, message: `${ids.length} data berhasil dihapus` }
+    return { success: true, message: `${safeIds.length} data berhasil dihapus` }
   } catch (error) {
     console.error("Bulk delete error:", error)
     return { success: false, message: "Gagal menghapus data. Mungkin ada relasi yang terkait." }

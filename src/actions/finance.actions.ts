@@ -6,6 +6,7 @@ import { onExpenseApproved, onPettyCashCreated } from "@/lib/hooks/accounting.ho
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
+import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/lib/utils/safe-parse"
 
 // ==================== BANK STATEMENT ACTIONS ====================
 
@@ -14,15 +15,15 @@ export async function createBankStatement(formData: FormData) {
 
   const bankStatement = await prisma.bankStatement.create({
     data: {
-      accountId: Number(formData.get("accountId")),
-      bankId: formData.get("bankId") ? Number(formData.get("bankId")) : null,
+      accountId: requireId(formData.get("accountId"), "accountId"),
+      bankId: safeId(formData.get("bankId")),
       accountNumber: formData.get("accountNumber") as string | null,
       date: new Date(formData.get("date") as string),
       reference: formData.get("reference") as string | null,
       periodStart: formData.get("periodStart") ? new Date(formData.get("periodStart") as string) : null,
       periodEnd: formData.get("periodEnd") ? new Date(formData.get("periodEnd") as string) : null,
-      openingBalance: formData.get("openingBalance") ? Number(formData.get("openingBalance")) : 0,
-      closingBalance: formData.get("closingBalance") ? Number(formData.get("closingBalance")) : 0,
+      openingBalance: safeNumber(formData.get("openingBalance")) ?? 0,
+      closingBalance: safeNumber(formData.get("closingBalance")) ?? 0,
       notes: formData.get("notes") as string | null,
       status: "draft",
       uploadedBy: Number(user.id),
@@ -56,7 +57,7 @@ export async function createJournal(formData: FormData) {
   // Create journal entries with optional costCenterId
   const entriesJson = formData.get("entries") as string | null
   if (entriesJson) {
-    const entries = JSON.parse(entriesJson) as { accountId: number; debit: number; credit: number; memo: string; costCenterId?: number }[]
+    const entries = safeJsonParse<{ accountId: number; debit: number; credit: number; memo: string; costCenterId?: number }[]>(entriesJson) ?? []
     for (const entry of entries) {
       if (entry.accountId) {
         await prisma.journalEntry.create({
@@ -76,7 +77,7 @@ export async function createJournal(formData: FormData) {
   // Associate uploaded attachments with the new journal
   const attachmentIds = formData.get("attachmentIds") as string | null
   if (attachmentIds) {
-    const ids = JSON.parse(attachmentIds) as number[]
+    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
       await prisma.transactionAttachment.updateMany({
         where: { id: { in: ids }, referenceId: 0 },
@@ -132,14 +133,17 @@ export async function createExpense(formData: FormData) {
   const expense = await prisma.expense.create({
     data: {
       documentNo,
-      employeeId: formData.get("employeeId") ? Number(formData.get("employeeId")) : null,
-      accountId: Number(formData.get("accountId")),
-      paidFromAccountId: formData.get("paidFromAccountId") ? Number(formData.get("paidFromAccountId")) : null,
-      costCenterId: formData.get("costCenterId") ? Number(formData.get("costCenterId")) : null,
-      amount: Number(formData.get("amount")),
+      employeeId: safeId(formData.get("employeeId")),
+      accountId: requireId(formData.get("accountId"), "accountId"),
+      paidFromAccountId: safeId(formData.get("paidFromAccountId")),
+      projectId: safeId(formData.get("projectId")),
+      costCenterId: safeId(formData.get("costCenterId")),
+      amount: requireNumber(formData.get("amount"), "amount"),
       date: new Date(formData.get("date") as string),
+      referenceNo: formData.get("referenceNo") as string | null,
       description: formData.get("description") as string | null,
       category: formData.get("category") as string | null,
+      receiptImage: formData.get("receiptImage") as string | null,
       status: "draft",
       createdBy: Number(user.id),
     },
@@ -148,7 +152,7 @@ export async function createExpense(formData: FormData) {
   // Associate uploaded attachments with the new expense
   const attachmentIds = formData.get("attachmentIds") as string | null
   if (attachmentIds) {
-    const ids = JSON.parse(attachmentIds) as number[]
+    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
       await prisma.transactionAttachment.updateMany({
         where: { id: { in: ids }, referenceId: 0 },
@@ -195,13 +199,25 @@ export async function createPettyCash(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("PC")
 
+  const type = formData.get("type") as string // IN or OUT
+  const amount = requireNumber(formData.get("amount"), "amount")
+
+  // Calculate balanceBefore from the last petty cash record
+  const lastRecord = await prisma.pettyCash.findFirst({
+    orderBy: { createdAt: "desc" },
+  })
+  const balanceBefore = lastRecord ? Number(lastRecord.balanceAfter) : 0
+  const balanceAfter = type === "IN" ? balanceBefore + amount : balanceBefore - amount
+
   const pettyCash = await prisma.pettyCash.create({
     data: {
       documentNo,
-      type: formData.get("type") as string, // IN or OUT
-      amount: Number(formData.get("amount")),
+      type,
+      amount,
+      balanceBefore,
+      balanceAfter,
       date: new Date(formData.get("date") as string),
-      accountId: formData.get("accountId") ? Number(formData.get("accountId")) : null,
+      accountId: safeId(formData.get("accountId")),
       description: formData.get("description") as string | null,
       createdBy: Number(user.id),
     },
@@ -213,7 +229,7 @@ export async function createPettyCash(formData: FormData) {
   // Associate uploaded attachments with the new petty cash record
   const attachmentIds = formData.get("attachmentIds") as string | null
   if (attachmentIds) {
-    const ids = JSON.parse(attachmentIds) as number[]
+    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
       await prisma.transactionAttachment.updateMany({
         where: { id: { in: ids }, referenceId: 0 },
@@ -236,12 +252,12 @@ export async function createBankReconciliation(formData: FormData) {
   const reconciliation = await prisma.bankReconciliation.create({
     data: {
       reconciliationNumber,
-      accountId: Number(formData.get("accountId")),
+      accountId: requireId(formData.get("accountId"), "accountId"),
       statementDate: new Date(formData.get("statementDate") as string),
-      statementBalance: Number(formData.get("statementBalance")),
+      statementBalance: requireNumber(formData.get("statementBalance"), "statementBalance"),
       periodStart: formData.get("periodStart") ? new Date(formData.get("periodStart") as string) : null,
       periodEnd: formData.get("periodEnd") ? new Date(formData.get("periodEnd") as string) : null,
-      bookBalance: formData.get("bookBalance") ? Number(formData.get("bookBalance")) : 0,
+      bookBalance: safeNumber(formData.get("bookBalance")) ?? 0,
       notes: formData.get("notes") as string | null,
       status: "draft",
       createdBy: Number(user.id),
@@ -288,9 +304,9 @@ export async function createBudget(formData: FormData) {
   const budget = await prisma.budget.create({
     data: {
       name: formData.get("name") as string,
-      accountId: Number(formData.get("accountId")),
-      costCenterId: formData.get("costCenterId") ? Number(formData.get("costCenterId")) : null,
-      amount: Number(formData.get("amount")),
+      accountId: requireId(formData.get("accountId"), "accountId"),
+      costCenterId: safeId(formData.get("costCenterId")),
+      amount: requireNumber(formData.get("amount"), "amount"),
       startDate: new Date(formData.get("startDate") as string),
       endDate: new Date(formData.get("endDate") as string),
       createdBy: Number(user.id),
@@ -341,6 +357,11 @@ export async function updateCostCenter(id: number, formData: FormData) {
 export async function deleteJournal(id: number) {
   await requirePermission("delete_journals")
 
+  const journal = await prisma.journal.findUniqueOrThrow({ where: { id } })
+  if (journal.status === "POSTED") {
+    throw new Error("Tidak bisa menghapus journal yang sudah POSTED")
+  }
+
   await prisma.journal.delete({ where: { id } })
 
   revalidatePath("/finance/journals")
@@ -349,6 +370,11 @@ export async function deleteJournal(id: number) {
 
 export async function deleteExpense(id: number) {
   await requirePermission("delete_expenses")
+
+  const expense = await prisma.expense.findUniqueOrThrow({ where: { id } })
+  if (expense.status === "approved") {
+    throw new Error("Tidak bisa menghapus expense yang sudah approved")
+  }
 
   await prisma.expense.delete({ where: { id } })
 
@@ -398,26 +424,20 @@ export async function updateJournal(id: number, formData: FormData) {
 
   const user = await requirePermission("create_journals")
 
-  const documentNo = await generateDocumentNumber("JRN")
-
+  // Fix #14: Jangan generate documentNo baru dan jangan reset totals ke 0
   const journal = await prisma.journal.update({
     where: { id },
     data: {
-      journalNumber: documentNo,
       transactionDate: new Date(formData.get("transactionDate") as string),
       description: formData.get("description") as string | null,
       type: (formData.get("type") as string) || "GENERAL",
-      status: "DRAFT",
-      totalDebit: 0,
-      totalCredit: 0,
-      createdBy: Number(user.id),
     },
   })
 
-  // Associate uploaded attachments with the new journal
+  // Associate uploaded attachments
   const attachmentIds = formData.get("attachmentIds") as string | null
   if (attachmentIds) {
-    const ids = JSON.parse(attachmentIds) as number[]
+    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
       await prisma.transactionAttachment.updateMany({
         where: { id: { in: ids }, referenceId: 0 },
@@ -441,14 +461,17 @@ export async function updateExpense(id: number, formData: FormData) {
     where: { id },
     data: {
       documentNo,
-      employeeId: formData.get("employeeId") ? Number(formData.get("employeeId")) : null,
-      accountId: Number(formData.get("accountId")),
-      paidFromAccountId: formData.get("paidFromAccountId") ? Number(formData.get("paidFromAccountId")) : null,
-      costCenterId: formData.get("costCenterId") ? Number(formData.get("costCenterId")) : null,
-      amount: Number(formData.get("amount")),
+      employeeId: safeId(formData.get("employeeId")),
+      accountId: requireId(formData.get("accountId"), "accountId"),
+      paidFromAccountId: safeId(formData.get("paidFromAccountId")),
+      projectId: safeId(formData.get("projectId")),
+      costCenterId: safeId(formData.get("costCenterId")),
+      amount: requireNumber(formData.get("amount"), "amount"),
       date: new Date(formData.get("date") as string),
+      referenceNo: formData.get("referenceNo") as string | null,
       description: formData.get("description") as string | null,
       category: formData.get("category") as string | null,
+      receiptImage: formData.get("receiptImage") as string | null,
       status: "draft",
       createdBy: Number(user.id),
     },
@@ -457,7 +480,7 @@ export async function updateExpense(id: number, formData: FormData) {
   // Associate uploaded attachments with the new expense
   const attachmentIds = formData.get("attachmentIds") as string | null
   if (attachmentIds) {
-    const ids = JSON.parse(attachmentIds) as number[]
+    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
       await prisma.transactionAttachment.updateMany({
         where: { id: { in: ids }, referenceId: 0 },
@@ -475,16 +498,23 @@ export async function updatePettyCash(id: number, formData: FormData) {
 
   const user = await requirePermission("create_petty_cash")
 
-  const documentNo = await generateDocumentNumber("PC")
+  const type = formData.get("type") as string // IN or OUT
+  const amount = requireNumber(formData.get("amount"), "amount")
+
+  // Recalculate balance: find the record just before this one
+  const currentRecord = await prisma.pettyCash.findUniqueOrThrow({ where: { id } })
+  const balanceBefore = Number(currentRecord.balanceBefore)
+  const balanceAfter = type === "IN" ? balanceBefore + amount : balanceBefore - amount
 
   const pettyCash = await prisma.pettyCash.update({
     where: { id },
     data: {
-      documentNo,
-      type: formData.get("type") as string, // IN or OUT
-      amount: Number(formData.get("amount")),
+      type,
+      amount,
+      balanceBefore,
+      balanceAfter,
       date: new Date(formData.get("date") as string),
-      accountId: formData.get("accountId") ? Number(formData.get("accountId")) : null,
+      accountId: safeId(formData.get("accountId")),
       description: formData.get("description") as string | null,
       createdBy: Number(user.id),
     },
@@ -496,7 +526,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
   // Associate uploaded attachments with the new petty cash record
   const attachmentIds = formData.get("attachmentIds") as string | null
   if (attachmentIds) {
-    const ids = JSON.parse(attachmentIds) as number[]
+    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
       await prisma.transactionAttachment.updateMany({
         where: { id: { in: ids }, referenceId: 0 },
@@ -518,9 +548,9 @@ export async function updateBudget(id: number, formData: FormData) {
     where: { id },
     data: {
       name: formData.get("name") as string,
-      accountId: Number(formData.get("accountId")),
-      costCenterId: formData.get("costCenterId") ? Number(formData.get("costCenterId")) : null,
-      amount: Number(formData.get("amount")),
+      accountId: requireId(formData.get("accountId"), "accountId"),
+      costCenterId: safeId(formData.get("costCenterId")),
+      amount: requireNumber(formData.get("amount"), "amount"),
       startDate: new Date(formData.get("startDate") as string),
       endDate: new Date(formData.get("endDate") as string),
       createdBy: Number(user.id),

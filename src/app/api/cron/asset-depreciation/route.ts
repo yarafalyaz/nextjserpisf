@@ -44,12 +44,38 @@ export async function GET(request: Request) {
 
   let processed = 0
   let errors = 0
+  let skipped = 0
   const errorDetails: string[] = []
+
+  // Fix #36: Validate account IDs exist before processing
+  const depExpAccountId = parseInt(process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID || "0")
+  const accDepAccountId = parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0")
+  if (!depExpAccountId || !accDepAccountId) {
+    return NextResponse.json({
+      error: "DEPRECIATION_EXPENSE_ACCOUNT_ID dan ACCUMULATED_DEPRECIATION_ACCOUNT_ID harus di-set di environment variables",
+    }, { status: 500 })
+  }
 
   for (const asset of assets) {
     try {
       const category = asset.category
       if (!category) continue
+
+      // Fix #37: Check if already depreciated this period
+      const existingDepreciation = await prisma.assetHistory.findFirst({
+        where: {
+          assetId: asset.id,
+          type: "depreciation",
+          date: {
+            gte: new Date(year, month - 1, 1),
+            lt: new Date(year, month, 1),
+          },
+        },
+      })
+      if (existingDepreciation) {
+        skipped++
+        continue
+      }
 
       const purchaseCost = Number(asset.purchaseCost)
       const currentValue = Number(asset.currentValue)
@@ -120,15 +146,15 @@ export async function GET(request: Request) {
             entries: {
               create: [
                 {
-                  // Debit: Depreciation Expense (use a default account or system setting)
-                  accountId: parseInt(process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID || "0") || 1,
+                  // Debit: Depreciation Expense
+                  accountId: parseInt(process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID || "0") || 0,
                   debit: depreciationDecimal,
                   credit: new Prisma.Decimal(0),
                   memo: `Beban penyusutan - ${asset.name}`,
                 },
                 {
                   // Credit: Accumulated Depreciation
-                  accountId: parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0") || 2,
+                  accountId: parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0") || 0,
                   debit: new Prisma.Decimal(0),
                   credit: depreciationDecimal,
                   memo: `Akumulasi penyusutan - ${asset.name}`,
@@ -151,7 +177,8 @@ export async function GET(request: Request) {
     period: `${month}/${year}`,
     totalAssets: assets.length,
     processed,
+    skipped,
     errors,
-    errorDetails: errorDetails.slice(0, 10), // Limit error details
+    errorDetails: errorDetails.slice(0, 10),
   })
 }

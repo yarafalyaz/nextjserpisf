@@ -12,6 +12,7 @@ import { bulkDelete } from "@/actions/bulk.actions"
 interface DeliveryOrder {
   id: number
   documentNo: string
+  doNumber?: string | null
   salesOrder: { documentNo: string; customer: { name: string } }
   date: Date | string
   status: string
@@ -27,6 +28,13 @@ const columns = [
         {info.getValue()}
       </Link>
     ),
+  }),
+  columnHelper.accessor("doNumber", {
+    header: "No. DO",
+    cell: (info) => {
+      const val = info.getValue()
+      return val ? <span className="font-mono">{val}</span> : <span className="text-muted">-</span>
+    },
   }),
   columnHelper.accessor((row) => row.salesOrder.documentNo, {
     id: "soDocumentNo",

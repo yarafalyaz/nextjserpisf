@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -12,7 +11,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { TextArea, ComboBox, Input, ListBox, Label } from "@heroui/react"
 
 const salesOrderSchema = z.object({
-  customerId: z.number({ required_error: "Customer wajib dipilih" }).min(1, "Customer wajib dipilih"),
+  customerId: z.number({ error: "Customer wajib dipilih" }).min(1, "Customer wajib dipilih"),
   date: z.string().min(1, "Tanggal wajib diisi"),
   deliveryDate: z.string().optional(),
   notes: z.string().optional(),
@@ -23,7 +22,7 @@ type SalesOrderInput = z.infer<typeof salesOrderSchema>
 interface SalesOrderFormProps {
   customers: { id: number; name: string
 }[]
-  order?: any
+  order?: { id: number; customerId: number; quotationId?: number | null; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number; discount?: number }> }
   quotationId?: number
   defaultCustomerId?: number
 }

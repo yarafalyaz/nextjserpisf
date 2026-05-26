@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -21,7 +21,9 @@ export async function onExpenseApprovedSyncPettyCash(
     where: { id: expense.paidFromAccountId },
   });
 
-  if (!paidFromAccount || paidFromAccount.type !== "PETTY_CASH") return;
+  // AccountType enum: ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  // Petty cash accounts are typically ASSET type with specific naming
+  if (!paidFromAccount || !paidFromAccount.name.toLowerCase().includes("petty cash")) return;
 
   // Idempotency: check if PettyCash record already exists for this expense
   const existing = await prisma.pettyCash.findFirst({
@@ -38,7 +40,8 @@ export async function onExpenseApprovedSyncPettyCash(
       amount: expense.amount,
       description: `Expense: ${expense.description ?? expense.documentNo}`,
       accountId: expense.paidFromAccountId,
-      transactionDate: expense.expenseDate ?? new Date(),
+      date: expense.date ?? new Date(),
+      transactionDate: expense.date ?? new Date(),
       referenceNo: expense.documentNo,
       createdBy: expense.approvedBy ?? null,
     },

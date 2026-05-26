@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateBank } from "@/actions/master.actions"
+import { Input, Label } from "@heroui/react"
 
 interface EditBankFormProps {
   bank: {
@@ -31,18 +32,18 @@ export function EditBankForm({ bank }: EditBankFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Bank *</label>
-          <input id="name" name="name" className="form-input" placeholder="Contoh: Bank BCA" required defaultValue={bank.name} />
+          <Label htmlFor="name">Nama Bank *</Label>
+          <Input id="name" name="name" placeholder="Contoh: Bank BCA" required defaultValue={bank.name} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="code" className="text-sm font-medium text-foreground">Kode Bank *</label>
-          <input id="code" name="code" className="form-input" placeholder="Contoh: BCA" required defaultValue={bank.code} />
+          <Label htmlFor="code">Kode Bank *</Label>
+          <Input id="code" name="code" placeholder="Contoh: BCA" required defaultValue={bank.code} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="accountId" className="text-sm font-medium text-foreground">Akun (COA)</label>
-          <input id="accountId" name="accountId" type="number" className="form-input" placeholder="ID Akun (opsional)" defaultValue={bank.accountId || ""} />
+          <Label htmlFor="accountId">Akun (COA)</Label>
+          <Input id="accountId" name="accountId" type="number" placeholder="ID Akun (opsional)" defaultValue={bank.accountId || ""} />
         </div>
       </div>
 

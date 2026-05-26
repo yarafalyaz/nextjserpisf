@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatDate } from '@/lib/utils/format'
 import { Package } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 function getAgeGroup(days: number): string {
   if (days <= 30) return '0-30 hari'
@@ -69,7 +70,7 @@ export default async function AgingInventoryPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.5rem' }}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex flex-col">
             <span className="text-[0.8125rem] text-muted font-medium">Total Item Aktif</span>
@@ -89,34 +90,32 @@ export default async function AgingInventoryPage() {
       {/* Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Nama Item</th>
-                <th>SKU</th>
-                <th style={{ textAlign: 'right' }}>Qty</th>
-                <th>Tanggal Pergerakan Terakhir</th>
-                <th style={{ textAlign: 'right' }}>Umur (Hari)</th>
-                <th>Kelompok Umur</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Nama Item</DetailTableTh>
+              <DetailTableTh>SKU</DetailTableTh>
+              <DetailTableTh align="right">Qty</DetailTableTh>
+              <DetailTableTh>Tanggal Pergerakan Terakhir</DetailTableTh>
+              <DetailTableTh align="right">Umur (Hari)</DetailTableTh>
+              <DetailTableTh>Kelompok Umur</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {data.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada persediaan</td></tr>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada persediaan</DetailTableTd></DetailTableRow>
               ) : (
                 data.map((row) => (
-                  <tr key={row.id}>
-                    <td className="font-medium">{row.name}</td>
-                    <td className="font-mono">{row.sku}</td>
-                    <td style={{ textAlign: 'right' }}>{row.qty}</td>
-                    <td>{formatDate(row.lastMoveDate, { format: 'short' })}</td>
-                    <td style={{ textAlign: 'right' }}>{row.ageDays}</td>
-                    <td><span className={`status-badge status-${row.ageDays > 90 ? 'danger' : row.ageDays > 60 ? 'warning' : 'default'}`}>{row.ageGroup}</span></td>
-                  </tr>
+                  <DetailTableRow key={row.id}>
+                    <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
+                    <DetailTableTd className="font-mono">{row.sku}</DetailTableTd>
+                    <DetailTableTd align="right">{row.qty}</DetailTableTd>
+                    <DetailTableTd>{formatDate(row.lastMoveDate, { format: 'short' })}</DetailTableTd>
+                    <DetailTableTd align="right">{row.ageDays}</DetailTableTd>
+                    <DetailTableTd><span className={`status-badge status-${row.ageDays > 90 ? 'danger' : row.ageDays > 60 ? 'warning' : 'default'}`}>{row.ageGroup}</span></DetailTableTd>
+                  </DetailTableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
       </div>
     </div>

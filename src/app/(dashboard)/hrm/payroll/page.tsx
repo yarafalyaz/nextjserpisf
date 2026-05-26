@@ -28,12 +28,18 @@ export default async function PayrollPage({
   const payrolls = await prisma.payroll.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    include: { employee: true },
   })
 
   const data = payrolls.map((p) => ({
     id: p.id,
     documentNo: p.documentNo,
     period: p.period,
+    employeeName: p.employee?.name ?? null,
+    baseSalary: Number(p.baseSalary),
+    allowances: Number(p.allowances),
+    deductions: Number(p.deductions),
+    netSalary: Number(p.netSalary),
     totalAmount: Number(p.totalAmount),
     status: p.status,
   }))

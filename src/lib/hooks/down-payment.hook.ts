@@ -1,5 +1,5 @@
-// @ts-nocheck
-import { prisma, TxClient } from "@/lib/db/prisma";
+
+import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
 /**
@@ -8,15 +8,15 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
  * Creates: Work Order, Project, Sales Order, Sales Invoice.
  */
 
-// ─────────────────────────────────────────────────────────────────────────────
-// onDownPaymentConfirmed
-// - Create Work Order + Items
-// - Create Project + Initialize Stages
-// - Create Sales Order + Items
-// - Create Sales Invoice + Items
-// - Update Quotation status → converted
-// - Idempotency check
-// ─────────────────────────────────────────────────────────────────────────────
+interface FlatItem {
+  itemId: number | null;
+  itemName: string;
+  qty: number;
+  unitPrice: number;
+  discount: number;
+  subtotal: number;
+  sectionName: string;
+}
 
 export async function onDownPaymentConfirmed(
   dpId: number,
@@ -30,13 +30,11 @@ export async function onDownPaymentConfirmed(
           include: {
             sections: {
               include: {
-                items: {
-                  include: { item: true },
-                },
+                items: true,
               },
             },
             customer: true,
-            customerVehicle: { include: { vehicle: true } },
+            customerVehicle: true,
           },
         },
       },
@@ -65,14 +63,14 @@ export async function onDownPaymentConfirmed(
     }
 
     // Flatten all items from quotation sections
-    const allItems = quotation.sections.flatMap((section) =>
+    const allItems: FlatItem[] = quotation.sections.flatMap((section) =>
       section.items.map((item) => ({
         itemId: item.itemId,
-        itemName: item.item?.name ?? "",
+        itemName: item.description ?? "",
         qty: Number(item.qty),
         unitPrice: Number(item.unitPrice),
         discount: Number(item.discount ?? 0),
-        subtotal: Number(item.subtotal),
+        subtotal: Number(item.total),
         sectionName: section.name,
       }))
     );
@@ -86,6 +84,7 @@ export async function onDownPaymentConfirmed(
         quotationId: quotation.id,
         customerId: quotation.customerId,
         customerVehicleId: quotation.customerVehicleId,
+        date: new Date(),
         status: "pending",
         notes: `Auto-generated dari DP ${dp.documentNo}`,
         createdBy: userId ?? null,
@@ -95,68 +94,37 @@ export async function onDownPaymentConfirmed(
     // Create Work Order Items
     if (allItems.length > 0) {
       await tx.workOrderItem.createMany({
-        data: allItems.map((item) => ({
-          workOrderId: workOrder.id,
-          itemId: item.itemId,
-          qty: item.qty,
-          unitCost: item.unitPrice,
-          description: item.itemName,
-        })),
+        data: allItems
+          .filter((item) => item.itemId !== null)
+          .map((item) => ({
+            workOrderId: workOrder.id,
+            itemId: item.itemId!,
+            qty: item.qty,
+            cost: item.unitPrice,
+          })),
       });
     }
 
-    // ─── Stock Shortage Warnings ──────────────────────────────────────────
-    const stockWarnings: string[] = [];
-    for (const item of allItems) {
-      const stock = await tx.item.findUnique({
-        where: { id: item.itemId },
-        select: { qtyOnHand: true, name: true },
-      });
-      if (stock && Number(stock.qtyOnHand) < Number(item.qty)) {
-        stockWarnings.push(
-          `⚠️ Stok ${stock.name} kurang (tersedia: ${stock.qtyOnHand}, butuh: ${item.qty})`
-        );
-      }
-    }
-    if (stockWarnings.length > 0) {
-      const currentNotes = workOrder.notes || "";
-      await tx.workOrder.update({
-        where: { id: workOrder.id },
-        data: { notes: `${currentNotes}\n${stockWarnings.join("\n")}`.trim() },
-      });
-    }
-
-    // ─── 2. Create Project + Initialize Stages ───────────────────────────
-    const projectDocNo = await generateDocumentNumber("PRJ");
-
+    // ─── 2. Create Project ───────────────────────────────────────────────
     const project = await tx.project.create({
       data: {
-        documentNo: projectDocNo,
         name: `Project - ${quotation.customer?.name ?? ""} - ${woDocNo}`,
         customerId: quotation.customerId,
-        quotationId: quotation.id,
-        workOrderId: workOrder.id,
         status: "active",
         startDate: new Date(),
+        notes: `Auto-generated dari DP ${dp.documentNo}. Quotation: ${quotation.documentNo}`,
         createdBy: userId ?? null,
       },
     });
 
     // Initialize default project stages
-    const defaultStages = [
-      { name: "Persiapan", order: 1, status: "pending" },
-      { name: "Pengerjaan", order: 2, status: "pending" },
-      { name: "Quality Check", order: 3, status: "pending" },
-      { name: "Selesai", order: 4, status: "pending" },
-    ];
-
     await tx.projectStage.createMany({
-      data: defaultStages.map((stage) => ({
-        projectId: project.id,
-        name: stage.name,
-        sortOrder: stage.order,
-        status: stage.status,
-      })),
+      data: [
+        { projectId: project.id, name: "Persiapan", sortOrder: 1, status: "pending" },
+        { projectId: project.id, name: "Pengerjaan", sortOrder: 2, status: "pending" },
+        { projectId: project.id, name: "Quality Check", sortOrder: 3, status: "pending" },
+        { projectId: project.id, name: "Selesai", sortOrder: 4, status: "pending" },
+      ],
     });
 
     // ─── 3. Create Sales Order + Items ───────────────────────────────────
@@ -167,12 +135,12 @@ export async function onDownPaymentConfirmed(
         documentNo: soDocNo,
         customerId: quotation.customerId,
         quotationId: quotation.id,
-        workOrderId: workOrder.id,
         date: new Date(),
         subtotal: quotation.subtotal,
         discount: quotation.discount ?? 0,
         tax: quotation.tax ?? 0,
         grandTotal: quotation.grandTotal,
+        totalAmount: quotation.grandTotal,
         status: "confirmed",
         notes: `Auto-generated dari DP ${dp.documentNo}`,
         createdBy: userId ?? null,
@@ -224,7 +192,7 @@ export async function onDownPaymentConfirmed(
           qty: item.qty,
           unitPrice: item.unitPrice,
           discount: item.discount,
-          subtotal: item.subtotal,
+          total: item.subtotal,
         })),
       });
     }
@@ -234,9 +202,6 @@ export async function onDownPaymentConfirmed(
       where: { id: dpId },
       data: {
         status: "confirmed",
-        workOrderId: workOrder.id,
-        salesOrderId: salesOrder.id,
-        salesInvoiceId: invoice.id,
       },
     });
 

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function UomPage() {
   const items = await prisma.item.findMany({
@@ -26,37 +27,33 @@ export default async function UomPage() {
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="flex items-center gap-2" style={{ marginBottom: "1rem", color: "var(--text-secondary)" }}>
+        <div className="flex items-center gap-2 mb-4 text-secondary">
           <Info size={16} />
           <span>Satuan dikelola sebagai field teks pada data barang. Berikut daftar satuan yang digunakan saat ini:</span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Kode</th>
-                <th>Nama</th>
-              </tr>
-            </thead>
-            <tbody>
-              {uomList.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="text-center py-10 px-4 text-muted">Belum ada satuan yang digunakan</td>
-                </tr>
-              ) : (
-                uomList.map((uom, idx) => (
-                  <tr key={uom}>
-                    <td>{idx + 1}</td>
-                    <td className="font-mono">{uom}</td>
-                    <td className="font-medium">{uom}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DetailTable>
+          <DetailTableHead>
+            <DetailTableTh>ID</DetailTableTh>
+            <DetailTableTh>Kode</DetailTableTh>
+            <DetailTableTh>Nama</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {uomList.length === 0 ? (
+              <DetailTableRow>
+                <DetailTableTd colSpan={3} className="text-center py-10 px-4 text-muted">Belum ada satuan yang digunakan</DetailTableTd>
+              </DetailTableRow>
+            ) : (
+              uomList.map((uom, idx) => (
+                <DetailTableRow key={uom}>
+                  <DetailTableTd>{idx + 1}</DetailTableTd>
+                  <DetailTableTd className="font-mono">{uom}</DetailTableTd>
+                  <DetailTableTd className="font-medium">{uom}</DetailTableTd>
+                </DetailTableRow>
+              ))
+            )}
+          </DetailTableBody>
+        </DetailTable>
       </div>
     </div>
   )

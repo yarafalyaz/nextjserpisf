@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createItemCategory } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, Label } from "@heroui/react"
 
 export default function CreateItemCategoryPage() {
   const router = useRouter()
@@ -33,13 +34,13 @@ export default function CreateItemCategoryPage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Kategori *</label>
-            <input id="name" name="name" className="form-input" placeholder="Nama kategori" required />
+            <Label htmlFor="name">Nama Kategori *</Label>
+            <Input id="name" name="name" placeholder="Nama kategori" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="description" className="text-sm font-medium text-foreground">Deskripsi</label>
-            <input id="description" name="description" className="form-input" placeholder="Deskripsi kategori" />
+            <Label htmlFor="description">Deskripsi</Label>
+            <Input id="description" name="description" placeholder="Deskripsi kategori" />
           </div>
         </div>
 

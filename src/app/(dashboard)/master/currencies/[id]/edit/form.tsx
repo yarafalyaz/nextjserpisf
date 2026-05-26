@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateCurrency } from "@/actions/master.actions"
+import { Input, Label } from "@heroui/react"
 
 interface CurrencyEditFormProps {
   currency: { id: number; code: string; name: string; rate: number }
@@ -26,16 +27,16 @@ export function CurrencyEditForm({ currency }: CurrencyEditFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Kode *</label>
-          <input name="code" className="form-input" required defaultValue={currency.code} placeholder="USD, IDR, dll" />
+          <Label>Kode *</Label>
+          <Input name="code" required defaultValue={currency.code} placeholder="USD, IDR, dll" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Nama *</label>
-          <input name="name" className="form-input" required defaultValue={currency.name} placeholder="Nama mata uang" />
+          <Label>Nama *</Label>
+          <Input name="name" required defaultValue={currency.name} placeholder="Nama mata uang" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Rate *</label>
-          <input name="rate" type="number" step="0.0001" className="form-input" required defaultValue={currency.rate} placeholder="0.0000" />
+          <Label>Rate *</Label>
+          <Input name="rate" type="number" step="0.0001" required defaultValue={currency.rate} placeholder="0.0000" />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

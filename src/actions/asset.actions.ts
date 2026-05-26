@@ -3,6 +3,7 @@
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
+import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 
 // ==================== ASSET CATEGORY ACTIONS ====================
 
@@ -13,8 +14,8 @@ export async function createAssetCategory(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code: formData.get("code") as string | null,
-      depreciationRate: formData.get("depreciationRate") ? Number(formData.get("depreciationRate")) : null,
-      usefulLife: formData.get("usefulLife") ? Number(formData.get("usefulLife")) : null,
+      depreciationRate: safeNumber(formData.get("depreciationRate")),
+      usefulLife: safeNumber(formData.get("usefulLife")),
     },
   })
 
@@ -42,7 +43,7 @@ export async function createAssetBrand(formData: FormData) {
 export async function createAssetTransfer(formData: FormData) {
   const user = await requirePermission("create_asset_transfers")
 
-  const assetId = Number(formData.get("assetId"))
+  const assetId = requireId(formData.get("assetId"), "assetId")
   const toLocation = formData.get("toLocation") as string
 
   const transfer = await prisma.assetTransfer.create({
@@ -50,8 +51,8 @@ export async function createAssetTransfer(formData: FormData) {
       assetId,
       fromLocation: formData.get("fromLocation") as string | null,
       toLocation,
-      fromEmployeeId: formData.get("fromEmployeeId") ? Number(formData.get("fromEmployeeId")) : null,
-      toEmployeeId: formData.get("toEmployeeId") ? Number(formData.get("toEmployeeId")) : null,
+      fromEmployeeId: safeId(formData.get("fromEmployeeId")),
+      toEmployeeId: safeId(formData.get("toEmployeeId")),
       transferDate: new Date(formData.get("transferDate") as string),
       notes: formData.get("notes") as string | null,
       createdBy: Number(user.id),
@@ -125,8 +126,8 @@ export async function updateAssetCategory(id: number, formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code: formData.get("code") as string | null,
-      depreciationRate: formData.get("depreciationRate") ? Number(formData.get("depreciationRate")) : null,
-      usefulLife: formData.get("usefulLife") ? Number(formData.get("usefulLife")) : null,
+      depreciationRate: safeNumber(formData.get("depreciationRate")),
+      usefulLife: safeNumber(formData.get("usefulLife")),
     },
   })
 
@@ -139,30 +140,46 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
 
   const user = await requirePermission("create_asset_transfers")
 
-  const assetId = Number(formData.get("assetId"))
+  const assetId = requireId(formData.get("assetId"), "assetId")
   const toLocation = formData.get("toLocation") as string
 
-  const transfer = await prisma.assetTransfer.update({
+  // Fix #38: Get old transfer to revert asset location if asset changed
+  const oldTransfer = await prisma.assetTransfer.findUniqueOrThrow({
     where: { id },
-    data: {
-      assetId,
-      fromLocation: formData.get("fromLocation") as string | null,
-      toLocation,
-      fromEmployeeId: formData.get("fromEmployeeId") ? Number(formData.get("fromEmployeeId")) : null,
-      toEmployeeId: formData.get("toEmployeeId") ? Number(formData.get("toEmployeeId")) : null,
-      transferDate: new Date(formData.get("transferDate") as string),
-      notes: formData.get("notes") as string | null,
-      createdBy: Number(user.id),
-    },
   })
 
-  // Update asset location
-  await prisma.asset.update({
-    where: { id: assetId },
-    data: { location: toLocation },
+  const transfer = await prisma.$transaction(async (tx) => {
+    // If asset changed, revert old asset location first
+    if (oldTransfer.assetId !== assetId && oldTransfer.fromLocation) {
+      await tx.asset.update({
+        where: { id: oldTransfer.assetId },
+        data: { location: oldTransfer.fromLocation },
+      })
+    }
+
+    const updated = await tx.assetTransfer.update({
+      where: { id },
+      data: {
+        assetId,
+        fromLocation: formData.get("fromLocation") as string | null,
+        toLocation,
+        fromEmployeeId: safeId(formData.get("fromEmployeeId")),
+        toEmployeeId: safeId(formData.get("toEmployeeId")),
+        transferDate: new Date(formData.get("transferDate") as string),
+        notes: formData.get("notes") as string | null,
+        createdBy: Number(user.id),
+      },
+    })
+
+    // Update asset location to new destination
+    await tx.asset.update({
+      where: { id: assetId },
+      data: { location: toLocation },
+    })
+
+    return updated
   })
 
-  revalidatePath("/assets/transfers")
   revalidatePath("/assets/transfers")
   return { success: true, id: transfer.id }
 }
@@ -174,10 +191,10 @@ export async function createAsset(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       code: (formData.get("code") as string) || "",
-      categoryId: formData.get("categoryId") ? Number(formData.get("categoryId")) : null,
+      categoryId: safeId(formData.get("categoryId")),
       
       purchaseDate: formData.get("purchaseDate") ? new Date(formData.get("purchaseDate") as string) : null,
-      purchaseCost: formData.get("purchasePrice") ? Number(formData.get("purchasePrice")) : 0,
+      purchaseCost: safeNumber(formData.get("purchasePrice")) ?? 0,
       location: (formData.get("location") as string) || null,
       status: formData.get("status") as string || "active",
       notes: (formData.get("description") as string) || null,

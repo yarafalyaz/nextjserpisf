@@ -1,4 +1,4 @@
-import { Eye, Pencil } from "lucide-react"
+import { Pencil } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -10,7 +10,9 @@ import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteEmployee } from "@/actions/master.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function EmployeeDetailPage({
   params,
@@ -36,20 +38,22 @@ export default async function EmployeeDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Master Data", href: "/master" },
-  { label: "Employees", href: "/master/employees" },
-  { label: "Detail" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">{employee.name}</h1>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Link href={`/master/employees/${id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
-          <DeleteButton id={employee.id} action={deleteEmployee} />
-          <Link href="/master/employees" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-      </div>
+      <PageHeader
+        title={employee.name}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Master Data", href: "/master" },
+          { label: "Employees", href: "/master/employees" },
+          { label: "Detail" },
+        ]}
+        actions={
+          <>
+            <Button href={`/master/employees/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <DeleteButton id={employee.id} action={deleteEmployee} />
+            <BackButton href="/master/employees" />
+          </>
+        }
+      />
 
       <DetailTabs
         ariaLabel="Employee detail tabs"
@@ -59,69 +63,43 @@ export default async function EmployeeDetailPage({
             label: "Info",
             content: (
               <>
-                <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">NIP</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium font-mono">{employee.employeeNo}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Department</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{employee.department?.name || "-"}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Posisi</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{employee.position?.name || "-"}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Email</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{employee.email || "-"}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Telepon</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{employee.phone || "-"}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal Masuk</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(employee.joinDate)}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Gaji Pokok</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(employee.baseSalary))}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
-                      <span className={`status-badge ${employee.isActive ? "status-active" : "status-cancelled"}`}>
-                        {employee.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <DetailCard>
+                  <DetailField label="NIP" value={employee.employeeNo} mono />
+                  <DetailField label="Department" value={employee.department?.name || "-"} />
+                  <DetailField label="Posisi" value={employee.position?.name || "-"} />
+                  <DetailField label="Email" value={employee.email || "-"} />
+                  <DetailField label="Telepon" value={employee.phone || "-"} />
+                  <DetailField label="Tanggal Masuk" value={formatDate(employee.joinDate)} />
+                  <DetailField label="Gaji Pokok" value={formatCurrency(Number(employee.baseSalary))} />
+                  <DetailField label="Status" value={
+                    <span className={`status-badge ${employee.isActive ? "status-active" : "status-cancelled"}`}>
+                      {employee.isActive ? "Active" : "Inactive"}
+                    </span>
+                  } />
+                </DetailCard>
 
                 {/* Active Loans */}
                 {employee.employeeLoans.length > 0 && (
-                  <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                      <h2 className="text-[0.9375rem] font-semibold text-foreground">Pinjaman Aktif</h2>
-                    </div>
-                    <div className="p-4 px-5">
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr><th>Jumlah</th><th>Cicilan</th><th>Sisa</th><th>Mulai</th></tr>
-                        </thead>
-                        <tbody>
-                          {employee.employeeLoans.map((loan) => (
-                            <tr key={loan.id}>
-                              <td>{formatCurrency(Number(loan.amount))}</td>
-                              <td>{formatCurrency(Number(loan.installmentAmount))}</td>
-                              <td className="text-danger">{formatCurrency(Number(loan.remainingAmount))}</td>
-                              <td>{formatDate(loan.startDate)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <DetailSection title="Pinjaman Aktif">
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Jumlah</DetailTableTh>
+                        <DetailTableTh>Cicilan</DetailTableTh>
+                        <DetailTableTh>Sisa</DetailTableTh>
+                        <DetailTableTh>Mulai</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {employee.employeeLoans.map((loan) => (
+                          <DetailTableRow key={loan.id}>
+                            <DetailTableTd>{formatCurrency(Number(loan.totalAmount))}</DetailTableTd>
+                            <DetailTableTd>{formatCurrency(Number(loan.monthlyInstallment))}</DetailTableTd>
+                            <DetailTableTd className="text-danger">{formatCurrency(Number(loan.remainingAmount))}</DetailTableTd>
+                            <DetailTableTd>{formatDate(loan.loanDate)}</DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  </DetailSection>
                 )}
               </>
             ),
@@ -139,21 +117,24 @@ export default async function EmployeeDetailPage({
                   {employee.attendances.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada data absensi</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>Tanggal</th><th>Check In</th><th>Check Out</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>Check In</DetailTableTh>
+                        <DetailTableTh>Check Out</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {employee.attendances.map((a) => (
-                          <tr key={a.id}>
-                            <td>{formatDate(a.date)}</td>
-                            <td>{a.checkIn ? new Date(a.checkIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
-                            <td>{a.checkOut ? new Date(a.checkOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}</td>
-                            <td><StatusChip status={a.status} /></td>
-                          </tr>
+                          <DetailTableRow key={a.id}>
+                            <DetailTableTd>{formatDate(a.date)}</DetailTableTd>
+                            <DetailTableTd>{a.checkIn ? new Date(a.checkIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}</DetailTableTd>
+                            <DetailTableTd>{a.checkOut ? new Date(a.checkOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={a.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -172,22 +153,26 @@ export default async function EmployeeDetailPage({
                   {employee.leaveRequests.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada data cuti</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>Jenis</th><th>Tanggal Mulai</th><th>Tanggal Selesai</th><th>Status</th><th>Alasan</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Jenis</DetailTableTh>
+                        <DetailTableTh>Tanggal Mulai</DetailTableTh>
+                        <DetailTableTh>Tanggal Selesai</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                        <DetailTableTh>Alasan</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {employee.leaveRequests.map((lr) => (
-                          <tr key={lr.id}>
-                            <td>{lr.type}</td>
-                            <td>{formatDate(lr.startDate)}</td>
-                            <td>{formatDate(lr.endDate)}</td>
-                            <td><StatusChip status={lr.status} /></td>
-                            <td>{lr.reason ? (lr.reason.length > 30 ? lr.reason.substring(0, 30) + "..." : lr.reason) : "-"}</td>
-                          </tr>
+                          <DetailTableRow key={lr.id}>
+                            <DetailTableTd>{lr.type}</DetailTableTd>
+                            <DetailTableTd>{formatDate(lr.startDate)}</DetailTableTd>
+                            <DetailTableTd>{formatDate(lr.endDate)}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={lr.status} /></DetailTableTd>
+                            <DetailTableTd>{lr.reason ? (lr.reason.length > 30 ? lr.reason.substring(0, 30) + "..." : lr.reason) : "-"}</DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -206,21 +191,24 @@ export default async function EmployeeDetailPage({
                   {employee.overtimeRequests.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada data lembur</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>Tanggal</th><th>Jam</th><th>Status</th><th>Alasan</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>Jam</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                        <DetailTableTh>Alasan</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {employee.overtimeRequests.map((ot) => (
-                          <tr key={ot.id}>
-                            <td>{formatDate(ot.date)}</td>
-                            <td>{Number(ot.hours)} jam</td>
-                            <td><StatusChip status={ot.status} /></td>
-                            <td>{ot.reason ? (ot.reason.length > 30 ? ot.reason.substring(0, 30) + "..." : ot.reason) : "-"}</td>
-                          </tr>
+                          <DetailTableRow key={ot.id}>
+                            <DetailTableTd>{formatDate(ot.date)}</DetailTableTd>
+                            <DetailTableTd>{Number(ot.hours)} jam</DetailTableTd>
+                            <DetailTableTd><StatusChip status={ot.status} /></DetailTableTd>
+                            <DetailTableTd>{ot.reason ? (ot.reason.length > 30 ? ot.reason.substring(0, 30) + "..." : ot.reason) : "-"}</DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>

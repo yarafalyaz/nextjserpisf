@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { PrismaClient } from "@prisma/client"
 import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
 function createPrismaClient(): PrismaClient {
   // Pass config object directly - PrismaMariaDb creates its own pool internally

@@ -15,13 +15,13 @@ export default function DashboardError({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6" style={{ textAlign: "center", padding: "48px" }}>
-        <div style={{ fontSize: "3rem", marginBottom: "16px" }}>⚠️</div>
-        <h2 style={{ margin: "0 0 8px", fontSize: "1.25rem" }}>Terjadi Kesalahan</h2>
-        <p className="text-muted" style={{ marginBottom: "24px" }}>
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-12 text-center">
+        <div className="text-5xl mb-4">⚠️</div>
+        <h2 className="m-0 mb-2 text-xl">Terjadi Kesalahan</h2>
+        <p className="text-muted mb-6">
           {error.message || "Terjadi kesalahan saat memuat halaman. Silakan coba lagi."}
         </p>
-        <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+        <div className="flex gap-3 justify-center">
           <button onClick={reset} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
             Coba Lagi
           </button>

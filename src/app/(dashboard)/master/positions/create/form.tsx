@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createPosition, updatePosition } from "@/actions/master.actions"
+import { Input, Select, ListBox, Label } from "@heroui/react"
 
 interface PositionCreateFormProps {
   departments: { id: number; name: string }[]
@@ -33,23 +34,25 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="code" className="text-sm font-medium text-foreground">Kode Jabatan</label>
-          <input id="code" name="code" className="form-input bg-muted" readOnly defaultValue={position?.code || generatedCode || ""} />
+          <Label htmlFor="code">Kode Jabatan</Label>
+          <Input id="code" name="code" className="bg-muted" readOnly defaultValue={position?.code || generatedCode || ""} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Jabatan *</label>
-          <input id="name" name="name" className="form-input" placeholder="Nama jabatan" required defaultValue={position?.name || ""} />
+          <Label htmlFor="name">Nama Jabatan *</Label>
+          <Input id="name" name="name" placeholder="Nama jabatan" required defaultValue={position?.name || ""} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="departmentId" className="text-sm font-medium text-foreground">Departemen</label>
-          <select id="departmentId" name="departmentId" className="form-input" defaultValue={position?.departmentId || ""}>
-            <option value="">Pilih Departemen</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
+          <Select name="departmentId" defaultSelectedKey={position?.departmentId ? String(position.departmentId) : undefined} className="w-full">
+            <Label htmlFor="departmentId">Departemen</Label>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Departemen"}</Select.Value><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {departments.map((d) => <ListBox.Item key={String(d.id)} id={String(d.id)} textValue={d.name}>{d.name}<ListBox.ItemIndicator /></ListBox.Item>)}
+              </ListBox>
+            </Select.Popover>
+          </Select>
         </div>
       </div>
 

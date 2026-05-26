@@ -8,6 +8,7 @@ import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteMaterialIssue } from "@/actions/inventory.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function MaterialIssueDetailPage({
   params,
@@ -31,7 +32,7 @@ export default async function MaterialIssueDetailPage({
       <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Inventory",href:"/inventory"},{label:"Material Issues",href:"/inventory/material-issues"},{label:"Detail"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Material Issue {issue.documentNo}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div className="flex gap-2 items-center">
           <StatusChip status={issue.status} />
   <div className="flex gap-2">
           <Link href={`/inventory/material-issues/${issue.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
@@ -72,7 +73,7 @@ export default async function MaterialIssueDetailPage({
             </div>
           )}
           {issue.notes && (
-            <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
+            <div className="flex flex-col gap-1 col-span-full">
               <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{issue.notes}</span>
             </div>
@@ -89,24 +90,22 @@ export default async function MaterialIssueDetailPage({
           {issue.items.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Item ID</th>
-                  <th style={{ textAlign: "right" }}>Qty</th>
-                  <th style={{ textAlign: "right" }}>Biaya</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Item ID</DetailTableTh>
+                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh align="right">Biaya</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {issue.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>Item #{item.itemId}</td>
-                    <td className="text-right">{Number(item.qty)}</td>
-                    <td className="text-right">{formatCurrency(Number(item.cost))}</td>
-                  </tr>
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           )}
         </div>
       </div>

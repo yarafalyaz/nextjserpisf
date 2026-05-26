@@ -8,7 +8,9 @@ import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteWorkOrder } from "@/actions/manufacturing.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 
 export default async function WorkOrderDetailPage({
   params,
@@ -33,51 +35,33 @@ export default async function WorkOrderDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Manufacturing", href: "/manufacturing" },
-  { label: "Work Orders", href: "/manufacturing/work-orders" },
-  { label: "Detail" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Work Order {wo.documentNo}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <StatusChip status={wo.status} />
-  <div className="flex gap-2">
-          <Link href={`/manufacturing/work-orders/${wo.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
-          {wo.status === "completed" && (
-            <Link href={`/sales/invoices/create?salesOrderId=${wo.quotationId}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover transition-all">+ Sales Invoice</Link>
-          )}
-          <DeleteButton id={wo.id} action={deleteWorkOrder} />
-                  <Link href="/manufacturing/work-orders" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-        </div>
-      </div>
+      <PageHeader
+        title={`Work Order ${wo.documentNo}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Manufacturing", href: "/manufacturing" },
+          { label: "Work Orders", href: "/manufacturing/work-orders" },
+          { label: "Detail" },
+        ]}
+        badge={<StatusChip status={wo.status} />}
+        actions={
+          <>
+            <Button href={`/manufacturing/work-orders/${wo.id}/edit`} variant="primary">Edit</Button>
+            {wo.status === "completed" && (
+              <Button href={`/sales/invoices/create?salesOrderId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
+            )}
+            <DeleteButton id={wo.id} action={deleteWorkOrder} />
+            <BackButton href="/manufacturing/work-orders" />
+          </>
+        }
+      />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Customer</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">
-              <Link href={`/master/customers/${wo.customerId}`}>{wo.customer.name}</Link>
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(wo.date)}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Quotation</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">
-              {wo.quotation ? <Link href={`/sales/quotations/${wo.quotationId}`}>{wo.quotation.documentNo}</Link> : "-"}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Total Biaya Material</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(totalCost)}</span>
-          </div>
-        </div>
-      </div>
+      <DetailCard>
+        <DetailField label="Customer" value={<Link href={`/master/customers/${wo.customerId}`}>{wo.customer.name}</Link>} />
+        <DetailField label="Tanggal" value={formatDate(wo.date)} />
+        <DetailField label="Quotation" value={wo.quotation ? <Link href={`/sales/quotations/${wo.quotationId}`}>{wo.quotation.documentNo}</Link> : "-"} mono />
+        <DetailField label="Total Biaya Material" value={formatCurrency(totalCost)} />
+      </DetailCard>
 
       {/* Items / Materials */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -88,43 +72,42 @@ export default async function WorkOrderDetailPage({
           {wo.items.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada material</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Item ID</th>
-                  <th style={{ textAlign: "right" }}>Qty</th>
-                  <th style={{ textAlign: "right" }}>Cost/Unit</th>
-                  <th style={{ textAlign: "right" }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {wo.items.map((item) => (
-                  <tr key={item.id}>
-                    <td>Item #{item.itemId}</td>
-                    <td className="text-right">{Number(item.qty)}</td>
-                    <td className="text-right">{formatCurrency(Number(item.cost))}</td>
-                    <td className="text-right">{formatCurrency(Number(item.qty) * Number(item.cost))}</td>
-                  </tr>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Item ID</DetailTableTh>
+                <DetailTableTh>Deskripsi</DetailTableTh>
+                <DetailTableTh>Status</DetailTableTh>
+                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh align="right">Cost/Unit</DetailTableTh>
+                <DetailTableTh align="right">Total</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {wo.items.map((item: any) => (
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd>{item.description || "-"}</DetailTableTd>
+                    <DetailTableTd><StatusChip status={item.status || "pending"} /></DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(item.qty) * Number(item.cost))}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={3} className="text-right"><strong>Total</strong></td>
-                  <td className="text-right"><strong>{formatCurrency(totalCost)}</strong></td>
-                </tr>
-              </tfoot>
-            </table>
+              </DetailTableBody>
+              <DetailTableFoot>
+                <DetailTableFootRow>
+                  <DetailTableTd colSpan={5} align="right" className="font-bold">Total</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold">{formatCurrency(totalCost)}</DetailTableTd>
+                </DetailTableFootRow>
+              </DetailTableFoot>
+            </DetailTable>
           )}
         </div>
       </div>
 
       {wo.notes && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{wo.notes}</span>
-          </div>
-        </div>
+        <DetailCard>
+          <DetailField label="Catatan" value={wo.notes} colSpan="full" />
+        </DetailCard>
       )}
     </div>
   )

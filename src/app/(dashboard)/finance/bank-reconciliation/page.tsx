@@ -7,6 +7,7 @@ import Link from "next/link"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { StatusChip } from '@/components/ui/status-chip'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function BankReconciliationPage({
   searchParams,
@@ -62,36 +63,34 @@ export default async function BankReconciliationPage({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th>Tanggal Statement</th>
-                <th>Saldo Statement</th>
-                <th>Matched Items</th>
-                <th>Status</th>
-                <th>Dibuat</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Tanggal Statement</DetailTableTh>
+              <DetailTableTh>Saldo Statement</DetailTableTh>
+              <DetailTableTh>Matched Items</DetailTableTh>
+              <DetailTableTh>Status</DetailTableTh>
+              <DetailTableTh>Dibuat</DetailTableTh>
+              <DetailTableTh>Aksi</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
               {reconciliations.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada data rekonsiliasi</td></tr>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada data rekonsiliasi</DetailTableTd></DetailTableRow>
               ) : (
                 reconciliations.map((r) => (
-                  <tr key={r.id}>
-                    <td>{formatDate(r.statementDate)}</td>
-                    <td className="text-right">{formatCurrency(Number(r.statementBalance))}</td>
-                    <td>{r.items.filter((i) => i.matched).length} / {r.items.length}</td>
-                    <td><StatusChip status={r.status} /></td>
-                    <td>{formatDate(r.createdAt)}</td>
-                    <td>
+                  <DetailTableRow key={r.id}>
+                    <DetailTableTd>{formatDate(r.statementDate)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(r.statementBalance))}</DetailTableTd>
+                    <DetailTableTd>{r.items.filter((i) => i.matched).length} / {r.items.length}</DetailTableTd>
+                    <DetailTableTd><StatusChip status={r.status} /></DetailTableTd>
+                    <DetailTableTd>{formatDate(r.createdAt)}</DetailTableTd>
+                    <DetailTableTd>
                       <Link href={`/finance/bank-reconciliation/${r.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">Eye</Link>
-                    </td>
-                  </tr>
+                    </DetailTableTd>
+                  </DetailTableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </DetailTableBody>
+          </DetailTable>
         </div>
 
         {totalPages > 1 && (

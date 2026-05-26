@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -19,7 +19,7 @@ export async function onTransferProcessed(
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
-      include: { items: { include: { item: true } } },
+      include: { items: true },
     });
 
     // Idempotency: check if OUT moves already exist
@@ -44,12 +44,12 @@ export async function onTransferProcessed(
           itemId: item.itemId,
           warehouseId: transfer.sourceWarehouseId,
           qty: item.qty,
-          cost: item.unitCost ?? 0,
+          cost: 0,
           impact: "OUT",
           status: "draft",
           referenceType: "InventoryTransfer",
           referenceId: transfer.id,
-          notes: `Transfer OUT ke ${transfer.destinationWarehouseId} - ${transfer.documentNo}`,
+          notes: `Transfer OUT ke WH#${transfer.destinationWarehouseId} - ${transfer.documentNo}`,
           createdBy: userId ?? null,
         },
       });
@@ -75,7 +75,7 @@ export async function onTransferReceived(
   await prisma.$transaction(async (tx) => {
     const transfer = await tx.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
-      include: { items: { include: { item: true } } },
+      include: { items: true },
     });
 
     // Idempotency: check if IN moves already exist
@@ -105,12 +105,12 @@ export async function onTransferReceived(
           itemId: item.itemId,
           warehouseId: transfer.destinationWarehouseId,
           qty: item.qty,
-          cost: item.unitCost ?? 0,
+          cost: 0,
           impact: "IN",
           status: "draft",
           referenceType: "InventoryTransfer",
           referenceId: transfer.id,
-          notes: `Transfer IN dari ${transfer.sourceWarehouseId} - ${transfer.documentNo}`,
+          notes: `Transfer IN dari WH#${transfer.sourceWarehouseId} - ${transfer.documentNo}`,
           createdBy: userId ?? null,
         },
       });
@@ -121,8 +121,6 @@ export async function onTransferReceived(
       where: { id: transferId },
       data: {
         status: "received",
-        receivedAt: new Date(),
-        receivedBy: userId ?? null,
       },
     });
   });

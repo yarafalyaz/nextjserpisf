@@ -5,6 +5,7 @@ import { useState, useTransition } from "react"
 import { createHoliday } from "@/actions/hrm.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, TextArea, Label } from "@heroui/react"
 
 export default function CreateHolidayPage() {
   const router = useRouter()
@@ -29,8 +30,8 @@ export default function CreateHolidayPage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Hari Libur *</label>
-            <input id="name" name="name" className="form-input" placeholder="Contoh: Hari Raya Idul Fitri" required />
+            <Label htmlFor="name">Nama Hari Libur *</Label>
+            <Input id="name" name="name" placeholder="Contoh: Hari Raya Idul Fitri" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -38,8 +39,8 @@ export default function CreateHolidayPage() {
           </div>
 
           <div className="flex flex-col gap-1.5 col-span-full">
-            <label htmlFor="description" className="text-sm font-medium text-foreground">Deskripsi</label>
-            <textarea id="description" name="description" className="form-input" rows={3} placeholder="Deskripsi hari libur (opsional)" />
+            <Label htmlFor="description">Deskripsi</Label>
+            <TextArea id="description" name="description" rows={3} placeholder="Deskripsi hari libur (opsional)" />
           </div>
         </div>
 

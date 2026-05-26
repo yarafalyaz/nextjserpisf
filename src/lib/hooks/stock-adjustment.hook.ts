@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -15,7 +15,7 @@ export async function onStockAdjustmentProcessed(
   await prisma.$transaction(async (tx) => {
     const adjustment = await tx.stockAdjustment.findUniqueOrThrow({
       where: { id: adjustmentId },
-      include: { items: { include: { item: true } } },
+      include: { items: true },
     });
 
     // Idempotency: check if stock moves already exist
@@ -36,9 +36,7 @@ export async function onStockAdjustmentProcessed(
 
     // Create Stock Move per item based on difference
     for (const item of adjustment.items) {
-      const currentQty = Number(item.currentQty);
-      const newQty = Number(item.newQty);
-      const diff = newQty - currentQty;
+      const diff = Number(item.difference);
 
       // Skip if no difference
       if (diff === 0) continue;
@@ -53,12 +51,12 @@ export async function onStockAdjustmentProcessed(
           itemId: item.itemId,
           warehouseId: adjustment.warehouseId,
           qty,
-          cost: item.unitCost ?? 0,
+          cost: item.unitCost,
           impact,
           status: "draft",
           referenceType: "StockAdjustment",
           referenceId: adjustment.id,
-          notes: `Penyesuaian Stok ${adjustment.documentNo} - ${item.item?.name ?? ""} (${currentQty} → ${newQty})`,
+          notes: `Penyesuaian Stok ${adjustment.documentNo} (${Number(item.systemQty)} → ${Number(item.actualQty)})`,
           createdBy: userId ?? null,
         },
       });
@@ -69,8 +67,8 @@ export async function onStockAdjustmentProcessed(
       where: { id: adjustmentId },
       data: {
         status: "processed",
-        processedAt: new Date(),
-        processedBy: userId ?? null,
+        approvedBy: userId ?? null,
+        approvedAt: new Date(),
       },
     });
   });

@@ -14,26 +14,40 @@ export async function DELETE(
   }
 
   const { id } = await params
+  const attachmentId = Number.parseInt(id, 10)
+  const userId = Number.parseInt(String(session.user.id), 10)
+  if (!Number.isInteger(attachmentId) || attachmentId <= 0) return NextResponse.json({ error: "Invalid attachment id" }, { status: 400 })
+  if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user" }, { status: 400 })
 
   const attachment = await prisma.transactionAttachment.findUnique({
-    where: { id: Number(id) },
+    where: { id: attachmentId },
   })
 
   if (!attachment) {
     return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
   }
 
-  // Delete file from disk
+  // Ownership guard: only uploader can delete
+  if (attachment.uploadedBy !== userId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  // Delete file from disk (normalize path)
   try {
-    const filepath = path.join(process.cwd(), "public", attachment.fileUrl)
-    await unlink(filepath)
+    const rel = attachment.fileUrl.replace(/^\/+/, "")
+    const uploadsRoot = path.join(process.cwd(), "public", "uploads")
+    const filepath = path.resolve(process.cwd(), "public", rel)
+
+    if (filepath.startsWith(uploadsRoot)) {
+      await unlink(filepath)
+    }
   } catch {
     // File might already be deleted, continue
   }
 
   // Delete from database
   await prisma.transactionAttachment.delete({
-    where: { id: Number(id) },
+    where: { id: attachmentId },
   })
 
   return NextResponse.json({ success: true })

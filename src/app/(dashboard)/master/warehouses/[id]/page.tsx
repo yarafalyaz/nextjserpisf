@@ -7,7 +7,9 @@ import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function WarehouseDetailPage({
   params,
@@ -34,19 +36,21 @@ export default async function WarehouseDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Master Data", href: "/master" },
-  { label: "Warehouses", href: "/master/warehouses" },
-  { label: "Detail" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">{warehouse.name}</h1>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Link href={`/master/warehouses/${id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
-          <Link href="/master/warehouses" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-      </div>
+      <PageHeader
+        title={warehouse.name}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Master Data", href: "/master" },
+          { label: "Warehouses", href: "/master/warehouses" },
+          { label: "Detail" },
+        ]}
+        actions={
+          <>
+            <Button href={`/master/warehouses/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <BackButton href="/master/warehouses" />
+          </>
+        }
+      />
 
       <DetailTabs
         ariaLabel="Warehouse detail tabs"
@@ -56,61 +60,41 @@ export default async function WarehouseDetailPage({
             label: "Info",
             content: (
               <>
-                <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-                  <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Nama Gudang</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{warehouse.name}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Kode</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium font-mono">{warehouse.code}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">
-                        <span className={`status-badge status-${warehouse.isActive ? "active" : "inactive"}`}>
-                          {warehouse.isActive ? "Aktif" : "Nonaktif"}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(warehouse.createdAt)}</span>
-                    </div>
-                    <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Alamat</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{warehouse.address || "-"}</span>
-                    </div>
-                  </div>
-                </div>
+                <DetailCard>
+                  <DetailField label="Nama Gudang" value={warehouse.name} />
+                  <DetailField label="Kode" value={warehouse.code} mono />
+                  <DetailField label="Status" value={
+                    <span className={`status-badge status-${warehouse.isActive ? "active" : "inactive"}`}>
+                      {warehouse.isActive ? "Aktif" : "Nonaktif"}
+                    </span>
+                  } />
+                  <DetailField label="Dibuat" value={formatDate(warehouse.createdAt)} />
+                  <DetailField label="Alamat" value={warehouse.address || "-"} colSpan="full" />
+                </DetailCard>
 
                 {/* Racks */}
-                <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                  <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                    <h2 className="text-[0.9375rem] font-semibold text-foreground">Rak</h2>
-                  </div>
-                  <div className="p-4 px-5">
-                    {warehouse.racks.length === 0 ? (
-                      <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada rak</p>
-                    ) : (
-                      <table className="w-full border-collapse">
-                        <thead>
-                          <tr><th>Kode</th><th>Nama</th><th>Jumlah Baris</th></tr>
-                        </thead>
-                        <tbody>
-                          {warehouse.racks.map((rack) => (
-                            <tr key={rack.id}>
-                              <td className="font-mono">{rack.code}</td>
-                              <td>{rack.name}</td>
-                              <td>{rack.rows.length}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
+                <DetailSection title="Rak">
+                  {warehouse.racks.length === 0 ? (
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada rak</p>
+                  ) : (
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Kode</DetailTableTh>
+                        <DetailTableTh>Nama</DetailTableTh>
+                        <DetailTableTh>Jumlah Baris</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {warehouse.racks.map((rack) => (
+                          <DetailTableRow key={rack.id}>
+                            <DetailTableTd className="font-mono">{rack.code}</DetailTableTd>
+                            <DetailTableTd>{rack.name}</DetailTableTd>
+                            <DetailTableTd>{rack.rows.length}</DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  )}
+                </DetailSection>
               </>
             ),
           },
@@ -127,22 +111,26 @@ export default async function WarehouseDetailPage({
                   {stockMoves.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada pergerakan stok</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Item</th><th>Impact</th><th style={{ textAlign: "right" }}>Qty</th><th>Tanggal</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Item</DetailTableTh>
+                        <DetailTableTh>Impact</DetailTableTh>
+                        <DetailTableTh align="right">Qty</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {stockMoves.map((sm) => (
-                          <tr key={sm.id}>
-                            <td className="font-mono">{sm.documentNo}</td>
-                            <td><Link href={`/master/items/${sm.itemId}`}>{sm.item.name}</Link></td>
-                            <td><StatusChip status={sm.impact === "IN" ? "received" : "returned"} /></td>
-                            <td className="text-right">{Number(sm.qty)}</td>
-                            <td>{formatDate(sm.createdAt)}</td>
-                          </tr>
+                          <DetailTableRow key={sm.id}>
+                            <DetailTableTd className="font-mono">{sm.documentNo}</DetailTableTd>
+                            <DetailTableTd><Link href={`/master/items/${sm.itemId}`}>{sm.item.name}</Link></DetailTableTd>
+                            <DetailTableTd><StatusChip status={sm.impact === "IN" ? "received" : "returned"} /></DetailTableTd>
+                            <DetailTableTd align="right">{Number(sm.qty)}</DetailTableTd>
+                            <DetailTableTd>{formatDate(sm.createdAt)}</DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>

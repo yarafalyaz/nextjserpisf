@@ -1,16 +1,16 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createAccount, updateAccount } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Select, ComboBox, ListBox, Label, TextArea } from "@heroui/react"
+import { ComboBox, ListBox, Label, Select as HeroSelect } from "@heroui/react"
+import { Input, TextArea, SelectValue } from "@/components/ui/heroui-compat"
 
 interface AccountFormProps {
   accounts: { id: number; code: string; name: string
 }[]
-  account?: any
+  account?: { id: number; code: string; name: string; type: string; parentId?: number | null; description?: string | null }
   generatedCode?: string
 }
 
@@ -48,10 +48,10 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
           <Input id="name" name="name" placeholder="Kas" required />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Select name="type" className="w-full" isRequired>
+          <HeroSelect name="type" className="w-full" isRequired>
             <Label>Tipe *</Label>
-            <Select.Trigger><Select.Value placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+            <HeroSelect.Trigger><SelectValue placeholder="Pilih Tipe" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="ASSET" textValue="ASSET">ASSET<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="LIABILITY" textValue="LIABILITY">LIABILITY<ListBox.ItemIndicator /></ListBox.Item>
@@ -59,8 +59,8 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
                 <ListBox.Item id="REVENUE" textValue="REVENUE">REVENUE<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="EXPENSE" textValue="EXPENSE">EXPENSE<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
-          </Select>
+            </HeroSelect.Popover>
+          </HeroSelect>
         </div>
         <div className="flex flex-col gap-1.5">
           <ComboBox name="parentId" className="w-full">
@@ -76,16 +76,16 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
           </ComboBox>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Select name="normalBalance" className="w-full">
+          <HeroSelect name="normalBalance" className="w-full">
             <Label>Saldo Normal</Label>
-            <Select.Trigger><Select.Value placeholder="Pilih Saldo Normal" /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+            <HeroSelect.Trigger><SelectValue placeholder="Pilih Saldo Normal" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="DEBIT" textValue="DEBIT">DEBIT<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="CREDIT" textValue="CREDIT">CREDIT<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
-          </Select>
+            </HeroSelect.Popover>
+          </HeroSelect>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>

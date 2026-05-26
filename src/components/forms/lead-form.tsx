@@ -1,12 +1,13 @@
-// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createLead, updateLead } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ListBox, Label } from "@heroui/react"
+import {Select, ListBox, Label , Select as HeroSelect, ComboBox} from "@heroui/react"
 import { AppDatePicker } from "@/components/ui/date-picker"
+import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
+import { CurrencyInput } from "@/components/ui/currency-input"
 
 interface LeadFormProps {
   lead?: {
@@ -93,7 +94,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="estimatedValue">Estimasi Nilai</Label>
-          <Input id="estimatedValue" name="estimatedValue" type="number" inputMode="numeric" placeholder="0" defaultValue={lead?.estimatedValue ? String(lead.estimatedValue) : ""} />
+          <CurrencyInput id="estimatedValue" name="estimatedValue" placeholder="0" defaultValue={lead?.estimatedValue} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
@@ -105,8 +106,8 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         <div className="flex flex-col gap-1.5">
           <Select name="source" defaultSelectedKey={lead?.source || undefined} className="w-full">
             <Label>Sumber</Label>
-            <Select.Trigger><Select.Value placeholder="Pilih Sumber" /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
+            <HeroSelect.Trigger><SelectValue placeholder="Pilih Sumber" /><HeroSelect.Indicator /></HeroSelect.Trigger>
+            <HeroSelect.Popover>
               <ListBox>
                 <ListBox.Item id="website" textValue="Website">Website<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="referral" textValue="Referral">Referral<ListBox.ItemIndicator /></ListBox.Item>
@@ -115,7 +116,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
                 <ListBox.Item id="exhibition" textValue="Exhibition">Exhibition<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="other" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </Select.Popover>
+            </HeroSelect.Popover>
           </Select>
         </div>
         {users.length > 0 && (

@@ -7,7 +7,9 @@ import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function ProjectDetailPage({
   params,
@@ -20,6 +22,9 @@ export default async function ProjectDetailPage({
     where: { id: Number(id) },
     include: {
       customer: true,
+      customerVehicle: {
+        include: { vehicle: { include: { variant: { include: { model: { include: { brand: true } } } } } } },
+      },
       items: true,
       stages: {
         orderBy: { sortOrder: "asc" },
@@ -30,6 +35,11 @@ export default async function ProjectDetailPage({
   })
 
   if (!project) notFound()
+
+  // Fetch linked work order if exists
+  const workOrder = project.workOrderId
+    ? await prisma.workOrder.findUnique({ where: { id: project.workOrderId }, select: { id: true, documentNo: true, status: true } })
+    : null
 
   const [quotations, invoices] = await Promise.all([
     prisma.quotation.findMany({
@@ -46,15 +56,21 @@ export default async function ProjectDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Projects",href:"/projects"},{label:"Detail"}]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Proyek: {project.name}</h1>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-          <span className={`status-badge status-${project.status}`}>{project.status}</span>
-          <Link href={`/projects/${project.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
-          <Link href="/projects" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-      </div>
+      <PageHeader
+        title={`Proyek: ${project.name}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Projects", href: "/projects" },
+          { label: "Detail" },
+        ]}
+        badge={<StatusChip status={project.status} />}
+        actions={
+          <>
+            <Button href={`/projects/${project.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <BackButton href="/projects" />
+          </>
+        }
+      />
 
       <DetailTabs
         ariaLabel="Project detail tabs"
@@ -63,42 +79,38 @@ export default async function ProjectDetailPage({
             id: "info",
             label: "Info",
             content: (
-              <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Nama Proyek</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{project.name}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Customer</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">
-                      <Link href={`/master/customers/${project.customer.id}`}>{project.customer.name}</Link>
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium"><span className={`status-badge status-${project.status}`}>{project.status}</span></span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal Mulai</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{project.startDate ? formatDate(project.startDate) : "-"}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal Selesai</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{project.endDate ? formatDate(project.endDate) : "-"}</span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
-                    <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(project.createdAt)}</span>
-                  </div>
-                  {project.notes && (
-                    <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
-                      <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
-                      <span className="text-[0.9375rem] text-foreground font-medium">{project.notes}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <DetailCard>
+                {project.documentNo && (
+                  <DetailField label="No. Dokumen" value={project.documentNo} mono />
+                )}
+                <DetailField label="Nama Proyek" value={project.name} />
+                <DetailField
+                  label="Customer"
+                  value={<Link href={`/master/customers/${project.customer.id}`}>{project.customer.name}</Link>}
+                />
+                <DetailField label="Status" value={<StatusChip status={project.status} />} />
+                <DetailField label="Tanggal Mulai" value={project.startDate ? formatDate(project.startDate) : "-"} />
+                <DetailField label="Tanggal Selesai" value={project.endDate ? formatDate(project.endDate) : "-"} />
+                <DetailField label="Dibuat" value={formatDate(project.createdAt)} />
+                {project.customerVehicle && (
+                  <DetailField
+                    label="Kendaraan"
+                    value={`${project.customerVehicle.licensePlate || "-"} — ${[project.customerVehicle.vehicle.variant?.model?.brand?.name, project.customerVehicle.vehicle.variant?.model?.name, project.customerVehicle.vehicle.variant?.name].filter(Boolean).join(" ") || "-"}`}
+                  />
+                )}
+                {workOrder && (
+                  <DetailField
+                    label="Work Order"
+                    value={<Link href={`/manufacturing/work-orders/${workOrder.id}`} className="text-primary hover:underline font-mono">{workOrder.documentNo}</Link>}
+                  />
+                )}
+                {project.description && (
+                  <DetailField label="Deskripsi" value={<span className="whitespace-pre-wrap">{project.description}</span>} colSpan="full" />
+                )}
+                {project.notes && (
+                  <DetailField label="Catatan" value={project.notes} colSpan="full" />
+                )}
+              </DetailCard>
             ),
           },
           {
@@ -113,24 +125,22 @@ export default async function ProjectDetailPage({
                   {project.items.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th>Deskripsi</th>
-                          <th style={{ textAlign: "right" }}>Qty</th>
-                          <th style={{ textAlign: "right" }}>Biaya</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Deskripsi</DetailTableTh>
+                        <DetailTableTh align="right">Qty</DetailTableTh>
+                        <DetailTableTh align="right">Biaya</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {project.items.map((item) => (
-                          <tr key={item.id}>
-                            <td>{item.description || `Item #${item.itemId}`}</td>
-                            <td className="text-right">{Number(item.qty)}</td>
-                            <td className="text-right">{formatCurrency(Number(item.cost))}</td>
-                          </tr>
+                          <DetailTableRow key={item.id}>
+                            <DetailTableTd>{item.description || `Item #${item.itemId}`}</DetailTableTd>
+                            <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -148,24 +158,22 @@ export default async function ProjectDetailPage({
                   {project.stages.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada tahapan</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th>Nama</th>
-                          <th>Status</th>
-                          <th style={{ textAlign: "right" }}>Progress</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Nama</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                        <DetailTableTh align="right">Progress</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {project.stages.map((stage) => (
-                          <tr key={stage.id}>
-                            <td>{stage.name}</td>
-                            <td><span className={`status-badge status-${stage.status}`}>{stage.status}</span></td>
-                            <td className="text-right">{stage.progress[0]?.percentage ?? 0}%</td>
-                          </tr>
+                          <DetailTableRow key={stage.id}>
+                            <DetailTableTd>{stage.name}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={stage.status} /></DetailTableTd>
+                            <DetailTableTd align="right">{stage.progress[0]?.percentage ?? 0}%</DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -184,21 +192,24 @@ export default async function ProjectDetailPage({
                   {quotations.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada quotation</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Tanggal</th><th>Total</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh align="right">Total</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {quotations.map((q) => (
-                          <tr key={q.id}>
-                            <td className="font-mono"><Link href={`/sales/quotations/${q.id}`}>{q.documentNo}</Link></td>
-                            <td>{formatDate(q.date)}</td>
-                            <td className="text-right">{formatCurrency(Number(q.grandTotal))}</td>
-                            <td><StatusChip status={q.status} /></td>
-                          </tr>
+                          <DetailTableRow key={q.id}>
+                            <DetailTableTd className="font-mono"><Link href={`/sales/quotations/${q.id}`}>{q.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(q.grandTotal))}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -217,22 +228,26 @@ export default async function ProjectDetailPage({
                   {invoices.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada invoice</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr><th>No. Dokumen</th><th>Tanggal</th><th>Total</th><th>Terbayar</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh align="right">Total</DetailTableTh>
+                        <DetailTableTh align="right">Terbayar</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {invoices.map((inv) => (
-                          <tr key={inv.id}>
-                            <td className="font-mono"><Link href={`/sales/invoices/${inv.id}`}>{inv.documentNo}</Link></td>
-                            <td>{formatDate(inv.date)}</td>
-                            <td className="text-right">{formatCurrency(Number(inv.grandTotal))}</td>
-                            <td className="text-right">{formatCurrency(Number(inv.paidAmount))}</td>
-                            <td><StatusChip status={inv.status} /></td>
-                          </tr>
+                          <DetailTableRow key={inv.id}>
+                            <DetailTableTd className="font-mono"><Link href={`/sales/invoices/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(inv.paidAmount))}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={inv.status} /></DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>
@@ -250,24 +265,22 @@ export default async function ProjectDetailPage({
                   {project.logs.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada log</p>
                   ) : (
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th>Aksi</th>
-                          <th>Catatan</th>
-                          <th>Tanggal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Aksi</DetailTableTh>
+                        <DetailTableTh>Catatan</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
                         {project.logs.map((log) => (
-                          <tr key={log.id}>
-                            <td>{log.action}</td>
-                            <td>{log.notes || "-"}</td>
-                            <td>{formatDate(log.createdAt)}</td>
-                          </tr>
+                          <DetailTableRow key={log.id}>
+                            <DetailTableTd>{log.action}</DetailTableTd>
+                            <DetailTableTd>{log.notes || "-"}</DetailTableTd>
+                            <DetailTableTd>{formatDate(log.createdAt)}</DetailTableTd>
+                          </DetailTableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </DetailTableBody>
+                    </DetailTable>
                   )}
                 </div>
               </div>

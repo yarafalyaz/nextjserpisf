@@ -6,7 +6,9 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVehicle } from "@/actions/vehicle.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function VehicleDetailPage({
   params,
@@ -40,48 +42,31 @@ export default async function VehicleDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Vehicles",href:"/vehicles"},{label:"Detail"}]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Kendaraan {vehicle.plateNumber || `#${vehicle.id}`}</h1>
-<div className="flex gap-2">
-          <Link href={`/vehicles/${vehicle.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
-          <DeleteButton id={vehicle.id} action={deleteVehicle} />
-                  <Link href="/vehicles" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
-      </div>
+      <PageHeader
+        title={`Kendaraan ${vehicle.plateNumber || `#${vehicle.id}`}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Vehicles", href: "/vehicles" },
+          { label: "Detail" },
+        ]}
+        actions={
+          <>
+            <Button href={`/vehicles/${vehicle.id}/edit`} variant="primary">Edit</Button>
+            <DeleteButton id={vehicle.id} action={deleteVehicle} />
+            <BackButton href="/vehicles" />
+          </>
+        }
+      />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Plat</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{vehicle.plateNumber || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Merek</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{brandName}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Model</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{modelName}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Varian</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{variantName}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tahun</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{vehicle.year || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Warna</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{vehicle.color || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(vehicle.createdAt)}</span>
-          </div>
-        </div>
-      </div>
+      <DetailCard>
+        <DetailField label="No. Plat" value={vehicle.plateNumber || "-"} mono />
+        <DetailField label="Merek" value={brandName} />
+        <DetailField label="Model" value={modelName} />
+        <DetailField label="Varian" value={variantName} />
+        <DetailField label="Tahun" value={vehicle.year || "-"} />
+        <DetailField label="Warna" value={vehicle.color || "-"} />
+        <DetailField label="Dibuat" value={formatDate(vehicle.createdAt)} />
+      </DetailCard>
 
       {/* Customer Vehicles */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -92,22 +77,20 @@ export default async function VehicleDetailPage({
           {vehicle.customerVehicles.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada pemilik terdaftar</p>
           ) : (
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th>Customer</th>
-                  <th>Terdaftar</th>
-                </tr>
-              </thead>
-              <tbody>
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Customer</DetailTableTh>
+                <DetailTableTh>Terdaftar</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
                 {vehicle.customerVehicles.map((cv) => (
-                  <tr key={cv.id}>
-                    <td><Link href={`/master/customers/${cv.customer.id}`}>{cv.customer.name}</Link></td>
-                    <td>{formatDate(cv.createdAt)}</td>
-                  </tr>
+                  <DetailTableRow key={cv.id}>
+                    <DetailTableTd><Link href={`/master/customers/${cv.customer.id}`}>{cv.customer.name}</Link></DetailTableTd>
+                    <DetailTableTd>{formatDate(cv.createdAt)}</DetailTableTd>
+                  </DetailTableRow>
                 ))}
-              </tbody>
-            </table>
+              </DetailTableBody>
+            </DetailTable>
           )}
         </div>
       </div>

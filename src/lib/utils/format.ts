@@ -122,16 +122,16 @@ export function formatRelativeTime(date: Date | string | null | undefined): stri
  */
 export function formatPercentage(
   value: number | string | null | undefined,
-  decimals: number = 1
+  decimals: number = 1,
+  /** If true, treat value as fraction (0.11 = 11%). Default false = value is already percentage. */
+  isFraction: boolean = false
 ): string {
   const numericValue = Number(value ?? 0)
 
   if (isNaN(numericValue)) return '0%'
 
-  // If value is already in percentage form (> 1), don't multiply
-  const percentage = numericValue <= 1 && numericValue > 0
-    ? numericValue * 100
-    : numericValue
+  // Fix #52: Explicit flag instead of ambiguous auto-detection
+  const percentage = isFraction ? numericValue * 100 : numericValue
 
   return `${formatNumber(percentage, decimals)}%`
 }
