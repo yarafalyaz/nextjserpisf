@@ -171,6 +171,9 @@ export async function createItem(formData: FormData) {
       minStock: Number(formData.get("minStock") || 0),
       cost: Number(formData.get("cost") || 0),
       price: Number(formData.get("price") || 0),
+      standardCost: formData.get("standardCost") ? Number(formData.get("standardCost")) : null,
+      costingMethod: formData.get("costingMethod") as string | null,
+      purchasePrice: formData.get("purchasePrice") ? Number(formData.get("purchasePrice")) : null,
       isActive: true,
     },
   })
@@ -199,6 +202,9 @@ export async function updateItem(itemId: number, formData: FormData) {
       minStock: Number(formData.get("minStock") || 0),
       cost: Number(formData.get("cost") || 0),
       price: Number(formData.get("price") || 0),
+      standardCost: formData.get("standardCost") ? Number(formData.get("standardCost")) : null,
+      costingMethod: formData.get("costingMethod") as string | null,
+      purchasePrice: formData.get("purchasePrice") ? Number(formData.get("purchasePrice")) : null,
     },
   })
 
@@ -461,11 +467,20 @@ export async function updatePosition(id: number, formData: FormData) {
 export async function createLead(formData: FormData) {
   await requirePermission("create_leads")
 
+  const leadNumber = await generateDocumentNumber("LEAD", "simple")
+
   const data = {
+    leadNumber,
     name: formData.get("name") as string,
     email: formData.get("email") as string || null,
     phone: formData.get("phone") as string || null,
     company: formData.get("company") as string || null,
+    contactName: formData.get("contactName") as string || null,
+    position: formData.get("position") as string || null,
+    industry: formData.get("industry") as string || null,
+    estimatedValue: formData.get("estimatedValue") ? Number(formData.get("estimatedValue")) : null,
+    expectedCloseDate: formData.get("expectedCloseDate") ? new Date(formData.get("expectedCloseDate") as string) : null,
+    address: formData.get("address") as string || null,
     source: formData.get("source") as string || null,
     notes: formData.get("notes") as string || null,
     status: "new",
@@ -486,6 +501,12 @@ export async function updateLead(id: number, formData: FormData) {
       email: formData.get("email") as string || null,
       phone: formData.get("phone") as string || null,
       company: formData.get("company") as string || null,
+      contactName: formData.get("contactName") as string || null,
+      position: formData.get("position") as string || null,
+      industry: formData.get("industry") as string || null,
+      estimatedValue: formData.get("estimatedValue") ? Number(formData.get("estimatedValue")) : null,
+      expectedCloseDate: formData.get("expectedCloseDate") ? new Date(formData.get("expectedCloseDate") as string) : null,
+      address: formData.get("address") as string || null,
       source: formData.get("source") as string || null,
       notes: formData.get("notes") as string || null,
     },
@@ -538,6 +559,14 @@ export async function createTax(formData: FormData) {
     data: {
       name: formData.get("name") as string,
       rate: Number(formData.get("rate") || 0),
+      code: formData.get("code") as string | null,
+      description: formData.get("description") as string | null,
+      type: formData.get("type") as string | null,
+      scope: formData.get("scope") as string | null,
+      isInclusive: formData.get("isInclusive") === "on",
+      isCompound: formData.get("isCompound") === "on",
+      effectiveFrom: formData.get("effectiveFrom") ? new Date(formData.get("effectiveFrom") as string) : null,
+      effectiveTo: formData.get("effectiveTo") ? new Date(formData.get("effectiveTo") as string) : null,
       isActive: true,
     },
   })
@@ -554,6 +583,14 @@ export async function updateTax(id: number, formData: FormData) {
     data: {
       name: formData.get("name") as string,
       rate: Number(formData.get("rate") || 0),
+      code: formData.get("code") as string | null,
+      description: formData.get("description") as string | null,
+      type: formData.get("type") as string | null,
+      scope: formData.get("scope") as string | null,
+      isInclusive: formData.get("isInclusive") === "on",
+      isCompound: formData.get("isCompound") === "on",
+      effectiveFrom: formData.get("effectiveFrom") ? new Date(formData.get("effectiveFrom") as string) : null,
+      effectiveTo: formData.get("effectiveTo") ? new Date(formData.get("effectiveTo") as string) : null,
     },
   })
 
@@ -588,6 +625,12 @@ export async function createCurrency(formData: FormData) {
       code: formData.get("code") as string,
       name: formData.get("name") as string,
       rate: Number(formData.get("rate") || 0),
+      symbol: formData.get("symbol") as string | null,
+      symbolPosition: formData.get("symbolPosition") as string | null,
+      decimalSeparator: formData.get("decimalSeparator") as string | null,
+      thousandsSeparator: formData.get("thousandsSeparator") as string | null,
+      decimalPlaces: formData.get("decimalPlaces") ? Number(formData.get("decimalPlaces")) : null,
+      isBase: formData.get("isBase") === "on",
       isActive: true,
     },
   })
@@ -605,6 +648,12 @@ export async function updateCurrency(id: number, formData: FormData) {
       code: formData.get("code") as string,
       name: formData.get("name") as string,
       rate: Number(formData.get("rate") || 0),
+      symbol: formData.get("symbol") as string | null,
+      symbolPosition: formData.get("symbolPosition") as string | null,
+      decimalSeparator: formData.get("decimalSeparator") as string | null,
+      thousandsSeparator: formData.get("thousandsSeparator") as string | null,
+      decimalPlaces: formData.get("decimalPlaces") ? Number(formData.get("decimalPlaces")) : null,
+      isBase: formData.get("isBase") === "on",
     },
   })
 

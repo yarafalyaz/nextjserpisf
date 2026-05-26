@@ -7,6 +7,32 @@ import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 
+// ==================== BANK STATEMENT ACTIONS ====================
+
+export async function createBankStatement(formData: FormData) {
+  const user = await requirePermission("create_journals")
+
+  const bankStatement = await prisma.bankStatement.create({
+    data: {
+      accountId: Number(formData.get("accountId")),
+      bankId: formData.get("bankId") ? Number(formData.get("bankId")) : null,
+      accountNumber: formData.get("accountNumber") as string | null,
+      date: new Date(formData.get("date") as string),
+      reference: formData.get("reference") as string | null,
+      periodStart: formData.get("periodStart") ? new Date(formData.get("periodStart") as string) : null,
+      periodEnd: formData.get("periodEnd") ? new Date(formData.get("periodEnd") as string) : null,
+      openingBalance: formData.get("openingBalance") ? Number(formData.get("openingBalance")) : 0,
+      closingBalance: formData.get("closingBalance") ? Number(formData.get("closingBalance")) : 0,
+      notes: formData.get("notes") as string | null,
+      status: "draft",
+      uploadedBy: Number(user.id),
+    },
+  })
+
+  revalidatePath("/finance/bank-statements")
+  return { success: true, id: bankStatement.id }
+}
+
 // ==================== JOURNAL ACTIONS ====================
 
 export async function createJournal(formData: FormData) {
@@ -26,6 +52,26 @@ export async function createJournal(formData: FormData) {
       createdBy: Number(user.id),
     },
   })
+
+  // Create journal entries with optional costCenterId
+  const entriesJson = formData.get("entries") as string | null
+  if (entriesJson) {
+    const entries = JSON.parse(entriesJson) as { accountId: number; debit: number; credit: number; memo: string; costCenterId?: number }[]
+    for (const entry of entries) {
+      if (entry.accountId) {
+        await prisma.journalEntry.create({
+          data: {
+            journalId: journal.id,
+            accountId: entry.accountId,
+            debit: entry.debit || 0,
+            credit: entry.credit || 0,
+            memo: entry.memo || null,
+            costCenterId: entry.costCenterId || null,
+          },
+        })
+      }
+    }
+  }
 
   // Associate uploaded attachments with the new journal
   const attachmentIds = formData.get("attachmentIds") as string | null
@@ -89,6 +135,7 @@ export async function createExpense(formData: FormData) {
       employeeId: formData.get("employeeId") ? Number(formData.get("employeeId")) : null,
       accountId: Number(formData.get("accountId")),
       paidFromAccountId: formData.get("paidFromAccountId") ? Number(formData.get("paidFromAccountId")) : null,
+      costCenterId: formData.get("costCenterId") ? Number(formData.get("costCenterId")) : null,
       amount: Number(formData.get("amount")),
       date: new Date(formData.get("date") as string),
       description: formData.get("description") as string | null,
@@ -184,11 +231,18 @@ export async function createPettyCash(formData: FormData) {
 export async function createBankReconciliation(formData: FormData) {
   const user = await requirePermission("create_journals")
 
+  const reconciliationNumber = await generateDocumentNumber("REC")
+
   const reconciliation = await prisma.bankReconciliation.create({
     data: {
+      reconciliationNumber,
       accountId: Number(formData.get("accountId")),
       statementDate: new Date(formData.get("statementDate") as string),
       statementBalance: Number(formData.get("statementBalance")),
+      periodStart: formData.get("periodStart") ? new Date(formData.get("periodStart") as string) : null,
+      periodEnd: formData.get("periodEnd") ? new Date(formData.get("periodEnd") as string) : null,
+      bookBalance: formData.get("bookBalance") ? Number(formData.get("bookBalance")) : 0,
+      notes: formData.get("notes") as string | null,
       status: "draft",
       createdBy: Number(user.id),
     },
@@ -256,11 +310,30 @@ export async function createCostCenter(formData: FormData) {
     data: {
       code: formData.get("code") as string,
       name: formData.get("name") as string,
+      description: formData.get("description") as string | null,
+      isActive: formData.get("isActive") === "on",
     },
   })
 
   revalidatePath("/finance/cost-centers")
   return { success: true, id: costCenter.id }
+}
+
+export async function updateCostCenter(id: number, formData: FormData) {
+  await requirePermission("edit_cost_centers")
+
+  await prisma.costCenter.update({
+    where: { id },
+    data: {
+      code: formData.get("code") as string,
+      name: formData.get("name") as string,
+      description: formData.get("description") as string | null,
+      isActive: formData.get("isActive") === "on",
+    },
+  })
+
+  revalidatePath("/finance/cost-centers")
+  return { success: true }
 }
 
 // ==================== DELETE ACTIONS ====================
@@ -371,6 +444,7 @@ export async function updateExpense(id: number, formData: FormData) {
       employeeId: formData.get("employeeId") ? Number(formData.get("employeeId")) : null,
       accountId: Number(formData.get("accountId")),
       paidFromAccountId: formData.get("paidFromAccountId") ? Number(formData.get("paidFromAccountId")) : null,
+      costCenterId: formData.get("costCenterId") ? Number(formData.get("costCenterId")) : null,
       amount: Number(formData.get("amount")),
       date: new Date(formData.get("date") as string),
       description: formData.get("description") as string | null,

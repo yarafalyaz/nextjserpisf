@@ -13,12 +13,12 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, TextArea, Select, ComboBox, ListBox, Label, InputGroup } from "@heroui/react"
 
 interface ExpenseFormProps {
-  accounts: { id: number; code: string; name: string; type: string
-}[]
+  accounts: { id: number; code: string; name: string; type: string }[]
+  costCenters?: { id: number; code: string; name: string }[]
   expense?: any
 }
 
-export function ExpenseForm({ accounts, expense }: ExpenseFormProps) {
+export function ExpenseForm({ accounts, costCenters = [], expense }: ExpenseFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -162,6 +162,29 @@ export function ExpenseForm({ accounts, expense }: ExpenseFormProps) {
             )}
           />
         </div>
+
+        {costCenters.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <ComboBox
+              name="costCenterId"
+              defaultSelectedKey={expense?.costCenterId ? String(expense.costCenterId) : undefined}
+              className="w-full"
+            >
+              <Label>Cost Center</Label>
+              <ComboBox.InputGroup><Input placeholder="Cari cost center..." /><ComboBox.Trigger /></ComboBox.InputGroup>
+              <ComboBox.Popover>
+                <ListBox>
+                  {costCenters.map((cc) => (
+                    <ListBox.Item key={cc.id} id={String(cc.id)} textValue={`${cc.code} - ${cc.name}`}>
+                      {cc.code} - {cc.name}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </ComboBox.Popover>
+            </ComboBox>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>

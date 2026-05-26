@@ -28,6 +28,9 @@ interface ItemFormProps {
     minStock: number
     cost: number
     price: number
+    standardCost: number | null
+    costingMethod: string | null
+    purchasePrice: number | null
   }
   categories: { id: number; name: string }[]
   brands: { id: number; name: string }[]
@@ -63,6 +66,9 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
       minStock: item?.minStock || 0,
       cost: item?.cost || 0,
       price: item?.price || 0,
+      standardCost: item?.standardCost || 0,
+      costingMethod: item?.costingMethod || undefined,
+      purchasePrice: item?.purchasePrice || 0,
     },
   })
 
@@ -321,6 +327,42 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="minStock">Minimum Stok</Label>
           <Input id="minStock" type="number" {...register("minStock", { valueAsNumber: true })} placeholder="0" />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="standardCost">Standard Cost (Rp)</Label>
+          <InputGroup>
+            <InputGroup.Prefix>Rp</InputGroup.Prefix>
+            <InputGroup.Input id="standardCost" type="number" step="0.01" {...register("standardCost", { valueAsNumber: true })} placeholder="0" />
+          </InputGroup>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Controller
+            name="costingMethod"
+            control={control}
+            render={({ field }) => (
+              <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : undefined)} className="w-full">
+                <Label>Metode Costing</Label>
+                <Select.Trigger><Select.Value placeholder="Pilih metode" /><Select.Indicator /></Select.Trigger>
+                <Select.Popover>
+                  <ListBox>
+                    <ListBox.Item key="average" id="average" textValue="Average">Average<ListBox.ItemIndicator /></ListBox.Item>
+                    <ListBox.Item key="fifo" id="fifo" textValue="FIFO">FIFO<ListBox.ItemIndicator /></ListBox.Item>
+                    <ListBox.Item key="standard" id="standard" textValue="Standard">Standard<ListBox.ItemIndicator /></ListBox.Item>
+                  </ListBox>
+                </Select.Popover>
+              </Select>
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="purchasePrice">Purchase Price (Rp)</Label>
+          <InputGroup>
+            <InputGroup.Prefix>Rp</InputGroup.Prefix>
+            <InputGroup.Input id="purchasePrice" type="number" step="0.01" {...register("purchasePrice", { valueAsNumber: true })} placeholder="0" />
+          </InputGroup>
         </div>
 
         <div className="flex flex-col gap-1.5">

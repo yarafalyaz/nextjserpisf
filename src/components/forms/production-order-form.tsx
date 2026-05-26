@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createProductionOrder, updateProductionOrder } from "@/actions/manufacturing.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, ComboBox, ListBox, Label } from "@heroui/react"
+import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { AppDatePicker } from "@/components/ui/date-picker"
 
 interface ProductionOrderFormProps {
-  products: { id: number; name: string; sku: string | null
-}[]
+  products: { id: number; name: string; sku: string | null }[]
   order?: any
 }
 
@@ -38,7 +38,7 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="productId" className="w-full" isRequired>
+          <ComboBox name="productId" defaultSelectedKey={order?.productId ? String(order.productId) : undefined} className="w-full" isRequired>
             <Label>Produk *</Label>
             <ComboBox.InputGroup><Input placeholder="Cari produk..." /><ComboBox.Trigger /></ComboBox.InputGroup>
             <ComboBox.Popover>
@@ -53,6 +53,24 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="qty">Jumlah Produksi *</Label>
           <Input id="qty" name="qty" type="number" placeholder="Qty" min={1} required defaultValue={order?.qty ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <AppDatePicker
+            label="Tanggal Mulai"
+            name="startDate"
+            defaultValue={order?.startDate ? new Date(order.startDate).toISOString().split("T")[0] : undefined}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <AppDatePicker
+            label="Tanggal Selesai"
+            name="endDate"
+            defaultValue={order?.endDate ? new Date(order.endDate).toISOString().split("T")[0] : undefined}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 col-span-full">
+          <Label htmlFor="notes">Catatan</Label>
+          <TextArea id="notes" name="notes" rows={3} placeholder="Catatan produksi..." defaultValue={order?.notes ?? ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

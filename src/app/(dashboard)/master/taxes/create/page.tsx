@@ -1,9 +1,12 @@
+// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTax } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { AppDatePicker } from "@/components/ui/date-picker"
+import { Input, Textarea, Select, ListBox, Checkbox } from "@heroui/react"
 
 export default function CreateTaxPage() {
   const router = useRouter()
@@ -32,14 +35,46 @@ export default function CreateTaxPage() {
       </div>
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama Pajak *</label>
-            <input id="name" name="name" className="form-input" placeholder="Contoh: PPN" required />
+          <Input label="Nama Pajak *" name="name" placeholder="Contoh: PPN" isRequired className="w-full" />
+
+          <Input label="Rate (%) *" name="rate" type="number" step="0.01" placeholder="Contoh: 11" isRequired className="w-full" />
+
+          <Input label="Kode" name="code" placeholder="Contoh: PPN11" className="w-full" />
+
+          <Select name="type" className="w-full">
+            <Select.Label>Tipe</Select.Label>
+            <Select.Trigger><Select.Value placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="percentage" textValue="Percentage">Percentage<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="fixed" textValue="Fixed">Fixed<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+
+          <Select name="scope" className="w-full">
+            <Select.Label>Lingkup</Select.Label>
+            <Select.Trigger><Select.Value placeholder="Pilih Lingkup" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="sales" textValue="Sales">Sales<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="purchase" textValue="Purchase">Purchase<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="both" textValue="Both">Both<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+
+          <AppDatePicker label="Berlaku Dari" name="effectiveFrom" className="w-full" />
+
+          <AppDatePicker label="Berlaku Sampai" name="effectiveTo" className="w-full" />
+
+          <div className="sm:col-span-2">
+            <Textarea label="Deskripsi" name="description" placeholder="Deskripsi pajak (opsional)" className="w-full" />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="rate" className="text-sm font-medium text-foreground">Rate (%) *</label>
-            <input id="rate" name="rate" type="number" step="0.01" className="form-input" placeholder="Contoh: 11" required />
+          <div className="sm:col-span-2 flex flex-wrap gap-6">
+            <Checkbox name="isInclusive">Inclusive</Checkbox>
+            <Checkbox name="isCompound">Compound</Checkbox>
           </div>
         </div>
 

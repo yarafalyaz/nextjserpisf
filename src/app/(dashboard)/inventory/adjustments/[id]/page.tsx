@@ -65,6 +65,28 @@ export default async function StockAdjustmentDetailPage({
               <span className="text-[0.9375rem] text-foreground font-medium">{adjustment.reason}</span>
             </div>
           )}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tipe</span>
+            <span className="text-[0.9375rem] text-foreground font-medium capitalize">{adjustment.type}</span>
+          </div>
+          {adjustment.notes && (
+            <div className="flex flex-col gap-1" style={{ gridColumn: "1 / -1" }}>
+              <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{adjustment.notes}</span>
+            </div>
+          )}
+          {adjustment.approvedBy && (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted uppercase tracking-wide">Disetujui Oleh</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">User #{adjustment.approvedBy}</span>
+            </div>
+          )}
+          {adjustment.approvedAt && (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted uppercase tracking-wide">Disetujui Pada</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(adjustment.approvedAt)}</span>
+            </div>
+          )}
         </div>
       </div>
 

@@ -17,6 +17,7 @@ interface TicketFormProps {
 export function TicketForm({ customers, users, ticket }: TicketFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const isEdit = !!ticket?.id
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -38,6 +39,12 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
   return (
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {isEdit && ticket?.ticketNumber && (
+          <div className="flex flex-col gap-1.5 col-span-full">
+            <Label htmlFor="ticketNumber">No. Tiket</Label>
+            <Input id="ticketNumber" value={ticket.ticketNumber} readOnly className="bg-surface-secondary" />
+          </div>
+        )}
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="subject">Subject *</Label>
           <Input id="subject" name="subject" placeholder="Subject ticket" required defaultValue={ticket?.subject ?? ""} />
@@ -60,7 +67,34 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
           </ComboBox>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Select name="priority" defaultSelectedKey="medium" className="w-full">
+          <Label htmlFor="customerName">Nama Customer (Non-Registered)</Label>
+          <Input id="customerName" name="customerName" placeholder="Nama customer" defaultValue={ticket?.customerName ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="customerEmail">Email Customer</Label>
+          <Input id="customerEmail" name="customerEmail" type="email" placeholder="email@example.com" defaultValue={ticket?.customerEmail ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="customerPhone">Telepon Customer</Label>
+          <Input id="customerPhone" name="customerPhone" type="tel" inputMode="numeric" placeholder="08xxxxxxxxxx" defaultValue={ticket?.customerPhone ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Select name="type" defaultSelectedKey={ticket?.type || undefined} className="w-full">
+            <Label>Tipe</Label>
+            <Select.Trigger><Select.Value placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="inquiry" textValue="Inquiry">Inquiry<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="complaint" textValue="Complaint">Complaint<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="support" textValue="Support">Support<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="feedback" textValue="Feedback">Feedback<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="other" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Select name="priority" defaultSelectedKey={ticket?.priority || "medium"} className="w-full">
             <Label>Prioritas *</Label>
             <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
             <Select.Popover>
@@ -85,6 +119,12 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
             </ComboBox.Popover>
           </ComboBox>
         </div>
+        {isEdit && (
+          <div className="flex flex-col gap-1.5 col-span-full">
+            <Label htmlFor="resolutionNotes">Catatan Resolusi</Label>
+            <TextArea id="resolutionNotes" name="resolutionNotes" rows={3} placeholder="Catatan penyelesaian tiket..." defaultValue={ticket?.resolutionNotes ?? ""} />
+          </div>
+        )}
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>

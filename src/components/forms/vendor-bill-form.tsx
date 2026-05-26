@@ -13,11 +13,12 @@ interface BillItem {
   itemId: string
   qty: number
   unitPrice: number
+  discountPercent: number
+  taxPercent: number
 }
 
 interface VendorBillFormProps {
-  vendors: { id: number; name: string
-}[]
+  vendors: { id: number; name: string }[]
   bill?: any
   items: { id: number; sku: string; name: string; cost: any; unitOfMeasure: string }[]
 }
@@ -27,10 +28,10 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [dueDate, setDueDate] = useState("")
-  const [billItems, setBillItems] = useState<BillItem[]>([{ itemId: "", qty: 1, unitPrice: 0 }])
+  const [billItems, setBillItems] = useState<BillItem[]>([{ itemId: "", qty: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 }])
 
   function addItem() {
-    setBillItems([...billItems, { itemId: "", qty: 1, unitPrice: 0 }])
+    setBillItems([...billItems, { itemId: "", qty: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 }])
   }
 
   function removeItem(index: number) {
@@ -47,7 +48,21 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
     setBillItems(updated)
   }
 
+  function calcLineTotal(item: BillItem) {
+    const base = item.qty * item.unitPrice
+    const discount = base * (item.discountPercent / 100)
+    const afterDiscount = base - discount
+    const tax = afterDiscount * (item.taxPercent / 100)
+    return afterDiscount + tax
+  }
+
   const subtotal = billItems.reduce((sum, item) => sum + item.qty * item.unitPrice, 0)
+  const totalDiscount = billItems.reduce((sum, item) => sum + (item.qty * item.unitPrice * item.discountPercent / 100), 0)
+  const totalTax = billItems.reduce((sum, item) => {
+    const afterDisc = item.qty * item.unitPrice * (1 - item.discountPercent / 100)
+    return sum + afterDisc * (item.taxPercent / 100)
+  }, 0)
+  const grandTotal = subtotal - totalDiscount + totalTax
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -55,9 +70,10 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
       try {
         const formData = new FormData(e.currentTarget)
         formData.set("subtotal", String(subtotal))
-        formData.set("tax", "0")
-        formData.set("grandTotal", String(subtotal))
-        const { createVendorBill } = await import("@/actions/purchase.actions")
+        formData.set("tax", String(totalTax))
+        formData.set("grandTotal", String(grandTotal))
+        formData.set("items", JSON.stringify(billItems))
+        const { createVendorBill, updateVendorBill } = await import("@/actions/purchase.actions")
         bill?.id ? await updateVendorBill(bill.id, formData) : await createVendorBill(formData)
         showSuccess(bill?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/purchase/bills")
@@ -72,7 +88,7 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="vendorId" className="w-full" isRequired>
+          <ComboBox name="vendorId" defaultSelectedKey={bill?.vendorId ? String(bill.vendorId) : undefined} className="w-full" isRequired>
             <Label>Vendor *</Label>
             <ComboBox.InputGroup><Input placeholder="Cari vendor..." /><ComboBox.Trigger /></ComboBox.InputGroup>
             <ComboBox.Popover>
@@ -96,49 +112,98 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
         </div>
       </div>
 
-      <div style={{ marginTop: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Item</h3>
-          <button type="button" onClick={addItem} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Plus size={14} /> Tambah Item</button>
+      <div className="mt-6">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-base font-semibold text-foreground">Item</h3>
+          <button type="button" onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">
+            <Plus size={14} /> Tambah Item
+          </button>
         </div>
-        <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Harga Satuan</th>
-              <th>Total</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {billItems.map((item, idx) => (
-              <tr key={idx}>
-                <td>
-                  <select value={item.itemId} onChange={(e) => updateItem(idx, "itemId", e.target.value)} className="form-input" required>
-                    <option value="">Pilih Item</option>
-                    {items.map((i) => <option key={i.id} value={i.id}>{i.sku} - {i.name}</option>)}
-                  </select>
-                </td>
-                <td><input type="number" value={item.qty} onChange={(e) => updateItem(idx, "qty", Number(e.target.value))} className="form-input" min={1} style={{ width: "80px" }} /></td>
-                <td><input type="number" value={item.unitPrice} onChange={(e) => updateItem(idx, "unitPrice", Number(e.target.value))} className="form-input" min={0} style={{ width: "120px" }} /></td>
-                <td className="text-right">{(item.qty * item.unitPrice).toLocaleString("id-ID")}</td>
-                <td>
-                  {billItems.length > 1 && (
-                    <button type="button" onClick={() => removeItem(idx)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost"><Trash2 size={14} /></button>
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-default">
+                <th className="text-left py-2 px-2 font-medium text-secondary" style={{ minWidth: "200px" }}>Item</th>
+                <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "80px" }}>Qty</th>
+                <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "120px" }}>Harga</th>
+                <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "80px" }}>Disc %</th>
+                <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "80px" }}>Tax %</th>
+                <th className="text-right py-2 px-2 font-medium text-secondary" style={{ width: "120px" }}>Total</th>
+                <th style={{ width: "40px" }}></th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={3} className="text-right"><strong>Grand Total</strong></td>
-              <td className="text-right"><strong>{subtotal.toLocaleString("id-ID")}</strong></td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {billItems.map((item, idx) => (
+                <tr key={idx} className="border-b border-default/50">
+                  <td className="py-2 px-2">
+                    <ComboBox
+                      selectedKey={item.itemId || null}
+                      onSelectionChange={(key) => updateItem(idx, "itemId", key ? String(key) : "")}
+                      className="w-full"
+                    >
+                      <ComboBox.InputGroup><Input placeholder="Cari item..." /><ComboBox.Trigger /></ComboBox.InputGroup>
+                      <ComboBox.Popover>
+                        <ListBox>
+                          {items.map((i) => (
+                            <ListBox.Item key={i.id} id={String(i.id)} textValue={`${i.sku} - ${i.name}`}>
+                              {i.sku} - {i.name}
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </ComboBox.Popover>
+                    </ComboBox>
+                  </td>
+                  <td className="py-2 px-2">
+                    <Input type="number" value={String(item.qty)} onChange={(e) => updateItem(idx, "qty", Number(e.target.value))} min={1} className="w-full" />
+                  </td>
+                  <td className="py-2 px-2">
+                    <Input type="number" value={String(item.unitPrice)} onChange={(e) => updateItem(idx, "unitPrice", Number(e.target.value))} min={0} className="w-full" />
+                  </td>
+                  <td className="py-2 px-2">
+                    <Input type="number" value={String(item.discountPercent)} onChange={(e) => updateItem(idx, "discountPercent", Number(e.target.value))} min={0} max={100} step={0.01} className="w-full" />
+                  </td>
+                  <td className="py-2 px-2">
+                    <Input type="number" value={String(item.taxPercent)} onChange={(e) => updateItem(idx, "taxPercent", Number(e.target.value))} min={0} max={100} step={0.01} className="w-full" />
+                  </td>
+                  <td className="py-2 px-2 text-right font-medium">{calcLineTotal(item).toLocaleString("id-ID")}</td>
+                  <td className="py-2 px-2 text-center">
+                    {billItems.length > 1 && (
+                      <button type="button" onClick={() => removeItem(idx)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-default">
+                <td colSpan={5} className="text-right py-2 px-2 text-sm text-secondary">Subtotal</td>
+                <td className="text-right py-2 px-2 font-medium">{subtotal.toLocaleString("id-ID")}</td>
+                <td></td>
+              </tr>
+              {totalDiscount > 0 && (
+                <tr>
+                  <td colSpan={5} className="text-right py-1 px-2 text-sm text-secondary">Diskon</td>
+                  <td className="text-right py-1 px-2 text-danger">-{totalDiscount.toLocaleString("id-ID")}</td>
+                  <td></td>
+                </tr>
+              )}
+              {totalTax > 0 && (
+                <tr>
+                  <td colSpan={5} className="text-right py-1 px-2 text-sm text-secondary">Pajak</td>
+                  <td className="text-right py-1 px-2">{totalTax.toLocaleString("id-ID")}</td>
+                  <td></td>
+                </tr>
+              )}
+              <tr>
+                <td colSpan={5} className="text-right py-2 px-2 text-sm font-semibold">Grand Total</td>
+                <td className="text-right py-2 px-2 font-bold text-primary">{grandTotal.toLocaleString("id-ID")}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
 
       <FormAttachmentUpload referenceType="vendor_bill" />

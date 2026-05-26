@@ -53,11 +53,18 @@ export async function createProductionOrder(formData: FormData) {
     include: { materials: true },
   })
 
+  const startDate = formData.get("startDate") as string | null
+  const endDate = formData.get("endDate") as string | null
+  const notes = formData.get("notes") as string | null
+
   const productionOrder = await prisma.productionOrder.create({
     data: {
       documentNo,
       productId,
       qty,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      notes,
       status: "draft",
       createdBy: Number(user.id),
       materials: {
@@ -118,20 +125,18 @@ export async function updateProductionOrder(id: number, formData: FormData) {
     include: { materials: true },
   })
 
+  const startDate = formData.get("startDate") as string | null
+  const endDate = formData.get("endDate") as string | null
+  const notes = formData.get("notes") as string | null
+
   const productionOrder = await prisma.productionOrder.update({
     where: { id },
     data: {
-      documentNo,
       productId,
       qty,
-      status: "draft",
-      createdBy: Number(user.id),
-      materials: {
-        create: product.materials.map((m) => ({
-          itemId: m.itemId,
-          qty: Number(m.qty) * qty,
-        })),
-      },
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      notes,
     },
   })
 

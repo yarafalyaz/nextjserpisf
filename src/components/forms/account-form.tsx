@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createAccount, updateAccount } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Select, ComboBox, ListBox, Label } from "@heroui/react"
+import { Input, Select, ComboBox, ListBox, Label, TextArea } from "@heroui/react"
 
 interface AccountFormProps {
   accounts: { id: number; code: string; name: string
@@ -74,6 +74,22 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
               </ListBox>
             </ComboBox.Popover>
           </ComboBox>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Select name="normalBalance" className="w-full">
+            <Label>Saldo Normal</Label>
+            <Select.Trigger><Select.Value placeholder="Pilih Saldo Normal" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="DEBIT" textValue="DEBIT">DEBIT<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="CREDIT" textValue="CREDIT">CREDIT<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5 col-span-full">
+          <Label htmlFor="description">Deskripsi</Label>
+          <TextArea id="description" name="description" rows={2} placeholder="Deskripsi akun" defaultValue={account?.description ?? ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

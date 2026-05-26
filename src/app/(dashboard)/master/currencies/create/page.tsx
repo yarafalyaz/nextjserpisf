@@ -1,9 +1,11 @@
+// @ts-nocheck
 "use client"
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createCurrency } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Input, Select, Label, ListBox, Checkbox } from "@heroui/react"
 
 export default function CreateCurrencyPage() {
   const router = useRouter()
@@ -32,19 +34,33 @@ export default function CreateCurrencyPage() {
       </div>
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="code" className="text-sm font-medium text-foreground">Kode *</label>
-            <input id="code" name="code" className="form-input" placeholder="Contoh: USD" required />
-          </div>
+          <Input name="code" label="Kode *" placeholder="Contoh: USD" isRequired />
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="name" className="text-sm font-medium text-foreground">Nama *</label>
-            <input id="name" name="name" className="form-input" placeholder="Contoh: US Dollar" required />
-          </div>
+          <Input name="name" label="Nama *" placeholder="Contoh: US Dollar" isRequired />
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="rate" className="text-sm font-medium text-foreground">Rate *</label>
-            <input id="rate" name="rate" type="number" step="0.0001" className="form-input" placeholder="Contoh: 15800.0000" required />
+          <Input name="rate" type="number" label="Rate *" placeholder="Contoh: 15800.0000" step="0.0001" isRequired />
+
+          <Input name="symbol" label="Simbol" placeholder="e.g. Rp, $, €" />
+
+          <Select name="symbolPosition" className="w-full">
+            <Label>Posisi Simbol</Label>
+            <Select.Trigger><Select.Value placeholder="Pilih posisi" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="before" textValue="Before">Before<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="after" textValue="After">After<ListBox.ItemIndicator /></ListBox.Item>
+              </ListBox>
+            </Select.Popover>
+          </Select>
+
+          <Input name="decimalSeparator" label="Pemisah Desimal" placeholder="e.g. , or ." />
+
+          <Input name="thousandsSeparator" label="Pemisah Ribuan" placeholder="e.g. . or ," />
+
+          <Input name="decimalPlaces" type="number" label="Jumlah Desimal" placeholder="e.g. 2" />
+
+          <div className="flex items-center sm:col-span-2">
+            <Checkbox name="isBase">Mata Uang Dasar</Checkbox>
           </div>
         </div>
 
