@@ -8,12 +8,12 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
 
 interface AssetTransferFormProps {
-  assets: { id: number; code: string; name: string; location: string | null
-}[]
+  assets: { id: number; code: string; name: string; location: string | null }[]
+  employees?: { id: number; name: string }[]
   transfer?: any
 }
 
-export function AssetTransferForm({ assets, transfer }: AssetTransferFormProps) {
+export function AssetTransferForm({ assets, employees = [], transfer }: AssetTransferFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [transferDate, setTransferDate] = useState(new Date().toISOString().split("T")[0])
@@ -64,6 +64,36 @@ export function AssetTransferForm({ assets, transfer }: AssetTransferFormProps) 
         <div className="flex flex-col gap-1.5">
           <AppDatePicker label="Tanggal Transfer *" name="transferDate" value={transferDate} onChange={setTransferDate} required />
         </div>
+        {employees.length > 0 && (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <ComboBox name="fromEmployeeId" defaultSelectedKey={transfer?.fromEmployeeId ? String(transfer.fromEmployeeId) : undefined} className="w-full">
+                <Label>Dari Karyawan</Label>
+                <ComboBox.InputGroup><Input placeholder="Cari karyawan..." /><ComboBox.Trigger /></ComboBox.InputGroup>
+                <ComboBox.Popover>
+                  <ListBox>
+                    {employees.map((emp) => (
+                      <ListBox.Item key={emp.id} id={String(emp.id)} textValue={emp.name}>{emp.name}</ListBox.Item>
+                    ))}
+                  </ListBox>
+                </ComboBox.Popover>
+              </ComboBox>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <ComboBox name="toEmployeeId" defaultSelectedKey={transfer?.toEmployeeId ? String(transfer.toEmployeeId) : undefined} className="w-full">
+                <Label>Ke Karyawan</Label>
+                <ComboBox.InputGroup><Input placeholder="Cari karyawan..." /><ComboBox.Trigger /></ComboBox.InputGroup>
+                <ComboBox.Popover>
+                  <ListBox>
+                    {employees.map((emp) => (
+                      <ListBox.Item key={emp.id} id={String(emp.id)} textValue={emp.name}>{emp.name}</ListBox.Item>
+                    ))}
+                  </ListBox>
+                </ComboBox.Popover>
+              </ComboBox>
+            </div>
+          </>
+        )}
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
           <TextArea id="notes" name="notes" rows={3} placeholder="Catatan transfer..." />

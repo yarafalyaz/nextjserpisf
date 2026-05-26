@@ -30,6 +30,10 @@ export function AssetCategoryForm({ category }: { category?: any } = {}) {
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="code">Kode</Label>
+          <Input id="code" name="code" placeholder="Contoh: AC-001" defaultValue={category?.code ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Kategori *</Label>
           <Input id="name" name="name" placeholder="Nama kategori aset" required defaultValue={category?.name ?? ""} />
         </div>
