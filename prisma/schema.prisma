@@ -81,30 +81,30 @@ model Permission {
 }
 
 model SystemSetting {
-  id                          Int      @id @default(autoincrement())
-  companyName                 String?  @map("company_name")
-  companyEmail                String?  @map("company_email")
-  companyPhone                String?  @map("company_phone")
-  companyAddress              String?  @map("company_address") @db.Text
-  companyLogo                 String?  @map("company_logo")
-  costingMethod               String   @default("FIFO") @map("costing_method")
-  fiscalYearStartMonth        Int      @default(1) @map("fiscal_year_start_month")
-  currencyCode                String   @default("IDR") @map("currency_code")
-  currencySymbol              String   @default("Rp ") @map("currency_symbol")
-  salesReceivableAccountId    Int?     @map("sales_receivable_account_id")
-  salesRevenueAccountId       Int?     @map("sales_revenue_account_id")
-  salesTaxAccountId           Int?     @map("sales_tax_account_id")
-  purchasePayableAccountId    Int?     @map("purchase_payable_account_id")
-  purchaseInventoryAccountId  Int?     @map("purchase_inventory_account_id")
-  purchaseTaxAccountId        Int?     @map("purchase_tax_account_id")
-  inventoryAccountId          Int?     @map("inventory_account_id")
-  inventoryAdjustmentAccountId Int?    @map("inventory_adjustment_account_id")
-  wipAccountId                Int?     @map("wip_account_id")
-  materialExpenseAccountId    Int?     @map("material_expense_account_id")
-  pettyCashAccountId          Int?     @map("petty_cash_account_id")
-  salesReturnAccountId        Int?     @map("sales_return_account_id")
-  createdAt                   DateTime @default(now()) @map("created_at")
-  updatedAt                   DateTime @updatedAt @map("updated_at")
+  id                           Int      @id @default(autoincrement())
+  companyName                  String?  @map("company_name")
+  companyEmail                 String?  @map("company_email")
+  companyPhone                 String?  @map("company_phone")
+  companyAddress               String?  @map("company_address") @db.Text
+  companyLogo                  String?  @map("company_logo")
+  costingMethod                String   @default("FIFO") @map("costing_method")
+  fiscalYearStartMonth         Int      @default(1) @map("fiscal_year_start_month")
+  currencyCode                 String   @default("IDR") @map("currency_code")
+  currencySymbol               String   @default("Rp ") @map("currency_symbol")
+  salesReceivableAccountId     Int?     @map("sales_receivable_account_id")
+  salesRevenueAccountId        Int?     @map("sales_revenue_account_id")
+  salesTaxAccountId            Int?     @map("sales_tax_account_id")
+  purchasePayableAccountId     Int?     @map("purchase_payable_account_id")
+  purchaseInventoryAccountId   Int?     @map("purchase_inventory_account_id")
+  purchaseTaxAccountId         Int?     @map("purchase_tax_account_id")
+  inventoryAccountId           Int?     @map("inventory_account_id")
+  inventoryAdjustmentAccountId Int?     @map("inventory_adjustment_account_id")
+  wipAccountId                 Int?     @map("wip_account_id")
+  materialExpenseAccountId     Int?     @map("material_expense_account_id")
+  pettyCashAccountId           Int?     @map("petty_cash_account_id")
+  salesReturnAccountId         Int?     @map("sales_return_account_id")
+  createdAt                    DateTime @default(now()) @map("created_at")
+  updatedAt                    DateTime @updatedAt @map("updated_at")
 
   @@map("system_settings")
 }
@@ -133,16 +133,15 @@ model Notification {
   @@map("notifications")
 }
 
-
 // ==================== MASTER DATA ====================
 
 model Customer {
   id            Int       @id @default(autoincrement())
-  street     String?   @map("street") @db.Text
-  village    String?   @map("village")
-  district   String?   @map("district")
-  province   String?   @map("province")
-  postalCode String?   @map("postal_code")
+  street        String?   @map("street") @db.Text
+  village       String?   @map("village")
+  district      String?   @map("district")
+  province      String?   @map("province")
+  postalCode    String?   @map("postal_code")
   name          String
   email         String?
   phone         String?
@@ -169,7 +168,7 @@ model Customer {
 }
 
 model Vendor {
-  id            Int       @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   photo             String?   @map("photo")
   street            String?   @map("street") @db.Text
   province          String?   @map("province")
@@ -179,19 +178,19 @@ model Vendor {
   bankAccountHolder String?   @map("bank_account_holder")
   districtVendor    String?   @map("district")
   villageVendor     String?   @map("village")
-  name          String
-  code          String?   @unique
-  email         String?
-  phone         String?
-  address       String?   @db.Text
-  city          String?
-  npwp          String?
-  contactPerson String?   @map("contact_person")
-  paymentTermId Int?      @map("payment_term_id")
-  isActive      Boolean   @default(true) @map("is_active")
-  deletedAt     DateTime? @map("deleted_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  name              String
+  code              String?   @unique
+  email             String?
+  phone             String?
+  address           String?   @db.Text
+  city              String?
+  npwp              String?
+  contactPerson     String?   @map("contact_person")
+  paymentTermId     Int?      @map("payment_term_id")
+  isActive          Boolean   @default(true) @map("is_active")
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   paymentTerm    PaymentTerm?    @relation(fields: [paymentTermId], references: [id])
   purchaseOrders PurchaseOrder[]
@@ -245,20 +244,27 @@ model Item {
   minStock           Decimal   @default(0) @map("min_stock") @db.Decimal(15, 2)
   cost               Decimal   @default(0) @db.Decimal(15, 2)
   price              Decimal   @default(0) @db.Decimal(15, 2)
+  standardCost       Decimal   @default(0) @map("standard_cost") @db.Decimal(15, 2)
+  costingMethod      String    @default("average") @map("costing_method")
+  purchasePrice      Decimal   @default(0) @map("purchase_price") @db.Decimal(15, 2)
   isActive           Boolean   @default(true) @map("is_active")
   deletedAt          DateTime? @map("deleted_at")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  category        ItemCategory? @relation(fields: [categoryId], references: [id])
-  brand           Brand?        @relation(fields: [brandId], references: [id])
-  vendor          Vendor?       @relation(fields: [vendorId], references: [id])
-  warehouse       Warehouse?    @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id])
-  rack            Rack?         @relation(fields: [defaultRackId], references: [id])
-  rackRow         RackRow?      @relation(fields: [defaultRackRowId], references: [id])
-  stockMoves      StockMove[]
-  inventoryLayers InventoryLayer[]
-  barcodes        Barcode[]
+  category           ItemCategory?       @relation(fields: [categoryId], references: [id])
+  brand              Brand?              @relation(fields: [brandId], references: [id])
+  vendor             Vendor?             @relation(fields: [vendorId], references: [id])
+  warehouse          Warehouse?          @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id])
+  rack               Rack?               @relation(fields: [defaultRackId], references: [id])
+  rackRow            RackRow?            @relation(fields: [defaultRackRowId], references: [id])
+  stockMoves         StockMove[]
+  inventoryLayers    InventoryLayer[]
+  barcodes           Barcode[]
+  itemBatches        ItemBatch[]
+  itemSerials        ItemSerial[]
+  deliveryOrderItems DeliveryOrderItem[]
+  priceListItems     PriceListItem[]
 
   @@map("items")
 }
@@ -273,14 +279,16 @@ model Warehouse {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  racks              Rack[]
-  defaultItems       Item[]              @relation("ItemDefaultWarehouse")
-  stockMoves         StockMove[]
-  goodsReceipts      GoodsReceipt[]
-  stockAdjustments   StockAdjustment[]
-  materialIssues     MaterialIssue[]
-  transfersOut       InventoryTransfer[] @relation("TransferSource")
-  transfersIn        InventoryTransfer[] @relation("TransferDest")
+  racks            Rack[]
+  defaultItems     Item[]              @relation("ItemDefaultWarehouse")
+  stockMoves       StockMove[]
+  goodsReceipts    GoodsReceipt[]
+  stockAdjustments StockAdjustment[]
+  materialIssues   MaterialIssue[]
+  transfersOut     InventoryTransfer[] @relation("TransferSource")
+  transfersIn      InventoryTransfer[] @relation("TransferDest")
+  itemBatches      ItemBatch[]
+  itemSerials      ItemSerial[]
 
   @@map("warehouses")
 }
@@ -342,7 +350,7 @@ model Position {
 }
 
 model Employee {
-  id               Int       @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   userId              Int?      @map("user_id")
   idNumber            String?   @map("id_number")
   bankName            String?   @map("bank_name")
@@ -358,22 +366,22 @@ model Employee {
   employeeVillage     String?   @map("village")
   postalCode          String?   @map("postal_code")
   photo               String?   @map("photo")
-  employeeNo       String    @unique @map("employee_no")
-  name             String
-  email            String?
-  phone            String?
-  gender           String?
-  dateOfBirth      DateTime? @map("date_of_birth")
-  maritalStatus    String?   @map("marital_status")
-  departmentId     Int?      @map("department_id")
-  positionId       Int?      @map("position_id")
-  joinDate         DateTime  @map("join_date")
-  paymentFrequency String    @default("MONTHLY") @map("payment_frequency")
-  baseSalary       Decimal   @default(0) @map("base_salary") @db.Decimal(15, 2)
-  isActive         Boolean   @default(true) @map("is_active")
-  deletedAt        DateTime? @map("deleted_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  employeeNo          String    @unique @map("employee_no")
+  name                String
+  email               String?
+  phone               String?
+  gender              String?
+  dateOfBirth         DateTime? @map("date_of_birth")
+  maritalStatus       String?   @map("marital_status")
+  departmentId        Int?      @map("department_id")
+  positionId          Int?      @map("position_id")
+  joinDate            DateTime  @map("join_date")
+  paymentFrequency    String    @default("MONTHLY") @map("payment_frequency")
+  baseSalary          Decimal   @default(0) @map("base_salary") @db.Decimal(15, 2)
+  isActive            Boolean   @default(true) @map("is_active")
+  deletedAt           DateTime? @map("deleted_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   department       Department?       @relation(fields: [departmentId], references: [id])
   position         Position?         @relation(fields: [positionId], references: [id])
@@ -387,14 +395,17 @@ model Employee {
 }
 
 model Account {
-  id        Int       @id @default(autoincrement())
-  code      String    @unique
-  name      String
-  type      AccountType
-  parentId  Int?      @map("parent_id")
-  isActive  Boolean   @default(true) @map("is_active")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id            Int         @id @default(autoincrement())
+  code          String      @unique
+  name          String
+  type          AccountType
+  parentId      Int?        @map("parent_id")
+  normalBalance String?     @map("normal_balance")
+  description   String?     @db.Text
+  isActive      Boolean     @default(true) @map("is_active")
+  deletedAt     DateTime?   @map("deleted_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
   parent         Account?       @relation("AccountTree", fields: [parentId], references: [id])
   children       Account[]      @relation("AccountTree")
@@ -402,7 +413,6 @@ model Account {
 
   @@map("accounts")
 }
-
 
 model PaymentTerm {
   id        Int      @id @default(autoincrement())
@@ -413,36 +423,35 @@ model PaymentTerm {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  vendors   Vendor[]
+  vendors Vendor[]
 
   @@map("payment_terms")
 }
 
-
 // ==================== SALES ====================
 
 model Quotation {
-  id               Int       @id @default(autoincrement())
-  revisionNumber Int @default(0) @map("revision_number")
-  projectId      Int?    @map("project_id")
-  documentNo       String    @unique @map("document_no")
-  customerId       Int       @map("customer_id")
-  customerVehicleId Int?     @map("customer_vehicle_id")
-  date             DateTime
-  validUntil       DateTime? @map("valid_until")
-  subtotal         Decimal   @default(0) @db.Decimal(15, 2)
-  discount         Decimal   @default(0) @db.Decimal(15, 2)
-  tax              Decimal   @default(0) @db.Decimal(15, 2)
-  grandTotal       Decimal   @default(0) @map("grand_total") @db.Decimal(15, 2)
-  status           String    @default("draft")
-  notes            String?   @db.Text
-  createdBy        Int?      @map("created_by")
-  deletedAt        DateTime? @map("deleted_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  id                Int       @id @default(autoincrement())
+  revisionNumber    Int       @default(0) @map("revision_number")
+  projectId         Int?      @map("project_id")
+  documentNo        String    @unique @map("document_no")
+  customerId        Int       @map("customer_id")
+  customerVehicleId Int?      @map("customer_vehicle_id")
+  date              DateTime
+  validUntil        DateTime? @map("valid_until")
+  subtotal          Decimal   @default(0) @db.Decimal(15, 2)
+  discount          Decimal   @default(0) @db.Decimal(15, 2)
+  tax               Decimal   @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal   @default(0) @map("grand_total") @db.Decimal(15, 2)
+  status            String    @default("draft")
+  notes             String?   @db.Text
+  createdBy         Int?      @map("created_by")
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  customer        Customer         @relation(fields: [customerId], references: [id])
-  customerVehicle CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
+  customer        Customer           @relation(fields: [customerId], references: [id])
+  customerVehicle CustomerVehicle?   @relation(fields: [customerVehicleId], references: [id])
   sections        QuotationSection[]
   histories       QuotationHistory[]
   downPayments    DownPayment[]
@@ -520,27 +529,27 @@ model DownPayment {
 }
 
 model SalesOrder {
-  id           Int       @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   customerVehicleId Int?      @map("customer_vehicle_id")
   totalAmount       Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
-  documentNo   String    @unique @map("document_no")
-  customerId   Int       @map("customer_id")
-  quotationId  Int?      @map("quotation_id")
-  date         DateTime
-  deliveryDate DateTime? @map("delivery_date")
-  notes        String?   @db.Text
-  subtotal     Decimal   @default(0) @db.Decimal(15, 2)
-  discount     Decimal   @default(0) @db.Decimal(15, 2)
-  tax          Decimal   @default(0) @db.Decimal(15, 2)
-  grandTotal   Decimal   @default(0) @map("grand_total") @db.Decimal(15, 2)
-  status       String    @default("draft")
-  createdBy    Int?      @map("created_by")
-  deletedAt    DateTime? @map("deleted_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  documentNo        String    @unique @map("document_no")
+  customerId        Int       @map("customer_id")
+  quotationId       Int?      @map("quotation_id")
+  date              DateTime
+  deliveryDate      DateTime? @map("delivery_date")
+  notes             String?   @db.Text
+  subtotal          Decimal   @default(0) @db.Decimal(15, 2)
+  discount          Decimal   @default(0) @db.Decimal(15, 2)
+  tax               Decimal   @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal   @default(0) @map("grand_total") @db.Decimal(15, 2)
+  status            String    @default("draft")
+  createdBy         Int?      @map("created_by")
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  customer      Customer         @relation(fields: [customerId], references: [id])
-  quotation     Quotation?       @relation(fields: [quotationId], references: [id])
+  customer       Customer         @relation(fields: [customerId], references: [id])
+  quotation      Quotation?       @relation(fields: [quotationId], references: [id])
   items          SalesOrderItem[]
   salesInvoices  SalesInvoice[]
   deliveryOrders DeliveryOrder[]
@@ -564,30 +573,30 @@ model SalesOrderItem {
 }
 
 model SalesInvoice {
-  id            Int                @id @default(autoincrement())
-  customerVehicleId Int?      @map("customer_vehicle_id")
-  projectId         Int?      @map("project_id")
-  amountPaid        Decimal   @default(0) @map("amount_paid") @db.Decimal(15, 2)
-  documentNo    String             @unique @map("document_no")
-  customerId    Int                @map("customer_id")
-  salesOrderId  Int?               @map("sales_order_id")
-  quotationId   Int?               @map("quotation_id")
-  date          DateTime
-  dueDate       DateTime?          @map("due_date")
-  subtotal      Decimal            @default(0) @db.Decimal(15, 2)
-  discount      Decimal            @default(0) @db.Decimal(15, 2)
-  tax           Decimal            @default(0) @db.Decimal(15, 2)
-  grandTotal    Decimal            @default(0) @map("grand_total") @db.Decimal(15, 2)
-  paidAmount    Decimal            @default(0) @map("paid_amount") @db.Decimal(15, 2)
-  totalAmount   Decimal            @default(0) @map("total_amount") @db.Decimal(15, 2)
-  taxAmount     Decimal            @default(0) @map("tax_amount") @db.Decimal(15, 2)
-  status        SalesInvoiceStatus @default(draft)
-  paymentStatus String?            @map("payment_status")
-  notes         String?            @db.Text
-  createdBy     Int?               @map("created_by")
-  deletedAt     DateTime?          @map("deleted_at")
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
+  id                Int                @id @default(autoincrement())
+  customerVehicleId Int?               @map("customer_vehicle_id")
+  projectId         Int?               @map("project_id")
+  amountPaid        Decimal            @default(0) @map("amount_paid") @db.Decimal(15, 2)
+  documentNo        String             @unique @map("document_no")
+  customerId        Int                @map("customer_id")
+  salesOrderId      Int?               @map("sales_order_id")
+  quotationId       Int?               @map("quotation_id")
+  date              DateTime
+  dueDate           DateTime?          @map("due_date")
+  subtotal          Decimal            @default(0) @db.Decimal(15, 2)
+  discount          Decimal            @default(0) @db.Decimal(15, 2)
+  tax               Decimal            @default(0) @db.Decimal(15, 2)
+  grandTotal        Decimal            @default(0) @map("grand_total") @db.Decimal(15, 2)
+  paidAmount        Decimal            @default(0) @map("paid_amount") @db.Decimal(15, 2)
+  totalAmount       Decimal            @default(0) @map("total_amount") @db.Decimal(15, 2)
+  taxAmount         Decimal            @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  status            SalesInvoiceStatus @default(draft)
+  paymentStatus     String?            @map("payment_status")
+  notes             String?            @db.Text
+  createdBy         Int?               @map("created_by")
+  deletedAt         DateTime?          @map("deleted_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
 
   customer   Customer           @relation(fields: [customerId], references: [id])
   salesOrder SalesOrder?        @relation(fields: [salesOrderId], references: [id])
@@ -632,16 +641,16 @@ model SalesPayment {
 }
 
 model SalesReturn {
-  id             Int       @id @default(autoincrement())
-  documentNo     String    @unique @map("document_no")
-  salesInvoiceId Int?      @map("sales_invoice_id")
-  customerId     Int       @map("customer_id")
+  id             Int      @id @default(autoincrement())
+  documentNo     String   @unique @map("document_no")
+  salesInvoiceId Int?     @map("sales_invoice_id")
+  customerId     Int      @map("customer_id")
   date           DateTime
-  reason         String?   @db.Text
-  status         String    @default("draft")
-  createdBy      Int?      @map("created_by")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  reason         String?  @db.Text
+  status         String   @default("draft")
+  createdBy      Int?     @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   items SalesReturnItem[]
 
@@ -660,21 +669,20 @@ model SalesReturnItem {
   @@map("sales_return_items")
 }
 
-
 // ==================== PURCHASE ====================
 
 model PurchaseRequest {
-  id          Int       @id @default(autoincrement())
-  documentNo  String    @unique @map("document_no")
-  title       String?   @map("title")
-  requestedBy Int       @map("requested_by")
+  id          Int      @id @default(autoincrement())
+  documentNo  String   @unique @map("document_no")
+  title       String?  @map("title")
+  requestedBy Int      @map("requested_by")
   date        DateTime
-  notes       String?   @db.Text
-  status      String    @default("draft")
-  approvedBy  Int?      @map("approved_by")
-  createdBy   Int?      @map("created_by")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  notes       String?  @db.Text
+  status      String   @default("draft")
+  approvedBy  Int?     @map("approved_by")
+  createdBy   Int?     @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   items          PurchaseRequestItem[]
   purchaseOrders PurchaseOrder[]
@@ -696,10 +704,10 @@ model PurchaseRequestItem {
 
 model PurchaseOrder {
   id                Int       @id @default(autoincrement())
-  paymentStatus String    @default("unpaid") @map("payment_status")
-  paymentTerm   String?   @map("payment_term")
-  shippingCost  Decimal   @default(0) @map("shipping_cost") @db.Decimal(15, 2)
-  totalAmount   Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
+  paymentStatus     String    @default("unpaid") @map("payment_status")
+  paymentTerm       String?   @map("payment_term")
+  shippingCost      Decimal   @default(0) @map("shipping_cost") @db.Decimal(15, 2)
+  totalAmount       Decimal   @default(0) @map("total_amount") @db.Decimal(15, 2)
   documentNo        String    @unique @map("document_no")
   vendorId          Int       @map("vendor_id")
   purchaseRequestId Int?      @map("purchase_request_id")
@@ -717,8 +725,8 @@ model PurchaseOrder {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  vendor          Vendor           @relation(fields: [vendorId], references: [id])
-  purchaseRequest PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+  vendor          Vendor              @relation(fields: [vendorId], references: [id])
+  purchaseRequest PurchaseRequest?    @relation(fields: [purchaseRequestId], references: [id])
   items           PurchaseOrderItem[]
   goodsReceipts   GoodsReceipt[]
   vendorBills     VendorBill[]
@@ -754,8 +762,8 @@ model GoodsReceipt {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  purchaseOrder PurchaseOrder    @relation(fields: [purchaseOrderId], references: [id])
-  warehouse     Warehouse        @relation(fields: [warehouseId], references: [id])
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
   items         GoodsReceiptItem[]
 
   @@map("goods_receipts")
@@ -784,7 +792,7 @@ model PurchaseReturn {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id])
   items         PurchaseReturnItem[]
 
   @@map("purchase_returns")
@@ -803,7 +811,7 @@ model PurchaseReturnItem {
 }
 
 model VendorBill {
-  id              Int       @id @default(autoincrement())
+  id                  Int       @id @default(autoincrement())
   goodsReceiptId      Int?      @map("goods_receipt_id")
   vendorInvoiceNumber String?   @map("vendor_invoice_number")
   discountAmount      Decimal   @default(0) @map("discount_amount") @db.Decimal(15, 2)
@@ -813,35 +821,45 @@ model VendorBill {
   approvedBy          Int?      @map("approved_by")
   approvedAt          DateTime? @map("approved_at")
   deletedAt           DateTime? @map("deleted_at")
-  documentNo      String    @unique @map("document_no")
-  vendorId        Int       @map("vendor_id")
-  purchaseOrderId Int?      @map("purchase_order_id")
-  date            DateTime
-  dueDate         DateTime? @map("due_date")
-  subtotal        Decimal   @default(0) @db.Decimal(15, 2)
-  tax             Decimal   @default(0) @db.Decimal(15, 2)
-  grandTotal      Decimal   @default(0) @map("grand_total") @db.Decimal(15, 2)
-  paidAmount      Decimal   @default(0) @map("paid_amount") @db.Decimal(15, 2)
-  status          String    @default("draft")
-  createdBy       Int?      @map("created_by")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  notes               String?   @db.Text
+  documentNo          String    @unique @map("document_no")
+  vendorId            Int       @map("vendor_id")
+  purchaseOrderId     Int?      @map("purchase_order_id")
+  date                DateTime
+  dueDate             DateTime? @map("due_date")
+  subtotal            Decimal   @default(0) @db.Decimal(15, 2)
+  tax                 Decimal   @default(0) @db.Decimal(15, 2)
+  grandTotal          Decimal   @default(0) @map("grand_total") @db.Decimal(15, 2)
+  paidAmount          Decimal   @default(0) @map("paid_amount") @db.Decimal(15, 2)
+  status              String    @default("draft")
+  createdBy           Int?      @map("created_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  vendor        Vendor          @relation(fields: [vendorId], references: [id])
-  purchaseOrder PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
+  vendor        Vendor           @relation(fields: [vendorId], references: [id])
+  purchaseOrder PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
   items         VendorBillItem[]
 
   @@map("vendor_bills")
 }
 
 model VendorBillItem {
-  id           Int     @id @default(autoincrement())
-  vendorBillId Int     @map("vendor_bill_id")
-  itemId       Int?    @map("item_id")
-  description  String?
-  qty          Decimal @default(1) @db.Decimal(15, 2)
-  unitPrice    Decimal @default(0) @map("unit_price") @db.Decimal(15, 2)
-  total        Decimal @default(0) @db.Decimal(15, 2)
+  id                 Int     @id @default(autoincrement())
+  vendorBillId       Int     @map("vendor_bill_id")
+  itemId             Int?    @map("item_id")
+  goodsReceiptItemId Int?    @map("goods_receipt_item_id")
+  description        String?
+  qty                Decimal @default(1) @db.Decimal(15, 2)
+  unit               String?
+  unitPrice          Decimal @default(0) @map("unit_price") @db.Decimal(15, 2)
+  discountPercent    Decimal @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  discountAmount     Decimal @default(0) @map("discount_amount") @db.Decimal(15, 2)
+  taxPercent         Decimal @default(0) @map("tax_percent") @db.Decimal(5, 2)
+  taxAmount          Decimal @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  subtotal           Decimal @default(0) @db.Decimal(15, 2)
+  total              Decimal @default(0) @db.Decimal(15, 2)
+  accountId          Int?    @map("account_id")
+  costCenterId       Int?    @map("cost_center_id")
 
   vendorBill VendorBill @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
 
@@ -849,26 +867,26 @@ model VendorBillItem {
 }
 
 model VendorPayment {
-  id            Int      @id @default(autoincrement())
-  referenceNumber  String?   @map("reference_number")
-  bankId           Int?      @map("bank_id")
-  bankAccount      String?   @map("bank_account")
-  status           String    @default("draft")
-  confirmedBy      Int?      @map("confirmed_by")
-  confirmedAt      DateTime? @map("confirmed_at")
-  deletedAt        DateTime? @map("deleted_at")
-  documentNo    String   @unique @map("document_no")
-  vendorId      Int      @map("vendor_id")
-  amount        Decimal  @db.Decimal(15, 2)
-  paymentDate   DateTime @map("payment_date")
-  paymentMethod String   @map("payment_method")
-  accountId     Int?     @map("account_id")
-  notes         String?  @db.Text
-  createdBy     Int?     @map("created_by")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              Int       @id @default(autoincrement())
+  referenceNumber String?   @map("reference_number")
+  bankId          Int?      @map("bank_id")
+  bankAccount     String?   @map("bank_account")
+  status          String    @default("draft")
+  confirmedBy     Int?      @map("confirmed_by")
+  confirmedAt     DateTime? @map("confirmed_at")
+  deletedAt       DateTime? @map("deleted_at")
+  documentNo      String    @unique @map("document_no")
+  vendorId        Int       @map("vendor_id")
+  amount          Decimal   @db.Decimal(15, 2)
+  paymentDate     DateTime  @map("payment_date")
+  paymentMethod   String    @map("payment_method")
+  accountId       Int?      @map("account_id")
+  notes           String?   @db.Text
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  vendor      Vendor                   @relation(fields: [vendorId], references: [id])
+  vendor      Vendor                    @relation(fields: [vendorId], references: [id])
   allocations VendorPaymentAllocation[]
 
   @@map("vendor_payments")
@@ -885,31 +903,31 @@ model VendorPaymentAllocation {
   @@map("vendor_payment_allocations")
 }
 
-
 model DeliveryOrder {
-  id           Int       @id @default(autoincrement())
-  customerId        Int?      @map("customer_id")
-  shippingAddress   String?   @map("shipping_address") @db.Text
-  shippingProvince  String?   @map("shipping_province")
-  shippingCity      String?   @map("shipping_city")
-  shippingDistrict  String?   @map("shipping_district")
-  shippingVillage   String?   @map("shipping_village")
-  shippingPostalCode String?  @map("shipping_postal_code")
-  shippingPhone     String?   @map("shipping_phone")
-  vehicleNumber     String?   @map("vehicle_number")
-  confirmedBy       Int?      @map("confirmed_by")
-  confirmedAt       DateTime? @map("confirmed_at")
-  deliveredAt       DateTime? @map("delivered_at")
-  documentNo   String    @unique @map("document_no")
-  salesOrderId Int       @map("sales_order_id")
-  date         DateTime
-  notes        String?   @db.Text
-  status       String    @default("draft")
-  createdBy    Int?      @map("created_by")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  id                 Int       @id @default(autoincrement())
+  customerId         Int?      @map("customer_id")
+  shippingAddress    String?   @map("shipping_address") @db.Text
+  shippingProvince   String?   @map("shipping_province")
+  shippingCity       String?   @map("shipping_city")
+  shippingDistrict   String?   @map("shipping_district")
+  shippingVillage    String?   @map("shipping_village")
+  shippingPostalCode String?   @map("shipping_postal_code")
+  shippingPhone      String?   @map("shipping_phone")
+  vehicleNumber      String?   @map("vehicle_number")
+  confirmedBy        Int?      @map("confirmed_by")
+  confirmedAt        DateTime? @map("confirmed_at")
+  deliveredAt        DateTime? @map("delivered_at")
+  documentNo         String    @unique @map("document_no")
+  salesOrderId       Int       @map("sales_order_id")
+  date               DateTime
+  notes              String?   @db.Text
+  status             String    @default("draft")
+  createdBy          Int?      @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
-  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
+  salesOrder SalesOrder          @relation(fields: [salesOrderId], references: [id])
+  items      DeliveryOrderItem[]
 
   @@map("delivery_orders")
 }
@@ -957,15 +975,21 @@ model InventoryLayer {
 }
 
 model StockAdjustment {
-  id          Int      @id @default(autoincrement())
-  documentNo  String   @unique @map("document_no")
-  warehouseId Int      @map("warehouse_id")
+  id          Int       @id @default(autoincrement())
+  documentNo  String    @unique @map("document_no")
+  warehouseId Int       @map("warehouse_id")
   date        DateTime
-  reason      String?  @db.Text
-  status      String   @default("draft")
-  createdBy   Int?     @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  reason      String?   @db.Text
+  type        String    @default("increase")
+  notes       String?   @db.Text
+  status      String    @default("draft")
+  approvedBy  Int?      @map("approved_by")
+  approvedAt  DateTime? @map("approved_at")
+  journalId   Int?      @map("journal_id")
+  createdBy   Int?      @map("created_by")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   warehouse Warehouse             @relation(fields: [warehouseId], references: [id])
   items     StockAdjustmentItem[]
@@ -980,6 +1004,11 @@ model StockAdjustmentItem {
   systemQty         Decimal @map("system_qty") @db.Decimal(15, 2)
   actualQty         Decimal @map("actual_qty") @db.Decimal(15, 2)
   difference        Decimal @db.Decimal(15, 2)
+  batchId           Int?    @map("batch_id")
+  unit              String?
+  unitCost          Decimal @default(0) @map("unit_cost") @db.Decimal(15, 2)
+  totalCost         Decimal @default(0) @map("total_cost") @db.Decimal(15, 2)
+  notes             String?
 
   stockAdjustment StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
 
@@ -1029,7 +1058,7 @@ model MaterialIssue {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id])
   items     MaterialIssueItem[]
 
   @@map("material_issues")
@@ -1050,12 +1079,13 @@ model MaterialIssueItem {
 // ==================== MANUFACTURING ====================
 
 model Product {
-  id          Int      @id @default(autoincrement())
-  name        String
-  sku         String?  @unique
-  description String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id           Int      @id @default(autoincrement())
+  name         String
+  sku          String?  @unique
+  description  String?  @db.Text
+  standardCost Decimal  @default(0) @map("standard_cost") @db.Decimal(15, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   materials        ProductMaterial[]
   productionOrders ProductionOrder[]
@@ -1075,26 +1105,34 @@ model ProductMaterial {
 }
 
 model ProductionOrder {
-  id        Int      @id @default(autoincrement())
-  documentNo String  @unique @map("document_no")
-  productId Int      @map("product_id")
-  qty       Decimal  @db.Decimal(15, 2)
-  status    String   @default("draft")
-  createdBy Int?     @map("created_by")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                Int       @id @default(autoincrement())
+  documentNo        String    @unique @map("document_no")
+  productId         Int       @map("product_id")
+  qty               Decimal   @db.Decimal(15, 2)
+  status            String    @default("draft")
+  startDate         DateTime? @map("start_date")
+  endDate           DateTime? @map("end_date")
+  notes             String?   @db.Text
+  totalStandardCost Decimal   @default(0) @map("total_standard_cost") @db.Decimal(15, 2)
+  totalActualCost   Decimal   @default(0) @map("total_actual_cost") @db.Decimal(15, 2)
+  createdBy         Int?      @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  product   Product                  @relation(fields: [productId], references: [id])
+  product   Product                   @relation(fields: [productId], references: [id])
   materials ProductionOrderMaterial[]
 
   @@map("production_orders")
 }
 
 model ProductionOrderMaterial {
-  id                Int     @id @default(autoincrement())
-  productionOrderId Int     @map("production_order_id")
-  itemId            Int     @map("item_id")
-  qty               Decimal @db.Decimal(15, 2)
+  id                Int      @id @default(autoincrement())
+  productionOrderId Int      @map("production_order_id")
+  itemId            Int      @map("item_id")
+  qty               Decimal  @db.Decimal(15, 2)
+  actualQty         Decimal? @map("actual_qty") @db.Decimal(15, 2)
+  standardCost      Decimal  @default(0) @map("standard_cost") @db.Decimal(15, 2)
+  actualCost        Decimal  @default(0) @map("actual_cost") @db.Decimal(15, 2)
 
   productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
 
@@ -1102,23 +1140,23 @@ model ProductionOrderMaterial {
 }
 
 model WorkOrder {
-  id          Int      @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   customerVehicleId Int?      @map("customer_vehicle_id")
   startDate         DateTime? @map("start_date")
   endDate           DateTime? @map("end_date")
-  documentNo  String   @unique @map("document_no")
-  quotationId Int?     @map("quotation_id")
-  projectId   Int?     @map("project_id")
-  customerId  Int      @map("customer_id")
-  date        DateTime
-  notes       String?  @db.Text
-  status      String   @default("draft")
-  createdBy   Int?     @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  documentNo        String    @unique @map("document_no")
+  quotationId       Int?      @map("quotation_id")
+  projectId         Int?      @map("project_id")
+  customerId        Int       @map("customer_id")
+  date              DateTime
+  notes             String?   @db.Text
+  status            String    @default("draft")
+  createdBy         Int?      @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  quotation Quotation?     @relation(fields: [quotationId], references: [id])
-  customer  Customer       @relation(fields: [customerId], references: [id])
+  quotation Quotation?      @relation(fields: [quotationId], references: [id])
+  customer  Customer        @relation(fields: [customerId], references: [id])
   items     WorkOrderItem[]
 
   @@map("work_orders")
@@ -1135,7 +1173,6 @@ model WorkOrderItem {
 
   @@map("work_order_items")
 }
-
 
 // ==================== HRM ====================
 
@@ -1156,17 +1193,17 @@ model Attendance {
 }
 
 model LeaveRequest {
-  id              Int       @id @default(autoincrement())
-  employeeId      Int       @map("employee_id")
+  id              Int      @id @default(autoincrement())
+  employeeId      Int      @map("employee_id")
   type            String
-  startDate       DateTime  @map("start_date")
-  endDate         DateTime  @map("end_date")
-  reason          String?   @db.Text
-  status          String    @default("pending")
-  approvedBy      Int?      @map("approved_by")
-  rejectionReason String?   @map("rejection_reason") @db.Text
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  startDate       DateTime @map("start_date")
+  endDate         DateTime @map("end_date")
+  reason          String?  @db.Text
+  status          String   @default("pending")
+  approvedBy      Int?     @map("approved_by")
+  rejectionReason String?  @map("rejection_reason") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   employee Employee @relation(fields: [employeeId], references: [id])
 
@@ -1253,19 +1290,20 @@ model Timesheet {
 // ==================== FINANCE / ACCOUNTING ====================
 
 model Journal {
-  id              Int      @id @default(autoincrement())
-  journalNumber   String   @unique @map("journal_number")
-  transactionDate DateTime @map("transaction_date")
-  referenceType   String?  @map("reference_type")
-  referenceId     Int?     @map("reference_id")
-  description     String?  @db.Text
-  type            String   @default("GENERAL")
-  status          String   @default("DRAFT")
-  totalDebit      Decimal  @map("total_debit") @db.Decimal(15, 2)
-  totalCredit     Decimal  @map("total_credit") @db.Decimal(15, 2)
-  createdBy       Int?     @map("created_by")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id              Int       @id @default(autoincrement())
+  journalNumber   String    @unique @map("journal_number")
+  transactionDate DateTime  @map("transaction_date")
+  referenceType   String?   @map("reference_type")
+  referenceId     Int?      @map("reference_id")
+  description     String?   @db.Text
+  type            String    @default("GENERAL")
+  status          String    @default("DRAFT")
+  totalDebit      Decimal   @map("total_debit") @db.Decimal(15, 2)
+  totalCredit     Decimal   @map("total_credit") @db.Decimal(15, 2)
+  createdBy       Int?      @map("created_by")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   entries JournalEntry[]
   creator User?          @relation(fields: [createdBy], references: [id])
@@ -1274,12 +1312,14 @@ model Journal {
 }
 
 model JournalEntry {
-  id        Int     @id @default(autoincrement())
-  journalId Int     @map("journal_id")
-  accountId Int     @map("account_id")
-  debit     Decimal @default(0) @db.Decimal(15, 2)
-  credit    Decimal @default(0) @db.Decimal(15, 2)
-  memo      String?
+  id             Int     @id @default(autoincrement())
+  journalId      Int     @map("journal_id")
+  accountId      Int     @map("account_id")
+  debit          Decimal @default(0) @db.Decimal(15, 2)
+  credit         Decimal @default(0) @db.Decimal(15, 2)
+  memo           String?
+  costCenterId   Int?    @map("cost_center_id")
+  profitCenterId Int?    @map("profit_center_id")
 
   journal Journal @relation(fields: [journalId], references: [id], onDelete: Cascade)
   account Account @relation(fields: [accountId], references: [id])
@@ -1299,6 +1339,7 @@ model Expense {
   category          String?
   status            String   @default("draft")
   approvedBy        Int?     @map("approved_by")
+  costCenterId      Int?     @map("cost_center_id")
   createdBy         Int?     @map("created_by")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
@@ -1337,11 +1378,17 @@ model Budget {
 }
 
 model CostCenter {
-  id        Int      @id @default(autoincrement())
-  code      String   @unique
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             Int      @id @default(autoincrement())
+  code           String   @unique
+  name           String
+  description    String?  @db.Text
+  isActive       Boolean  @default(true) @map("is_active")
+  departmentId   Int?     @map("department_id")
+  profitCenterId Int?     @map("profit_center_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  skfValues SkfValue[]
 
   @@map("cost_centers")
 }
@@ -1353,16 +1400,31 @@ model ProfitCenter {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  skfValues SkfValue[]
+
   @@map("profit_centers")
 }
 
 model BankStatement {
-  id        Int      @id @default(autoincrement())
-  accountId Int      @map("account_id")
-  date      DateTime
-  reference String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             Int       @id @default(autoincrement())
+  accountId      Int       @map("account_id")
+  bankId         Int?      @map("bank_id")
+  accountNumber  String?   @map("account_number")
+  date           DateTime
+  reference      String?
+  periodStart    DateTime? @map("period_start")
+  periodEnd      DateTime? @map("period_end")
+  openingBalance Decimal   @default(0) @map("opening_balance") @db.Decimal(15, 2)
+  closingBalance Decimal   @default(0) @map("closing_balance") @db.Decimal(15, 2)
+  totalDebits    Decimal   @default(0) @map("total_debits") @db.Decimal(15, 2)
+  totalCredits   Decimal   @default(0) @map("total_credits") @db.Decimal(15, 2)
+  notes          String?   @db.Text
+  status         String    @default("draft")
+  uploadedBy     Int?      @map("uploaded_by")
+  filePath       String?   @map("file_path")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   lines BankStatementLine[]
 
@@ -1370,13 +1432,21 @@ model BankStatement {
 }
 
 model BankStatementLine {
-  id              Int      @id @default(autoincrement())
-  bankStatementId Int      @map("bank_statement_id")
-  date            DateTime
-  description     String?
-  amount          Decimal  @db.Decimal(15, 2)
-  type            String
-  reference       String?
+  id               Int       @id @default(autoincrement())
+  bankStatementId  Int       @map("bank_statement_id")
+  date             DateTime
+  valueDate        DateTime? @map("value_date")
+  description      String?
+  amount           Decimal   @db.Decimal(15, 2)
+  debit            Decimal   @default(0) @db.Decimal(15, 2)
+  credit           Decimal   @default(0) @db.Decimal(15, 2)
+  balance          Decimal   @default(0) @db.Decimal(15, 2)
+  type             String
+  reference        String?
+  status           String    @default("unmatched")
+  matchedJournalId Int?      @map("matched_journal_id")
+  matchedPaymentId Int?      @map("matched_payment_id")
+  matchedType      String?   @map("matched_type")
 
   bankStatement BankStatement @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
 
@@ -1384,14 +1454,28 @@ model BankStatementLine {
 }
 
 model BankReconciliation {
-  id               Int      @id @default(autoincrement())
-  accountId        Int      @map("account_id")
-  statementDate    DateTime @map("statement_date")
-  statementBalance Decimal  @map("statement_balance") @db.Decimal(15, 2)
-  status           String   @default("draft")
-  createdBy        Int?     @map("created_by")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                   Int       @id @default(autoincrement())
+  reconciliationNumber String?   @unique @map("reconciliation_number")
+  accountId            Int       @map("account_id")
+  bankId               Int?      @map("bank_id")
+  bankStatementId      Int?      @map("bank_statement_id")
+  statementDate        DateTime  @map("statement_date")
+  statementBalance     Decimal   @map("statement_balance") @db.Decimal(15, 2)
+  periodStart          DateTime? @map("period_start")
+  periodEnd            DateTime? @map("period_end")
+  bookBalance          Decimal   @default(0) @map("book_balance") @db.Decimal(15, 2)
+  difference           Decimal   @default(0) @db.Decimal(15, 2)
+  outstandingDeposits  Decimal   @default(0) @map("outstanding_deposits") @db.Decimal(15, 2)
+  outstandingPayments  Decimal   @default(0) @map("outstanding_payments") @db.Decimal(15, 2)
+  adjustedBookBalance  Decimal   @default(0) @map("adjusted_book_balance") @db.Decimal(15, 2)
+  status               String    @default("draft")
+  notes                String?   @db.Text
+  completedBy          Int?      @map("completed_by")
+  completedAt          DateTime? @map("completed_at")
+  createdBy            Int?      @map("created_by")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   items BankReconciliationItem[]
 
@@ -1399,33 +1483,51 @@ model BankReconciliation {
 }
 
 model BankReconciliationItem {
-  id                   Int     @id @default(autoincrement())
-  bankReconciliationId Int     @map("bank_reconciliation_id")
-  bankStatementLineId  Int     @map("bank_statement_line_id")
-  journalEntryId       Int?    @map("journal_entry_id")
-  matched              Boolean @default(false)
+  id                   Int       @id @default(autoincrement())
+  bankReconciliationId Int       @map("bank_reconciliation_id")
+  bankStatementLineId  Int       @map("bank_statement_line_id")
+  journalEntryId       Int?      @map("journal_entry_id")
+  type                 String?
+  reference            String?
+  description          String?   @db.Text
+  amount               Decimal   @default(0) @db.Decimal(15, 2)
+  date                 DateTime?
+  matched              Boolean   @default(false)
+  cleared              Boolean   @default(false)
+  clearedDate          DateTime? @map("cleared_date")
+  relatedJournalId     Int?      @map("related_journal_id")
+  relatedPaymentId     Int?      @map("related_payment_id")
 
   bankReconciliation BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
 
   @@map("bank_reconciliation_items")
 }
 
-
 // ==================== CRM ====================
 
 model Lead {
-  id          Int       @id @default(autoincrement())
-  name        String
-  email       String?
-  phone       String?
-  company     String?
-  source      String?
-  status      String    @default("new")
-  assignedTo  Int?      @map("assigned_to")
-  notes       String?   @db.Text
-  convertedAt DateTime? @map("converted_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id                Int       @id @default(autoincrement())
+  leadNumber        String?   @unique @map("lead_number")
+  name              String
+  email             String?
+  phone             String?
+  company           String?
+  contactName       String?   @map("contact_name")
+  position          String?
+  industry          String?
+  source            String?
+  status            String    @default("new")
+  estimatedValue    Decimal?  @map("estimated_value") @db.Decimal(15, 2)
+  expectedCloseDate DateTime? @map("expected_close_date")
+  customerId        Int?      @map("customer_id")
+  assignedTo        Int?      @map("assigned_to")
+  address           String?   @db.Text
+  notes             String?   @db.Text
+  convertedAt       DateTime? @map("converted_at")
+  createdBy         Int?      @map("created_by")
+  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   activities LeadActivity[]
 
@@ -1433,12 +1535,19 @@ model Lead {
 }
 
 model LeadActivity {
-  id        Int      @id @default(autoincrement())
-  leadId    Int      @map("lead_id")
-  type      String
-  notes     String?  @db.Text
-  userId    Int?     @map("user_id")
-  createdAt DateTime @default(now()) @map("created_at")
+  id          Int       @id @default(autoincrement())
+  leadId      Int       @map("lead_id")
+  type        String
+  subject     String?
+  description String?   @db.Text
+  notes       String?   @db.Text
+  scheduledAt DateTime? @map("scheduled_at")
+  completedAt DateTime? @map("completed_at")
+  oldStatus   String?   @map("old_status")
+  newStatus   String?   @map("new_status")
+  userId      Int?      @map("user_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
@@ -1446,16 +1555,26 @@ model LeadActivity {
 }
 
 model CrmTicket {
-  id          Int      @id @default(autoincrement())
-  subject     String
-  description String?  @db.Text
-  customerId  Int?     @map("customer_id")
-  priority    String   @default("medium")
-  status      String   @default("open")
-  assignedTo  Int?     @map("assigned_to")
-  createdBy   Int?     @map("created_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id              Int       @id @default(autoincrement())
+  ticketNumber    String?   @unique @map("ticket_number")
+  subject         String
+  description     String?   @db.Text
+  customerId      Int?      @map("customer_id")
+  customerName    String?   @map("customer_name")
+  customerEmail   String?   @map("customer_email")
+  customerPhone   String?   @map("customer_phone")
+  type            String?
+  priority        String    @default("medium")
+  status          String    @default("open")
+  assignedTo      Int?      @map("assigned_to")
+  firstResponseAt DateTime? @map("first_response_at")
+  resolvedAt      DateTime? @map("resolved_at")
+  closedAt        DateTime? @map("closed_at")
+  resolutionNotes String?   @map("resolution_notes") @db.Text
+  createdBy       Int?      @map("created_by")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   comments CrmTicketComment[]
 
@@ -1463,11 +1582,13 @@ model CrmTicket {
 }
 
 model CrmTicketComment {
-  id        Int      @id @default(autoincrement())
-  ticketId  Int      @map("ticket_id")
-  userId    Int?     @map("user_id")
-  body      String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
+  id         Int      @id @default(autoincrement())
+  ticketId   Int      @map("ticket_id")
+  userId     Int?     @map("user_id")
+  body       String   @db.Text
+  isInternal Boolean  @default(false) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   ticket CrmTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
@@ -1477,12 +1598,17 @@ model CrmTicketComment {
 // ==================== ASSETS ====================
 
 model AssetCategory {
-  id              Int      @id @default(autoincrement())
-  name            String
-  depreciationRate Decimal? @map("depreciation_rate") @db.Decimal(5, 2)
-  usefulLife      Int?     @map("useful_life")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                               Int      @id @default(autoincrement())
+  name                             String
+  code                             String?
+  depreciationRate                 Decimal? @map("depreciation_rate") @db.Decimal(5, 2)
+  usefulLife                       Int?     @map("useful_life")
+  assetAccountId                   Int?     @map("asset_account_id")
+  accumulatedDepreciationAccountId Int?     @map("accumulated_depreciation_account_id")
+  depreciationExpenseAccountId     Int?     @map("depreciation_expense_account_id")
+  gainLossAccountId                Int?     @map("gain_loss_account_id")
+  createdAt                        DateTime @default(now()) @map("created_at")
+  updatedAt                        DateTime @updatedAt @map("updated_at")
 
   assets Asset[]
 
@@ -1524,7 +1650,7 @@ model AssetBrandModel {
 }
 
 model Asset {
-  id              Int       @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   photo             String?   @map("photo")
   serialNumber      String?   @map("serial_number")
   description       String?   @map("description") @db.Text
@@ -1532,18 +1658,18 @@ model Asset {
   condition         String    @default("good") @map("condition")
   employeeId        Int?      @map("employee_id")
   assetBrandModelId Int?      @map("asset_brand_model_id")
-  code            String    @unique
-  name            String
-  categoryId      Int?      @map("category_id")
-  groupId         Int?      @map("group_id")
-  purchaseDate    DateTime? @map("purchase_date")
-  purchaseCost    Decimal   @default(0) @map("purchase_cost") @db.Decimal(15, 2)
-  currentValue    Decimal   @default(0) @map("current_value") @db.Decimal(15, 2)
-  location        String?
-  status          String    @default("active")
-  notes           String?   @db.Text
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  code              String    @unique
+  name              String
+  categoryId        Int?      @map("category_id")
+  groupId           Int?      @map("group_id")
+  purchaseDate      DateTime? @map("purchase_date")
+  purchaseCost      Decimal   @default(0) @map("purchase_cost") @db.Decimal(15, 2)
+  currentValue      Decimal   @default(0) @map("current_value") @db.Decimal(15, 2)
+  location          String?
+  status            String    @default("active")
+  notes             String?   @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   category  AssetCategory?  @relation(fields: [categoryId], references: [id])
   group     AssetGroup?     @relation(fields: [groupId], references: [id])
@@ -1568,14 +1694,17 @@ model AssetHistory {
 }
 
 model AssetTransfer {
-  id           Int      @id @default(autoincrement())
-  assetId      Int      @map("asset_id")
-  fromLocation String?  @map("from_location")
-  toLocation   String   @map("to_location")
-  transferDate DateTime @map("transfer_date")
-  notes        String?  @db.Text
-  createdBy    Int?     @map("created_by")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id             Int      @id @default(autoincrement())
+  assetId        Int      @map("asset_id")
+  fromLocation   String?  @map("from_location")
+  toLocation     String   @map("to_location")
+  fromEmployeeId Int?     @map("from_employee_id")
+  toEmployeeId   Int?     @map("to_employee_id")
+  transferDate   DateTime @map("transfer_date")
+  notes          String?  @db.Text
+  createdBy      Int?     @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   asset Asset @relation(fields: [assetId], references: [id])
 
@@ -1630,18 +1759,20 @@ model Vehicle {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  variant          VehicleVariant?  @relation(fields: [vehicleVariantId], references: [id])
+  variant          VehicleVariant?   @relation(fields: [vehicleVariantId], references: [id])
   customerVehicles CustomerVehicle[]
 
   @@map("vehicles")
 }
 
 model CustomerVehicle {
-  id         Int      @id @default(autoincrement())
-  customerId Int      @map("customer_id")
-  vehicleId  Int      @map("vehicle_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id           Int      @id @default(autoincrement())
+  customerId   Int      @map("customer_id")
+  vehicleId    Int      @map("vehicle_id")
+  vehicleType  String?  @map("vehicle_type")
+  transmission String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   customer   Customer    @relation(fields: [customerId], references: [id])
   vehicle    Vehicle     @relation(fields: [vehicleId], references: [id])
@@ -1673,12 +1804,12 @@ model Project {
 }
 
 model ProjectItem {
-  id        Int     @id @default(autoincrement())
-  projectId Int     @map("project_id")
-  itemId    Int?    @map("item_id")
+  id          Int     @id @default(autoincrement())
+  projectId   Int     @map("project_id")
+  itemId      Int?    @map("item_id")
   description String?
-  qty       Decimal @default(1) @db.Decimal(15, 2)
-  cost      Decimal @default(0) @db.Decimal(15, 2)
+  qty         Decimal @default(1) @db.Decimal(15, 2)
+  cost        Decimal @default(0) @db.Decimal(15, 2)
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -1694,7 +1825,7 @@ model ProjectStage {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project  Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   progress ProjectStageProgress[]
 
   @@map("project_stages")
@@ -1729,12 +1860,17 @@ model ProjectLog {
 // ==================== APPROVAL WORKFLOW ====================
 
 model ApprovalWorkflow {
-  id        Int      @id @default(autoincrement())
-  name      String
-  modelType String   @map("model_type")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          Int       @id @default(autoincrement())
+  name        String
+  code        String?
+  modelType   String    @map("model_type")
+  description String?   @db.Text
+  isParallel  Boolean   @default(false) @map("is_parallel")
+  priority    Int       @default(0)
+  isActive    Boolean   @default(true) @map("is_active")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   steps     ApprovalWorkflowStep[]
   approvals Approval[]
@@ -1743,13 +1879,19 @@ model ApprovalWorkflow {
 }
 
 model ApprovalWorkflowStep {
-  id         Int      @id @default(autoincrement())
-  workflowId Int      @map("workflow_id")
-  stepOrder  Int      @map("step_order")
-  roleId     Int?     @map("role_id")
-  userId     Int?     @map("user_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id                      Int      @id @default(autoincrement())
+  workflowId              Int      @map("workflow_id")
+  name                    String?
+  stepOrder               Int      @map("step_order")
+  roleId                  Int?     @map("role_id")
+  userId                  Int?     @map("user_id")
+  approverType            String?  @map("approver_type")
+  canSkip                 Boolean  @default(false) @map("can_skip")
+  autoApproveAfterTimeout Boolean  @default(false) @map("auto_approve_after_timeout")
+  timeoutHours            Int?     @map("timeout_hours")
+  conditions              Json?
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
 
   workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
@@ -1757,14 +1899,19 @@ model ApprovalWorkflowStep {
 }
 
 model Approval {
-  id            Int      @id @default(autoincrement())
-  workflowId    Int      @map("workflow_id")
-  referenceType String   @map("reference_type")
-  referenceId   Int      @map("reference_id")
-  currentStep   Int      @default(1) @map("current_step")
-  status        String   @default("pending")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              Int       @id @default(autoincrement())
+  workflowId      Int       @map("workflow_id")
+  referenceType   String    @map("reference_type")
+  referenceId     Int       @map("reference_id")
+  currentStep     Int       @default(1) @map("current_step")
+  status          String    @default("pending")
+  requestedBy     Int?      @map("requested_by")
+  requestedAt     DateTime? @map("requested_at")
+  finalApprovedBy Int?      @map("final_approved_by")
+  completedAt     DateTime? @map("completed_at")
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   workflow  ApprovalWorkflow  @relation(fields: [workflowId], references: [id])
   histories ApprovalHistory[]
@@ -1786,7 +1933,6 @@ model ApprovalHistory {
   @@map("approval_histories")
 }
 
-
 // ==================== MASTER: BANK & TAX ====================
 
 model Bank {
@@ -1802,12 +1948,23 @@ model Bank {
 }
 
 model Tax {
-  id        Int      @id @default(autoincrement())
-  name      String
-  rate      Decimal  @db.Decimal(5, 2)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id            Int       @id @default(autoincrement())
+  name          String
+  code          String?
+  description   String?   @db.Text
+  rate          Decimal   @db.Decimal(5, 2)
+  type          String    @default("percentage")
+  scope         String?
+  isInclusive   Boolean   @default(false) @map("is_inclusive")
+  isCompound    Boolean   @default(false) @map("is_compound")
+  accountId     Int?      @map("account_id")
+  effectiveFrom DateTime? @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  displayOrder  Int       @default(0) @map("display_order")
+  isActive      Boolean   @default(true) @map("is_active")
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@map("taxes")
 }
@@ -1828,24 +1985,44 @@ model Holiday {
 // ==================== MASTER: PRICE LIST, CURRENCY, BARCODE ====================
 
 model PriceList {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?  @db.Text
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id              Int       @id @default(autoincrement())
+  name            String
+  code            String?
+  type            String?
+  description     String?   @db.Text
+  currencyId      Int?      @map("currency_id")
+  isDefault       Boolean   @default(false) @map("is_default")
+  validFrom       DateTime? @map("valid_from")
+  validTo         DateTime? @map("valid_to")
+  discountPercent Decimal   @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  markupPercent   Decimal   @default(0) @map("markup_percent") @db.Decimal(5, 2)
+  isActive        Boolean   @default(true) @map("is_active")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  priceListItems PriceListItem[]
 
   @@map("price_lists")
 }
 
 model Currency {
-  id        Int      @id @default(autoincrement())
-  code      String   @unique
-  name      String
-  rate      Decimal  @db.Decimal(15, 4)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id                 Int      @id @default(autoincrement())
+  code               String   @unique
+  name               String
+  symbol             String?
+  symbolPosition     String   @default("before") @map("symbol_position")
+  decimalSeparator   String   @default(".") @map("decimal_separator")
+  thousandsSeparator String   @default(",") @map("thousands_separator")
+  decimalPlaces      Int      @default(2) @map("decimal_places")
+  rate               Decimal  @db.Decimal(15, 4)
+  isBase             Boolean  @default(false) @map("is_base")
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  exchangeRatesFrom ExchangeRate[] @relation("ExchangeRateFrom")
+  exchangeRatesTo   ExchangeRate[] @relation("ExchangeRateTo")
 
   @@map("currencies")
 }
@@ -1892,10 +2069,15 @@ model TaxGroupTax {
 model StatisticalKeyFigure {
   id        Int      @id @default(autoincrement())
   name      String
+  code      String?
   unit      String
+  type      String?
   value     Decimal  @default(0) @db.Decimal(15, 2)
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  skfValues SkfValue[]
 
   @@map("statistical_key_figures")
 }
@@ -1932,4 +2114,175 @@ model TransactionAttachment {
 
   @@index([referenceType, referenceId])
   @@map("transaction_attachments")
+}
+
+// ==================== DELIVERY ORDER ITEMS ====================
+
+model DeliveryOrderItem {
+  id               Int     @id @default(autoincrement())
+  deliveryOrderId  Int     @map("delivery_order_id")
+  salesOrderItemId Int?    @map("sales_order_item_id")
+  itemId           Int     @map("item_id")
+  qty              Decimal @db.Decimal(15, 2)
+  unit             String?
+  notes            String?
+
+  deliveryOrder DeliveryOrder @relation(fields: [deliveryOrderId], references: [id], onDelete: Cascade)
+  item          Item          @relation(fields: [itemId], references: [id])
+
+  @@map("delivery_order_items")
+}
+
+// ==================== ITEM BATCH & SERIAL ====================
+
+model ItemBatch {
+  id                Int       @id @default(autoincrement())
+  itemId            Int       @map("item_id")
+  batchNumber       String    @map("batch_number")
+  manufacturingDate DateTime? @map("manufacturing_date")
+  expiryDate        DateTime? @map("expiry_date")
+  qty               Decimal   @db.Decimal(15, 2)
+  warehouseId       Int       @map("warehouse_id")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  item      Item      @relation(fields: [itemId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@map("item_batches")
+}
+
+model ItemSerial {
+  id           Int      @id @default(autoincrement())
+  itemId       Int      @map("item_id")
+  serialNumber String   @unique @map("serial_number")
+  status       String   @default("available")
+  warehouseId  Int      @map("warehouse_id")
+  notes        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  item      Item      @relation(fields: [itemId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@map("item_serials")
+}
+
+// ==================== EXCHANGE RATES ====================
+
+model ExchangeRate {
+  id             Int      @id @default(autoincrement())
+  fromCurrencyId Int      @map("from_currency_id")
+  toCurrencyId   Int      @map("to_currency_id")
+  rate           Decimal  @db.Decimal(15, 6)
+  effectiveDate  DateTime @map("effective_date")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  fromCurrency Currency @relation("ExchangeRateFrom", fields: [fromCurrencyId], references: [id])
+  toCurrency   Currency @relation("ExchangeRateTo", fields: [toCurrencyId], references: [id])
+
+  @@map("exchange_rates")
+}
+
+// ==================== CRM PIPELINE ====================
+
+model CrmPipeline {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  isDefault   Boolean  @default(false) @map("is_default")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  stages CrmPipelineStage[]
+
+  @@map("crm_pipelines")
+}
+
+model CrmPipelineStage {
+  id          Int      @id @default(autoincrement())
+  pipelineId  Int      @map("pipeline_id")
+  name        String
+  order       Int
+  probability Int      @default(0)
+  color       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  pipeline CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@map("crm_pipeline_stages")
+}
+
+// ==================== APPROVAL DELEGATION ====================
+
+model ApprovalDelegation {
+  id         Int      @id @default(autoincrement())
+  fromUserId Int      @map("from_user_id")
+  toUserId   Int      @map("to_user_id")
+  startDate  DateTime @map("start_date")
+  endDate    DateTime @map("end_date")
+  reason     String?
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("approval_delegations")
+}
+
+// ==================== SKF VALUES ====================
+
+model SkfValue {
+  id                     Int      @id @default(autoincrement())
+  statisticalKeyFigureId Int      @map("statistical_key_figure_id")
+  costCenterId           Int?     @map("cost_center_id")
+  profitCenterId         Int?     @map("profit_center_id")
+  period                 String
+  value                  Decimal  @db.Decimal(15, 4)
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  statisticalKeyFigure StatisticalKeyFigure @relation(fields: [statisticalKeyFigureId], references: [id])
+  costCenter           CostCenter?          @relation(fields: [costCenterId], references: [id])
+  profitCenter         ProfitCenter?        @relation(fields: [profitCenterId], references: [id])
+
+  @@map("skf_values")
+}
+
+// ==================== PRICE LIST ITEMS ====================
+
+model PriceListItem {
+  id          Int       @id @default(autoincrement())
+  priceListId Int       @map("price_list_id")
+  itemId      Int       @map("item_id")
+  price       Decimal   @db.Decimal(15, 2)
+  minQty      Decimal   @default(1) @map("min_qty") @db.Decimal(15, 2)
+  validFrom   DateTime? @map("valid_from")
+  validTo     DateTime? @map("valid_to")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id])
+
+  @@map("price_list_items")
+}
+
+// ==================== UNIT OF MEASURE ====================
+
+model UnitOfMeasure {
+  id               Int      @id @default(autoincrement())
+  name             String
+  symbol           String
+  category         String?
+  baseUnitId       Int?     @map("base_unit_id")
+  conversionFactor Decimal  @default(1) @map("conversion_factor") @db.Decimal(15, 6)
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("unit_of_measures")
 }
