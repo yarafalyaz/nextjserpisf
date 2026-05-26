@@ -25,10 +25,12 @@ interface LeadFormProps {
     source: string | null
     notes: string | null
     status: string | null
+    assignedTo: number | null
   }
+  users?: { id: number; name: string }[]
 }
 
-export function LeadForm({ lead }: LeadFormProps) {
+export function LeadForm({ lead, users = [] }: LeadFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!lead
@@ -116,6 +118,21 @@ export function LeadForm({ lead }: LeadFormProps) {
             </Select.Popover>
           </Select>
         </div>
+        {users.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <ComboBox name="assignedTo" defaultSelectedKey={lead?.assignedTo ? String(lead.assignedTo) : undefined} className="w-full">
+              <Label>Ditugaskan Ke</Label>
+              <ComboBox.InputGroup><Input placeholder="Cari user..." /><ComboBox.Trigger /></ComboBox.InputGroup>
+              <ComboBox.Popover>
+                <ListBox>
+                  {users.map((u) => (
+                    <ListBox.Item key={u.id} id={String(u.id)} textValue={u.name}>{u.name}</ListBox.Item>
+                  ))}
+                </ListBox>
+              </ComboBox.Popover>
+            </ComboBox>
+          </div>
+        )}
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="address">Alamat</Label>
           <TextArea id="address" name="address" rows={2} placeholder="Alamat lengkap..." defaultValue={lead?.address || ""} />

@@ -106,6 +106,14 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
         <div className="flex flex-col gap-1.5">
           <AppDatePicker label="Jatuh Tempo" name="dueDate" value={dueDate} onChange={setDueDate} />
         </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="vendorInvoiceNumber">No. Invoice Vendor</Label>
+          <Input id="vendorInvoiceNumber" name="vendorInvoiceNumber" placeholder="No. invoice dari vendor" defaultValue={bill?.vendorInvoiceNumber ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="terms">Syarat Pembayaran</Label>
+          <Input id="terms" name="terms" placeholder="e.g. Net 30" defaultValue={bill?.terms ?? ""} />
+        </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
           <TextArea id="notes" name="notes" rows={2} placeholder="Catatan..." defaultValue={bill?.notes ?? ""} />

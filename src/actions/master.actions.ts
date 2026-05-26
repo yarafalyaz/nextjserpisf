@@ -483,6 +483,7 @@ export async function createLead(formData: FormData) {
     address: formData.get("address") as string || null,
     source: formData.get("source") as string || null,
     notes: formData.get("notes") as string || null,
+    assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
     status: "new",
   }
 
@@ -509,6 +510,7 @@ export async function updateLead(id: number, formData: FormData) {
       address: formData.get("address") as string || null,
       source: formData.get("source") as string || null,
       notes: formData.get("notes") as string || null,
+      assignedTo: formData.get("assignedTo") ? Number(formData.get("assignedTo")) : null,
     },
   })
 
