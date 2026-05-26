@@ -1,0 +1,75 @@
+"use client"
+
+import { createColumnHelper } from "@tanstack/react-table"
+import Link from "next/link"
+import { DataTable } from "@/components/ui/data-table"
+import { ActionDropdown } from "@/components/ui/action-dropdown"
+import { StatusChip } from "@/components/ui/status-chip"
+import { deleteWorkOrder } from "@/actions/manufacturing.actions"
+import { formatDate } from "@/lib/utils/format"
+import { bulkDelete } from "@/actions/bulk.actions"
+
+interface WorkOrder {
+  id: number
+  documentNo: string
+  status: string
+  customer: { name: string }
+  date: Date | string
+}
+
+const columnHelper = createColumnHelper<WorkOrder>()
+
+const columns = [
+  columnHelper.accessor("documentNo", {
+    header: "No. WO",
+    cell: (info) => (
+      <Link href={`/manufacturing/work-orders/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+        {info.getValue()}
+      </Link>
+    ),
+  }),
+  columnHelper.accessor("status", {
+    header: "Status",
+    cell: (info) => {
+      const val = info.getValue()
+      return <StatusChip status={val} />
+    },
+  }),
+  columnHelper.accessor((row) => row.customer.name, {
+    id: "customerName",
+    header: "Pelanggan",
+  }),
+  columnHelper.accessor("date", {
+    header: "Tanggal Mulai",
+    cell: (info) => formatDate(info.getValue()),
+  }),
+  columnHelper.display({
+    id: "actions",
+    header: "Aksi",
+    enableSorting: false,
+    cell: (info) => (
+      <ActionDropdown
+        viewHref={`/manufacturing/work-orders/${info.row.original.id}`}
+        deleteAction={deleteWorkOrder}
+        deleteId={info.row.original.id}
+      />
+    ),
+  }),
+]
+
+interface WorkOrderTableProps {
+  data: WorkOrder[]
+}
+
+export function WorkOrderTable({ data }: WorkOrderTableProps) {
+  return (
+    <DataTable
+      data={data}
+      columns={columns}
+      ariaLabel="Daftar work order"
+      pageSize={20}
+      selectable={true}
+      onBulkDelete={(ids) => bulkDelete("workOrder", ids)}
+    />
+  )
+}

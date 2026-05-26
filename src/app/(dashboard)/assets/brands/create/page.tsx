@@ -1,0 +1,24 @@
+export const dynamic = "force-dynamic"
+
+import { requirePermission } from "@/lib/auth/permissions"
+import { AssetBrandForm } from "@/components/forms/asset-brand-form"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+
+export default async function CreateAssetBrandPage() {
+  await requirePermission("create_assets")
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[
+  { label: "Dashboard", href: "/" },
+  { label: "Assets", href: "/assets" },
+  { label: "Brands", href: "/assets/brands" },
+  { label: "Create" },
+]} />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h1 className="text-2xl font-bold text-foreground">Tambah Brand Aset</h1>
+      </div>
+      <AssetBrandForm />
+    </div>
+  )
+}

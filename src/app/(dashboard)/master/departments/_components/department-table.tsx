@@ -1,0 +1,66 @@
+"use client"
+
+import { createColumnHelper } from "@tanstack/react-table"
+import Link from "next/link"
+import { DataTable } from "@/components/ui/data-table"
+import { ActionDropdown } from "@/components/ui/action-dropdown"
+import { deleteDepartment } from "@/actions/master.actions"
+import { bulkDelete } from "@/actions/bulk.actions"
+
+interface Department {
+  id: number
+  code: string | null
+  name: string
+  description: string | null
+}
+
+const columnHelper = createColumnHelper<Department>()
+
+const columns = [
+  columnHelper.accessor("code", {
+    header: "Kode",
+    cell: (info) => <span className="font-mono">{info.getValue() || "-"}</span>,
+  }),
+  columnHelper.accessor("name", {
+    header: "Nama",
+    cell: (info) => (
+      <Link href={`/master/departments/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+        {info.getValue()}
+      </Link>
+    ),
+  }),
+  columnHelper.accessor("description", {
+    header: "Deskripsi",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.display({
+    id: "actions",
+    header: "Aksi",
+    enableSorting: false,
+    cell: (info) => (
+      <ActionDropdown
+        viewHref={`/master/departments/${info.row.original.id}`}
+        editHref={`/master/departments/${info.row.original.id}/edit`}
+        deleteAction={deleteDepartment}
+        deleteId={info.row.original.id}
+      />
+    ),
+  }),
+]
+
+interface DepartmentTableProps {
+  data: Department[]
+}
+
+export function DepartmentTable({ data }: DepartmentTableProps) {
+  return (
+    <DataTable
+      data={data}
+      columns={columns}
+      ariaLabel="Daftar departemen"
+      pageSize={20}
+      selectable={true}
+      onBulkDelete={(ids) => bulkDelete("department", ids)}
+    />
+  )
+}

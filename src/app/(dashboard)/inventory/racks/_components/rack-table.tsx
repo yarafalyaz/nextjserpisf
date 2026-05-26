@@ -1,0 +1,74 @@
+"use client"
+
+import { createColumnHelper } from "@tanstack/react-table"
+import Link from "next/link"
+import { DataTable } from "@/components/ui/data-table"
+import { ActionDropdown } from "@/components/ui/action-dropdown"
+import { deleteRack } from "@/actions/inventory.actions"
+import { bulkDelete } from "@/actions/bulk.actions"
+
+interface Warehouse {
+  name: string
+}
+
+interface RackRow {
+  id: number
+}
+
+interface Rack {
+  id: number
+  name: string
+  warehouse: Warehouse
+  rows: RackRow[]
+}
+
+const columnHelper = createColumnHelper<Rack>()
+
+const columns = [
+  columnHelper.accessor("name", {
+    header: "Nama",
+    cell: (info) => (
+      <Link href={`/inventory/racks/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+        {info.getValue()}
+      </Link>
+    ),
+  }),
+  columnHelper.accessor("warehouse.name", {
+    header: "Gudang",
+    cell: (info) => info.getValue(),
+  }),
+  columnHelper.accessor("rows", {
+    header: "Jumlah Baris",
+    cell: (info) => info.getValue().length,
+  }),
+  columnHelper.display({
+    id: "actions",
+    header: "Aksi",
+    enableSorting: false,
+    cell: (info) => (
+      <ActionDropdown
+        viewHref={`/inventory/racks/${info.row.original.id}`}
+        editHref={`/inventory/racks/${info.row.original.id}/edit`}
+        deleteAction={deleteRack}
+        deleteId={info.row.original.id}
+      />
+    ),
+  }),
+]
+
+interface RackTableProps {
+  data: Rack[]
+}
+
+export function RackTable({ data }: RackTableProps) {
+  return (
+    <DataTable
+      data={data}
+      columns={columns}
+      ariaLabel="Daftar rak"
+      pageSize={20}
+      selectable={true}
+      onBulkDelete={(ids) => bulkDelete("rack", ids)}
+    />
+  )
+}

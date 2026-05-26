@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/auto-reject-quotations",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/asset-depreciation",
+      "schedule": "0 1 1 * *"
+    },
+    {
+      "path": "/api/cron/daily-notifications",
+      "schedule": "0 7 * * *"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+export const dynamic = "force-dynamic"
+
+import { prisma } from "@/lib/db/prisma"
+import Link from "next/link"
+import { AppSearchField } from "@/components/ui/search-field"
+import { requirePermission } from "@/lib/auth/permissions"
+import { AssetBrandTable } from "./_components/asset-brand-table"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+
+export default async function AssetBrandsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string }>
+}) {
+  await requirePermission("view_assets")
+
+  const params = await searchParams
+
+  const where = {
+    ...(params.search && {
+      name: { contains: params.search },
+    }),
+  }
+
+  const brands = await prisma.assetBrand.findMany({
+    where,
+    orderBy: { name: "asc" },
+    include: { _count: { select: { models: true } } },
+  })
+
+  const tableData = JSON.parse(JSON.stringify(brands))
+
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[
+  { label: "Dashboard", href: "/" },
+  { label: "Assets", href: "/assets" },
+  { label: "Brands" },
+]} />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h1 className="text-2xl font-bold text-foreground">Brand Aset</h1>
+        <Link href="/assets/brands/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-asset-brand-btn">
+          + Tambah Brand
+        </Link>
+      </div>
+
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="p-3 px-4 flex flex-col gap-3">
+          <AppSearchField placeholder="Cari nama brand..." action="/assets/brands" />
+        </div>
+
+        <AssetBrandTable data={tableData} />
+      </div>
+    </div>
+  )
+}

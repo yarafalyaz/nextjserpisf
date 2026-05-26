@@ -1,0 +1,59 @@
+import { NextResponse } from "next/server"
+import { prisma } from "@/lib/db/prisma"
+
+/**
+ * Cron: Auto-reject quotations that have been in 'sent' status for more than 14 days.
+ * Schedule: Daily at midnight (0 0 * * *)
+ * 
+ * Mirrors Laravel: AutoRejectQuotations command
+ */
+export async function GET(request: Request) {
+  // Verify cron secret
+  const authHeader = request.headers.get("authorization")
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const days = 14
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - days)
+
+  // Find quotations that are in 'sent' status and haven't been updated in 14 days
+  const staleQuotations = await prisma.quotation.findMany({
+    where: {
+      status: "sent",
+      deletedAt: null,
+      updatedAt: { lt: cutoffDate },
+    },
+  })
+
+  if (staleQuotations.length === 0) {
+    return NextResponse.json({ rejected: 0, message: "No stale quotations found." })
+  }
+
+  let rejectedCount = 0
+
+  for (const quotation of staleQuotations) {
+    await prisma.$transaction([
+      // Update quotation status to rejected
+      prisma.quotation.update({
+        where: { id: quotation.id },
+        data: { status: "rejected" },
+      }),
+      // Create history entry
+      prisma.quotationHistory.create({
+        data: {
+          quotationId: quotation.id,
+          action: "auto_rejected",
+          description: `Auto-rejected by system (expired after ${days} days without response)`,
+        },
+      }),
+    ])
+    rejectedCount++
+  }
+
+  return NextResponse.json({
+    rejected: rejectedCount,
+    message: `Successfully rejected ${rejectedCount} stale quotations.`,
+  })
+}

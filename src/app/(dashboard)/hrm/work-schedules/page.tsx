@@ -1,0 +1,57 @@
+export const dynamic = "force-dynamic"
+
+import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
+import Link from "next/link"
+import { Clock } from "lucide-react"
+import { AppSearchField } from "@/components/ui/search-field"
+import { WorkScheduleTable } from "./_components/work-schedule-table"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+
+export default async function WorkSchedulesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string }>
+}) {
+  await requirePermission("view_work_schedules")
+
+  const params = await searchParams
+
+  const where = {
+    ...(params.search && {
+      name: { contains: params.search },
+    }),
+  }
+
+  const schedules = await prisma.workSchedule.findMany({
+    where,
+    orderBy: [{ name: "asc" }, { dayOfWeek: "asc" }],
+  })
+
+  const data = schedules.map((s) => ({
+    id: s.id,
+    name: s.name,
+    dayOfWeek: s.dayOfWeek,
+    startTime: s.startTime,
+    endTime: s.endTime,
+  }))
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h1 className="text-2xl font-bold text-foreground">Jadwal Kerja</h1>
+        <Link href="/hrm/work-schedules/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-schedule-btn">
+          <Clock size={16} /> Tambah Jadwal
+        </Link>
+      </div>
+
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="p-3 px-4 flex flex-col gap-3">
+          <AppSearchField placeholder="Cari nama jadwal..." action="/hrm/work-schedules" />
+        </div>
+
+        <WorkScheduleTable data={data} />
+      </div>
+    </div>
+  )
+}

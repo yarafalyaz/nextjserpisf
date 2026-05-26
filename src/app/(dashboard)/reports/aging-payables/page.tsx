@@ -1,0 +1,121 @@
+export const dynamic = 'force-dynamic'
+
+import { prisma } from '@/lib/db/prisma'
+import { requirePermission } from '@/lib/auth/permissions'
+import { formatCurrency, formatDate } from '@/lib/utils/format'
+import { FileText } from 'lucide-react'
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+
+function getAgeGroup(days: number): string {
+  if (days <= 30) return '0-30 hari'
+  if (days <= 60) return '31-60 hari'
+  if (days <= 90) return '61-90 hari'
+  return '90+ hari'
+}
+
+export default async function AgingPayablesPage() {
+  await requirePermission('view_reports')
+
+  const bills = await prisma.vendorBill.findMany({
+    where: {
+      status: { not: 'paid' },
+      dueDate: { not: null },
+    },
+    include: { vendor: true },
+    orderBy: { dueDate: 'asc' },
+  })
+
+  const today = new Date()
+  const data = bills.map((bill) => {
+    const dueDate = bill.dueDate!
+    const diffTime = today.getTime() - dueDate.getTime()
+    const ageDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)))
+    return {
+      id: bill.id,
+      vendorName: bill.vendor.name,
+      documentNo: bill.documentNo,
+      dueDate: bill.dueDate!,
+      amount: Number(bill.grandTotal) - Number(bill.paidAmount),
+      ageDays,
+      ageGroup: getAgeGroup(ageDays),
+    }
+  })
+
+  // Summary by age group
+  const summary = {
+    '0-30 hari': 0,
+    '31-60 hari': 0,
+    '61-90 hari': 0,
+    '90+ hari': 0,
+  }
+  data.forEach((d) => {
+    summary[d.ageGroup as keyof typeof summary] += d.amount
+  })
+
+  const totalOutstanding = data.reduce((sum, d) => sum + d.amount, 0)
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[
+  { label: "Dashboard", href: "/" },
+  { label: "Reports", href: "/reports" },
+  { label: "Aging Payables" },
+]} />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h1 className="text-2xl font-bold text-foreground"><FileText size={20} /> Aging Hutang (Payables)</h1>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1.5rem' }}>
+        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex flex-col">
+            <span className="text-[0.8125rem] text-muted font-medium">Total Outstanding</span>
+            <span className="text-xl font-bold text-foreground">{formatCurrency(totalOutstanding)}</span>
+          </div>
+        </div>
+        {Object.entries(summary).map(([group, amount]) => (
+          <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md" key={group}>
+            <div className="flex flex-col">
+              <span className="text-[0.8125rem] text-muted font-medium">{group}</span>
+              <span className="text-xl font-bold text-foreground">{formatCurrency(amount)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Table */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th>Vendor</th>
+                <th>No. Bill</th>
+                <th>Jatuh Tempo</th>
+                <th style={{ textAlign: 'right' }}>Sisa Tagihan</th>
+                <th style={{ textAlign: 'right' }}>Umur (Hari)</th>
+                <th>Kelompok Umur</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada hutang jatuh tempo</td></tr>
+              ) : (
+                data.map((row) => (
+                  <tr key={row.id}>
+                    <td className="font-medium">{row.vendorName}</td>
+                    <td className="font-mono">{row.documentNo}</td>
+                    <td>{formatDate(row.dueDate, { format: 'short' })}</td>
+                    <td style={{ textAlign: 'right' }}>{formatCurrency(row.amount)}</td>
+                    <td style={{ textAlign: 'right' }}>{row.ageDays}</td>
+                    <td><span className={`status-badge status-${row.ageDays > 90 ? 'danger' : row.ageDays > 60 ? 'warning' : 'default'}`}>{row.ageGroup}</span></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}

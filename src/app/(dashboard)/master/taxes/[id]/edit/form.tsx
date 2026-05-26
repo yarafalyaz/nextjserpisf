@@ -1,0 +1,45 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { useTransition } from "react"
+import { updateTax } from "@/actions/master.actions"
+
+interface TaxEditFormProps {
+  tax: { id: number; name: string; rate: number }
+}
+
+export function TaxEditForm({ tax }: TaxEditFormProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    startTransition(async () => {
+      await updateTax(tax.id, formData)
+      router.push("/master/taxes")
+      router.refresh()
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-foreground">Nama *</label>
+          <input name="name" className="form-input" required defaultValue={tax.name} placeholder="Nama pajak" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-foreground">Rate (%) *</label>
+          <input name="rate" type="number" step="0.01" className="form-input" required defaultValue={tax.rate} placeholder="0.00" />
+        </div>
+      </div>
+      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
+        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
+        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
+          {isPending ? "Menyimpan..." : "Update"}
+        </button>
+      </div>
+    </form>
+  )
+}

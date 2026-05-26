@@ -1,0 +1,122 @@
+// @ts-nocheck
+"use client"
+
+import { useRouter } from "next/navigation"
+import { useState, useTransition } from "react"
+import { createJournal, updateJournal } from "@/actions/finance.actions"
+import { AppDatePicker } from "@/components/ui/date-picker"
+import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
+import { showSuccess, showError } from "@/lib/utils/toast"
+import { Input, Label } from "@heroui/react"
+
+interface JournalFormProps {
+  accounts: { id: number; code: string; name: string
+}[]
+  journal?: any
+}
+
+interface JournalEntry { accountId: number; debit: number; credit: number; memo: string }
+
+export function JournalForm({ accounts, journal }: JournalFormProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [entries, setEntries] = useState<JournalEntry[]>([
+    { accountId: 0, debit: 0, credit: 0, memo: "" },
+    { accountId: 0, debit: 0, credit: 0, memo: "" },
+  ])
+  const [description, setDescription] = useState("")
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+
+  function addEntry() { setEntries([...entries, { accountId: 0, debit: 0, credit: 0, memo: "" }]) }
+  function removeEntry(i: number) { setEntries(entries.filter((_, idx) => idx !== i)) }
+  function updateEntry(i: number, field: keyof JournalEntry, value: any) {
+    const updated = [...entries]; updated[i] = { ...updated[i], [field]: value }; setEntries(updated)
+  }
+
+  const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
+  const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!isBalanced) return alert("Debit dan Credit harus balance!")
+    startTransition(async () => {
+      try {
+        const formData = new FormData()
+        formData.append("description", description)
+        formData.append("transactionDate", date)
+        formData.append("entries", JSON.stringify(entries))
+        const nativeFormData = new FormData(e.currentTarget)
+        const attachmentIdsValue = nativeFormData.get("attachmentIds")
+        if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
+        journal?.id ? await updateJournal(journal.id, formData) : await createJournal(formData)
+        showSuccess(journal?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        router.push("/finance/journals")
+        router.refresh()
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "Gagal menyimpan data")
+      }
+    })
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div className="flex flex-col gap-1.5">
+          <AppDatePicker
+            label="Tanggal"
+            name="transactionDate"
+            value={date}
+            onChange={(val) => setDate(val)}
+            required
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Deskripsi</Label>
+          <Input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full" placeholder="Deskripsi jurnal" isRequired />
+        </div>
+      </div>
+
+      <div style={{ marginTop: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+          <h3 style={{ margin: 0, fontSize: "1rem" }}>Entries</h3>
+          <button type="button" onClick={addEntry} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary">+ Tambah Baris</button>
+        </div>
+        <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
+          <thead><tr><th>Akun</th><th>Debit</th><th>Credit</th><th>Memo</th><th></th></tr></thead>
+          <tbody>
+            {entries.map((entry, i) => (
+              <tr key={i}>
+                <td>
+                  <select value={entry.accountId} onChange={(e) => updateEntry(i, "accountId", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }}>
+                    <option value={0}>Pilih Akun</option>
+                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}
+                  </select>
+                </td>
+                <td><input type="number" step="0.01" value={entry.debit} onChange={(e) => updateEntry(i, "debit", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "110px" }} /></td>
+                <td><input type="number" step="0.01" value={entry.credit} onChange={(e) => updateEntry(i, "credit", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "110px" }} /></td>
+                <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
+                <td>{entries.length > 2 && <button type="button" onClick={() => removeEntry(i)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost" style={{ color: "var(--color-danger)" }}>×</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ fontWeight: "bold" }}>
+              <td className="text-right">Total</td>
+              <td className="text-right">Rp {totalDebit.toLocaleString("id-ID")}</td>
+              <td className="text-right">Rp {totalCredit.toLocaleString("id-ID")}</td>
+              <td><span className={isBalanced ? "text-success" : "text-danger"}>{isBalanced ? "Balanced" : "Not Balanced"}</span></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <FormAttachmentUpload referenceType="journal" />
+      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
+        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
+        <button type="submit" disabled={isPending || !isBalanced} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">{isPending ? "Menyimpan..." : journal?.id ? "Update" : "Simpan"}</button>
+      </div>
+    </form>
+  )
+}

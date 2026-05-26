@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YaraERP - Next.js App Router
+
+Sistem ERP terintegrasi yang dibangun dengan Next.js 16 App Router, Prisma 7, dan MySQL.
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router + Turbopack)
+- **Language**: TypeScript 5
+- **ORM**: Prisma 7 (MySQL via @prisma/adapter-mariadb)
+- **Auth**: NextAuth v5 (Credentials + JWT)
+- **UI**: TailwindCSS 4 + HeroUI + Framer Motion
+- **Forms**: React Hook Form + Zod
+- **State**: Zustand + TanStack Query
+- **Charts**: Recharts
+- **Testing**: Vitest + Playwright
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- MySQL 8.0+
+- npm
+
+### Installation
 
 ```bash
+# Install dependencies
+npm install
+
+# Setup environment
+cp .env.example .env
+# Edit .env with your database credentials
+
+# Generate Prisma client
+npm run db:generate
+
+# Push schema to database
+npm run db:push
+
+# Seed database (creates admin user, roles, permissions, COA)
+npm run db:seed
+
+# Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Default Login
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Email**: admin@yaraerp.co.id
+- **Password**: password123
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Modules (41 Routes)
 
-## Learn More
+| # | Module | Description |
+|---|--------|-------------|
+| 1 | Dashboard | KPI Cards, Recent Invoices, Low Stock Alerts |
+| 2 | Master Data | Customers, Vendors, Items, Warehouses, Employees, Accounts |
+| 3 | Sales | Quotation → DP → SO → Invoice → Payment → Return |
+| 4 | Purchase | PR → PO → Goods Receipt → Return |
+| 5 | Inventory | Stock Moves, Adjustments, Transfers, Material Issues |
+| 6 | Manufacturing | Work Orders, Production Orders |
+| 7 | HRM | Attendance, Leave, Overtime, Payroll |
+| 8 | Finance | Journals, Expenses, Petty Cash, Bank Reconciliation |
+| 9 | CRM | Leads, Tickets |
+| 10 | Assets | Asset Management |
+| 11 | Reports | Balance Sheet, P&L, Trial Balance |
+| 12 | Settings | Company Config, Account Mapping |
 
-To learn more about Next.js, take a look at the following resources:
+## Key Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **FIFO Inventory Costing** with row-level locking
+- **Double-Entry Accounting** with balance validation
+- **Atomic Document Numbering** (concurrency-safe)
+- **Observer Pattern** via explicit hooks (13 hooks)
+- **RBAC** with 70+ permissions
+- **Responsive Design** (mobile-first)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run dev          # Start dev server (Turbopack)
+npm run build        # Production build
+npm run db:push      # Push schema to DB
+npm run db:seed      # Seed database
+npm run db:studio    # Open Prisma Studio
+npm run db:generate  # Regenerate Prisma client
+npm run test         # Run unit tests
+npm run test:e2e     # Run E2E tests
+```
