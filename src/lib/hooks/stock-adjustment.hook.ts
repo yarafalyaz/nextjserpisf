@@ -47,7 +47,7 @@ export async function onStockAdjustmentProcessed(
       const impact = diff > 0 ? "IN" : "OUT";
       const qty = Math.abs(diff);
 
-      await tx.stockMove.create({
+      const sm = await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
@@ -66,6 +66,38 @@ export async function onStockAdjustmentProcessed(
       // Update item qtyOnHand
       const qtyDiff = Number(item.difference);
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qtyDiff} WHERE id = ${item.itemId}`;
+
+      // FIFO layer handling
+      if (qtyDiff > 0) {
+        // Positive adjustment — create new layer
+        await tx.inventoryLayer.create({
+          data: {
+            itemId: item.itemId,
+            stockMoveId: sm.id,
+            qtyIn: qtyDiff,
+            qtyOut: 0,
+            remaining: qtyDiff,
+            unitCost: item.unitCost ?? 0,
+          },
+        });
+      } else if (qtyDiff < 0) {
+        // Negative adjustment — consume from oldest layers
+        const layers = await tx.inventoryLayer.findMany({
+          where: { itemId: item.itemId, remaining: { gt: 0 } },
+          orderBy: { createdAt: "asc" },
+        });
+        let qtyToConsume = Math.abs(qtyDiff);
+        for (const layer of layers) {
+          if (qtyToConsume <= 0) break;
+          const available = Number(layer.remaining);
+          const consume = Math.min(available, qtyToConsume);
+          await tx.inventoryLayer.update({
+            where: { id: layer.id },
+            data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
+          });
+          qtyToConsume -= consume;
+        }
+      }
     }
 
     // Create Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment)

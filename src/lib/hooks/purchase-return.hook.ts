@@ -65,6 +65,23 @@ export async function onPurchaseReturnProcessed(
 
       // Update item qtyOnHand
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
+
+      // FIFO layer consumption
+      const layers = await tx.inventoryLayer.findMany({
+        where: { itemId: item.itemId, remaining: { gt: 0 } },
+        orderBy: { createdAt: "asc" },
+      });
+      let qtyToConsume = Number(item.qty);
+      for (const layer of layers) {
+        if (qtyToConsume <= 0) break;
+        const available = Number(layer.remaining);
+        const consume = Math.min(available, qtyToConsume);
+        await tx.inventoryLayer.update({
+          where: { id: layer.id },
+          data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
+        });
+        qtyToConsume -= consume;
+      }
     }
 
     // Create Journal Entry (Dr Purchase Return, Cr Inventory)

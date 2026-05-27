@@ -46,7 +46,7 @@ export async function onSalesReturnCompleted(
     for (const item of salesReturn.items) {
       const smDocNo = await generateDocumentNumber("SM");
 
-      await tx.stockMove.create({
+      const sm = await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
@@ -64,6 +64,18 @@ export async function onSalesReturnCompleted(
 
       // Update item qtyOnHand
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
+
+      // Create FIFO inventory layer (returned stock)
+      await tx.inventoryLayer.create({
+        data: {
+          itemId: item.itemId,
+          stockMoveId: sm.id,
+          qtyIn: item.qty,
+          qtyOut: 0,
+          remaining: item.qty,
+          unitCost: item.cost ?? 0,
+        },
+      });
     }
 
     // Create Journal Entry (Dr Inventory, Cr Sales Return)
