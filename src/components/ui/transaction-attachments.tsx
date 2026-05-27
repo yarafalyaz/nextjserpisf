@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useCallback, useState, useEffect, useRef } from "react"
 import { Upload, X, FileText, Image, Download, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/page-header"
@@ -36,11 +36,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
   const [loading, setLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    fetchAttachments()
-  }, [referenceType, referenceId])
-
-  async function fetchAttachments() {
+  const fetchAttachments = useCallback(async () => {
     try {
       const res = await fetch(`/api/upload/attachments?referenceType=${referenceType}&referenceId=${referenceId}`)
       if (res.ok) {
@@ -52,7 +48,15 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
     } finally {
       setLoading(false)
     }
-  }
+  }, [referenceId, referenceType])
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void fetchAttachments()
+    }, 0)
+
+    return () => window.clearTimeout(timeout)
+  }, [fetchAttachments])
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

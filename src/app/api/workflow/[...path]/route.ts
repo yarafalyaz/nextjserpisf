@@ -37,9 +37,9 @@ export async function POST(
     return NextResponse.json({ error: "Invalid id" }, { status: 400 })
   }
 
-  const module = path.slice(0, path.length - 2).join("/")
+  const moduleKey = path.slice(0, path.length - 2).join("/")
 
-  const config = MODULE_MAP[module]
+  const config = MODULE_MAP[moduleKey]
   if (!config) {
     return NextResponse.json({ error: "Module not found" }, { status: 404 })
   }

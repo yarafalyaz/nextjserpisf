@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSidebarStore } from "@/lib/stores"
@@ -183,16 +183,11 @@ const navigation: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [expandedItems, setExpandedItems] = useState<string[]>([])
-  const { isOpen, close } = useSidebarStore()
-
-  // Set active menu on mount (client only)
-  useEffect(() => {
+  const [expandedItems, setExpandedItems] = useState<string[]>(() => {
     const segments = pathname.split("/").filter(Boolean)
-    if (segments.length > 0) {
-      setExpandedItems(["/" + segments[0]])
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    return segments.length > 0 ? ["/" + segments[0]] : []
+  })
+  const { isOpen, close } = useSidebarStore()
 
   const toggleExpand = (href: string) => {
     setExpandedItems((prev) =>

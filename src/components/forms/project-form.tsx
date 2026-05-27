@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useMemo, useTransition } from "react"
+import { useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createProject, updateProject } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -39,10 +39,9 @@ export function ProjectForm({ customers, customerVehicles = [], project }: Proje
   const isEdit = !!project
 
   // Filter vehicles by selected customer (use project's customerId as initial)
-  const filteredVehicles = useMemo(() => {
-    if (!project?.customerId) return customerVehicles
-    return customerVehicles.filter((v) => v.customerId === project.customerId)
-  }, [customerVehicles, project?.customerId])
+  const filteredVehicles = project?.customerId
+    ? customerVehicles.filter((v) => v.customerId === project.customerId)
+    : customerVehicles
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

@@ -138,7 +138,7 @@ export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps
 
   // Load regencies when province changes
   useEffect(() => {
-    if (!provinceCode) { setRegencies([]); return }
+    if (!provinceCode) return
     fetch(`/api/address?type=regencies&parentCode=${provinceCode}`)
       .then(res => res.json())
       .then((data: AddressOption[]) => {
@@ -155,7 +155,7 @@ export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps
 
   // Load districts when regency changes
   useEffect(() => {
-    if (!regencyCode) { setDistricts([]); return }
+    if (!regencyCode) return
     fetch(`/api/address?type=districts&parentCode=${regencyCode}`)
       .then(res => res.json())
       .then((data: AddressOption[]) => {
@@ -172,7 +172,7 @@ export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps
 
   // Load villages when district changes
   useEffect(() => {
-    if (!districtCode) { setVillages([]); return }
+    if (!districtCode) return
     fetch(`/api/address?type=villages&parentCode=${districtCode}`)
       .then(res => res.json())
       .then((data: AddressOption[]) => setVillages(Array.isArray(data) ? data : []))

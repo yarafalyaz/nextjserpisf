@@ -15,17 +15,12 @@ const ThemeContext = createContext<ThemeContextType>({
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("system")
-  const [mounted, setMounted] = useState(false)
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "system"
+    return (localStorage.getItem("theme") as Theme | null) || "system"
+  })
 
   useEffect(() => {
-    setMounted(true)
-    const stored = localStorage.getItem("theme") as Theme | null
-    if (stored) setTheme(stored)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted) return
     const root = document.documentElement
     root.classList.remove("light", "dark")
 
@@ -37,7 +32,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
 
     localStorage.setItem("theme", theme)
-  }, [theme, mounted])
+  }, [theme])
 
   // Listen for system theme changes
   useEffect(() => {

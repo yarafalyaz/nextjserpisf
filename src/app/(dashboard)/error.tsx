@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/page-header"
 
 export default function DashboardError({
@@ -26,9 +27,9 @@ export default function DashboardError({
           <Button onPress={reset} >
             Coba Lagi
           </Button>
-          <a href="/" >
+          <Link href="/" >
             Ke Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     </div>

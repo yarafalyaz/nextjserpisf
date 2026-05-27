@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useRef } from "react"
 
 interface CurrencyInputProps {
   name?: string
@@ -59,13 +59,7 @@ export function CurrencyInput({
 
   const hiddenRef = useRef<HTMLInputElement>(null)
 
-  // Sync controlled value
-  useEffect(() => {
-    if (isControlled) {
-      setDisplayValue(formatDisplay(controlledValue))
-    }
-  }, [controlledValue, isControlled])
-
+  const visibleValue = isControlled ? formatDisplay(controlledValue) : displayValue
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value
@@ -114,7 +108,7 @@ export function CurrencyInput({
     [displayValue]
   )
 
-  const numericValue = parseInput(displayValue)
+  const numericValue = parseInput(visibleValue)
 
   return (
     <div className="relative">
@@ -127,7 +121,7 @@ export function CurrencyInput({
         type="text"
         inputMode="numeric"
         id={id}
-        value={displayValue}
+        value={visibleValue}
         onChange={handleChange}
         onBlur={handleBlur}
         onFocus={handleFocus}
