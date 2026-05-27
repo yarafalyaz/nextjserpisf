@@ -6,6 +6,7 @@ import { useTransition } from "react"
 import { createBank } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Input, Label } from "@heroui/react"
+import { Button } from "@/components/ui/page-header"
 
 export default function CreateBankPage() {
   const router = useRouter()
@@ -51,10 +52,10 @@ export default function CreateBankPage() {
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-          <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="submit-bank">
+          <Button onClick={() => router.back()} >Batal</Button>
+          <Button type="submit" variant="primary" disabled={isPending} id="submit-bank">
             {isPending ? "Menyimpan..." : "Simpan"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

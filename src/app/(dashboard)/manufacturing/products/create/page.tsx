@@ -7,6 +7,7 @@ import { Plus, Trash2 } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Input, TextArea, Label, ComboBox, ListBox } from "@heroui/react"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { Button } from "@/components/ui/page-header"
 
 interface MaterialRow {
   itemId: string
@@ -170,9 +171,9 @@ export default function CreateProductPage() {
         <div className="form-section">
           <div className="form-section-header">
             <h3 className="form-section-title">Material (BOM)</h3>
-            <button type="button" onClick={addMaterialRow} aria-label="Tambah material" className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default hover:bg-surface-secondary transition-all">
+            <Button onClick={addMaterialRow} aria-label="Tambah material" >
               <Plus size={14} /> Tambah Material
-            </button>
+            </Button>
           </div>
 
           <div className="overflow-x-auto">
@@ -203,9 +204,9 @@ export default function CreateProductPage() {
                       />
                     </DetailTableTd>
                     <DetailTableTd>
-                      <button type="button" onClick={() => removeMaterialRow(index)} aria-label="Hapus material" className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-danger hover:bg-danger/10 transition-all" disabled={materials.length === 1}>
+                      <Button onClick={() => removeMaterialRow(index)} aria-label="Hapus material"  disabled={materials.length === 1}>
                         <Trash2 size={14} />
-                      </button>
+                      </Button>
                     </DetailTableTd>
                   </DetailTableRow>
                 ))}
@@ -215,10 +216,10 @@ export default function CreateProductPage() {
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-          <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="submit-product">
+          <Button onClick={() => router.back()} >Batal</Button>
+          <Button type="submit" variant="primary" disabled={isPending} id="submit-product">
             {isPending ? "Menyimpan..." : "Simpan"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

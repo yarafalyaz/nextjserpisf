@@ -8,9 +8,10 @@ import { z } from "zod"
 import { createDownPayment, updateDownPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Select, ComboBox, ListBox, Label, InputGroup, TextField , Select as HeroSelect} from "@heroui/react"
+import {Select, ComboBox, ListBox, Label, InputGroup, TextField } from "@heroui/react"
 import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 import { CurrencyInput } from "@/components/ui/currency-input"
+import { Button } from "@/components/ui/page-header"
 
 const downPaymentSchema = z.object({
   customerId: z.number({ error: "Customer wajib dipilih" }).min(1, "Customer wajib dipilih"),
@@ -162,14 +163,14 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
             render={({ field }) => (
               <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                 <Label>Metode Pembayaran *</Label>
-                <HeroSelect.Trigger><SelectValue placeholder="Pilih Metode" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                <HeroSelect.Popover>
+                <Select.Trigger><SelectValue placeholder="Pilih Metode" /><Select.Indicator /></Select.Trigger>
+                <Select.Popover>
                   <ListBox>
                     <ListBox.Item id="transfer" textValue="Transfer">Transfer<ListBox.ItemIndicator /></ListBox.Item>
                     <ListBox.Item id="cash" textValue="Cash">Cash<ListBox.ItemIndicator /></ListBox.Item>
                     <ListBox.Item id="giro" textValue="Giro">Giro<ListBox.ItemIndicator /></ListBox.Item>
                   </ListBox>
-                </HeroSelect.Popover>
+                </Select.Popover>
               </Select>
             )}
           />
@@ -194,10 +195,10 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="submit-down-payment">
+        <Button onClick={() => router.back()} >Batal</Button>
+        <Button disabled={isPending}  id="submit-down-payment">
           {isPending ? "Menyimpan..." : downPayment?.id ? "Update" : "Simpan"}
-        </button>
+        </Button>
       </div>
     </form>
   )

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition, useMemo, useState } from "react"
 import { createCustomerVehicle, updateCustomerVehicle } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label, Select as HeroSelect, Checkbox } from "@heroui/react"
+import { Select, ComboBox, ListBox, Label,  Checkbox } from "@heroui/react"
 import { SelectValue, Input, TextArea } from "@/components/ui/heroui-compat"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -208,14 +208,14 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
               className="w-full"
             >
               <Label>Transmisi</Label>
-              <HeroSelect.Trigger><SelectValue placeholder="Pilih Transmisi" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-              <HeroSelect.Popover>
+              <Select.Trigger><SelectValue placeholder="Pilih Transmisi" /><Select.Indicator /></Select.Trigger>
+              <Select.Popover>
                 <ListBox>
                   <ListBox.Item id="manual" textValue="Manual">Manual<ListBox.ItemIndicator /></ListBox.Item>
                   <ListBox.Item id="automatic" textValue="Automatic">Automatic<ListBox.ItemIndicator /></ListBox.Item>
                   <ListBox.Item id="cvt" textValue="CVT">CVT<ListBox.ItemIndicator /></ListBox.Item>
                 </ListBox>
-              </HeroSelect.Popover>
+              </Select.Popover>
             </Select>
           </div>
 

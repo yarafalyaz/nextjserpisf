@@ -1,11 +1,13 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
 
 /**
  * Purchase Return Hook - Observer pattern replacement.
  * Triggered when a Purchase Return is processed.
  * Creates Stock Move OUT per item (goods returned to vendor).
+ * Creates Journal Entry (Dr Purchase Return, Cr Inventory)
  */
 
 export async function onPurchaseReturnProcessed(
@@ -61,6 +63,18 @@ export async function onPurchaseReturnProcessed(
         },
       });
     }
+
+    // Create Journal Entry (Dr Purchase Return, Cr Inventory)
+    await stockJournalService.onPurchaseReturn(
+      tx as any,
+      purchaseReturn.items.map((i) => ({
+        qty: Number(i.qty),
+        cost: Number(i.cost),
+      })),
+      purchaseReturn.documentNo ?? `PRET-${returnId}`,
+      returnId,
+      userId
+    );
 
     // Update Purchase Return status
     await tx.purchaseReturn.update({

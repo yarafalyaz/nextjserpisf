@@ -130,9 +130,9 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
           <div>
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-base font-semibold text-foreground">Item</h3>
-              <button type="button" onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">
+              <Button onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">
                 <Plus size={14} /> Tambah Item
-              </button>
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
@@ -183,9 +183,9 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
                       <td className="py-2 px-2 text-right font-medium">{calcLineTotal(item).toLocaleString("id-ID")}</td>
                       <td className="py-2 px-2 text-center">
                         {billItems.length > 1 && (
-                          <button type="button" onClick={() => removeItem(idx)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">
+                          <Button onClick={() => removeItem(idx)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">
                             <Trash2 size={14} />
-                          </button>
+                          </Button>
                         )}
                       </td>
                     </tr>

@@ -1,5 +1,8 @@
 "use client"
 
+import { Button } from "@/components/ui/page-header"
+
+
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -63,24 +66,24 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
       {(canApprove || canReject) && (
         <div className="flex gap-2">
           {canApprove && (
-            <button
+            <Button
               onClick={() => handleAction("approve")}
               disabled={isPending}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-success text-white hover:bg-success/90 transition-all disabled:opacity-50"
             >
               <CheckCircle size={14} />
               Setujui
-            </button>
+            </Button>
           )}
           {canReject && (
-            <button
+            <Button
               onClick={() => handleAction("reject")}
               disabled={isPending}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-danger text-white hover:bg-danger/90 transition-all disabled:opacity-50"
             >
               <XCircle size={14} />
               Tolak
-            </button>
+            </Button>
           )}
         </div>
       )}

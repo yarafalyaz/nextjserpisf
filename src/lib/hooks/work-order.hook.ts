@@ -1,11 +1,13 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
 
 /**
  * Work Order Hook - Observer pattern replacement.
  * Triggered when a Work Order is completed.
  * Creates Stock Move OUT per item (materials consumed).
+ * Creates Journal Entry (Dr WIP, Cr Inventory)
  */
 
 export async function onWorkOrderCompleted(
@@ -62,6 +64,20 @@ export async function onWorkOrderCompleted(
         },
       });
     }
+
+    // Create Journal Entry (Dr WIP, Cr Inventory)
+    await stockJournalService.onWorkOrderCompleted(
+      tx as any,
+      workOrder.items
+        .filter((i) => Number(i.qty) > 0)
+        .map((i) => ({
+          qty: Number(i.qty),
+          cost: Number(i.cost),
+        })),
+      workOrder.documentNo ?? `WO-${workOrderId}`,
+      workOrderId,
+      userId
+    );
 
     // Update Work Order status
     await tx.workOrder.update({

@@ -1,5 +1,8 @@
 "use client"
 
+import { Button } from "@/components/ui/page-header"
+
+
 import { useState, useEffect, useRef } from "react"
 import { Label } from "@heroui/react"
 import { ChevronDown, Search } from "lucide-react"
@@ -41,7 +44,7 @@ function SearchableSelect({ id, name, label, options, value, onChange, disabled,
       <Label htmlFor={id}>{label}</Label>
       <input type="hidden" name={name} value={value} />
       <div className="relative">
-        <button
+        <Button
           type="button"
           id={id}
           onClick={() => !disabled && setIsOpen(!isOpen)}
@@ -50,7 +53,7 @@ function SearchableSelect({ id, name, label, options, value, onChange, disabled,
         >
           <span className={value ? "text-foreground" : "text-muted"}>{value || placeholder || "Pilih..."}</span>
           <ChevronDown size={14} className="text-muted" />
-        </button>
+        </Button>
 
         {isOpen && (
           <div className="absolute z-50 top-full mt-1 w-full bg-surface border border-default rounded-lg shadow-lg overflow-hidden">
@@ -70,14 +73,14 @@ function SearchableSelect({ id, name, label, options, value, onChange, disabled,
                 <div className="px-3 py-2 text-sm text-muted">Tidak ditemukan</div>
               ) : (
                 filtered.map(o => (
-                  <button
+                  <Button
                     key={o.code}
                     type="button"
                     onClick={() => { onChange(o.name, o.code); setIsOpen(false); setSearch("") }}
                     className={`w-full text-left px-3 py-2 text-sm hover:bg-primary/10 transition-colors ${value === o.name ? "bg-primary/10 text-primary font-medium" : "text-foreground"}`}
                   >
                     {o.name}
-                  </button>
+                  </Button>
                 ))
               )}
             </div>
@@ -121,7 +124,15 @@ export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps
   useEffect(() => {
     fetch("/api/address?type=provinces")
       .then(res => res.json())
-      .then(data => setProvinces(Array.isArray(data) ? data : []))
+      .then((data: AddressOption[]) => {
+        const list = Array.isArray(data) ? data : []
+        setProvinces(list)
+        // Auto-resolve province code from defaultValues name
+        if (defaultValues?.province && !provinceCode) {
+          const match = list.find(p => p.name === defaultValues.province)
+          if (match) setProvinceCode(match.code)
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -130,7 +141,15 @@ export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps
     if (!provinceCode) { setRegencies([]); return }
     fetch(`/api/address?type=regencies&parentCode=${provinceCode}`)
       .then(res => res.json())
-      .then(data => setRegencies(Array.isArray(data) ? data : []))
+      .then((data: AddressOption[]) => {
+        const list = Array.isArray(data) ? data : []
+        setRegencies(list)
+        // Auto-resolve city code from defaultValues name
+        if (defaultValues?.city && !regencyCode) {
+          const match = list.find(r => r.name === defaultValues.city)
+          if (match) setRegencyCode(match.code)
+        }
+      })
       .catch(() => {})
   }, [provinceCode])
 
@@ -139,7 +158,15 @@ export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps
     if (!regencyCode) { setDistricts([]); return }
     fetch(`/api/address?type=districts&parentCode=${regencyCode}`)
       .then(res => res.json())
-      .then(data => setDistricts(Array.isArray(data) ? data : []))
+      .then((data: AddressOption[]) => {
+        const list = Array.isArray(data) ? data : []
+        setDistricts(list)
+        // Auto-resolve district code from defaultValues name
+        if (defaultValues?.district && !districtCode) {
+          const match = list.find(d => d.name === defaultValues.district)
+          if (match) setDistrictCode(match.code)
+        }
+      })
       .catch(() => {})
   }, [regencyCode])
 
@@ -148,7 +175,7 @@ export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps
     if (!districtCode) { setVillages([]); return }
     fetch(`/api/address?type=villages&parentCode=${districtCode}`)
       .then(res => res.json())
-      .then(data => setVillages(Array.isArray(data) ? data : []))
+      .then((data: AddressOption[]) => setVillages(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [districtCode])
 

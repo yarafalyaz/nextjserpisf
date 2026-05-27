@@ -1,5 +1,8 @@
 "use client"
 
+import { Button } from "@/components/ui/page-header"
+
+
 import { useTheme } from "@/components/providers/theme-provider"
 
 export function ThemeToggle() {
@@ -7,7 +10,7 @@ export function ThemeToggle() {
 
   return (
     <div className="theme-toggle">
-      <button
+      <Button
         type="button"
         onClick={() => setTheme("light")}
         className={`theme-toggle-btn ${theme === "light" ? "active" : ""}`}
@@ -25,8 +28,8 @@ export function ThemeToggle() {
           <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
         </svg>
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
         onClick={() => setTheme("dark")}
         className={`theme-toggle-btn ${theme === "dark" ? "active" : ""}`}
@@ -36,8 +39,8 @@ export function ThemeToggle() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
         onClick={() => setTheme("system")}
         className={`theme-toggle-btn ${theme === "system" ? "active" : ""}`}
@@ -49,7 +52,7 @@ export function ThemeToggle() {
           <line x1="8" y1="21" x2="16" y2="21"/>
           <line x1="12" y1="17" x2="12" y2="21"/>
         </svg>
-      </button>
+      </Button>
     </div>
   )
 }

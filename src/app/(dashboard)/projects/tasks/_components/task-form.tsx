@@ -5,7 +5,8 @@ import { useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createTask, updateTask } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { TextArea, Label, Select, ComboBox, Input, ListBox, Select as HeroSelect } from "@heroui/react"
+import { TextArea, Label, Select, ComboBox, Input, ListBox } from "@heroui/react"
+import { Button } from "@/components/ui/page-header"
 
 interface TaskFormProps {
   projects: { id: number; name: string }[]
@@ -82,8 +83,8 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
         <div className="flex flex-col gap-1.5">
           <Select name="status" isRequired defaultSelectedKey={task?.status ?? "pending"} className="w-full">
             <Label>Status *</Label>
-            <HeroSelect.Trigger><Select.Value /><HeroSelect.Indicator /></HeroSelect.Trigger>
-            <HeroSelect.Popover>
+            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
               <ListBox>
                 {statusOptions.map((s) => (
                   <ListBox.Item key={s.id} id={s.id} textValue={s.name}>
@@ -92,7 +93,7 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
                   </ListBox.Item>
                 ))}
               </ListBox>
-            </HeroSelect.Popover>
+            </Select.Popover>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -136,8 +137,8 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">{isPending ? "Menyimpan..." : task?.id ? "Update" : "Simpan"}</button>
+        <Button onClick={() => router.back()} >Batal</Button>
+        <Button type="submit" variant="primary" disabled={isPending}>{isPending ? "Menyimpan..." : task?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

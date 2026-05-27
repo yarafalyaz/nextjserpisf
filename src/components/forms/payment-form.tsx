@@ -9,7 +9,7 @@ import { createSalesPayment, updateSalesPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label, InputGroup , Select as HeroSelect} from "@heroui/react"
+import { Input, TextArea, Select, ComboBox, ListBox, Label, InputGroup } from "@heroui/react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -117,8 +117,8 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
               render={({ field }) => (
                 <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                   <Label>Metode Bayar *</Label>
-                  <HeroSelect.Trigger><Select.Value /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       <ListBox.Item id="transfer" textValue="Transfer Bank">Transfer Bank<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item id="cash" textValue="Tunai">Tunai<ListBox.ItemIndicator /></ListBox.Item>
@@ -126,7 +126,7 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
                       <ListBox.Item id="card" textValue="Kartu Kredit/Debit">Kartu Kredit/Debit<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item id="ewallet" textValue="E-Wallet">E-Wallet<ListBox.ItemIndicator /></ListBox.Item>
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />

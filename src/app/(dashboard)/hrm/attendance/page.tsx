@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AttendanceTable } from "./_components/attendance-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Button } from "@/components/ui/page-header"
 
 export default async function AttendancePage({
   searchParams,
@@ -58,7 +59,7 @@ export default async function AttendancePage({
         <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
         <form className="flex gap-2" action="/hrm/attendance">
           <input type="date" name="date" defaultValue={targetDate.toISOString().split("T")[0]} className="form-input" />
-          <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Filter</button>
+          <Button >Filter</Button>
         </form>
       </div>
 

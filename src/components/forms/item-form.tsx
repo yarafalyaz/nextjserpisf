@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { itemSchema, type ItemInput } from "@/lib/validators"
 import { createItem, updateItem } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Label, Select, ComboBox, ListBox, InputGroup , Select as HeroSelect, Switch} from "@heroui/react"
+import {Label, Select, ComboBox, ListBox, InputGroup ,  Switch} from "@heroui/react"
 import { Upload, X } from "lucide-react"
 import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -167,9 +167,9 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               {imagePreview ? (
                 <div className="image-upload-preview">
                   <img src={imagePreview} alt="Preview" className="image-upload-img" />
-                  <button type="button" onClick={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
+                  <Button onClick={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
                     <X className="size-4" />
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div
@@ -290,8 +290,8 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               render={({ field }) => (
                 <Select selectedKey={field.value || "PCS"} onSelectionChange={(key) => field.onChange(String(key))} className="w-full">
                   <Label>Satuan</Label>
-                  <HeroSelect.Trigger><Select.Value /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="PCS" id="PCS" textValue="PCS">PCS<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="SET" id="SET" textValue="SET">SET<ListBox.ItemIndicator /></ListBox.Item>
@@ -300,7 +300,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                       <ListBox.Item key="MTR" id="MTR" textValue="MTR">MTR<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="BOX" id="BOX" textValue="BOX">BOX<ListBox.ItemIndicator /></ListBox.Item>
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />
@@ -340,14 +340,14 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               render={({ field }) => (
                 <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : undefined)} className="w-full">
                   <Label>Metode Costing</Label>
-                  <HeroSelect.Trigger><SelectValue placeholder="Pilih metode" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><SelectValue placeholder="Pilih metode" /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="average" id="average" textValue="Average">Average<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="fifo" id="fifo" textValue="FIFO">FIFO<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="standard" id="standard" textValue="Standard">Standard<ListBox.ItemIndicator /></ListBox.Item>
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />

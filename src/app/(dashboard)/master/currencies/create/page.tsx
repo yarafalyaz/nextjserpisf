@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createCurrency } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ListBox, Checkbox, Select as HeroSelect, Label } from "@heroui/react"
+import { ListBox, Checkbox, Select, Label } from "@heroui/react"
 import { Input, SelectValue } from "@/components/ui/heroui-compat"
+import { Button } from "@/components/ui/page-header"
 
 export default function CreateCurrencyPage() {
   const router = useRouter()
@@ -42,16 +43,16 @@ export default function CreateCurrencyPage() {
 
           <Input name="symbol" label="Simbol" placeholder="e.g. Rp, $, €" />
 
-          <HeroSelect name="symbolPosition" className="w-full">
+          <Select name="symbolPosition" className="w-full">
             <Label>Posisi Simbol</Label>
-            <HeroSelect.Trigger><SelectValue placeholder="Pilih posisi" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-            <HeroSelect.Popover>
+            <Select.Trigger><SelectValue placeholder="Pilih posisi" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
               <ListBox>
                 <ListBox.Item id="before" textValue="Before">Before<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="after" textValue="After">After<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </HeroSelect.Popover>
-          </HeroSelect>
+            </Select.Popover>
+          </Select>
 
           <Input name="decimalSeparator" label="Pemisah Desimal" placeholder="e.g. , or ." />
 
@@ -65,10 +66,10 @@ export default function CreateCurrencyPage() {
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-          <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="submit-currency">
+          <Button onClick={() => router.back()} >Batal</Button>
+          <Button type="submit" variant="primary" disabled={isPending} id="submit-currency">
             {isPending ? "Menyimpan..." : "Simpan"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

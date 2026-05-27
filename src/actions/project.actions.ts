@@ -4,16 +4,18 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
+import { generateDocumentNumber } from "@/lib/utils/document-number"
 
 // ==================== PROJECT ACTIONS ====================
 
 export async function createProject(formData: FormData) {
   const user = await requirePermission("create_projects")
+  const documentNo = await generateDocumentNumber("PRJ")
 
   const project = await prisma.project.create({
     data: {
       name: formData.get("name") as string,
-      documentNo: (formData.get("documentNo") as string) || null,
+      documentNo,
       description: (formData.get("description") as string) || null,
       customerId: requireId(formData.get("customerId"), "customerId"),
       customerVehicleId: safeNumber(formData.get("customerVehicleId")),
@@ -37,7 +39,6 @@ export async function updateProject(projectId: number, formData: FormData) {
     where: { id: projectId },
     data: {
       name: formData.get("name") as string,
-      documentNo: (formData.get("documentNo") as string) || null,
       description: (formData.get("description") as string) || null,
       customerId: requireId(formData.get("customerId"), "customerId"),
       customerVehicleId: safeNumber(formData.get("customerVehicleId")),

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Upload, X, FileText, Image, Download, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { Button } from "@/components/ui/page-header"
 
 interface Attachment {
   id: number
@@ -114,7 +115,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
           <FileText className="size-4" />
           Bukti / Lampiran
         </h3>
-        <button
+        <Button
           type="button"
           className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary"
           onClick={() => fileInputRef.current?.click()}
@@ -122,7 +123,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         >
           <Upload className="size-3" />
           {uploading ? "Mengupload..." : "Upload Bukti"}
-        </button>
+        </Button>
         <input
           ref={fileInputRef}
           type="file"
@@ -161,9 +162,9 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
                 <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all attachment-action-" title="Download">
                   <Download className="size-3.5" />
                 </a>
-                <button onClick={() => handleDelete(att.id)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all attachment-action-btn attachment-delete-" title="Hapus">
+                <Button onPress={() => handleDelete(att.id)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all attachment-action-btn attachment-delete-" title="Hapus">
                   <Trash2 className="size-3.5" />
-                </button>
+                </Button>
               </div>
             </div>
           ))}

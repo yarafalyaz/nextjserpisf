@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ReactNode } from "react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Button as HeroButton } from "@heroui/react"
 
 interface BreadcrumbItem {
   label: string
@@ -41,38 +42,56 @@ export function PageHeader({ title, subtitle, breadcrumbs, actions, badge }: Pag
   )
 }
 
-// Reusable button variants
+// Reusable button variants (HeroUI v3)
 interface ButtonProps {
   href?: string
   onClick?: () => void
+  onPress?: () => void
   children: ReactNode
   variant?: "primary" | "secondary" | "ghost" | "danger"
-  size?: "sm" | "md"
+  size?: "sm" | "md" | "lg"
   disabled?: boolean
   type?: "button" | "submit"
   className?: string
+  id?: string
+  [key: string]: any
 }
 
-const variantStyles = {
-  primary: "bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md",
-  secondary: "bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary",
-  ghost: "text-muted-foreground hover:bg-surface-secondary hover:text-foreground",
-  danger: "bg-red-500 text-white hover:bg-red-600",
+const variantMap: Record<string, "primary" | "secondary" | "danger" | "ghost" | "outline"> = {
+  primary: "primary",
+  secondary: "outline",
+  ghost: "ghost",
+  danger: "danger",
 }
 
-const sizeStyles = {
-  sm: "px-3 py-1.5 text-xs",
-  md: "px-4 py-2.5 text-sm",
-}
-
-export function Button({ href, onClick, children, variant = "secondary", size = "md", disabled, type = "button", className = "" }: ButtonProps) {
-  const baseClass = `inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-all ${variantStyles[variant]} ${sizeStyles[size]} ${disabled ? "opacity-50 cursor-not-allowed" : ""} ${className}`
+export function Button({ href, onClick, onPress, children, variant = "secondary", size = "md", disabled, type = "button", className = "", id, ...rest }: ButtonProps) {
+  const heroVariant: "primary" | "secondary" | "danger" | "ghost" | "outline" = variantMap[variant] || "outline"
+  const handlePress = onPress || onClick
 
   if (href) {
-    return <Link href={href} className={baseClass}>{children}</Link>
+    return (
+      <Link href={href} tabIndex={-1}>
+        <HeroButton variant={heroVariant} size={size} isDisabled={disabled} className={className} {...rest}>
+          {children}
+        </HeroButton>
+      </Link>
+    )
   }
 
-  return <button type={type} onClick={onClick} disabled={disabled} className={baseClass}>{children}</button>
+  return (
+    <HeroButton
+      type={type}
+      onPress={handlePress}
+      variant={heroVariant}
+      size={size}
+      isDisabled={disabled}
+      className={className}
+      id={id}
+      {...rest}
+    >
+      {children}
+    </HeroButton>
+  )
 }
 
 // Back button shortcut

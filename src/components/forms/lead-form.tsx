@@ -4,10 +4,11 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createLead, updateLead } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Select, ListBox, Label , Select as HeroSelect, ComboBox} from "@heroui/react"
+import {Select, ListBox, Label ,  ComboBox} from "@heroui/react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 import { CurrencyInput } from "@/components/ui/currency-input"
+import { Button } from "@/components/ui/page-header"
 
 interface LeadFormProps {
   lead?: {
@@ -106,8 +107,8 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         <div className="flex flex-col gap-1.5">
           <Select name="source" defaultSelectedKey={lead?.source || undefined} className="w-full">
             <Label>Sumber</Label>
-            <HeroSelect.Trigger><SelectValue placeholder="Pilih Sumber" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-            <HeroSelect.Popover>
+            <Select.Trigger><SelectValue placeholder="Pilih Sumber" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
               <ListBox>
                 <ListBox.Item id="website" textValue="Website">Website<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="referral" textValue="Referral">Referral<ListBox.ItemIndicator /></ListBox.Item>
@@ -116,7 +117,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
                 <ListBox.Item id="exhibition" textValue="Exhibition">Exhibition<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="other" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </HeroSelect.Popover>
+            </Select.Popover>
           </Select>
         </div>
         {users.length > 0 && (
@@ -144,8 +145,8 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Lead"}</button>
+        <Button onClick={() => router.back()} >Batal</Button>
+        <Button disabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Lead"}</Button>
       </div>
     </form>
   )

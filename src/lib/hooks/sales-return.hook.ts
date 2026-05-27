@@ -1,11 +1,13 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
 
 /**
  * Sales Return Hook - Observer pattern replacement.
  * Triggered when a Sales Return is completed.
  * Creates Stock Move IN per item (returned goods back to warehouse).
+ * Creates Journal Entry (Dr Inventory, Cr Sales Return)
  */
 
 export async function onSalesReturnCompleted(
@@ -60,6 +62,18 @@ export async function onSalesReturnCompleted(
         },
       });
     }
+
+    // Create Journal Entry (Dr Inventory, Cr Sales Return)
+    await stockJournalService.onSalesReturn(
+      tx as any,
+      salesReturn.items.map((i) => ({
+        qty: Number(i.qty),
+        cost: Number(i.cost),
+      })),
+      salesReturn.documentNo ?? `SR-${returnId}`,
+      returnId,
+      userId
+    );
 
     // Update Sales Return status
     await tx.salesReturn.update({

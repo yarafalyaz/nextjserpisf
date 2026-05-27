@@ -8,7 +8,7 @@ import { employeeSchema, type EmployeeInput } from "@/lib/validators"
 import { createEmployee, updateEmployee } from "@/actions/master.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, ComboBox, ListBox, Select, Select as HeroSelect } from "@heroui/react"
+import { Label, ComboBox, ListBox, Select } from "@heroui/react"
 import { Input, TextArea, SelectValue } from "@/components/ui/heroui-compat"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -31,6 +31,11 @@ interface EmployeeFormProps {
     paymentFrequency: string
     baseSalary: number
     city?: string | null
+    province?: string | null
+    employeeCity?: string | null
+    employeeDistrict?: string | null
+    employeeVillage?: string | null
+    postalCode?: string | null
   }
   departments: { id: number; name: string }[]
   positions: { id: number; name: string }[]
@@ -69,6 +74,17 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
+        // Append/overwrite address fields from AddressPicker hidden inputs
+        const form = document.querySelector("form") as HTMLFormElement | null
+        if (form) {
+          const addressFields = ["province", "city", "district", "village", "postalCode", "address"]
+          addressFields.forEach(field => {
+            const input = form.querySelector(`input[name="${field}"]`) as HTMLInputElement | null
+            if (input?.value) {
+              formData.set(field, input.value)
+            }
+          })
+        }
         if (isEdit) {
           await updateEmployee(employee!.id, formData)
         } else {
@@ -108,13 +124,13 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               render={({ field }) => (
                 <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                   <Label>Jenis Kelamin</Label>
-                  <HeroSelect.Trigger><SelectValue /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="M" id="M" textValue="Laki-laki">Laki-laki<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="F" id="F" textValue="Perempuan">Perempuan<ListBox.ItemIndicator /></ListBox.Item>
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />
@@ -134,14 +150,14 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               render={({ field }) => (
                 <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                   <Label>Status Pernikahan</Label>
-                  <HeroSelect.Trigger><SelectValue /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="Single" id="Single" textValue="Belum Menikah">Belum Menikah<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="Married" id="Married" textValue="Menikah">Menikah<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="Divorced" id="Divorced" textValue="Cerai">Cerai<ListBox.ItemIndicator /></ListBox.Item>
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />
@@ -224,13 +240,13 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               render={({ field }) => (
                 <Select selectedKey={field.value || "MONTHLY"} onSelectionChange={(key) => field.onChange(String(key))} className="w-full">
                   <Label>Tipe Pembayaran</Label>
-                  <HeroSelect.Trigger><SelectValue /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="MONTHLY" id="MONTHLY" textValue="Bulanan">Bulanan<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="WEEKLY" id="WEEKLY" textValue="Mingguan">Mingguan<ListBox.ItemIndicator /></ListBox.Item>
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />
@@ -282,7 +298,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
             <TextArea id="street" {...register("street")} rows={2} placeholder="Alamat lengkap" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <AddressPicker defaultValues={{ city: employee?.city ?? undefined }} />
+            <AddressPicker defaultValues={{ province: employee?.province ?? undefined, city: employee?.employeeCity ?? employee?.city ?? undefined, district: employee?.employeeDistrict ?? undefined, village: employee?.employeeVillage ?? undefined, postalCode: employee?.postalCode ?? undefined }} />
           </div>
         </FormSection>
 

@@ -6,6 +6,7 @@ import { Tabs, Input, Label, Switch, Select, ComboBox, ListBox, TextArea } from 
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { Button } from "@/components/ui/page-header"
 
 interface Account {
   id: number
@@ -90,7 +91,9 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         if (signaturePreview) formData.set("quotationSignatureImage", signaturePreview)
         await updateSystemSettings(formData)
         showSuccess("Settings berhasil disimpan")
-      } catch (error) {
+      } catch (error: any) {
+        // Next.js redirect throws NEXT_REDIRECT — let it propagate
+        if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error
         showError(error instanceof Error ? error.message : "Gagal menyimpan settings")
       }
     })
@@ -230,9 +233,9 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Label htmlFor="currencyLocale">Locale Mata Uang</Label>
                 <Input id="currencyLocale" name="currencyLocale" placeholder="id_ID" defaultValue={settings.currencyLocale || "id_ID"} className="w-full" />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="documentNumberFormat">Format Nomor Dokumen</Label>
-                <Input id="documentNumberFormat" name="documentNumberFormat" placeholder="YRA-{d}/{m}/{Y}-{0001}" defaultValue={settings.documentNumberFormat || ""} className="w-full" />
+              <div className="flex flex-col gap-1.5 hidden">
+                <Label htmlFor="documentNumberFormat">Format Nomor Dokumen (legacy)</Label>
+                <Input id="documentNumberFormat" name="documentNumberFormat" placeholder="(tidak dipakai)" defaultValue={settings.documentNumberFormat || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="periodLockDate">Period Lock Date</Label>
@@ -345,6 +348,74 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="timesheetPrefix">Timesheet</Label>
                 <Input id="timesheetPrefix" name="timesheetPrefix" defaultValue={settings.timesheetPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="downPaymentPrefix">Down Payment</Label>
+                <Input id="downPaymentPrefix" name="downPaymentPrefix" defaultValue={settings.downPaymentPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="deliveryOrderPrefix">Delivery Order</Label>
+                <Input id="deliveryOrderPrefix" name="deliveryOrderPrefix" defaultValue={settings.deliveryOrderPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="journalPrefix">Jurnal</Label>
+                <Input id="journalPrefix" name="journalPrefix" defaultValue={settings.journalPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="expensePrefix">Expense</Label>
+                <Input id="expensePrefix" name="expensePrefix" defaultValue={settings.expensePrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="pettyCashPrefix">Petty Cash</Label>
+                <Input id="pettyCashPrefix" name="pettyCashPrefix" defaultValue={settings.pettyCashPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="reconciliationPrefix">Rekonsiliasi</Label>
+                <Input id="reconciliationPrefix" name="reconciliationPrefix" defaultValue={settings.reconciliationPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="payrollPrefix">Payroll</Label>
+                <Input id="payrollPrefix" name="payrollPrefix" defaultValue={settings.payrollPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="projectPrefix">Project</Label>
+                <Input id="projectPrefix" name="projectPrefix" defaultValue={settings.projectPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="goodsReceiptPrefix">Goods Receipt</Label>
+                <Input id="goodsReceiptPrefix" name="goodsReceiptPrefix" defaultValue={settings.goodsReceiptPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="vendorBillPrefix">Vendor Bill</Label>
+                <Input id="vendorBillPrefix" name="vendorBillPrefix" defaultValue={settings.vendorBillPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="vendorPaymentPrefix">Vendor Payment</Label>
+                <Input id="vendorPaymentPrefix" name="vendorPaymentPrefix" defaultValue={settings.vendorPaymentPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="purchaseReturnPrefix">Purchase Return</Label>
+                <Input id="purchaseReturnPrefix" name="purchaseReturnPrefix" defaultValue={settings.purchaseReturnPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ticketPrefix">Ticket / CRM</Label>
+                <Input id="ticketPrefix" name="ticketPrefix" defaultValue={settings.ticketPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="leadPrefix">Lead</Label>
+                <Input id="leadPrefix" name="leadPrefix" defaultValue={settings.leadPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="materialIssuePrefix">Material Issue</Label>
+                <Input id="materialIssuePrefix" name="materialIssuePrefix" defaultValue={settings.materialIssuePrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="manufacturingOrderPrefix">Manufacturing Order</Label>
+                <Input id="manufacturingOrderPrefix" name="manufacturingOrderPrefix" defaultValue={settings.manufacturingOrderPrefix || ""} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="stockMovementPrefix">Stock Movement</Label>
+                <Input id="stockMovementPrefix" name="stockMovementPrefix" defaultValue={settings.stockMovementPrefix || ""} className="w-full" />
               </div>
             </div>
           </div>
@@ -474,20 +545,20 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
 
       {/* Submit */}
       <div className="flex items-center gap-3 mt-6">
-        <button
+        <Button
           type="submit"
           disabled={isPending}
           className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-all"
         >
           {isPending ? "Menyimpan..." : "Simpan Settings"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={() => router.push("/settings")}
           className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"
         >
           Batal
-        </button>
+        </Button>
       </div>
     </form>
   )

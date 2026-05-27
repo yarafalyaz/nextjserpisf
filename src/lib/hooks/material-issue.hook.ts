@@ -1,11 +1,13 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
 
 /**
  * Material Issue Hook - Observer pattern replacement.
  * Triggered when a Material Issue is completed.
  * Creates Stock Move OUT per item.
+ * Creates Journal Entry (Dr Material Expense, Cr Inventory)
  */
 
 export async function onMaterialIssueCompleted(
@@ -54,6 +56,18 @@ export async function onMaterialIssueCompleted(
         },
       });
     }
+
+    // Create Journal Entry (Dr Material Expense, Cr Inventory)
+    await stockJournalService.onMaterialIssue(
+      tx as any,
+      issue.items.map((i) => ({
+        qty: Number(i.qty),
+        cost: Number(i.cost),
+      })),
+      issue.documentNo ?? `MI-${issueId}`,
+      issueId,
+      userId
+    );
 
     // Update Material Issue status
     await tx.materialIssue.update({

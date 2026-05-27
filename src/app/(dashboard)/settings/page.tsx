@@ -96,7 +96,7 @@ export default async function SettingsPage() {
               <DisplayField label="Kode Mata Uang" value={settings?.currencyCode} />
               <DisplayField label="Simbol Mata Uang" value={settings?.currencySymbol} />
               <DisplayField label="Locale" value={settings?.currencyLocale} />
-              <DisplayField label="Format Nomor Dokumen" value={settings?.documentNumberFormat} />
+              <DisplayField label="Format Nomor Dokumen (legacy)" value={settings?.documentNumberFormat} />
               <DisplayField label="Period Lock Date" value={settings?.periodLockDate ? settings.periodLockDate.toISOString().split("T")[0] : null} />
               <BoolField label="Tampilkan Is Active" value={settings?.showIsActiveField !== false} />
               <BoolField label="Tampilkan NPWP" value={settings?.showTaxId !== false} />
@@ -133,12 +133,29 @@ export default async function SettingsPage() {
               <DisplayField label="Sales Order" value={settings?.salesOrderPrefix} />
               <DisplayField label="Invoice" value={settings?.salesInvoicePrefix} />
               <DisplayField label="Payment" value={settings?.salesPaymentPrefix} />
+              <DisplayField label="Down Payment" value={settings?.downPaymentPrefix} />
+              <DisplayField label="Delivery Order" value={settings?.deliveryOrderPrefix} />
               <DisplayField label="Sales Return" value={settings?.salesReturnPrefix} />
               <DisplayField label="Purchase Request" value={settings?.purchaseRequestPrefix} />
               <DisplayField label="Purchase Order" value={settings?.purchaseOrderPrefix} />
+              <DisplayField label="Goods Receipt" value={settings?.goodsReceiptPrefix} />
+              <DisplayField label="Vendor Bill" value={settings?.vendorBillPrefix} />
+              <DisplayField label="Vendor Payment" value={settings?.vendorPaymentPrefix} />
+              <DisplayField label="Purchase Return" value={settings?.purchaseReturnPrefix} />
               <DisplayField label="Transfer" value={settings?.inventoryTransferPrefix} />
               <DisplayField label="Adjustment" value={settings?.stockAdjustmentPrefix} />
+              <DisplayField label="Material Issue" value={settings?.materialIssuePrefix} />
+              <DisplayField label="Stock Movement" value={settings?.stockMovementPrefix} />
               <DisplayField label="Work Order" value={settings?.workOrderPrefix} />
+              <DisplayField label="Manufacturing Order" value={settings?.manufacturingOrderPrefix} />
+              <DisplayField label="Jurnal" value={settings?.journalPrefix} />
+              <DisplayField label="Expense" value={settings?.expensePrefix} />
+              <DisplayField label="Petty Cash" value={settings?.pettyCashPrefix} />
+              <DisplayField label="Rekonsiliasi" value={settings?.reconciliationPrefix} />
+              <DisplayField label="Payroll" value={settings?.payrollPrefix} />
+              <DisplayField label="Project" value={settings?.projectPrefix} />
+              <DisplayField label="Ticket" value={settings?.ticketPrefix} />
+              <DisplayField label="Lead" value={settings?.leadPrefix} />
               <DisplayField label="Timesheet" value={settings?.timesheetPrefix} />
             </div>
           </div>

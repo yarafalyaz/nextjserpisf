@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { customerSchema, type CustomerInput } from "@/lib/validators"
 import { createCustomer, updateCustomer } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, Select, ListBox, Select as HeroSelect } from "@heroui/react"
+import { Label, Select, ListBox } from "@heroui/react"
 import { Input, TextArea, SelectValue } from "@/components/ui/heroui-compat"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -21,6 +21,10 @@ interface CustomerFormProps {
     phone: string | null
     address: string | null
     city: string | null
+    province: string | null
+    district: string | null
+    village: string | null
+    postalCode: string | null
     npwp: string | null
     contactPerson: string | null
     gender: string | null
@@ -56,6 +60,17 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
+        // Append/overwrite address fields from AddressPicker hidden inputs
+        const form = document.querySelector("form") as HTMLFormElement | null
+        if (form) {
+          const addressFields = ["province", "city", "district", "village", "postalCode", "address"]
+          addressFields.forEach(field => {
+            const input = form.querySelector(`input[name="${field}"]`) as HTMLInputElement | null
+            if (input?.value) {
+              formData.set(field, input.value)
+            }
+          })
+        }
         if (isEdit) { await updateCustomer(customer!.id, formData) }
         else { await createCustomer(formData) }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
@@ -101,13 +116,13 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
               render={({ field }) => (
                 <Select selectedKey={field.value ? String(field.value) : null} onSelectionChange={(key) => field.onChange(key)} placeholder="-- Pilih --" className="w-full">
                   <Label>Gender</Label>
-                  <HeroSelect.Trigger><SelectValue /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="male" id="male" textValue="Laki-laki">Laki-laki<ListBox.ItemIndicator /></ListBox.Item>
                       <ListBox.Item key="female" id="female" textValue="Perempuan">Perempuan<ListBox.ItemIndicator /></ListBox.Item>
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />
@@ -119,7 +134,7 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
             <TextArea id="street" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <AddressPicker defaultValues={{ city: customer?.city ?? undefined }} />
+            <AddressPicker defaultValues={{ province: customer?.province ?? undefined, city: customer?.city ?? undefined, district: customer?.district ?? undefined, village: customer?.village ?? undefined, postalCode: customer?.postalCode ?? undefined }} />
           </div>
         </FormSection>
         <FormActions>

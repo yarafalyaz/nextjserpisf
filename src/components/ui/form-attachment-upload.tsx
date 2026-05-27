@@ -4,6 +4,7 @@ import { useState, useRef } from "react"
 import { Upload, X, FileText } from "lucide-react"
 import { showError } from "@/lib/utils/toast"
 import { Label } from "@heroui/react"
+import { Button } from "@/components/ui/page-header"
 
 interface UploadedFile {
   id: number
@@ -102,14 +103,14 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
                   <span className="form-attachment-name">{file.originalName}</span>
                   <span className="form-attachment-size">{formatFileSize(file.fileSize)}</span>
                 </div>
-                <button type="button" onClick={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
+                <Button onClick={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
                   <X className="size-4" />
-                </button>
+                </Button>
               </div>
             ))}
           </div>
         )}
-        <button
+        <Button
           type="button"
           className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all form-attachment-upload-"
           onClick={() => fileInputRef.current?.click()}
@@ -117,7 +118,7 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
         >
           <Upload className="size-4" />
           {uploading ? "Mengupload..." : "Upload Bukti (JPG, PDF)"}
-        </button>
+        </Button>
         <input
           ref={fileInputRef}
           type="file"

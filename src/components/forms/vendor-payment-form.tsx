@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition, useRef } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label, Select as HeroSelect } from "@heroui/react"
+import { Select, ComboBox, ListBox, Label } from "@heroui/react"
 import { Upload, X, FileText } from "lucide-react"
 import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -131,15 +131,15 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
           <div className="flex flex-col gap-1.5">
             <Select name="paymentMethod" className="w-full" isRequired>
               <Label>Metode Pembayaran *</Label>
-              <HeroSelect.Trigger><SelectValue placeholder="Pilih Metode" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-              <HeroSelect.Popover>
+              <Select.Trigger><SelectValue placeholder="Pilih Metode" /><Select.Indicator /></Select.Trigger>
+              <Select.Popover>
                 <ListBox>
                   <ListBox.Item id="transfer" textValue="Transfer Bank">Transfer Bank<ListBox.ItemIndicator /></ListBox.Item>
                   <ListBox.Item id="cash" textValue="Tunai">Tunai<ListBox.ItemIndicator /></ListBox.Item>
                   <ListBox.Item id="giro" textValue="Giro">Giro<ListBox.ItemIndicator /></ListBox.Item>
                   <ListBox.Item id="cek" textValue="Cek">Cek<ListBox.ItemIndicator /></ListBox.Item>
                 </ListBox>
-              </HeroSelect.Popover>
+              </Select.Popover>
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -185,14 +185,14 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
                         <span className="form-attachment-name">{file.originalName}</span>
                         <span className="form-attachment-size">{formatFileSize(file.fileSize)}</span>
                       </div>
-                      <button type="button" onClick={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
+                      <Button onClick={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
                         <X className="size-4" />
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
-              <button
+              <Button
                 type="button"
                 className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all"
                 onClick={() => fileInputRef.current?.click()}
@@ -200,7 +200,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
               >
                 <Upload className="size-4" />
                 {uploading ? "Mengupload..." : "Upload Bukti (JPG, PDF)"}
-              </button>
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"

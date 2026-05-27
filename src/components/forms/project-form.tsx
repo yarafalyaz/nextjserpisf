@@ -6,6 +6,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { createProject, updateProject } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Button } from "@/components/ui/page-header"
 
 interface CustomerVehicleOption {
   id: number
@@ -67,8 +68,8 @@ export function ProjectForm({ customers, customerVehicles = [], project }: Proje
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="documentNo">No. Dokumen</Label>
-          <Input id="documentNo" name="documentNo" placeholder="Auto-generate jika kosong" defaultValue={project?.documentNo || ""} />
+          <Label htmlFor="documentNo">No. Dokumen (auto)</Label>
+          <Input id="documentNo" name="documentNo" readOnly className="text-muted-foreground" placeholder="Auto-generated" defaultValue={project?.documentNo || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Proyek *</Label>
@@ -128,8 +129,8 @@ export function ProjectForm({ customers, customerVehicles = [], project }: Proje
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Proyek"}</button>
+        <Button onClick={() => router.back()} >Batal</Button>
+        <Button disabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Proyek"}</Button>
       </div>
     </form>
   )

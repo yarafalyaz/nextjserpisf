@@ -1,6 +1,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
 
 /**
  * Goods Receipt Hook - Observer pattern replacement.
@@ -8,6 +9,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
  * - Auto-generate document number
  * - Update PO status
  * - Create Stock Move IN
+ * - Create Journal Entry (Dr Inventory, Cr Purchase Inventory Clearing)
  */
 
 export async function onGoodsReceiptVerified(
@@ -103,7 +105,19 @@ export async function onGoodsReceiptVerified(
       });
     }
 
-    // ─── 4. Update GR status ─────────────────────────────────────────────
+    // ─── 4. Create Journal Entry ──────────────────────────────────────
+    await stockJournalService.onGoodsReceipt(
+      tx as any,
+      goodsReceipt.items.map((i) => ({
+        qty: Number(i.qty),
+        cost: Number(i.unitCost ?? 0),
+      })),
+      goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`,
+      goodsReceiptId,
+      userId
+    );
+
+    // ─── 5. Update GR status ─────────────────────────────────────────────
     await tx.goodsReceipt.update({
       where: { id: goodsReceiptId },
       data: { status: "verified" },

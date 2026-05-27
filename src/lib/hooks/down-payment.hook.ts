@@ -106,8 +106,11 @@ export async function onDownPaymentConfirmed(
     }
 
     // ─── 2. Create Project ───────────────────────────────────────────────
+    const projectDocNo = await generateDocumentNumber("PRJ")
+
     const project = await tx.project.create({
       data: {
+        documentNo: projectDocNo,
         name: `Project - ${quotation.customer?.name ?? ""} - ${woDocNo}`,
         customerId: quotation.customerId,
         status: "active",

@@ -8,6 +8,7 @@ import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, Label } from "@heroui/react"
 import { CurrencyInput } from "@/components/ui/currency-input"
+import { Button } from "@/components/ui/page-header"
 
 interface JournalFormProps {
   accounts: { id: number; code: string; name: string
@@ -80,7 +81,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
       <div style={{ marginTop: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Entries</h3>
-          <button type="button" onClick={addEntry} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary">+ Tambah Baris</button>
+          <Button onClick={addEntry} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary">+ Tambah Baris</Button>
         </div>
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
           <thead><tr><th>Akun</th><th>Debit</th><th>Credit</th><th>Memo</th><th></th></tr></thead>
@@ -96,7 +97,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
                 <td><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="form-input" /></td>
                 <td><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="form-input" /></td>
                 <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
-                <td>{entries.length > 2 && <button type="button" onClick={() => removeEntry(i)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost" style={{ color: "var(--color-danger)" }}>×</button>}</td>
+                <td>{entries.length > 2 && <Button onClick={() => removeEntry(i)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost" style={{ color: "var(--color-danger)" }}>×</Button>}</td>
               </tr>
             ))}
           </tbody>
@@ -114,8 +115,8 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
 
       <FormAttachmentUpload referenceType="journal" />
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending || !isBalanced} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">{isPending ? "Menyimpan..." : journal?.id ? "Update" : "Simpan"}</button>
+        <Button onClick={() => router.back()} >Batal</Button>
+        <Button disabled={isPending || !isBalanced} >{isPending ? "Menyimpan..." : journal?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

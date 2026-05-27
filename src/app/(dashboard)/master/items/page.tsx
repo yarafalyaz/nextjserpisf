@@ -6,6 +6,7 @@ import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ItemTable } from "./_components/item-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Button } from "@/components/ui/page-header"
 
 export default async function ItemsPage({
   searchParams,
@@ -55,7 +56,7 @@ export default async function ItemsPage({
       <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Item" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Items</h1>
-<Link href="/master/items/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-item-btn">
+<Link href="/master/items/create" id="create-item-btn" className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors">
           + Tambah Item
         </Link>
       </div>
@@ -70,7 +71,7 @@ export default async function ItemsPage({
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
-            <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Filter</button>
+            <Button >Filter</Button>
           </form>
         </div>
 

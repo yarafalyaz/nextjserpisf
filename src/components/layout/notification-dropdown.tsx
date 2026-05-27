@@ -1,5 +1,7 @@
 "use client"
 
+import { Button } from "@/components/ui/page-header"
+
 import { useState, useRef, useEffect } from "react"
 import { Bell, Check } from "lucide-react"
 import { Badge } from "@heroui/react"
@@ -73,7 +75,7 @@ export function NotificationDropdown() {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button
+      <Button
         onClick={handleToggle}
         className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all header-notification-"
         id="notification-btn"
@@ -82,7 +84,7 @@ export function NotificationDropdown() {
           <Bell size={20} />
           {unreadCount > 0 && <Badge color="danger" size="sm" />}
         </Badge.Anchor>
-      </button>
+      </Button>
 
       {isOpen && (
         <div className="absolute right-0 top-full mt-2 w-80 bg-surface rounded-xl border border-default shadow-xl z-50 overflow-hidden">

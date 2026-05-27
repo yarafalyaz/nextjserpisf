@@ -96,7 +96,7 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
           <div>
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-base font-semibold text-foreground">Materials</h3>
-              <button type="button" onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah</button>
+              <Button onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah</Button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
@@ -137,7 +137,7 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
                       </td>
                       <td className="py-2 px-2 text-center">
                         {woItems.length > 1 && (
-                          <button type="button" onClick={() => removeItem(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</button>
+                          <Button onClick={() => removeItem(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
                         )}
                       </td>
                     </tr>

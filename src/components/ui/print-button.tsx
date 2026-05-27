@@ -1,5 +1,8 @@
 "use client"
 
+import { Button } from "@/components/ui/page-header"
+
+
 import { Printer } from "lucide-react"
 
 interface PrintButtonProps {
@@ -12,12 +15,12 @@ export function PrintButton({ title = "Cetak" }: PrintButtonProps) {
   }
 
   return (
-    <button
+    <Button
       onClick={handlePrint}
-      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"
+      
     >
       <Printer size={14} />
       {title}
-    </button>
+    </Button>
   )
 }

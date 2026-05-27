@@ -6,17 +6,18 @@
  * and render them using v3 API patterns.
  */
 
-import React, { type ComponentPropsWithRef, type ReactNode } from "react"
+import React, { type ComponentProps, type ReactNode } from "react"
 import {
   Input as HeroInput,
   TextArea as HeroTextArea,
-  Select as HeroSelect,
+  Select,
   Label,
+  Button as HeroButton,
 } from "@heroui/react"
 
 // ─── Input ───────────────────────────────────────────────────────────────────
 
-type HeroInputProps = ComponentPropsWithRef<typeof HeroInput>
+type HeroInputProps = ComponentProps<typeof HeroInput>
 
 interface CompatInputProps extends Omit<HeroInputProps, "label"> {
   label?: string
@@ -37,7 +38,7 @@ export function Input({ label, isRequired, className, ...props }: CompatInputPro
 
 // ─── TextArea ────────────────────────────────────────────────────────────────
 
-type HeroTextAreaProps = ComponentPropsWithRef<typeof HeroTextArea>
+type HeroTextAreaProps = ComponentProps<typeof HeroTextArea>
 
 interface CompatTextAreaProps extends Omit<HeroTextAreaProps, "label"> {
   label?: string
@@ -65,11 +66,11 @@ interface CompatSelectValueProps {
 
 export function SelectValue({ placeholder, children }: CompatSelectValueProps) {
   return (
-    <HeroSelect.Value>
+    <Select.Value>
       {({ selectedText }: { selectedText?: string }) =>
         children || selectedText || placeholder || "Pilih..."
       }
-    </HeroSelect.Value>
+    </Select.Value>
   )
 }
 
@@ -77,4 +78,16 @@ export function SelectValue({ placeholder, children }: CompatSelectValueProps) {
 
 export function SelectLabel({ children }: { children: ReactNode }) {
   return <Label className="text-sm font-medium text-foreground mb-1.5 block">{children}</Label>
+}
+
+// ─── Button (native button → HeroUI Button) ─────────────────────────────────
+
+type HeroButtonProps = ComponentProps<typeof HeroButton>
+
+export function Button({ children, className, ...props }: HeroButtonProps) {
+  return (
+    <HeroButton {...props} className={className as string}>
+      {children}
+    </HeroButton>
+  )
 }

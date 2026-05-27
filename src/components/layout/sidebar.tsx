@@ -17,6 +17,7 @@ import {
   Globe, ListOrdered, Layers, BadgeDollarSign
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+import { Button } from "@/components/ui/page-header"
 
 interface NavItem {
   label: string
@@ -221,9 +222,9 @@ export function Sidebar() {
       <aside className={`sidebar ${isOpen ? "open" : ""}`}>
         <div className="sidebar-header">
           <h1 className="sidebar-logo">YaraERP</h1>
-          <button className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all sidebar-close- lg:hidden" onClick={close}>
+          <Button className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all sidebar-close- lg:hidden" onClick={close}>
             <X size={20} />
-          </button>
+          </Button>
         </div>
 
         <nav className="sidebar-nav">
@@ -233,14 +234,14 @@ export function Sidebar() {
               <div key={item.href} className="nav-group">
                 {item.children ? (
                   <>
-                    <button
+                    <Button
                       onClick={() => toggleExpand(item.href)}
                       className={`nav-item nav-item-parent ${isActive(item.href) ? "active" : ""}`}
                     >
                       <Icon size={18} className="nav-icon" />
                       <span className="nav-label">{item.label}</span>
                       <ChevronRight size={14} className={`nav-arrow ${expandedItems.includes(item.href) ? "expanded" : ""}`} />
-                    </button>
+                    </Button>
                     {expandedItems.includes(item.href) && (
                       <div className="nav-children">
                         {item.children.map((child) => {

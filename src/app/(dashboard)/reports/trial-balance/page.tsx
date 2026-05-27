@@ -6,6 +6,7 @@ import { formatCurrency } from '@/lib/utils/format'
 import { Scale } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
+import { Button } from "@/components/ui/page-header"
 
 export default async function TrialBalancePage({
   searchParams,
@@ -69,7 +70,7 @@ export default async function TrialBalancePage({
           name="date"
           defaultValue={params.date || asOfDate.toISOString().split('T')[0]}
         />
-        <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Generate</button>
+        <Button >Generate</Button>
       </form>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

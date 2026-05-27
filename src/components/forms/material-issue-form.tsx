@@ -6,6 +6,7 @@ import { createMaterialIssue, updateMaterialIssue } from "@/actions/inventory.ac
 import { useState } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, ComboBox, ListBox, Label } from "@heroui/react"
+import { Button } from "@/components/ui/page-header"
 
 interface MaterialIssueFormProps {
   warehouses: { id: number; name: string
@@ -72,7 +73,7 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
       <div style={{ marginTop: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Materials</h3>
-          <button type="button" onClick={addItem} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary">+ Tambah</button>
+          <Button onClick={addItem} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary">+ Tambah</Button>
         </div>
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
           <thead><tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Total</th><th></th></tr></thead>
@@ -88,7 +89,7 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
                 <td><input type="number" min={1} value={item.qty} onChange={(e) => updateItem(i, "qty", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "80px" }} /></td>
                 <td className="text-right">Rp {item.unitCost.toLocaleString("id-ID")}</td>
                 <td className="text-right">Rp {(item.qty * item.unitCost).toLocaleString("id-ID")}</td>
-                <td>{miItems.length > 1 && <button type="button" onClick={() => removeItem(i)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost" style={{ color: "var(--color-danger)" }}>×</button>}</td>
+                <td>{miItems.length > 1 && <Button onClick={() => removeItem(i)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost" style={{ color: "var(--color-danger)" }}>×</Button>}</td>
               </tr>
             ))}
           </tbody>
@@ -96,8 +97,8 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">{isPending ? "Memproses..." : "Buat Material Issue"}</button>
+        <Button onClick={() => router.back()} >Batal</Button>
+        <Button disabled={isPending} >{isPending ? "Memproses..." : "Buat Material Issue"}</Button>
       </div>
     </form>
   )

@@ -5,7 +5,7 @@ import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label , Select as HeroSelect} from "@heroui/react"
+import { Input, TextArea, Select, ComboBox, ListBox, Label } from "@heroui/react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -42,13 +42,13 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
           <div className="flex flex-col gap-1.5">
             <Select name="type" defaultSelectedKey="IN" className="w-full" isRequired>
               <Label>Tipe *</Label>
-              <HeroSelect.Trigger><Select.Value /><HeroSelect.Indicator /></HeroSelect.Trigger>
-              <HeroSelect.Popover>
+              <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+              <Select.Popover>
                 <ListBox>
                   <ListBox.Item id="IN" textValue="Masuk (Pengisian)">Masuk (Pengisian)<ListBox.ItemIndicator /></ListBox.Item>
                   <ListBox.Item id="OUT" textValue="Keluar (Pengeluaran)">Keluar (Pengeluaran)<ListBox.ItemIndicator /></ListBox.Item>
                 </ListBox>
-              </HeroSelect.Popover>
+              </Select.Popover>
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">

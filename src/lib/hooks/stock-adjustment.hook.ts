@@ -1,11 +1,13 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
 
 /**
  * Stock Adjustment Hook - Observer pattern replacement.
  * Triggered when a Stock Adjustment is processed.
  * Creates Stock Move IN/OUT per item based on quantity difference.
+ * Creates Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment)
  */
 
 export async function onStockAdjustmentProcessed(
@@ -61,6 +63,19 @@ export async function onStockAdjustmentProcessed(
         },
       });
     }
+
+    // Create Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment)
+    await stockJournalService.onStockAdjustment(
+      tx as any,
+      adjustment.items.map((i) => ({
+        qty: Number(i.actualQty),
+        cost: Number(i.unitCost),
+        difference: Number(i.difference),
+      })),
+      adjustment.documentNo ?? `ADJ-${adjustmentId}`,
+      adjustmentId,
+      userId
+    );
 
     // Update Stock Adjustment status
     await tx.stockAdjustment.update({

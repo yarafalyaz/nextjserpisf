@@ -130,13 +130,13 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
           <div>
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-base font-semibold text-foreground">Items yang Dibutuhkan</h3>
-              <button
+              <Button
                 type="button"
                 onClick={addItem}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all"
               >
                 <Plus size={14} /> Tambah Item
-              </button>
+              </Button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
@@ -191,13 +191,13 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
                       </td>
                       <td className="py-2 px-2 text-center">
                         {prItems.length > 1 && (
-                          <button
+                          <Button
                             type="button"
                             onClick={() => removeItem(i)}
                             className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             <Trash2 size={14} />
-                          </button>
+                          </Button>
                         )}
                       </td>
                     </tr>

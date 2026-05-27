@@ -148,6 +148,19 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
       date: formData.get("date") ? new Date(formData.get("date") as string) : undefined,
       validUntil: formData.get("validUntil") ? new Date(formData.get("validUntil") as string) : undefined,
       notes: formData.get("notes") as string | null,
+      revisionNumber: { increment: 1 },
+    },
+  })
+
+  const user = await requirePermission("edit_quotations")
+    ? await prisma.user.findFirst({ where: { id: { not: 0 } } }) // fallback
+    : null
+
+  await prisma.quotationHistory.create({
+    data: {
+      quotationId,
+      action: "revised",
+      description: `Revisi #${quotation.revisionNumber + 1} — Quotation ${quotation.documentNo}`,
     },
   })
 

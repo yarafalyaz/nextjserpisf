@@ -1,5 +1,8 @@
 "use client"
 
+import { Button } from "@/components/ui/page-header"
+
+
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import { Search, X } from "lucide-react"
@@ -66,7 +69,7 @@ export function AppSearchField({ placeholder = "Cari...", action, paramName = "s
         }}
       />
       {value && (
-        <button
+        <Button
           type="button"
           onClick={handleClear}
           style={{
@@ -83,7 +86,7 @@ export function AppSearchField({ placeholder = "Cari...", action, paramName = "s
           }}
         >
           <X size={14} />
-        </button>
+        </Button>
       )}
     </form>
   )

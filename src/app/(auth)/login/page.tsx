@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { Eye, EyeOff, Lock, Mail, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/page-header"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -98,18 +99,18 @@ export default function LoginPage() {
                 className="login-input"
                 placeholder="••••••••"
               />
-              <button
+              <Button
                 type="button"
                 className="login-eye-btn"
-                onClick={() => setShowPassword(!showPassword)}
+                onPress={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+              </Button>
             </div>
           </div>
 
-          <button type="submit" disabled={loading} className="login-btn" id="login-submit">
+          <Button type="submit" disabled={loading} className="login-btn" id="login-submit">
             {loading ? (
               <>
                 <Loader2 size={18} className="login-spinner" />
@@ -118,7 +119,7 @@ export default function LoginPage() {
             ) : (
               "Masuk"
             )}
-          </button>
+          </Button>
         </form>
 
         {/* Footer */}

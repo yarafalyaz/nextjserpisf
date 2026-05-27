@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { vendorSchema, type VendorInput } from "@/lib/validators"
 import { createVendor, updateVendor } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, Select, ListBox, Select as HeroSelect } from "@heroui/react"
+import { Label, Select, ListBox } from "@heroui/react"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { SelectValue, Input, TextArea } from "@/components/ui/heroui-compat"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -22,6 +22,10 @@ interface VendorFormProps {
     phone: string | null
     address: string | null
     city: string | null
+    province: string | null
+    districtVendor: string | null
+    villageVendor: string | null
+    postalCode: string | null
     npwp: string | null
     contactPerson: string | null
     paymentTermId: number | null
@@ -54,6 +58,17 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
+        // Append/overwrite address fields from AddressPicker hidden inputs
+        const form = document.querySelector("form") as HTMLFormElement | null
+        if (form) {
+          const addressFields = ["province", "city", "district", "village", "postalCode", "address"]
+          addressFields.forEach(field => {
+            const input = form.querySelector(`input[name="${field}"]`) as HTMLInputElement | null
+            if (input?.value) {
+              formData.set(field, input.value)
+            }
+          })
+        }
 
         if (isEdit) {
           await updateVendor(vendor!.id, formData)
@@ -101,14 +116,14 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
               render={({ field }) => (
                 <Select selectedKey={field.value ? String(field.value) : ""} onSelectionChange={(key) => field.onChange(key ? Number(key) : null)} className="w-full">
                   <Label>Termin Pembayaran</Label>
-                  <HeroSelect.Trigger><SelectValue placeholder="Pilih termin" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-                  <HeroSelect.Popover>
+                  <Select.Trigger><SelectValue placeholder="Pilih termin" /><Select.Indicator /></Select.Trigger>
+                  <Select.Popover>
                     <ListBox>
                       {paymentTerms.map((pt) => (
                         <ListBox.Item key={String(pt.id)} id={String(pt.id)} textValue={pt.name}>{pt.name}<ListBox.ItemIndicator /></ListBox.Item>
                       ))}
                     </ListBox>
-                  </HeroSelect.Popover>
+                  </Select.Popover>
                 </Select>
               )}
             />
@@ -126,7 +141,7 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
             <Label htmlFor="street">Alamat Jalan</Label>
             <TextArea id="address" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
           </div>
-          <AddressPicker defaultValues={{ city: vendor?.city ?? undefined }} />
+          <AddressPicker defaultValues={{ province: vendor?.province ?? undefined, city: vendor?.city ?? undefined, district: vendor?.districtVendor ?? undefined, village: vendor?.villageVendor ?? undefined, postalCode: vendor?.postalCode ?? undefined }} />
         </FormSection>
 
         <FormActions>

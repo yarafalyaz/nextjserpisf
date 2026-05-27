@@ -123,7 +123,7 @@ function SectionItems({
           ))}
         </tbody>
       </table>
-      <button
+      <Button
         type="button"
         onClick={() =>
           append({
@@ -141,7 +141,7 @@ function SectionItems({
         style={{ marginTop: "8px" }}
       >
         + Tambah Item
-      </button>
+      </Button>
     </div>
   )
 }
@@ -289,14 +289,14 @@ function SectionItemRow({
       </td>
       <td>
         {canRemove && (
-          <button
+          <Button
             type="button"
             onClick={onRemove}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost"
             style={{ color: "var(--color-danger)", padding: "4px 8px" }}
           >
             ×
-          </button>
+          </Button>
         )}
       </td>
     </tr>
@@ -581,7 +581,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
       <FormSection title="Item Quotation" columns={1}>
         <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button
+          <Button
             type="button"
             onClick={() =>
               appendSection({
@@ -603,7 +603,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -primary"
           >
             + Tambah Section
-          </button>
+          </Button>
         </div>
         </div>
 
@@ -616,14 +616,14 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
                 placeholder={`Nama Section (opsional)`}
               />
               {sectionFields.length > 1 && (
-                <button
+                <Button
                   type="button"
                   onClick={() => removeSection(sectionIndex)}
                   className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost"
                   style={{ color: "var(--color-danger)" }}
                 >
                   Hapus Section
-                </button>
+                </Button>
               )}
             </div>
 

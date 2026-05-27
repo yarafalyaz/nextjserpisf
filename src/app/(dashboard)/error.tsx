@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { Button } from "@/components/ui/page-header"
 
 export default function DashboardError({
   error,
@@ -22,10 +23,10 @@ export default function DashboardError({
           {error.message || "Terjadi kesalahan saat memuat halaman. Silakan coba lagi."}
         </p>
         <div className="flex gap-3 justify-center">
-          <button onClick={reset} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
+          <Button onPress={reset} >
             Coba Lagi
-          </button>
-          <a href="/" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
+          </Button>
+          <a href="/" >
             Ke Dashboard
           </a>
         </div>

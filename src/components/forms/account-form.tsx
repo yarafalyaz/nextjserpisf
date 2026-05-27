@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createAccount, updateAccount } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { ComboBox, ListBox, Label, Select as HeroSelect } from "@heroui/react"
+import { ComboBox, ListBox, Label, Select } from "@heroui/react"
 import { Input, TextArea, SelectValue } from "@/components/ui/heroui-compat"
+import { Button } from "@/components/ui/page-header"
 
 interface AccountFormProps {
   accounts: { id: number; code: string; name: string
@@ -48,10 +49,10 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
           <Input id="name" name="name" placeholder="Kas" required />
         </div>
         <div className="flex flex-col gap-1.5">
-          <HeroSelect name="type" className="w-full" isRequired>
+          <Select name="type" className="w-full" isRequired>
             <Label>Tipe *</Label>
-            <HeroSelect.Trigger><SelectValue placeholder="Pilih Tipe" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-            <HeroSelect.Popover>
+            <Select.Trigger><SelectValue placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
               <ListBox>
                 <ListBox.Item id="ASSET" textValue="ASSET">ASSET<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="LIABILITY" textValue="LIABILITY">LIABILITY<ListBox.ItemIndicator /></ListBox.Item>
@@ -59,8 +60,8 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
                 <ListBox.Item id="REVENUE" textValue="REVENUE">REVENUE<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="EXPENSE" textValue="EXPENSE">EXPENSE<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </HeroSelect.Popover>
-          </HeroSelect>
+            </Select.Popover>
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <ComboBox name="parentId" className="w-full">
@@ -76,16 +77,16 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
           </ComboBox>
         </div>
         <div className="flex flex-col gap-1.5">
-          <HeroSelect name="normalBalance" className="w-full">
+          <Select name="normalBalance" className="w-full">
             <Label>Saldo Normal</Label>
-            <HeroSelect.Trigger><SelectValue placeholder="Pilih Saldo Normal" /><HeroSelect.Indicator /></HeroSelect.Trigger>
-            <HeroSelect.Popover>
+            <Select.Trigger><SelectValue placeholder="Pilih Saldo Normal" /><Select.Indicator /></Select.Trigger>
+            <Select.Popover>
               <ListBox>
                 <ListBox.Item id="DEBIT" textValue="DEBIT">DEBIT<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="CREDIT" textValue="CREDIT">CREDIT<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
-            </HeroSelect.Popover>
-          </HeroSelect>
+            </Select.Popover>
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
@@ -93,10 +94,10 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <button type="button" onClick={() => router.back()} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Batal</button>
-        <button type="submit" disabled={isPending} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="submit-account">
+        <Button onClick={() => router.back()} >Batal</Button>
+        <Button disabled={isPending}  id="submit-account">
           {isPending ? "Menyimpan..." : account?.id ? "Update" : "Simpan"}
-        </button>
+        </Button>
       </div>
     </form>
   )
