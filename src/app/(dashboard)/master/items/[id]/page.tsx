@@ -57,13 +57,24 @@ export default async function ItemDetailPage({
           case "MaterialIssue": {
             const mi = await prisma.materialIssue.findUnique({ where: { id: sm.referenceId } })
             if (mi?.projectId) {
-              const proj = await prisma.project.findUnique({ where: { id: mi.projectId } })
-              if (proj) { party = proj.name; partyLabel = "Project" }
+              const proj = await prisma.project.findUnique({ where: { id: mi.projectId }, include: { customer: true, customerVehicle: true } })
+              if (proj?.customer) {
+                party = proj.customer.name
+                if (proj.customerVehicle) party += ` (${proj.customerVehicle.licensePlate || ''})`
+                partyLabel = "Customer"
+              } else if (proj) {
+                party = proj.name
+                partyLabel = "Project"
+              }
             } else if (mi?.workOrderId) {
               const wo = await prisma.workOrder.findUnique({ where: { id: mi.workOrderId } })
               if (wo?.projectId) {
-                const proj = await prisma.project.findUnique({ where: { id: wo.projectId } })
-                if (proj) { party = proj.name; partyLabel = "Project" }
+                const proj = await prisma.project.findUnique({ where: { id: wo.projectId }, include: { customer: true, customerVehicle: true } })
+                if (proj?.customer) {
+                  party = proj.customer.name
+                  if (proj.customerVehicle) party += ` (${proj.customerVehicle.licensePlate || ''})`
+                  partyLabel = "Customer"
+                }
               }
             }
             docLink = `/inventory/material-issues/${sm.referenceId}`
@@ -112,6 +123,16 @@ export default async function ItemDetailPage({
             break
           }
         }
+      }
+
+      // Fallback: extract party info from description if not resolved
+      if (party === "-" && sm.description) {
+        // Try to extract "dari X" or "untuk X" or "dari X - reason"
+        const dariMatch = sm.description.match(/(?:dari|from)\s+(.+?)(?:\s*[-–]|$)/i)
+        const untukMatch = sm.description.match(/(?:untuk|to|for)\s+(.+?)(?:\s*[-–]|$)/i)
+        if (dariMatch) { party = dariMatch[1].trim(); partyLabel = "Vendor" }
+        else if (untukMatch) { party = untukMatch[1].trim(); partyLabel = "Customer" }
+        else { party = sm.description }
       }
 
       return { ...sm, party, partyLabel, docLink }

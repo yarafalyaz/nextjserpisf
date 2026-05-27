@@ -103,6 +103,9 @@ export async function onGoodsReceiptVerified(
           createdBy: userId ?? null,
         },
       });
+
+      // Update item qtyOnHand
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
     }
 
     // ─── 4. Create Journal Entry ──────────────────────────────────────

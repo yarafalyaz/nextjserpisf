@@ -62,6 +62,10 @@ export async function onStockAdjustmentProcessed(
           createdBy: userId ?? null,
         },
       });
+
+      // Update item qtyOnHand
+      const qtyDiff = Number(item.difference);
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qtyDiff} WHERE id = ${item.itemId}`;
     }
 
     // Create Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment)
