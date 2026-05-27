@@ -158,7 +158,7 @@ export async function onDownPaymentConfirmed(
           qty: item.qty,
           unitPrice: item.unitPrice,
           discount: item.discount,
-          subtotal: item.subtotal,
+          total: item.subtotal,
         })),
       });
     }
