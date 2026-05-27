@@ -418,14 +418,26 @@ export async function createDeliveryOrder(formData: FormData) {
   const user = await requirePermission("create_delivery_orders")
 
   const documentNo = await generateDocumentNumber("DO")
+  const salesOrderId = requireId(formData.get("salesOrderId"), "salesOrderId")
+  const salesOrder = await prisma.salesOrder.findUnique({
+    where: { id: salesOrderId },
+    select: { customerId: true },
+  })
 
   const deliveryOrder = await prisma.deliveryOrder.create({
     data: {
       documentNo,
       doNumber: (formData.get("doNumber") as string) || null,
-      salesOrderId: requireId(formData.get("salesOrderId"), "salesOrderId"),
+      customerId: salesOrder?.customerId ?? null,
+      salesOrderId,
       date: new Date(formData.get("date") as string),
       deliveryDate: formData.get("deliveryDate") ? new Date(formData.get("deliveryDate") as string) : null,
+      shippingAddress: (formData.get("shippingAddress") as string) || null,
+      shippingProvince: (formData.get("shippingProvince") as string) || null,
+      shippingCity: (formData.get("shippingCity") as string) || null,
+      shippingDistrict: (formData.get("shippingDistrict") as string) || null,
+      shippingVillage: (formData.get("shippingVillage") as string) || null,
+      shippingPostalCode: (formData.get("shippingPostalCode") as string) || null,
       shippingPhone: (formData.get("shippingPhone") as string) || null,
       vehicleNumber: (formData.get("vehicleNumber") as string) || null,
       notes: formData.get("notes") as string | null,
@@ -683,16 +695,28 @@ export async function updateSalesReturn(id: number, formData: FormData) {
 export async function updateDeliveryOrder(id: number, formData: FormData) {
   "use server"
 
-  const user = await requirePermission("create_delivery_orders")
+  await requirePermission("create_delivery_orders")
+  const salesOrderId = requireId(formData.get("salesOrderId"), "salesOrderId")
+  const salesOrder = await prisma.salesOrder.findUnique({
+    where: { id: salesOrderId },
+    select: { customerId: true },
+  })
 
   // Fix #2: Jangan generate documentNo baru
   const deliveryOrder = await prisma.deliveryOrder.update({
     where: { id },
     data: {
       doNumber: (formData.get("doNumber") as string) || null,
-      salesOrderId: requireId(formData.get("salesOrderId"), "salesOrderId"),
+      customerId: salesOrder?.customerId ?? null,
+      salesOrderId,
       date: new Date(formData.get("date") as string),
       deliveryDate: formData.get("deliveryDate") ? new Date(formData.get("deliveryDate") as string) : null,
+      shippingAddress: (formData.get("shippingAddress") as string) || null,
+      shippingProvince: (formData.get("shippingProvince") as string) || null,
+      shippingCity: (formData.get("shippingCity") as string) || null,
+      shippingDistrict: (formData.get("shippingDistrict") as string) || null,
+      shippingVillage: (formData.get("shippingVillage") as string) || null,
+      shippingPostalCode: (formData.get("shippingPostalCode") as string) || null,
       shippingPhone: (formData.get("shippingPhone") as string) || null,
       vehicleNumber: (formData.get("vehicleNumber") as string) || null,
       notes: formData.get("notes") as string | null,

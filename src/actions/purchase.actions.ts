@@ -285,6 +285,8 @@ export async function createVendorPayment(formData: FormData) {
     }
   }
 
+  await onVendorPaymentCreated(payment.id, Number(user.id))
+
   revalidatePath("/purchase/payments")
   return { success: true, id: payment.id }
 }
