@@ -249,26 +249,36 @@ export async function createGoodsReceipt(formData: FormData) {
   const itemsJson = formData.get("items") as string | null
   const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null }[]>(itemsJson) ?? []
 
-  const gr = await prisma.goodsReceipt.create({
-    data: {
-      documentNo,
-      purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
-      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-      date: new Date(formData.get("date") as string),
-      notes: formData.get("notes") as string | null,
-      status: "draft",
-      createdBy: Number(user.id),
-      items: {
-        create: items
-          .filter((i) => i.itemId > 0 && i.qty > 0)
-          .map((i) => ({
-            itemId: i.itemId,
-            qty: i.qty,
-            unitCost: i.unitCost || 0,
-            warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
-          })),
+  const gr = await prisma.$transaction(async (tx) => {
+    const createdGr = await tx.goodsReceipt.create({
+      data: {
+        documentNo,
+        purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
+        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+        date: new Date(formData.get("date") as string),
+        notes: formData.get("notes") as string | null,
+        status: "draft",
+        createdBy: Number(user.id),
+        items: {
+          create: items
+            .filter((i) => i.itemId > 0 && i.qty > 0)
+            .map((i) => ({
+              itemId: i.itemId,
+              qty: i.qty,
+              unitCost: i.unitCost || 0,
+              warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
+            })),
+        },
       },
-    },
+    })
+
+    // Parity GoodsReceiptObserver(created): set PO status -> received
+    await tx.purchaseOrder.update({
+      where: { id: createdGr.purchaseOrderId },
+      data: { status: "received" },
+    })
+
+    return createdGr
   })
 
   revalidatePath("/pembelian/penerimaan")
@@ -605,10 +615,25 @@ export async function deletePurchaseOrder(id: number) {
   await prisma.$transaction(async (tx) => {
     // 1. Delete all related GoodsReceipts and reverse their stock moves
     for (const gr of po.goodsReceipts) {
-      // Reverse stock moves created by this GR
-      await tx.stockMove.deleteMany({
+      const stockMoves = await tx.stockMove.findMany({
         where: { referenceType: "GoodsReceipt", referenceId: gr.id },
+        select: { id: true, itemId: true, qty: true },
       })
+
+      if (stockMoves.length > 0) {
+        for (const move of stockMoves) {
+          await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(move.qty)} WHERE id = ${move.itemId}`
+        }
+
+        await tx.inventoryLayer.deleteMany({
+          where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
+        })
+
+        await tx.stockMove.deleteMany({
+          where: { id: { in: stockMoves.map((m) => m.id) } },
+        })
+      }
+
       // Delete GR items
       await tx.goodsReceiptItem.deleteMany({
         where: { goodsReceiptId: gr.id },
@@ -651,14 +676,32 @@ export async function deleteGoodsReceipt(id: number) {
 
   const gr = await prisma.goodsReceipt.findUniqueOrThrow({
     where: { id },
-    include: { purchaseOrder: true },
+    include: {
+      purchaseOrder: true,
+      items: true,
+    },
   })
 
   await prisma.$transaction(async (tx) => {
-    // 1. Reverse all stock moves created by this GR
-    await tx.stockMove.deleteMany({
+    // 1. Reverse all stock moves + inventory layers + qty_on_hand created by this GR
+    const stockMoves = await tx.stockMove.findMany({
       where: { referenceType: "GoodsReceipt", referenceId: id },
+      select: { id: true, itemId: true, qty: true },
     })
+
+    if (stockMoves.length > 0) {
+      for (const move of stockMoves) {
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(move.qty)} WHERE id = ${move.itemId}`
+      }
+
+      await tx.inventoryLayer.deleteMany({
+        where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
+      })
+
+      await tx.stockMove.deleteMany({
+        where: { id: { in: stockMoves.map((m) => m.id) } },
+      })
+    }
 
     // 2. Delete GR items
     await tx.goodsReceiptItem.deleteMany({
@@ -668,12 +711,18 @@ export async function deleteGoodsReceipt(id: number) {
     // 3. Delete the GR
     await tx.goodsReceipt.delete({ where: { id } })
 
-    // 4. Update PO status back to 'confirmed' if it was 'received'
-    if (gr.purchaseOrderId && gr.purchaseOrder?.status === "received") {
-      await tx.purchaseOrder.update({
-        where: { id: gr.purchaseOrderId },
-        data: { status: "confirmed" },
+    // 4. Parity GoodsReceiptObserver(deleting): revert PO status to ordered if this was last GR
+    if (gr.purchaseOrderId) {
+      const remainingCount = await tx.goodsReceipt.count({
+        where: { purchaseOrderId: gr.purchaseOrderId },
       })
+
+      if (remainingCount === 0) {
+        await tx.purchaseOrder.update({
+          where: { id: gr.purchaseOrderId },
+          data: { status: "ordered" },
+        })
+      }
     }
   })
 

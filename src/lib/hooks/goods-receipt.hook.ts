@@ -96,7 +96,7 @@ export async function onGoodsReceiptVerified(
           qty: item.qty,
           cost: item.unitCost ?? 0,
           impact: "IN",
-          status: "draft",
+          status: "posted",
           referenceType: "GoodsReceipt",
           referenceId: goodsReceipt.id,
           notes: `Penerimaan dari GR ${goodsReceipt.documentNo ?? ""}`,

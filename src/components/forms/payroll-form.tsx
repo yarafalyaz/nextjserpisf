@@ -50,11 +50,11 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
       getPayrollEstimation(employeeId, startDate, endDate)
         .then(data => {
           if (cancelled) return
-          setBaseSalary(data.baseSalary)
-          setOvertime(data.overtimeTotal)
-          setAppreciation(data.appreciationTotal)
-          setLoan(data.loanDeduction)
-          setLate(data.lateDeduction)
+          setBaseSalary(data.baseSalary ?? 0)
+          setOvertime(data.overtimeTotal ?? 0)
+          setAppreciation(data.appreciationTotal ?? 0)
+          setLoan(data.loanDeduction ?? 0)
+          setLate(data.lateDeduction ?? 0)
         })
         .catch((e) => {
           if (cancelled) return

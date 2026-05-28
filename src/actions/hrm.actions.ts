@@ -428,9 +428,10 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
 
     if (!exists) {
       const est = await getPayrollEstimation(emp.id, startDateStr, endDateStr)
+      if (!est || 'success' in est) { continue } // skip failed estimation
       const documentNo = await generateDocumentNumber("PAYROLL")
       
-      const netSalary = est.baseSalary + est.overtimeTotal + est.appreciationTotal - est.loanDeduction - est.lateDeduction
+      const netSalary = (est.baseSalary ?? 0) + (est.overtimeTotal ?? 0) + (est.appreciationTotal ?? 0) - (est.loanDeduction ?? 0) - (est.lateDeduction ?? 0)
       
       await prisma.payroll.create({
         data: {
@@ -439,10 +440,10 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
           period,
           startDate: new Date(startDateStr),
           endDate: new Date(endDateStr),
-          baseSalary: est.baseSalary,
-          overtimeTotal: est.overtimeTotal,
-          appreciationTotal: est.appreciationTotal,
-          loanDeduction: est.loanDeduction,
+          baseSalary: est.baseSalary ?? 0,
+          overtimeTotal: est.overtimeTotal ?? 0,
+          appreciationTotal: est.appreciationTotal ?? 0,
+          loanDeduction: est.loanDeduction ?? 0,
           lateDeduction: est.lateDeduction,
           lateMinutes: est.lateMinutes,
           netSalary: netSalary,
