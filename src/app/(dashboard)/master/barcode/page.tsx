@@ -98,10 +98,10 @@ export default async function BarcodesPage({
             </span>
             <div className="flex gap-1">
               {page > 1 && (
-                <Link href={`/master/barcode?halaman=${page - 1}&search=${params.cari || ""}`} className="button button--ghost button--sm">← Prev</Link>
+                <Link href={`/master/barcode?halaman=${page - 1}&search=cari=${params.cari || ""}`} className="button button--ghost button--sm">← Prev</Link>
               )}
               {page < totalPages && (
-                <Link href={`/master/barcode?halaman=${page + 1}&search=${params.cari || ""}`} className="button button--ghost button--sm">Next →</Link>
+                <Link href={`/master/barcode?halaman=${page + 1}&search=cari=${params.cari || ""}`} className="button button--ghost button--sm">Next →</Link>
               )}
             </div>
           </div>

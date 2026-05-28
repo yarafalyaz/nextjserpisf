@@ -58,8 +58,8 @@ export function DatePresets() {
   const handlePreset = (key: string) => {
     const { startDate, endDate } = getPresetDates(key)
     const params = new URLSearchParams(searchParams.toString())
-    params.set('startDate', startDate)
-    params.set('endDate', endDate)
+    params.set('tanggalMulai', startDate)
+    params.set('tanggalSelesai', endDate)
     router.push(`?${params.toString()}`)
   }
 

@@ -59,7 +59,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   // Load cities
   useEffect(() => {
     if (!provinceCode) return
-    fetch(`/api/address?tipe=regencies&parentCode=${provinceCode}`)
+    fetch(`/api/address?tipe=regencies&parentCode=kodeInduk=${provinceCode}`)
       .then(res => res.json())
       .then(data => setCities(data))
       .catch(() => {})
@@ -68,7 +68,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   // Load districts
   useEffect(() => {
     if (!cityCode) return
-    fetch(`/api/address?tipe=districts&parentCode=${cityCode}`)
+    fetch(`/api/address?tipe=districts&parentCode=kodeInduk=${cityCode}`)
       .then(res => res.json())
       .then(data => setDistricts(data))
       .catch(() => {})
@@ -77,7 +77,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   // Load villages
   useEffect(() => {
     if (!districtCode) return
-    fetch(`/api/address?tipe=villages&parentCode=${districtCode}`)
+    fetch(`/api/address?tipe=villages&parentCode=kodeInduk=${districtCode}`)
       .then(res => res.json())
       .then(data => setVillages(data))
       .catch(() => {})

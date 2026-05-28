@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth/auth"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 
 /**
- * GET /api/payroll/late-penalty?karyawanId=X&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ * GET /api/payroll/late-penalty?karyawanId=X&tanggalMulai=YYYY-MM-DD&tanggalSelesai=YYYY-MM-DD
  * Returns late penalty calculation preview for payroll form.
  */
 export async function GET(request: NextRequest) {

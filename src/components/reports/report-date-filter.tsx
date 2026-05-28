@@ -20,14 +20,14 @@ export function ReportDateFilter({ defaultStartDate, defaultEndDate, extraParams
 
   function handleGenerate() {
     const params = new URLSearchParams()
-    if (startDate) params.set("startDate", startDate)
-    if (endDate) params.set("endDate", endDate)
+    if (startDate) params.set("tanggalMulai", startDate)
+    if (endDate) params.set("tanggalSelesai", endDate)
     if (extraParams) {
       Object.entries(extraParams).forEach(([k, v]) => { if (v) params.set(k, v) })
     }
     // Preserve other existing params
     searchParams.forEach((v, k) => {
-      if (!params.has(k) && k !== "startDate" && k !== "endDate") params.set(k, v)
+      if (!params.has(k) && k !== "tanggalMulai" && k !== "tanggalSelesai") params.set(k, v)
     })
     router.push(`?${params.toString()}`)
   }

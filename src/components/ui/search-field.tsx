@@ -13,7 +13,7 @@ interface AppSearchFieldProps {
   paramName?: string
 }
 
-export function AppSearchField({ placeholder = "Cari...", action, paramName = "search" }: AppSearchFieldProps) {
+export function AppSearchField({ placeholder = "Cari...", action, paramName = "cari" }: AppSearchFieldProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [value, setValue] = useState(searchParams.get(paramName) || "")
@@ -26,7 +26,7 @@ export function AppSearchField({ placeholder = "Cari...", action, paramName = "s
     } else {
       params.delete(paramName)
     }
-    params.delete("page")
+    params.delete("halaman")
     router.push(`${action}?${params.toString()}`)
   }
 
@@ -34,7 +34,7 @@ export function AppSearchField({ placeholder = "Cari...", action, paramName = "s
     setValue("")
     const params = new URLSearchParams(searchParams.toString())
     params.delete(paramName)
-    params.delete("page")
+    params.delete("halaman")
     router.push(`${action}?${params.toString()}`)
   }
 
