@@ -18,6 +18,7 @@ interface CustomerVehicleOption {
 interface ProjectFormProps {
   customers: { id: number; name: string }[]
   customerVehicles?: CustomerVehicleOption[]
+  generatedCode?: string
   project?: {
     id: number
     name: string
@@ -33,7 +34,7 @@ interface ProjectFormProps {
   }
 }
 
-export function ProjectForm({ customers, customerVehicles = [], project }: ProjectFormProps) {
+export function ProjectForm({ customers, customerVehicles = [], generatedCode, project }: ProjectFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!project
@@ -67,8 +68,8 @@ export function ProjectForm({ customers, customerVehicles = [], project }: Proje
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="documentNo">No. Dokumen (auto)</Label>
-          <Input id="documentNo" name="documentNo" readOnly className="text-muted-foreground" placeholder="Auto-generated" defaultValue={project?.documentNo || ""} />
+          <Label htmlFor="documentNo">No. Dokumen</Label>
+          <Input id="documentNo" name="documentNo" value={project?.documentNo || generatedCode || ""} readOnly className="bg-default-soft font-mono" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Proyek *</Label>
