@@ -286,18 +286,18 @@ function SectionItemRow({
         />
       </td>
       <td>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          {...register(`${prefix}.unitPrice`, { valueAsNumber: true })}
-          className="form-input"
-          style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
-          onChange={(e) => {
-            setValue(`${prefix}.unitPrice`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
-            setTimeout(() => onRecalc(itemIndex), 0)
-          }}
-        />
+        <div style={{ width: "130px" }}>
+          <CurrencyInput
+            value={watchedItem?.unitPrice || 0}
+            onChange={(val) => {
+              setValue(`${prefix}.unitPrice`, val)
+              setTimeout(() => onRecalc(itemIndex), 0)
+            }}
+            className="form-input"
+            style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
+            placeholder="0"
+          />
+        </div>
       </td>
       <td>
         <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>

@@ -16,6 +16,7 @@ interface CurrencyInputProps {
   min?: number
   max?: number
   prefix?: string
+  style?: React.CSSProperties
 }
 
 /**
@@ -36,6 +37,7 @@ export function CurrencyInput({
   min,
   max,
   prefix,
+  style,
 }: CurrencyInputProps) {
   const isControlled = controlledValue !== undefined
 
@@ -127,6 +129,7 @@ export function CurrencyInput({
         onFocus={handleFocus}
         placeholder={placeholder}
         className={`${className} ${prefix ? "pl-10" : ""}`}
+        style={style}
         required={required}
         disabled={disabled}
         autoComplete="off"
