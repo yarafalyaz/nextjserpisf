@@ -1,4 +1,3 @@
-
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
@@ -6,6 +5,16 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
  * Down Payment Hook - Observer pattern replacement.
  * Triggered when a Down Payment is confirmed.
  * Creates: Work Order, Project, Sales Order, Sales Invoice.
+ *
+ * Parity with Laravel DownPaymentObserver:
+ * 1. Quotation status must be "accepted"
+ * 2. Idempotency: skip silently if WO/SO/Invoice already exist
+ * 3. Create WorkOrder + WorkOrderItems from quotation sections
+ * 4. Create Project + initializeStages
+ * 5. Create SalesOrder + SalesOrderItems
+ * 6. Create SalesInvoice + SalesInvoiceItems (paidAmount = DP amount)
+ * 7. Update quotation status → converted
+ * 8. Stock check for every item, record shortage in WO notes
  */
 
 interface FlatItem {
@@ -40,9 +49,10 @@ export async function onDownPaymentConfirmed(
       },
     });
 
-    // Guard: already confirmed
+    // Guard: already confirmed — silent skip (idempotency)
     if (dp.status === "confirmed") {
-      throw new Error("Down Payment sudah dikonfirmasi sebelumnya.");
+      console.log(`[DownPayment] Skipping: DP ${dp.documentNo} already confirmed.`);
+      return;
     }
 
     const quotation = dp.quotation;
@@ -54,12 +64,28 @@ export async function onDownPaymentConfirmed(
       throw new Error("Quotation belum di-accept.");
     }
 
-    // ─── Idempotency Check ───────────────────────────────────────────────
+    // ─── Idempotency Check ────────────────────────────────────────────
+    // Laravel observer: skip silently if WO/SO/Invoice already exist
     const existingWO = await tx.workOrder.findFirst({
       where: { quotationId: quotation.id },
     });
     if (existingWO) {
-      throw new Error("Dokumen sudah dibuat untuk quotation ini (idempotency).");
+      console.log(`[DownPayment] Skipping idempotent: WO already exists for quotation ${quotation.documentNo}`);
+      return;
+    }
+    const existingSO = await tx.salesOrder.findFirst({
+      where: { quotationId: quotation.id },
+    });
+    if (existingSO) {
+      console.log(`[DownPayment] Skipping idempotent: SO already exists for quotation ${quotation.documentNo}`);
+      return;
+    }
+    const existingInv = await tx.salesInvoice.findFirst({
+      where: { quotationId: quotation.id },
+    });
+    if (existingInv) {
+      console.log(`[DownPayment] Skipping idempotent: Invoice already exists for quotation ${quotation.documentNo}`);
+      return;
     }
 
     // Flatten all items from quotation sections
@@ -75,7 +101,7 @@ export async function onDownPaymentConfirmed(
       }))
     );
 
-    // ─── Generate BOM Material Stock Notes & Services ───────────────────
+    // ─── Generate BOM Material Stock Notes & Services ─────────────────
     let bomNotes = `Auto-generated dari DP ${dp.documentNo}\n`;
     let serviceList = "";
     let materialHeaderAdded = false;
@@ -127,8 +153,24 @@ export async function onDownPaymentConfirmed(
             });
           }
         } else {
-          // Jika tidak ada BOM, asumsikan ini adalah JASA / Layanan Bengkel
-          if (item.itemName.trim() !== "") {
+          // Non-BOM item: check stock if it has a valid itemId
+          if (item.itemId !== null) {
+            const stockItem = await tx.item.findUnique({
+              where: { id: item.itemId },
+              select: { id: true, name: true, qtyOnHand: true, unitOfMeasure: true },
+            });
+            if (stockItem) {
+              if (!materialHeaderAdded) {
+                bomNotes += `\n[RINCIAN KEBUTUHAN MATERIAL & CEK STOK]\n`;
+                materialHeaderAdded = true;
+              }
+              const isShortage = Number(stockItem.qtyOnHand) < item.qty;
+              bomNotes += `- ${stockItem.name}: Butuh ${item.qty} ${stockItem.unitOfMeasure ?? "PCS"} | Stok Saat Ini: ${stockItem.qtyOnHand} ${stockItem.unitOfMeasure ?? "PCS"} ${isShortage ? "(Stok Kurang!)" : "(Cukup)"}\n`;
+            } else if (item.itemName.trim() !== "") {
+              serviceList += `- ${item.itemName} (Volume/Qty: ${item.qty})\n`;
+            }
+          } else if (item.itemName.trim() !== "") {
+            // Pure service item (no itemId) — log as service
             serviceList += `- ${item.itemName} (Volume/Qty: ${item.qty})\n`;
           }
         }
@@ -141,7 +183,7 @@ export async function onDownPaymentConfirmed(
       console.error("Gagal men-generate catatan stok BOM:", err);
     }
 
-    // ─── 1. Create Work Order ────────────────────────────────────────────
+    // ─── 1. Create Work Order ─────────────────────────────────────────
     const woDocNo = await generateDocumentNumber("WO");
 
     const workOrder = await tx.workOrder.create({
@@ -171,8 +213,8 @@ export async function onDownPaymentConfirmed(
       });
     }
 
-    // ─── 2. Create Project ───────────────────────────────────────────────
-    const projectDocNo = await generateDocumentNumber("PRJ")
+    // ─── 2. Create Project ───────────────────────────────────────────
+    const projectDocNo = await generateDocumentNumber("PRJ");
 
     const project = await tx.project.create({
       data: {
@@ -196,7 +238,7 @@ export async function onDownPaymentConfirmed(
       ],
     });
 
-    // ─── 3. Create Sales Order + Items ───────────────────────────────────
+    // ─── 3. Create Sales Order + Items ───────────────────────────────
     const soDocNo = await generateDocumentNumber("SO");
 
     const salesOrder = await tx.salesOrder.create({
@@ -229,7 +271,7 @@ export async function onDownPaymentConfirmed(
       });
     }
 
-    // ─── 4. Create Sales Invoice + Items ─────────────────────────────────
+    // ─── 4. Create Sales Invoice + Items ─────────────────────────────
     const invDocNo = await generateDocumentNumber("INV");
 
     const invoice = await tx.salesInvoice.create({
@@ -266,7 +308,7 @@ export async function onDownPaymentConfirmed(
       });
     }
 
-    // ─── 5. Update Down Payment status ───────────────────────────────────
+    // ─── 5. Update Down Payment status ───────────────────────────────
     await tx.downPayment.update({
       where: { id: dpId },
       data: {
@@ -274,7 +316,7 @@ export async function onDownPaymentConfirmed(
       },
     });
 
-    // ─── 6. Update Quotation status → converted ─────────────────────────
+    // ─── 6. Update Quotation status → converted ─────────────────────
     await tx.quotation.update({
       where: { id: quotation.id },
       data: { status: "converted" },
