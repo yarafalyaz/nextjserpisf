@@ -95,7 +95,8 @@ export function BulkGeneratePayrollButton() {
                   id="bulk-period" 
                   placeholder="Otomatis YYYY-MM" 
                   value={period} 
-                  isReadOnly
+                  readOnly
+                  onChange={() => {}}
                   className="opacity-80"
                 />
               </div>
