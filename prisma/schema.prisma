@@ -120,6 +120,8 @@ model SystemSetting {
   attendanceRadiusKm            Decimal   @default(1.00) @map("attendance_radius_km") @db.Decimal(8, 2)
   latePenaltyPerMinute          Decimal   @default(5000.00) @map("late_penalty_per_minute") @db.Decimal(15, 2)
   maxLatePenaltyMinutes         Int       @default(120) @map("max_late_penalty_minutes")
+  payrollCutoffDay              Int       @default(25) @map("payroll_cutoff_day")
+
   quotationFooterNotes          String?   @map("quotation_footer_notes") @db.Text
   quotationSignatureName        String?   @map("quotation_signature_name")
   quotationSignatureImage       String?   @map("quotation_signature_image")

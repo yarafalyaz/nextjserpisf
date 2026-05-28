@@ -179,6 +179,7 @@ export async function updateSystemSettings(formData: FormData) {
       attendanceRadiusKm: decimalDefault("attendanceRadiusKm", 1.0),
       latePenaltyPerMinute: decimalDefault("latePenaltyPerMinute", 5000),
       maxLatePenaltyMinutes: intDefault("maxLatePenaltyMinutes", 120),
+      payrollCutoffDay: intDefault("payrollCutoffDay", 25),
 
       // Quotation
       quotationFooterNotes: strNull("quotationFooterNotes"),

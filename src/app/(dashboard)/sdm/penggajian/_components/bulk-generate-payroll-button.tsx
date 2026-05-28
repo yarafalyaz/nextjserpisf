@@ -14,21 +14,41 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"
 import { Sparkles, Loader2 } from "lucide-react"
 
-export function BulkGeneratePayrollButton() {
+export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: number }) {
   const state = useOverlayState()
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
-  const [period, setPeriod] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  const [period, setPeriod] = useState("") // format "YYYY-MM"
+  const [startDate, setStartDate] = useState("") // format "YYYY-MM-DD"
+  const [endDate, setEndDate] = useState("") // format "YYYY-MM-DD"
+  const [isManual, setIsManual] = useState(false)
 
-  // Auto set period YYYY-MM if endDate changes
-  const handleEndDateChange = (date: Date | null) => {
-    const dateStr = date ? date.toString() : ""
-    setEndDate(dateStr)
-    if (dateStr) {
-      setPeriod(dateStr.substring(0, 7))
+  // Handle month selection and auto-calculate dates based on system cutoffDay setting
+  const handlePeriodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value // e.g. "2026-05"
+    setPeriod(rawVal)
+    
+    if (rawVal) {
+      const [yearStr, monthStr] = rawVal.split("-")
+      const year = parseInt(yearStr, 10)
+      const month = parseInt(monthStr, 10) // 1-12
+
+      // End Date: selected-month-cutoffDay
+      const endObj = new Date(year, month - 1, cutoffDay)
+      // Start Date: (cutoffDay + 1) of the previous month
+      // Previous month of Jan (1) is Dec of previous year, Date handles this automatically.
+      const startObj = new Date(year, month - 2, cutoffDay + 1)
+
+      // Format YYYY-MM-DD
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const formatYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+      setStartDate(formatYMD(startObj))
+      setEndDate(formatYMD(endObj))
+    } else {
+      setStartDate("")
+      setEndDate("")
     }
   }
 
@@ -72,33 +92,62 @@ export function BulkGeneratePayrollButton() {
             </Modal.Header>
             <Modal.Body className="flex flex-col gap-4 py-4">
               <p className="text-sm text-muted">
-                Sistem akan otomatis membuat draf slip gaji untuk <strong>semua karyawan yang aktif</strong>, termasuk menghitung gaji pokok, bonus lembur/apresiasi, dan potongan pinjaman/telat secara otomatis.
+                Sistem akan otomatis membuat draf slip gaji untuk <strong>semua karyawan yang aktif</strong>. Tanggal cut-off akan diatur otomatis berdasarkan pengaturan sistem (tgl {cutoffDay}).
               </p>
-              
+
               <div className="flex flex-col gap-1.5">
-                <AppDatePicker 
-                  label="Tanggal Mulai Cut-off *" 
-                  onChange={(d) => setStartDate(d ? d.toString() : "")} 
+                <Label htmlFor="period-picker">Pilih Periode Bulan *</Label>
+                <Input
+                  id="period-picker"
+                  type="month"
+                  value={period}
+                  onChange={handlePeriodChange}
+                  className="w-full"
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <AppDatePicker 
-                  label="Tanggal Selesai Cut-off *" 
-                  onChange={handleEndDateChange} 
-                />
-              </div>
+              {!isManual ? (
+                <div className="grid grid-cols-2 gap-4 bg-default-100/50 p-3 rounded-lg border border-default/50 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block mb-0.5">Mulai Cut-off</span>
+                    <span className="font-semibold text-foreground text-sm">{startDate ? new Date(startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : "-"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block mb-0.5">Selesai Cut-off</span>
+                    <span className="font-semibold text-foreground text-sm">{endDate ? new Date(endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : "-"}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <AppDatePicker 
+                      label="Tanggal Mulai Cut-off *" 
+                      value={startDate}
+                      onChange={(d) => setStartDate(d ? d.toString() : "")} 
+                    />
+                  </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="bulk-period">Periode Penggajian</Label>
-                <Input 
-                  id="bulk-period" 
-                  placeholder="Otomatis YYYY-MM" 
-                  value={period} 
-                  readOnly
-                  onChange={() => {}}
-                  className="opacity-80"
+                  <div className="flex flex-col gap-1.5">
+                    <AppDatePicker 
+                      label="Tanggal Selesai Cut-off *" 
+                      value={endDate}
+                      onChange={(d) => setEndDate(d ? d.toString() : "")} 
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 mt-1">
+                <input 
+                  type="checkbox" 
+                  id="toggle-manual" 
+                  checked={isManual} 
+                  onChange={(e) => setIsManual(e.target.checked)} 
+                  className="rounded border-default text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                 />
+                <Label htmlFor="toggle-manual" className="text-xs text-muted-foreground cursor-pointer select-none">
+                  Ubah Tanggal Cut-off Secara Manual
+                </Label>
               </div>
             </Modal.Body>
             <Modal.Footer className="border-t border-default/50">
@@ -108,7 +157,7 @@ export function BulkGeneratePayrollButton() {
               <Button 
                 className="bg-indigo-600 text-white font-semibold"
                 onPress={handleGenerate}
-                isDisabled={isPending}
+                isDisabled={isPending || !period}
               >
                 {isPending ? (
                   <>

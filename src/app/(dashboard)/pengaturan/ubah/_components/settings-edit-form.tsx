@@ -75,6 +75,7 @@ interface SettingsFormValues {
   materialIssueExpenseAccountId?: number | null
   materialIssuePrefix?: string | null
   maxLatePenaltyMinutes?: number | null
+  payrollCutoffDay?: number | null
   overtimeCoefficient?: number | null
   overtimeMealBreakEnd?: string | null
   overtimeMealBreakStart?: string | null
@@ -839,6 +840,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="maxLatePenaltyMinutes">Maks Menit Denda Terlambat</Label>
                 <Input id="maxLatePenaltyMinutes" name="maxLatePenaltyMinutes" type="number" defaultValue={String(settings.maxLatePenaltyMinutes)} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <Label htmlFor="payrollCutoffDay">Tanggal Cut-off Penggajian (Tgl akhir siklus per bulan)</Label>
+                <Input id="payrollCutoffDay" name="payrollCutoffDay" type="number" min={1} max={31} defaultValue={String(settings.payrollCutoffDay ?? 25)} className="w-full" description="Contoh: Jika 25, maka siklus penggajian adalah tanggal 26 bulan lalu s/d tanggal 25 bulan ini." />
               </div>
             </div>
           </div>
