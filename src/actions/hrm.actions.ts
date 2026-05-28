@@ -219,6 +219,57 @@ export async function approveOvertime(overtimeId: number) {
 
 // ==================== PAYROLL ACTIONS ====================
 
+export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string) {
+  const startDate = new Date(startDateStr)
+  const endDate = new Date(endDateStr)
+
+  // 1. Base Salary & Active Loans
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      baseSalary: true,
+      employeeLoans: {
+        where: { status: "active" }
+      }
+    }
+  })
+  
+  if (!employee) throw new Error("Employee not found")
+
+  const baseSalary = Number(employee.baseSalary)
+  const loanDeduction = employee.employeeLoans.reduce((sum, loan) => sum + Number(loan.monthlyInstallment), 0)
+
+  // 2. Overtime Total
+  const overtimes = await prisma.overtimeRequest.findMany({
+    where: {
+      employeeId,
+      status: "approved",
+      date: { gte: startDate, lte: endDate }
+    }
+  })
+  const overtimeTotal = overtimes.reduce((sum, ot) => sum + Number(ot.calculatedValue ?? 0), 0)
+
+  // 3. Appreciation Total
+  const appreciations = await prisma.appreciation.findMany({
+    where: {
+      employeeId,
+      date: { gte: startDate, lte: endDate }
+    }
+  })
+  const appreciationTotal = appreciations.reduce((sum, ap) => sum + Number(ap.amount ?? 0), 0)
+
+  // 4. Late Deduction
+  const latePenalty = await calculateLatePenalty(employeeId, startDate, endDate)
+
+  return {
+    baseSalary,
+    overtimeTotal,
+    appreciationTotal,
+    loanDeduction,
+    lateDeduction: latePenalty.totalPenalty,
+  }
+}
+
 export async function processPayroll(formData: FormData) {
   const user = await requirePermission("create_payroll")
 

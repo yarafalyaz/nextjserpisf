@@ -1,14 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition, useState } from "react"
+import { useTransition, useState, useEffect } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { processPayroll } from "@/actions/hrm.actions"
+import { processPayroll, getPayrollEstimation } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, TextArea, ComboBox, ListBox, Label, InputGroup } from "@heroui/react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
-import { CheckCircle } from "lucide-react"
+import { CheckCircle, Loader2 } from "lucide-react"
 
 interface PayrollFormProps {
   employees: { id: number; name: string }[]
@@ -17,6 +17,12 @@ interface PayrollFormProps {
 export function PayrollForm({ employees }: PayrollFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [isEstimating, setIsEstimating] = useState(false)
+
+  // Selection states for auto-calc trigger
+  const [employeeId, setEmployeeId] = useState<number | null>(null)
+  const [startDate, setStartDate] = useState<string>("")
+  const [endDate, setEndDate] = useState<string>("")
 
   // Basic calculation states just for UI presentation
   const [baseSalary, setBaseSalary] = useState(0)
@@ -25,11 +31,31 @@ export function PayrollForm({ employees }: PayrollFormProps) {
   const [appreciation, setAppreciation] = useState(0)
   const [deductions, setDeductions] = useState(0)
   const [loan, setLoan] = useState(0)
+  const [late, setLate] = useState(0)
+
+  // Auto-fetch data gaji & absensi
+  useEffect(() => {
+    if (employeeId && startDate && endDate) {
+      setIsEstimating(true)
+      getPayrollEstimation(employeeId, startDate, endDate)
+        .then(data => {
+          setBaseSalary(data.baseSalary)
+          setOvertime(data.overtimeTotal)
+          setAppreciation(data.appreciationTotal)
+          setLoan(data.loanDeduction)
+          setLate(data.lateDeduction)
+        })
+        .catch((e) => {
+          showError("Gagal menarik data estimasi: " + e.message)
+        })
+        .finally(() => setIsEstimating(false))
+    }
+  }, [employeeId, startDate, endDate])
 
   // Gross = Base + Allowances + Overtime + Appreciation
   const grossSalary = baseSalary + allowances + overtime + appreciation
-  // Total Deductions = Deductions + Loan (Late deduction is auto-calc on server if left 0)
-  const totalDeductions = deductions + loan
+  // Total Deductions = Deductions + Loan + Late
+  const totalDeductions = deductions + loan + late
   const netSalaryEst = grossSalary - totalDeductions
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -49,16 +75,21 @@ export function PayrollForm({ employees }: PayrollFormProps) {
 
   return (
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-default bg-surface-secondary/30">
+      <div className="p-6 border-b border-default bg-surface-secondary/30 flex justify-between items-center">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <CheckCircle className="text-primary" size={18} />
           Informasi Utama
         </h2>
+        {isEstimating && (
+          <span className="text-xs text-primary flex items-center gap-1.5 font-medium bg-primary/10 px-2.5 py-1 rounded-full animate-pulse">
+            <Loader2 size={12} className="animate-spin" /> Menarik data absensi & gaji...
+          </span>
+        )}
       </div>
 
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="employeeId" className="w-full" isRequired>
+          <ComboBox name="employeeId" className="w-full" isRequired onSelectionChange={(key) => setEmployeeId(key ? Number(key) : null)}>
             <Label>Karyawan *</Label>
             <ComboBox.InputGroup>
               <Input placeholder="Pilih karyawan..." />
@@ -83,11 +114,11 @@ export function PayrollForm({ employees }: PayrollFormProps) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <AppDatePicker label="Tanggal Mulai (Cut-off) *" name="startDate" onChange={() => {}} required />
+          <AppDatePicker label="Tanggal Mulai (Cut-off) *" name="startDate" onChange={(date) => setStartDate(date?.toString() || "")} required />
         </div>
         
         <div className="flex flex-col gap-1.5">
-          <AppDatePicker label="Tanggal Selesai (Cut-off) *" name="endDate" onChange={() => {}} required />
+          <AppDatePicker label="Tanggal Selesai (Cut-off) *" name="endDate" onChange={(date) => setEndDate(date?.toString() || "")} required />
         </div>
 
         <div className="flex flex-col gap-1.5 md:col-span-2">
@@ -97,7 +128,7 @@ export function PayrollForm({ employees }: PayrollFormProps) {
 
       <div className="p-6 border-y border-default bg-surface-secondary/30">
         <h2 className="text-lg font-semibold text-foreground">Komponen Pendapatan</h2>
-        <p className="text-sm text-muted">Masukkan nilai komponen pendapatan bulanan.</p>
+        <p className="text-sm text-muted">Akan ditarik otomatis sesuai data master karyawan.</p>
       </div>
 
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -105,35 +136,35 @@ export function PayrollForm({ employees }: PayrollFormProps) {
           <Label htmlFor="baseSalary">Gaji Pokok *</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="baseSalary" name="baseSalary" placeholder="0" required onChange={(v) => setBaseSalary(Number(v) || 0)} />
+            <CurrencyInput id="baseSalary" name="baseSalary" placeholder="0" required value={baseSalary} onChange={(v) => setBaseSalary(Number(v) || 0)} />
           </InputGroup>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="allowances">Tunjangan</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="allowances" name="allowances" placeholder="0" onChange={(v) => setAllowances(Number(v) || 0)} />
+            <CurrencyInput id="allowances" name="allowances" placeholder="0" value={allowances} onChange={(v) => setAllowances(Number(v) || 0)} />
           </InputGroup>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="overtimeTotal">Total Lembur</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="overtimeTotal" name="overtimeTotal" placeholder="0" onChange={(v) => setOvertime(Number(v) || 0)} />
+            <CurrencyInput id="overtimeTotal" name="overtimeTotal" placeholder="0" value={overtime} onChange={(v) => setOvertime(Number(v) || 0)} />
           </InputGroup>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="appreciationTotal">Total Apresiasi / Bonus</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="appreciationTotal" name="appreciationTotal" placeholder="0" onChange={(v) => setAppreciation(Number(v) || 0)} />
+            <CurrencyInput id="appreciationTotal" name="appreciationTotal" placeholder="0" value={appreciation} onChange={(v) => setAppreciation(Number(v) || 0)} />
           </InputGroup>
         </div>
       </div>
 
       <div className="p-6 border-y border-default bg-surface-secondary/30">
         <h2 className="text-lg font-semibold text-foreground">Komponen Potongan</h2>
-        <p className="text-sm text-muted">Kosongkan jika sistem harus menghitung keterlambatan (auto-calculate).</p>
+        <p className="text-sm text-muted">Akan ditarik otomatis dari pinjaman aktif dan absensi keterlambatan.</p>
       </div>
 
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -141,21 +172,21 @@ export function PayrollForm({ employees }: PayrollFormProps) {
           <Label htmlFor="deductions">Potongan Lainnya</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="deductions" name="deductions" placeholder="0" onChange={(v) => setDeductions(Number(v) || 0)} />
+            <CurrencyInput id="deductions" name="deductions" placeholder="0" value={deductions} onChange={(v) => setDeductions(Number(v) || 0)} />
           </InputGroup>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="loanDeduction">Potongan Pinjaman</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="loanDeduction" name="loanDeduction" placeholder="0" onChange={(v) => setLoan(Number(v) || 0)} />
+            <CurrencyInput id="loanDeduction" name="loanDeduction" placeholder="0" value={loan} onChange={(v) => setLoan(Number(v) || 0)} />
           </InputGroup>
         </div>
         <div className="flex flex-col gap-1.5 md:col-span-2">
-          <Label htmlFor="lateDeduction">Potongan Terlambat (Opsional)</Label>
+          <Label htmlFor="lateDeduction">Potongan Terlambat</Label>
           <InputGroup>
             <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="lateDeduction" name="lateDeduction" placeholder="Otomatis dihitung sistem jika dikosongkan" />
+            <CurrencyInput id="lateDeduction" name="lateDeduction" placeholder="0" value={late} onChange={(v) => setLate(Number(v) || 0)} />
           </InputGroup>
         </div>
       </div>
@@ -164,7 +195,7 @@ export function PayrollForm({ employees }: PayrollFormProps) {
       <div className="p-6 m-6 mt-0 bg-primary/5 rounded-xl border border-primary/20 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h3 className="font-semibold text-primary">Estimasi Gaji Bersih</h3>
-          <p className="text-sm text-muted">Sebelum perhitungan otomatis absen (keterlambatan/cuti)</p>
+          <p className="text-sm text-muted">Total otomatis terhitung dari data di atas</p>
         </div>
         <div className="text-2xl font-bold text-primary font-mono tabular-nums">
           Rp {netSalaryEst.toLocaleString("id-ID")}
@@ -173,7 +204,7 @@ export function PayrollForm({ employees }: PayrollFormProps) {
 
       <div className="flex justify-end gap-3 p-6 border-t border-default bg-surface">
         <Button onPress={() => router.back()} variant="secondary">Batal</Button>
-        <Button isDisabled={isPending} variant="primary">
+        <Button isDisabled={isPending || isEstimating} variant="primary">
           {isPending ? "Memproses..." : "Proses Payroll"}
         </Button>
       </div>
