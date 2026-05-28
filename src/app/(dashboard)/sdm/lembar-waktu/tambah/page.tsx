@@ -10,7 +10,7 @@ export default async function CreateTimesheetPage() {
 
   const [employees, projects] = await Promise.all([
     prisma.employee.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),

@@ -9,7 +9,7 @@ export default async function CreateLeavePage() {
   await requirePermission("view_leave_requests")
 
   const employees = await prisma.employee.findMany({
-    where: { isActive: true },
+    where: { isActive: true, deletedAt: null },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   })

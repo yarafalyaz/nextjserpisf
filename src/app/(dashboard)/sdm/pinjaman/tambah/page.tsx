@@ -9,7 +9,7 @@ export default async function CreateLoanPage() {
   await requirePermission("view_employee_loans")
 
   const employees = await prisma.employee.findMany({
-    where: { isActive: true },
+    where: { isActive: true, deletedAt: null },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   })

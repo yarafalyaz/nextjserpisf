@@ -8,7 +8,7 @@ export default async function CreatePayrollPage() {
   await requirePermission("create_payroll")
 
   const employees = await prisma.employee.findMany({
-    where: { isActive: true },
+    where: { isActive: true, deletedAt: null },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   })
