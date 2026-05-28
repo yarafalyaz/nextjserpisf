@@ -267,7 +267,55 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     appreciationTotal,
     loanDeduction,
     lateDeduction: latePenalty.totalPenalty,
+    lateMinutes: latePenalty.totalLateMinutes,
   }
+}
+
+export async function generateBulkPayroll(period: string, startDateStr: string, endDateStr: string) {
+  const user = await requirePermission("create_payroll")
+  
+  const employees = await prisma.employee.findMany({
+    where: { isActive: true, deletedAt: null }
+  })
+
+  let count = 0
+  for (const emp of employees) {
+    // Check if payroll exists for this period
+    const exists = await prisma.payroll.findFirst({
+      where: { employeeId: emp.id, period }
+    })
+
+    if (!exists) {
+      const est = await getPayrollEstimation(emp.id, startDateStr, endDateStr)
+      const documentNo = await generateDocumentNumber("PAYROLL")
+      
+      const netSalary = est.baseSalary + est.overtimeTotal + est.appreciationTotal - est.loanDeduction - est.lateDeduction
+      
+      await prisma.payroll.create({
+        data: {
+          documentNo,
+          employeeId: emp.id,
+          period,
+          startDate: new Date(startDateStr),
+          endDate: new Date(endDateStr),
+          baseSalary: est.baseSalary,
+          overtimeTotal: est.overtimeTotal,
+          appreciationTotal: est.appreciationTotal,
+          loanDeduction: est.loanDeduction,
+          lateDeduction: est.lateDeduction,
+          lateMinutes: est.lateMinutes,
+          netSalary: netSalary,
+          totalAmount: netSalary,
+          status: "draft",
+          createdBy: Number(user.id),
+        }
+      })
+      count++
+    }
+  }
+
+  revalidatePath("/sdm/penggajian")
+  return { success: true, count }
 }
 
 export async function processPayroll(formData: FormData) {

@@ -8,6 +8,8 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { PayrollTable } from "./_components/payroll-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button"
+
 export default async function PayrollPage({
   searchParams,
 }: {
@@ -49,9 +51,12 @@ export default async function PayrollPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Penggajian</h1>
-        <Link href="/sdm/penggajian/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-payroll-btn">
-          + Proses Payroll
-        </Link>
+        <div className="flex gap-2 items-center flex-wrap">
+          <BulkGeneratePayrollButton />
+          <Link href="/sdm/penggajian/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface text-foreground border border-default hover:bg-surface-secondary hover:-translate-y-px hover:shadow-md transition-all" id="create-payroll-btn">
+            + Proses Manual
+          </Link>
+        </div>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
