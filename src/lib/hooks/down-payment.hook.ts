@@ -75,8 +75,10 @@ export async function onDownPaymentConfirmed(
       }))
     );
 
-    // ─── Generate BOM Material Stock Notes ───────────────────────────────
+    // ─── Generate BOM Material Stock Notes & Services ───────────────────
     let bomNotes = `Auto-generated dari DP ${dp.documentNo}\n`;
+    let serviceList = "";
+    let materialHeaderAdded = false;
     
     try {
       for (const item of allItems) {
@@ -109,7 +111,11 @@ export async function onDownPaymentConfirmed(
           });
 
           if (materialsWithStock.length > 0) {
-            bomNotes += `\n[RESEP BOM: ${matchedProduct.name}]\n`;
+            if (!materialHeaderAdded) {
+              bomNotes += `\n[RINCIAN KEBUTUHAN MATERIAL & CEK STOK]\n`;
+              materialHeaderAdded = true;
+            }
+            bomNotes += `\n📦 Produk Perakitan: ${matchedProduct.name} (Qty: ${item.qty})\n`;
             materialsWithStock.forEach(mat => {
               const dbItem = materialItems.find(i => i.id === mat.itemId);
               const qtyNeeded = Number(mat.qty) * item.qty;
@@ -120,7 +126,16 @@ export async function onDownPaymentConfirmed(
               bomNotes += `- ${dbItem?.name || `Item #${mat.itemId}`}: Butuh ${qtyNeeded} ${uom} | Stok Saat Ini: ${stock} ${uom} ${isShortage ? "(🔴 Stok Kurang!)" : "(🟢 Cukup)"}\n`;
             });
           }
+        } else {
+          // Jika tidak ada BOM, asumsikan ini adalah JASA / Layanan Bengkel
+          if (item.itemName.trim() !== "") {
+            serviceList += `- ${item.itemName} (Volume/Qty: ${item.qty})\n`;
+          }
         }
+      }
+
+      if (serviceList !== "") {
+        bomNotes += `\n[INSTRUKSI JASA / PENGERJAAN FISIK BENGKEL]\n${serviceList}`;
       }
     } catch (err) {
       console.error("Gagal men-generate catatan stok BOM:", err);
