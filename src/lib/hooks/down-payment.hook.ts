@@ -115,7 +115,7 @@ export async function onDownPaymentConfirmed(
               bomNotes += `\n[RINCIAN KEBUTUHAN MATERIAL & CEK STOK]\n`;
               materialHeaderAdded = true;
             }
-            bomNotes += `\n📦 Produk Perakitan: ${matchedProduct.name} (Qty: ${item.qty})\n`;
+            bomNotes += `\nProduk Perakitan: ${matchedProduct.name} (Qty: ${item.qty})\n`;
             materialsWithStock.forEach(mat => {
               const dbItem = materialItems.find(i => i.id === mat.itemId);
               const qtyNeeded = Number(mat.qty) * item.qty;
@@ -123,7 +123,7 @@ export async function onDownPaymentConfirmed(
               const uom = dbItem ? dbItem.unitOfMeasure : "PCS";
               const isShortage = stock < qtyNeeded;
 
-              bomNotes += `- ${dbItem?.name || `Item #${mat.itemId}`}: Butuh ${qtyNeeded} ${uom} | Stok Saat Ini: ${stock} ${uom} ${isShortage ? "(🔴 Stok Kurang!)" : "(🟢 Cukup)"}\n`;
+              bomNotes += `- ${dbItem?.name || `Item #${mat.itemId}`}: Butuh ${qtyNeeded} ${uom} | Stok Saat Ini: ${stock} ${uom} ${isShortage ? "(Stok Kurang!)" : "(Cukup)"}\n`;
             });
           }
         } else {

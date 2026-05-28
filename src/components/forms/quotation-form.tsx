@@ -203,7 +203,7 @@ function SectionItemRow({
                 : "bg-default-soft border-default text-muted-foreground hover:bg-default"
             }`}
           >
-            {isCustomMode ? "🛠️ Jasa" : "📦 Item"}
+            {isCustomMode ? "Jasa" : "Item"}
           </button>
 
           {isCustomMode ? (
