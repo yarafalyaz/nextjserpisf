@@ -1,26 +1,52 @@
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/page-header"
-
-
-import { Printer } from "lucide-react"
+import { Printer, Loader2 } from "lucide-react"
+import { showError, showSuccess } from "@/lib/utils/toast"
+import { generateTransactionPDF } from "@/lib/pdf/generator"
 
 interface PrintButtonProps {
   title?: string
+  documentType?: "invoice" | "quotation" | "order" | "work-order"
+  documentId?: number
+  disabled?: boolean
 }
 
-export function PrintButton({ title = "Cetak" }: PrintButtonProps) {
-  function handlePrint() {
-    window.print()
+export function PrintButton({ title = "Cetak", documentType, documentId, disabled }: PrintButtonProps) {
+  const [isPrinting, setIsPrinting] = useState(false)
+
+  async function handlePrint() {
+    if (!documentType || !documentId) {
+      window.print() // Fallback to standard print if no API params
+      return
+    }
+
+    try {
+      setIsPrinting(true)
+      const res = await fetch(`/api/print?type=${documentType}&id=${documentId}`)
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal mengambil data cetak")
+      }
+
+      generateTransactionPDF(data.company, data.docInfo, data.items, data.summary)
+      showSuccess("PDF berhasil dibuat")
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Terjadi kesalahan saat memproses PDF")
+    } finally {
+      setIsPrinting(false)
+    }
   }
 
   return (
     <Button
       onPress={handlePrint}
-      
+      isDisabled={isPrinting || disabled}
     >
-      <Printer size={14} />
-      {title}
+      {isPrinting ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+      {isPrinting ? "Mencetak..." : title}
     </Button>
   )
 }

@@ -62,7 +62,7 @@ export default async function InvoiceDetailPage({
             {invoice.status === "paid" && (
               <Button href={`/sales/delivery-orders/create?salesInvoiceId=${invoice.id}`} variant="primary">+ Delivery Order</Button>
             )}
-            <PrintButton />
+            <PrintButton documentType="invoice" documentId={invoice.id} />
             <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
             <BackButton href="/sales/invoices" />
           </>

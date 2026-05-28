@@ -9,6 +9,7 @@ import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteWorkOrder } from "@/actions/manufacturing.actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
+import { PrintButton } from "@/components/ui/print-button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 
@@ -50,6 +51,7 @@ export default async function WorkOrderDetailPage({
             {wo.status === "completed" && (
               <Button href={`/sales/invoices/create?salesOrderId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
             )}
+            <PrintButton documentType="work-order" documentId={wo.id} />
             <DeleteButton id={wo.id} action={deleteWorkOrder} />
             <BackButton href="/manufacturing/work-orders" />
           </>

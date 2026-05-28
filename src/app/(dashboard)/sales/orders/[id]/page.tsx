@@ -48,7 +48,7 @@ export default async function SalesOrderDetailPage({
             {order.status === "approved" && (
               <Button href={`/sales/down-payments/create?salesOrderId=${order.id}`} variant="primary">+ Down Payment</Button>
             )}
-            <PrintButton />
+            <PrintButton documentType="order" documentId={order.id} />
             <BackButton href="/sales/orders" />
           </>
         }

@@ -3,18 +3,19 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { Button, Dropdown, Label, Description, Header, Separator, Tooltip } from "@heroui/react"
-import { MoreVertical, Eye, Pencil, Trash2 } from "lucide-react"
+import { MoreVertical, Eye, Pencil, Trash2, Printer } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface ActionDropdownProps {
   viewHref?: string
   editHref?: string
+  printAction?: () => void
   deleteAction?: (id: number) => Promise<{ success: boolean }>
   deleteId?: number
 }
 
-export function ActionDropdown({ viewHref, editHref, deleteAction, deleteId }: ActionDropdownProps) {
+export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, deleteId }: ActionDropdownProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
@@ -24,6 +25,8 @@ export function ActionDropdown({ viewHref, editHref, deleteAction, deleteId }: A
       router.push(viewHref)
     } else if (key === "edit" && editHref) {
       router.push(editHref)
+    } else if (key === "print" && printAction) {
+      printAction()
     } else if (key === "delete" && deleteAction && deleteId) {
       setIsDeleteOpen(true)
     }
@@ -72,6 +75,17 @@ export function ActionDropdown({ viewHref, editHref, deleteAction, deleteId }: A
                   <div className="flex flex-col">
                     <Label>Edit</Label>
                     <Description>Ubah data</Description>
+                  </div>
+                </Dropdown.Item>
+              )}
+              {printAction && (
+                <Dropdown.Item id="print" textValue="Cetak PDF">
+                  <div className="flex h-8 items-start justify-center pt-px">
+                    <Printer className="size-4 shrink-0 text-muted" />
+                  </div>
+                  <div className="flex flex-col">
+                    <Label>Cetak PDF</Label>
+                    <Description>Ekspor dokumen ke PDF</Description>
                   </div>
                 </Dropdown.Item>
               )}
