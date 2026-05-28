@@ -125,7 +125,7 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
             id="period" 
             name="period" 
             value={endDate ? endDate.substring(0, 7) : ""} // Otomatis format "YYYY-MM" dari cut-off akhir
-            isReadOnly 
+            readOnly 
             onChange={() => {}}
             className="opacity-70"
             description="Otomatis diisi berdasarkan bulan pada Tanggal Selesai."
