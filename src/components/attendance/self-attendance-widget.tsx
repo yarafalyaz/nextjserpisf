@@ -42,6 +42,7 @@ export function SelfAttendanceWidget() {
   const [error, setError] = useState<string | null>(null)
   const [geo, setGeo] = useState<GeoCoords | null>(null)
   const [geoLoading, setGeoLoading] = useState(false)
+  const [lokasiNama, setLokasiNama] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [mounted, setMounted] = useState(false)
 
@@ -90,6 +91,23 @@ export function SelfAttendanceWidget() {
       setGeoLoading(false)
     })
   }, [geoLoading, getGeo])
+
+  // Reverse Geocoding untuk cari nama jalan
+  useEffect(() => {
+    if (!geo) return
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${geo.latitude}&lon=${geo.longitude}&zoom=18&addressdetails=1`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.address) {
+          const addr = data.address
+          const jalan = addr.road || addr.suburb || addr.village || addr.city_district || addr.municipality || "Lokasi Anda"
+          setLokasiNama(jalan)
+        } else {
+          setLokasiNama("Lokasi Anda")
+        }
+      })
+      .catch(() => setLokasiNama("Lokasi Anda"))
+  }, [geo])
 
   const handleCheckIn = async () => {
     setError(null)
@@ -215,11 +233,11 @@ export function SelfAttendanceWidget() {
                     className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
                   >
                     <MapPin size={10} />
-                    {status.checkInLatitude.toFixed(4)}, {status.checkInLongitude.toFixed(4)}
+                    <span>Lihat Peta</span>
                   </a>
                 )}
               </div>
-
+ 
               {/* Check Out */}
               <div className="bg-surface rounded-lg border border-default p-3">
                 <div className="flex items-center gap-1.5 text-muted text-xs mb-1">
@@ -237,7 +255,7 @@ export function SelfAttendanceWidget() {
                     className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
                   >
                     <MapPin size={10} />
-                    {status.checkOutLatitude.toFixed(4)}, {status.checkOutLongitude.toFixed(4)}
+                    <span>Lihat Peta</span>
                   </a>
                 )}
               </div>
@@ -312,14 +330,21 @@ export function SelfAttendanceWidget() {
         {/* GPS Status */}
         {mounted && geo && (
           <div className="flex items-center justify-center gap-1.5 text-xs text-muted">
-            <MapPin size={10} className={geo ? "text-success" : "text-muted"} />
-            <span>GPS terdeteksi</span>
+            <MapPin size={10} className="text-success" />
+            <a
+              href={`https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline line-clamp-1 max-w-[250px]"
+            >
+              {lokasiNama || "Mencari lokasi..."}
+            </a>
           </div>
         )}
         {mounted && !geo && (
           <div className="flex items-center justify-center gap-1.5 text-xs text-warning">
             <MapPin size={10} />
-            <span>GPS tidak tersedia — izinkan akses lokasi untuk akurasi</span>
+            <span>GPS tidak tersedia — izinkan akses lokasi</span>
           </div>
         )}
       </div>
