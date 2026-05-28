@@ -109,8 +109,15 @@ export function PayrollForm({ employees }: PayrollFormProps) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="period">Periode Penggajian (cth: 2026-05) *</Label>
-          <Input id="period" name="period" placeholder="YYYY-MM" required />
+          <Label htmlFor="period">Periode Penggajian *</Label>
+          <Input 
+            id="period" 
+            name="period" 
+            value={endDate ? endDate.substring(0, 7) : ""} // Otomatis format "YYYY-MM" dari cut-off akhir
+            isReadOnly 
+            className="opacity-70"
+            description="Otomatis diisi berdasarkan bulan pada Tanggal Selesai."
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
