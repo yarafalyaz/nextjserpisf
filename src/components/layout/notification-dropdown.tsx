@@ -37,7 +37,7 @@ export function NotificationDropdown() {
   async function fetchNotifications() {
     setLoading(true)
     try {
-      const res = await fetch("/api/notifications")
+      const res = await fetch("/api/notifikasi")
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications || [])
@@ -58,7 +58,7 @@ export function NotificationDropdown() {
   }
 
   async function markAsRead(id: number) {
-    await fetch(`/api/notifications/${id}/read`, { method: "POST" })
+    await fetch(`/api/notifikasi/${id}/read`, { method: "POST" })
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
     setUnreadCount(prev => Math.max(0, prev - 1))
   }
@@ -131,7 +131,7 @@ export function NotificationDropdown() {
 
           <div className="border-t border-default px-4 py-2.5">
             <Link
-              href="/notifications"
+              href="/notifikasi"
               className="block text-center text-xs font-medium text-primary hover:text-primary-hover transition-colors"
               onClick={() => setIsOpen(false)}
             >

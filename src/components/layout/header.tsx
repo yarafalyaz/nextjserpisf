@@ -89,11 +89,11 @@ export function Header() {
                 </div>
               </div>
               <div className="header-dropdown-divider" />
-              <Link href="/profile" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
+              <Link href="/profil" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
                 <User size={16} />
                 <span>Edit Profile</span>
               </Link>
-              <Link href="/settings" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
+              <Link href="/pengaturan" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
                 <Settings size={16} />
                 <span>Settings</span>
               </Link>
