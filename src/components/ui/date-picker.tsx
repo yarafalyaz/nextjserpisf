@@ -46,14 +46,14 @@ export function AppDatePicker({ label, name, value, defaultValue, onChange, requ
             </HeroDatePicker.Trigger>
           </DateField.Suffix>
         </DateField.Group>
-        <HeroDatePicker.Popover>
-          <Calendar aria-label={label}>
+        <HeroDatePicker.Popover placement="bottom start" className="z-50 min-w-[280px]">
+          <Calendar aria-label={label} className="p-3">
             <Calendar.Header>
               <Calendar.NavButton slot="previous" />
               <Calendar.Heading />
               <Calendar.NavButton slot="next" />
             </Calendar.Header>
-            <Calendar.Grid>
+            <Calendar.Grid className="w-full">
               <Calendar.GridHeader>
                 {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
               </Calendar.GridHeader>

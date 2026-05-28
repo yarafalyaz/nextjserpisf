@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PurchaseRequestTable } from "./_components/purchase-request-table"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 export default async function PurchaseRequestsPage({
@@ -50,7 +51,7 @@ export default async function PurchaseRequestsPage({
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "pending", "approved", "rejected"].map((s) => (
               <Link key={s} href={`/purchase/requests?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

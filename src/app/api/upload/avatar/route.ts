@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate file size (max 2MB)
-  if (file.size > 2 * 1024 * 1024) {
-    return NextResponse.json({ error: "Ukuran file maksimal 2MB" }, { status: 400 })
+  if (file.size > 50 * 1024 * 1024) {
+    return NextResponse.json({ error: "Ukuran file maksimal 50MB" }, { status: 400 })
   }
 
   const bytes = await file.arrayBuffer()

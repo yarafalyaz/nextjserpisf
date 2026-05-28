@@ -11,24 +11,32 @@ export async function updateSystemSettings(formData: FormData) {
   const settings = await prisma.systemSetting.findFirst()
   if (!settings) throw new Error("System settings not found")
 
-  function str(key: string): string | undefined {
-    const v = formData.get(key)
-    return v ? String(v) : undefined
+  function has(key: string): boolean {
+    return formData.has(key)
   }
 
-  function strNull(key: string): string | null {
+  function str(key: string): string | undefined {
+    if (!has(key)) return undefined
+    const v = formData.get(key)
+    return v !== null ? String(v) : undefined
+  }
+
+  function strNull(key: string): string | null | undefined {
+    if (!has(key)) return undefined
     const v = formData.get(key)
     return v && String(v).trim() !== "" ? String(v) : null
   }
 
   function int(key: string): number | undefined {
+    if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return undefined
     const n = parseInt(String(v), 10)
     return isNaN(n) ? undefined : n
   }
 
-  function intNull(key: string): number | null {
+  function intNull(key: string): number | null | undefined {
+    if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return null
     const n = parseInt(String(v), 10)
@@ -36,25 +44,32 @@ export async function updateSystemSettings(formData: FormData) {
   }
 
   function decimal(key: string): number | undefined {
+    if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return undefined
     const n = parseFloat(String(v))
     return isNaN(n) ? undefined : n
   }
 
-  function decimalNull(key: string): number | null {
+  function decimalNull(key: string): number | null | undefined {
+    if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return null
     const n = parseFloat(String(v))
     return isNaN(n) ? null : n
   }
 
-  function bool(key: string): boolean {
-    const v = formData.get(key)
-    return v === "on" || v === "true" || v === "1"
+  function bool(key: string): boolean | undefined {
+    const values = formData.getAll(key)
+    if (values.length === 0) return undefined
+    return values.some((v) => {
+      const value = String(v).toLowerCase()
+      return value === "on" || value === "true" || value === "1" || value === "yes"
+    })
   }
 
-  function dateNull(key: string): Date | null {
+  function dateNull(key: string): Date | null | undefined {
+    if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return null
     const d = new Date(String(v))

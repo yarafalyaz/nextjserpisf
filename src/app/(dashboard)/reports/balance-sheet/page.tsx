@@ -5,8 +5,9 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency } from '@/lib/utils/format'
 import { BarChart3 } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { Button } from "@/components/ui/page-header"
+import { ReportSingleDateFilter } from "@/components/reports/report-date-filter"
 
 export default async function BalanceSheetPage({
   searchParams,
@@ -76,20 +77,12 @@ export default async function BalanceSheetPage({
         <div className="flex items-center gap-2">
           <BarChart3 size={24} />
           <h1>Neraca (Balance Sheet)</h1>
+        <ExportButtons title="Balance_Sheet" />
         </div>
         <p>Per tanggal: {asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
       </div>
 
-      <form className="mb-6 flex items-center gap-3">
-        <label htmlFor="date">Tanggal:</label>
-        <input
-          type="date"
-          id="date"
-          name="date"
-          defaultValue={params.date || asOfDate.toISOString().split('T')[0]}
-        />
-        <Button >Generate</Button>
-      </form>
+      <ReportSingleDateFilter defaultDate={params.date || asOfDate.toISOString().split('T')[0]} />
 
       {/* ASET */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">

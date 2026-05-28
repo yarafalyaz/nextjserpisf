@@ -51,7 +51,7 @@ type ModelName =
   | "rackRow"
   | "productionOrder"
   | "workOrder"
-  | "bomProduct"
+  | "product"
   | "project"
   | "assetBrand"
   | "assetCategory"
@@ -109,7 +109,7 @@ const modelPermissionMap: Record<ModelName, string> = {
   rackRow: "manage_inventory",
   productionOrder: "delete_production_orders",
   workOrder: "delete_work_orders",
-  bomProduct: "delete_bom_products",
+  product: "delete_bom_products",
   project: "delete_projects",
   assetBrand: "delete_asset_brands",
   assetCategory: "delete_asset_categories",
@@ -168,7 +168,7 @@ const modelRevalidateMap: Record<ModelName, string> = {
   rackRow: "/inventory/rack-rows",
   productionOrder: "/manufacturing/production-orders",
   workOrder: "/manufacturing/work-orders",
-  bomProduct: "/manufacturing/products",
+  product: "/manufacturing/products",
   project: "/projects",
   assetBrand: "/assets/brands",
   assetCategory: "/assets/categories",

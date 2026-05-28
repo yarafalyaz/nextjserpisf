@@ -1,14 +1,44 @@
 import { createPool } from "mariadb"
 import bcrypt from "bcryptjs"
 
-const pool = createPool({
-  host: "127.0.0.1",
-  port: 3009,
-  user: "root",
-  password: "",
-  database: "yara_erp",
-  connectionLimit: 5,
-})
+function buildPoolConfig() {
+  const fallback = {
+    socketPath: "/tmp/mysql.sock",
+    user: "root",
+    password: "",
+    database: "yara_erp",
+    connectionLimit: 5,
+  }
+
+  const databaseUrl = process.env.DATABASE_URL
+  if (!databaseUrl) return fallback
+
+  try {
+    const parsed = new URL(databaseUrl)
+    const socketPath = parsed.searchParams.get("socketPath") || parsed.searchParams.get("socket")
+    const database = decodeURIComponent(parsed.pathname.replace(/^\//, "")) || "yara_erp"
+    const user = decodeURIComponent(parsed.username || "root")
+    const password = decodeURIComponent(parsed.password || "")
+    const connectionLimit = Number(parsed.searchParams.get("connectionLimit") || 5)
+
+    if (socketPath) {
+      return { socketPath, user, password, database, connectionLimit }
+    }
+
+    return {
+      host: parsed.hostname || "127.0.0.1",
+      port: parsed.port ? Number(parsed.port) : 3306,
+      user,
+      password,
+      database,
+      connectionLimit,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+const pool = createPool(buildPoolConfig())
 
 async function main() {
   const conn = await pool.getConnection()

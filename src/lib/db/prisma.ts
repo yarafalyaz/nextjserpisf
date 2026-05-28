@@ -4,14 +4,16 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb"
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
 function createPrismaClient(): PrismaClient {
-  // Pass config object directly - PrismaMariaDb creates its own pool internally
-  const adapter = new PrismaMariaDb({
-    socketPath: "/tmp/mysql.sock",
-    user: "root",
-    password: "",
-    database: "yara_erp",
-    connectionLimit: 10,
-  })
+  const adapter = process.env.DATABASE_URL
+    ? new PrismaMariaDb(process.env.DATABASE_URL)
+    : new PrismaMariaDb({
+        socketPath: "/tmp/mysql.sock",
+        user: "root",
+        password: "",
+        database: "yara_erp",
+        connectionLimit: 10,
+      })
+
   return new PrismaClient({ adapter })
 }
 

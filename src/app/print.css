@@ -1,0 +1,68 @@
+@media print {
+  /* Hide non-essential UI */
+  nav, aside, header, footer,
+  [data-sidebar],
+  [data-topbar],
+  form,
+  button:not([data-print-keep]) {
+    display: none !important;
+  }
+
+  /* Reset layout */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  main, [data-main-content] {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Cards become flat */
+  .bg-surface {
+    background: white !important;
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
+  }
+
+  /* Tables */
+  table {
+    width: 100% !important;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+
+  th, td {
+    border: 1px solid #ccc !important;
+    padding: 4px 8px !important;
+  }
+
+  th {
+    background: #f5f5f5 !important;
+    font-weight: bold;
+  }
+
+  /* Page breaks */
+  .page-break-before { page-break-before: always; }
+  .page-break-after { page-break-after: always; }
+  .no-break { page-break-inside: avoid; }
+
+  /* KPI cards in print */
+  .grid {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Colors for print */
+  .text-success { color: #16a34a !important; }
+  .text-danger { color: #dc2626 !important; }
+  .text-warning { color: #ca8a04 !important; }
+  .text-muted { color: #666 !important; }
+}

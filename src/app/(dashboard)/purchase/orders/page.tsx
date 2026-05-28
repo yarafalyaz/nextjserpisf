@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PurchaseOrderTable } from "./_components/purchase-order-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -59,7 +60,7 @@ export default async function PurchaseOrdersPage({
             <div className="flex flex-col gap-2">
               {["", "draft", "approved", "ordered", "received", "cancelled"].map((s) => (
                 <Link key={s} href={`/purchase/orders?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                  {s || "Semua"}
+                  {s ? statusLabel(s) : "Semua"}
                 </Link>
               ))}
             </div>
@@ -67,7 +68,7 @@ export default async function PurchaseOrdersPage({
           <div className="flex gap-1.5 flex-wrap hidden lg:flex">
             {["", "draft", "approved", "ordered", "received", "cancelled"].map((s) => (
               <Link key={s} href={`/purchase/orders?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

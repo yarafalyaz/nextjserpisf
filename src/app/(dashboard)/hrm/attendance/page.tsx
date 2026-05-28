@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AttendanceTable } from "./_components/attendance-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ReportSingleDateFilter } from "@/components/reports/report-date-filter"
 import { Button } from "@/components/ui/page-header"
 
 export default async function AttendancePage({

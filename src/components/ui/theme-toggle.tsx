@@ -1,19 +1,20 @@
 "use client"
 
 import { Button } from "@/components/ui/page-header"
-
-
 import { useTheme } from "@/components/providers/theme-provider"
+import { useIsSSR } from "@react-aria/ssr"
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
+  const isSSR = useIsSSR()
+  const activeTheme = isSSR ? "system" : theme
 
   return (
     <div className="theme-toggle">
       <Button
         type="button"
-        onClick={() => setTheme("light")}
-        className={`theme-toggle-btn ${theme === "light" ? "active" : ""}`}
+        onPress={() => setTheme("light")}
+        className={`theme-toggle-btn ${activeTheme === "light" ? "active" : ""}`}
         title="Light"
         aria-label="Light theme"
       >
@@ -31,8 +32,8 @@ export function ThemeToggle() {
       </Button>
       <Button
         type="button"
-        onClick={() => setTheme("dark")}
-        className={`theme-toggle-btn ${theme === "dark" ? "active" : ""}`}
+        onPress={() => setTheme("dark")}
+        className={`theme-toggle-btn ${activeTheme === "dark" ? "active" : ""}`}
         title="Dark"
         aria-label="Dark theme"
       >
@@ -42,8 +43,8 @@ export function ThemeToggle() {
       </Button>
       <Button
         type="button"
-        onClick={() => setTheme("system")}
-        className={`theme-toggle-btn ${theme === "system" ? "active" : ""}`}
+        onPress={() => setTheme("system")}
+        className={`theme-toggle-btn ${activeTheme === "system" ? "active" : ""}`}
         title="System"
         aria-label="System theme"
       >

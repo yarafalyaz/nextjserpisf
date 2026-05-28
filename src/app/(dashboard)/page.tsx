@@ -7,6 +7,54 @@ import Link from "next/link"
 import { DollarSign, Receipt, Users, Package, AlertTriangle } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { RevenueChart, SalesStatusChart, TopCustomersChart } from "@/components/dashboard/charts"
+
+async function getChartData() {
+  const sixMonthsAgo = new Date()
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+  sixMonthsAgo.setDate(1)
+  sixMonthsAgo.setHours(0, 0, 0, 0)
+
+  // Revenue trend - last 6 months
+  const revenueRaw = await prisma.$queryRaw<{ month: string; revenue: number }[]>`
+    SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COALESCE(SUM(paid_amount), 0) as revenue
+    FROM sales_invoices
+    WHERE created_at >= ${sixMonthsAgo} AND status IN ('posted', 'partial', 'paid')
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+    ORDER BY month ASC
+  `
+
+  const revenueData = revenueRaw.map((r) => ({
+    month: r.month,
+    revenue: Number(r.revenue),
+  }))
+
+  // Sales by status
+  const statusRaw = await prisma.$queryRaw<{ status: string; count: bigint }[]>`
+    SELECT status, COUNT(*) as count FROM sales_invoices GROUP BY status
+  `
+  const salesByStatus = statusRaw.map((s) => ({
+    name: s.status,
+    value: Number(s.count),
+  }))
+
+  // Top 5 customers by revenue
+  const topCustomersRaw = await prisma.$queryRaw<{ name: string; revenue: number }[]>`
+    SELECT c.name, COALESCE(SUM(si.paid_amount), 0) as revenue
+    FROM sales_invoices si
+    JOIN customers c ON si.customer_id = c.id
+    WHERE si.status IN ('posted', 'partial', 'paid')
+    GROUP BY c.id, c.name
+    ORDER BY revenue DESC
+    LIMIT 5
+  `
+  const topCustomers = topCustomersRaw.map((c) => ({
+    name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+    revenue: Number(c.revenue),
+  }))
+
+  return { revenueData, salesByStatus, topCustomers }
+}
 
 async function getDashboardData() {
   const [
@@ -61,7 +109,10 @@ async function getDashboardData() {
 export default async function DashboardPage() {
   await requirePermission("view_dashboard")
 
-  const data = await getDashboardData()
+  const [data, chartData] = await Promise.all([
+    getDashboardData(),
+    getChartData(),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -106,6 +157,15 @@ export default async function DashboardPage() {
             <span className="text-xl font-bold text-foreground">{data.totalItems}</span>
           </div>
         </div>
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <RevenueChart data={chartData.revenueData} />
+        <SalesStatusChart data={chartData.salesByStatus} />
+      </div>
+      <div className="grid grid-cols-1">
+        <TopCustomersChart data={chartData.topCustomers} />
       </div>
 
       {/* Content Grid */}

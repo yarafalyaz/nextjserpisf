@@ -56,7 +56,7 @@ export function ProductTable({ data }: ProductTableProps) {
       ariaLabel="Daftar produk"
       pageSize={20}
       selectable={true}
-      onBulkDelete={(ids) => bulkDelete("bomProduct", ids)}
+      onBulkDelete={(ids) => bulkDelete("product", ids)}
     />
   )
 }

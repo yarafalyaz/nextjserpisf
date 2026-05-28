@@ -5,8 +5,9 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency } from '@/lib/utils/format'
 import { Scale } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
-import { Button } from "@/components/ui/page-header"
+import { ReportSingleDateFilter } from "@/components/reports/report-date-filter"
 
 export default async function TrialBalancePage({
   searchParams,
@@ -58,20 +59,12 @@ export default async function TrialBalancePage({
         <div className="flex items-center gap-2">
           <Scale size={24} />
           <h1>Neraca Saldo (Trial Balance)</h1>
+        <ExportButtons title="Trial_Balance" />
         </div>
         <p>Per tanggal: {asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
       </div>
 
-      <form className="mb-6 flex items-center gap-3">
-        <label htmlFor="date">Tanggal:</label>
-        <input
-          type="date"
-          id="date"
-          name="date"
-          defaultValue={params.date || asOfDate.toISOString().split('T')[0]}
-        />
-        <Button >Generate</Button>
-      </form>
+      <ReportSingleDateFilter defaultDate={params.date || asOfDate.toISOString().split('T')[0]} />
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">

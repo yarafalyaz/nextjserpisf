@@ -3,10 +3,11 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { changePassword } from "@/actions/auth.actions"
+import { changePassword, updateProfile } from "@/actions/auth.actions"
 import { User, Lock, Camera } from "lucide-react"
 import { Input, Label } from "@heroui/react"
 import { Button } from "@/components/ui/page-header"
+import { showSuccess, showError } from "@/lib/utils/toast"
 
 interface ProfileFormProps {
   user: { id: number; name: string; email: string; avatar: string | null }
@@ -35,13 +36,14 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
       const data = await res.json()
       if (res.ok) {
         setAvatarUrl(data.url)
-        await update()
+        await update({ name: user.name, image: data.url })
         router.refresh()
+        showSuccess("Foto profil berhasil diperbarui!")
       } else {
-        alert(data.error || "Upload gagal")
+        showError(data.error || "Upload gagal")
       }
     } catch (err) {
-      alert("Upload gagal: " + (err as Error).message)
+      showError("Upload gagal: " + (err as Error).message)
     } finally {
       setUploading(false)
     }
@@ -51,14 +53,15 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
     e.preventDefault()
     startTransition(async () => {
       const formData = new FormData(e.currentTarget)
-      formData.append("userId", String(user.id))
-      const { updateProfile } = await import("@/actions/auth.actions")
       const result = await updateProfile(formData)
       if (result.error) {
-        alert(result.error)
+        showError(result.error)
       } else {
-        await update()
+        const name = formData.get("name") as string
+        const email = formData.get("email") as string
+        await update({ name, email })
         router.refresh()
+        showSuccess("Profil berhasil diperbarui!")
       }
     })
   }
@@ -67,12 +70,11 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
     e.preventDefault()
     startTransition(async () => {
       const formData = new FormData(e.currentTarget)
-      formData.append("userId", String(user.id))
       const result = await changePassword(formData)
       if (result.error) {
-        alert(result.error)
+        showError(result.error)
       } else {
-        alert("Password berhasil diubah!")
+        showSuccess("Password berhasil diubah!")
         ;(e.target as HTMLFormElement).reset()
       }
     })
@@ -80,7 +82,6 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {/* Profile Info + Avatar Upload - Combined */}
       <form onSubmit={onSubmitProfile} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="profile-top">
           <div className="profile-avatar-upload" onClick={() => fileInputRef.current?.click()}>
@@ -130,13 +131,12 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button disabled={isPending} >
+          <Button type="submit" disabled={isPending}>
             {isPending ? "Menyimpan..." : "Simpan Perubahan"}
           </Button>
         </div>
       </form>
 
-      {/* Change Password */}
       <form onSubmit={onSubmitPassword} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <h3 style={{ margin: "0 0 16px", fontSize: "0.9375rem", display: "flex", alignItems: "center", gap: "8px" }}>
           <Lock size={16} /> Ubah Password
@@ -152,7 +152,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button disabled={isPending} >
+          <Button type="submit" disabled={isPending}>
             {isPending ? "Mengubah..." : "Ubah Password"}
           </Button>
         </div>

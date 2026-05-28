@@ -1,0 +1,27 @@
+export const dynamic = "force-dynamic"
+
+import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { UserCreateForm } from "./_components/user-create-form"
+
+export default async function CreateUserPage() {
+  await requirePermission("manage_users")
+
+  const roles = await prisma.role.findMany({
+    orderBy: { name: "asc" },
+  })
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[
+        { label: "Dashboard", href: "/" },
+        { label: "Settings", href: "/settings" },
+        { label: "Users", href: "/settings/users" },
+        { label: "Create" },
+      ]} />
+      <h1 className="text-2xl font-bold text-foreground">Tambah User Baru</h1>
+      <UserCreateForm roles={roles} />
+    </div>
+  )
+}

@@ -1,6 +1,7 @@
 'use client'
 
 import { Chip } from '@heroui/react'
+import { statusLabel } from '@/lib/utils/status-labels'
 
 const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'accent'> = {
   active: 'success',
@@ -41,7 +42,7 @@ export function StatusChip({ status }: { status: string }) {
   const color = statusColors[status.toLowerCase().replace(/\s+/g, '_')] || 'default'
   return (
     <Chip color={color} size="sm" variant="soft">
-      {status}
+      {statusLabel(status)}
     </Chip>
   )
 }

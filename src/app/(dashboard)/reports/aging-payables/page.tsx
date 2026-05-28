@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { FileText } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 function getAgeGroup(days: number): string {
@@ -64,6 +65,7 @@ export default async function AgingPayablesPage() {
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground"><FileText size={20} /> Aging Hutang (Payables)</h1>
+        <ExportButtons title="Aging_Payables" />
       </div>
 
       {/* Summary Cards */}

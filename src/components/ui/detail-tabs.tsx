@@ -11,9 +11,9 @@ interface TabItem {
 
 export function DetailTabs({ tabs, ariaLabel }: { tabs: TabItem[]; ariaLabel: string }) {
   return (
-    <Tabs defaultSelectedKey={tabs[0]?.id}>
+    <Tabs defaultSelectedKey={tabs[0]?.id} className="w-full">
       <Tabs.ListContainer>
-        <Tabs.List aria-label={ariaLabel}>
+        <Tabs.List aria-label={ariaLabel} className="w-full justify-center">
           {tabs.map((tab) => (
             <Tabs.Tab key={tab.id} id={tab.id}>
               {tab.label}
@@ -23,7 +23,7 @@ export function DetailTabs({ tabs, ariaLabel }: { tabs: TabItem[]; ariaLabel: st
         </Tabs.List>
       </Tabs.ListContainer>
       {tabs.map((tab) => (
-        <Tabs.Panel key={tab.id} id={tab.id}>
+        <Tabs.Panel key={tab.id} id={tab.id} className="pt-4">
           {tab.content}
         </Tabs.Panel>
       ))}

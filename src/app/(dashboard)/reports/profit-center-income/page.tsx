@@ -5,8 +5,9 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency } from '@/lib/utils/format'
 import { Building2 } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { Button } from "@/components/ui/page-header"
+import { ReportDateFilter } from "@/components/reports/report-date-filter"
 
 export default async function ProfitCenterIncomePage({
   searchParams,
@@ -95,29 +96,14 @@ export default async function ProfitCenterIncomePage({
         <div className="flex items-center gap-2">
           <Building2 size={24} />
           <h1>Laporan Laba Rugi per Profit Center</h1>
+        <ExportButtons title="Profit_Center" />
         </div>
         <p>
           Periode: {startDate.toLocaleDateString('id-ID')} - {endDate.toLocaleDateString('id-ID')}
         </p>
       </div>
 
-      <form className="mb-6 flex items-center gap-3 flex-wrap">
-        <label htmlFor="startDate">Dari:</label>
-        <input
-          type="date"
-          id="startDate"
-          name="startDate"
-          defaultValue={params.startDate || startDate.toISOString().split('T')[0]}
-        />
-        <label htmlFor="endDate">Sampai:</label>
-        <input
-          type="date"
-          id="endDate"
-          name="endDate"
-          defaultValue={params.endDate || endDate.toISOString().split('T')[0]}
-        />
-        <Button >Generate</Button>
-      </form>
+      <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
 
       {/* Profit Centers List */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">

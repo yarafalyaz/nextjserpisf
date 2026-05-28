@@ -5,8 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
-import { Button } from "@/components/ui/page-header"
+import { Select, ListBox, Label, Button } from "@heroui/react"
+import { AppDatePicker } from "@/components/ui/date-picker"
 
 /**
  * Shows all accounts with their debit and credit totals
@@ -136,26 +138,24 @@ export default async function FinancialReportsPage({
            reportType === "income-statement" ? "Laba Rugi (Income Statement)" :
            "Reports"}
         </h1>
+        <ExportButtons title="Financial" />
       </div>
 
       {/* Report Selector */}
-      <form className="bg-surface rounded-xl border border-default shadow-sm p-6 flex gap-3 flex-wrap items-end" action="/reports/financial">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Jenis Laporan</label>
-          <select name="report" className="form-input" defaultValue={reportType}>
-            <option value="trial-balance">Neraca Saldo</option>
-            <option value="income-statement">Laba Rugi</option>
-          </select>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Dari</label>
-          <input type="date" name="startDate" className="form-input" defaultValue={params.startDate || `${new Date().getFullYear()}-01-01`} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Sampai</label>
-          <input type="date" name="endDate" className="form-input" defaultValue={params.endDate || new Date().toISOString().split("T")[0]} />
-        </div>
-        <Button >Generate</Button>
+      <form className="bg-surface rounded-xl border border-default shadow-sm p-6 flex gap-4 flex-wrap items-end print:hidden" action="/reports/financial">
+        <Select name="report" defaultSelectedKey={reportType} placeholder="Pilih Laporan" className="w-[200px]">
+          <Label>Jenis Laporan</Label>
+          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id="trial-balance" textValue="Neraca Saldo">Neraca Saldo<ListBox.ItemIndicator /></ListBox.Item>
+              <ListBox.Item id="income-statement" textValue="Laba Rugi">Laba Rugi<ListBox.ItemIndicator /></ListBox.Item>
+            </ListBox>
+          </Select.Popover>
+        </Select>
+        <AppDatePicker label="Dari" name="startDate" defaultValue={params.startDate || `${new Date().getFullYear()}-01-01`} className="w-[180px]" />
+        <AppDatePicker label="Sampai" name="endDate" defaultValue={params.endDate || new Date().toISOString().split("T")[0]} className="w-[180px]" />
+        <Button type="submit" variant="primary" size="sm">Generate</Button>
       </form>
 
       {/* Trial Balance */}

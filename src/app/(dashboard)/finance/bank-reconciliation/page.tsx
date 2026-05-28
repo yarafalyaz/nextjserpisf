@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { StatusChip } from '@/components/ui/status-chip'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -56,7 +57,7 @@ export default async function BankReconciliationPage({
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "completed"].map((s) => (
               <Link key={s} href={`/finance/bank-reconciliation?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

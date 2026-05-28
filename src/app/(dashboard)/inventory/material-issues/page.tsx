@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { MaterialIssueTable } from "./_components/material-issue-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -50,7 +51,7 @@ export default async function MaterialIssuesPage({
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "issued"].map((s) => (
               <Link key={s} href={`/inventory/material-issues?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

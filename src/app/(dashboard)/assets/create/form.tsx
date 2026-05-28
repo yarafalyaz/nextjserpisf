@@ -5,6 +5,8 @@ import { useTransition } from "react"
 import { createAsset } from "@/actions/asset.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, TextArea, Select, ComboBox, ListBox, Label } from "@heroui/react"
+import { AppDatePicker } from "@/components/ui/date-picker"
+
 import { Button } from "@/components/ui/page-header"
 
 interface AssetFormProps {
@@ -66,8 +68,7 @@ export function AssetForm({ categories, brands, asset }: AssetFormProps) {
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="purchaseDate">Tanggal Pembelian</Label>
-          <Input id="purchaseDate" name="purchaseDate" type="date" defaultValue={asset?.purchaseDate?.split("T")[0] || ""} />
+          <AppDatePicker label="Tanggal Pembelian" name="purchaseDate" defaultValue={asset?.purchaseDate?.split("T")[0] || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="purchasePrice">Harga Pembelian</Label>

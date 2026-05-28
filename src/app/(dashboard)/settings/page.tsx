@@ -23,6 +23,50 @@ function BoolField({ label, value }: { label: string; value: boolean }) {
   )
 }
 
+function AccountMappingField({ label, value }: { label: string; value: string }) {
+  const isSet = value !== "Belum diset"
+
+  return (
+    <div className={`rounded-lg border px-3 py-3 transition-colors ${
+      isSet ? "bg-surface border-default" : "bg-danger/5 border-danger/30"
+    }`}>
+      <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-muted">{label}</p>
+      <p className={`mt-1 text-[1rem] font-semibold leading-snug ${isSet ? "text-foreground" : "text-danger"}`}>{value}</p>
+      <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold ${
+        isSet ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+      }`}>
+        {isSet ? "Tersambung" : "Belum Diset"}
+      </span>
+    </div>
+  )
+}
+
+function AccountMappingSection({
+  title,
+  items,
+}: {
+  title: string
+  items: { label: string; value: string }[]
+}) {
+  const mapped = items.filter((item) => item.value !== "Belum diset").length
+
+  return (
+    <section className="rounded-xl border border-default bg-surface-secondary/40 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <span className="inline-flex rounded-full border border-default bg-surface px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted">
+          {mapped}/{items.length} Tersambung
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        {items.map((item) => (
+          <AccountMappingField key={`${title}-${item.label}`} label={item.label} value={item.value} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default async function SettingsPage() {
   await requirePermission("manage_settings")
 
@@ -34,6 +78,68 @@ export default async function SettingsPage() {
     const acc = accounts.find((a) => a.id === id)
     return acc ? `${acc.code} - ${acc.name}` : "Belum diset"
   }
+
+  const mappingGroups = [
+    {
+      title: "Penjualan",
+      items: [
+        { label: "Piutang Usaha", value: accountName(settings?.salesReceivableAccountId) },
+        { label: "Pendapatan Penjualan", value: accountName(settings?.salesRevenueAccountId) },
+        { label: "PPN Keluaran", value: accountName(settings?.salesTaxAccountId) },
+        { label: "Retur Penjualan", value: accountName(settings?.salesReturnAccountId) },
+        { label: "Akun Penjualan", value: accountName(settings?.salesAccountId) },
+      ],
+    },
+    {
+      title: "Pembelian",
+      items: [
+        { label: "Hutang Usaha", value: accountName(settings?.purchasePayableAccountId) },
+        { label: "Persediaan", value: accountName(settings?.purchaseInventoryAccountId) },
+        { label: "PPN Masukan", value: accountName(settings?.purchaseTaxAccountId) },
+        { label: "Beban Pembelian", value: accountName(settings?.purchaseExpenseAccountId) },
+        { label: "Diskon Pembelian", value: accountName(settings?.purchaseDiscountAccountId) },
+        { label: "Ongkos Kirim", value: accountName(settings?.purchaseShippingAccountId) },
+        { label: "Retur Pembelian", value: accountName(settings?.purchaseReturnAccountId) },
+      ],
+    },
+    {
+      title: "Persediaan & Manufaktur",
+      items: [
+        { label: "Persediaan", value: accountName(settings?.inventoryAccountId) },
+        { label: "Penyesuaian Persediaan", value: accountName(settings?.inventoryAdjustmentAccountId) },
+        { label: "Stock Adjustment", value: accountName(settings?.stockAdjustmentAccountId) },
+        { label: "HPP (COGS)", value: accountName(settings?.cogsAccountId) },
+        { label: "WIP", value: accountName(settings?.wipAccountId) },
+        { label: "Beban Material", value: accountName(settings?.materialExpenseAccountId) },
+        { label: "Beban Pengeluaran Material", value: accountName(settings?.materialIssueExpenseAccountId) },
+      ],
+    },
+    {
+      title: "Umum",
+      items: [
+        { label: "Kas Kecil", value: accountName(settings?.pettyCashAccountId) },
+        { label: "Kas & Bank", value: accountName(settings?.cashBankAccountId) },
+        { label: "Beban Umum", value: accountName(settings?.generalExpenseAccountId) },
+        { label: "Kas Default", value: accountName(settings?.defaultCashAccountId) },
+      ],
+    },
+    {
+      title: "Payroll",
+      items: [
+        { label: "Beban Gaji", value: accountName(settings?.salaryExpenseAccountId) },
+        { label: "Hutang Gaji", value: accountName(settings?.salariesPayableAccountId) },
+        { label: "Bank Payroll", value: accountName(settings?.payrollBankAccountId) },
+        { label: "Piutang Karyawan", value: accountName(settings?.employeeReceivableAccountId) },
+        { label: "Tipe Jurnal Payroll", value: accountName(settings?.payrollJournalTypeId) },
+      ],
+    },
+  ]
+
+  const allMappings = mappingGroups.flatMap((group) => group.items)
+  const mappedCount = allMappings.filter((item) => item.value !== "Belum diset").length
+  const totalMappings = allMappings.length
+  const unmappedCount = totalMappings - mappedCount
+  const mappingProgress = totalMappings > 0 ? Math.round((mappedCount / totalMappings) * 100) : 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -207,52 +313,35 @@ export default async function SettingsPage() {
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Mapping Akun</h2>
           </div>
           <div className="p-4 px-5">
-            <h3 className="text-sm font-semibold text-foreground mb-3">Penjualan</h3>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-              <DisplayField label="Piutang Usaha" value={accountName(settings?.salesReceivableAccountId)} />
-              <DisplayField label="Pendapatan Penjualan" value={accountName(settings?.salesRevenueAccountId)} />
-              <DisplayField label="PPN Keluaran" value={accountName(settings?.salesTaxAccountId)} />
-              <DisplayField label="Retur Penjualan" value={accountName(settings?.salesReturnAccountId)} />
-              <DisplayField label="Akun Penjualan" value={accountName(settings?.salesAccountId)} />
+            <div className="rounded-xl border border-default bg-surface-secondary/50 p-4 mb-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted">Kualitas Mapping</p>
+                  <p className="text-lg font-semibold text-foreground mt-1">
+                    {mappedCount}/{totalMappings} akun tersambung
+                  </p>
+                  <p className="text-sm text-muted mt-1">
+                    {unmappedCount === 0
+                      ? "Semua mapping akun sudah lengkap."
+                      : `${unmappedCount} akun belum diset. Lengkapi untuk posting jurnal yang lebih aman.`}
+                  </p>
+                </div>
+                <Link
+                  href="/settings/edit"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-primary text-white hover:bg-primary/90 transition-all"
+                >
+                  Edit Mapping
+                </Link>
+              </div>
+              <div className="mt-3 h-2 rounded-full bg-surface border border-default overflow-hidden">
+                <div className="h-full bg-primary transition-all" style={{ width: `${mappingProgress}%` }} />
+              </div>
             </div>
 
-            <h3 className="text-sm font-semibold text-foreground mt-5 mb-3">Pembelian</h3>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-              <DisplayField label="Hutang Usaha" value={accountName(settings?.purchasePayableAccountId)} />
-              <DisplayField label="Persediaan" value={accountName(settings?.purchaseInventoryAccountId)} />
-              <DisplayField label="PPN Masukan" value={accountName(settings?.purchaseTaxAccountId)} />
-              <DisplayField label="Beban Pembelian" value={accountName(settings?.purchaseExpenseAccountId)} />
-              <DisplayField label="Diskon Pembelian" value={accountName(settings?.purchaseDiscountAccountId)} />
-              <DisplayField label="Ongkos Kirim" value={accountName(settings?.purchaseShippingAccountId)} />
-              <DisplayField label="Retur Pembelian" value={accountName(settings?.purchaseReturnAccountId)} />
-            </div>
-
-            <h3 className="text-sm font-semibold text-foreground mt-5 mb-3">Persediaan & Manufaktur</h3>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-              <DisplayField label="Persediaan" value={accountName(settings?.inventoryAccountId)} />
-              <DisplayField label="Penyesuaian Persediaan" value={accountName(settings?.inventoryAdjustmentAccountId)} />
-              <DisplayField label="Stock Adjustment" value={accountName(settings?.stockAdjustmentAccountId)} />
-              <DisplayField label="HPP (COGS)" value={accountName(settings?.cogsAccountId)} />
-              <DisplayField label="WIP" value={accountName(settings?.wipAccountId)} />
-              <DisplayField label="Beban Material" value={accountName(settings?.materialExpenseAccountId)} />
-              <DisplayField label="Beban Pengeluaran Material" value={accountName(settings?.materialIssueExpenseAccountId)} />
-            </div>
-
-            <h3 className="text-sm font-semibold text-foreground mt-5 mb-3">Umum</h3>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-              <DisplayField label="Kas Kecil" value={accountName(settings?.pettyCashAccountId)} />
-              <DisplayField label="Kas & Bank" value={accountName(settings?.cashBankAccountId)} />
-              <DisplayField label="Beban Umum" value={accountName(settings?.generalExpenseAccountId)} />
-              <DisplayField label="Kas Default" value={accountName(settings?.defaultCashAccountId)} />
-            </div>
-
-            <h3 className="text-sm font-semibold text-foreground mt-5 mb-3">Payroll</h3>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-              <DisplayField label="Beban Gaji" value={accountName(settings?.salaryExpenseAccountId)} />
-              <DisplayField label="Hutang Gaji" value={accountName(settings?.salariesPayableAccountId)} />
-              <DisplayField label="Bank Payroll" value={accountName(settings?.payrollBankAccountId)} />
-              <DisplayField label="Piutang Karyawan" value={accountName(settings?.employeeReceivableAccountId)} />
-              <DisplayField label="Tipe Jurnal Payroll" value={accountName(settings?.payrollJournalTypeId)} />
+            <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+              {mappingGroups.map((group) => (
+                <AccountMappingSection key={group.title} title={group.title} items={group.items} />
+              ))}
             </div>
           </div>
         </div>

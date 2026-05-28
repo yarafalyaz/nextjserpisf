@@ -55,13 +55,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id ?? "";
         token.name = user.name;
         token.roles = (user as any).roles;
         token.permissions = (user as any).permissions;
       }
+      
+      // Handle client-side update() calls
+      if (trigger === "update" && session) {
+        if (session.name) token.name = session.name;
+        if (session.email) token.email = session.email;
+        if (session.image || session.avatar) token.avatar = session.image || session.avatar;
+        // Reset cache timer to force DB sync if needed
+        (token as any)._avatarFetchedAt = 0;
+        return token;
+      }
+
       // Fetch avatar only on sign-in or every 5 minutes (not every request)
       const now = Date.now();
       const lastFetch = (token as any)._avatarFetchedAt as number | undefined;

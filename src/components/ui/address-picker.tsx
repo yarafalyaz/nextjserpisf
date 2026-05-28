@@ -1,98 +1,15 @@
 "use client"
 
-import { Button } from "@/components/ui/page-header"
+import { useState, useEffect } from "react"
+import { ComboBox, Input, ListBox, Label } from "@heroui/react"
 
-
-import { useState, useEffect, useRef } from "react"
-import { Label } from "@heroui/react"
-import { ChevronDown, Search } from "lucide-react"
-
-interface AddressOption {
+interface Region {
   code: string
   name: string
   postalCode?: string
 }
 
-interface SearchableSelectProps {
-  id: string
-  name: string
-  label: string
-  options: AddressOption[]
-  value: string
-  onChange: (value: string, code: string) => void
-  disabled?: boolean
-  placeholder?: string
-}
-
-function SearchableSelect({ id, name, label, options, value, onChange, disabled, placeholder }: SearchableSelectProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [search, setSearch] = useState("")
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false)
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  const filtered = options.filter(o => o.name.toLowerCase().includes(search.toLowerCase()))
-
-  return (
-    <div className="flex flex-col gap-1.5" ref={ref}>
-      <Label htmlFor={id}>{label}</Label>
-      <input type="hidden" name={name} value={value} />
-      <div className="relative">
-        <Button
-          type="button"
-          id={id}
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          disabled={disabled}
-          className="w-full px-3 py-2.5 rounded-lg border border-default bg-surface text-sm text-left text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
-        >
-          <span className={value ? "text-foreground" : "text-muted"}>{value || placeholder || "Pilih..."}</span>
-          <ChevronDown size={14} className="text-muted" />
-        </Button>
-
-        {isOpen && (
-          <div className="absolute z-50 top-full mt-1 w-full bg-surface border border-default rounded-lg shadow-lg overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-default">
-              <Search size={14} className="text-muted" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari..."
-                className="flex-1 text-sm bg-transparent outline-none text-foreground placeholder:text-muted"
-                autoFocus
-              />
-            </div>
-            <div className="max-h-48 overflow-y-auto">
-              {filtered.length === 0 ? (
-                <div className="px-3 py-2 text-sm text-muted">Tidak ditemukan</div>
-              ) : (
-                filtered.map(o => (
-                  <Button
-                    key={o.code}
-                    type="button"
-                    onClick={() => { onChange(o.name, o.code); setIsOpen(false); setSearch("") }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-primary/10 transition-colors ${value === o.name ? "bg-primary/10 text-primary font-medium" : "text-foreground"}`}
-                  >
-                    {o.name}
-                  </Button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 interface AddressPickerProps {
-  prefix?: string
   defaultValues?: {
     province?: string
     city?: string
@@ -100,165 +17,215 @@ interface AddressPickerProps {
     village?: string
     postalCode?: string
   }
+  defaultProvince?: string
+  defaultCity?: string
+  defaultDistrict?: string
+  defaultVillage?: string
+  defaultPostalCode?: string
+  prefix?: string
 }
 
-export function AddressPicker({ prefix = "", defaultValues }: AddressPickerProps) {
-  const [provinces, setProvinces] = useState<AddressOption[]>([])
-  const [regencies, setRegencies] = useState<AddressOption[]>([])
-  const [districts, setDistricts] = useState<AddressOption[]>([])
-  const [villages, setVillages] = useState<AddressOption[]>([])
+export function AddressPicker({ defaultValues, defaultProvince, defaultCity, defaultDistrict, defaultVillage, defaultPostalCode, prefix }: AddressPickerProps) {
+  const initProvince = defaultValues?.province || defaultProvince || ""
+  const initCity = defaultValues?.city || defaultCity || ""
+  const initDistrict = defaultValues?.district || defaultDistrict || ""
+  const initVillage = defaultValues?.village || defaultVillage || ""
+  const initPostalCode = defaultValues?.postalCode || defaultPostalCode || ""
 
-  const [selectedProvince, setSelectedProvince] = useState(defaultValues?.province || "")
-  const [selectedRegency, setSelectedRegency] = useState(defaultValues?.city || "")
-  const [selectedDistrict, setSelectedDistrict] = useState(defaultValues?.district || "")
-  const [selectedVillage, setSelectedVillage] = useState(defaultValues?.village || "")
-  const [postalCode, setPostalCode] = useState(defaultValues?.postalCode || "")
+  const [provinces, setProvinces] = useState<Region[]>([])
+  const [cities, setCities] = useState<Region[]>([])
+  const [districts, setDistricts] = useState<Region[]>([])
+  const [villages, setVillages] = useState<Region[]>([])
 
-  const [provinceCode, setProvinceCode] = useState("")
-  const [regencyCode, setRegencyCode] = useState("")
-  const [districtCode, setDistrictCode] = useState("")
+  const [selectedProvince, setSelectedProvince] = useState(initProvince)
+  const [selectedCity, setSelectedCity] = useState(initCity)
+  const [selectedDistrict, setSelectedDistrict] = useState(initDistrict)
+  const [selectedVillage, setSelectedVillage] = useState(initVillage)
+  const [postalCode, setPostalCode] = useState(initPostalCode)
 
-  const fieldName = (name: string) => prefix ? `${prefix}${name.charAt(0).toUpperCase() + name.slice(1)}` : name
+  const fieldName = (field: string) => prefix ? `${prefix}${field.charAt(0).toUpperCase() + field.slice(1)}` : field
+  const provinceCode = provinces.find((p) => p.name === selectedProvince)?.code || ""
+  const cityCode = cities.find((c) => c.name === selectedCity)?.code || ""
+  const districtCode = districts.find((d) => d.name === selectedDistrict)?.code || ""
 
-  // Load provinces on mount
+  // Load provinces
   useEffect(() => {
     fetch("/api/address?type=provinces")
       .then(res => res.json())
-      .then((data: AddressOption[]) => {
-        const list = Array.isArray(data) ? data : []
-        setProvinces(list)
-        // Auto-resolve province code from defaultValues name
-        if (defaultValues?.province && !provinceCode) {
-          const match = list.find(p => p.name === defaultValues.province)
-          if (match) setProvinceCode(match.code)
-        }
-      })
+      .then(data => setProvinces(data))
       .catch(() => {})
   }, [])
 
-  // Load regencies when province changes
+  // Load cities
   useEffect(() => {
     if (!provinceCode) return
     fetch(`/api/address?type=regencies&parentCode=${provinceCode}`)
       .then(res => res.json())
-      .then((data: AddressOption[]) => {
-        const list = Array.isArray(data) ? data : []
-        setRegencies(list)
-        // Auto-resolve city code from defaultValues name
-        if (defaultValues?.city && !regencyCode) {
-          const match = list.find(r => r.name === defaultValues.city)
-          if (match) setRegencyCode(match.code)
-        }
-      })
+      .then(data => setCities(data))
       .catch(() => {})
   }, [provinceCode])
 
-  // Load districts when regency changes
+  // Load districts
   useEffect(() => {
-    if (!regencyCode) return
-    fetch(`/api/address?type=districts&parentCode=${regencyCode}`)
+    if (!cityCode) return
+    fetch(`/api/address?type=districts&parentCode=${cityCode}`)
       .then(res => res.json())
-      .then((data: AddressOption[]) => {
-        const list = Array.isArray(data) ? data : []
-        setDistricts(list)
-        // Auto-resolve district code from defaultValues name
-        if (defaultValues?.district && !districtCode) {
-          const match = list.find(d => d.name === defaultValues.district)
-          if (match) setDistrictCode(match.code)
-        }
-      })
+      .then(data => setDistricts(data))
       .catch(() => {})
-  }, [regencyCode])
+  }, [cityCode])
 
-  // Load villages when district changes
+  // Load villages
   useEffect(() => {
     if (!districtCode) return
     fetch(`/api/address?type=villages&parentCode=${districtCode}`)
       .then(res => res.json())
-      .then((data: AddressOption[]) => setVillages(Array.isArray(data) ? data : []))
+      .then(data => setVillages(data))
       .catch(() => {})
   }, [districtCode])
 
-  // Auto-fill postal code from village data is handled in onChange below
-
   return (
     <>
-      <SearchableSelect
-        id={fieldName("province")}
-        name={fieldName("province")}
-        label="Provinsi"
-        options={provinces}
-        value={selectedProvince}
-        onChange={(name, code) => {
-          setSelectedProvince(name); setProvinceCode(code)
-          setSelectedRegency(""); setRegencyCode("")
-          setSelectedDistrict(""); setDistrictCode("")
-          setSelectedVillage(""); setPostalCode("")
-          setRegencies([]); setDistricts([]); setVillages([])
-        }}
-        placeholder="Pilih Provinsi"
-      />
+      <input type="hidden" name={fieldName("province")} value={selectedProvince} />
+      <input type="hidden" name={fieldName("city")} value={selectedCity} />
+      <input type="hidden" name={fieldName("district")} value={selectedDistrict} />
+      <input type="hidden" name={fieldName("village")} value={selectedVillage} />
+      <input type="hidden" name={fieldName("postalCode")} value={postalCode} />
 
-      <SearchableSelect
-        id={fieldName("city")}
-        name={fieldName("city")}
-        label="Kab/Kota"
-        options={regencies}
-        value={selectedRegency}
-        onChange={(name, code) => {
-          setSelectedRegency(name); setRegencyCode(code)
-          setSelectedDistrict(""); setDistrictCode("")
-          setSelectedVillage(""); setPostalCode("")
-          setDistricts([]); setVillages([])
-        }}
-        disabled={!selectedProvince}
-        placeholder="Pilih Kab/Kota"
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Provinsi */}
+        <ComboBox
+          selectedKey={selectedProvince || undefined}
+          onSelectionChange={(key) => {
+            const name = key ? String(key) : ""
+            setSelectedProvince(name)
+            setSelectedCity("")
+            setSelectedDistrict("")
+            setSelectedVillage("")
+            setPostalCode("")
+            setCities([])
+            setDistricts([])
+            setVillages([])
+          }}
+          className="w-full"
+        >
+          <Label>Provinsi</Label>
+          <ComboBox.InputGroup>
+            <Input placeholder="Cari provinsi..." />
+            <ComboBox.Trigger />
+          </ComboBox.InputGroup>
+          <ComboBox.Popover>
+            <ListBox>
+              {provinces.map(p => (
+                <ListBox.Item key={p.name} id={p.name} textValue={p.name}>
+                  {p.name}<ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </ComboBox.Popover>
+        </ComboBox>
 
-      <SearchableSelect
-        id={fieldName("district")}
-        name={fieldName("district")}
-        label="Kecamatan"
-        options={districts}
-        value={selectedDistrict}
-        onChange={(name, code) => {
-          setSelectedDistrict(name); setDistrictCode(code)
-          setSelectedVillage(""); setPostalCode("")
-          setVillages([])
-        }}
-        disabled={!selectedRegency}
-        placeholder="Pilih Kecamatan"
-      />
+        {/* Kota/Kabupaten */}
+        <ComboBox
+          selectedKey={selectedCity || undefined}
+          onSelectionChange={(key) => {
+            const name = key ? String(key) : ""
+            setSelectedCity(name)
+            setSelectedDistrict("")
+            setSelectedVillage("")
+            setPostalCode("")
+            setDistricts([])
+            setVillages([])
+          }}
+          className="w-full"
+          isDisabled={!provinceCode}
+        >
+          <Label>Kota/Kabupaten</Label>
+          <ComboBox.InputGroup>
+            <Input placeholder="Cari kota..." />
+            <ComboBox.Trigger />
+          </ComboBox.InputGroup>
+          <ComboBox.Popover>
+            <ListBox>
+              {cities.map(c => (
+                <ListBox.Item key={c.name} id={c.name} textValue={c.name}>
+                  {c.name}<ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </ComboBox.Popover>
+        </ComboBox>
 
-      <SearchableSelect
-        id={fieldName("village")}
-        name={fieldName("village")}
-        label="Kelurahan/Desa"
-        options={villages}
-        value={selectedVillage}
-        onChange={(name, code) => {
-          setSelectedVillage(name)
-          // Auto-fill postal code from village data
-          const village = villages.find(v => v.code === code)
-          if (village && village.postalCode) {
-            setPostalCode(village.postalCode)
-          }
-        }}
-        disabled={!selectedDistrict}
-        placeholder="Pilih Kelurahan/Desa"
-      />
+        {/* Kecamatan */}
+        <ComboBox
+          selectedKey={selectedDistrict || undefined}
+          onSelectionChange={(key) => {
+            const name = key ? String(key) : ""
+            setSelectedDistrict(name)
+            setSelectedVillage("")
+            setPostalCode("")
+            setVillages([])
+          }}
+          className="w-full"
+          isDisabled={!cityCode}
+        >
+          <Label>Kecamatan</Label>
+          <ComboBox.InputGroup>
+            <Input placeholder="Cari kecamatan..." />
+            <ComboBox.Trigger />
+          </ComboBox.InputGroup>
+          <ComboBox.Popover>
+            <ListBox>
+              {districts.map(d => (
+                <ListBox.Item key={d.name} id={d.name} textValue={d.name}>
+                  {d.name}<ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </ComboBox.Popover>
+        </ComboBox>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={fieldName("postalCode")}>Kode Pos</Label>
-        <input
-          type="text"
-          id={fieldName("postalCode")}
-          name={fieldName("postalCode")}
-          value={postalCode}
-          readOnly
-          placeholder="Otomatis terisi"
-          className="w-full px-3 py-2.5 rounded-lg border border-default bg-surface-secondary text-sm text-foreground cursor-not-allowed"
-        />
+        {/* Kelurahan/Desa */}
+        <ComboBox
+          selectedKey={selectedVillage || undefined}
+          onSelectionChange={(key) => {
+            const name = key ? String(key) : ""
+            setSelectedVillage(name)
+            // Auto-fill postal code
+            const village = villages.find(v => v.name === name)
+            if (village?.postalCode) {
+              setPostalCode(village.postalCode)
+            }
+          }}
+          className="w-full"
+          isDisabled={!districtCode}
+        >
+          <Label>Kelurahan/Desa</Label>
+          <ComboBox.InputGroup>
+            <Input placeholder="Cari kelurahan..." />
+            <ComboBox.Trigger />
+          </ComboBox.InputGroup>
+          <ComboBox.Popover>
+            <ListBox>
+              {villages.map(v => (
+                <ListBox.Item key={v.name} id={v.name} textValue={v.name}>
+                  {v.name}{v.postalCode ? ` (${v.postalCode})` : ""}<ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </ComboBox.Popover>
+        </ComboBox>
+
+        {/* Kode Pos (auto-filled) */}
+        <div className="flex flex-col gap-1.5">
+          <Label>Kode Pos</Label>
+          <Input
+            name={fieldName("postalCode")}
+            value={postalCode}
+            readOnly
+            placeholder="Kode pos"
+            className="w-full"
+          />
+        </div>
       </div>
     </>
   )

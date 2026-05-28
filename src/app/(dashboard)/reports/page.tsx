@@ -1,14 +1,24 @@
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import {
-  FileSpreadsheet, Scale, BookOpen, Coins, Clock, Package, TrendingUp
+  FileSpreadsheet, Scale, BookOpen, Coins, Clock, Package, TrendingUp, Target, Users, Receipt, Landmark, FolderKanban, ArrowLeftRight, BarChart3
 } from "lucide-react"
 
 const reportsModules = [
+  { label: "Income Statement", href: "/reports/income-statement", icon: TrendingUp, desc: "Laba rugi multi-step" },
+  { label: "P&L by Project", href: "/reports/project-pnl", icon: FolderKanban, desc: "Laba rugi per project/WO" },
   { label: "Financial", href: "/reports/financial", icon: FileSpreadsheet, desc: "Laporan keuangan" },
   { label: "Trial Balance", href: "/reports/trial-balance", icon: Scale, desc: "Neraca saldo" },
   { label: "Balance Sheet", href: "/reports/balance-sheet", icon: BookOpen, desc: "Neraca" },
   { label: "Cash Flow", href: "/reports/cash-flow", icon: Coins, desc: "Arus kas" },
+  { label: "General Ledger", href: "/reports/general-ledger", icon: BookOpen, desc: "Buku besar per akun" },
+  { label: "Bank Book", href: "/reports/bank-book", icon: Landmark, desc: "Mutasi bank/kas" },
+  { label: "Budget vs Actual", href: "/reports/budget-vs-actual", icon: Target, desc: "Realisasi anggaran" },
+  { label: "AR/AP Summary", href: "/reports/ar-ap-summary", icon: Users, desc: "Piutang & hutang" },
+  { label: "Tax Report", href: "/reports/tax-report", icon: Receipt, desc: "Rekap PPN" },
+  { label: "Stock Valuation", href: "/reports/stock-valuation", icon: Package, desc: "Nilai persediaan per gudang" },
+  { label: "Stock Movement", href: "/reports/stock-movement", icon: ArrowLeftRight, desc: "Mutasi stok masuk/keluar" },
+  { label: "Inventory Summary", href: "/reports/inventory-summary", icon: BarChart3, desc: "Ringkasan & item kritis" },
   { label: "Aging Receivables", href: "/reports/aging-receivables", icon: Clock, desc: "Umur piutang" },
   { label: "Aging Payables", href: "/reports/aging-payables", icon: Clock, desc: "Umur hutang" },
   { label: "Aging Inventory", href: "/reports/aging-inventory", icon: Package, desc: "Umur persediaan" },
