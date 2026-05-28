@@ -7,6 +7,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton, Button } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { Pencil } from "lucide-react"
+import { ApprovePayrollButton } from "./_components/approve-button"
 import {
   DetailTable,
   DetailTableBody,
@@ -48,9 +49,12 @@ export default async function PayrollDetailPage({
         actions={
           <div className="flex gap-2">
             {payroll.status === "draft" && (
-              <Button href={`/sdm/penggajian/${payroll.id}/ubah`} variant="secondary">
-                <Pencil size={14} /> Ubah
-              </Button>
+              <>
+                <ApprovePayrollButton payrollId={payroll.id} />
+                <Button href={`/sdm/penggajian/${payroll.id}/ubah`} variant="secondary">
+                  <Pencil size={14} /> Ubah
+                </Button>
+              </>
             )}
             <BackButton href="/sdm/penggajian" />
           </div>
