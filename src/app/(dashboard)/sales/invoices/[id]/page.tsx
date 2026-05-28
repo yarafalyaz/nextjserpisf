@@ -59,6 +59,11 @@ export default async function InvoiceDetailPage({
         actions={
           <>
             <Button href={`/sales/invoices/${invoice.id}/edit`} variant="primary">Edit</Button>
+            {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+              <Button href={`/sales/payments/create?invoiceId=${invoice.id}`} variant="primary" style={{ background: "var(--color-success)", color: "#fff" }}>
+                Terima Pembayaran
+              </Button>
+            )}
             {invoice.status === "paid" && (
               <Button href={`/sales/delivery-orders/create?salesInvoiceId=${invoice.id}`} variant="primary">+ Delivery Order</Button>
             )}

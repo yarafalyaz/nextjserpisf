@@ -29,7 +29,9 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
     resolver: zodResolver(salesPaymentSchema),
     defaultValues: {
       salesInvoiceId: defaultInvoiceId || undefined,
-      amount: 0,
+      amount: defaultInvoiceId
+        ? Number(invoices.find(i => i.id === defaultInvoiceId)?.grandTotal ?? 0) - Number(invoices.find(i => i.id === defaultInvoiceId)?.paidAmount ?? 0)
+        : 0,
       paymentDate: new Date().toISOString().split("T")[0],
       paymentMethod: "transfer",
       notes: "",
