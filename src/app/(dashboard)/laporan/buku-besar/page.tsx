@@ -70,7 +70,7 @@ export default async function GeneralLedgerPage({
   }
 
   const rows = entries.reduce<Array<(typeof entries)[number] & { balance: number }>>((acc, entry) => {
-    const previousBalance = acc.length > 0 ? acc[acc.length - 1]!.balance : 0
+    const previousBalance = acc.length > 0 ? acc[acc.length - 1].balance : 0
     const nextBalance = previousBalance + entry.debit - entry.credit
     acc.push({ ...entry, balance: nextBalance })
     return acc
@@ -78,7 +78,7 @@ export default async function GeneralLedgerPage({
 
   const totalDebit = entries.reduce((sum, e) => sum + e.debit, 0)
   const totalCredit = entries.reduce((sum, e) => sum + e.credit, 0)
-  const finalBalance = rows.length > 0 ? rows[rows.length - 1]!.balance : 0
+  const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : 0
 
   return (
     <div className="flex flex-col gap-6">
