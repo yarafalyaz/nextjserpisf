@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExpenseTable } from "./_components/expense-table"
@@ -16,9 +16,10 @@ export default async function ExpensesPage({
   await requirePermission("view_expenses")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
   const expenses = await prisma.expense.findMany({
@@ -41,11 +42,18 @@ export default async function ExpensesPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari expense..." action="/keuangan/pengeluaran" />
           <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "pending", "approved", "rejected"].map((s) => (
-              <Link key={s} href={`/keuangan/pengeluaran?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/keuangan/pengeluaran${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
         </div>
 

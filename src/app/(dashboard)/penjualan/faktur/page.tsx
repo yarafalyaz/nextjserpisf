@@ -14,6 +14,7 @@ export default async function InvoicesPage({
   await requirePermission("view_sales_invoices")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
   const page = Number(params.halaman) || 1
   const perPage = 20
 

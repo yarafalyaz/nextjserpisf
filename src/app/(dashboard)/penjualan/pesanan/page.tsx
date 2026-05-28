@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { OrderTable } from "./_components/order-table"
@@ -16,6 +16,7 @@ export default async function SalesOrdersPage({
   await requirePermission("view_sales_orders")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     deletedAt: null,
@@ -25,7 +26,7 @@ export default async function SalesOrdersPage({
         { customer: { name: { contains: params.cari } } },
       ],
     }),
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
   const rawOrders = await prisma.salesOrder.findMany({
@@ -60,15 +61,18 @@ export default async function SalesOrdersPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari no. dokumen atau customer..." action="/penjualan/pesanan" />
           <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "confirmed", "completed", "cancelled"].map((s) => (
-              <Link
-                key={s}
-                href={`/penjualan/pesanan?status=${s}`}
-                className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
-              >
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "draft", "confirmed", "completed", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/penjualan/pesanan${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
         </div>
 

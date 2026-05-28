@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { JournalTable } from "./_components/journal-table"
@@ -16,6 +17,7 @@ export default async function JournalsPage({
   await requirePermission("view_journals")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...(params.cari && {
@@ -24,7 +26,7 @@ export default async function JournalsPage({
         { description: { contains: params.cari } },
       ],
     }),
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
   const journals = await prisma.journal.findMany({

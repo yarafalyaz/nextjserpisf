@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PurchaseOrderTable } from "./_components/purchase-order-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -17,6 +17,7 @@ export default async function PurchaseOrdersPage({
   await requirePermission("view_purchase_orders")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     deletedAt: null,
@@ -26,7 +27,7 @@ export default async function PurchaseOrdersPage({
         { vendor: { name: { contains: params.cari } } },
       ],
     }),
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
   const rawOrders = await prisma.purchaseOrder.findMany({
@@ -58,19 +59,33 @@ export default async function PurchaseOrdersPage({
           <AppSearchField placeholder="Cari no. dokumen atau vendor..." action="/pembelian/pesanan" />
           <FilterDrawer>
             <div className="flex flex-col gap-2">
-              {["", "draft", "approved", "ordered", "received", "cancelled"].map((s) => (
-                <Link key={s} href={`/pembelian/pesanan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                  {s ? statusLabel(s) : "Semua"}
+            {["", "draft", "approved", "ordered", "received", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/pembelian/pesanan${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
                 </Link>
-              ))}
+              )
+            })}
             </div>
           </FilterDrawer>
           <div className="flex gap-1.5 flex-wrap hidden lg:flex">
-            {["", "draft", "approved", "ordered", "received", "cancelled"].map((s) => (
-              <Link key={s} href={`/pembelian/pesanan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "draft", "approved", "ordered", "received", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/pembelian/pesanan${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
         </div>
 

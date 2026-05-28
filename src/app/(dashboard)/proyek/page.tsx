@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { FolderKanban } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ProjectTable } from "./_components/project-table"
@@ -17,9 +17,10 @@ export default async function ProjectsPage({
   await requirePermission("view_projects")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
     ...(params.cari && {
       name: { contains: params.cari },
     }),
@@ -49,11 +50,18 @@ export default async function ProjectsPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
           <div className="flex gap-1.5 flex-wrap">
-            {["", "active", "completed", "cancelled"].map((s) => (
-              <Link key={s} href={`/proyek?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s === "active" ? "Aktif" : s === "completed" ? "Selesai" : s === "cancelled" ? "Dibatalkan" : "Semua"}
-              </Link>
-            ))}
+            {["", "active", "completed", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/proyek${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
           <AppSearchField placeholder="Cari proyek..." action="/proyek" />
         </div>

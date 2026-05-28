@@ -68,3 +68,49 @@ export function statusLabel(status: string | null | undefined): string {
   if (!status) return "-";
   return STATUS_LABELS[status] ?? status;
 }
+
+export const statusToIndo: Record<string, string> = {
+  draft: "konsep",
+  pending: "menunggu",
+  approved: "disetujui",
+  rejected: "ditolak",
+  completed: "selesai",
+  active: "aktif",
+  inactive: "nonaktif",
+  in_progress: "dalam-proses",
+  sent: "terkirim",
+  verified: "terverifikasi",
+  paid: "dibayar",
+  partial: "sebagian",
+  shipped: "dikirim",
+  delivered: "diterima",
+  ordered: "dipesan",
+  cancelled: "batal",
+  returned: "retur",
+  in_transit: "perjalanan",
+  received: "diterima-gudang",
+  processed: "diproses",
+  issued: "keluar",
+  confirmed: "konfirmasi",
+  posted: "posting",
+  new: "baru",
+  open: "buka",
+  resolved: "terselesaikan",
+  closed: "tutup",
+  won: "menang",
+  lost: "kalah",
+  converted: "konversi",
+  accepted: "terima",
+  on_hold: "tunda",
+  contacted: "dihubungi",
+  qualified: "kualifikasi",
+  proposal: "proposal",
+}
+
+export const indoToStatus: Record<string, string> = Object.entries(statusToIndo).reduce(
+  (acc, [db, url]) => {
+    acc[url] = db
+    return acc
+  },
+  {} as Record<string, string>
+)

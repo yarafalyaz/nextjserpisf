@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { MaterialIssueTable } from "./_components/material-issue-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -16,6 +16,7 @@ export default async function MaterialIssuesPage({
   await requirePermission("view_material_issues")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...(params.cari && {
@@ -23,7 +24,7 @@ export default async function MaterialIssuesPage({
         { documentNo: { contains: params.cari } },
       ],
     }),
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
   const issues = await prisma.materialIssue.findMany({
@@ -49,11 +50,18 @@ export default async function MaterialIssuesPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/pengeluaran-material" />
           <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "issued"].map((s) => (
-              <Link key={s} href={`/inventaris/pengeluaran-material?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "draft", "issued"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/inventaris/pengeluaran-material${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
         </div>
 

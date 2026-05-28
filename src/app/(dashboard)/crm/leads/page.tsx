@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { requirePermission } from "@/lib/auth/permissions"
 import { LeadTable } from "./_components/lead-table"
@@ -16,6 +16,7 @@ export default async function LeadsPage({
   await requirePermission("view_leads")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...(params.cari && {
@@ -25,7 +26,7 @@ export default async function LeadsPage({
         { company: { contains: params.cari } },
       ],
     }),
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
   const leads = await prisma.lead.findMany({
@@ -53,11 +54,18 @@ export default async function LeadsPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari nama, email, atau perusahaan..." action="/crm/leads" />
           <div className="flex gap-1.5 flex-wrap">
-            {["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((s) => (
-              <Link key={s} href={`/crm/leads?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/crm/leads${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
         </div>
 

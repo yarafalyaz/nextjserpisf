@@ -6,7 +6,7 @@ import Link from "next/link"
 import { ListTodo } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TaskTable } from "./_components/task-table"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 export default async function TasksPage({
@@ -17,9 +17,10 @@ export default async function TasksPage({
   await requirePermission("view_projects")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
     ...(params.cari && {
       name: { contains: params.cari },
     }),
@@ -49,11 +50,18 @@ export default async function TasksPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
           <div className="flex gap-1.5 flex-wrap">
-            {["", "pending", "in_progress", "completed", "cancelled"].map((s) => (
-              <Link key={s} href={`/proyek/tugas?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "pending", "in_progress", "completed", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/proyek/tugas${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
           <AppSearchField placeholder="Cari tugas..." action="/proyek/tugas" />
         </div>

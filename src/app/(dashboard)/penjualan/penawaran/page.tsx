@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { QuotationTable } from "./_components/quotation-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -17,6 +17,7 @@ export default async function QuotationsPage({
   await requirePermission("view_quotations")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     deletedAt: null,
@@ -26,7 +27,7 @@ export default async function QuotationsPage({
         { customer: { name: { contains: params.cari } } },
       ],
     }),
-    ...(params.status && { status: params.status }),
+    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
   const rawQuotations = await prisma.quotation.findMany({
@@ -67,27 +68,33 @@ export default async function QuotationsPage({
           <AppSearchField placeholder="Cari no. dokumen atau customer..." action="/penjualan/penawaran" />
           <FilterDrawer>
             <div className="flex flex-col gap-2">
-              {["", "draft", "sent", "accepted", "converted", "cancelled"].map((s) => (
-                <Link
-                  key={s}
-                  href={`/penjualan/penawaran?status=${s}`}
-                  className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
+            {["", "draft", "sent", "accepted", "converted", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/penjualan/penawaran${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
-                  {s ? statusLabel(s) : "Semua"}
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
                 </Link>
-              ))}
+              )
+            })}
             </div>
           </FilterDrawer>
           <div className="flex gap-1.5 flex-wrap hidden lg:flex">
-            {["", "draft", "sent", "accepted", "converted", "cancelled"].map((s) => (
-              <Link
-                key={s}
-                href={`/penjualan/penawaran?status=${s}`}
-                className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
-              >
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "draft", "sent", "accepted", "converted", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/penjualan/penawaran${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
         </div>
 
