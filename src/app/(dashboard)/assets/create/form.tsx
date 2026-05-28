@@ -13,9 +13,10 @@ interface AssetFormProps {
   categories: { id: number; name: string }[]
   brands: { id: number; name: string }[]
   asset?: any
+  generatedCode: string
 }
 
-export function AssetForm({ categories, brands, asset }: AssetFormProps) {
+export function AssetForm({ categories, brands, asset, generatedCode }: AssetFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -43,7 +44,7 @@ export function AssetForm({ categories, brands, asset }: AssetFormProps) {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="code">Kode Aset</Label>
-          <Input id="code" name="code" placeholder="Kode aset" defaultValue={asset?.code || ""} />
+          <Input id="code" name="code" value={asset?.code || generatedCode} readOnly className="bg-default-soft font-mono" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Select name="categoryId" defaultSelectedKey={asset?.categoryId ? String(asset.categoryId) : undefined} className="w-full">

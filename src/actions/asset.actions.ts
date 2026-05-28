@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
+import { generateDocumentNumber } from "@/lib/utils/document-number"
 
 // ==================== ASSET CATEGORY ACTIONS ====================
 
@@ -187,10 +188,15 @@ export async function createAsset(formData: FormData) {
   "use server"
   await requirePermission("create_assets")
 
+  let code = (formData.get("code") as string) || ""
+  if (!code) {
+    code = await generateDocumentNumber("AST", "simple")
+  }
+
   const asset = await prisma.asset.create({
     data: {
       name: formData.get("name") as string,
-      code: (formData.get("code") as string) || "",
+      code: code,
       categoryId: safeId(formData.get("categoryId")),
       
       purchaseDate: formData.get("purchaseDate") ? new Date(formData.get("purchaseDate") as string) : null,

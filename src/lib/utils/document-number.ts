@@ -41,6 +41,7 @@ const PREFIX_FIELD_MAP: Record<string, string> = {
   VND: 'vendorCodePrefix',
   ITM: 'itemCodePrefix',
   PRD: 'productCodePrefix',
+  AST: 'assetCodePrefix',
   WH: 'warehouseCodePrefix',
   EMP: 'employeeCodePrefix',
   ACC: undefined as any, // Account prefix not stored separately
