@@ -128,6 +128,7 @@ function SectionItems({
         onPress={() =>
           append({
             itemId: 0,
+            isCustom: false,
             description: "",
             qty: 1,
             uom: "PCS",
@@ -175,44 +176,91 @@ function SectionItemRow({
 }) {
   const prefix = `sections.${sectionIndex}.items.${itemIndex}`
   const watchedItem = useWatch({ control, name: prefix })
+  const isCustomMode = watchedItem?.isCustom || false
 
   return (
     <tr>
-      <td>
-        <Controller
-          name={`${prefix}.itemId`}
-          control={control}
-          render={({ field }) => (
-            <ComboBox
-              selectedKey={field.value ? String(field.value) : null}
-              onSelectionChange={(key) => {
-                if (key) onItemSelect(itemIndex, Number(key))
+      <td className="align-middle">
+        <div className="flex items-center gap-2">
+          {/* Toggle Master vs Quick Add */}
+          <button
+            type="button"
+            onClick={() => {
+              const currentCustom = !isCustomMode
+              setValue(`${prefix}.isCustom`, currentCustom)
+              if (currentCustom) {
+                setValue(`${prefix}.itemId`, null)
+                setValue(`${prefix}.uom`, "JASA")
+              } else {
+                setValue(`${prefix}.itemId`, 0)
+                setValue(`${prefix}.uom`, "PCS")
+              }
+            }}
+            title={isCustomMode ? "Ubah ke Produk Master" : "Quick Add Jasa Bebas"}
+            className={`p-1.5 rounded-lg border transition-all text-xs shrink-0 flex items-center justify-center ${
+              isCustomMode 
+                ? "bg-warning-soft border-warning text-warning-soft-foreground font-bold" 
+                : "bg-default-soft border-default text-muted-foreground hover:bg-default"
+            }`}
+          >
+            {isCustomMode ? "🛠️ Jasa" : "📦 Item"}
+          </button>
+
+          {isCustomMode ? (
+            <input
+              {...register(`${prefix}.description`)}
+              className="form-input w-full font-medium"
+              style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+              placeholder="Ketik nama jasa bebas..."
+              onChange={(e) => {
+                setValue(`${prefix}.description`, e.target.value)
               }}
-              className="w-full"
-            >
-              <ComboBox.InputGroup>
-                <Input placeholder="Pilih item..." style={{ fontSize: "0.8125rem", padding: "6px 8px" }} />
-                <ComboBox.Trigger />
-              </ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {items.map((item) => (
-                    <ListBox.Item key={item.id} id={String(item.id)} textValue={item.name}>
-                      {item.name}
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            />
+          ) : (
+            <Controller
+              name={`${prefix}.itemId`}
+              control={control}
+              render={({ field }) => (
+                <ComboBox
+                  selectedKey={field.value ? String(field.value) : null}
+                  onSelectionChange={(key) => {
+                    if (key) {
+                      onItemSelect(itemIndex, Number(key))
+                      // Set description automatically from item name if master item selected
+                      const sel = items.find(i => i.id === Number(key))
+                      if (sel) {
+                        setValue(`${prefix}.description`, sel.name)
+                      }
+                    }
+                  }}
+                  className="w-full"
+                >
+                  <ComboBox.InputGroup>
+                    <Input placeholder="Pilih item..." style={{ fontSize: "0.8125rem", padding: "6px 8px" }} />
+                    <ComboBox.Trigger />
+                  </ComboBox.InputGroup>
+                  <ComboBox.Popover>
+                    <ListBox>
+                      {items.map((item) => (
+                        <ListBox.Item key={item.id} id={String(item.id)} textValue={item.name}>
+                          {item.name}
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </ComboBox.Popover>
+                </ComboBox>
+              )}
+            />
           )}
-        />
+        </div>
       </td>
       <td>
         <input
           {...register(`${prefix}.description`)}
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
-          placeholder="Deskripsi..."
+          placeholder="Catatan / spek tambahan..."
+          disabled={isCustomMode} // Di mode jasa, kolom deskripsi sudah menyatu di kolom utama
         />
       </td>
       <td>
@@ -420,6 +468,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
               items: [
                 {
                   itemId: 0,
+                  isCustom: false,
                   description: "",
                   qty: 1,
                   uom: "PCS",
@@ -588,6 +637,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
                 items: [
                   {
                     itemId: 0,
+                    isCustom: false,
                     description: "",
                     qty: 1,
                     uom: "PCS",

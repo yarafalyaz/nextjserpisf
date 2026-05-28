@@ -119,7 +119,8 @@ export const accountSchema = z.object({
 // ==================== SALES VALIDATORS ====================
 
 export const quotationItemSchema = z.object({
-  itemId: z.number().min(1, "Item wajib dipilih"),
+  itemId: z.number().nullable().optional(),
+  isCustom: z.boolean().optional().default(false),
   description: z.string().optional().default(""),
   qty: z.number().min(0.01, "Qty harus lebih dari 0"),
   uom: z.string().default("PCS"),
