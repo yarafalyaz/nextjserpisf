@@ -27,34 +27,36 @@ export async function onSalesReturnCompleted(
         referenceId: returnId,
       },
     });
-    if (existingMoves) {
-      throw new Error("Stock Move sudah dibuat untuk Sales Return ini.");
+    if (existingMoves) return; // Idempotent: silently no-op
+
+    // Guard: must be in a completable state
+    if (salesReturn.status === "completed" || salesReturn.status === "cancelled") {
+      throw new Error("Sales Return sudah selesai atau dibatalkan.");
     }
 
-    // Guard: must not be already completed
-    if (salesReturn.status === "completed") {
-      throw new Error("Sales Return sudah selesai sebelumnya.");
-    }
-
-    // Get default warehouse (first active warehouse)
-    const warehouse = await tx.warehouse.findFirst({
+    // Resolve warehouse: item default warehouse → first warehouse fallback
+    const fallbackWarehouse = await tx.warehouse.findFirst({
       select: { id: true },
     });
-    const warehouseId = warehouse?.id ?? 1;
+    if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
 
     // Create Stock Move IN per item (goods returned to warehouse)
     for (const item of salesReturn.items) {
       const smDocNo = await generateDocumentNumber("SM");
 
+      // Resolve warehouse per item (chain: item default → fallback)
+      const itemData = await tx.item.findUnique({ where: { id: item.itemId }, select: { defaultWarehouseId: true } });
+      const resolvedWarehouseId = itemData?.defaultWarehouseId ?? fallbackWarehouse.id;
+
       const sm = await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
-          warehouseId,
+          warehouseId: resolvedWarehouseId,
           qty: item.qty,
           cost: item.cost,
           impact: "IN",
-          status: "draft",
+          status: "posted",
           referenceType: "SalesReturn",
           referenceId: salesReturn.id,
           notes: `Retur Penjualan ${salesReturn.documentNo}`,

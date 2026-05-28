@@ -27,13 +27,11 @@ export async function onStockAdjustmentProcessed(
         referenceId: adjustmentId,
       },
     });
-    if (existingMoves) {
-      throw new Error("Stock Move sudah dibuat untuk Stock Adjustment ini.");
-    }
+    if (existingMoves) return; // Idempotent: silently no-op
 
-    // Guard: must not be already processed
-    if (adjustment.status === "processed") {
-      throw new Error("Stock Adjustment sudah diproses sebelumnya.");
+    // Guard: must be in a processable state
+    if (adjustment.status === "processed" || adjustment.status === "cancelled") {
+      throw new Error("Stock Adjustment sudah diproses atau dibatalkan.");
     }
 
     // Create Stock Move per item based on difference
@@ -55,7 +53,7 @@ export async function onStockAdjustmentProcessed(
           qty,
           cost: item.unitCost,
           impact,
-          status: "draft",
+          status: "posted",
           referenceType: "StockAdjustment",
           referenceId: adjustment.id,
           notes: `Penyesuaian Stok ${adjustment.documentNo} (${Number(item.systemQty)} → ${Number(item.actualQty)})`,

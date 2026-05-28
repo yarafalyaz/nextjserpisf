@@ -27,20 +27,19 @@ export async function onWorkOrderCompleted(
         referenceId: workOrderId,
       },
     });
-    if (existingMoves) {
-      throw new Error("Stock Move sudah dibuat untuk Work Order ini.");
+    if (existingMoves) return; // Idempotent: silently no-op
+
+    // Guard: must be in a completable state
+    if (workOrder.status === "completed" || workOrder.status === "cancelled") {
+      throw new Error("Work Order sudah selesai atau dibatalkan.");
     }
 
-    // Guard: must not be already completed
-    if (workOrder.status === "completed") {
-      throw new Error("Work Order sudah selesai sebelumnya.");
-    }
-
-    // Get default warehouse for stock moves
-    const warehouse = await tx.warehouse.findFirst({
+    // Resolve warehouse: WO warehouse (if exists) → project warehouse → item default warehouse
+    // Per-item resolution below; this is just for items without default warehouse
+    const fallbackWarehouse = await tx.warehouse.findFirst({
       select: { id: true },
     });
-    const warehouseId = warehouse?.id ?? 1;
+    if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
 
     // Create Stock Move OUT per item (materials consumed in production)
     for (const item of workOrder.items) {
@@ -48,15 +47,19 @@ export async function onWorkOrderCompleted(
 
       const smDocNo = await generateDocumentNumber("SM");
 
+      // Resolve warehouse per item (chain: item default → fallback)
+      const itemData = await tx.item.findUnique({ where: { id: item.itemId }, select: { defaultWarehouseId: true } });
+      const resolvedWarehouseId = itemData?.defaultWarehouseId ?? fallbackWarehouse.id;
+
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
-          warehouseId,
+          warehouseId: resolvedWarehouseId,
           qty: item.qty,
           cost: item.cost,
           impact: "OUT",
-          status: "draft",
+          status: "posted",
           referenceType: "WorkOrder",
           referenceId: workOrder.id,
           notes: `Pemakaian Material WO ${workOrder.documentNo}`,

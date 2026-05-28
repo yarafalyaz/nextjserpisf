@@ -23,7 +23,7 @@ export async function onExpenseApprovedSyncPettyCash(
 
   // AccountType enum: ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
   // Petty cash accounts are typically ASSET type with specific naming
-  if (!paidFromAccount || !paidFromAccount.name.toLowerCase().includes("petty cash")) return;
+  if (!paidFromAccount || (!paidFromAccount.name.toLowerCase().includes("petty cash") && !paidFromAccount.name.toLowerCase().includes("kas kecil"))) return;
 
   // Idempotency: check if PettyCash record already exists for this expense
   const existing = await prisma.pettyCash.findFirst({
@@ -32,6 +32,14 @@ export async function onExpenseApprovedSyncPettyCash(
   if (existing) return;
 
   const documentNo = await generateDocumentNumber("PC");
+
+  // Calculate current petty cash balance (parity with Laravel ExpenseObserver)
+  const lastPettyCash = await prisma.pettyCash.findFirst({
+    orderBy: { id: "desc" },
+    select: { balanceAfter: true },
+  });
+  const balanceBefore = Number(lastPettyCash?.balanceAfter ?? 0);
+  const balanceAfter = balanceBefore - Number(expense.amount);
 
   await prisma.pettyCash.create({
     data: {
@@ -43,6 +51,8 @@ export async function onExpenseApprovedSyncPettyCash(
       date: expense.date ?? new Date(),
       transactionDate: expense.date ?? new Date(),
       referenceNo: expense.documentNo,
+      balanceBefore,
+      balanceAfter,
       createdBy: expense.approvedBy ?? null,
     },
   });
