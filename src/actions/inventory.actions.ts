@@ -390,6 +390,13 @@ export async function deleteStockAdjustment(id: number) {
   try {
   await requirePermission("delete_stock_adjustments")
 
+  const adjustment = await prisma.stockAdjustment.findUniqueOrThrow({
+    where: { id: id },
+  })
+  if (adjustment.status !== "draft") {
+    throw new Error("Hanya stock adjustment draft yang dapat dihapus")
+  }
+
   await prisma.stockAdjustment.delete({ where: { id } })
 
   revalidatePath("/inventaris/penyesuaian")
@@ -406,6 +413,11 @@ export async function deleteInventoryTransfer(id: number) {
   try {
   await requirePermission("delete_inventory_transfers")
 
+  const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({ where: { id } })
+  if (transfer.status !== "draft") {
+    throw new Error("Hanya transfer draft yang dapat dihapus")
+  }
+
   await prisma.inventoryTransfer.delete({ where: { id } })
 
   revalidatePath("/inventaris/transfer")
@@ -421,6 +433,11 @@ export async function deleteInventoryTransfer(id: number) {
 export async function deleteMaterialIssue(id: number) {
   try {
   await requirePermission("delete_material_issues")
+
+  const issue = await prisma.materialIssue.findUniqueOrThrow({ where: { id } })
+  if (issue.status !== "draft") {
+    throw new Error("Hanya material issue draft yang dapat dihapus")
+  }
 
   await prisma.materialIssue.delete({ where: { id } })
 
@@ -457,6 +474,11 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
   const user = await requirePermission("create_stock_adjustments")
 
+  const adj = await prisma.stockAdjustment.findUniqueOrThrow({ where: { id } })
+  if (adj.status !== "draft") {
+    throw new Error("Hanya stock adjustment draft yang dapat diedit")
+  }
+
   // Fix #2: Jangan generate documentNo baru saat update
   const adjustment = await prisma.stockAdjustment.update({
     where: { id },
@@ -485,6 +507,11 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
   const user = await requirePermission("create_material_issues")
 
+  const mi = await prisma.materialIssue.findUniqueOrThrow({ where: { id } })
+  if (mi.status !== "draft") {
+    throw new Error("Hanya material issue draft yang dapat diedit")
+  }
+
   // Fix #2: Jangan generate documentNo baru saat update
   const issue = await prisma.materialIssue.update({
     where: { id },
@@ -512,6 +539,11 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
   "use server"
 
   const user = await requirePermission("create_inventory_transfers")
+
+  const tf = await prisma.inventoryTransfer.findUniqueOrThrow({ where: { id } })
+  if (tf.status !== "draft") {
+    throw new Error("Hanya transfer draft yang dapat diedit")
+  }
 
   // Fix #2: Jangan generate documentNo baru saat update
   const transfer = await prisma.inventoryTransfer.update({

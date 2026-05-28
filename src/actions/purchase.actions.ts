@@ -66,8 +66,8 @@ export async function approvePurchaseRequest(prId: number) {
     where: { id: prId },
   })
 
-  if (pr.status !== "pending") {
-    throw new Error("PR hanya bisa di-approve dari status pending")
+  if (pr.status !== "draft") {
+    throw new Error("PR hanya bisa di-approve dari status draft")
   }
 
   await prisma.purchaseRequest.update({
@@ -159,6 +159,14 @@ export async function markPurchaseOrderOrdered(poId: number) {
   try {
   await requirePermission("edit_purchase_orders")
 
+  const po = await prisma.purchaseOrder.findUniqueOrThrow({
+    where: { id: poId },
+  })
+
+  if (po.status !== "approved") {
+    throw new Error("PO hanya bisa ditandai ordered dari status approved")
+  }
+
   await prisma.purchaseOrder.update({
     where: { id: poId },
     data: { status: "ordered" },
@@ -178,6 +186,14 @@ export async function markPurchaseOrderReceived(poId: number) {
   try {
   const user = await requirePermission("edit_purchase_orders")
 
+  const po = await prisma.purchaseOrder.findUniqueOrThrow({
+    where: { id: poId },
+  })
+
+  if (po.status !== "ordered") {
+    throw new Error("PO hanya bisa ditandai received dari status ordered")
+  }
+
   await prisma.purchaseOrder.update({
     where: { id: poId },
     data: { status: "received" },
@@ -192,6 +208,33 @@ export async function markPurchaseOrderReceived(poId: number) {
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
     console.error("[markPurchaseOrderReceived]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
+export async function cancelPurchaseOrder(poId: number) {
+  try {
+  const user = await requirePermission("edit_purchase_orders")
+
+  const po = await prisma.purchaseOrder.findUniqueOrThrow({
+    where: { id: poId },
+  })
+
+  if (po.status === "received" || po.status === "cancelled") {
+    throw new Error("PO ini tidak dapat dibatalkan")
+  }
+
+  await prisma.purchaseOrder.update({
+    where: { id: poId },
+    data: { status: "cancelled" },
+  })
+
+  revalidatePath("/pembelian/pesanan")
+  return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[cancelPurchaseOrder]", e?.message || e)
     return { success: false, error: e?.message || "Terjadi kesalahan" }
   }
 }
@@ -361,6 +404,98 @@ export async function createVendorPayment(formData: FormData) {
   }
 }
 
+export async function confirmVendorBill(billId: number) {
+  try {
+  const user = await requirePermission("edit_vendor_bills")
+
+  const bill = await prisma.vendorBill.findUniqueOrThrow({
+    where: { id: billId },
+  })
+
+  if (bill.status !== "draft") {
+    throw new Error("Tagihan hanya bisa diposting dari status draft")
+  }
+
+  await prisma.vendorBill.update({
+    where: { id: billId },
+    data: {
+      status: "posted",
+      approvedBy: Number(user.id),
+      approvedAt: new Date(),
+      balanceDue: bill.grandTotal,
+    },
+  })
+
+  await onVendorBillPosted(billId, Number(user.id))
+
+  revalidatePath("/pembelian/tagihan")
+  return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[confirmVendorBill]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
+export async function confirmVendorPayment(paymentId: number) {
+  try {
+  const user = await requirePermission("edit_vendor_payments")
+
+  const payment = await prisma.vendorPayment.findUniqueOrThrow({
+    where: { id: paymentId },
+  })
+
+  if (payment.status !== "draft") {
+    throw new Error("Pembayaran hanya bisa dikonfirmasi dari status draft")
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.vendorPayment.update({
+      where: { id: paymentId },
+      data: {
+        status: "completed",
+        confirmedBy: Number(user.id),
+        confirmedAt: new Date(),
+      },
+    })
+
+    const allocations = await tx.vendorPaymentAllocation.findMany({
+      where: { vendorPaymentId: paymentId },
+    })
+
+    for (const alloc of allocations) {
+      const bill = await tx.vendorBill.findUniqueOrThrow({
+        where: { id: alloc.vendorBillId },
+      })
+
+      const nextPaid = Number(bill.paidAmount) + Number(alloc.amount)
+      const nextBalance = Number(bill.grandTotal) - nextPaid
+
+      await tx.vendorBill.update({
+        where: { id: bill.id },
+        data: {
+          paidAmount: nextPaid,
+          balanceDue: nextBalance,
+          status: nextBalance <= 0 ? "paid" : "posted",
+        },
+      })
+    }
+  })
+
+  await onVendorPaymentCreated(paymentId, Number(user.id))
+
+  revalidatePath("/pembelian/pembayaran")
+  revalidatePath("/pembelian/tagihan")
+  return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[confirmVendorPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
 // ==================== PURCHASE RETURN ACTIONS ====================
 
 export async function createPurchaseReturn(formData: FormData) {
@@ -410,8 +545,8 @@ export async function processPurchaseReturn(returnId: number) {
     where: { id: returnId },
   })
 
-  if (purchaseReturn.status === "returned") {
-    throw new Error("Purchase return sudah diproses")
+  if (purchaseReturn.status !== "draft") {
+    throw new Error("Purchase return hanya bisa diproses dari status draft")
   }
 
   await prisma.purchaseReturn.update({
@@ -557,6 +692,11 @@ export async function deleteVendorBill(id: number) {
   try {
   await requirePermission("delete_vendor_bills")
 
+  const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } })
+  if (bill.status !== "draft") {
+    throw new Error("Hanya tagihan draft yang dapat dihapus")
+  }
+
   await prisma.vendorBill.delete({ where: { id } })
 
   revalidatePath("/pembelian/tagihan")
@@ -572,6 +712,11 @@ export async function deleteVendorBill(id: number) {
 export async function deleteVendorPayment(id: number) {
   try {
   await requirePermission("delete_vendor_payments")
+
+  const payment = await prisma.vendorPayment.findUniqueOrThrow({ where: { id } })
+  if (payment.status !== "draft") {
+    throw new Error("Hanya pembayaran draft yang dapat dihapus")
+  }
 
   await prisma.vendorPayment.delete({ where: { id } })
 
@@ -591,6 +736,11 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
   "use server"
 
   const user = await requirePermission("create_purchase_requests")
+
+  const existingPr = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id } })
+  if (existingPr.status !== "draft") {
+    throw new Error("Hanya PR draft yang dapat diedit")
+  }
 
   const requestedBy = requireNumber(formData.get("requestedBy"), "requestedBy") || Number(user.id)
   const itemsJson = formData.get("items") as string | null
@@ -639,6 +789,11 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 
   const user = await requirePermission("create_purchase_orders")
 
+  const existingPo = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
+  if (existingPo.status !== "draft") {
+    throw new Error("Hanya PO draft yang dapat diedit")
+  }
+
   const documentNo = await generateDocumentNumber("PO")
 
   const po = await prisma.purchaseOrder.update({
@@ -682,6 +837,11 @@ export async function updateVendorBill(id: number, formData: FormData) {
   "use server"
 
   const user = await requirePermission("create_vendor_bills")
+
+  const existingBill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } })
+  if (existingBill.status !== "draft") {
+    throw new Error("Hanya tagihan draft yang dapat diedit")
+  }
 
   const documentNo = await generateDocumentNumber("BILL")
 
@@ -728,6 +888,11 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
   "use server"
 
   const user = await requirePermission("create_goods_receipts")
+
+  const existingGr = await prisma.goodsReceipt.findUniqueOrThrow({ where: { id } })
+  if (existingGr.status !== "draft") {
+    throw new Error("Hanya GR draft yang dapat diedit")
+  }
 
   const itemsJson = formData.get("items") as string | null
   const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null }[]>(itemsJson) ?? []
@@ -778,6 +943,11 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
 
   const user = await requirePermission("create_purchase_returns")
 
+  const ret = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
+  if (ret.status !== "draft") {
+    throw new Error("Hanya retur draft yang dapat diedit")
+  }
+
   const documentNo = await generateDocumentNumber("PRET")
 
   const itemsJson = formData.get("items") as string
@@ -820,6 +990,11 @@ export async function updateVendorPayment(id: number, formData: FormData) {
 
   const user = await requirePermission("create_vendor_payments")
 
+  const existingPayment = await prisma.vendorPayment.findUniqueOrThrow({ where: { id } })
+  if (existingPayment.status !== "draft") {
+    throw new Error("Hanya pembayaran draft yang dapat diedit")
+  }
+
   const documentNo = await generateDocumentNumber("VPAY")
 
   const payment = await prisma.vendorPayment.update({
@@ -861,6 +1036,11 @@ export async function updateVendorPayment(id: number, formData: FormData) {
 export async function deletePurchaseReturn(id: number) {
   try {
   "use server"
+  const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
+  if (purchaseReturn.status !== "draft") {
+    throw new Error("Hanya retur draft yang dapat dihapus")
+  }
+
   await prisma.purchaseReturn.delete({ where: { id } })
   revalidatePath("/pembelian/retur")
   return { success: true }
