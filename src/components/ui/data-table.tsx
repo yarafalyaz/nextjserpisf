@@ -13,6 +13,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 import { useMemo, useState } from "react"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 // --- Sorting Bridge ---
 function toSortDescriptor(sorting: SortingState): SortDescriptor | undefined {
@@ -78,6 +79,8 @@ export function DataTable<TData extends { id: number | string }>({
   const [sorting, setSorting] = useState<SortingState>([])
   const [selectedKeys, setSelectedKeys] = useState<Selection>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([])
 
   const table = useReactTable({
     columns,
@@ -110,18 +113,12 @@ export function DataTable<TData extends { id: number | string }>({
     }
   }
 
-  async function handleBulkDelete() {
-    if (!onBulkDelete) return
-    const ids = selectedKeys === "all"
-      ? data.map((d) => Number(d.id))
-      : Array.from(selectedKeys as Set<string>).map(Number)
-
-    if (!ids.length) return
-    if (!confirm(`Yakin hapus ${ids.length} data?`)) return
+  async function executeBulkDelete() {
+    if (!onBulkDelete || !pendingDeleteIds.length) return
 
     setIsDeleting(true)
     try {
-      const result = await onBulkDelete(ids)
+      const result = await onBulkDelete(pendingDeleteIds)
       if (result.success) {
         setSelectedKeys(new Set())
       } else {
@@ -131,12 +128,25 @@ export function DataTable<TData extends { id: number | string }>({
       alert("Terjadi kesalahan saat menghapus data")
     } finally {
       setIsDeleting(false)
+      setConfirmOpen(false)
     }
+  }
+
+  function handleBulkDelete() {
+    if (!onBulkDelete) return
+    const ids = selectedKeys === "all"
+      ? data.map((d) => Number(d.id))
+      : Array.from(selectedKeys as Set<string>).map(Number)
+
+    if (!ids.length) return
+    setPendingDeleteIds(ids)
+    setConfirmOpen(true)
   }
 
   const selectedCount = selectedKeys === "all" ? totalRows : (selectedKeys as Set<string>).size
 
   return (
+    <>
     <Table>
       {selectedCount > 0 && (bulkActions || onBulkDelete) && (
         <div className="flex items-center gap-3 px-4 py-2 bg-primary/5 border-b rounded-t-lg">
@@ -262,5 +272,18 @@ export function DataTable<TData extends { id: number | string }>({
         </Table.Footer>
       )}
     </Table>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Hapus data terpilih?"
+        body={`${pendingDeleteIds.length} data yang dipilih akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="danger"
+        isPending={isDeleting}
+        onConfirm={executeBulkDelete}
+      />
+    </>
   )
 }

@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Button, AlertDialog } from "@heroui/react"
+import { Button } from "@heroui/react"
 import { Trash2 } from "lucide-react"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface DeleteButtonProps {
   id: number
@@ -32,28 +33,17 @@ export function DeleteButton({ id, action }: DeleteButtonProps) {
         <Trash2 size={15} />
       </Button>
 
-      <AlertDialog.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>
-        <AlertDialog.Container>
-          <AlertDialog.Dialog className="sm:max-w-[400px]">
-            <AlertDialog.CloseTrigger />
-            <AlertDialog.Header>
-              <AlertDialog.Icon status="danger" />
-              <AlertDialog.Heading>Hapus data ini?</AlertDialog.Heading>
-            </AlertDialog.Header>
-            <AlertDialog.Body>
-              <p>Data yang dihapus tidak dapat dikembalikan. Pastikan Anda yakin sebelum melanjutkan.</p>
-            </AlertDialog.Body>
-            <AlertDialog.Footer>
-              <Button slot="close" variant="tertiary">
-                Batal
-              </Button>
-              <Button variant="danger" isPending={isPending} onPress={handleDelete}>
-                Hapus
-              </Button>
-            </AlertDialog.Footer>
-          </AlertDialog.Dialog>
-        </AlertDialog.Container>
-      </AlertDialog.Backdrop>
+      <ConfirmDialog
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+        title="Hapus data ini?"
+        body="Data yang dihapus tidak dapat dikembalikan. Pastikan Anda yakin sebelum melanjutkan."
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="danger"
+        isPending={isPending}
+        onConfirm={handleDelete}
+      />
     </>
   )
 }
