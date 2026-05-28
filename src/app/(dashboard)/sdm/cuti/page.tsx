@@ -11,16 +11,16 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function LeaveRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string }>
+  searchParams: Promise<{ status?: string; cari?: string }>
 }) {
   await requirePermission("view_leave_requests")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { employee: { name: { contains: params.search } } },
+        { employee: { name: { contains: params.cari } } },
       ],
     }),
     ...(params.status && { status: params.status }),

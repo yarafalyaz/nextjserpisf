@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/page-header"
 interface TicketFormProps {
   customers: { id: number; name: string
 }[]
-  ticket?: { id: number; subject: string; description?: string | null; priority: string; status: string; assignedTo?: number | null; ticketNumber?: string; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null; type?: string | null; resolutionNotes?: string | null }
+  ticket?: { id: number; subject: string; description?: string | null; priority: string; status: string; assignedTo?: number | null; ticketNumber?: string; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null; tipe?: string | null; resolutionNotes?: string | null }
   users: { id: number; name: string }[]
 }
 

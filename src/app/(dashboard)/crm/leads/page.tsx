@@ -11,18 +11,18 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string }>
+  searchParams: Promise<{ status?: string; cari?: string }>
 }) {
   await requirePermission("view_leads")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { name: { contains: params.search } },
-        { email: { contains: params.search } },
-        { company: { contains: params.search } },
+        { name: { contains: params.cari } },
+        { email: { contains: params.cari } },
+        { company: { contains: params.cari } },
       ],
     }),
     ...(params.status && { status: params.status }),

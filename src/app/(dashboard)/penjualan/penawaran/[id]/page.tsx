@@ -50,7 +50,7 @@ export default async function QuotationDetailPage({
             <Button href={`/penjualan/penawaran/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
             {quotation.status === "approved" && (
-              <Button href={`/penjualan/pesanan/create?quotationId=${id}`} variant="primary">+ Sales Order</Button>
+              <Button href={`/penjualan/pesanan/create?penawaranId=${id}`} variant="primary">+ Sales Order</Button>
             )}
             <BackButton href="/penjualan/penawaran" />
           </>

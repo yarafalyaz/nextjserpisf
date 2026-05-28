@@ -9,15 +9,15 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function DepartmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { name: { contains: params.search } },
-        { code: { contains: params.search } },
+        { name: { contains: params.cari } },
+        { code: { contains: params.cari } },
       ],
     }),
   }

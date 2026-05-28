@@ -10,20 +10,20 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function StockMovesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; impact?: string }>
+  searchParams: Promise<{ cari?: string; dampak?: string }>
 }) {
   await requirePermission("view_stock_moves")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { documentNo: { contains: params.search } },
-        { item: { name: { contains: params.search } } },
+        { documentNo: { contains: params.cari } },
+        { item: { name: { contains: params.cari } } },
       ],
     }),
-    ...(params.impact && { impact: params.impact as "IN" | "OUT" }),
+    ...(params.dampak && { dampak: params.dampak as "IN" | "OUT" }),
   }
 
   const rawMoves = await prisma.stockMove.findMany({
@@ -55,9 +55,9 @@ export default async function StockMovesPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari no. dokumen atau item..." action="/inventaris/mutasi-stok" />
           <div className="flex gap-1.5 flex-wrap">
-            <Link href="/inventaris/mutasi-stok" className={`filter-chip ${!params.impact ? "active" : ""}`}>Semua</Link>
-            <Link href="/inventaris/mutasi-stok?impact=IN" className={`filter-chip ${params.impact === "IN" ? "active" : ""}`}>IN</Link>
-            <Link href="/inventaris/mutasi-stok?impact=OUT" className={`filter-chip ${params.impact === "OUT" ? "active" : ""}`}>OUT</Link>
+            <Link href="/inventaris/mutasi-stok" className={`filter-chip ${!params.dampak ? "active" : ""}`}>Semua</Link>
+            <Link href="/inventaris/mutasi-stok?dampak=IN" className={`filter-chip ${params.dampak === "IN" ? "active" : ""}`}>IN</Link>
+            <Link href="/inventaris/mutasi-stok?dampak=OUT" className={`filter-chip ${params.dampak === "OUT" ? "active" : ""}`}>OUT</Link>
           </div>
         </div>
 

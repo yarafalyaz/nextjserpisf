@@ -11,17 +11,17 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function TicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string }>
+  searchParams: Promise<{ status?: string; cari?: string }>
 }) {
   await requirePermission("view_tickets")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { subject: { contains: params.search } },
-        { customerName: { contains: params.search } },
+        { subject: { contains: params.cari } },
+        { customerName: { contains: params.cari } },
       ],
     }),
     ...(params.status && { status: params.status }),

@@ -11,17 +11,17 @@ import { FilterDrawer } from "@/components/ui/filter-drawer"
 export default async function JournalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string }>
 }) {
   await requirePermission("view_journals")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { journalNumber: { contains: params.search } },
-        { description: { contains: params.search } },
+        { journalNumber: { contains: params.cari } },
+        { description: { contains: params.cari } },
       ],
     }),
     ...(params.status && { status: params.status }),

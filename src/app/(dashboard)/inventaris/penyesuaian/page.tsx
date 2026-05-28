@@ -11,16 +11,16 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function StockAdjustmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string }>
+  searchParams: Promise<{ status?: string; cari?: string }>
 }) {
   await requirePermission("view_stock_adjustments")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { documentNo: { contains: params.search } },
+        { documentNo: { contains: params.cari } },
       ],
     }),
     ...(params.status && { status: params.status }),

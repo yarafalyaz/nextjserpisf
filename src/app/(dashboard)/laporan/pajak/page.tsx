@@ -13,7 +13,7 @@ import { ReportDateFilter } from "@/components/reports/report-date-filter"
 export default async function TaxReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ startDate?: string; endDate?: string }>
+  searchParams: Promise<{ tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
   await requirePermission('view_reports')
   const params = await searchParams

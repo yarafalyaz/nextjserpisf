@@ -11,15 +11,15 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function WorkSchedulesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_work_schedules")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
-      name: { contains: params.search },
+    ...(params.cari && {
+      name: { contains: params.cari },
     }),
   }
 

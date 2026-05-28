@@ -50,7 +50,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
 
   // Load provinces
   useEffect(() => {
-    fetch("/api/address?type=provinces")
+    fetch("/api/address?tipe=provinces")
       .then(res => res.json())
       .then(data => setProvinces(data))
       .catch(() => {})
@@ -59,7 +59,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   // Load cities
   useEffect(() => {
     if (!provinceCode) return
-    fetch(`/api/address?type=regencies&parentCode=${provinceCode}`)
+    fetch(`/api/address?tipe=regencies&parentCode=${provinceCode}`)
       .then(res => res.json())
       .then(data => setCities(data))
       .catch(() => {})
@@ -68,7 +68,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   // Load districts
   useEffect(() => {
     if (!cityCode) return
-    fetch(`/api/address?type=districts&parentCode=${cityCode}`)
+    fetch(`/api/address?tipe=districts&parentCode=${cityCode}`)
       .then(res => res.json())
       .then(data => setDistricts(data))
       .catch(() => {})
@@ -77,7 +77,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   // Load villages
   useEffect(() => {
     if (!districtCode) return
-    fetch(`/api/address?type=villages&parentCode=${districtCode}`)
+    fetch(`/api/address?tipe=villages&parentCode=${districtCode}`)
       .then(res => res.json())
       .then(data => setVillages(data))
       .catch(() => {})

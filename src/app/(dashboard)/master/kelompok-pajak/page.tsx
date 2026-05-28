@@ -11,15 +11,15 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function TaxGroupsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string }>
+  searchParams: Promise<{ halaman?: string; cari?: string }>
 }) {
   const params = await searchParams
-  const page = Number(params.page) || 1
+  const page = Number(params.halaman) || 1
   const perPage = 20
 
   const where = {
-    ...(params.search && {
-      name: { contains: params.search },
+    ...(params.cari && {
+      name: { contains: params.cari },
     }),
   }
 
@@ -103,10 +103,10 @@ export default async function TaxGroupsPage({
             </span>
             <div className="flex gap-1">
               {page > 1 && (
-                <Link href={`/master/kelompok-pajak?page=${page - 1}&search=${params.search || ""}`} className="button button--ghost button--sm">← Prev</Link>
+                <Link href={`/master/kelompok-pajak?halaman=${page - 1}&search=${params.cari || ""}`} className="button button--ghost button--sm">← Prev</Link>
               )}
               {page < totalPages && (
-                <Link href={`/master/kelompok-pajak?page=${page + 1}&search=${params.search || ""}`} className="button button--ghost button--sm">Next →</Link>
+                <Link href={`/master/kelompok-pajak?halaman=${page + 1}&search=${params.cari || ""}`} className="button button--ghost button--sm">Next →</Link>
               )}
             </div>
           </div>

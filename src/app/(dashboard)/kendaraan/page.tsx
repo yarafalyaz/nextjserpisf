@@ -9,17 +9,17 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function VehiclesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { plateNumber: { contains: params.search } },
-        { color: { contains: params.search } },
-        { variant: { name: { contains: params.search } } },
+        { plateNumber: { contains: params.cari } },
+        { color: { contains: params.cari } },
+        { variant: { name: { contains: params.cari } } },
       ],
     }),
   }

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/page-header"
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; category?: string }>
+  searchParams: Promise<{ cari?: string; category?: string }>
 }) {
   await requirePermission("view_items")
 
@@ -20,10 +20,10 @@ export default async function ItemsPage({
   const where = {
     isActive: true,
     deletedAt: null,
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { sku: { contains: params.search } },
-        { name: { contains: params.search } },
+        { sku: { contains: params.cari } },
+        { name: { contains: params.cari } },
       ],
     }),
     ...(params.category && { categoryId: Number(params.category) }),

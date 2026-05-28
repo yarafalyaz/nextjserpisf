@@ -10,17 +10,17 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function SalesPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_sales_payments")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { documentNo: { contains: params.search } },
-        { salesInvoice: { customer: { name: { contains: params.search } } } },
+        { documentNo: { contains: params.cari } },
+        { salesInvoice: { customer: { name: { contains: params.cari } } } },
       ],
     }),
   }

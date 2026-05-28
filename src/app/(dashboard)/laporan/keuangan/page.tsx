@@ -13,7 +13,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 /**
  * Shows all accounts with their debit and credit totals
  */
-async function getTrialBalanceData(startDate?: string, endDate?: string) {
+async function getTrialBalanceData(tanggalMulai?: string, tanggalSelesai?: string) {
   const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1) // Jan 1
   const end = endDate ? new Date(endDate) : new Date()
 
@@ -60,7 +60,7 @@ async function getTrialBalanceData(startDate?: string, endDate?: string) {
 /**
  * Income Statement (P&L)
  */
-async function getIncomeStatementData(startDate?: string, endDate?: string) {
+async function getIncomeStatementData(tanggalMulai?: string, tanggalSelesai?: string) {
   const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1)
   const end = endDate ? new Date(endDate) : new Date()
 
@@ -115,7 +115,7 @@ async function getIncomeStatementData(startDate?: string, endDate?: string) {
 export default async function FinancialReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ report?: string; startDate?: string; endDate?: string }>
+  searchParams: Promise<{ report?: string; tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
   await requirePermission("view_reports")
 

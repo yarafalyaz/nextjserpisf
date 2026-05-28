@@ -10,7 +10,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function VendorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_vendors")
 
@@ -18,10 +18,10 @@ export default async function VendorsPage({
 
   const where = {
     deletedAt: null,
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { name: { contains: params.search } },
-        { phone: { contains: params.search } },
+        { name: { contains: params.cari } },
+        { phone: { contains: params.cari } },
       ],
     }),
   }

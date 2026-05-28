@@ -46,7 +46,7 @@ export default async function SalesOrderDetailPage({
           <>
             <Button href={`/penjualan/pesanan/${order.id}/edit`} variant="primary">Edit</Button>
             {order.status === "approved" && (
-              <Button href={`/penjualan/uang-muka/create?salesOrderId=${order.id}`} variant="primary">+ Down Payment</Button>
+              <Button href={`/penjualan/uang-muka/create?pesananPenjualanId=${order.id}`} variant="primary">+ Down Payment</Button>
             )}
             <PrintButton documentType="order" documentId={order.id} />
             <BackButton href="/penjualan/pesanan" />

@@ -14,7 +14,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 export default async function StockMovementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ warehouseId?: string; startDate?: string; endDate?: string }>
+  searchParams: Promise<{ warehouseId?: string; tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
   await requirePermission('view_reports')
   const params = await searchParams

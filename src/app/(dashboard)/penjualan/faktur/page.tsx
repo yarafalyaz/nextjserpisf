@@ -9,19 +9,19 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; status?: string }>
+  searchParams: Promise<{ halaman?: string; cari?: string; status?: string }>
 }) {
   await requirePermission("view_sales_invoices")
 
   const params = await searchParams
-  const page = Number(params.page) || 1
+  const page = Number(params.halaman) || 1
   const perPage = 20
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { documentNo: { contains: params.search } },
-        { customer: { name: { contains: params.search } } },
+        { documentNo: { contains: params.cari } },
+        { customer: { name: { contains: params.cari } } },
       ],
     }),
     ...(params.status && { status: params.status as any }),

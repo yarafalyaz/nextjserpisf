@@ -11,7 +11,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 export default async function AccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_accounts")
 
@@ -19,10 +19,10 @@ export default async function AccountsPage({
 
   const where = {
     isActive: true,
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { code: { contains: params.search } },
-        { name: { contains: params.search } },
+        { code: { contains: params.cari } },
+        { name: { contains: params.cari } },
       ],
     }),
   }

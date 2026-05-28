@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth/auth"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 
 /**
- * GET /api/payroll/late-penalty?employeeId=X&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ * GET /api/payroll/late-penalty?karyawanId=X&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
  * Returns late penalty calculation preview for payroll form.
  */
 export async function GET(request: NextRequest) {
@@ -13,9 +13,9 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const employeeId = Number(searchParams.get("employeeId"))
-  const startDateStr = searchParams.get("startDate")
-  const endDateStr = searchParams.get("endDate")
+  const employeeId = Number(searchParams.get("karyawanId"))
+  const startDateStr = searchParams.get("tanggalMulai")
+  const endDateStr = searchParams.get("tanggalSelesai")
 
   if (!employeeId || !startDateStr || !endDateStr) {
     return NextResponse.json(

@@ -41,7 +41,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
 
   const fetchAttachments = useCallback(async () => {
     try {
-      const res = await fetch(`/api/upload/attachments?referenceType=${referenceType}&referenceId=${referenceId}`)
+      const res = await fetch(`/api/upload/attachments?tipeReferensi=${referenceType}&referenceId=${referenceId}`)
       if (res.ok) {
         const data = await res.json()
         setAttachments(data)

@@ -15,8 +15,8 @@ interface ReportDateFilterProps {
 export function ReportDateFilter({ defaultStartDate, defaultEndDate, extraParams }: ReportDateFilterProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [startDate, setStartDate] = useState(searchParams.get("startDate") || defaultStartDate)
-  const [endDate, setEndDate] = useState(searchParams.get("endDate") || defaultEndDate)
+  const [startDate, setStartDate] = useState(searchParams.get("tanggalMulai") || defaultStartDate)
+  const [endDate, setEndDate] = useState(searchParams.get("tanggalSelesai") || defaultEndDate)
 
   function handleGenerate() {
     const params = new URLSearchParams()

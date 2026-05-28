@@ -11,17 +11,17 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function DownPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string }>
+  searchParams: Promise<{ status?: string; cari?: string }>
 }) {
   await requirePermission("view_down_payments")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { quotation: { customer: { name: { contains: params.search } } } },
-        { quotation: { documentNo: { contains: params.search } } },
+        { quotation: { customer: { name: { contains: params.cari } } } },
+        { quotation: { documentNo: { contains: params.cari } } },
       ],
     }),
     ...(params.status && { status: params.status }),

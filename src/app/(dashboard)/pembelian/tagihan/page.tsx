@@ -11,17 +11,17 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function VendorBillsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string }>
 }) {
   await requirePermission("view_vendor_bills")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { documentNo: { contains: params.search } },
-        { vendor: { name: { contains: params.search } } },
+        { documentNo: { contains: params.cari } },
+        { vendor: { name: { contains: params.cari } } },
       ],
     }),
     ...(params.status && { status: params.status }),

@@ -102,8 +102,8 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const referenceType = searchParams.get("referenceType")
-  const referenceId = searchParams.get("referenceId")
+  const referenceType = searchParams.get("tipeReferensi")
+  const referenceId = searchParams.get("referensiId")
 
   if (!referenceType || !referenceId) {
     return NextResponse.json({ error: "referenceType and referenceId are required" }, { status: 400 })

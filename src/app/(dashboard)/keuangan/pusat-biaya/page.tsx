@@ -10,17 +10,17 @@ import { CostCenterTable } from "./_components/cost-center-table"
 export default async function CostCentersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_cost_centers")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { code: { contains: params.search } },
-        { name: { contains: params.search } },
+        { code: { contains: params.cari } },
+        { name: { contains: params.cari } },
       ],
     }),
   }

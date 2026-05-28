@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/page-header"
 export default async function AttendancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; search?: string }>
+  searchParams: Promise<{ date?: string; cari?: string }>
 }) {
   await requirePermission("view_attendance")
 
@@ -28,8 +28,8 @@ export default async function AttendancePage({
       gte: targetDate,
       lt: nextDay,
     },
-    ...(params.search && {
-      employee: { name: { contains: params.search } },
+    ...(params.cari && {
+      employee: { name: { contains: params.cari } },
     }),
   }
 

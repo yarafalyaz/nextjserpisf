@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url)
-  const type = searchParams.get("type") // invoice | quotation | order | work-order
+  const type = searchParams.get("tipe") // invoice | quotation | order | work-order
   const idStr = searchParams.get("id")
 
   if (!type || !idStr) {

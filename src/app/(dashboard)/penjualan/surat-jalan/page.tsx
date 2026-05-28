@@ -11,15 +11,15 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function DeliveryOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string }>
 }) {
   await requirePermission("view_delivery_orders")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
-      documentNo: { contains: params.search },
+    ...(params.cari && {
+      documentNo: { contains: params.cari },
     }),
     ...(params.status && { status: params.status }),
   }

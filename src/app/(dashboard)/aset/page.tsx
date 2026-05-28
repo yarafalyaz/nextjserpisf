@@ -10,18 +10,18 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function AssetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_assets")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { name: { contains: params.search } },
-        { code: { contains: params.search } },
-        { location: { contains: params.search } },
+        { name: { contains: params.cari } },
+        { code: { contains: params.cari } },
+        { location: { contains: params.cari } },
       ],
     }),
   }

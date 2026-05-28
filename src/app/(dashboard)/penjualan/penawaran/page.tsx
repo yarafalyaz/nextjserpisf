@@ -12,7 +12,7 @@ import { FilterDrawer } from "@/components/ui/filter-drawer"
 export default async function QuotationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string }>
 }) {
   await requirePermission("view_quotations")
 
@@ -20,10 +20,10 @@ export default async function QuotationsPage({
 
   const where = {
     deletedAt: null,
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { documentNo: { contains: params.search } },
-        { customer: { name: { contains: params.search } } },
+        { documentNo: { contains: params.cari } },
+        { customer: { name: { contains: params.cari } } },
       ],
     }),
     ...(params.status && { status: params.status }),

@@ -18,7 +18,7 @@ interface TaskFormProps {
     description?: string | null
     status: string
     assignedTo?: number | null
-    startDate?: string | null
+    tanggalMulai?: string | null
     dueDate?: string | null
   }
 }

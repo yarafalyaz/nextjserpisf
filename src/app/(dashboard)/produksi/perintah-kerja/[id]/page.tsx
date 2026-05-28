@@ -49,7 +49,7 @@ export default async function WorkOrderDetailPage({
           <>
             <Button href={`/produksi/perintah-kerja/${wo.id}/edit`} variant="primary">Edit</Button>
             {wo.status === "completed" && (
-              <Button href={`/penjualan/faktur/create?salesOrderId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
+              <Button href={`/penjualan/faktur/create?pesananPenjualanId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
             )}
             <PrintButton documentType="work-order" documentId={wo.id} />
             <DeleteButton id={wo.id} action={deleteWorkOrder} />

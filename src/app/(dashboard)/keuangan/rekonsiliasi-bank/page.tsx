@@ -13,12 +13,12 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 export default async function BankReconciliationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; status?: string }>
+  searchParams: Promise<{ halaman?: string; status?: string }>
 }) {
   await requirePermission("view_bank_reconciliation")
 
   const params = await searchParams
-  const page = Number(params.page) || 1
+  const page = Number(params.halaman) || 1
   const perPage = 20
 
   const where = {
@@ -98,8 +98,8 @@ export default async function BankReconciliationPage({
           <div className="flex items-center justify-between p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
-              {page > 1 && <Link href={`/keuangan/rekonsiliasi-bank?page=${page - 1}`} className="button button--ghost button--sm">← Prev</Link>}
-              {page < totalPages && <Link href={`/keuangan/rekonsiliasi-bank?page=${page + 1}`} className="button button--ghost button--sm">Next →</Link>}
+              {page > 1 && <Link href={`/keuangan/rekonsiliasi-bank?halaman=${page - 1}`} className="button button--ghost button--sm">← Prev</Link>}
+              {page < totalPages && <Link href={`/keuangan/rekonsiliasi-bank?halaman=${page + 1}`} className="button button--ghost button--sm">Next →</Link>}
             </div>
           </div>
         )}

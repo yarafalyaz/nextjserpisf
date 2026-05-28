@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/page-header"
 interface AdjustmentFormProps {
   warehouses: { id: number; name: string
 }[]
-  adjustment?: { id: number; warehouseId: number; date: string; type?: string; reason?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; type: string }> }
+  adjustment?: { id: number; warehouseId: number; date: string; tipe?: string; reason?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; type: string }> }
   items: { id: number; sku: string; name: string; qtyOnHand: string; cost: string }[]
 }
 

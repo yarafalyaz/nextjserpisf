@@ -43,7 +43,7 @@ export default async function DownPaymentDetailPage({
           <>
             <Button href={`/penjualan/uang-muka/${dp.id}/edit`} variant="primary">Edit</Button>
             {dp.status === "paid" && (
-              <Button href={`/produksi/perintah-kerja/create?quotationId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
+              <Button href={`/produksi/perintah-kerja/create?penawaranId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
             )}
             <PrintButton />
             <DeleteButton id={dp.id} action={deleteDownPayment} />

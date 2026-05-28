@@ -11,19 +11,19 @@ import { AppreciationTable } from "./_components/appreciation-table"
 export default async function AppreciationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; search?: string }>
+  searchParams: Promise<{ tipe?: string; cari?: string }>
 }) {
   await requirePermission("view_appreciations")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { employee: { name: { contains: params.search } } },
+        { employee: { name: { contains: params.cari } } },
       ],
     }),
-    ...(params.type && { type: params.type }),
+    ...(params.tipe && { tipe: params.tipe }),
   }
 
   const appreciations = await prisma.appreciation.findMany({
@@ -55,7 +55,7 @@ export default async function AppreciationsPage({
           <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/apresiasi" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "bonus", "reward", "incentive"].map((s) => (
-              <Link key={s} href={`/sdm/apresiasi?type=${s}`} className={`filter-chip ${params.type === s || (!params.type && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/sdm/apresiasi?tipe=${s}`} className={`filter-chip ${params.tipe === s || (!params.tipe && !s) ? "active" : ""}`}>
                 {s === "bonus" ? "Bonus" : s === "reward" ? "Reward" : s === "incentive" ? "Insentif" : "Semua"}
               </Link>
             ))}

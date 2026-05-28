@@ -8,13 +8,13 @@ import { DepartmentHolidayTable } from "./_components/department-holiday-table"
 export default async function DepartmentHolidaysPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
-      name: { contains: params.search },
+    ...(params.cari && {
+      name: { contains: params.cari },
     }),
   }
 

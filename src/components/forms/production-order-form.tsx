@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/page-header"
 
 interface ProductionOrderFormProps {
   products: { id: number; name: string; sku: string | null }[]
-  order?: { id: number; workOrderId: number; itemId: number; productId?: number | null; qty: number; startDate?: string | null; endDate?: string | null; notes?: string | null }
+  order?: { id: number; workOrderId: number; itemId: number; productId?: number | null; qty: number; tanggalMulai?: string | null; tanggalSelesai?: string | null; notes?: string | null }
 }
 
 export function ProductionOrderForm({ products, order }: ProductionOrderFormProps) {

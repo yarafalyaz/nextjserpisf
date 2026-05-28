@@ -11,7 +11,7 @@ import { ExpenseTable } from "./_components/expense-table"
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string }>
 }) {
   await requirePermission("view_expenses")
 

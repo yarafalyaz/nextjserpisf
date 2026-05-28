@@ -25,8 +25,8 @@ async function loadCSV(filePath: string): Promise<string[][]> {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const type = searchParams.get("type")
-  const parentCode = searchParams.get("parentCode")
+  const type = searchParams.get("tipe")
+  const parentCode = searchParams.get("kodeInduk")
 
   try {
     if (type === "provinces") {

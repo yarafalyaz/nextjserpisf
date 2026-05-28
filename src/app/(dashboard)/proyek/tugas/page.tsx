@@ -12,7 +12,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string }>
 }) {
   await requirePermission("view_projects")
 
@@ -20,8 +20,8 @@ export default async function TasksPage({
 
   const where = {
     ...(params.status && { status: params.status }),
-    ...(params.search && {
-      name: { contains: params.search },
+    ...(params.cari && {
+      name: { contains: params.cari },
     }),
   }
 

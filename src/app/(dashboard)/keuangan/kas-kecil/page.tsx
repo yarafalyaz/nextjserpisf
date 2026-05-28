@@ -10,14 +10,14 @@ import { PettyCashTable } from "./_components/petty-cash-table"
 export default async function PettyCashPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; type?: string }>
+  searchParams: Promise<{ cari?: string; tipe?: string }>
 }) {
   await requirePermission("view_petty_cash")
 
   const params = await searchParams
 
   const where = {
-    ...(params.type && { type: params.type }),
+    ...(params.tipe && { tipe: params.tipe }),
   }
 
   const records = await prisma.pettyCash.findMany({
@@ -48,9 +48,9 @@ export default async function PettyCashPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari petty cash..." action="/keuangan/kas-kecil" />
           <div className="flex gap-1.5 flex-wrap">
-            <Link href="/keuangan/kas-kecil" className={`filter-chip ${!params.type ? "active" : ""}`}>Semua</Link>
-            <Link href="/keuangan/kas-kecil?type=IN" className={`filter-chip ${params.type === "IN" ? "active" : ""}`}>Masuk</Link>
-            <Link href="/keuangan/kas-kecil?type=OUT" className={`filter-chip ${params.type === "OUT" ? "active" : ""}`}>Keluar</Link>
+            <Link href="/keuangan/kas-kecil" className={`filter-chip ${!params.tipe ? "active" : ""}`}>Semua</Link>
+            <Link href="/keuangan/kas-kecil?tipe=IN" className={`filter-chip ${params.tipe === "IN" ? "active" : ""}`}>Masuk</Link>
+            <Link href="/keuangan/kas-kecil?tipe=OUT" className={`filter-chip ${params.tipe === "OUT" ? "active" : ""}`}>Keluar</Link>
           </div>
         </div>
 

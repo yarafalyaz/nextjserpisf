@@ -11,17 +11,17 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function WorkOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string }>
+  searchParams: Promise<{ status?: string; cari?: string }>
 }) {
   await requirePermission("view_work_orders")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
+    ...(params.cari && {
       OR: [
-        { documentNo: { contains: params.search } },
-        { customer: { name: { contains: params.search } } },
+        { documentNo: { contains: params.cari } },
+        { customer: { name: { contains: params.cari } } },
       ],
     }),
     ...(params.status && { status: params.status }),

@@ -24,7 +24,7 @@ export function PrintButton({ title = "Cetak", documentType, documentId, disable
 
     try {
       setIsPrinting(true)
-      const res = await fetch(`/api/print?type=${documentType}&id=${documentId}`)
+      const res = await fetch(`/api/print?tipe=${documentType}&id=${documentId}`)
       const data = await res.json()
 
       if (!res.ok) {

@@ -13,7 +13,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 export default async function GeneralLedgerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ accountId?: string; startDate?: string; endDate?: string }>
+  searchParams: Promise<{ accountId?: string; tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
   await requirePermission('view_reports')
   const params = await searchParams

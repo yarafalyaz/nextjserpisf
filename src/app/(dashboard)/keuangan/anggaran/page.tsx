@@ -10,15 +10,15 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function BudgetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>
+  searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_budgets")
 
   const params = await searchParams
 
   const where = {
-    ...(params.search && {
-      name: { contains: params.search },
+    ...(params.cari && {
+      name: { contains: params.cari },
     }),
   }
 
