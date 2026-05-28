@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { QuotationTable } from "./_components/quotation-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -72,7 +73,7 @@ export default async function QuotationsPage({
                   href={`/sales/quotations?status=${s}`}
                   className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
                 >
-                  {s || "Semua"}
+                  {s ? statusLabel(s) : "Semua"}
                 </Link>
               ))}
             </div>
@@ -84,7 +85,7 @@ export default async function QuotationsPage({
                 href={`/sales/quotations?status=${s}`}
                 className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
               >
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

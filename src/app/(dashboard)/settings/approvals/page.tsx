@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
@@ -45,7 +46,7 @@ export default async function ApprovalsPage({
           <div className="flex gap-1.5 flex-wrap">
             {["", "pending", "approved", "rejected"].map((s) => (
               <Link key={s} href={`/settings/approvals?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

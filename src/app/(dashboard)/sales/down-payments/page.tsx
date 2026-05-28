@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { DownPaymentTable } from "./_components/down-payment-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -60,7 +61,7 @@ export default async function DownPaymentsPage({
                 href={`/sales/down-payments?status=${s}`}
                 className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
               >
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

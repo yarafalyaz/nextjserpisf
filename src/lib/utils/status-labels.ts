@@ -20,16 +20,22 @@ export const STATUS_LABELS: Record<string, string> = {
   paid: "Dibayar",
   partial: "Sebagian",
 
-  // Sales
-  confirmed: "Terkonfirmasi",
+  // Delivery
+  shipped: "Dikirim",
   delivered: "Terkirim",
-  posted: "Diposting",
+  ordered: "Dipesan",
+  cancelled: "Dibatalkan",
+  returned: "Dikembalikan",
+  in_transit: "Dalam Perjalanan",
+  received: "Diterima",
 
   // Inventory
   processed: "Diproses",
   issued: "Dikeluarkan",
-  in_transit: "Dalam Perjalanan",
-  received: "Diterima",
+
+  // Sales
+  confirmed: "Terkonfirmasi",
+  posted: "Diposting",
 
   // CRM
   new: "Baru",
@@ -37,6 +43,9 @@ export const STATUS_LABELS: Record<string, string> = {
   closed: "Tutup",
   won: "Menang",
   lost: "Kalah",
+  converted: "Terkonversi",
+  accepted: "Diterima",
+  on_hold: "Ditunda",
 
   // HRM
   present: "Hadir",

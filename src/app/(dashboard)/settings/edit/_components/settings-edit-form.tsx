@@ -21,6 +21,18 @@ interface SettingsEditFormProps {
   accounts: Account[]
 }
 
+interface AccountMappingField {
+  name: string
+  label: string
+  value: string
+  onChange: (key: string) => void
+}
+
+interface AccountMappingSection {
+  title: string
+  items: AccountMappingField[]
+}
+
 function AccountComboBox({ name, label, accounts, value, onChange }: { name: string; label: string; accounts: Account[]; value?: string; onChange?: (key: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -49,9 +61,37 @@ function AccountComboBox({ name, label, accounts, value, onChange }: { name: str
   )
 }
 
+function MappingSectionCard({ title, items, accounts }: { title: string; items: AccountMappingField[]; accounts: Account[] }) {
+  const mappedCount = items.filter((item) => Boolean(item.value)).length
+
+  return (
+    <section className="rounded-xl border border-default bg-surface-secondary/40 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <span className="inline-flex rounded-full border border-default bg-surface px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted">
+          {mappedCount}/{items.length} terisi
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {items.map((item) => (
+          <AccountComboBox
+            key={item.name}
+            name={item.name}
+            label={item.label}
+            accounts={accounts}
+            value={item.value}
+            onChange={item.onChange}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [selectedTab, setSelectedTab] = useState("company")
   const [logoPreview, setLogoPreview] = useState<string | null>(settings.companyLogo || null)
   const [latitude, setLatitude] = useState(settings.companyLatitude ? String(settings.companyLatitude) : "")
   const [longitude, setLongitude] = useState(settings.companyLongitude ? String(settings.companyLongitude) : "")
@@ -93,7 +133,69 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
   const logoInputRef = useRef<HTMLInputElement>(null)
   const signatureInputRef = useRef<HTMLInputElement>(null)
 
-        const handleAutoMap = () => {
+  const mappingSections: AccountMappingSection[] = [
+    {
+      title: "Penjualan",
+      items: [
+        { name: "salesReceivableAccountId", label: "Piutang Usaha", value: salesReceivable, onChange: setSalesReceivable },
+        { name: "salesRevenueAccountId", label: "Pendapatan Penjualan", value: salesRevenue, onChange: setSalesRevenue },
+        { name: "salesTaxAccountId", label: "PPN Keluaran", value: salesTax, onChange: setSalesTax },
+        { name: "salesReturnAccountId", label: "Retur Penjualan", value: salesReturn, onChange: setSalesReturn },
+        { name: "salesAccountId", label: "Akun Penjualan", value: salesAcc, onChange: setSalesAcc },
+      ],
+    },
+    {
+      title: "Pembelian",
+      items: [
+        { name: "purchasePayableAccountId", label: "Hutang Usaha", value: purchasePayable, onChange: setPurchasePayable },
+        { name: "purchaseInventoryAccountId", label: "Persediaan (Pembelian)", value: purchaseInventory, onChange: setPurchaseInventory },
+        { name: "purchaseTaxAccountId", label: "PPN Masukan", value: purchaseTax, onChange: setPurchaseTax },
+        { name: "purchaseExpenseAccountId", label: "Beban Pembelian", value: purchaseExpense, onChange: setPurchaseExpense },
+        { name: "purchaseDiscountAccountId", label: "Diskon Pembelian", value: purchaseDiscount, onChange: setPurchaseDiscount },
+        { name: "purchaseShippingAccountId", label: "Ongkos Kirim", value: purchaseShipping, onChange: setPurchaseShipping },
+        { name: "purchaseReturnAccountId", label: "Retur Pembelian", value: purchaseReturn, onChange: setPurchaseReturn },
+      ],
+    },
+    {
+      title: "Persediaan & Manufaktur",
+      items: [
+        { name: "inventoryAccountId", label: "Persediaan", value: inventoryAcc, onChange: setInventoryAcc },
+        { name: "inventoryAdjustmentAccountId", label: "Penyesuaian Persediaan", value: inventoryAdjustment, onChange: setInventoryAdjustment },
+        { name: "stockAdjustmentAccountId", label: "Stock Adjustment", value: stockAdjustmentAcc, onChange: setStockAdjustmentAcc },
+        { name: "cogsAccountId", label: "HPP (COGS)", value: cogsAcc, onChange: setCogsAcc },
+        { name: "wipAccountId", label: "WIP", value: wipAcc, onChange: setWipAcc },
+        { name: "materialExpenseAccountId", label: "Beban Material", value: materialExpense, onChange: setMaterialExpense },
+        { name: "materialIssueExpenseAccountId", label: "Beban Pengeluaran Material", value: materialIssueExpense, onChange: setMaterialIssueExpense },
+      ],
+    },
+    {
+      title: "Umum",
+      items: [
+        { name: "pettyCashAccountId", label: "Kas Kecil", value: pettyCashAcc, onChange: setPettyCashAcc },
+        { name: "cashBankAccountId", label: "Kas & Bank", value: cashBankAcc, onChange: setCashBankAcc },
+        { name: "generalExpenseAccountId", label: "Beban Umum", value: generalExpense, onChange: setGeneralExpense },
+        { name: "defaultCashAccountId", label: "Kas Default", value: defaultCash, onChange: setDefaultCash },
+      ],
+    },
+    {
+      title: "Payroll",
+      items: [
+        { name: "salaryExpenseAccountId", label: "Beban Gaji", value: salaryExpense, onChange: setSalaryExpense },
+        { name: "salariesPayableAccountId", label: "Hutang Gaji", value: salariesPayable, onChange: setSalariesPayable },
+        { name: "payrollBankAccountId", label: "Bank Payroll", value: payrollBank, onChange: setPayrollBank },
+        { name: "employeeReceivableAccountId", label: "Piutang Karyawan", value: employeeReceivable, onChange: setEmployeeReceivable },
+        { name: "payrollJournalTypeId", label: "Tipe Jurnal Payroll", value: payrollJournalType, onChange: setPayrollJournalType },
+      ],
+    },
+  ]
+
+  const allMappingItems = mappingSections.flatMap((section) => section.items)
+  const mappedCount = allMappingItems.filter((item) => Boolean(item.value)).length
+  const totalCount = allMappingItems.length
+  const unmappedCount = totalCount - mappedCount
+  const mappingProgress = totalCount > 0 ? Math.round((mappedCount / totalCount) * 100) : 0
+
+  const handleAutoMap = () => {
     const findAccount = (keywords: string[]) => {
       const match = accounts.find(a => {
         const name = a.name.toLowerCase();
@@ -134,6 +236,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
     setSalariesPayable(findAccount(["hutang gaji", "salaries payable", "utang gaji"]));
     setPayrollBank(findAccount(["bank payroll", "payroll bank"]));
     setEmployeeReceivable(findAccount(["piutang karyawan", "employee receivable"]));
+    setPayrollJournalType(findAccount(["jurnal payroll", "payroll journal"]));
   };
 
   const handleGetLocation = () => {
@@ -219,11 +322,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
   }
 
   const inputClass = "w-full rounded-lg border border-default bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-  const textareaClass = "w-full rounded-lg border border-default bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors min-h-[80px] resize-y"
 
   return (
     <form onSubmit={onSubmit}>
-      <Tabs defaultSelectedKey="company">
+      <Tabs selectedKey={selectedTab} onSelectionChange={(key) => setSelectedTab(String(key))}>
         <Tabs.ListContainer>
           <Tabs.List aria-label="Settings Tabs">
             <Tabs.Tab id="company">Perusahaan<Tabs.Indicator /></Tabs.Tab>
@@ -647,58 +749,39 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </Tabs.Panel>
 
         {/* Tab 6: Mapping Akun */}
-        {/* Tab 6: Mapping Akun */}
         <Tabs.Panel id="accounts">
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6 mt-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-foreground">Penjualan</h2>
-              <button type="button" onClick={handleAutoMap} className="text-xs font-semibold text-primary hover:underline" data-print-keep>Auto-Map Akun</button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              <AccountComboBox name="salesReceivableAccountId" label="Piutang Usaha" accounts={accounts} value={salesReceivable} onChange={setSalesReceivable} />
-              <AccountComboBox name="salesRevenueAccountId" label="Pendapatan Penjualan" accounts={accounts} value={salesRevenue} onChange={setSalesRevenue} />
-              <AccountComboBox name="salesTaxAccountId" label="PPN Keluaran" accounts={accounts} value={salesTax} onChange={setSalesTax} />
-              <AccountComboBox name="salesReturnAccountId" label="Retur Penjualan" accounts={accounts} value={salesReturn} onChange={setSalesReturn} />
-              <AccountComboBox name="salesAccountId" label="Akun Penjualan" accounts={accounts} value={salesAcc} onChange={setSalesAcc} />
-            </div>
-
-            <h2 className="text-base font-semibold text-foreground mb-4 mt-8">Pembelian</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              <AccountComboBox name="purchasePayableAccountId" label="Hutang Usaha" accounts={accounts} value={purchasePayable} onChange={setPurchasePayable} />
-              <AccountComboBox name="purchaseInventoryAccountId" label="Persediaan (Pembelian)" accounts={accounts} value={purchaseInventory} onChange={setPurchaseInventory} />
-              <AccountComboBox name="purchaseTaxAccountId" label="PPN Masukan" accounts={accounts} value={purchaseTax} onChange={setPurchaseTax} />
-              <AccountComboBox name="purchaseExpenseAccountId" label="Beban Pembelian" accounts={accounts} value={purchaseExpense} onChange={setPurchaseExpense} />
-              <AccountComboBox name="purchaseDiscountAccountId" label="Diskon Pembelian" accounts={accounts} value={purchaseDiscount} onChange={setPurchaseDiscount} />
-              <AccountComboBox name="purchaseShippingAccountId" label="Ongkos Kirim" accounts={accounts} value={purchaseShipping} onChange={setPurchaseShipping} />
-              <AccountComboBox name="purchaseReturnAccountId" label="Retur Pembelian" accounts={accounts} value={purchaseReturn} onChange={setPurchaseReturn} />
-            </div>
-
-            <h2 className="text-base font-semibold text-foreground mb-4 mt-8">Persediaan & Manufaktur</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              <AccountComboBox name="inventoryAccountId" label="Persediaan" accounts={accounts} value={inventoryAcc} onChange={setInventoryAcc} />
-              <AccountComboBox name="inventoryAdjustmentAccountId" label="Penyesuaian Persediaan" accounts={accounts} value={inventoryAdjustment} onChange={setInventoryAdjustment} />
-              <AccountComboBox name="stockAdjustmentAccountId" label="Stock Adjustment" accounts={accounts} value={stockAdjustmentAcc} onChange={setStockAdjustmentAcc} />
-              <AccountComboBox name="cogsAccountId" label="HPP (COGS)" accounts={accounts} value={cogsAcc} onChange={setCogsAcc} />
-              <AccountComboBox name="wipAccountId" label="WIP" accounts={accounts} value={wipAcc} onChange={setWipAcc} />
-              <AccountComboBox name="materialExpenseAccountId" label="Beban Material" accounts={accounts} value={materialExpense} onChange={setMaterialExpense} />
-              <AccountComboBox name="materialIssueExpenseAccountId" label="Beban Pengeluaran Material" accounts={accounts} value={materialIssueExpense} onChange={setMaterialIssueExpense} />
+            <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted">Kualitas Mapping</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">
+                    {mappedCount}/{totalCount} akun terisi
+                  </p>
+                  <p className="mt-1 text-sm text-muted">
+                    {unmappedCount === 0
+                      ? "Semua mapping akun sudah lengkap."
+                      : `${unmappedCount} akun belum dipilih. Lengkapi supaya posting jurnal lebih aman.`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutoMap}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-primary text-white hover:bg-primary/90 transition-all"
+                  data-print-keep
+                >
+                  Auto-Map Akun
+                </button>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full border border-default bg-surface">
+                <div className="h-full bg-primary transition-all" style={{ width: `${mappingProgress}%` }} />
+              </div>
             </div>
 
-            <h2 className="text-base font-semibold text-foreground mb-4 mt-8">Umum</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              <AccountComboBox name="pettyCashAccountId" label="Kas Kecil" accounts={accounts} value={pettyCashAcc} onChange={setPettyCashAcc} />
-              <AccountComboBox name="cashBankAccountId" label="Kas & Bank" accounts={accounts} value={cashBankAcc} onChange={setCashBankAcc} />
-              <AccountComboBox name="generalExpenseAccountId" label="Beban Umum" accounts={accounts} value={generalExpense} onChange={setGeneralExpense} />
-              <AccountComboBox name="defaultCashAccountId" label="Kas Default" accounts={accounts} value={defaultCash} onChange={setDefaultCash} />
-            </div>
-
-            <h2 className="text-base font-semibold text-foreground mb-4 mt-8">Payroll</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              <AccountComboBox name="salaryExpenseAccountId" label="Beban Gaji" accounts={accounts} value={salaryExpense} onChange={setSalaryExpense} />
-              <AccountComboBox name="salariesPayableAccountId" label="Hutang Gaji" accounts={accounts} value={salariesPayable} onChange={setSalariesPayable} />
-              <AccountComboBox name="payrollBankAccountId" label="Bank Payroll" accounts={accounts} value={payrollBank} onChange={setPayrollBank} />
-              <AccountComboBox name="employeeReceivableAccountId" label="Piutang Karyawan" accounts={accounts} value={employeeReceivable} onChange={setEmployeeReceivable} />
-              <AccountComboBox name="payrollJournalTypeId" label="Tipe Jurnal Payroll" accounts={accounts} value={payrollJournalType} onChange={setPayrollJournalType} />
+            <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+              {mappingSections.map((section) => (
+                <MappingSectionCard key={section.title} title={section.title} items={section.items} accounts={accounts} />
+              ))}
             </div>
           </div>
         </Tabs.Panel>

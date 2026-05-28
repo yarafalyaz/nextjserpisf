@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ListTodo } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TaskTable } from "./_components/task-table"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 export default async function TasksPage({
@@ -50,7 +51,7 @@ export default async function TasksPage({
           <div className="flex gap-1.5 flex-wrap">
             {["", "pending", "in_progress", "completed", "cancelled"].map((s) => (
               <Link key={s} href={`/projects/tasks?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s === "pending" ? "Pending" : s === "in_progress" ? "In Progress" : s === "completed" ? "Selesai" : s === "cancelled" ? "Dibatalkan" : "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

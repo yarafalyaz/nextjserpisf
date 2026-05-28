@@ -24,8 +24,8 @@ interface TaskFormProps {
 }
 
 const statusOptions = [
-  { id: "pending", name: "Pending" },
-  { id: "in_progress", name: "In Progress" },
+  { id: "pending", name: "Menunggu" },
+  { id: "in_progress", name: "Dalam Proses" },
   { id: "completed", name: "Selesai" },
   { id: "cancelled", name: "Dibatalkan" },
 ]
