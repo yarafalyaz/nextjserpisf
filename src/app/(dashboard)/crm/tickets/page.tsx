@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TicketTable } from "./_components/ticket-table"
@@ -53,7 +54,7 @@ export default async function TicketsPage({
           <div className="flex gap-1.5 flex-wrap">
             {["", "open", "in_progress", "resolved", "closed"].map((s) => (
               <Link key={s} href={`/crm/tickets?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

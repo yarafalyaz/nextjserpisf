@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { requirePermission } from "@/lib/auth/permissions"
 import { LeadTable } from "./_components/lead-table"
@@ -54,7 +55,7 @@ export default async function LeadsPage({
           <div className="flex gap-1.5 flex-wrap">
             {["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((s) => (
               <Link key={s} href={`/crm/leads?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s || "Semua"}
+                {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
           </div>

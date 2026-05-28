@@ -40,14 +40,21 @@ export const STATUS_LABELS: Record<string, string> = {
   // CRM
   new: "Baru",
   open: "Terbuka",
+  resolved: "Terselesaikan",
   closed: "Tutup",
   won: "Menang",
   lost: "Kalah",
   converted: "Terkonversi",
   accepted: "Diterima",
   on_hold: "Ditunda",
+  contacted: "Dihubungi",
+  qualified: "Terkualifikasi",
+  proposal: "Proposal",
 
   // HRM
+  bonus: "Bonus",
+  reward: "Penghargaan",
+  incentive: "Insentif",
   present: "Hadir",
   absent: "Tidak Hadir",
   late: "Terlambat",
