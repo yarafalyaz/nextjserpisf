@@ -20,10 +20,11 @@ export default async function EmployeeDetailPage({
   params: Promise<{ id: string }>
 }) {
   await requirePermission("view_employees")
-  const { id } = await params
+  const numId = Number(id)
+  if (isNaN(numId)) notFound()
 
   const employee = await prisma.employee.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       department: true,
       position: true,
@@ -48,7 +49,7 @@ export default async function EmployeeDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/karyawan/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/karyawan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={employee.id} action={deleteEmployee} />
             <BackButton href="/master/karyawan" />
           </>
