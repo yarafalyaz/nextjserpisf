@@ -28,10 +28,8 @@ export async function onPurchaseReturnProcessed(
     });
     if (existingMoves) return;
 
-    // Guard: observer should only run on transition to returned.
-    if (purchaseReturn.status === "returned") {
-      throw new Error("Purchase Return sudah dikembalikan sebelumnya.");
-    }
+    // Guard: already returned
+    if (purchaseReturn.status === "returned") return;
 
     // Warehouse resolution fallback:
     // 1) latest Goods Receipt warehouse for same PO

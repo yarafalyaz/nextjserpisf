@@ -31,7 +31,7 @@ export async function onWorkOrderCompleted(
 
     // Guard: must be in a completable state
     if (workOrder.status === "completed" || workOrder.status === "cancelled") {
-      throw new Error("Work Order sudah selesai atau dibatalkan.");
+      return; // already completed/cancelled; idempotent no-op
     }
 
     // Resolve warehouse: WO warehouse (if exists) → project warehouse → item default warehouse

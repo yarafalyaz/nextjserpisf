@@ -32,7 +32,7 @@ export async function onMaterialIssueCompleted(
 
     // Guard: observer should only run on transition to completed.
     if (issue.status === "completed") {
-      throw new Error("Material Issue sudah selesai sebelumnya.");
+      return; // already completed; idempotent no-op
     }
 
     // Create Stock Move OUT per item

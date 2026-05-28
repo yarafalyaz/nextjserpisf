@@ -31,7 +31,7 @@ export async function onStockAdjustmentProcessed(
 
     // Guard: must be in a processable state
     if (adjustment.status === "processed" || adjustment.status === "cancelled") {
-      throw new Error("Stock Adjustment sudah diproses atau dibatalkan.");
+      return; // already processed/cancelled; idempotent no-op
     }
 
     // Create Stock Move per item based on difference

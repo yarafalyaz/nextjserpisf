@@ -25,9 +25,18 @@ export async function onGoodsReceiptVerified(
       },
     });
 
+    // Idempotency: check if stock moves already exist
+    const existingMoves = await tx.stockMove.findFirst({
+      where: {
+        referenceType: "GoodsReceipt",
+        referenceId: goodsReceiptId,
+      },
+    });
+    if (existingMoves) return; // Idempotent: silently no-op
+
     // Idempotency: check if already verified
     if (goodsReceipt.status === "verified") {
-      throw new Error("Goods Receipt sudah diverifikasi sebelumnya.");
+      return; // Already processed
     }
 
     // ─── 1. Auto-generate document number if not set ─────────────────────

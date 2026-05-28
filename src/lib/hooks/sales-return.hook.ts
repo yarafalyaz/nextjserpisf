@@ -31,7 +31,7 @@ export async function onSalesReturnCompleted(
 
     // Guard: must be in a completable state
     if (salesReturn.status === "completed" || salesReturn.status === "cancelled") {
-      throw new Error("Sales Return sudah selesai atau dibatalkan.");
+      return; // already completed/cancelled; idempotent no-op
     }
 
     // Resolve warehouse: item default warehouse → first warehouse fallback
