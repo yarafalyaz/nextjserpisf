@@ -419,6 +419,7 @@ export async function updatePayroll(id: number, formData: FormData) {
       netSalary,
       totalAmount,
       paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
+      status: "approved",
     },
   })
 
