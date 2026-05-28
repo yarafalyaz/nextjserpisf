@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@heroui/styles";
 
 @theme {
   --color-primary: #dc2626;
@@ -12,7 +13,7 @@
   --color-muted: var(--text-muted, #64748b);
 }
 
-/* Tailwind CSS is already imported via @heroui/react/styles in layout.tsx */
+/* HeroUI v3 styles must be imported after Tailwind CSS. */
 
 /* ==================== CSS VARIABLES ==================== */
 :root {
@@ -124,6 +125,43 @@ html.dark {
   box-shadow: var(--shadow-sm);
 }
 
+/* Native controls that still cannot use HeroUI primitives directly. */
+.form-input {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  padding: 0.625rem 0.75rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.form-input:hover {
+  background: var(--bg-secondary);
+  border-color: color-mix(in srgb, var(--border-color), var(--text-muted) 24%);
+}
+
+.form-input:focus,
+.form-input:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.form-input:disabled,
+.form-input[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+select.form-input {
+  cursor: pointer;
+}
+
 /* ==================== DARK MODE OVERRIDES ==================== */
 /* Only override our custom elements - HeroUI handles its own components */
 html.dark .form-input {
@@ -158,25 +196,6 @@ html.dark table tr {
 
 html.dark table tr:hover td {
   background: var(--bg-tertiary);
-}
-
-/* HeroUI Table dark mode - remove nested backgrounds */
-html.dark [data-slot="table-root"],
-html.dark [data-slot="scroll-container"],
-html.dark [data-slot="table-content"],
-html.dark [data-slot="table-body"],
-html.dark [data-slot="table-header"],
-html.dark [data-slot="table-row"],
-html.dark [data-slot="table-cell"],
-html.dark [data-slot="table-column"] {
-  background: transparent !important;
-  border-color: var(--border-color) !important;
-}
-
-html.dark [data-slot="scroll-container"] {
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
 }
 
 html.dark .bg-muted {
@@ -600,6 +619,11 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  transition: margin-left 0.22s ease;
+}
+
+.app-main.sidebar-closed {
+  margin-left: 0;
 }
 
 .app-content {
@@ -627,6 +651,12 @@ body {
   box-shadow: none;
   scrollbar-width: thin;
   scrollbar-color: rgba(0,0,0,0.1) transparent;
+  transform: translateX(-100%);
+  transition: transform 0.22s ease;
+}
+
+.sidebar.open {
+  transform: translateX(0);
 }
 
 .sidebar::-webkit-scrollbar {
@@ -776,12 +806,11 @@ body {
 }
 
 .header-menu-btn {
-  display: none;
-  background: none;
-  border: none;
-  cursor: pointer;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
   color: var(--text-secondary);
-  padding: 8px;
   border-radius: var(--border-radius);
 }
 
@@ -821,13 +850,11 @@ body {
 
 .header-notification-btn {
   position: relative;
-  background: none;
-  border: none;
-  cursor: pointer;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
   color: var(--text-secondary);
-  padding: 8px;
   border-radius: var(--border-radius);
-  transition: var(--transition);
 }
 
 .header-notification-btn:hover {
@@ -1363,12 +1390,7 @@ html.dark [cmdk-group-heading] {
     z-index: 1000;
     height: 100vh;
     box-shadow: var(--shadow-xl);
-    transform: translateX(-100%);
     transition: transform 0.3s ease;
-  }
-
-  .sidebar.open {
-    transform: translateX(0);
   }
 
   .sidebar-overlay {
@@ -1918,6 +1940,13 @@ html.dark [cmdk-group-heading] {
 .attachment-actions {
   display: flex;
   border-top: 1px solid var(--border-color);
+}
+
+.attachment-action-link,
+.attachment-action-button {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0;
 }
 
 .attachment-action-btn {

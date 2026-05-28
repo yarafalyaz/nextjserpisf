@@ -37,8 +37,9 @@ export async function DELETE(
     const rel = attachment.fileUrl.replace(/^\/+/, "")
     const uploadsRoot = path.join(process.cwd(), "public", "uploads")
     const filepath = path.resolve(process.cwd(), "public", rel)
+    const relativePath = path.relative(uploadsRoot, filepath)
 
-    if (filepath.startsWith(uploadsRoot)) {
+    if (!relativePath.startsWith("..") && !path.isAbsolute(relativePath)) {
       await unlink(filepath)
     }
   } catch {

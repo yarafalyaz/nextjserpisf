@@ -138,7 +138,7 @@ export function InvoiceItemsEditor({
           {editable && (
             <Button
               type="button"
-              onClick={() => setEditing(true)}
+              onPress={() => setEditing(true)}
               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary-hover transition-all"
             >
               ✏️ Edit Items
@@ -189,15 +189,15 @@ export function InvoiceItemsEditor({
         <div className="flex gap-2">
           <Button
             type="button"
-            onClick={() => { setItems(initialItems); setEditing(false) }}
+            onPress={() => { setItems(initialItems); setEditing(false) }}
             className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"
           >
             Batal
           </Button>
           <Button
             type="button"
-            onClick={handleSave}
-            disabled={isPending}
+            onPress={handleSave}
+            isDisabled={isPending}
             className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-primary text-white hover:bg-primary-hover transition-all"
           >
             {isPending ? "Menyimpan..." : "💾 Simpan"}
@@ -258,7 +258,7 @@ export function InvoiceItemsEditor({
                 <td className="py-2 px-1">
                   <Button
                     type="button"
-                    onClick={() => removeItem(i)}
+                    onPress={() => removeItem(i)}
                     className="text-danger hover:text-danger/80 text-lg"
                     title="Hapus item"
                   >
@@ -272,7 +272,7 @@ export function InvoiceItemsEditor({
 
         <Button
           type="button"
-          onClick={addItem}
+          onPress={addItem}
           className="mt-3 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-dashed border-default text-muted hover:border-primary hover:text-primary transition-all"
         >
           + Tambah Item

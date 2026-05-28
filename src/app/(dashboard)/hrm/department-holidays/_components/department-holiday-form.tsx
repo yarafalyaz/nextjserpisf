@@ -82,15 +82,20 @@ export function DepartmentHolidayForm({ departments, holiday }: DepartmentHolida
         </div>
 
         <div className="flex flex-col gap-1.5 justify-end">
-          <Checkbox name="isRecurring" value="on" defaultSelected={holiday?.isRecurring ?? false}>
-            Berulang setiap tahun
+          <Checkbox id="department-holiday-is-recurring" name="isRecurring" value="on" defaultSelected={holiday?.isRecurring ?? false}>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            <Checkbox.Content>
+              <Label htmlFor="department-holiday-is-recurring">Berulang setiap tahun</Label>
+            </Checkbox.Content>
           </Checkbox>
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button type="submit" variant="primary" disabled={isPending} id="submit-department-holiday">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-department-holiday">
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
       </div>

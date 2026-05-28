@@ -13,10 +13,14 @@ export async function createProduct(formData: FormData) {
 
   const name = formData.get("name") as string
   const sku = formData.get("sku") as string | null
-  const code = (formData.get("code") as string) || null
+  let code = (formData.get("code") as string) || null
   const description = formData.get("description") as string | null
   const vehicleBrandId = safeNumber(formData.get("vehicleBrandId")) ?? undefined
   const vehicleModelId = safeNumber(formData.get("vehicleModelId")) ?? undefined
+
+  if (!code) {
+    code = await generateDocumentNumber("PRD", "simple")
+  }
 
   // Parse dynamic material rows
   const itemIds = formData.getAll("materialItemId") as string[]

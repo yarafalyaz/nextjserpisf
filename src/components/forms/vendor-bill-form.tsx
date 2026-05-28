@@ -130,7 +130,7 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
           <div>
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-base font-semibold text-foreground">Item</h3>
-              <Button onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">
+              <Button onPress={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">
                 <Plus size={14} /> Tambah Item
               </Button>
             </div>
@@ -183,7 +183,7 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
                       <td className="py-2 px-2 text-right font-medium">{calcLineTotal(item).toLocaleString("id-ID")}</td>
                       <td className="py-2 px-2 text-center">
                         {billItems.length > 1 && (
-                          <Button onClick={() => removeItem(idx)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">
+                          <Button onPress={() => removeItem(idx)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">
                             <Trash2 size={14} />
                           </Button>
                         )}
@@ -227,8 +227,8 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
         </FormSection>
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : bill?.id ? "Update" : "Simpan"}
           </Button>
         </FormActions>

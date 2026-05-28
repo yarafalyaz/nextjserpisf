@@ -131,9 +131,9 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         </h3>
         <Button
           type="button"
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
+          variant="secondary" size="sm"
+          onPress={() => fileInputRef.current?.click()}
+          isDisabled={uploading}
         >
           <Upload className="size-3" />
           {uploading ? "Mengupload..." : "Upload Bukti"}
@@ -173,10 +173,10 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
                 <span className="attachment-size">{formatFileSize(att.fileSize)}</span>
               </div>
               <div className="attachment-actions">
-                <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all attachment-action-" title="Download">
+                <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="button button--secondary button--sm attachment-action-link" title="Download">
                   <Download className="size-3.5" />
                 </a>
-                <Button onPress={() => handleDeleteClick(att.id)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all attachment-action-btn attachment-delete-" title="Hapus">
+                <Button onPress={() => handleDeleteClick(att.id)} variant="danger-soft" size="sm" className="attachment-action-button" title="Hapus">
                   <Trash2 className="size-3.5" />
                 </Button>
               </div>

@@ -74,7 +74,7 @@ export default async function ApprovalsPage({
                     <DetailTableTd><span className={`status-badge status-${a.status}`}>{a.status}</span></DetailTableTd>
                     <DetailTableTd>{formatDate(a.createdAt)}</DetailTableTd>
                     <DetailTableTd>
-                      <Link href={`/settings/approvals/${a.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">Eye</Link>
+                      <Link href={`/settings/approvals/${a.id}`} className="button button--ghost button--sm">Eye</Link>
                     </DetailTableTd>
                   </DetailTableRow>
                 ))

@@ -7,9 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { itemSchema, type ItemInput } from "@/lib/validators"
 import { createItem, updateItem } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Label, Select, ComboBox, ListBox, InputGroup ,  Switch} from "@heroui/react"
+import { Label, Select, ComboBox, ListBox, InputGroup, Switch, Input, TextArea } from "@heroui/react"
 import { Upload, X } from "lucide-react"
-import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -167,7 +166,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               {imagePreview ? (
                 <div className="image-upload-preview">
                   <img src={imagePreview} alt="Preview" className="image-upload-img" />
-                  <Button onClick={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
+                  <Button onPress={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
                     <X className="size-4" />
                   </Button>
                 </div>
@@ -340,7 +339,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               render={({ field }) => (
                 <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : undefined)} className="w-full">
                   <Label>Metode Costing</Label>
-                  <Select.Trigger><SelectValue placeholder="Pilih metode" /><Select.Indicator /></Select.Trigger>
+                  <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih metode"}</Select.Value><Select.Indicator /></Select.Trigger>
                   <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="average" id="average" textValue="Average">Average<ListBox.ItemIndicator /></ListBox.Item>
@@ -480,8 +479,8 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
         </FormSection>
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending || uploading}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending || uploading}>
             {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
           </Button>
         </FormActions>

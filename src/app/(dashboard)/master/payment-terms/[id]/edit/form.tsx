@@ -49,8 +49,8 @@ export function EditPaymentTermForm({ paymentTerm }: EditPaymentTermFormProps) {
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button type="submit" variant="primary" disabled={isPending} id="submit-payment-term">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-payment-term">
           {isPending ? "Menyimpan..." : "Update"}
         </Button>
       </div>

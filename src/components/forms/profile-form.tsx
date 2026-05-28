@@ -131,7 +131,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : "Simpan Perubahan"}
           </Button>
         </div>
@@ -152,7 +152,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button type="submit" disabled={isPending}>
+          <Button type="submit" isDisabled={isPending}>
             {isPending ? "Mengubah..." : "Ubah Password"}
           </Button>
         </div>

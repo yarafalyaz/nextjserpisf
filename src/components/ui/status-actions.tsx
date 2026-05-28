@@ -67,8 +67,8 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
         <div className="flex gap-2">
           {canApprove && (
             <Button
-              onClick={() => handleAction("approve")}
-              disabled={isPending}
+              onPress={() => handleAction("approve")}
+              isDisabled={isPending}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-success text-white hover:bg-success/90 transition-all disabled:opacity-50"
             >
               <CheckCircle size={14} />
@@ -77,8 +77,8 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
           )}
           {canReject && (
             <Button
-              onClick={() => handleAction("reject")}
-              disabled={isPending}
+              onPress={() => handleAction("reject")}
+              isDisabled={isPending}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-danger text-white hover:bg-danger/90 transition-all disabled:opacity-50"
             >
               <XCircle size={14} />

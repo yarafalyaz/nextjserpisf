@@ -180,8 +180,8 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
           <FormAttachmentUpload referenceType="sales_payment" />
         </FormSection>
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Memproses..." : "Terima Pembayaran"}
           </Button>
         </FormActions>

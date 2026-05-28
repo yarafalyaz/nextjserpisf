@@ -132,7 +132,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
               <h3 className="text-base font-semibold text-foreground">Items yang Dibutuhkan</h3>
               <Button
                 type="button"
-                onClick={addItem}
+                onPress={addItem}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all"
               >
                 <Plus size={14} /> Tambah Item
@@ -193,7 +193,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
                         {prItems.length > 1 && (
                           <Button
                             type="button"
-                            onClick={() => removeItem(i)}
+                            onPress={() => removeItem(i)}
                             className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             <Trash2 size={14} />
@@ -209,8 +209,8 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
         </FormSection>
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : request?.id ? "Update" : "Simpan"}
           </Button>
         </FormActions>

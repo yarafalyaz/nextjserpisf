@@ -7,8 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { customerSchema, type CustomerInput } from "@/lib/validators"
 import { createCustomer, updateCustomer } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, Select, ListBox } from "@heroui/react"
-import { Input, TextArea, SelectValue } from "@/components/ui/heroui-compat"
+import { Label, Select, ListBox, Input, TextArea } from "@heroui/react"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -116,7 +115,7 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
               render={({ field }) => (
                 <Select selectedKey={field.value ? String(field.value) : null} onSelectionChange={(key) => field.onChange(key)} placeholder="-- Pilih --" className="w-full">
                   <Label>Gender</Label>
-                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                   <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="male" id="male" textValue="Laki-laki">Laki-laki<ListBox.ItemIndicator /></ListBox.Item>
@@ -138,8 +137,8 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
           </div>
         </FormSection>
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
           </Button>
         </FormActions>

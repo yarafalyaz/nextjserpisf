@@ -110,7 +110,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Button type="submit" disabled={loading} className="login-btn" id="login-submit">
+          <Button type="submit" isDisabled={loading} className="login-btn" id="login-submit">
             {loading ? (
               <>
                 <Loader2 size={18} className="login-spinner" />

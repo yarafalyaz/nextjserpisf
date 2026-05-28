@@ -50,6 +50,19 @@ export async function proxy(req: NextRequest) {
   // Fix #25: API routes still need to pass through (they handle their own auth),
   // but we validate auth for sensitive API paths
   if (pathname.startsWith("/api")) {
+    // NextAuth must stay reachable before a user has a session.
+    if (pathname.startsWith("/api/auth")) {
+      if (req.method === "POST") {
+        const result = takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth)
+        if (!result.allowed) {
+          return addSecurityHeaders(
+            NextResponse.json({ error: "Too many attempts, coba lagi nanti" }, { status: 429 })
+          )
+        }
+      }
+      return addSecurityHeaders(NextResponse.next())
+    }
+
     // Cron routes use their own CRON_SECRET verification
     if (pathname.startsWith("/api/cron")) {
       return addSecurityHeaders(NextResponse.next())

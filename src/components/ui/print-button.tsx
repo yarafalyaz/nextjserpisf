@@ -16,7 +16,7 @@ export function PrintButton({ title = "Cetak" }: PrintButtonProps) {
 
   return (
     <Button
-      onClick={handlePrint}
+      onPress={handlePrint}
       
     >
       <Printer size={14} />

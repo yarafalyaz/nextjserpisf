@@ -65,7 +65,7 @@ export default async function UsersPage() {
                     </span>
                   </DetailTableTd>
                   <DetailTableTd>
-                    <Link href={`/settings/users/${user.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost"><Pencil size={14} /></Link>
+                    <Link href={`/settings/users/${user.id}`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
                   </DetailTableTd>
                 </DetailTableRow>
               ))}

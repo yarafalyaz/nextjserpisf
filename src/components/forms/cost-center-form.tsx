@@ -42,12 +42,19 @@ export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code
           <TextArea id="description" name="description" rows={2} placeholder="Deskripsi cost center" defaultValue={costCenter?.description ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
-          <Checkbox name="isActive" defaultSelected={costCenter?.isActive !== false}>Aktif</Checkbox>
+          <Checkbox id="cost-center-is-active" name="isActive" value="on" defaultSelected={costCenter?.isActive !== false}>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            <Checkbox.Content>
+              <Label htmlFor="cost-center-is-active">Aktif</Label>
+            </Checkbox.Content>
+          </Checkbox>
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending} >{isPending ? "Menyimpan..." : costCenter?.id ? "Update" : "Simpan"}</Button>
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : costCenter?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

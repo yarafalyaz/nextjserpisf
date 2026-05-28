@@ -4,9 +4,8 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createLead, updateLead } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Select, ListBox, Label ,  ComboBox} from "@heroui/react"
+import { Select, ListBox, Label, ComboBox, Input, TextArea } from "@heroui/react"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
 
@@ -107,7 +106,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         <div className="flex flex-col gap-1.5">
           <Select name="source" defaultSelectedKey={lead?.source || undefined} className="w-full">
             <Label>Sumber</Label>
-            <Select.Trigger><SelectValue placeholder="Pilih Sumber" /><Select.Indicator /></Select.Trigger>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Sumber"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
                 <ListBox.Item id="website" textValue="Website">Website<ListBox.ItemIndicator /></ListBox.Item>
@@ -145,8 +144,8 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Lead"}</Button>
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Lead"}</Button>
       </div>
     </form>
   )

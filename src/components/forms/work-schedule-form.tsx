@@ -89,7 +89,14 @@ export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFor
           <Input id="lateToleranceMinutes" name="lateToleranceMinutes" type="number" min="0" placeholder="0" defaultValue={String(schedule?.lateToleranceMinutes ?? 0)} />
         </div>
         <div className="flex flex-col gap-1.5 justify-end">
-          <Checkbox name="isActive" defaultSelected={schedule?.isActive !== false}>Aktif</Checkbox>
+          <Checkbox id="work-schedule-is-active" name="isActive" value="on" defaultSelected={schedule?.isActive !== false}>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            <Checkbox.Content>
+              <Label htmlFor="work-schedule-is-active">Aktif</Label>
+            </Checkbox.Content>
+          </Checkbox>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label>Hari Kerja *</Label>
@@ -104,8 +111,8 @@ export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFor
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending} >{isPending ? "Menyimpan..." : schedule?.id ? "Update" : "Simpan"}</Button>
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : schedule?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

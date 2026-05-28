@@ -9,8 +9,7 @@ import { createExpense, updateExpense } from "@/actions/finance.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Select, ComboBox, ListBox, Label, InputGroup } from "@heroui/react"
-import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
+import { Select, ComboBox, ListBox, Label, InputGroup, Input, TextArea } from "@heroui/react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
 
@@ -150,7 +149,7 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
             render={({ field }) => (
               <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                 <Label>Kategori</Label>
-                <Select.Trigger><SelectValue placeholder="Pilih Kategori" /><Select.Indicator /></Select.Trigger>
+                <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Kategori"}</Select.Value><Select.Indicator /></Select.Trigger>
                 <Select.Popover>
                   <ListBox>
                     <ListBox.Item id="operasional" textValue="Operasional">Operasional<ListBox.ItemIndicator /></ListBox.Item>
@@ -238,8 +237,8 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
 
       <FormAttachmentUpload referenceType="expense" />
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending}  id="submit-expense">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending}  id="submit-expense">
           {isPending ? "Menyimpan..." : expense?.id ? "Update" : "Simpan"}
         </Button>
       </div>

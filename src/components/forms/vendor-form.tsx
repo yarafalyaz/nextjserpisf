@@ -7,9 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { vendorSchema, type VendorInput } from "@/lib/validators"
 import { createVendor, updateVendor } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, Select, ListBox } from "@heroui/react"
+import { Label, Select, ListBox, Input, TextArea } from "@heroui/react"
 import { AddressPicker } from "@/components/ui/address-picker"
-import { SelectValue, Input, TextArea } from "@/components/ui/heroui-compat"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -116,7 +115,7 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
               render={({ field }) => (
                 <Select selectedKey={field.value ? String(field.value) : ""} onSelectionChange={(key) => field.onChange(key ? Number(key) : null)} className="w-full">
                   <Label>Termin Pembayaran</Label>
-                  <Select.Trigger><SelectValue placeholder="Pilih termin" /><Select.Indicator /></Select.Trigger>
+                  <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih termin"}</Select.Value><Select.Indicator /></Select.Trigger>
                   <Select.Popover>
                     <ListBox>
                       {paymentTerms.map((pt) => (
@@ -145,8 +144,8 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
         </FormSection>
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
           </Button>
         </FormActions>

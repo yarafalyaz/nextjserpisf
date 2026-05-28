@@ -21,6 +21,12 @@ export async function updateSystemSettings(formData: FormData) {
     return v !== null ? String(v) : undefined
   }
 
+  function strDefault(key: string, fallback: string): string | undefined {
+    if (!has(key)) return undefined
+    const value = str(key)
+    return value && value.trim() !== "" ? value : fallback
+  }
+
   function strNull(key: string): string | null | undefined {
     if (!has(key)) return undefined
     const v = formData.get(key)
@@ -33,6 +39,11 @@ export async function updateSystemSettings(formData: FormData) {
     if (!v || String(v).trim() === "") return undefined
     const n = parseInt(String(v), 10)
     return isNaN(n) ? undefined : n
+  }
+
+  function intDefault(key: string, fallback: number): number | undefined {
+    if (!has(key)) return undefined
+    return int(key) ?? fallback
   }
 
   function intNull(key: string): number | null | undefined {
@@ -49,6 +60,11 @@ export async function updateSystemSettings(formData: FormData) {
     if (!v || String(v).trim() === "") return undefined
     const n = parseFloat(String(v))
     return isNaN(n) ? undefined : n
+  }
+
+  function decimalDefault(key: string, fallback: number): number | undefined {
+    if (!has(key)) return undefined
+    return decimal(key) ?? fallback
   }
 
   function decimalNull(key: string): number | null | undefined {
@@ -96,11 +112,11 @@ export async function updateSystemSettings(formData: FormData) {
       companyLongitude: decimalNull("companyLongitude"),
 
       // General
-      costingMethod: str("costingMethod") || "FIFO",
-      fiscalYearStartMonth: int("fiscalYearStartMonth") ?? 1,
-      currencyCode: str("currencyCode") || "IDR",
-      currencySymbol: str("currencySymbol") || "Rp ",
-      currencyLocale: str("currencyLocale") || "id_ID",
+      costingMethod: strDefault("costingMethod", "FIFO"),
+      fiscalYearStartMonth: intDefault("fiscalYearStartMonth", 1),
+      currencyCode: strDefault("currencyCode", "IDR"),
+      currencySymbol: strDefault("currencySymbol", "Rp "),
+      currencyLocale: strDefault("currencyLocale", "id_ID"),
       documentNumberFormat: str("documentNumberFormat") || undefined,
       periodLockDate: dateNull("periodLockDate"),
       showIsActiveField: bool("showIsActiveField"),
@@ -123,46 +139,46 @@ export async function updateSystemSettings(formData: FormData) {
       enableAutoVendorCode: bool("enableAutoVendorCode"),
 
       // Document Prefixes
-      quotationCodePrefix: str("quotationCodePrefix") || "QUO",
+      quotationCodePrefix: strDefault("quotationCodePrefix", "QUO"),
       assetPrefix: strNull("assetPrefix"),
-      salesOrderPrefix: str("salesOrderPrefix") || "SO",
-      salesInvoicePrefix: str("salesInvoicePrefix") || "INV",
-      salesPaymentPrefix: str("salesPaymentPrefix") || "PAY",
-      salesReturnPrefix: str("salesReturnPrefix") || "SR",
-      purchaseRequestPrefix: str("purchaseRequestPrefix") || "PR",
-      purchaseOrderPrefix: str("purchaseOrderPrefix") || "PO",
-      inventoryTransferPrefix: str("inventoryTransferPrefix") || "TRF",
-      stockAdjustmentPrefix: str("stockAdjustmentPrefix") || "ADJ",
-      workOrderPrefix: str("workOrderPrefix") || "WO",
-      timesheetPrefix: str("timesheetPrefix") || "TS",
-      downPaymentPrefix: str("downPaymentPrefix") || "DP",
-      deliveryOrderPrefix: str("deliveryOrderPrefix") || "DO",
-      journalPrefix: str("journalPrefix") || "JRN",
-      expensePrefix: str("expensePrefix") || "EXP",
-      pettyCashPrefix: str("pettyCashPrefix") || "PC",
-      reconciliationPrefix: str("reconciliationPrefix") || "REC",
-      payrollPrefix: str("payrollPrefix") || "PAYROLL",
-      projectPrefix: str("projectPrefix") || "PRJ",
-      goodsReceiptPrefix: str("goodsReceiptPrefix") || "GR",
-      vendorBillPrefix: str("vendorBillPrefix") || "BILL",
-      vendorPaymentPrefix: str("vendorPaymentPrefix") || "VPAY",
-      purchaseReturnPrefix: str("purchaseReturnPrefix") || "PRET",
-      ticketPrefix: str("ticketPrefix") || "TKT",
-      leadPrefix: str("leadPrefix") || "LEAD",
-      materialIssuePrefix: str("materialIssuePrefix") || "MI",
-      manufacturingOrderPrefix: str("manufacturingOrderPrefix") || "MO",
-      stockMovementPrefix: str("stockMovementPrefix") || "SM",
+      salesOrderPrefix: strDefault("salesOrderPrefix", "SO"),
+      salesInvoicePrefix: strDefault("salesInvoicePrefix", "INV"),
+      salesPaymentPrefix: strDefault("salesPaymentPrefix", "PAY"),
+      salesReturnPrefix: strDefault("salesReturnPrefix", "SR"),
+      purchaseRequestPrefix: strDefault("purchaseRequestPrefix", "PR"),
+      purchaseOrderPrefix: strDefault("purchaseOrderPrefix", "PO"),
+      inventoryTransferPrefix: strDefault("inventoryTransferPrefix", "TRF"),
+      stockAdjustmentPrefix: strDefault("stockAdjustmentPrefix", "ADJ"),
+      workOrderPrefix: strDefault("workOrderPrefix", "WO"),
+      timesheetPrefix: strDefault("timesheetPrefix", "TS"),
+      downPaymentPrefix: strDefault("downPaymentPrefix", "DP"),
+      deliveryOrderPrefix: strDefault("deliveryOrderPrefix", "DO"),
+      journalPrefix: strDefault("journalPrefix", "JRN"),
+      expensePrefix: strDefault("expensePrefix", "EXP"),
+      pettyCashPrefix: strDefault("pettyCashPrefix", "PC"),
+      reconciliationPrefix: strDefault("reconciliationPrefix", "REC"),
+      payrollPrefix: strDefault("payrollPrefix", "PAYROLL"),
+      projectPrefix: strDefault("projectPrefix", "PRJ"),
+      goodsReceiptPrefix: strDefault("goodsReceiptPrefix", "GR"),
+      vendorBillPrefix: strDefault("vendorBillPrefix", "BILL"),
+      vendorPaymentPrefix: strDefault("vendorPaymentPrefix", "VPAY"),
+      purchaseReturnPrefix: strDefault("purchaseReturnPrefix", "PRET"),
+      ticketPrefix: strDefault("ticketPrefix", "TKT"),
+      leadPrefix: strDefault("leadPrefix", "LEAD"),
+      materialIssuePrefix: strDefault("materialIssuePrefix", "MI"),
+      manufacturingOrderPrefix: strDefault("manufacturingOrderPrefix", "MO"),
+      stockMovementPrefix: strDefault("stockMovementPrefix", "SM"),
 
       // Overtime
-      overtimeMultiplier: decimal("overtimeMultiplier") ?? 0.00578035,
-      overtimeCoefficient: decimal("overtimeCoefficient") ?? 1.1,
-      overtimeMealBreakStart: str("overtimeMealBreakStart") || "17:00",
-      overtimeMealBreakEnd: str("overtimeMealBreakEnd") || "19:00",
+      overtimeMultiplier: decimalDefault("overtimeMultiplier", 0.00578035),
+      overtimeCoefficient: decimalDefault("overtimeCoefficient", 1.1),
+      overtimeMealBreakStart: strDefault("overtimeMealBreakStart", "17:00"),
+      overtimeMealBreakEnd: strDefault("overtimeMealBreakEnd", "19:00"),
 
       // Attendance
-      attendanceRadiusKm: decimal("attendanceRadiusKm") ?? 1.0,
-      latePenaltyPerMinute: decimal("latePenaltyPerMinute") ?? 5000,
-      maxLatePenaltyMinutes: int("maxLatePenaltyMinutes") ?? 120,
+      attendanceRadiusKm: decimalDefault("attendanceRadiusKm", 1.0),
+      latePenaltyPerMinute: decimalDefault("latePenaltyPerMinute", 5000),
+      maxLatePenaltyMinutes: intDefault("maxLatePenaltyMinutes", 120),
 
       // Quotation
       quotationFooterNotes: strNull("quotationFooterNotes"),

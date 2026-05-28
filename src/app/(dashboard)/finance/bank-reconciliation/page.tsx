@@ -85,7 +85,7 @@ export default async function BankReconciliationPage({
                     <DetailTableTd><StatusChip status={r.status} /></DetailTableTd>
                     <DetailTableTd>{formatDate(r.createdAt)}</DetailTableTd>
                     <DetailTableTd>
-                      <Link href={`/finance/bank-reconciliation/${r.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">Eye</Link>
+                      <Link href={`/finance/bank-reconciliation/${r.id}`} className="button button--ghost button--sm">Eye</Link>
                     </DetailTableTd>
                   </DetailTableRow>
                 ))
@@ -98,8 +98,8 @@ export default async function BankReconciliationPage({
           <div className="flex items-center justify-between p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
-              {page > 1 && <Link href={`/finance/bank-reconciliation?page=${page - 1}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">← Prev</Link>}
-              {page < totalPages && <Link href={`/finance/bank-reconciliation?page=${page + 1}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">Next →</Link>}
+              {page > 1 && <Link href={`/finance/bank-reconciliation?page=${page - 1}`} className="button button--ghost button--sm">← Prev</Link>}
+              {page < totalPages && <Link href={`/finance/bank-reconciliation?page=${page + 1}`} className="button button--ghost button--sm">Next →</Link>}
             </div>
           </div>
         )}

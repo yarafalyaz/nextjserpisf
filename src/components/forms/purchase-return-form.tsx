@@ -96,7 +96,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
       <div style={{ marginTop: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Item Retur</h3>
-          <Button onClick={addItem} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary">+ Tambah Item</Button>
+          <Button onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
         </div>
 
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
@@ -135,7 +135,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
                 </td>
                 <td>
                   {returnItems.length > 1 && (
-                    <Button onClick={() => removeItem(index)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost" style={{ color: "var(--color-danger)" }}>×</Button>
+                    <Button onPress={() => removeItem(index)} variant="danger-soft" size="sm">×</Button>
                   )}
                 </td>
               </tr>
@@ -145,8 +145,8 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending}  id="submit-purchase-return">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending}  id="submit-purchase-return">
           {isPending ? "Menyimpan..." : returnData?.id ? "Update" : "Simpan"}
         </Button>
       </div>

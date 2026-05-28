@@ -4,7 +4,6 @@ import { Inter, JetBrains_Mono } from "next/font/google"
 import { AuthProvider } from "@/components/providers/auth-provider"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { UIProvider } from "@/components/providers/ui-provider"
-import "@heroui/react/styles"
 import "./globals.css"
 import "./print.css"
 

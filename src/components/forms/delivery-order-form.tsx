@@ -80,8 +80,8 @@ export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderF
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending} >{isPending ? "Menyimpan..." : deliveryOrder?.id ? "Update" : "Simpan"}</Button>
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : deliveryOrder?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

@@ -128,8 +128,8 @@ export function TimesheetForm({ employees, projects, tasks = [], timesheet }: Ti
           </div>
         </FormSection>
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : timesheet?.id ? "Update" : "Simpan"}
           </Button>
         </FormActions>

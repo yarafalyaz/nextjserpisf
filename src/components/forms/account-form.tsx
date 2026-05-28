@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createAccount, updateAccount } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { ComboBox, ListBox, Label, Select } from "@heroui/react"
-import { Input, TextArea, SelectValue } from "@/components/ui/heroui-compat"
+import { ComboBox, ListBox, Label, Select, Input, TextArea } from "@heroui/react"
 import { Button } from "@/components/ui/page-header"
 
 interface AccountFormProps {
@@ -51,7 +50,7 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
         <div className="flex flex-col gap-1.5">
           <Select name="type" className="w-full" isRequired>
             <Label>Tipe *</Label>
-            <Select.Trigger><SelectValue placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Tipe"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
                 <ListBox.Item id="ASSET" textValue="ASSET">ASSET<ListBox.ItemIndicator /></ListBox.Item>
@@ -79,7 +78,7 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
         <div className="flex flex-col gap-1.5">
           <Select name="normalBalance" className="w-full">
             <Label>Saldo Normal</Label>
-            <Select.Trigger><SelectValue placeholder="Pilih Saldo Normal" /><Select.Indicator /></Select.Trigger>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Saldo Normal"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
                 <ListBox.Item id="DEBIT" textValue="DEBIT">DEBIT<ListBox.ItemIndicator /></ListBox.Item>
@@ -94,8 +93,8 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending}  id="submit-account">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending}  id="submit-account">
           {isPending ? "Menyimpan..." : account?.id ? "Update" : "Simpan"}
         </Button>
       </div>

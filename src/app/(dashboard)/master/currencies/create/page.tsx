@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createCurrency } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ListBox, Checkbox, Select, Label } from "@heroui/react"
-import { Input, SelectValue } from "@/components/ui/heroui-compat"
+import { ListBox, Checkbox, Select, Label, Input } from "@heroui/react"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateCurrencyPage() {
@@ -35,17 +34,29 @@ export default function CreateCurrencyPage() {
       </div>
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <Input name="code" label="Kode *" placeholder="Contoh: USD" isRequired />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-code" isRequired>Kode</Label>
+            <Input id="currency-code" name="code" placeholder="Contoh: USD" required />
+          </div>
 
-          <Input name="name" label="Nama *" placeholder="Contoh: US Dollar" isRequired />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-name" isRequired>Nama</Label>
+            <Input id="currency-name" name="name" placeholder="Contoh: US Dollar" required />
+          </div>
 
-          <Input name="rate" type="number" label="Rate *" placeholder="Contoh: 15800.0000" step="0.0001" isRequired />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-rate" isRequired>Rate</Label>
+            <Input id="currency-rate" name="rate" type="number" placeholder="Contoh: 15800.0000" step="0.0001" required />
+          </div>
 
-          <Input name="symbol" label="Simbol" placeholder="e.g. Rp, $, €" />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-symbol">Simbol</Label>
+            <Input id="currency-symbol" name="symbol" placeholder="e.g. Rp, $, €" />
+          </div>
 
           <Select name="symbolPosition" className="w-full">
             <Label>Posisi Simbol</Label>
-            <Select.Trigger><SelectValue placeholder="Pilih posisi" /><Select.Indicator /></Select.Trigger>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih posisi"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
                 <ListBox.Item id="before" textValue="Before">Before<ListBox.ItemIndicator /></ListBox.Item>
@@ -54,20 +65,36 @@ export default function CreateCurrencyPage() {
             </Select.Popover>
           </Select>
 
-          <Input name="decimalSeparator" label="Pemisah Desimal" placeholder="e.g. , or ." />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-decimal-separator">Pemisah Desimal</Label>
+            <Input id="currency-decimal-separator" name="decimalSeparator" placeholder="e.g. , or ." />
+          </div>
 
-          <Input name="thousandsSeparator" label="Pemisah Ribuan" placeholder="e.g. . or ," />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-thousands-separator">Pemisah Ribuan</Label>
+            <Input id="currency-thousands-separator" name="thousandsSeparator" placeholder="e.g. . or ," />
+          </div>
 
-          <Input name="decimalPlaces" type="number" label="Jumlah Desimal" placeholder="e.g. 2" />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-decimal-places">Jumlah Desimal</Label>
+            <Input id="currency-decimal-places" name="decimalPlaces" type="number" placeholder="e.g. 2" />
+          </div>
 
           <div className="flex items-center sm:col-span-2">
-            <Checkbox name="isBase">Mata Uang Dasar</Checkbox>
+            <Checkbox id="currency-is-base" name="isBase" value="on">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              <Checkbox.Content>
+                <Label htmlFor="currency-is-base">Mata Uang Dasar</Label>
+              </Checkbox.Content>
+            </Checkbox>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button onClick={() => router.back()} >Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending} id="submit-currency">
+          <Button onPress={() => router.back()} >Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending} id="submit-currency">
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
         </div>

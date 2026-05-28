@@ -74,8 +74,8 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending}  id="submit-production-order">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending}  id="submit-production-order">
           {isPending ? "Menyimpan..." : order?.id ? "Update" : "Simpan"}
         </Button>
       </div>

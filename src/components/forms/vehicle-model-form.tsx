@@ -54,8 +54,8 @@ export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending} >{isPending ? "Menyimpan..." : model?.id ? "Update" : "Simpan"}</Button>
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : model?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

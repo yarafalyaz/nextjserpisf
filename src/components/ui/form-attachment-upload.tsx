@@ -103,7 +103,7 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
                   <span className="form-attachment-name">{file.originalName}</span>
                   <span className="form-attachment-size">{formatFileSize(file.fileSize)}</span>
                 </div>
-                <Button onClick={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
+                <Button onPress={() => handleRemoveFile(file.id)} variant="danger-soft" size="sm" isIconOnly className="form-attachment-remove" aria-label="Hapus">
                   <X className="size-4" />
                 </Button>
               </div>
@@ -112,9 +112,9 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
         )}
         <Button
           type="button"
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all form-attachment-upload-"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
+          variant="secondary" size="sm" className="form-attachment-upload-btn"
+          onPress={() => fileInputRef.current?.click()}
+          isDisabled={uploading}
         >
           <Upload className="size-4" />
           {uploading ? "Mengupload..." : "Upload Bukti (JPG, PDF)"}

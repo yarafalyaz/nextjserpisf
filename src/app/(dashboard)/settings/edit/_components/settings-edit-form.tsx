@@ -196,6 +196,26 @@ function MappingSectionCard({ title, items, accounts }: { title: string; items: 
   )
 }
 
+function SettingSwitch({ name, label, defaultSelected }: { name: string; label: string; defaultSelected: boolean }) {
+  const id = `${name}-switch`
+
+  return (
+    <>
+      <input type="hidden" name={name} value="0" />
+      <Switch id={id} name={name} value="on" defaultSelected={defaultSelected}>
+        <Switch.Control>
+          <Switch.Thumb />
+        </Switch.Control>
+        <Switch.Content>
+          <Label htmlFor={id} className="text-sm font-medium text-foreground">
+            {label}
+          </Label>
+        </Switch.Content>
+      </Switch>
+    </>
+  )
+}
+
 export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -609,16 +629,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
               <div className="flex flex-col gap-3 justify-end">
                 <div className="flex items-center gap-3">
-                  <input type="hidden" name="showIsActiveField" value="0" />
-                  <Switch name="showIsActiveField" defaultSelected={settings.showIsActiveField !== false}>
-                    Tampilkan Field Is Active
-                  </Switch>
+                  <SettingSwitch name="showIsActiveField" label="Tampilkan Field Is Active" defaultSelected={settings.showIsActiveField !== false} />
                 </div>
                 <div className="flex items-center gap-3">
-                  <input type="hidden" name="showTaxId" value="0" />
-                  <Switch name="showTaxId" defaultSelected={settings.showTaxId !== false}>
-                    Tampilkan NPWP
-                  </Switch>
+                  <SettingSwitch name="showTaxId" label="Tampilkan NPWP" defaultSelected={settings.showTaxId !== false} />
                 </div>
               </div>
             </div>
@@ -633,44 +647,37 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="itemCodePrefix">Prefix Item</Label>
                 <Input id="itemCodePrefix" name="itemCodePrefix" defaultValue={settings.itemCodePrefix || ""} className="w-full" />
-                <input type="hidden" name="enableAutoItemCode" value="0" />
-                <Switch name="enableAutoItemCode" defaultSelected={settings.enableAutoItemCode !== false}>Kode Otomatis Barang</Switch>
+                <SettingSwitch name="enableAutoItemCode" label="Kode Otomatis Barang" defaultSelected={settings.enableAutoItemCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="warehouseCodePrefix">Prefix Gudang</Label>
                 <Input id="warehouseCodePrefix" name="warehouseCodePrefix" defaultValue={settings.warehouseCodePrefix || ""} className="w-full" />
-                <input type="hidden" name="enableAutoWarehouseCode" value="0" />
-                <Switch name="enableAutoWarehouseCode" defaultSelected={settings.enableAutoWarehouseCode !== false}>Kode Otomatis Gudang</Switch>
+                <SettingSwitch name="enableAutoWarehouseCode" label="Kode Otomatis Gudang" defaultSelected={settings.enableAutoWarehouseCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="rackCodePrefix">Prefix Rak</Label>
                 <Input id="rackCodePrefix" name="rackCodePrefix" defaultValue={settings.rackCodePrefix || ""} className="w-full" />
-                <input type="hidden" name="enableAutoRackCode" value="0" />
-                <Switch name="enableAutoRackCode" defaultSelected={settings.enableAutoRackCode !== false}>Kode Otomatis Rak</Switch>
+                <SettingSwitch name="enableAutoRackCode" label="Kode Otomatis Rak" defaultSelected={settings.enableAutoRackCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="rowCodePrefix">Prefix Baris</Label>
                 <Input id="rowCodePrefix" name="rowCodePrefix" defaultValue={settings.rowCodePrefix || ""} className="w-full" />
-                <input type="hidden" name="enableAutoRowCode" value="0" />
-                <Switch name="enableAutoRowCode" defaultSelected={settings.enableAutoRowCode !== false}>Kode Otomatis Baris</Switch>
+                <SettingSwitch name="enableAutoRowCode" label="Kode Otomatis Baris" defaultSelected={settings.enableAutoRowCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="customerCodePrefix">Prefix Customer</Label>
                 <Input id="customerCodePrefix" name="customerCodePrefix" defaultValue={settings.customerCodePrefix || ""} className="w-full" />
-                <input type="hidden" name="enableAutoCustomerCode" value="0" />
-                <Switch name="enableAutoCustomerCode" defaultSelected={settings.enableAutoCustomerCode !== false}>Kode Otomatis Pelanggan</Switch>
+                <SettingSwitch name="enableAutoCustomerCode" label="Kode Otomatis Pelanggan" defaultSelected={settings.enableAutoCustomerCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="employeeCodePrefix">Prefix Karyawan</Label>
                 <Input id="employeeCodePrefix" name="employeeCodePrefix" defaultValue={settings.employeeCodePrefix || ""} className="w-full" />
-                <input type="hidden" name="enableAutoEmployeeCode" value="0" />
-                <Switch name="enableAutoEmployeeCode" defaultSelected={settings.enableAutoEmployeeCode !== false}>Kode Otomatis Karyawan</Switch>
+                <SettingSwitch name="enableAutoEmployeeCode" label="Kode Otomatis Karyawan" defaultSelected={settings.enableAutoEmployeeCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="vendorCodePrefix">Prefix Vendor</Label>
                 <Input id="vendorCodePrefix" name="vendorCodePrefix" defaultValue={settings.vendorCodePrefix || ""} className="w-full" />
-                <input type="hidden" name="enableAutoVendorCode" value="0" />
-                <Switch name="enableAutoVendorCode" defaultSelected={settings.enableAutoVendorCode !== false}>Kode Otomatis Pemasok</Switch>
+                <SettingSwitch name="enableAutoVendorCode" label="Kode Otomatis Pemasok" defaultSelected={settings.enableAutoVendorCode !== false} />
               </div>
             </div>
 
@@ -907,14 +914,14 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
       <div className="flex items-center gap-3 mt-6">
         <Button
           type="submit"
-          disabled={isPending}
+          isDisabled={isPending}
           className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-all"
         >
           {isPending ? "Menyimpan..." : "Simpan Settings"}
         </Button>
         <Button
           type="button"
-          onClick={() => router.push("/settings")}
+          onPress={() => router.push("/settings")}
           className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"
         >
           Batal

@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTicket, updateTicket } from "@/actions/crm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Select, ComboBox, ListBox, Label } from "@heroui/react"
-import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
+import { Select, ComboBox, ListBox, Label, Input, TextArea } from "@heroui/react"
 import { Button } from "@/components/ui/page-header"
 
 interface TicketFormProps {
@@ -82,7 +81,7 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
         <div className="flex flex-col gap-1.5">
           <Select name="type" defaultSelectedKey={ticket?.type || undefined} className="w-full">
             <Label>Tipe</Label>
-            <Select.Trigger><SelectValue placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Tipe"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
                 <ListBox.Item id="inquiry" textValue="Inquiry">Inquiry<ListBox.ItemIndicator /></ListBox.Item>
@@ -128,8 +127,8 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
         )}
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending}  id="submit-ticket">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending}  id="submit-ticket">
           {isPending ? "Menyimpan..." : ticket?.id ? "Update" : "Simpan"}
         </Button>
       </div>

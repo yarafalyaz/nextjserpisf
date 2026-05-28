@@ -106,8 +106,8 @@ export function AssetTransferForm({ assets, employees = [], transfer }: AssetTra
           </div>
         </FormSection>
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : transfer?.id ? "Update" : "Simpan"}
           </Button>
         </FormActions>

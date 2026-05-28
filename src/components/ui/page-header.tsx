@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ReactNode } from "react"
+import type { ComponentProps, ReactNode } from "react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button as HeroButton } from "@heroui/react"
 
@@ -42,49 +42,54 @@ export function PageHeader({ title, subtitle, breadcrumbs, actions, badge }: Pag
   )
 }
 
-// Reusable button variants (HeroUI v3)
-interface ButtonProps {
+type HeroButtonProps = ComponentProps<typeof HeroButton>
+type ButtonVariant = NonNullable<HeroButtonProps["variant"]>
+
+// Reusable button wrapper that exposes HeroUI v3 props across the app.
+interface ButtonProps extends Omit<HeroButtonProps, "children" | "type" | "variant"> {
   href?: string
-  onClick?: () => void
-  onPress?: () => void
   children: ReactNode
-  variant?: "primary" | "secondary" | "ghost" | "danger"
+  title?: string
+  variant?: ButtonVariant
   size?: "sm" | "md" | "lg"
-  disabled?: boolean
-  type?: "button" | "submit"
-  className?: string
-  id?: string
-  [key: string]: any
+  type?: "button" | "submit" | "reset"
 }
 
-const variantMap: Record<string, "primary" | "secondary" | "danger" | "ghost" | "outline"> = {
+const variantMap: Record<ButtonVariant, ButtonVariant> = {
   primary: "primary",
-  secondary: "outline",
+  secondary: "secondary",
+  tertiary: "tertiary",
+  outline: "outline",
   ghost: "ghost",
   danger: "danger",
+  "danger-soft": "danger-soft",
 }
 
-export function Button({ href, onClick, onPress, children, variant = "secondary", size = "md", disabled, type = "button", className = "", id, ...rest }: ButtonProps) {
-  const heroVariant: "primary" | "secondary" | "danger" | "ghost" | "outline" = variantMap[variant] || "outline"
-  const handlePress = onPress || onClick
+export function Button({ href, children, variant = "secondary", size = "md", type = "button", className = "", id, ...rest }: ButtonProps) {
+  const heroVariant = variantMap[variant] || "secondary"
 
   if (href) {
     return (
-      <Link href={href} tabIndex={-1}>
-        <HeroButton variant={heroVariant} size={size} isDisabled={disabled} className={className} {...rest}>
-          {children}
-        </HeroButton>
-      </Link>
+      <HeroButton
+        variant={heroVariant}
+        size={size}
+        className={className}
+        id={id}
+        render={(props) => (
+          <Link {...(props as unknown as Omit<ComponentProps<typeof Link>, "href">)} href={href} />
+        )}
+        {...rest}
+      >
+        {children}
+      </HeroButton>
     )
   }
 
   return (
     <HeroButton
       type={type}
-      onPress={handlePress}
       variant={heroVariant}
       size={size}
-      isDisabled={disabled}
       className={className}
       id={id}
       {...rest}

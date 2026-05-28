@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
+import { isValidCronRequest } from "@/lib/security/cron"
 
 /**
  * Cron: Auto-reject quotations that have been in 'sent' status for more than 14 days.
@@ -9,8 +10,7 @@ import { prisma } from "@/lib/db/prisma"
  */
 export async function GET(request: Request) {
   // Verify cron secret
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!isValidCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

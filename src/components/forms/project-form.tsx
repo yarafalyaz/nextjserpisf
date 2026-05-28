@@ -128,8 +128,8 @@ export function ProjectForm({ customers, customerVehicles = [], project }: Proje
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Proyek"}</Button>
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Proyek"}</Button>
       </div>
     </form>
   )

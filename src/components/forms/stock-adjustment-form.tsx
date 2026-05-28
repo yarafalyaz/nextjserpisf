@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { createStockAdjustment, updateStockAdjustment } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Input, Label, ComboBox, ListBox} from "@heroui/react"
-import { TextArea } from "@/components/ui/heroui-compat"
+import { Input, Label, ComboBox, ListBox, TextArea } from "@heroui/react"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -107,7 +106,8 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
 
         <FormSection title="Catatan" columns={1}>
           <div className="flex flex-col gap-1.5">
-            <TextArea name="notes" label="Catatan" placeholder="Catatan tambahan (opsional)" defaultValue={adjustment?.notes || ""} />
+            <Label htmlFor="stock-adjustment-notes">Catatan</Label>
+            <TextArea id="stock-adjustment-notes" name="notes" placeholder="Catatan tambahan (opsional)" defaultValue={adjustment?.notes || ""} />
           </div>
         </FormSection>
 
@@ -115,7 +115,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
           <div>
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-base font-semibold text-foreground">Barang</h3>
-              <Button onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Item</Button>
+              <Button onPress={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Item</Button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
@@ -146,7 +146,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
                       <td className="py-2 px-2"><input type="text" value={item.reason} onChange={(e) => updateItem(i, "reason", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Alasan" /></td>
                       <td className="py-2 px-2 text-center">
                         {adjItems.length > 1 && (
-                          <Button onClick={() => removeItem(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
+                          <Button onPress={() => removeItem(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
                         )}
                       </td>
                     </tr>
@@ -158,8 +158,8 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
         </FormSection>
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : adjustment?.id ? "Update" : "Simpan"}
           </Button>
         </FormActions>

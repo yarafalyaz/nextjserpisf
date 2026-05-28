@@ -106,7 +106,7 @@ export default function CreateProductPage() {
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="code">Kode Produk</Label>
-            <Input id="code" name="code" placeholder="Kode produk (opsional)" />
+            <Input id="code" name="code" placeholder="Kosongkan untuk generate otomatis" />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -171,7 +171,7 @@ export default function CreateProductPage() {
         <div className="form-section">
           <div className="form-section-header">
             <h3 className="form-section-title">Material (BOM)</h3>
-            <Button onClick={addMaterialRow} aria-label="Tambah material" >
+            <Button onPress={addMaterialRow} aria-label="Tambah material" >
               <Plus size={14} /> Tambah Material
             </Button>
           </div>
@@ -204,7 +204,7 @@ export default function CreateProductPage() {
                       />
                     </DetailTableTd>
                     <DetailTableTd>
-                      <Button onClick={() => removeMaterialRow(index)} aria-label="Hapus material"  disabled={materials.length === 1}>
+                      <Button onPress={() => removeMaterialRow(index)} aria-label="Hapus material"  isDisabled={materials.length === 1}>
                         <Trash2 size={14} />
                       </Button>
                     </DetailTableTd>
@@ -216,8 +216,8 @@ export default function CreateProductPage() {
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button onClick={() => router.back()} >Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending} id="submit-product">
+          <Button onPress={() => router.back()} >Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending} id="submit-product">
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
         </div>

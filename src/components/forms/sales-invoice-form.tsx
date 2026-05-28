@@ -131,8 +131,8 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending}  id="submit-sales-invoice">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending}  id="submit-sales-invoice">
           {isPending ? "Menyimpan..." : invoice?.id ? "Update" : "Simpan"}
         </Button>
       </div>

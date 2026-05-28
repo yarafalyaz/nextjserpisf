@@ -8,8 +8,7 @@ import { employeeSchema, type EmployeeInput } from "@/lib/validators"
 import { createEmployee, updateEmployee } from "@/actions/master.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, ComboBox, ListBox, Select } from "@heroui/react"
-import { Input, TextArea, SelectValue } from "@/components/ui/heroui-compat"
+import { Label, ComboBox, ListBox, Select, Input, TextArea } from "@heroui/react"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -124,7 +123,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               render={({ field }) => (
                 <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                   <Label>Jenis Kelamin</Label>
-                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                   <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="M" id="M" textValue="Laki-laki">Laki-laki<ListBox.ItemIndicator /></ListBox.Item>
@@ -150,7 +149,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               render={({ field }) => (
                 <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                   <Label>Status Pernikahan</Label>
-                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                   <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="Single" id="Single" textValue="Belum Menikah">Belum Menikah<ListBox.ItemIndicator /></ListBox.Item>
@@ -240,7 +239,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               render={({ field }) => (
                 <Select selectedKey={field.value || "MONTHLY"} onSelectionChange={(key) => field.onChange(String(key))} className="w-full">
                   <Label>Tipe Pembayaran</Label>
-                  <Select.Trigger><SelectValue /><Select.Indicator /></Select.Trigger>
+                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
                   <Select.Popover>
                     <ListBox>
                       <ListBox.Item key="MONTHLY" id="MONTHLY" textValue="Bulanan">Bulanan<ListBox.ItemIndicator /></ListBox.Item>
@@ -303,8 +302,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
         </FormSection>
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
           </Button>
         </FormActions>

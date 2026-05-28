@@ -44,8 +44,8 @@ export function TaxGroupForm({ taxes }: Props) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button type="submit" variant="primary" disabled={isPending}>
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending}>
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
       </div>

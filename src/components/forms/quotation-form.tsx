@@ -125,7 +125,7 @@ function SectionItems({
       </table>
       <Button
         type="button"
-        onClick={() =>
+        onPress={() =>
           append({
             itemId: 0,
             description: "",
@@ -137,7 +137,7 @@ function SectionItems({
             total: 0,
           })
         }
-        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -secondary"
+        variant="secondary" size="sm"
         style={{ marginTop: "8px" }}
       >
         + Tambah Item
@@ -291,9 +291,8 @@ function SectionItemRow({
         {canRemove && (
           <Button
             type="button"
-            onClick={onRemove}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost"
-            style={{ color: "var(--color-danger)", padding: "4px 8px" }}
+            onPress={onRemove}
+            variant="danger-soft" size="sm"
           >
             ×
           </Button>
@@ -583,7 +582,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Button
             type="button"
-            onClick={() =>
+            onPress={() =>
               appendSection({
                 name: "",
                 items: [
@@ -600,7 +599,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
                 ],
               })
             }
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -primary"
+            variant="primary" size="sm"
           >
             + Tambah Section
           </Button>
@@ -618,9 +617,8 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
               {sectionFields.length > 1 && (
                 <Button
                   type="button"
-                  onClick={() => removeSection(sectionIndex)}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost"
-                  style={{ color: "var(--color-danger)" }}
+                  onPress={() => removeSection(sectionIndex)}
+                  variant="danger-soft" size="sm"
                 >
                   Hapus Section
                 </Button>
@@ -655,8 +653,8 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
       </FormSection>
 
       <FormActions>
-        <Button onClick={() => router.back()}>Batal</Button>
-        <Button type="submit" variant="primary" disabled={isPending}>
+        <Button onPress={() => router.back()}>Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending}>
           {isPending ? "Menyimpan..." : "Buat Quotation"}
         </Button>
       </FormActions>

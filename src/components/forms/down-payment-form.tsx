@@ -8,8 +8,7 @@ import { z } from "zod"
 import { createDownPayment, updateDownPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import {Select, ComboBox, ListBox, Label, InputGroup, TextField } from "@heroui/react"
-import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
+import { Select, ComboBox, ListBox, Label, InputGroup, TextField, Input, TextArea } from "@heroui/react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
 
@@ -163,7 +162,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
             render={({ field }) => (
               <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
                 <Label>Metode Pembayaran *</Label>
-                <Select.Trigger><SelectValue placeholder="Pilih Metode" /><Select.Indicator /></Select.Trigger>
+                <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Metode"}</Select.Value><Select.Indicator /></Select.Trigger>
                 <Select.Popover>
                   <ListBox>
                     <ListBox.Item id="transfer" textValue="Transfer">Transfer<ListBox.ItemIndicator /></ListBox.Item>
@@ -195,8 +194,8 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button disabled={isPending}  id="submit-down-payment">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button isDisabled={isPending}  id="submit-down-payment">
           {isPending ? "Menyimpan..." : downPayment?.id ? "Update" : "Simpan"}
         </Button>
       </div>

@@ -44,8 +44,8 @@ export function DepartmentCreateForm({ generatedCode }: DepartmentCreateFormProp
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onClick={() => router.back()} >Batal</Button>
-        <Button type="submit" variant="primary" disabled={isPending} id="submit-department">
+        <Button onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-department">
           {isPending ? "Menyimpan..." : "Simpan"}
         </Button>
       </div>

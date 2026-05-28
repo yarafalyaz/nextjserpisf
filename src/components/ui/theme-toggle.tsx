@@ -2,12 +2,16 @@
 
 import { Button } from "@/components/ui/page-header"
 import { useTheme } from "@/components/providers/theme-provider"
-import { useIsSSR } from "@react-aria/ssr"
+import { useSyncExternalStore } from "react"
+
+const subscribe = () => () => undefined
+const getClientSnapshot = () => true
+const getServerSnapshot = () => false
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-  const isSSR = useIsSSR()
-  const activeTheme = isSSR ? "system" : theme
+  const mounted = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot)
+  const activeTheme = mounted ? theme : "system"
 
   return (
     <div className="theme-toggle">

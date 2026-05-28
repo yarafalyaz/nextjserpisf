@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition, useMemo, useState } from "react"
 import { createCustomerVehicle, updateCustomerVehicle } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label,  Checkbox } from "@heroui/react"
-import { SelectValue, Input, TextArea } from "@/components/ui/heroui-compat"
+import { Select, ComboBox, ListBox, Label, Checkbox, Input, TextArea } from "@heroui/react"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -208,7 +207,7 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
               className="w-full"
             >
               <Label>Transmisi</Label>
-              <Select.Trigger><SelectValue placeholder="Pilih Transmisi" /><Select.Indicator /></Select.Trigger>
+              <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Transmisi"}</Select.Value><Select.Indicator /></Select.Trigger>
               <Select.Popover>
                 <ListBox>
                   <ListBox.Item id="manual" textValue="Manual">Manual<ListBox.ItemIndicator /></ListBox.Item>
@@ -238,14 +237,19 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
 
           <div className="flex items-center gap-2">
             <Checkbox isSelected={isActive} onChange={setIsActive} id="isActive">
-              Aktif
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              <Checkbox.Content>
+                <Label htmlFor="isActive">Aktif</Label>
+              </Checkbox.Content>
             </Checkbox>
           </div>
         </FormSection>
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : vehicle?.id ? "Update" : "Simpan"}
           </Button>
         </FormActions>

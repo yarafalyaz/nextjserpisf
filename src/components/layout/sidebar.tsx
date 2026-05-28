@@ -217,7 +217,7 @@ export function Sidebar() {
       <aside className={`sidebar ${isOpen ? "open" : ""}`}>
         <div className="sidebar-header">
           <h1 className="sidebar-logo">YaraERP</h1>
-          <Button className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all sidebar-close- lg:hidden" onClick={close}>
+          <Button variant="ghost" size="sm" isIconOnly className="sidebar-close-btn lg:hidden" aria-label="Tutup sidebar" onPress={close}>
             <X size={20} />
           </Button>
         </div>
@@ -230,7 +230,7 @@ export function Sidebar() {
                 {item.children ? (
                   <>
                     <Button
-                      onClick={() => toggleExpand(item.href)}
+                      onPress={() => toggleExpand(item.href)}
                       className={`nav-item nav-item-parent ${isActive(item.href) ? "active" : ""}`}
                     >
                       <Icon size={18} className="nav-icon" />

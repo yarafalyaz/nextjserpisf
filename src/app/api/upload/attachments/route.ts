@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
   const filepath = path.join(uploadDir, filename)
 
   // Final path traversal guard
-  if (!filepath.startsWith(uploadDir)) {
+  const relativePath = path.relative(uploadDir, filepath)
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     return NextResponse.json({ error: "Invalid file path" }, { status: 400 })
   }
 

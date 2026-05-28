@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/page-header"
 
 import { useState, useRef, useEffect } from "react"
-import { Bell, Check } from "lucide-react"
+import { Bell } from "lucide-react"
 import { Badge } from "@heroui/react"
 import Link from "next/link"
 
@@ -77,8 +77,9 @@ export function NotificationDropdown() {
   return (
     <div className="relative" ref={dropdownRef}>
       <Button
-        onClick={handleToggle}
-        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all header-notification-"
+        onPress={handleToggle}
+        variant="ghost" size="sm" isIconOnly className="header-notification-btn" aria-label="Buka notifikasi"
+        aria-expanded={isOpen}
         id="notification-btn"
       >
         <Badge.Anchor>

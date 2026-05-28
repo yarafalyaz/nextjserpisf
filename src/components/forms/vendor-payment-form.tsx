@@ -4,9 +4,8 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition, useRef } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label } from "@heroui/react"
+import { Select, ComboBox, ListBox, Label, Input, TextArea } from "@heroui/react"
 import { Upload, X, FileText } from "lucide-react"
-import { SelectValue, SelectLabel, Input, TextArea } from "@/components/ui/heroui-compat"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -131,7 +130,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
           <div className="flex flex-col gap-1.5">
             <Select name="paymentMethod" className="w-full" isRequired>
               <Label>Metode Pembayaran *</Label>
-              <Select.Trigger><SelectValue placeholder="Pilih Metode" /><Select.Indicator /></Select.Trigger>
+              <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Metode"}</Select.Value><Select.Indicator /></Select.Trigger>
               <Select.Popover>
                 <ListBox>
                   <ListBox.Item id="transfer" textValue="Transfer Bank">Transfer Bank<ListBox.ItemIndicator /></ListBox.Item>
@@ -185,7 +184,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
                         <span className="form-attachment-name">{file.originalName}</span>
                         <span className="form-attachment-size">{formatFileSize(file.fileSize)}</span>
                       </div>
-                      <Button onClick={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
+                      <Button onPress={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
                         <X className="size-4" />
                       </Button>
                     </div>
@@ -195,8 +194,8 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
               <Button
                 type="button"
                 className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+                onPress={() => fileInputRef.current?.click()}
+                isDisabled={uploading}
               >
                 <Upload className="size-4" />
                 {uploading ? "Mengupload..." : "Upload Bukti (JPG, PDF)"}
@@ -229,8 +228,8 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
         )}
 
         <FormActions>
-          <Button onClick={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending || uploading}>
+          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending || uploading}>
             {isPending ? "Menyimpan..." : payment?.id ? "Update" : "Simpan"}
           </Button>
         </FormActions>

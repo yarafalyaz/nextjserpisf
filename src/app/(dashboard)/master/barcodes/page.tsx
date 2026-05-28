@@ -98,10 +98,10 @@ export default async function BarcodesPage({
             </span>
             <div className="flex gap-1">
               {page > 1 && (
-                <Link href={`/master/barcodes?page=${page - 1}&search=${params.search || ""}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">← Prev</Link>
+                <Link href={`/master/barcodes?page=${page - 1}&search=${params.search || ""}`} className="button button--ghost button--sm">← Prev</Link>
               )}
               {page < totalPages && (
-                <Link href={`/master/barcodes?page=${page + 1}&search=${params.search || ""}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-transparent transition-all inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all -ghost">Next →</Link>
+                <Link href={`/master/barcodes?page=${page + 1}&search=${params.search || ""}`} className="button button--ghost button--sm">Next →</Link>
               )}
             </div>
           </div>

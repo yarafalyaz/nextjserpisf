@@ -5,8 +5,7 @@ import { useTransition } from "react"
 import { createTax } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { ListBox, Checkbox, Select } from "@heroui/react"
-import { Input, TextArea, SelectValue, SelectLabel } from "@/components/ui/heroui-compat"
+import { ListBox, Checkbox, Label, Select, Input, TextArea } from "@heroui/react"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateTaxPage() {
@@ -36,15 +35,24 @@ export default function CreateTaxPage() {
       </div>
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <Input label="Nama Pajak *" name="name" placeholder="Contoh: PPN" isRequired className="w-full" />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="tax-name" isRequired>Nama Pajak</Label>
+            <Input id="tax-name" name="name" placeholder="Contoh: PPN" required className="w-full" />
+          </div>
 
-          <Input label="Rate (%) *" name="rate" type="number" step="0.01" placeholder="Contoh: 11" isRequired className="w-full" />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="tax-rate" isRequired>Rate (%)</Label>
+            <Input id="tax-rate" name="rate" type="number" step="0.01" placeholder="Contoh: 11" required className="w-full" />
+          </div>
 
-          <Input label="Kode" name="code" placeholder="Contoh: PPN11" className="w-full" />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="tax-code">Kode</Label>
+            <Input id="tax-code" name="code" placeholder="Contoh: PPN11" className="w-full" />
+          </div>
 
           <Select name="type" className="w-full">
-            <SelectLabel>Tipe</SelectLabel>
-            <Select.Trigger><SelectValue placeholder="Pilih Tipe" /><Select.Indicator /></Select.Trigger>
+            <Label>Tipe</Label>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Tipe"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
                 <ListBox.Item id="percentage" textValue="Percentage">Percentage<ListBox.ItemIndicator /></ListBox.Item>
@@ -54,8 +62,8 @@ export default function CreateTaxPage() {
           </Select>
 
           <Select name="scope" className="w-full">
-            <SelectLabel>Lingkup</SelectLabel>
-            <Select.Trigger><SelectValue placeholder="Pilih Lingkup" /><Select.Indicator /></Select.Trigger>
+            <Label>Lingkup</Label>
+            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Lingkup"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
                 <ListBox.Item id="sales" textValue="Sales">Sales<ListBox.ItemIndicator /></ListBox.Item>
@@ -70,18 +78,35 @@ export default function CreateTaxPage() {
           <AppDatePicker label="Berlaku Sampai" name="effectiveTo" className="w-full" />
 
           <div className="sm:col-span-2">
-            <TextArea label="Deskripsi" name="description" placeholder="Deskripsi pajak (opsional)" className="w-full" />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="tax-description">Deskripsi</Label>
+              <TextArea id="tax-description" name="description" placeholder="Deskripsi pajak (opsional)" className="w-full" />
+            </div>
           </div>
 
           <div className="sm:col-span-2 flex flex-wrap gap-6">
-            <Checkbox name="isInclusive">Inclusive</Checkbox>
-            <Checkbox name="isCompound">Compound</Checkbox>
+            <Checkbox id="tax-is-inclusive" name="isInclusive" value="on">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              <Checkbox.Content>
+                <Label htmlFor="tax-is-inclusive">Inclusive</Label>
+              </Checkbox.Content>
+            </Checkbox>
+            <Checkbox id="tax-is-compound" name="isCompound" value="on">
+              <Checkbox.Control>
+                <Checkbox.Indicator />
+              </Checkbox.Control>
+              <Checkbox.Content>
+                <Label htmlFor="tax-is-compound">Compound</Label>
+              </Checkbox.Content>
+            </Checkbox>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button onClick={() => router.back()} >Batal</Button>
-          <Button type="submit" variant="primary" disabled={isPending} id="submit-tax">
+          <Button onPress={() => router.back()} >Batal</Button>
+          <Button type="submit" variant="primary" isDisabled={isPending} id="submit-tax">
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
         </div>

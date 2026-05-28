@@ -71,7 +71,7 @@ export function AppSearchField({ placeholder = "Cari...", action, paramName = "s
       {value && (
         <Button
           type="button"
-          onClick={handleClear}
+          onPress={handleClear}
           style={{
             display: "flex",
             alignItems: "center",
