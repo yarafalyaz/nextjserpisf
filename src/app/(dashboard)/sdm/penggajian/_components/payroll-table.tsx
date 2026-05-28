@@ -5,7 +5,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatPeriod } from "@/lib/utils/format"
 
 interface PayrollData {
   id: number
@@ -31,7 +31,7 @@ const columns = [
     header: "Periode",
     cell: (info) => (
       <Link href={`/sdm/penggajian/${info.row.original.id}`} className="text-primary hover:underline font-medium">
-        {info.getValue()}
+        {formatPeriod(info.getValue())}
       </Link>
     ),
   }),

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrency, formatPeriod } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton, Button } from "@/components/ui/page-header"
@@ -64,7 +64,7 @@ export default async function PayrollDetailPage({
       <DetailCard title="Informasi Payroll">
         <DetailField label="No. Dokumen" value={payroll.documentNo} mono />
         <DetailField label="Karyawan" value={payroll.employee?.name ?? "-"} />
-        <DetailField label="Periode" value={payroll.period} />
+        <DetailField label="Periode" value={formatPeriod(payroll.period)} />
         <DetailField label="Status" value={<StatusChip status={payroll.status} />} />
         <DetailField label="Tanggal Mulai" value={formatDate(payroll.startDate)} />
         <DetailField label="Tanggal Selesai" value={formatDate(payroll.endDate)} />

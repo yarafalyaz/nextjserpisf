@@ -195,3 +195,23 @@ export function getStatusColor(status: string): string {
   }
   return colorMap[status] || "default"
 }
+
+/**
+ * Format a period string (YYYY-MM) to Indonesian month and year.
+ * Example: "2026-05" -> "Mei 2026"
+ */
+export function formatPeriod(period: string | null | undefined): string {
+  if (!period || !period.includes("-")) return period ?? "-"
+  
+  const [year, month] = period.split("-")
+  const months = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+  ]
+  const mIndex = parseInt(month, 10) - 1
+  if (mIndex >= 0 && mIndex < 12) {
+    return `${months[mIndex]} ${year}`
+  }
+  
+  return period
+}
