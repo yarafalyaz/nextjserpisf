@@ -75,6 +75,57 @@ export async function onDownPaymentConfirmed(
       }))
     );
 
+    // ─── Generate BOM Material Stock Notes ───────────────────────────────
+    let bomNotes = `Auto-generated dari DP ${dp.documentNo}\n`;
+    
+    try {
+      for (const item of allItems) {
+        // Cari produk BOM berdasarkan nama item/deskripsi quotation
+        const matchedProduct = await tx.product.findFirst({
+          where: {
+            name: {
+              contains: item.itemName,
+            },
+          },
+          include: {
+            materials: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        });
+
+        if (matchedProduct) {
+          // Ambil detail bahan penyusun dengan item (untuk stok)
+          const materialsWithStock = await tx.productMaterial.findMany({
+            where: { productId: matchedProduct.id },
+          });
+
+          // Fetch items for stock in parallel
+          const materialItems = await tx.item.findMany({
+            where: { id: { in: materialsWithStock.map(m => m.itemId) } },
+            select: { id: true, name: true, qtyOnHand: true, unitOfMeasure: true },
+          });
+
+          if (materialsWithStock.length > 0) {
+            bomNotes += `\n[RESEP BOM: ${matchedProduct.name}]\n`;
+            materialsWithStock.forEach(mat => {
+              const dbItem = materialItems.find(i => i.id === mat.itemId);
+              const qtyNeeded = Number(mat.qty) * item.qty;
+              const stock = dbItem ? Number(dbItem.qtyOnHand) : 0;
+              const uom = dbItem ? dbItem.unitOfMeasure : "PCS";
+              const isShortage = stock < qtyNeeded;
+
+              bomNotes += `- ${dbItem?.name || `Item #${mat.itemId}`}: Butuh ${qtyNeeded} ${uom} | Stok Saat Ini: ${stock} ${uom} ${isShortage ? "(🔴 Stok Kurang!)" : "(🟢 Cukup)"}\n`;
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Gagal men-generate catatan stok BOM:", err);
+    }
+
     // ─── 1. Create Work Order ────────────────────────────────────────────
     const woDocNo = await generateDocumentNumber("WO");
 
@@ -86,7 +137,7 @@ export async function onDownPaymentConfirmed(
         customerVehicleId: quotation.customerVehicleId,
         date: new Date(),
         status: "pending",
-        notes: `Auto-generated dari DP ${dp.documentNo}`,
+        notes: bomNotes.trim(),
         createdBy: userId ?? null,
       },
     });
