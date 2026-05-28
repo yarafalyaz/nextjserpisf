@@ -223,7 +223,7 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
 
       <div className="flex justify-end gap-3 p-6 border-t border-default bg-surface">
         <Button onPress={() => router.back()} variant="secondary">Batal</Button>
-        <Button isDisabled={isPending || isEstimating} variant="primary">
+        <Button type="submit" isDisabled={isPending || isEstimating} variant="primary">
           {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Payroll"}
         </Button>
       </div>
