@@ -607,7 +607,7 @@ export async function createSalesPayment(formData: FormData) {
   })
 
   // Recalculate invoice status
-  await onSalesPaymentRecalculate(payment.salesInvoiceId)
+  await onSalesPaymentRecalculate(payment.id)
 
   // Create accounting journal
   await onSalesPaymentCreated(payment.id, Number(user.id))
@@ -1007,11 +1007,14 @@ export async function updateSalesPayment(id: number, formData: FormData) {
 
   const user = await requirePermission("create_sales_payments")
 
-  // Fix #2 & #11: Jangan generate documentNo baru, pakai Updated hook bukan Created
+  // Fetch old invoiceId before update to handle invoice reassignment
+  const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true } })
+  const newInvoiceId = requireId(formData.get("salesInvoiceId"), "salesInvoiceId")
+
   const payment = await prisma.salesPayment.update({
     where: { id },
     data: {
-      salesInvoiceId: requireId(formData.get("salesInvoiceId"), "salesInvoiceId"),
+      salesInvoiceId: newInvoiceId,
       amount: requireNumber(formData.get("amount"), "amount"),
       paymentDate: new Date(formData.get("paymentDate") as string),
       paymentMethod: formData.get("paymentMethod") as string,
@@ -1020,8 +1023,12 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     },
   })
 
-  // Recalculate invoice status (Updated, not Created)
+  // Recalculate new invoice
   await onSalesPaymentUpdated(payment.salesInvoiceId)
+  // If invoice changed, also recalc old invoice
+  if (oldPayment.salesInvoiceId && oldPayment.salesInvoiceId !== payment.salesInvoiceId) {
+    await onSalesPaymentUpdated(oldPayment.salesInvoiceId)
+  }
 
   // Associate uploaded attachments
   const attachmentIds = formData.get("attachmentIds") as string | null
