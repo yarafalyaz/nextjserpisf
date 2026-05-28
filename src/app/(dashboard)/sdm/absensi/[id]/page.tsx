@@ -64,14 +64,14 @@ export default async function AttendanceDetailPage({
       <PageHeader
         title="Detail Absensi"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Absensi", href: "/sdm/absensi" },
           { label: "Detail" },
         ]}
         badge={
           <Chip size="sm" variant="soft" color={attendance.status === "present" ? "success" : "default"}>
-            {attendance.status}
+            {attendance.status === "present" ? "Hadir" : attendance.status}
           </Chip>
         }
         actions={<BackButton href="/sdm/absensi" />}
@@ -80,18 +80,18 @@ export default async function AttendanceDetailPage({
       <DetailCard title="Informasi Absensi">
         <DetailField label="Karyawan" value={attendance.employee.name} />
         <DetailField label="Tanggal" value={formatDate(attendance.date.toISOString())} />
-        <DetailField label="Check In" value={formatTime(attendance.checkIn)} />
+        <DetailField label="Masuk" value={formatTime(attendance.checkIn)} />
         <DetailField
-          label="GPS Check In"
+          label="GPS Masuk"
           value={
             checkInLat !== null && checkInLng !== null
               ? <GpsLink latitude={checkInLat} longitude={checkInLng} />
               : "-"
           }
         />
-        <DetailField label="Check Out" value={formatTime(attendance.checkOut)} />
+        <DetailField label="Pulang" value={formatTime(attendance.checkOut)} />
         <DetailField
-          label="GPS Check Out"
+          label="GPS Pulang"
           value={
             checkOutLat !== null && checkOutLng !== null
               ? <GpsLink latitude={checkOutLat} longitude={checkOutLng} />

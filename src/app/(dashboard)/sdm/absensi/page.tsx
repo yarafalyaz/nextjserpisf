@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AttendanceTable } from "./_components/attendance-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ReportSingleDateFilter } from "@/components/reports/report-date-filter"
+import { SelfAttendanceWidget } from "@/components/attendance/self-attendance-widget"
 import { Button } from "@/components/ui/page-header"
 
 export default async function AttendancePage({
@@ -56,11 +56,16 @@ export default async function AttendancePage({
 
   return (
     <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "SDM", href: "/sdm" }, { label: "Absensi" }]} />
+
+      {/* Self-Service Widget: Check-In / Check-Out */}
+      <SelfAttendanceWidget />
+
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Absensi</h1>
+        <h2 className="text-xl font-bold text-foreground">Riwayat Absensi</h2>
         <form className="flex gap-2" action="/sdm/absensi">
           <input type="date" name="date" defaultValue={targetDate.toISOString().split("T")[0]} className="form-input" />
-          <Button >Filter</Button>
+          <Button>Filter</Button>
         </form>
       </div>
 

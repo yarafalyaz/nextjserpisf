@@ -41,11 +41,11 @@ const columns = [
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.accessor("checkIn", {
-    header: "Check In",
+    header: "Masuk",
     cell: (info) => formatTime(info.getValue()),
   }),
   columnHelper.accessor("checkOut", {
-    header: "Check Out",
+    header: "Pulang",
     cell: (info) => formatTime(info.getValue()),
   }),
   columnHelper.accessor("status", {
@@ -65,7 +65,7 @@ const columns = [
       if (!hasCheckInGps && !hasCheckOutGps) return <span className="text-muted">-</span>
       return (
         <Chip size="sm" variant="soft" color="success">
-          <span className="inline-flex items-center gap-1"><MapPin size={12} />{hasCheckInGps && hasCheckOutGps ? "In/Out" : hasCheckInGps ? "In" : "Out"}</span>
+          <span className="inline-flex items-center gap-1"><MapPin size={12} />{hasCheckInGps && hasCheckOutGps ? "Masuk/Pulang" : hasCheckInGps ? "Masuk" : "Pulang"}</span>
         </Chip>
       )
     },
