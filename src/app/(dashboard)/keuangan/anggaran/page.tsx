@@ -25,6 +25,7 @@ export default async function BudgetsPage({
   const budgets = await prisma.budget.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const data = JSON.parse(JSON.stringify(budgets))

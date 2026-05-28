@@ -1280,6 +1280,7 @@ model Attendance {
   status            String    @default("present")
   overtimeMinutes   Int?      @map("overtime_minutes")
   overtimeApproved  Boolean   @default(false) @map("overtime_approved")
+  lateMinutes       Int       @default(0) @map("late_minutes")
   notes             String?
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")

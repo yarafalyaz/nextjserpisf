@@ -22,6 +22,7 @@ export default async function StatisticalKeyFiguresPage({
   const figures = await prisma.statisticalKeyFigure.findMany({
     where,
     orderBy: { name: "asc" },
+    take: 1000,
   })
 
   const data = JSON.parse(JSON.stringify(figures))

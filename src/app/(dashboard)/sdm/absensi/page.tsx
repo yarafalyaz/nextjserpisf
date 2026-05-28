@@ -7,13 +7,14 @@ import { AttendanceTable } from "./_components/attendance-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { SelfAttendanceWidget } from "@/components/attendance/self-attendance-widget"
 import { Button } from "@/components/ui/page-header"
+import { auth } from "@/lib/auth/auth"
 
 export default async function AttendancePage({
   searchParams,
 }: {
   searchParams: Promise<{ date?: string; cari?: string }>
 }) {
-  await requirePermission("view_attendance")
+  const user = await requirePermission("view_attendance")
 
   const params = await searchParams
 
@@ -23,12 +24,22 @@ export default async function AttendancePage({
   const nextDay = new Date(targetDate)
   nextDay.setDate(nextDay.getDate() + 1)
 
+  // Role-scope: non admin/hr only sees own data
+  const isPrivileged = user.roles.includes("super_admin") || user.roles.includes("hr")
+  let employeeFilter: { employeeId: number } | { employeeId: -1 } | undefined
+  if (!isPrivileged) {
+    const session = await auth()
+    const me = session?.user?.id ? await prisma.employee.findFirst({ where: { userId: Number(session.user.id) }, select: { id: true } }) : null
+    employeeFilter = { employeeId: me?.id ?? -1 }
+  }
+
   const where = {
     date: {
       gte: targetDate,
       lt: nextDay,
     },
-    ...(params.cari && {
+    ...employeeFilter,
+    ...(params.cari && isPrivileged && {
       employee: { name: { contains: params.cari } },
     }),
   }
@@ -52,6 +63,7 @@ export default async function AttendancePage({
     checkOutLongitude: a.checkOutLongitude ? Number(a.checkOutLongitude) : null,
     overtimeMinutes: a.overtimeMinutes,
     overtimeApproved: a.overtimeApproved,
+    lateMinutes: a.lateMinutes ?? null,
   }))
 
   return (

@@ -10,20 +10,29 @@ import { PettyCashTable } from "./_components/petty-cash-table"
 export default async function PettyCashPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; tipe?: string }>
+  searchParams: Promise<{ cari?: string; tipe?: string; halaman?: string }>
 }) {
   await requirePermission("view_petty_cash")
 
   const params = await searchParams
+  const page = Number(params.halaman) || 1
+  const perPage = 100
 
   const where = {
     ...(params.tipe && { type: params.tipe }),
   }
 
-  const records = await prisma.pettyCash.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-  })
+  const [records, total] = await Promise.all([
+    prisma.pettyCash.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * perPage,
+      take: perPage,
+    }),
+    prisma.pettyCash.count({ where }),
+  ])
+
+  const totalPages = Math.ceil(total / perPage)
 
   const data = records.map((r) => ({
     id: r.id,
@@ -55,6 +64,16 @@ export default async function PettyCashPage({
         </div>
 
         <PettyCashTable data={data} />
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+            <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
+            <div className="flex gap-1">
+              {page > 1 && <Link href={`/keuangan/kas-kecil?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
+              {page < totalPages && <Link href={`/keuangan/kas-kecil?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

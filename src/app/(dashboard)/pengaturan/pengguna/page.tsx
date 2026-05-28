@@ -14,10 +14,12 @@ export default async function UsersPage() {
     prisma.user.findMany({
       include: { roles: true },
       orderBy: { createdAt: "desc" },
+      take: 1000,
     }),
     prisma.role.findMany({
       include: { permissions: true },
       orderBy: { name: "asc" },
+      take: 1000,
     }),
   ])
 

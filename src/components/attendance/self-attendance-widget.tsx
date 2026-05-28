@@ -243,7 +243,7 @@ export function SelfAttendanceWidget() {
                 {sudahCheckOut ? "Absensi Hari Ini Lengkap" : "Sedang Bekerja"}
               </span>
               <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
-                {status.status === "present" ? "Hadir" : status.status}
+                {status.status === "present" ? "Hadir" : status.status === "late" ? "Terlambat" : status.status === "half_day" ? "Setengah Hari" : status.status}
               </span>
             </div>
 

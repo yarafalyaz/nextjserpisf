@@ -6,8 +6,11 @@ import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton, Button } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { requirePermission } from "@/lib/auth/permissions"
+import { auth } from "@/lib/auth/auth"
 import { Pencil } from "lucide-react"
 import { ApprovePayrollButton } from "./_components/approve-button"
+import { MarkPaidPayrollButton } from "./_components/mark-paid-button"
 import {
   DetailTable,
   DetailTableBody,
@@ -20,6 +23,9 @@ export default async function PayrollDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  const user = await requirePermission("view_payroll")
+  const session = await auth()
+
   const { id } = await params
 
   const numId = Number(id)
@@ -31,6 +37,14 @@ export default async function PayrollDetailPage({
   })
 
   if (!payroll) notFound()
+
+  const isPrivileged = user.roles.includes("super_admin") || user.roles.includes("hr")
+  if (!isPrivileged) {
+    const myEmployee = session?.user?.id
+      ? await prisma.employee.findFirst({ where: { userId: Number(session.user.id) }, select: { id: true } })
+      : null
+    if (!myEmployee || payroll.employeeId !== myEmployee.id) notFound()
+  }
 
   const fmt = (val: unknown) =>
     Number(val ?? 0).toLocaleString("id-ID")
@@ -56,6 +70,7 @@ export default async function PayrollDetailPage({
                 </Button>
               </>
             )}
+            {payroll.status === "approved" && <MarkPaidPayrollButton payrollId={payroll.id} />}
             <BackButton href="/sdm/penggajian" />
           </div>
         }

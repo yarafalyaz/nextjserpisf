@@ -7,35 +7,100 @@ import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 
+function getWibNow(now = new Date()) {
+  const wibOffset = 7 * 60 * 60 * 1000
+  return new Date(now.getTime() + wibOffset)
+}
+
+function getWibDateOnly(now = new Date()) {
+  const wibNow = getWibNow(now)
+  return new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()))
+}
+
+function toMinutes(hhmm: string) {
+  const [h, m] = hhmm.split(":").map((v) => Number(v || 0))
+  return h * 60 + m
+}
+
+async function resolveWorkSchedule(departmentId: number | null | undefined, dayOfWeek: number) {
+  const schedules = await prisma.workSchedule.findMany({
+    where: {
+      isActive: true,
+      dayOfWeek,
+      OR: [{ departmentId: departmentId ?? undefined }, { departmentId: null }],
+    },
+    orderBy: { departmentId: "desc" },
+  })
+
+  return (
+    schedules.find((s) => s.departmentId === (departmentId ?? null)) ??
+    schedules.find((s) => s.departmentId === null) ??
+    null
+  )
+}
+
 // ==================== ATTENDANCE ACTIONS ====================
 
 export async function checkIn(employeeId: number, latitude?: number, longitude?: number) {
-  const user = await requirePermission("create_attendance")
+  await requirePermission("create_attendance")
 
-  // Fix #40: Use timezone-aware date for WIB (UTC+7)
   const now = new Date()
-  const wibOffset = 7 * 60 * 60 * 1000
-  const wibNow = new Date(now.getTime() + wibOffset)
-  const today = new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()))
+  const wibNow = getWibNow(now)
+  const today = getWibDateOnly(now)
 
   // Check if already checked in today
   const existing = await prisma.attendance.findFirst({
-    where: {
-      employeeId,
-      date: today,
-    },
+    where: { employeeId, date: today },
   })
-
   if (existing) {
     throw new Error("Sudah check-in hari ini")
   }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { departmentId: true },
+  })
+  if (!employee) throw new Error("Karyawan tidak ditemukan")
+
+  // Guard: holiday check (global + department)
+  const dayOfWeek = wibNow.getUTCDay()
+  const holiday = await prisma.holiday.findFirst({ where: { date: today } })
+  const deptHoliday = await prisma.departmentHoliday.findFirst({
+    where: { departmentId: employee.departmentId ?? undefined, date: today },
+  })
+  if (holiday || deptHoliday) {
+    throw new Error("Hari ini adalah hari libur. Tidak dapat check-in.")
+  }
+
+  // Guard: approved leave check
+  const approvedLeave = await prisma.leaveRequest.findFirst({
+    where: {
+      employeeId,
+      status: "approved",
+      startDate: { lte: today },
+      endDate: { gte: today },
+    },
+  })
+  if (approvedLeave) {
+    throw new Error("Anda sedang dalam masa cuti. Tidak dapat check-in.")
+  }
+
+  const schedule = await resolveWorkSchedule(employee.departmentId, dayOfWeek)
+  const startTime = schedule?.startTime ?? "08:00"
+  const tolerance = schedule?.lateToleranceMinutes ?? 0
+  const nowMinutes = wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes()
+  const startMinutes = toMinutes(startTime)
+  const deadlineMinutes = startMinutes + tolerance
+  const isLate = nowMinutes > deadlineMinutes
+  const lateMinutes = isLate ? nowMinutes - startMinutes : 0
 
   const attendance = await prisma.attendance.create({
     data: {
       employeeId,
       date: today,
       checkIn: now,
-      status: "present",
+      status: isLate ? "late" : "present",
+      lateMinutes,
       checkInLatitude: latitude ?? null,
       checkInLongitude: longitude ?? null,
     },
@@ -48,23 +113,27 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
 export async function checkOut(employeeId: number, latitude?: number, longitude?: number) {
   await requirePermission("edit_attendance")
 
-  // Fix #40: Use timezone-aware date for WIB (UTC+7)
   const now = new Date()
-  const wibOffset = 7 * 60 * 60 * 1000
-  const wibNow = new Date(now.getTime() + wibOffset)
-  const today = new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()))
+  const wibNow = getWibNow(now)
+  const today = getWibDateOnly(now)
 
   const attendance = await prisma.attendance.findFirst({
-    where: {
-      employeeId,
-      date: today,
-      checkOut: null,
-    },
+    where: { employeeId, date: today, checkOut: null },
   })
-
   if (!attendance) {
     throw new Error("Belum check-in atau sudah check-out hari ini")
   }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { departmentId: true },
+  })
+  const dayOfWeek = wibNow.getUTCDay()
+  const schedule = await resolveWorkSchedule(employee?.departmentId, dayOfWeek)
+  const endTime = schedule?.endTime ?? "17:00"
+  const endMinutes = toMinutes(endTime)
+  const nowMinutes = wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes()
+  const isHalfDay = nowMinutes < endMinutes
 
   await prisma.attendance.update({
     where: { id: attendance.id },
@@ -72,6 +141,7 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
       checkOut: now,
       checkOutLatitude: latitude ?? null,
       checkOutLongitude: longitude ?? null,
+      status: isHalfDay ? "half_day" : attendance.status,
     },
   })
 
@@ -376,6 +446,12 @@ export async function processPayroll(formData: FormData) {
 export async function updatePayroll(id: number, formData: FormData) {
   await requirePermission("edit_payroll")
 
+  // Only draft payroll can be edited
+  const existing = await prisma.payroll.findUniqueOrThrow({ where: { id } })
+  if (existing.status !== "draft") {
+    throw new Error("Hanya penggajian status draft yang dapat diubah")
+  }
+
   const employeeId = safeId(formData.get("employeeId"))
   const startDate = new Date(formData.get("startDate") as string)
   const endDate = new Date(formData.get("endDate") as string)
@@ -397,7 +473,9 @@ export async function updatePayroll(id: number, formData: FormData) {
   const overtimeTotal = safeNumber(formData.get("overtimeTotal")) ?? 0
   const appreciationTotal = safeNumber(formData.get("appreciationTotal")) ?? 0
   const loanDeduction = safeNumber(formData.get("loanDeduction")) ?? 0
-  const netSalary = safeNumber(formData.get("netSalary")) ?? (baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction)
+
+  // Recalculate net_salary auto
+  const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction
   const totalAmount = safeNumber(formData.get("totalAmount")) ?? netSalary
   const paymentDateRaw = formData.get("paymentDate") as string | null
 
@@ -419,7 +497,6 @@ export async function updatePayroll(id: number, formData: FormData) {
       netSalary,
       totalAmount,
       paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
-      status: "approved",
     },
   })
 
@@ -444,6 +521,27 @@ export async function approvePayroll(payrollId: number) {
   })
 
   revalidatePath("/sdm/penggajian")
+  return { success: true }
+}
+
+export async function markPayrollPaid(payrollId: number) {
+  await requirePermission("edit_payroll")
+
+  const payroll = await prisma.payroll.findUniqueOrThrow({
+    where: { id: payrollId },
+  })
+
+  if (payroll.status !== "approved") {
+    throw new Error("Payroll hanya bisa ditandai dibayar dari status approved")
+  }
+
+  await prisma.payroll.update({
+    where: { id: payrollId },
+    data: { status: "paid", paymentDate: new Date() },
+  })
+
+  revalidatePath("/sdm/penggajian")
+  revalidatePath(`/sdm/penggajian/${payrollId}`)
   return { success: true }
 }
 

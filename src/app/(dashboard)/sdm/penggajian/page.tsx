@@ -2,11 +2,13 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { auth } from "@/lib/auth/auth"
 import Link from "next/link"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PayrollTable } from "./_components/payroll-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Button } from "@/components/ui/page-header"
 
 import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button"
 
@@ -25,20 +27,39 @@ const indoToStatus: Record<string, string> = {
 export default async function PayrollPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string; bulan?: string; tahun?: string }>
 }) {
-  await requirePermission("view_payroll")
+  const user = await requirePermission("view_payroll")
 
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
+  const month = params.bulan ? Number(params.bulan) : undefined
+  const year = params.tahun ? Number(params.tahun) : undefined
+
+  // Role-scope: non-HR/admin only sees own payroll
+  const isPrivileged = user.roles.includes("super_admin") || user.roles.includes("hr")
+  let employeeFilter: { employeeId: number } | { employeeId: -1 } | undefined
+  if (!isPrivileged) {
+    const session = await auth()
+    const me = session?.user?.id ? await prisma.employee.findFirst({ where: { userId: Number(session.user.id) }, select: { id: true } }) : null
+    employeeFilter = { employeeId: me?.id ?? -1 }
+  }
+
   const where = {
+    ...employeeFilter,
     ...(params.cari && {
       OR: [
         { documentNo: { contains: params.cari } },
       ],
     }),
     ...(dbStatusParam && { status: dbStatusParam }),
+    ...(month && year && {
+      endDate: {
+        gte: new Date(Date.UTC(year, month - 1, 1)),
+        lt: new Date(Date.UTC(year, month, 1)),
+      },
+    }),
   }
 
   const payrolls = await prisma.payroll.findMany({
@@ -78,13 +99,41 @@ export default async function PayrollPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/penggajian" />
+          <div className="flex gap-2 flex-wrap items-center">
+            <form className="flex gap-2" action="/sdm/penggajian">
+              <select name="bulan" defaultValue={params.bulan ?? ""} className="form-input text-sm">
+                <option value="">Bulan</option>
+                {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
+                  <option key={m} value={m}>{new Date(2026, m - 1).toLocaleString("id-ID", { month: "long" })}</option>
+                ))}
+              </select>
+              <select name="tahun" defaultValue={params.tahun ?? ""} className="form-input text-sm">
+                <option value="">Tahun</option>
+                {[2025,2026,2027].map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+              {params.status && <input type="hidden" name="status" value={params.status} />}
+              <Button type="submit">Filter</Button>
+            </form>
+            {month && year && (
+              <Link href={`/sdm/penggajian${params.status ? `?status=${params.status}` : ""}`} className="text-xs text-primary hover:underline">
+                Reset bulan
+              </Link>
+            )}
+          </div>
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "approved", "paid"].map((dbStatus) => {
               const urlStatus = dbStatus ? statusToIndo[dbStatus] : ""
+              const qs = new URLSearchParams()
+              if (urlStatus) qs.set("status", urlStatus)
+              if (month) qs.set("bulan", String(month))
+              if (year) qs.set("tahun", String(year))
+              const qstr = qs.toString()
               return (
                 <Link 
                   key={dbStatus} 
-                  href={`/sdm/penggajian${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  href={`/sdm/penggajian${qstr ? `?${qstr}` : ""}`} 
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}

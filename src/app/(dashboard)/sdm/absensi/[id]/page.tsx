@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { auth } from "@/lib/auth/auth"
 import { notFound } from "next/navigation"
 import { formatDate } from "@/lib/utils/format"
 import { Chip } from "@heroui/react"
@@ -42,6 +43,7 @@ export default async function AttendanceDetailPage({
   params: Promise<{ id: string }>
 }) {
   await requirePermission("view_attendance")
+  const session = await auth()
 
   const { id } = await params
   const attendanceId = Number(id)
@@ -53,6 +55,14 @@ export default async function AttendanceDetailPage({
   })
 
   if (!attendance) notFound()
+
+  const isPrivileged = session?.user?.roles?.includes("super_admin") || session?.user?.roles?.includes("hr")
+  if (!isPrivileged) {
+    const myEmployee = session?.user?.id
+      ? await prisma.employee.findFirst({ where: { userId: Number(session.user.id) }, select: { id: true } })
+      : null
+    if (!myEmployee || attendance.employeeId !== myEmployee.id) notFound()
+  }
 
   const checkInLat = attendance.checkInLatitude ? Number(attendance.checkInLatitude) : null
   const checkInLng = attendance.checkInLongitude ? Number(attendance.checkInLongitude) : null
@@ -99,6 +109,9 @@ export default async function AttendanceDetailPage({
           }
         />
         <DetailField label="Lembur" value={formatOvertimeMinutes(attendance.overtimeMinutes)} />
+        {attendance.lateMinutes > 0 && (
+          <DetailField label="Keterlambatan" value={`${attendance.lateMinutes} menit`} />
+        )}
         <DetailField
           label="Lembur Disetujui"
           value={

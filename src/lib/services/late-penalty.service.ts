@@ -46,7 +46,6 @@ export async function calculateLatePenalty(
       employeeId,
       date: { gte: startDate, lte: endDate },
       checkIn: { not: null },
-      status: "present",
     },
     orderBy: { date: "asc" },
   })

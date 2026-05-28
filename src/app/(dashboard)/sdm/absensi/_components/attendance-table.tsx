@@ -21,6 +21,7 @@ interface AttendanceData {
   checkOutLongitude: number | null
   overtimeMinutes: number | null
   overtimeApproved: boolean
+  lateMinutes?: number | null
 }
 
 function formatTime(isoString: string | null): string {
@@ -84,6 +85,15 @@ const columns = [
           <span className="inline-flex items-center gap-1"><Clock size={12} />{label}</span>
         </Chip>
       )
+    },
+  }),
+  columnHelper.display({
+    id: "late",
+    header: "Terlambat",
+    cell: (info) => {
+      const lateMinutes = info.row.original.lateMinutes ?? 0
+      if (lateMinutes <= 0) return <span className="text-muted">-</span>
+      return <span className="text-warning font-medium">{lateMinutes} mnt</span>
     },
   }),
   columnHelper.display({

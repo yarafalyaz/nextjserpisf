@@ -36,6 +36,7 @@ export default async function VehiclesPage({
       },
     },
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(vehicles))

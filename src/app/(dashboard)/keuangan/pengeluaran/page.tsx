@@ -11,22 +11,30 @@ import { ExpenseTable } from "./_components/expense-table"
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string }>
 }) {
   await requirePermission("view_expenses")
 
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
+  const page = Number(params.halaman) || 1
+  const perPage = 100
 
   const where = {
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
-  const expenses = await prisma.expense.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-  })
+  const [expenses, total] = await Promise.all([
+    prisma.expense.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * perPage,
+      take: perPage,
+    }),
+    prisma.expense.count({ where }),
+  ])
 
+  const totalPages = Math.ceil(total / perPage)
   const data = JSON.parse(JSON.stringify(expenses))
 
   return (
@@ -58,6 +66,16 @@ export default async function ExpensesPage({
         </div>
 
         <ExpenseTable data={data} />
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+            <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
+            <div className="flex gap-1">
+              {page > 1 && <Link href={`/keuangan/pengeluaran?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
+              {page < totalPages && <Link href={`/keuangan/pengeluaran?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
