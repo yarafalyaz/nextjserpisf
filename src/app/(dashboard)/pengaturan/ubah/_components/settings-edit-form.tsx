@@ -861,7 +861,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Label>Gambar Tanda Tangan</Label>
                 <div className="flex items-center gap-4">
                   {signaturePreview && (
-                    <SafeImage src={signaturePreview} alt="Signature" width={96} height={48} className="w-24 h-12 object-contain rounded border border-default" />
+                    <SafeImage src={signaturePreview} alt="Tanda Tangan" width={96} height={48} className="w-24 h-12 object-contain rounded border border-default" />
                   )}
                   <input ref={signatureInputRef} type="file" accept="image/*" onChange={handleSignatureChange} className="text-sm" />
                 </div>

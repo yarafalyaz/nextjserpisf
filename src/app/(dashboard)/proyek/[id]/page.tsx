@@ -191,7 +191,7 @@ export default async function ProjectDetailPage({
                 )}
                 <DetailField label="Nama Proyek" value={project.name} />
                 <DetailField
-                  label="Customer"
+                  label="Pelanggan"
                   value={<Link href={`/master/pelanggan/${project.customer.id}`} className="text-primary hover:underline font-medium">{project.customer.name}</Link>}
                 />
                 <DetailField label="Status" value={<StatusChip status={project.status} />} />

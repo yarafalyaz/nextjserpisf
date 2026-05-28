@@ -49,7 +49,7 @@ export default async function PurchaseOrderDetailPage({
         badge={<StatusChip status={po.status} />}
         actions={
           <>
-            <Button href={`/pembelian/pesanan/${po.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/pembelian/pesanan/${po.id}/edit`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={po.id} action={deletePurchaseOrder} />
             <BackButton href="/pembelian/pesanan" />
@@ -71,11 +71,11 @@ export default async function PurchaseOrderDetailPage({
                   module="pembelian/pesanan"
                 />
                 <DetailCard>
-                  <DetailField label="Vendor" value={po.vendor.name} />
+                  <DetailField label="Pemasok" value={po.vendor.name} />
                   <DetailField label="Tanggal" value={formatDate(po.date)} />
                   <DetailField label="Expected" value={formatDate(po.expectedDate)} />
                   <DetailField label="PR Ref" value={po.purchaseRequest?.documentNo || "-"} mono />
-                  <DetailField label="Grand Total" value={formatCurrency(Number(po.grandTotal))} />
+                  <DetailField label="Total Keseluruhan" value={formatCurrency(Number(po.grandTotal))} />
                 </DetailCard>
 
                 {/* Notes */}
@@ -117,7 +117,7 @@ export default async function PurchaseOrderDetailPage({
                     </DetailTableBody>
                     <DetailTableFoot>
                       <DetailTableFootRow>
-                        <DetailTableTd colSpan={4} align="right"><strong>Grand Total</strong></DetailTableTd>
+                        <DetailTableTd colSpan={4} align="right"><strong>Total Keseluruhan</strong></DetailTableTd>
                         <DetailTableTd align="right"><strong>{formatCurrency(Number(po.grandTotal))}</strong></DetailTableTd>
                       </DetailTableFootRow>
                     </DetailTableFoot>

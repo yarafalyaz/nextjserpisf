@@ -99,10 +99,10 @@ export default async function PriceListsPage({
             </span>
             <div className="flex gap-1">
               {page > 1 && (
-                <Link href={`/master/daftar-harga?halaman=${page - 1}&search=cari=${params.cari || ""}`} className="button button--ghost button--sm">← Prev</Link>
+                <Link href={`/master/daftar-harga?halaman=${page - 1}&search=cari=${params.cari || ""}`} className="button button--ghost button--sm">← Sebelumnya</Link>
               )}
               {page < totalPages && (
-                <Link href={`/master/daftar-harga?halaman=${page + 1}&search=cari=${params.cari || ""}`} className="button button--ghost button--sm">Next →</Link>
+                <Link href={`/master/daftar-harga?halaman=${page + 1}&search=cari=${params.cari || ""}`} className="button button--ghost button--sm">Berikutnya →</Link>
               )}
             </div>
           </div>

@@ -212,7 +212,7 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
                     </tr>
                   )}
                   <tr>
-                    <td colSpan={5} className="text-right py-2 px-2 text-sm font-semibold">Grand Total</td>
+                    <td colSpan={5} className="text-right py-2 px-2 text-sm font-semibold">Total Keseluruhan</td>
                     <td className="text-right py-2 px-2 font-bold text-primary">{grandTotal.toLocaleString("id-ID")}</td>
                     <td></td>
                   </tr>

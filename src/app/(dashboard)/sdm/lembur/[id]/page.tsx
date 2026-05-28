@@ -43,7 +43,7 @@ export default async function OvertimeRequestDetailPage({
         badge={<StatusChip status={overtime.status} />}
         actions={
           <>
-            <Button href={`/sdm/lembur/${overtime.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/sdm/lembur/${overtime.id}/edit`} variant="primary">Ubah</Button>
             <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />
             <BackButton href="/sdm/lembur" />
           </>

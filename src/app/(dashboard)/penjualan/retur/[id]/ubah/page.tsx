@@ -28,7 +28,7 @@ export default async function EditPage({
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
       <SalesReturnForm returnData={data as any} invoices={invoices as any} customers={customers as any} items={items as any}/>
     </div>

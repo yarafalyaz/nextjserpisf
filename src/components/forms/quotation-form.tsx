@@ -427,7 +427,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
           </div>
         </div>
         <div className="totals-row totals-grand">
-          <span className="totals-label">Grand Total</span>
+          <span className="totals-label">Total Keseluruhan</span>
           <span className="totals-value">Rp {formatCurrency(grandTotal)}</span>
         </div>
       </div>

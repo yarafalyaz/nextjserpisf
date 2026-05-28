@@ -120,7 +120,7 @@ export default async function DashboardPage() {
   { label: "Dashboard" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-foreground">Dasbor</h1>
         <p className="text-[0.9375rem] text-muted mt-1">Selamat datang di YaraERP</p>
       </div>
 

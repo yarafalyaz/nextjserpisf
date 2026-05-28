@@ -43,7 +43,7 @@ export default async function PurchaseRequestDetailPage({
         badge={<StatusChip status={request.status} />}
         actions={
           <>
-            <Button href={`/pembelian/permintaan/${request.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/pembelian/permintaan/${request.id}/edit`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={request.id} action={deletePurchaseRequest} />
             <BackButton href="/pembelian/permintaan" />
@@ -103,7 +103,7 @@ export default async function PurchaseRequestDetailPage({
       {request.purchaseOrders.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Purchase Order Terkait</h2>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">Pesanan Pembelian Terkait</h2>
           </div>
           <div className="p-4 px-5">
             <DetailTable>

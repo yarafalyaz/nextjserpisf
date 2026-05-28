@@ -47,7 +47,7 @@ export default async function WorkOrderDetailPage({
         badge={<StatusChip status={wo.status} />}
         actions={
           <>
-            <Button href={`/produksi/perintah-kerja/${wo.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/produksi/perintah-kerja/${wo.id}/edit`} variant="primary">Ubah</Button>
             {wo.status === "completed" && (
               <Button href={`/penjualan/faktur/create?pesananPenjualanId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
             )}
@@ -59,9 +59,9 @@ export default async function WorkOrderDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="Customer" value={<Link href={`/master/pelanggan/${wo.customerId}`}>{wo.customer.name}</Link>} />
+        <DetailField label="Pelanggan" value={<Link href={`/master/pelanggan/${wo.customerId}`}>{wo.customer.name}</Link>} />
         <DetailField label="Tanggal" value={formatDate(wo.date)} />
-        <DetailField label="Quotation" value={wo.quotation ? <Link href={`/penjualan/penawaran/${wo.quotationId}`}>{wo.quotation.documentNo}</Link> : "-"} mono />
+        <DetailField label="Penawaran" value={wo.quotation ? <Link href={`/penjualan/penawaran/${wo.quotationId}`}>{wo.quotation.documentNo}</Link> : "-"} mono />
         <DetailField label="Total Biaya Material" value={formatCurrency(totalCost)} />
       </DetailCard>
 

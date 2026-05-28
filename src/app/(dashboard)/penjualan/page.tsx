@@ -7,7 +7,7 @@ import {
 const salesModules = [
   { label: "Quotations", href: "/penjualan/penawaran", icon: FileText, desc: "Penawaran harga" },
   { label: "Down Payments", href: "/penjualan/uang-muka", icon: Wallet, desc: "Uang muka penjualan" },
-  { label: "Sales Orders", href: "/penjualan/pesanan", icon: ShoppingCart, desc: "Pesanan penjualan" },
+  { label: "Pesanan Penjualan", href: "/penjualan/pesanan", icon: ShoppingCart, desc: "Pesanan penjualan" },
   { label: "Delivery Orders", href: "/penjualan/surat-jalan", icon: Truck, desc: "Surat jalan" },
   { label: "Invoices", href: "/penjualan/faktur", icon: Receipt, desc: "Faktur penjualan" },
   { label: "Payments", href: "/penjualan/pembayaran", icon: CreditCard, desc: "Pembayaran masuk" },
@@ -18,7 +18,7 @@ export default function SalesPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Sales" }]} />
-      <h1 className="text-2xl font-bold text-foreground">Sales</h1>
+      <h1 className="text-2xl font-bold text-foreground">Penjualan</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {salesModules.map((mod) => {
           const Icon = mod.icon

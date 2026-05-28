@@ -40,7 +40,7 @@ export default async function GoodsReceiptDetailPage({
         <div className="flex gap-2 items-center">
           <span className={`status-badge status-${receipt.status}`}>{receipt.status}</span>
   <div className="flex gap-2">
-          <Link href={`/pembelian/penerimaan/${receipt.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
+          <Link href={`/pembelian/penerimaan/${receipt.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
           <PrintButton />
           <DeleteButton id={receipt.id} action={deleteGoodsReceipt} />
                   <Link href="/pembelian/penerimaan" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
@@ -55,7 +55,7 @@ export default async function GoodsReceiptDetailPage({
             <span className="text-[0.9375rem] text-foreground font-medium font-mono">{receipt.documentNo}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Purchase Order</span>
+            <span className="text-xs font-medium text-muted uppercase tracking-wide">Pesanan Pembelian</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               <Link href={`/pembelian/pesanan/${receipt.purchaseOrder.id}`}>{receipt.purchaseOrder.documentNo}</Link>
             </span>

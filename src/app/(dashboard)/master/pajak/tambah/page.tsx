@@ -66,8 +66,8 @@ export default function CreateTaxPage() {
             <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Lingkup"}</Select.Value><Select.Indicator /></Select.Trigger>
             <Select.Popover>
               <ListBox>
-                <ListBox.Item id="sales" textValue="Sales">Sales<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="purchase" textValue="Purchase">Purchase<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="sales" textValue="Penjualan">Penjualan<ListBox.ItemIndicator /></ListBox.Item>
+                <ListBox.Item id="purchase" textValue="Pembelian">Pembelian<ListBox.ItemIndicator /></ListBox.Item>
                 <ListBox.Item id="both" textValue="Both">Both<ListBox.ItemIndicator /></ListBox.Item>
               </ListBox>
             </Select.Popover>

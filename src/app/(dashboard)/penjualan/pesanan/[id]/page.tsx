@@ -34,7 +34,7 @@ export default async function SalesOrderDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Sales Order ${order.documentNo}`}
+        title={`Pesanan Penjualan ${order.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Sales", href: "/penjualan" },
@@ -44,7 +44,7 @@ export default async function SalesOrderDetailPage({
         badge={<StatusChip status={order.status} />}
         actions={
           <>
-            <Button href={`/penjualan/pesanan/${order.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/penjualan/pesanan/${order.id}/edit`} variant="primary">Ubah</Button>
             {order.status === "approved" && (
               <Button href={`/penjualan/uang-muka/create?pesananPenjualanId=${order.id}`} variant="primary">+ Down Payment</Button>
             )}
@@ -63,16 +63,16 @@ export default async function SalesOrderDetailPage({
 
       <DetailCard>
         <DetailField
-          label="Customer"
+          label="Pelanggan"
           value={<Link href={`/master/pelanggan/${order.customerId}`}>{order.customer.name}</Link>}
         />
         <DetailField label="Tanggal" value={formatDate(order.date)} />
         <DetailField label="Tanggal Pengiriman" value={order.deliveryDate ? formatDate(order.deliveryDate) : "-"} />
         <DetailField
-          label="Quotation"
+          label="Penawaran"
           value={order.quotation ? <Link href={`/penjualan/penawaran/${order.quotation.id}`}>{order.quotation.documentNo}</Link> : "-"}
         />
-        <DetailField label="Grand Total" value={formatCurrency(Number(order.grandTotal))} />
+        <DetailField label="Total Keseluruhan" value={formatCurrency(Number(order.grandTotal))} />
       </DetailCard>
 
       {/* Items */}
@@ -109,7 +109,7 @@ export default async function SalesOrderDetailPage({
         <DetailField label="Subtotal" value={formatCurrency(Number(order.subtotal))} />
         <DetailField label="Diskon" value={formatCurrency(Number(order.discount))} />
         <DetailField label="Pajak" value={formatCurrency(Number(order.tax))} />
-        <DetailField label="Grand Total" value={<span className="text-xl">{formatCurrency(Number(order.grandTotal))}</span>} />
+        <DetailField label="Total Keseluruhan" value={<span className="text-xl">{formatCurrency(Number(order.grandTotal))}</span>} />
       </DetailCard>
 
       {/* Delivery Orders */}

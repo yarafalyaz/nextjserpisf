@@ -90,7 +90,7 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
             control={control}
             render={({ field }) => (
               <ComboBox selectedKey={field.value ? String(field.value) : null} onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)} className="w-full">
-                <Label>Sales Order (Opsional)</Label>
+                <Label>Pesanan Penjualan (Opsional)</Label>
                 <ComboBox.InputGroup><Input placeholder="Cari sales order..." /><ComboBox.Trigger /></ComboBox.InputGroup>
                 <ComboBox.Popover>
                   <ListBox>

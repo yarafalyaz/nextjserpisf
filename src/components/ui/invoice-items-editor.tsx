@@ -171,7 +171,7 @@ export function InvoiceItemsEditor({
               <tr><td colSpan={4} className="text-right py-1 px-2 font-medium">Subtotal</td><td className="text-right py-1 px-2 font-medium">{formatCurrency(subtotal)}</td></tr>
               {discount > 0 && <tr><td colSpan={4} className="text-right py-1 px-2">Diskon</td><td className="text-right py-1 px-2">-{formatCurrency(discount)}</td></tr>}
               {taxAmount > 0 && <tr><td colSpan={4} className="text-right py-1 px-2">Pajak ({tax}%)</td><td className="text-right py-1 px-2">{formatCurrency(taxAmount)}</td></tr>}
-              <tr><td colSpan={4} className="text-right py-1 px-2 font-bold">Grand Total</td><td className="text-right py-1 px-2 font-bold">{formatCurrency(grandTotal)}</td></tr>
+              <tr><td colSpan={4} className="text-right py-1 px-2 font-bold">Total Keseluruhan</td><td className="text-right py-1 px-2 font-bold">{formatCurrency(grandTotal)}</td></tr>
               <tr><td colSpan={4} className="text-right py-1 px-2 text-success">Terbayar</td><td className="text-right py-1 px-2 text-success">{formatCurrency(paidAmount)}</td></tr>
               <tr><td colSpan={4} className="text-right py-1 px-2 text-danger font-bold">Sisa</td><td className="text-right py-1 px-2 text-danger font-bold">{formatCurrency(sisa)}</td></tr>
             </tfoot>
@@ -289,7 +289,7 @@ export function InvoiceItemsEditor({
             <input type="number" min={0} max={100} step={0.5} value={tax} onChange={(e) => setTax(Number(e.target.value))} className="form-input w-20 text-right text-sm" />
           </div>
           <div className="flex items-center gap-3 text-sm font-bold">
-            <span>Grand Total:</span>
+            <span>Total Keseluruhan:</span>
             <span>{formatCurrency(grandTotal)}</span>
           </div>
           <div className="flex items-center gap-3 text-sm text-success">

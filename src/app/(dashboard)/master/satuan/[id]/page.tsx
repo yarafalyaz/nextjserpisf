@@ -30,7 +30,7 @@ export default async function UomDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/satuan/${id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/master/satuan/${id}/edit`} variant="primary">Ubah</Button>
             <BackButton href="/master/satuan" />
           </>
         }

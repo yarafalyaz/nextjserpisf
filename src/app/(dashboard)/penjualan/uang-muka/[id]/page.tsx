@@ -41,7 +41,7 @@ export default async function DownPaymentDetailPage({
         badge={<StatusChip status={dp.status} />}
         actions={
           <>
-            <Button href={`/penjualan/uang-muka/${dp.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/penjualan/uang-muka/${dp.id}/edit`} variant="primary">Ubah</Button>
             {dp.status === "paid" && (
               <Button href={`/produksi/perintah-kerja/create?penawaranId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
             )}
@@ -55,11 +55,11 @@ export default async function DownPaymentDetailPage({
       <DetailCard>
         <DetailField label="No. Dokumen" value={dp.documentNo} mono />
         <DetailField
-          label="Customer"
+          label="Pelanggan"
           value={<Link href={`/master/pelanggan/${dp.customer.id}`}>{dp.customer.name}</Link>}
         />
         <DetailField
-          label="Quotation"
+          label="Penawaran"
           value={<Link href={`/penjualan/penawaran/${dp.quotation.id}`}>{dp.quotation.documentNo}</Link>}
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(dp.amount))}</span>} />

@@ -40,7 +40,7 @@ export default async function StockAdjustmentDetailPage({
         badge={<StatusChip status={adjustment.status} />}
         actions={
           <>
-            <Button href={`/inventaris/penyesuaian/${adjustment.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/inventaris/penyesuaian/${adjustment.id}/edit`} variant="primary">Ubah</Button>
             <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
             <BackButton href="/inventaris/penyesuaian" />
           </>

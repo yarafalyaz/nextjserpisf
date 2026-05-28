@@ -44,7 +44,7 @@ export default async function WorkScheduleDetailPage({
         }
         actions={
           <>
-            <Button href={`/sdm/jadwal-kerja/${schedule.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/sdm/jadwal-kerja/${schedule.id}/edit`} variant="primary">Ubah</Button>
             <DeleteButton id={schedule.id} action={deleteWorkSchedule} />
             <BackButton href="/sdm/jadwal-kerja" />
           </>

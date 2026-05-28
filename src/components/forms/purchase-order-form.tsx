@@ -211,7 +211,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4} className="text-right"><strong>Grand Total</strong></td>
+                  <td colSpan={4} className="text-right"><strong>Total Keseluruhan</strong></td>
                   <td className="text-right"><strong>Rp {grandTotal.toLocaleString("id-ID")}</strong></td>
                   <td></td>
                 </tr>

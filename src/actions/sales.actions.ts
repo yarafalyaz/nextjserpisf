@@ -777,7 +777,7 @@ export async function deleteSalesOrder(id: number) {
   await requirePermission("delete_sales_orders")
   const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (so.status !== "draft") {
-    throw new Error("Hanya Sales Order berstatus draft yang bisa dihapus")
+    throw new Error("Hanya Pesanan Penjualan berstatus draft yang bisa dihapus")
   }
   await prisma.salesOrder.delete({ where: { id } })
   revalidatePath("/penjualan/pesanan")

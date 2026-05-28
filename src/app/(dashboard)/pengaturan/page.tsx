@@ -218,7 +218,7 @@ export default async function SettingsPage() {
           </div>
           <div className="p-4 px-5">
             <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-              <DisplayField label="Item" value={settings?.itemCodePrefix} />
+              <DisplayField label="Barang" value={settings?.itemCodePrefix} />
               <BoolField label="Auto Item" value={settings?.enableAutoItemCode !== false} />
               <DisplayField label="Gudang" value={settings?.warehouseCodePrefix} />
               <BoolField label="Auto Gudang" value={settings?.enableAutoWarehouseCode !== false} />
@@ -226,44 +226,44 @@ export default async function SettingsPage() {
               <BoolField label="Auto Rak" value={settings?.enableAutoRackCode !== false} />
               <DisplayField label="Baris" value={settings?.rowCodePrefix} />
               <BoolField label="Auto Baris" value={settings?.enableAutoRowCode !== false} />
-              <DisplayField label="Customer" value={settings?.customerCodePrefix} />
+              <DisplayField label="Pelanggan" value={settings?.customerCodePrefix} />
               <BoolField label="Auto Customer" value={settings?.enableAutoCustomerCode !== false} />
               <DisplayField label="Karyawan" value={settings?.employeeCodePrefix} />
               <BoolField label="Auto Karyawan" value={settings?.enableAutoEmployeeCode !== false} />
-              <DisplayField label="Vendor" value={settings?.vendorCodePrefix} />
+              <DisplayField label="Pemasok" value={settings?.vendorCodePrefix} />
               <BoolField label="Auto Vendor" value={settings?.enableAutoVendorCode !== false} />
             </div>
             <h3 className="text-sm font-semibold text-foreground mt-5 mb-3">Prefix Dokumen</h3>
             <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-              <DisplayField label="Quotation" value={settings?.quotationCodePrefix} />
-              <DisplayField label="Asset" value={settings?.assetPrefix} />
-              <DisplayField label="Sales Order" value={settings?.salesOrderPrefix} />
-              <DisplayField label="Invoice" value={settings?.salesInvoicePrefix} />
-              <DisplayField label="Payment" value={settings?.salesPaymentPrefix} />
+              <DisplayField label="Penawaran" value={settings?.quotationCodePrefix} />
+              <DisplayField label="Aset" value={settings?.assetPrefix} />
+              <DisplayField label="Pesanan Penjualan" value={settings?.salesOrderPrefix} />
+              <DisplayField label="Faktur" value={settings?.salesInvoicePrefix} />
+              <DisplayField label="Pembayaran" value={settings?.salesPaymentPrefix} />
               <DisplayField label="Down Payment" value={settings?.downPaymentPrefix} />
               <DisplayField label="Delivery Order" value={settings?.deliveryOrderPrefix} />
               <DisplayField label="Sales Return" value={settings?.salesReturnPrefix} />
               <DisplayField label="Purchase Request" value={settings?.purchaseRequestPrefix} />
-              <DisplayField label="Purchase Order" value={settings?.purchaseOrderPrefix} />
+              <DisplayField label="Pesanan Pembelian" value={settings?.purchaseOrderPrefix} />
               <DisplayField label="Goods Receipt" value={settings?.goodsReceiptPrefix} />
               <DisplayField label="Vendor Bill" value={settings?.vendorBillPrefix} />
               <DisplayField label="Vendor Payment" value={settings?.vendorPaymentPrefix} />
               <DisplayField label="Purchase Return" value={settings?.purchaseReturnPrefix} />
               <DisplayField label="Transfer" value={settings?.inventoryTransferPrefix} />
-              <DisplayField label="Adjustment" value={settings?.stockAdjustmentPrefix} />
+              <DisplayField label="Penyesuaian" value={settings?.stockAdjustmentPrefix} />
               <DisplayField label="Material Issue" value={settings?.materialIssuePrefix} />
               <DisplayField label="Stock Movement" value={settings?.stockMovementPrefix} />
               <DisplayField label="Work Order" value={settings?.workOrderPrefix} />
               <DisplayField label="Manufacturing Order" value={settings?.manufacturingOrderPrefix} />
               <DisplayField label="Jurnal" value={settings?.journalPrefix} />
-              <DisplayField label="Expense" value={settings?.expensePrefix} />
+              <DisplayField label="Pengeluaran" value={settings?.expensePrefix} />
               <DisplayField label="Petty Cash" value={settings?.pettyCashPrefix} />
               <DisplayField label="Rekonsiliasi" value={settings?.reconciliationPrefix} />
-              <DisplayField label="Payroll" value={settings?.payrollPrefix} />
-              <DisplayField label="Project" value={settings?.projectPrefix} />
+              <DisplayField label="Penggajian" value={settings?.payrollPrefix} />
+              <DisplayField label="Proyek" value={settings?.projectPrefix} />
               <DisplayField label="Ticket" value={settings?.ticketPrefix} />
               <DisplayField label="Lead" value={settings?.leadPrefix} />
-              <DisplayField label="Timesheet" value={settings?.timesheetPrefix} />
+              <DisplayField label="Lembar Waktu" value={settings?.timesheetPrefix} />
             </div>
           </div>
         </div>
@@ -302,7 +302,7 @@ export default async function SettingsPage() {
             {settings?.quotationSignatureImage && (
               <div className="mt-3">
                 <span className="text-xs font-medium text-muted uppercase tracking-wide">Gambar Tanda Tangan</span>
-                <SafeImage src={settings.quotationSignatureImage} alt="Signature" width={96} height={48} className="mt-1 w-24 h-12 object-contain rounded border border-default" />
+                <SafeImage src={settings.quotationSignatureImage} alt="Tanda Tangan" width={96} height={48} className="mt-1 w-24 h-12 object-contain rounded border border-default" />
               </div>
             )}
           </div>

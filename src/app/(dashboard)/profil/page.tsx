@@ -24,7 +24,7 @@ export default async function ProfilePage() {
   { label: "Profile" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Profile</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Profil</h1>
       </div>
       <ProfileForm
         user={{ id: user.id, name: user.name, email: user.email, avatar: user.avatar }}

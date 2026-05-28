@@ -42,7 +42,7 @@ export default async function AppreciationDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/sdm/apresiasi/${appreciation.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/sdm/apresiasi/${appreciation.id}/edit`} variant="primary">Ubah</Button>
             <DeleteButton id={appreciation.id} action={deleteAppreciation} />
             <BackButton href="/sdm/apresiasi" />
           </>

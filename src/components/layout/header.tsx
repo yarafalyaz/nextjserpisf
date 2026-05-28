@@ -91,16 +91,16 @@ export function Header() {
               <div className="header-dropdown-divider" />
               <Link href="/profil" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
                 <User size={16} />
-                <span>Edit Profile</span>
+                <span>Ubah Profil</span>
               </Link>
               <Link href="/pengaturan" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
                 <Settings size={16} />
-                <span>Settings</span>
+                <span>Pengaturan</span>
               </Link>
               <div className="header-dropdown-divider" />
               <Button onPress={() => { import("next-auth/react").then(m => m.signOut({ callbackUrl: "/login" })) }} className="header-dropdown-item header-dropdown-danger">
                   <LogOut size={16} />
-                  <span>Sign Out</span>
+                  <span>Keluar</span>
               </Button>
             </div>
           )}

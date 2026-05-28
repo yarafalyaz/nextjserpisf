@@ -40,7 +40,7 @@ export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderF
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <ComboBox name="salesOrderId" className="w-full" isRequired>
-            <Label>Sales Order *</Label>
+            <Label>Pesanan Penjualan *</Label>
             <ComboBox.InputGroup><Input placeholder="Cari sales order..." /><ComboBox.Trigger /></ComboBox.InputGroup>
             <ComboBox.Popover>
               <ListBox>

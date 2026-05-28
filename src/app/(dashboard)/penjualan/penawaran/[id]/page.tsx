@@ -50,7 +50,7 @@ export default async function QuotationDetailPage({
             <Button href={`/penjualan/penawaran/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
             {quotation.status === "approved" && (
-              <Button href={`/penjualan/pesanan/create?penawaranId=${id}`} variant="primary">+ Sales Order</Button>
+              <Button href={`/penjualan/pesanan/create?penawaranId=${id}`} variant="primary">+ Pesanan Penjualan</Button>
             )}
             <BackButton href="/penjualan/penawaran" />
           </>
@@ -72,12 +72,12 @@ export default async function QuotationDetailPage({
                 />
                 <DetailCard>
                   <DetailField
-                    label="Customer"
+                    label="Pelanggan"
                     value={<Link href={`/master/pelanggan/${quotation.customerId}`}>{quotation.customer.name}</Link>}
                   />
                   <DetailField label="Tanggal" value={formatDate(quotation.date)} />
                   <DetailField label="Valid Sampai" value={formatDate(quotation.validUntil)} />
-                  <DetailField label="Grand Total" value={formatCurrency(Number(quotation.grandTotal))} />
+                  <DetailField label="Total Keseluruhan" value={formatCurrency(Number(quotation.grandTotal))} />
                 </DetailCard>
 
                 {/* Summary */}
@@ -85,7 +85,7 @@ export default async function QuotationDetailPage({
                   <DetailField label="Subtotal" value={formatCurrency(Number(quotation.subtotal))} />
                   <DetailField label="Diskon" value={formatCurrency(Number(quotation.discount))} />
                   <DetailField label="Pajak" value={formatCurrency(Number(quotation.tax))} />
-                  <DetailField label="Grand Total" value={<span className="text-xl">{formatCurrency(Number(quotation.grandTotal))}</span>} />
+                  <DetailField label="Total Keseluruhan" value={<span className="text-xl">{formatCurrency(Number(quotation.grandTotal))}</span>} />
                 </DetailCard>
 
                 {/* Notes */}

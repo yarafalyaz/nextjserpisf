@@ -58,7 +58,7 @@ export default async function InvoiceDetailPage({
         badge={<StatusChip status={invoice.status} />}
         actions={
           <>
-            <Button href={`/penjualan/faktur/${invoice.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/penjualan/faktur/${invoice.id}/edit`} variant="primary">Ubah</Button>
             {invoice.status !== "paid" && invoice.status !== "cancelled" && (
               <Button href={`/penjualan/pembayaran/create?fakturId=${invoice.id}`} variant="primary" style={{ background: "var(--color-success)", color: "#fff" }}>
                 Terima Pembayaran
@@ -88,11 +88,11 @@ export default async function InvoiceDetailPage({
                   module="penjualan/faktur"
                 />
                 <DetailCard>
-                  <DetailField label="Customer" value={invoice.customer.name} />
+                  <DetailField label="Pelanggan" value={invoice.customer.name} />
                   <DetailField label="Tanggal" value={formatDate(invoice.date)} />
                   <DetailField label="Jatuh Tempo" value={formatDate(invoice.dueDate)} />
-                  <DetailField label="Sales Order" value={invoice.salesOrder?.documentNo || "-"} mono />
-                  <DetailField label="Quotation" value={invoice.quotation?.documentNo || "-"} mono />
+                  <DetailField label="Pesanan Penjualan" value={invoice.salesOrder?.documentNo || "-"} mono />
+                  <DetailField label="Penawaran" value={invoice.quotation?.documentNo || "-"} mono />
                   <DetailField label="Status Bayar" value={invoice.paymentStatus || "-"} />
                 </DetailCard>
 
@@ -171,7 +171,7 @@ export default async function InvoiceDetailPage({
                             <DetailTableTd align="right" className="font-bold">{formatCurrency(invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
                           </DetailTableFootRow>
                           <DetailTableFootRow>
-                            <DetailTableTd colSpan={4} align="right">Grand Total Invoice</DetailTableTd>
+                            <DetailTableTd colSpan={4} align="right">Total Keseluruhan Faktur</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(invoice.grandTotal))}</DetailTableTd>
                           </DetailTableFootRow>
                           <DetailTableFootRow>

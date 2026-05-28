@@ -39,7 +39,7 @@ export default async function SalesPaymentDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/penjualan/pembayaran/${payment.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/penjualan/pembayaran/${payment.id}/edit`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={payment.id} action={deleteSalesPayment} />
             <BackButton href="/penjualan/pembayaran" />
@@ -50,11 +50,11 @@ export default async function SalesPaymentDetailPage({
       <DetailCard>
         <DetailField label="No. Dokumen" value={payment.documentNo} mono />
         <DetailField
-          label="Invoice"
+          label="Faktur"
           value={<Link href={`/penjualan/faktur/${payment.salesInvoice.id}`}>{payment.salesInvoice.documentNo}</Link>}
         />
         <DetailField
-          label="Customer"
+          label="Pelanggan"
           value={<Link href={`/master/pelanggan/${payment.salesInvoice.customer.id}`}>{payment.salesInvoice.customer.name}</Link>}
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />

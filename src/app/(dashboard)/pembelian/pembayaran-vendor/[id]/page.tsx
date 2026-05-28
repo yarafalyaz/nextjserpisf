@@ -41,7 +41,7 @@ export default async function VendorPaymentDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/pembelian/pembayaran-vendor/${payment.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/pembelian/pembayaran-vendor/${payment.id}/edit`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={payment.id} action={deleteVendorPayment} />
             <BackButton href="/pembelian/pembayaran-vendor" />
@@ -52,7 +52,7 @@ export default async function VendorPaymentDetailPage({
       <DetailCard>
         <DetailField label="No. Dokumen" value={payment.documentNo} mono />
         <DetailField
-          label="Vendor"
+          label="Pemasok"
           value={<Link href={`/master/pemasok/${payment.vendor.id}`}>{payment.vendor.name}</Link>}
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />

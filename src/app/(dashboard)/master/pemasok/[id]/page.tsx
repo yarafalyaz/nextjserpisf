@@ -80,11 +80,11 @@ export default async function VendorDetailPage({
           },
           {
             id: "po",
-            label: `Purchase Orders (${vendor.purchaseOrders.length})`,
+            label: `Pesanan Pembelian (${vendor.purchaseOrders.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Purchase Order Terbaru</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Pesanan Pembelian Terbaru</h2>
                   <Link href={`/pembelian/pesanan?cari=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">

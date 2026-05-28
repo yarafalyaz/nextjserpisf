@@ -88,7 +88,7 @@ export function GoodsReceiptForm({ purchaseOrders, warehouses, defaultPoId, rece
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <ComboBox selectedKey={poId || null} onSelectionChange={(key) => handlePoChange(key ? String(key) : null)} className="w-full" isRequired>
-              <Label>Purchase Order *</Label>
+              <Label>Pesanan Pembelian *</Label>
               <ComboBox.InputGroup><Input placeholder="Cari purchase order..." /><ComboBox.Trigger /></ComboBox.InputGroup>
               <ComboBox.Popover>
                 <ListBox>

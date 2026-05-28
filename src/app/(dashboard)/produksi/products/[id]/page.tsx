@@ -42,7 +42,7 @@ export default async function ProductDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/produksi/products/${product.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/produksi/products/${product.id}/edit`} variant="primary">Ubah</Button>
             <DeleteButton id={product.id} action={deleteProduct} />
             <BackButton href="/produksi/products" />
           </>

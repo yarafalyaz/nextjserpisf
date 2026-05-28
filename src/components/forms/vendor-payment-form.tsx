@@ -214,7 +214,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
         {vendorId && vendorBills.length > 0 && (
           <FormSection title="Bill Belum Lunas" columns={1}>
             <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-              <thead><tr><th>No. Dokumen</th><th>Grand Total</th></tr></thead>
+              <thead><tr><th>No. Dokumen</th><th>Total Keseluruhan</th></tr></thead>
               <tbody>
                 {vendorBills.map((b) => (
                   <tr key={b.id}>

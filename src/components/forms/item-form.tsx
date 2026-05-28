@@ -165,7 +165,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
             <div className="image-upload-area">
               {imagePreview ? (
                 <div className="image-upload-preview">
-                  <img src={imagePreview} alt="Preview" className="image-upload-img" />
+                  <img src={imagePreview} alt="Pratinjau" className="image-upload-img" />
                   <Button onPress={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
                     <X className="size-4" />
                   </Button>

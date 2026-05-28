@@ -64,7 +64,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <ComboBox name="purchaseOrderId" className="w-full" isRequired>
-            <Label>Purchase Order *</Label>
+            <Label>Pesanan Pembelian *</Label>
             <ComboBox.InputGroup><Input placeholder="Cari purchase order..." /><ComboBox.Trigger /></ComboBox.InputGroup>
             <ComboBox.Popover>
               <ListBox>

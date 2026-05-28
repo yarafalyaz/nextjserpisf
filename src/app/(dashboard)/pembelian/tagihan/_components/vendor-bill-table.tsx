@@ -39,7 +39,7 @@ const columns = [
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.accessor("grandTotal", {
-    header: "Grand Total",
+    header: "Total Keseluruhan",
     cell: (info) => formatCurrency(Number(info.getValue())),
   }),
   columnHelper.accessor("status", {

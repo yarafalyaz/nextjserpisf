@@ -75,8 +75,8 @@ export default async function BankStatementsPage({
           <div className="flex items-center justify-between p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
-              {page > 1 && <Link href={`/keuangan/laporan-bank?halaman=${page - 1}`} className="button button--ghost button--sm">← Prev</Link>}
-              {page < totalPages && <Link href={`/keuangan/laporan-bank?halaman=${page + 1}`} className="button button--ghost button--sm">Next →</Link>}
+              {page > 1 && <Link href={`/keuangan/laporan-bank?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
+              {page < totalPages && <Link href={`/keuangan/laporan-bank?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
             </div>
           </div>
         )}
