@@ -553,13 +553,17 @@ model QuotationItem {
 }
 
 model QuotationHistory {
-  id          Int       @id @default(autoincrement())
-  quotationId Int       @map("quotation_id")
-  action      String
-  description String?   @db.Text
-  userId      Int?      @map("user_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  id               Int      @id @default(autoincrement())
+  quotationId      Int      @map("quotation_id")
+  revisionNumber   Int      @default(0) @map("revision_number")
+  statusAtSnapshot String   @default("sent") @map("status_at_snapshot")
+  dataSnapshot     Json?    @map("data_snapshot")
+  changeReason     String?  @map("change_reason") @db.Text
+  action           String
+  description      String?  @db.Text
+  userId           Int?     @map("user_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  quotation        Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
   @@index([quotationId], map: "quotation_histories_quotation_id_fkey")
   @@map("quotation_histories")

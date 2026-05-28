@@ -152,6 +152,165 @@ export async function acceptQuotation(quotationId: number) {
   }
 }
 
+
+export async function rejectQuotation(quotationId: number) {
+  try {
+  await requirePermission("confirm_quotations")
+
+  const quotation = await prisma.quotation.findUniqueOrThrow({
+    where: { id: quotationId },
+  })
+
+  if (quotation.status !== "sent") {
+    throw new Error("Hanya penawaran terkirim yang dapat ditolak")
+  }
+
+  await prisma.quotation.update({
+    where: { id: quotationId },
+    data: { status: "rejected" },
+  })
+
+  revalidatePath("/penjualan/penawaran")
+  return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[rejectQuotation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
+export async function reviseQuotation(quotationId: number, changeReason: string) {
+  try {
+  const user = await requirePermission("edit_quotations")
+
+  const quotation = await prisma.quotation.findUniqueOrThrow({
+    where: { id: quotationId },
+    include: { sections: { include: { items: true } } },
+  })
+
+  if (quotation.status !== "sent") {
+    throw new Error("Hanya penawaran terkirim yang dapat direvisi")
+  }
+
+  if (!changeReason?.trim()) {
+    throw new Error("Alasan perubahan wajib diisi")
+  }
+
+  const snapshot = {
+    grandTotal: quotation.grandTotal,
+    subtotal: quotation.subtotal,
+    discount: quotation.discount,
+    tax: quotation.tax,
+    sections: quotation.sections,
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.quotationHistory.create({
+      data: {
+        quotationId,
+        revisionNumber: quotation.revisionNumber,
+        statusAtSnapshot: quotation.status,
+        dataSnapshot: snapshot,
+        changeReason: changeReason.trim(),
+        action: "revised",
+        description: `Revisi #${quotation.revisionNumber} — ${changeReason.trim()}`,
+        userId: Number(user.id),
+      },
+    })
+
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: {
+        status: "draft",
+        revisionNumber: { increment: 1 },
+      },
+    })
+  })
+
+  revalidatePath("/penjualan/penawaran")
+  return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[reviseQuotation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
+export async function convertQuotationToOrder(quotationId: number) {
+  try {
+  const user = await requirePermission("create_sales_orders")
+
+  const quotation = await prisma.quotation.findUniqueOrThrow({
+    where: { id: quotationId },
+    include: { sections: { include: { items: true } } },
+  })
+
+  if (quotation.status !== "accepted") {
+    throw new Error("Hanya penawaran accepted yang dapat dikonversi")
+  }
+
+  const existing = await prisma.salesOrder.findFirst({ where: { quotationId } })
+  if (existing) {
+    throw new Error("Penawaran ini sudah memiliki Sales Order")
+  }
+
+  const documentNo = await generateDocumentNumber("SO")
+  const allItems = quotation.sections.flatMap((section) => section.items)
+
+  const salesOrder = await prisma.$transaction(async (tx) => {
+    const so = await tx.salesOrder.create({
+      data: {
+        documentNo,
+        customerId: quotation.customerId,
+        quotationId: quotation.id,
+        customerVehicleId: quotation.customerVehicleId,
+        date: new Date(),
+        subtotal: quotation.subtotal,
+        discount: quotation.discount ?? 0,
+        tax: quotation.tax ?? 0,
+        grandTotal: quotation.grandTotal,
+        totalAmount: quotation.grandTotal,
+        status: "draft",
+        notes: `Auto-generated dari Quotation ${quotation.documentNo}`,
+        createdBy: Number(user.id),
+      },
+    })
+
+    if (allItems.length > 0) {
+      await tx.salesOrderItem.createMany({
+        data: allItems.map((item) => ({
+          salesOrderId: so.id,
+          itemId: item.itemId,
+          description: item.description,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          discount: item.discount,
+          total: item.total,
+        })),
+      })
+    }
+
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: { status: "converted" },
+    })
+
+    return so
+  })
+
+  revalidatePath("/penjualan/penawaran")
+  revalidatePath("/penjualan/pesanan")
+  return { success: true, id: salesOrder.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[convertQuotationToOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
 export async function updateQuotation(quotationId: number, formData: FormData) {
   try {
   await requirePermission("edit_quotations")
@@ -174,19 +333,6 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
       paymentMethod: formData.get("paymentMethod") as string | null,
       shippingMethod: formData.get("shippingMethod") as string | null,
       notes: formData.get("notes") as string | null,
-      revisionNumber: { increment: 1 },
-    },
-  })
-
-  const user = await requirePermission("edit_quotations")
-    ? await prisma.user.findFirst({ where: { id: { not: 0 } } }) // fallback
-    : null
-
-  await prisma.quotationHistory.create({
-    data: {
-      quotationId,
-      action: "revised",
-      description: `Revisi #${quotation.revisionNumber + 1} — Quotation ${quotation.documentNo}`,
     },
   })
 
@@ -227,17 +373,23 @@ export async function createDownPayment(formData: FormData) {
     proofImage = `/uploads/proofs/${filename}`
   }
 
+  const quotationId = requireId(formData.get("quotationId"), "quotationId")
+  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
+  if (!["accepted", "converted"].includes(quotation.status)) {
+    throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
+  }
+
   const dp = await prisma.downPayment.create({
     data: {
       documentNo,
-      quotationId: requireId(formData.get("quotationId"), "quotationId"),
-      customerId: requireId(formData.get("customerId"), "customerId"),
+      quotationId,
+      customerId: quotation.customerId,
       amount: requireNumber(formData.get("amount"), "amount"),
       paymentDate: new Date(formData.get("paymentDate") as string),
       paymentMethod: formData.get("paymentMethod") as string | null,
       proofImage,
       notes: formData.get("notes") as string | null,
-      status: "pending",
+      status: "draft",
       createdBy: Number(user.id),
     },
   })
@@ -303,6 +455,52 @@ export async function createSalesOrder(formData: FormData) {
   }
 }
 
+
+export async function confirmSalesOrder(id: number) {
+  try {
+  await requirePermission("edit_sales_orders")
+  const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
+  if (so.status !== "draft") throw new Error("Sales Order hanya bisa dikonfirmasi dari status draft")
+  await prisma.salesOrder.update({ where: { id }, data: { status: "confirmed" } })
+  revalidatePath("/penjualan/pesanan")
+  return { success: true }
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[confirmSalesOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
+export async function processSalesOrder(id: number) {
+  try {
+  await requirePermission("edit_sales_orders")
+  const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
+  if (so.status !== "confirmed") throw new Error("Sales Order hanya bisa diproses dari status confirmed")
+  await prisma.salesOrder.update({ where: { id }, data: { status: "processing" } })
+  revalidatePath("/penjualan/pesanan")
+  return { success: true }
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[processSalesOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
+export async function completeSalesOrder(id: number) {
+  try {
+  await requirePermission("edit_sales_orders")
+  const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
+  if (so.status !== "processing") throw new Error("Sales Order hanya bisa diselesaikan dari status processing")
+  await prisma.salesOrder.update({ where: { id }, data: { status: "completed" } })
+  revalidatePath("/penjualan/pesanan")
+  return { success: true }
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[completeSalesOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
 // ==================== INVOICE ACTIONS ====================
 
 export async function postInvoice(invoiceId: number) {
@@ -313,8 +511,13 @@ export async function postInvoice(invoiceId: number) {
     where: { id: invoiceId },
   })
 
-  if (invoice.status !== "sent" && invoice.status !== "draft") {
-    throw new Error("Invoice hanya bisa di-post dari status draft/sent")
+  if (invoice.status !== "draft") {
+    throw new Error("Invoice hanya bisa di-post dari status draft")
+  }
+
+  const itemCount = await prisma.salesInvoiceItem.count({ where: { salesInvoiceId: invoiceId } })
+  if (itemCount === 0) {
+    throw new Error("Invoice tidak memiliki item")
   }
 
   await prisma.salesInvoice.update({
@@ -378,12 +581,23 @@ export async function createSalesPayment(formData: FormData) {
   const user = await requirePermission("create_sales_payments")
 
   const documentNo = await generateDocumentNumber("PAY")
+  const salesInvoiceId = requireId(formData.get("salesInvoiceId"), "salesInvoiceId")
+  const amount = requireNumber(formData.get("amount"), "amount")
+  const invoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } })
+  if (!["posted", "partial"].includes(invoice.status)) {
+    throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
+  }
+  const remaining = Number(invoice.grandTotal) - Number(invoice.paidAmount)
+  if (amount > remaining) {
+    throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
+  }
 
   const payment = await prisma.salesPayment.create({
     data: {
       documentNo,
-      salesInvoiceId: requireId(formData.get("salesInvoiceId"), "salesInvoiceId"),
-      amount: requireNumber(formData.get("amount"), "amount"),
+      salesInvoiceId,
+      customerId: invoice.customerId,
+      amount,
       paymentDate: new Date(formData.get("paymentDate") as string),
       paymentMethod: formData.get("paymentMethod") as string,
       accountId: safeId(formData.get("accountId")),
@@ -551,14 +765,34 @@ export async function deleteQuotation(id: number) {
   try {
   await requirePermission("delete_quotations")
 
-  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id } })
+  await prisma.quotation.findUniqueOrThrow({ where: { id } })
 
-  await prisma.quotation.update({
-    where: { id },
-    data: {
-      documentNo: `${quotation.documentNo}__deleted__${id}`,
-      deletedAt: new Date(),
-    },
+  await prisma.$transaction(async (tx) => {
+    const salesOrders = await tx.salesOrder.findMany({ where: { quotationId: id }, select: { id: true } })
+    const salesOrderIds = salesOrders.map((so) => so.id)
+    const invoices = await tx.salesInvoice.findMany({
+      where: { OR: [{ quotationId: id }, { salesOrderId: { in: salesOrderIds.length ? salesOrderIds : [-1] } }] },
+      select: { id: true },
+    })
+    const invoiceIds = invoices.map((inv) => inv.id)
+
+    if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
+    if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
+    if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
+
+    if (salesOrderIds.length) await tx.deliveryOrder.deleteMany({ where: { salesOrderId: { in: salesOrderIds } } })
+    if (salesOrderIds.length) await tx.salesOrderItem.deleteMany({ where: { salesOrderId: { in: salesOrderIds } } })
+    if (salesOrderIds.length) await tx.salesOrder.deleteMany({ where: { id: { in: salesOrderIds } } })
+
+    const workOrders = await tx.workOrder.findMany({ where: { quotationId: id }, select: { id: true, projectId: true } })
+    const workOrderIds = workOrders.map((wo) => wo.id)
+    const projectIds = workOrders.map((wo) => wo.projectId).filter((pid): pid is number => pid !== null)
+    if (workOrderIds.length) await tx.workOrderItem.deleteMany({ where: { workOrderId: { in: workOrderIds } } })
+    if (workOrderIds.length) await tx.workOrder.deleteMany({ where: { id: { in: workOrderIds } } })
+    if (projectIds.length) await tx.project.deleteMany({ where: { id: { in: projectIds } } })
+
+    await tx.downPayment.deleteMany({ where: { quotationId: id } })
+    await tx.quotation.delete({ where: { id } })
   })
 
   revalidatePath("/penjualan/penawaran")
@@ -624,8 +858,8 @@ export async function deleteDownPayment(id: number) {
   await requirePermission("delete_down_payments")
 
   const dp = await prisma.downPayment.findUniqueOrThrow({ where: { id } })
-  if (dp.status === "confirmed") {
-    throw new Error("Tidak bisa menghapus down payment yang sudah confirmed")
+  if (dp.status !== "draft") {
+    throw new Error("Hanya down payment draft yang bisa dihapus")
   }
 
   await prisma.downPayment.delete({ where: { id } })
@@ -646,6 +880,11 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   "use server"
 
   const user = await requirePermission("create_sales_orders")
+
+  const existing = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
+  if (existing.status !== "draft") {
+    throw new Error("Hanya Sales Order draft yang bisa diubah")
+  }
 
   // Fix #1: UPDATE bukan CREATE, dan jangan generate documentNo baru
   const salesOrder = await prisma.salesOrder.update({
@@ -674,6 +913,11 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   "use server"
 
   const user = await requirePermission("create_sales_invoices")
+
+  const existingInvoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
+  if (existingInvoice.status !== "draft") {
+    throw new Error("Hanya invoice draft yang bisa diubah")
+  }
 
   const itemsJson = formData.get("items") as string | null
   const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number }>>(itemsJson) ?? []) : null
@@ -913,9 +1157,19 @@ export async function updateDownPayment(id: number, formData: FormData) {
     proofImage = `/uploads/proofs/${filename}`
   }
 
+  const existingDp = await prisma.downPayment.findUniqueOrThrow({ where: { id } })
+  if (existingDp.status !== "draft") {
+    throw new Error("Hanya Down Payment draft yang bisa diubah")
+  }
+  const quotationId = requireId(formData.get("quotationId"), "quotationId")
+  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
+  if (!["accepted", "converted"].includes(quotation.status)) {
+    throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
+  }
+
   const data: any = {
-    quotationId: requireId(formData.get("quotationId"), "quotationId"),
-    customerId: requireId(formData.get("customerId"), "customerId"),
+    quotationId,
+    customerId: quotation.customerId,
     amount: requireNumber(formData.get("amount"), "amount"),
     paymentDate: new Date(formData.get("paymentDate") as string),
     paymentMethod: formData.get("paymentMethod") as string | null,
@@ -946,11 +1200,17 @@ export async function deleteSalesOrder(id: number) {
   "use server"
   // Fix #23: Add permission check
   await requirePermission("delete_sales_orders")
-  const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
-  if (so.status !== "draft") {
-    throw new Error("Hanya Pesanan Penjualan berstatus draft yang bisa dihapus")
-  }
-  await prisma.salesOrder.delete({ where: { id } })
+  await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
+  await prisma.$transaction(async (tx) => {
+    const invoices = await tx.salesInvoice.findMany({ where: { salesOrderId: id }, select: { id: true } })
+    const invoiceIds = invoices.map((inv) => inv.id)
+    if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
+    if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
+    if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
+    await tx.deliveryOrder.deleteMany({ where: { salesOrderId: id } })
+    await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } })
+    await tx.salesOrder.delete({ where: { id } })
+  })
   revalidatePath("/penjualan/pesanan")
   return { success: true }
 
@@ -966,11 +1226,12 @@ export async function deleteSalesInvoice(id: number) {
   "use server"
   // Fix #23: Add permission check
   await requirePermission("delete_sales_invoices")
-  const inv = await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
-  if (inv.status === "posted" || inv.status === "paid") {
-    throw new Error("Tidak bisa menghapus invoice yang sudah posted/paid")
-  }
-  await prisma.salesInvoice.delete({ where: { id } })
+  await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
+  await prisma.$transaction(async (tx) => {
+    await tx.salesPayment.deleteMany({ where: { salesInvoiceId: id } })
+    await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } })
+    await tx.salesInvoice.delete({ where: { id } })
+  })
   revalidatePath("/penjualan/faktur")
   return { success: true }
 
