@@ -69,6 +69,7 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={`/sdm/penggajian/${info.row.original.id}`}
+        editHref={info.row.original.status === "draft" ? `/sdm/penggajian/${info.row.original.id}/ubah` : undefined}
       />
     ),
   }),
