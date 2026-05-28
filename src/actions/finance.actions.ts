@@ -49,6 +49,20 @@ export async function createJournal(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("JRN")
 
+  // Laravel parity: parse and validate entries before creating journal
+  const entriesJson = formData.get("entries") as string | null
+  const entries = safeJsonParse<{ accountId: number; debit: number; credit: number; memo: string; costCenterId?: number }[]>(entriesJson) ?? []
+
+  if (entries.length < 2) {
+    throw new Error("Journal harus memiliki minimal 2 entri")
+  }
+
+  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0)
+  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0)
+  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    throw new Error(`Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`)
+  }
+
   const journal = await prisma.journal.create({
     data: {
       journalNumber: documentNo,
@@ -56,29 +70,25 @@ export async function createJournal(formData: FormData) {
       description: formData.get("description") as string | null,
       type: (formData.get("type") as string) || "GENERAL",
       status: "DRAFT",
-      totalDebit: 0,
-      totalCredit: 0,
+      totalDebit,
+      totalCredit,
       createdBy: Number(user.id),
     },
   })
 
   // Create journal entries with optional costCenterId
-  const entriesJson = formData.get("entries") as string | null
-  if (entriesJson) {
-    const entries = safeJsonParse<{ accountId: number; debit: number; credit: number; memo: string; costCenterId?: number }[]>(entriesJson) ?? []
-    for (const entry of entries) {
-      if (entry.accountId) {
-        await prisma.journalEntry.create({
-          data: {
-            journalId: journal.id,
-            accountId: entry.accountId,
-            debit: entry.debit || 0,
-            credit: entry.credit || 0,
-            memo: entry.memo || null,
-            costCenterId: entry.costCenterId || null,
-          },
-        })
-      }
+  for (const entry of entries) {
+    if (entry.accountId) {
+      await prisma.journalEntry.create({
+        data: {
+          journalId: journal.id,
+          accountId: entry.accountId,
+          debit: entry.debit || 0,
+          credit: entry.credit || 0,
+          memo: entry.memo || null,
+          costCenterId: entry.costCenterId || null,
+        },
+      })
     }
   }
 
@@ -201,8 +211,8 @@ export async function approveExpense(expenseId: number) {
     where: { id: expenseId },
   })
 
-  if (expense.status !== "pending") {
-    throw new Error("Expense hanya bisa di-approve dari status pending")
+  if (expense.status !== "draft") {
+    throw new Error("Expense hanya bisa di-approve dari status draft")
   }
 
   await prisma.expense.update({
@@ -227,6 +237,34 @@ export async function approveExpense(expenseId: number) {
   }
 }
 
+export async function markExpensePaid(expenseId: number) {
+  try {
+  await requirePermission("edit_expenses")
+
+  const expense = await prisma.expense.findUniqueOrThrow({
+    where: { id: expenseId },
+  })
+
+  // Laravel parity: only approved expenses can be marked as paid (draft → approved → paid)
+  if (expense.status !== "approved") {
+    throw new Error("Hanya pengeluaran yang sudah disetujui yang dapat ditandai sebagai dibayar")
+  }
+
+  await prisma.expense.update({
+    where: { id: expenseId },
+    data: { status: "paid" },
+  })
+
+  revalidatePath("/keuangan/pengeluaran")
+  return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[markExpensePaid]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
 // ==================== PETTY CASH ACTIONS ====================
 
 export async function createPettyCash(formData: FormData) {
@@ -243,6 +281,12 @@ export async function createPettyCash(formData: FormData) {
     orderBy: { createdAt: "desc" },
   })
   const balanceBefore = lastRecord ? Number(lastRecord.balanceAfter) : 0
+
+  // Laravel parity: OUT can't exceed current balance
+  if (type === "OUT" && amount > balanceBefore) {
+    throw new Error(`Saldo kas kecil tidak cukup: tersedia ${balanceBefore}, dibutuhkan ${amount}`)
+  }
+
   const balanceAfter = type === "IN" ? balanceBefore + amount : balanceBefore - amount
 
   const pettyCash = await prisma.pettyCash.create({
@@ -344,9 +388,28 @@ export async function completeReconciliation(reconciliationId: number) {
   try {
   await requirePermission("edit_journals")
 
+  // Laravel parity: only draft reconciliations can be completed
+  const reconciliation = await prisma.bankReconciliation.findUniqueOrThrow({
+    where: { id: reconciliationId },
+    include: { items: true },
+  })
+
+  if (reconciliation.status !== "draft") {
+    throw new Error("Hanya rekonsiliasi dengan status draft yang dapat diselesaikan")
+  }
+
+  // Laravel parity: all lines must be matched before completing
+  const unmatchedItems = reconciliation.items.filter((item) => !item.matched)
+  if (unmatchedItems.length > 0) {
+    throw new Error(`${unmatchedItems.length} baris belum di-match. Semua baris harus di-match sebelum menyelesaikan rekonsiliasi.`)
+  }
+
   await prisma.bankReconciliation.update({
     where: { id: reconciliationId },
-    data: { status: "completed" },
+    data: {
+      status: "completed",
+      completedAt: new Date(),
+    },
   })
 
   revalidatePath("/keuangan/rekonsiliasi-bank")
@@ -447,7 +510,11 @@ export async function deleteJournal(id: number) {
     throw new Error("Tidak bisa menghapus journal yang sudah POSTED")
   }
 
-  await prisma.journal.delete({ where: { id } })
+  // Laravel parity: cascade delete entries then journal
+  await prisma.$transaction(async (tx) => {
+    await tx.journalEntry.deleteMany({ where: { journalId: id } })
+    await tx.journal.delete({ where: { id } })
+  })
 
   revalidatePath("/keuangan/jurnal")
   return { success: true }
@@ -464,8 +531,9 @@ export async function deleteExpense(id: number) {
   await requirePermission("delete_expenses")
 
   const expense = await prisma.expense.findUniqueOrThrow({ where: { id } })
-  if (expense.status === "approved") {
-    throw new Error("Tidak bisa menghapus expense yang sudah approved")
+  // Laravel parity: only draft/pending expenses can be deleted
+  if (expense.status === "approved" || expense.status === "paid") {
+    throw new Error("Tidak bisa menghapus expense yang sudah approved atau paid")
   }
 
   await prisma.expense.delete({ where: { id } })
@@ -551,6 +619,12 @@ export async function updateJournal(id: number, formData: FormData) {
 
   const user = await requirePermission("create_journals")
 
+  // Laravel parity: only DRAFT journals can be edited
+  const existing = await prisma.journal.findUniqueOrThrow({ where: { id } })
+  if (existing.status !== "DRAFT") {
+    throw new Error("Journal yang sudah diposting tidak dapat diubah")
+  }
+
   // Fix #14: Jangan generate documentNo baru dan jangan reset totals ke 0
   const journal = await prisma.journal.update({
     where: { id },
@@ -583,11 +657,79 @@ export async function updateJournal(id: number, formData: FormData) {
   }
 }
 
+export async function reverseJournal(journalId: number) {
+  try {
+  const user = await requirePermission("edit_journals")
+
+  const journal = await prisma.journal.findUniqueOrThrow({
+    where: { id: journalId },
+    include: { entries: true },
+  })
+
+  // Laravel parity: only posted journals can be reversed
+  if (journal.status !== "POSTED") {
+    throw new Error("Hanya journal yang sudah POSTED yang bisa di-reverse")
+  }
+
+  const documentNo = await generateDocumentNumber("JRN-RV")
+
+  await prisma.$transaction(async (tx) => {
+    const reversalJournal = await tx.journal.create({
+      data: {
+        journalNumber: documentNo,
+        transactionDate: new Date(),
+        description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
+        type: journal.type,
+        status: "POSTED",
+        referenceType: "Journal",
+        referenceId: journal.id,
+        totalDebit: journal.totalDebit,
+        totalCredit: journal.totalCredit,
+        createdBy: Number(user.id),
+      },
+    })
+
+    for (const entry of journal.entries) {
+      await tx.journalEntry.create({
+        data: {
+          journalId: reversalJournal.id,
+          accountId: entry.accountId,
+          debit: entry.credit,
+          credit: entry.debit,
+          memo: `Reversal: ${entry.memo ?? ""}`,
+          costCenterId: entry.costCenterId,
+          profitCenterId: entry.profitCenterId,
+        },
+      })
+    }
+
+    await tx.journal.update({
+      where: { id: journalId },
+      data: { status: "REVERSED" },
+    })
+  })
+
+  revalidatePath("/keuangan/jurnal")
+  return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[reverseJournal]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
+}
+
 export async function updateExpense(id: number, formData: FormData) {
   try {
   "use server"
 
   const user = await requirePermission("create_expenses")
+
+  // Laravel parity: only draft expenses can be edited
+  const existingExpense = await prisma.expense.findUniqueOrThrow({ where: { id } })
+  if (existingExpense.status !== "draft") {
+    throw new Error("Hanya pengeluaran dengan status draft yang dapat diubah")
+  }
 
   const documentNo = await generateDocumentNumber("EXP")
 
@@ -645,6 +787,12 @@ export async function updatePettyCash(id: number, formData: FormData) {
   // Recalculate balance: find the record just before this one
   const currentRecord = await prisma.pettyCash.findUniqueOrThrow({ where: { id } })
   const balanceBefore = Number(currentRecord.balanceBefore)
+
+  // Laravel parity: OUT can't exceed current balance
+  if (type === "OUT" && amount > balanceBefore) {
+    throw new Error(`Saldo kas kecil tidak cukup: tersedia ${balanceBefore}, dibutuhkan ${amount}`)
+  }
+
   const balanceAfter = type === "IN" ? balanceBefore + amount : balanceBefore - amount
 
   const pettyCash = await prisma.pettyCash.update({
