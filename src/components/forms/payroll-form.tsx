@@ -132,15 +132,15 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <AppDatePicker label="Tanggal Mulai (Cut-off) *" name="startDate" defaultValue={initialData?.startDate ? new Date(initialData.startDate) : undefined} onChange={(date) => setStartDate(date?.toString() || "")} required />
+          <AppDatePicker label="Tanggal Mulai (Cut-off) *" name="startDate" defaultValue={initialData?.startDate ? new Date(initialData.startDate).toISOString().substring(0, 10) : undefined} onChange={(date) => setStartDate(date?.toString() || "")} required />
         </div>
         
         <div className="flex flex-col gap-1.5">
-          <AppDatePicker label="Tanggal Selesai (Cut-off) *" name="endDate" defaultValue={initialData?.endDate ? new Date(initialData.endDate) : undefined} onChange={(date) => setEndDate(date?.toString() || "")} required />
+          <AppDatePicker label="Tanggal Selesai (Cut-off) *" name="endDate" defaultValue={initialData?.endDate ? new Date(initialData.endDate).toISOString().substring(0, 10) : undefined} onChange={(date) => setEndDate(date?.toString() || "")} required />
         </div>
 
         <div className="flex flex-col gap-1.5 md:col-span-2">
-          <AppDatePicker label="Tanggal Rencana Pembayaran" name="paymentDate" defaultValue={initialData?.paymentDate ? new Date(initialData.paymentDate) : undefined} onChange={() => {}} />
+          <AppDatePicker label="Tanggal Rencana Pembayaran" name="paymentDate" defaultValue={initialData?.paymentDate ? new Date(initialData.paymentDate).toISOString().substring(0, 10) : undefined} onChange={() => {}} />
         </div>
       </div>
 
