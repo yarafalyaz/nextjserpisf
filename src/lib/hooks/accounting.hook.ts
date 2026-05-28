@@ -29,6 +29,7 @@ async function generateJournalNumber(
 // 1. onSalesInvoicePosted
 //    Dr. Receivable (total_amount)
 //    Cr. Revenue (subtotal) + Cr. Tax (tax_amount)
+//    Dr. COGS, Cr. Inventory (cost of invoice items)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function onSalesInvoicePosted(
@@ -40,6 +41,7 @@ export async function onSalesInvoicePosted(
 
   const invoice = await prisma.salesInvoice.findUniqueOrThrow({
     where: { id: invoiceId },
+    include: { items: true },
   });
 
   // Idempotency: check if journal already exists
@@ -100,6 +102,50 @@ export async function onSalesInvoicePosted(
           debit: 0,
           credit: taxAmount,
           memo: "PPN Keluaran",
+        },
+      });
+    }
+
+    // Dr. HPP / Cr. Persediaan (if inventory cost can be derived)
+    const cogsAmount = invoice.items.reduce(
+      (sum, item) => sum + Number(item.qty) * Math.max(0, Number(item.total ?? 0) - Number(item.discount ?? 0)),
+      0
+    );
+
+    if (cogsAmount > 0 && settings.cogsAccountId && settings.inventoryAccountId) {
+      const cogsJournalNumber = await generateJournalNumber(tx, "INV-COGS", invoiceId);
+      const cogsJournal = await tx.journal.create({
+        data: {
+          journalNumber: cogsJournalNumber,
+          transactionDate: invoice.date,
+          referenceType: "SalesInvoiceCOGS",
+          referenceId: invoice.id,
+          description: `COGS Invoice ${invoice.documentNo}`,
+          type: "GENERAL",
+          status: "POSTED",
+          totalDebit: cogsAmount,
+          totalCredit: cogsAmount,
+          createdBy: userId ?? null,
+        },
+      });
+
+      await tx.journalEntry.create({
+        data: {
+          journalId: cogsJournal.id,
+          accountId: settings.cogsAccountId,
+          debit: cogsAmount,
+          credit: 0,
+          memo: "Harga Pokok Penjualan",
+        },
+      });
+
+      await tx.journalEntry.create({
+        data: {
+          journalId: cogsJournal.id,
+          accountId: settings.inventoryAccountId,
+          debit: 0,
+          credit: cogsAmount,
+          memo: "Pengeluaran Persediaan atas Penjualan",
         },
       });
     }

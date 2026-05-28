@@ -220,9 +220,6 @@ export async function approveExpense(expenseId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
-  // Accounting journal
-  await onExpenseApproved(expenseId, Number(user.id))
-
   // Sync to PettyCash if paid from petty cash account
   await onExpenseApprovedSyncPettyCash(expenseId)
 
@@ -254,6 +251,9 @@ export async function markExpensePaid(expenseId: number) {
     where: { id: expenseId },
     data: { status: "paid" },
   })
+
+  // Accounting journal (Laravel parity: created when status becomes paid)
+  await onExpenseApproved(expenseId)
 
   revalidatePath("/keuangan/pengeluaran")
   return { success: true }

@@ -20,24 +20,25 @@ export async function onMaterialIssueCompleted(
       include: { items: true },
     });
 
-    // Idempotency: check if stock moves already exist
     const existingMoves = await tx.stockMove.findFirst({
       where: {
         referenceType: "MaterialIssue",
         referenceId: issueId,
       },
     });
-    if (existingMoves) {
-      throw new Error("Stock Move sudah dibuat untuk Material Issue ini.");
-    }
 
-    // Guard: must not be already completed
+    // Idempotent retry: if the observer already posted stock, do not create duplicates.
+    if (existingMoves) return;
+
+    // Guard: observer should only run on transition to completed.
     if (issue.status === "completed") {
       throw new Error("Material Issue sudah selesai sebelumnya.");
     }
 
     // Create Stock Move OUT per item
     for (const item of issue.items) {
+      if (Number(item.qty) <= 0) continue;
+
       const smDocNo = await generateDocumentNumber("SM");
 
       await tx.stockMove.create({
@@ -48,7 +49,7 @@ export async function onMaterialIssueCompleted(
           qty: item.qty,
           cost: item.cost,
           impact: "OUT",
-          status: "draft",
+          status: "posted",
           referenceType: "MaterialIssue",
           referenceId: issue.id,
           notes: `Pengeluaran Material ${issue.documentNo}`,

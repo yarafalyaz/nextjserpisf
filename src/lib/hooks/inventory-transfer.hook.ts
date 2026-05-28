@@ -1,15 +1,19 @@
-
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 
 /**
  * Inventory Transfer Hook - Observer pattern replacement.
  * Handles stock movement between warehouses.
+ *
+ * Status contract (action-owned):
+ *   draft → processed  (via processInventoryTransfer → onTransferProcessed)
+ *   processed → received (via receiveInventoryTransfer → onTransferReceived)
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
 // onTransferProcessed
-// Creates Stock Move OUT from source warehouse for each item
+// Creates Stock Move OUT from source warehouse for each item.
+// Idempotent: returns silently if OUT moves already exist for this transfer.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function onTransferProcessed(
@@ -22,7 +26,7 @@ export async function onTransferProcessed(
       include: { items: true },
     });
 
-    // Idempotency: check if OUT moves already exist
+    // Idempotency: return silently if OUT moves already exist
     const existingOutMoves = await tx.stockMove.findFirst({
       where: {
         referenceType: "InventoryTransfer",
@@ -30,12 +34,12 @@ export async function onTransferProcessed(
         impact: "OUT",
       },
     });
-    if (existingOutMoves) {
-      throw new Error("Stock Move OUT sudah dibuat untuk transfer ini.");
-    }
+    if (existingOutMoves) return;
 
     // Create Stock Move OUT per item from source warehouse
     for (const item of transfer.items) {
+      if (Number(item.qty) <= 0) continue;
+
       const smDocNo = await generateDocumentNumber("SM");
 
       await tx.stockMove.create({
@@ -46,26 +50,41 @@ export async function onTransferProcessed(
           qty: item.qty,
           cost: 0,
           impact: "OUT",
-          status: "draft",
+          status: "posted",
           referenceType: "InventoryTransfer",
           referenceId: transfer.id,
           notes: `Transfer OUT ke WH#${transfer.destinationWarehouseId} - ${transfer.documentNo}`,
           createdBy: userId ?? null,
         },
       });
-    }
 
-    // Update transfer status
-    await tx.inventoryTransfer.update({
-      where: { id: transferId },
-      data: { status: "in_transit" },
-    });
+      // Update item qtyOnHand in source warehouse
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
+
+      // FIFO layer consumption
+      const layers = await tx.inventoryLayer.findMany({
+        where: { itemId: item.itemId, remaining: { gt: 0 } },
+        orderBy: { createdAt: "asc" },
+      });
+      let qtyToConsume = Number(item.qty);
+      for (const layer of layers) {
+        if (qtyToConsume <= 0) break;
+        const available = Number(layer.remaining);
+        const consume = Math.min(available, qtyToConsume);
+        await tx.inventoryLayer.update({
+          where: { id: layer.id },
+          data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
+        });
+        qtyToConsume -= consume;
+      }
+    }
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // onTransferReceived
-// Creates Stock Move IN to destination warehouse for each item
+// Creates Stock Move IN to destination warehouse for each item.
+// Idempotent: returns silently if IN moves already exist for this transfer.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function onTransferReceived(
@@ -78,7 +97,7 @@ export async function onTransferReceived(
       include: { items: true },
     });
 
-    // Idempotency: check if IN moves already exist
+    // Idempotency: return silently if IN moves already exist
     const existingInMoves = await tx.stockMove.findFirst({
       where: {
         referenceType: "InventoryTransfer",
@@ -86,17 +105,17 @@ export async function onTransferReceived(
         impact: "IN",
       },
     });
-    if (existingInMoves) {
-      throw new Error("Stock Move IN sudah dibuat untuk transfer ini.");
-    }
+    if (existingInMoves) return;
 
-    // Guard: must be in transit
-    if (transfer.status !== "in_transit") {
-      throw new Error("Transfer harus berstatus 'in_transit' untuk diterima.");
+    // Guard: must be processed (OUT already posted) before receiving
+    if (transfer.status !== "processed") {
+      throw new Error("Transfer harus berstatus 'processed' untuk diterima.");
     }
 
     // Create Stock Move IN per item to destination warehouse
     for (const item of transfer.items) {
+      if (Number(item.qty) <= 0) continue;
+
       const smDocNo = await generateDocumentNumber("SM");
 
       await tx.stockMove.create({
@@ -107,21 +126,34 @@ export async function onTransferReceived(
           qty: item.qty,
           cost: 0,
           impact: "IN",
-          status: "draft",
+          status: "posted",
           referenceType: "InventoryTransfer",
           referenceId: transfer.id,
           notes: `Transfer IN dari WH#${transfer.sourceWarehouseId} - ${transfer.documentNo}`,
           createdBy: userId ?? null,
         },
       });
-    }
 
-    // Update transfer status
-    await tx.inventoryTransfer.update({
-      where: { id: transferId },
-      data: {
-        status: "received",
-      },
-    });
+      // Update item qtyOnHand in destination warehouse
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
+
+      // Create FIFO inventory layer for received stock
+      const sm = await tx.stockMove.findFirst({
+        where: { documentNo: smDocNo },
+        select: { id: true },
+      });
+      if (sm) {
+        await tx.inventoryLayer.create({
+          data: {
+            itemId: item.itemId,
+            stockMoveId: sm.id,
+            qtyIn: item.qty,
+            qtyOut: 0,
+            remaining: item.qty,
+            unitCost: 0,
+          },
+        });
+      }
+    }
   });
 }
