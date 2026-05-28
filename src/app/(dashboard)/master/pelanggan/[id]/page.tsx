@@ -50,7 +50,7 @@ export default async function CustomerDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/customers/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/pelanggan/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/master/pelanggan" />
           </>
         }
@@ -81,7 +81,7 @@ export default async function CustomerDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Quotation Terbaru</h2>
-                  <Link href={`/sales/quotations?search=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/penjualan/penawaran?search=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {customer.quotations.length === 0 ? (
@@ -97,7 +97,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.quotations.map((q) => (
                           <DetailTableRow key={q.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/sales/quotations/${q.id}`}>{q.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/penjualan/penawaran/${q.id}`}>{q.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(q.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
@@ -117,7 +117,7 @@ export default async function CustomerDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Invoice Terbaru</h2>
-                  <Link href={`/sales/invoices?search=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/penjualan/faktur?search=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {customer.salesInvoices.length === 0 ? (
@@ -134,7 +134,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.salesInvoices.map((inv) => (
                           <DetailTableRow key={inv.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/sales/invoices/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/penjualan/faktur/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(inv.paidAmount))}</DetailTableTd>
@@ -155,7 +155,7 @@ export default async function CustomerDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Proyek</h2>
-                  <Link href={`/projects?search=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/proyek?search=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {customer.projects.length === 0 ? (
@@ -171,7 +171,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.projects.map((p) => (
                           <DetailTableRow key={p.id}>
-                            <DetailTableTd><Link href={`/projects/${p.id}`}>{p.name}</Link></DetailTableTd>
+                            <DetailTableTd><Link href={`/proyek/${p.id}`}>{p.name}</Link></DetailTableTd>
                             <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
                             <DetailTableTd>{p.startDate ? formatDate(p.startDate) : "-"}</DetailTableTd>
                             <DetailTableTd>{p.endDate ? formatDate(p.endDate) : "-"}</DetailTableTd>
@@ -191,7 +191,7 @@ export default async function CustomerDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Kendaraan</h2>
-                  <Link href={`/master/customers/${id}/vehicles`} className="text-[0.8125rem] text-primary font-medium hover:underline">Kelola Kendaraan →</Link>
+                  <Link href={`/master/pelanggan/${id}/kendaraan`} className="text-[0.8125rem] text-primary font-medium hover:underline">Kelola Kendaraan →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {customer.customerVehicles.length === 0 ? (
@@ -207,7 +207,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.customerVehicles.map((cv) => (
                           <DetailTableRow key={cv.id}>
-                            <DetailTableTd>{cv.vehicle?.variant?.name || `Vehicle #${cv.vehicleId}`}</DetailTableTd>
+                            <DetailTableTd>{cv.vehicle?.variant?.name || `Vehicle #${cv.kendaraanId}`}</DetailTableTd>
                             <DetailTableTd className="font-mono">{cv.vehicle?.plateNumber || "-"}</DetailTableTd>
                             <DetailTableTd>{cv.vehicle?.year || "-"}</DetailTableTd>
                             <DetailTableTd>{cv.vehicle?.color || "-"}</DetailTableTd>

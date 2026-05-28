@@ -23,7 +23,7 @@ const columns = [
     id: "assetName",
     header: "Aset",
     cell: (info) => (
-      <Link href={`/assets/transfers/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/aset/transfer/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -46,7 +46,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/assets/transfers/${info.row.original.id}`}
+        viewHref={`/aset/transfer/${info.row.original.id}`}
         deleteAction={deleteAssetTransfer}
         deleteId={info.row.original.id}
       />

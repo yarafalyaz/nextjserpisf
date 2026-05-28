@@ -50,7 +50,7 @@ export default async function ProjectsPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <div className="flex gap-1.5 flex-wrap">
             {["", "active", "completed", "cancelled"].map((s) => (
-              <Link key={s} href={`/projects?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/proyek?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s === "active" ? "Aktif" : s === "completed" ? "Selesai" : s === "cancelled" ? "Dibatalkan" : "Semua"}
               </Link>
             ))}

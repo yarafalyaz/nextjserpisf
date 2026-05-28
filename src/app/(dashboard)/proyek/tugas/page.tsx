@@ -50,7 +50,7 @@ export default async function TasksPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <div className="flex gap-1.5 flex-wrap">
             {["", "pending", "in_progress", "completed", "cancelled"].map((s) => (
-              <Link key={s} href={`/projects/tasks?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/proyek/tugas?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

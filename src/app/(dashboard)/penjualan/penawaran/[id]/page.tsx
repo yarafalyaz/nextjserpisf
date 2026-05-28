@@ -47,10 +47,10 @@ export default async function QuotationDetailPage({
         badge={<StatusChip status={quotation.status} />}
         actions={
           <>
-            <Button href={`/sales/quotations/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/penjualan/penawaran/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
             {quotation.status === "approved" && (
-              <Button href={`/sales/orders/create?quotationId=${id}`} variant="primary">+ Sales Order</Button>
+              <Button href={`/penjualan/pesanan/create?quotationId=${id}`} variant="primary">+ Sales Order</Button>
             )}
             <BackButton href="/penjualan/penawaran" />
           </>
@@ -73,7 +73,7 @@ export default async function QuotationDetailPage({
                 <DetailCard>
                   <DetailField
                     label="Customer"
-                    value={<Link href={`/master/customers/${quotation.customerId}`}>{quotation.customer.name}</Link>}
+                    value={<Link href={`/master/pelanggan/${quotation.customerId}`}>{quotation.customer.name}</Link>}
                   />
                   <DetailField label="Tanggal" value={formatDate(quotation.date)} />
                   <DetailField label="Valid Sampai" value={formatDate(quotation.validUntil)} />

@@ -50,7 +50,7 @@ export default async function PurchaseRequestsPage({
           <AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/permintaan" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "pending", "approved", "rejected"].map((s) => (
-              <Link key={s} href={`/purchase/requests?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/pembelian/permintaan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

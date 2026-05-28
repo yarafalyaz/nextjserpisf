@@ -41,7 +41,7 @@ export default async function ItemCategoryDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/item-categories/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/kategori-barang/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={category.id} action={deleteItemCategory} />
             <BackButton href="/master/kategori-barang" />
           </>
@@ -52,7 +52,7 @@ export default async function ItemCategoryDetailPage({
         <DetailField label="Nama Kategori" value={category.name} />
         <DetailField label="Kategori Induk" value={
           category.parent ? (
-            <Link href={`/master/item-categories/${category.parent.id}`}>{category.parent.name}</Link>
+            <Link href={`/master/kategori-barang/${category.parent.id}`}>{category.parent.name}</Link>
           ) : "-"
         } />
         <DetailField label="Deskripsi" value={category.description || "-"} colSpan="full" />
@@ -70,7 +70,7 @@ export default async function ItemCategoryDetailPage({
             <DetailTableBody>
               {category.children.map((child) => (
                 <DetailTableRow key={child.id}>
-                  <DetailTableTd><Link href={`/master/item-categories/${child.id}`}>{child.name}</Link></DetailTableTd>
+                  <DetailTableTd><Link href={`/master/kategori-barang/${child.id}`}>{child.name}</Link></DetailTableTd>
                   <DetailTableTd>{child.description || "-"}</DetailTableTd>
                 </DetailTableRow>
               ))}
@@ -93,7 +93,7 @@ export default async function ItemCategoryDetailPage({
             <DetailTableBody>
               {category.items.map((item) => (
                 <DetailTableRow key={item.id}>
-                  <DetailTableTd className="font-mono"><Link href={`/master/items/${item.id}`}>{item.sku}</Link></DetailTableTd>
+                  <DetailTableTd className="font-mono"><Link href={`/master/barang/${item.id}`}>{item.sku}</Link></DetailTableTd>
                   <DetailTableTd>{item.name}</DetailTableTd>
                   <DetailTableTd>{item.unitOfMeasure}</DetailTableTd>
                 </DetailTableRow>

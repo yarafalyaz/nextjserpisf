@@ -101,7 +101,7 @@ export async function createPurchaseOrder(formData: FormData) {
   }
 
   // Notify admins
-  await notificationService.notifyAdmins('Purchase Order baru dibuat', `/purchase/orders/${po.id}`)
+  await notificationService.notifyAdmins('Purchase Order baru dibuat', `/pembelian/pesanan/${po.id}`)
 
   revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }
@@ -204,7 +204,7 @@ export async function verifyGoodsReceipt(grId: number) {
   await onGoodsReceiptVerified(grId, Number(user.id))
 
   // Notify admins
-  await notificationService.notifyAdmins('Goods Receipt diterima', `/purchase/goods-receipts/${grId}`)
+  await notificationService.notifyAdmins('Goods Receipt diterima', `/pembelian/penerimaan/${grId}`)
 
   revalidatePath("/pembelian/penerimaan")
   revalidatePath("/pembelian/pesanan")
@@ -538,7 +538,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   }
 
   // Notify admins
-  await notificationService.notifyAdmins('Purchase Order baru dibuat', `/purchase/orders/${po.id}`)
+  await notificationService.notifyAdmins('Purchase Order baru dibuat', `/pembelian/pesanan/${po.id}`)
 
   revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }

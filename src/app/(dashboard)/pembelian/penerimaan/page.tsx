@@ -50,7 +50,7 @@ export default async function GoodsReceiptsPage({
           <AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/penerimaan" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "verified"].map((s) => (
-              <Link key={s} href={`/purchase/goods-receipts?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/pembelian/penerimaan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

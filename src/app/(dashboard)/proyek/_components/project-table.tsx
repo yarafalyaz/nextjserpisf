@@ -36,7 +36,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Judul Proyek",
     cell: (info) => (
-      <Link href={`/projects/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/proyek/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue() || "-"}
       </Link>
     ),

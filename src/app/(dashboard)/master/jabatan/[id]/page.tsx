@@ -40,7 +40,7 @@ export default async function PositionDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/positions/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/jabatan/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={position.id} action={deletePosition} />
             <BackButton href="/master/jabatan" />
           </>
@@ -51,7 +51,7 @@ export default async function PositionDetailPage({
         <DetailField label="Nama Posisi" value={position.name} />
         <DetailField label="Departemen" value={
           position.department ? (
-            <Link href={`/master/departments/${position.department.id}`}>{position.department.name}</Link>
+            <Link href={`/master/departemen/${position.department.id}`}>{position.department.name}</Link>
           ) : "-"
         } />
         <DetailField label="Dibuat" value={formatDate(position.createdAt)} />
@@ -71,7 +71,7 @@ export default async function PositionDetailPage({
             <DetailTableBody>
               {position.employees.map((emp) => (
                 <DetailTableRow key={emp.id}>
-                  <DetailTableTd className="font-mono"><Link href={`/master/employees/${emp.id}`}>{emp.employeeNo}</Link></DetailTableTd>
+                  <DetailTableTd className="font-mono"><Link href={`/master/karyawan/${emp.id}`}>{emp.employeeNo}</Link></DetailTableTd>
                   <DetailTableTd>{emp.name}</DetailTableTd>
                   <DetailTableTd>{emp.email || "-"}</DetailTableTd>
                 </DetailTableRow>

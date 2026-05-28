@@ -65,7 +65,7 @@ export default async function UsersPage() {
                     </span>
                   </DetailTableTd>
                   <DetailTableTd>
-                    <Link href={`/settings/users/${user.id}`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
+                    <Link href={`/pengaturan/pengguna/${user.id}`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
                   </DetailTableTd>
                 </DetailTableRow>
               ))}

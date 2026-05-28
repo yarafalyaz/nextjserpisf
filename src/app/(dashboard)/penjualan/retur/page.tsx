@@ -56,7 +56,7 @@ export default async function SalesReturnsPage({
             {["", "draft", "completed"].map((s) => (
               <Link
                 key={s}
-                href={`/sales/returns?status=${s}`}
+                href={`/penjualan/retur?status=${s}`}
                 className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
               >
                 {s ? statusLabel(s) : "Semua"}

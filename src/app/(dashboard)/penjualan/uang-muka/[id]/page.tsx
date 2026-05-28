@@ -41,9 +41,9 @@ export default async function DownPaymentDetailPage({
         badge={<StatusChip status={dp.status} />}
         actions={
           <>
-            <Button href={`/sales/down-payments/${dp.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/penjualan/uang-muka/${dp.id}/edit`} variant="primary">Edit</Button>
             {dp.status === "paid" && (
-              <Button href={`/manufacturing/work-orders/create?quotationId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
+              <Button href={`/produksi/perintah-kerja/create?quotationId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
             )}
             <PrintButton />
             <DeleteButton id={dp.id} action={deleteDownPayment} />
@@ -56,11 +56,11 @@ export default async function DownPaymentDetailPage({
         <DetailField label="No. Dokumen" value={dp.documentNo} mono />
         <DetailField
           label="Customer"
-          value={<Link href={`/master/customers/${dp.customer.id}`}>{dp.customer.name}</Link>}
+          value={<Link href={`/master/pelanggan/${dp.customer.id}`}>{dp.customer.name}</Link>}
         />
         <DetailField
           label="Quotation"
-          value={<Link href={`/sales/quotations/${dp.quotation.id}`}>{dp.quotation.documentNo}</Link>}
+          value={<Link href={`/penjualan/penawaran/${dp.quotation.id}`}>{dp.quotation.documentNo}</Link>}
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(dp.amount))}</span>} />
         <DetailField label="Tanggal Bayar" value={formatDate(dp.paymentDate)} />

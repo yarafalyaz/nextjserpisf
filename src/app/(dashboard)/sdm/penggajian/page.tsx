@@ -59,7 +59,7 @@ export default async function PayrollPage({
           <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/penggajian" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "approved", "paid"].map((s) => (
-              <Link key={s} href={`/hrm/payroll?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/sdm/penggajian?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

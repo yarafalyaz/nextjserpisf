@@ -49,17 +49,17 @@ export default async function CustomerVehiclesPage({
         { label: "Dashboard", href: "/" },
         { label: "Master Data", href: "/master" },
         { label: "Customers", href: "/master/pelanggan" },
-        { label: customer.name, href: `/master/customers/${id}` },
+        { label: customer.name, href: `/master/pelanggan/${id}` },
         { label: "Kendaraan" },
       ]} />
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Kendaraan - {customer.name}</h1>
         <div className="flex gap-2">
-          <Link href={`/master/customers/${id}/vehicles/create`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
+          <Link href={`/master/pelanggan/${id}/kendaraan/tambah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
             <Plus size={14} /> Tambah Kendaraan
           </Link>
-          <Link href={`/master/customers/${id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
+          <Link href={`/master/pelanggan/${id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
       </div>
 
@@ -89,10 +89,10 @@ export default async function CustomerVehiclesPage({
                     <DetailTableTd><StatusChip status={cv.isActive ? "active" : "inactive"} /></DetailTableTd>
                     <DetailTableTd>
                       <div className="flex items-center gap-1">
-                        <Link href={`/master/customers/${id}/vehicles/${cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
+                        <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
                           <Eye size={14} />
                         </Link>
-                        <Link href={`/master/customers/${id}/vehicles/${cv.id}/edit`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Edit">
+                        <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}/edit`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Edit">
                           <Pencil size={14} />
                         </Link>
                         <DeleteButton id={cv.id} action={deleteCustomerVehicle} />

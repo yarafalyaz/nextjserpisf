@@ -38,8 +38,8 @@ export default async function CreateCustomerVehiclePage({
         { label: "Dashboard", href: "/" },
         { label: "Master Data", href: "/master" },
         { label: "Customers", href: "/master/pelanggan" },
-        { label: customer.name, href: `/master/customers/${id}` },
-        { label: "Kendaraan", href: `/master/customers/${id}/vehicles` },
+        { label: customer.name, href: `/master/pelanggan/${id}` },
+        { label: "Kendaraan", href: `/master/pelanggan/${id}/kendaraan` },
         { label: "Tambah" },
       ]} />
 

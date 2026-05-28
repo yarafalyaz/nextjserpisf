@@ -25,7 +25,7 @@ const columns = [
     header: "Nama",
     cell: (info) => (
       <div>
-        <Link href={`/master/items/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+        <Link href={`/master/barang/${info.row.original.id}`} className="text-primary hover:underline font-medium">
           {info.getValue()}
         </Link>
         <p className="text-xs text-muted-foreground mt-0.5">
@@ -65,8 +65,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/master/items/${info.row.original.id}`}
-        editHref={`/master/items/${info.row.original.id}/edit`}
+        viewHref={`/master/barang/${info.row.original.id}`}
+        editHref={`/master/barang/${info.row.original.id}/edit`}
         deleteAction={deleteItem}
         deleteId={info.row.original.id}
       />

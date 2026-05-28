@@ -42,7 +42,7 @@ export default async function ExpenseDetailPage({
         ]}
         badge={<StatusChip status={expense.status} />}
         actions={<>
-          <Button href={`/finance/expenses/${expense.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/pengeluaran/${expense.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <PrintButton />
           <DeleteButton id={expense.id} action={deleteExpense} />
           <BackButton href="/keuangan/pengeluaran" />
@@ -61,7 +61,7 @@ export default async function ExpenseDetailPage({
         {expense.description && <DetailField label="Deskripsi" value={expense.description} colSpan="full" />}
         {project && (
           <DetailField label="Proyek" value={
-            <Link href={`/projects/${project.id}`} className="text-primary hover:underline">{project.documentNo ? `${project.documentNo} - ` : ""}{project.name}</Link>
+            <Link href={`/proyek/${project.id}`} className="text-primary hover:underline">{project.documentNo ? `${project.documentNo} - ` : ""}{project.name}</Link>
           } />
         )}
         {expense.referenceNo && <DetailField label="No. Referensi" value={expense.referenceNo} mono />}

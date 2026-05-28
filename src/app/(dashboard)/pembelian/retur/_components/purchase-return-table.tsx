@@ -30,7 +30,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/purchase/returns/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/pembelian/retur/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -57,7 +57,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/purchase/returns/${info.row.original.id}`}
+        viewHref={`/pembelian/retur/${info.row.original.id}`}
       />
     ),
   }),

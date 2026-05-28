@@ -36,7 +36,7 @@ export default async function TimesheetDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/hrm/timesheets/${timesheet.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/sdm/lembar-waktu/${timesheet.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={timesheet.id} action={deleteTimesheet} />
             <BackButton href="/sdm/lembar-waktu" />
           </>

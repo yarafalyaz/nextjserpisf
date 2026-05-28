@@ -37,14 +37,14 @@ export default async function AssetTransferDetailPage({
           { label: "Detail" },
         ]}
         actions={<>
-          <Button href={`/assets/transfers/${transfer.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/transfer/${transfer.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={transfer.id} action={deleteAssetTransfer} />
           <BackButton href="/aset/transfer" />
         </>}
       />
 
       <DetailCard>
-        <DetailField label="Aset" value={<Link href={`/assets/${transfer.asset.id}`}>{transfer.asset.code} - {transfer.asset.name}</Link>} />
+        <DetailField label="Aset" value={<Link href={`/aset/${transfer.asset.id}`}>{transfer.asset.code} - {transfer.asset.name}</Link>} />
         <DetailField label="Dari Lokasi" value={transfer.fromLocation || "-"} />
         <DetailField label="Ke Lokasi" value={transfer.toLocation} />
         <DetailField label="Tanggal Transfer" value={formatDate(transfer.transferDate)} />

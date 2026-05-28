@@ -23,7 +23,7 @@ const columns = [
     id: "quotationDocumentNo",
     header: "Quotation",
     cell: (info) => (
-      <Link href={`/sales/down-payments/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/uang-muka/${info.row.original.id}`} className="text-primary hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),

@@ -24,7 +24,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/sales/delivery-orders/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/surat-jalan/${info.row.original.id}`} className="text-primary hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),

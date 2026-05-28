@@ -55,7 +55,7 @@ export default async function AppreciationsPage({
           <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/apresiasi" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "bonus", "reward", "incentive"].map((s) => (
-              <Link key={s} href={`/hrm/appreciations?type=${s}`} className={`filter-chip ${params.type === s || (!params.type && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/sdm/apresiasi?type=${s}`} className={`filter-chip ${params.type === s || (!params.type && !s) ? "active" : ""}`}>
                 {s === "bonus" ? "Bonus" : s === "reward" ? "Reward" : s === "incentive" ? "Insentif" : "Semua"}
               </Link>
             ))}

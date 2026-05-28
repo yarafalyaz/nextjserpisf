@@ -56,7 +56,7 @@ export default async function BankReconciliationPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "completed"].map((s) => (
-              <Link key={s} href={`/finance/bank-reconciliation?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/keuangan/rekonsiliasi-bank?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
@@ -85,7 +85,7 @@ export default async function BankReconciliationPage({
                     <DetailTableTd><StatusChip status={r.status} /></DetailTableTd>
                     <DetailTableTd>{formatDate(r.createdAt)}</DetailTableTd>
                     <DetailTableTd>
-                      <Link href={`/finance/bank-reconciliation/${r.id}`} className="button button--ghost button--sm">Eye</Link>
+                      <Link href={`/keuangan/rekonsiliasi-bank/${r.id}`} className="button button--ghost button--sm">Eye</Link>
                     </DetailTableTd>
                   </DetailTableRow>
                 ))
@@ -98,8 +98,8 @@ export default async function BankReconciliationPage({
           <div className="flex items-center justify-between p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
-              {page > 1 && <Link href={`/finance/bank-reconciliation?page=${page - 1}`} className="button button--ghost button--sm">← Prev</Link>}
-              {page < totalPages && <Link href={`/finance/bank-reconciliation?page=${page + 1}`} className="button button--ghost button--sm">Next →</Link>}
+              {page > 1 && <Link href={`/keuangan/rekonsiliasi-bank?page=${page - 1}`} className="button button--ghost button--sm">← Prev</Link>}
+              {page < totalPages && <Link href={`/keuangan/rekonsiliasi-bank?page=${page + 1}`} className="button button--ghost button--sm">Next →</Link>}
             </div>
           </div>
         )}

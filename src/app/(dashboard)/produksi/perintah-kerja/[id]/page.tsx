@@ -47,9 +47,9 @@ export default async function WorkOrderDetailPage({
         badge={<StatusChip status={wo.status} />}
         actions={
           <>
-            <Button href={`/manufacturing/work-orders/${wo.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/produksi/perintah-kerja/${wo.id}/edit`} variant="primary">Edit</Button>
             {wo.status === "completed" && (
-              <Button href={`/sales/invoices/create?salesOrderId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
+              <Button href={`/penjualan/faktur/create?salesOrderId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
             )}
             <PrintButton documentType="work-order" documentId={wo.id} />
             <DeleteButton id={wo.id} action={deleteWorkOrder} />
@@ -59,9 +59,9 @@ export default async function WorkOrderDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="Customer" value={<Link href={`/master/customers/${wo.customerId}`}>{wo.customer.name}</Link>} />
+        <DetailField label="Customer" value={<Link href={`/master/pelanggan/${wo.customerId}`}>{wo.customer.name}</Link>} />
         <DetailField label="Tanggal" value={formatDate(wo.date)} />
-        <DetailField label="Quotation" value={wo.quotation ? <Link href={`/sales/quotations/${wo.quotationId}`}>{wo.quotation.documentNo}</Link> : "-"} mono />
+        <DetailField label="Quotation" value={wo.quotation ? <Link href={`/penjualan/penawaran/${wo.quotationId}`}>{wo.quotation.documentNo}</Link> : "-"} mono />
         <DetailField label="Total Biaya Material" value={formatCurrency(totalCost)} />
       </DetailCard>
 

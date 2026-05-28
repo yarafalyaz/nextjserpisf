@@ -42,7 +42,7 @@ export default async function ExpensesPage({
           <AppSearchField placeholder="Cari expense..." action="/keuangan/pengeluaran" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "pending", "approved", "rejected"].map((s) => (
-              <Link key={s} href={`/finance/expenses?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/keuangan/pengeluaran?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

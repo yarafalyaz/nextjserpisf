@@ -33,7 +33,7 @@ export default async function BudgetDetailPage({
           { label: budget.name },
         ]}
         actions={<>
-          <Button href={`/finance/budgets/${budget.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/anggaran/${budget.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={budget.id} action={deleteBudget} />
           <BackButton href="/keuangan/anggaran" />
         </>}

@@ -60,10 +60,10 @@ export default async function RolesPage() {
                     <DetailTableTd>{formatDate(role.createdAt)}</DetailTableTd>
                     <DetailTableTd>
                       <div className="flex items-center gap-1">
-                        <Link href={`/settings/roles/${role.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+                        <Link href={`/pengaturan/peran/${role.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Detail
                         </Link>
-                        <Link href={`/settings/roles/${role.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+                        <Link href={`/pengaturan/peran/${role.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Edit
                         </Link>
                         <form action={async () => {

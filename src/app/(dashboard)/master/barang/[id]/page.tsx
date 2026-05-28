@@ -51,7 +51,7 @@ export default async function ItemDetailPage({
               const po = gr.purchaseOrderId ? await prisma.purchaseOrder.findUnique({ where: { id: gr.purchaseOrderId }, include: { vendor: true } }) : null
               if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
             }
-            docLink = `/purchase/goods-receipts/${sm.referenceId}`
+            docLink = `/pembelian/penerimaan/${sm.referenceId}`
             break
           }
           case "MaterialIssue": {
@@ -77,7 +77,7 @@ export default async function ItemDetailPage({
                 }
               }
             }
-            docLink = `/inventory/material-issues/${sm.referenceId}`
+            docLink = `/inventaris/pengeluaran-material/${sm.referenceId}`
             break
           }
           case "SalesReturn": {
@@ -86,7 +86,7 @@ export default async function ItemDetailPage({
               const cust = await prisma.customer.findUnique({ where: { id: sr.customerId } })
               if (cust) { party = cust.name; partyLabel = "Customer" }
             }
-            docLink = `/sales/returns/${sm.referenceId}`
+            docLink = `/penjualan/retur/${sm.referenceId}`
             break
           }
           case "PurchaseReturn": {
@@ -95,19 +95,19 @@ export default async function ItemDetailPage({
               const po = await prisma.purchaseOrder.findUnique({ where: { id: pr.purchaseOrderId }, include: { vendor: true } })
               if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
             }
-            docLink = `/purchase/returns/${sm.referenceId}`
+            docLink = `/pembelian/retur/${sm.referenceId}`
             break
           }
           case "StockAdjustment": {
             partyLabel = "Internal"
             party = "Penyesuaian Stok"
-            docLink = `/inventory/adjustments/${sm.referenceId}`
+            docLink = `/inventaris/penyesuaian/${sm.referenceId}`
             break
           }
           case "InventoryTransfer": {
             partyLabel = "Internal"
             party = "Transfer Gudang"
-            docLink = `/inventory/transfers/${sm.referenceId}`
+            docLink = `/inventaris/transfer/${sm.referenceId}`
             break
           }
           case "WorkOrder": {
@@ -119,7 +119,7 @@ export default async function ItemDetailPage({
               partyLabel = "Produksi"
               party = "Work Order"
             }
-            docLink = `/manufacturing/work-orders/${sm.referenceId}`
+            docLink = `/produksi/perintah-kerja/${sm.referenceId}`
             break
           }
         }
@@ -154,7 +154,7 @@ export default async function ItemDetailPage({
         ) : undefined}
         actions={
           <>
-            <Button href={`/master/items/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/barang/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={item.id} action={deleteItem} />
             <BackButton href="/master/barang" />
           </>

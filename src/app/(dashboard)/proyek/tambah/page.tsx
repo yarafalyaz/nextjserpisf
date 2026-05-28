@@ -26,7 +26,7 @@ export default async function CreateProjectPage() {
   const customerVehicles = customerVehiclesRaw.map((cv) => ({
     id: cv.id,
     licensePlate: cv.licensePlate,
-    vehicleName: [cv.vehicle.variant?.model?.brand?.name, cv.vehicle.variant?.model?.name, cv.vehicle.variant?.name].filter(Boolean).join(" ") || `Vehicle #${cv.vehicleId}`,
+    vehicleName: [cv.vehicle.variant?.model?.brand?.name, cv.vehicle.variant?.model?.name, cv.vehicle.variant?.name].filter(Boolean).join(" ") || `Vehicle #${cv.kendaraanId}`,
     customerId: cv.customerId,
   }))
 

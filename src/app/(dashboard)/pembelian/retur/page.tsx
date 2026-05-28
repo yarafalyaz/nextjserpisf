@@ -54,7 +54,7 @@ export default async function PurchaseReturnsPage({
           <AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/retur" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "returned"].map((s) => (
-              <Link key={s} href={`/purchase/returns?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/pembelian/retur?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

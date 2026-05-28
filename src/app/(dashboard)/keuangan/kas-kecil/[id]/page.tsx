@@ -34,7 +34,7 @@ export default async function PettyCashDetailPage({
           { label: pettyCash.documentNo },
         ]}
         actions={<>
-          <Button href={`/finance/petty-cash/${pettyCash.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/kas-kecil/${pettyCash.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={pettyCash.id} action={deletePettyCash} />
           <BackButton href="/keuangan/kas-kecil" />
         </>}

@@ -25,7 +25,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/sales/quotations/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/penawaran/${info.row.original.id}`} className="text-primary hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -61,7 +61,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/sales/quotations/${info.row.original.id}`}
+        viewHref={`/penjualan/penawaran/${info.row.original.id}`}
         deleteAction={deleteQuotation}
         deleteId={info.row.original.id}
       />

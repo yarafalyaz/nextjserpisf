@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor("code", {
     header: "Kode",
     cell: (info) => (
-      <Link href={`/master/currencies/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/master/mata-uang/${info.row.original.id}`} className="text-primary hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -39,7 +39,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        editHref={`/master/currencies/${info.row.original.id}/edit`}
+        editHref={`/master/mata-uang/${info.row.original.id}/edit`}
         deleteAction={deleteCurrency}
         deleteId={info.row.original.id}
       />

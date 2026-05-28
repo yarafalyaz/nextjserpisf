@@ -23,7 +23,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/hrm/timesheets/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/lembar-waktu/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -46,7 +46,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/hrm/timesheets/${info.row.original.id}`}
+        viewHref={`/sdm/lembar-waktu/${info.row.original.id}`}
         deleteAction={deleteTimesheet}
         deleteId={info.row.original.id}
       />

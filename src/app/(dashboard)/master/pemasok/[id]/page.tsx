@@ -55,7 +55,7 @@ export default async function VendorDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/vendors/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/pemasok/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/master/pemasok" />
           </>
         }
@@ -85,7 +85,7 @@ export default async function VendorDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Purchase Order Terbaru</h2>
-                  <Link href={`/purchase/orders?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/pembelian/pesanan?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {vendor.purchaseOrders.length === 0 ? (
@@ -101,7 +101,7 @@ export default async function VendorDetailPage({
                       <DetailTableBody>
                         {vendor.purchaseOrders.map((po) => (
                           <DetailTableRow key={po.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/purchase/orders/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(po.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(po.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
@@ -121,7 +121,7 @@ export default async function VendorDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
-                  <Link href={`/purchase/goods-receipts?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/pembelian/penerimaan?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {goodsReceipts.length === 0 ? (
@@ -140,7 +140,7 @@ export default async function VendorDetailPage({
                           <DetailTableRow key={gr.id}>
                             <DetailTableTd className="font-mono">{gr.documentNo}</DetailTableTd>
                             <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
-                            <DetailTableTd className="font-mono"><Link href={`/purchase/orders/${gr.purchaseOrder.id}`}>{gr.purchaseOrder.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${gr.purchaseOrder.id}`}>{gr.purchaseOrder.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{gr.warehouse?.name || "-"}</DetailTableTd>
                             <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
                           </DetailTableRow>
@@ -159,7 +159,7 @@ export default async function VendorDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Pembelian</h2>
-                  <Link href={`/purchase/returns?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/pembelian/retur?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {purchaseReturns.length === 0 ? (
@@ -177,7 +177,7 @@ export default async function VendorDetailPage({
                           <DetailTableRow key={pr.id}>
                             <DetailTableTd className="font-mono">{pr.documentNo}</DetailTableTd>
                             <DetailTableTd>{formatDate(pr.date)}</DetailTableTd>
-                            <DetailTableTd className="font-mono"><Link href={`/purchase/orders/${pr.purchaseOrder.id}`}>{pr.purchaseOrder.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${pr.purchaseOrder.id}`}>{pr.purchaseOrder.documentNo}</Link></DetailTableTd>
                             <DetailTableTd><StatusChip status={pr.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -195,7 +195,7 @@ export default async function VendorDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan Terbaru</h2>
-                  <Link href={`/purchase/bills?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/pembelian/tagihan?search=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {vendor.vendorBills.length === 0 ? (
@@ -212,7 +212,7 @@ export default async function VendorDetailPage({
                       <DetailTableBody>
                         {vendor.vendorBills.map((bill) => (
                           <DetailTableRow key={bill.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/purchase/bills/${bill.id}`}>{bill.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/pembelian/tagihan/${bill.id}`}>{bill.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(bill.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(bill.grandTotal))}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(bill.paidAmount))}</DetailTableTd>

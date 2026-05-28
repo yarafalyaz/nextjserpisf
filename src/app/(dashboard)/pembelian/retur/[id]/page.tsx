@@ -42,7 +42,7 @@ export default async function PurchaseReturnDetailPage({
         badge={<StatusChip status={purchaseReturn.status} />}
         actions={
           <>
-            <Button href={`/purchase/returns/${purchaseReturn.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/pembelian/retur/${purchaseReturn.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
             <BackButton href="/pembelian/retur" />
@@ -54,11 +54,11 @@ export default async function PurchaseReturnDetailPage({
         <DetailField label="No. Dokumen" value={purchaseReturn.documentNo} mono />
         <DetailField
           label="Purchase Order"
-          value={<Link href={`/purchase/orders/${purchaseReturn.purchaseOrder.id}`}>{purchaseReturn.purchaseOrder.documentNo}</Link>}
+          value={<Link href={`/pembelian/pesanan/${purchaseReturn.purchaseOrder.id}`}>{purchaseReturn.purchaseOrder.documentNo}</Link>}
         />
         <DetailField
           label="Vendor"
-          value={<Link href={`/master/vendors/${purchaseReturn.purchaseOrder.vendor.id}`}>{purchaseReturn.purchaseOrder.vendor.name}</Link>}
+          value={<Link href={`/master/pemasok/${purchaseReturn.purchaseOrder.vendor.id}`}>{purchaseReturn.purchaseOrder.vendor.name}</Link>}
         />
         <DetailField label="Tanggal" value={formatDate(purchaseReturn.date)} />
         <DetailField label="Dibuat" value={formatDate(purchaseReturn.createdAt)} />

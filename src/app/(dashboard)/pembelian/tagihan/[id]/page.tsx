@@ -38,7 +38,7 @@ export default async function VendorBillDetailPage({
         <div className="flex gap-2 items-center">
           <span className={`status-badge status-${bill.status}`}>{bill.status}</span>
   <div className="flex gap-2">
-          <Link href={`/purchase/bills/${bill.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
+          <Link href={`/pembelian/tagihan/${bill.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Edit</Link>
           <PrintButton />
           <DeleteButton id={bill.id} action={deleteVendorBill} />
                   <Link href="/pembelian/tagihan" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
@@ -60,14 +60,14 @@ export default async function VendorBillDetailPage({
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted uppercase tracking-wide">Vendor</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
-              <Link href={`/master/vendors/${bill.vendor.id}`}>{bill.vendor.name}</Link>
+              <Link href={`/master/pemasok/${bill.vendor.id}`}>{bill.vendor.name}</Link>
             </span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted uppercase tracking-wide">Purchase Order</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               {bill.purchaseOrder ? (
-                <Link href={`/purchase/orders/${bill.purchaseOrder.id}`}>{bill.purchaseOrder.documentNo}</Link>
+                <Link href={`/pembelian/pesanan/${bill.purchaseOrder.id}`}>{bill.purchaseOrder.documentNo}</Link>
               ) : "-"}
             </span>
           </div>

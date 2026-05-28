@@ -78,7 +78,7 @@ export default async function ProjectDetailPage({
         badge={<StatusChip status={project.status} />}
         actions={
           <>
-            <Button href={`/projects/${project.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/proyek/${project.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/proyek" />
           </>
         }
@@ -192,7 +192,7 @@ export default async function ProjectDetailPage({
                 <DetailField label="Nama Proyek" value={project.name} />
                 <DetailField
                   label="Customer"
-                  value={<Link href={`/master/customers/${project.customer.id}`} className="text-primary hover:underline font-medium">{project.customer.name}</Link>}
+                  value={<Link href={`/master/pelanggan/${project.customer.id}`} className="text-primary hover:underline font-medium">{project.customer.name}</Link>}
                 />
                 <DetailField label="Status" value={<StatusChip status={project.status} />} />
                 <DetailField label="Tanggal Mulai" value={project.startDate ? formatDate(project.startDate) : "-"} />
@@ -207,7 +207,7 @@ export default async function ProjectDetailPage({
                 {workOrder && (
                   <DetailField
                     label="Work Order"
-                    value={<Link href={`/manufacturing/work-orders/${workOrder.id}`} className="text-primary hover:underline font-mono">{workOrder.documentNo}</Link>}
+                    value={<Link href={`/produksi/perintah-kerja/${workOrder.id}`} className="text-primary hover:underline font-mono">{workOrder.documentNo}</Link>}
                   />
                 )}
                 {project.description && (
@@ -321,7 +321,7 @@ export default async function ProjectDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Penawaran</h2>
-                  <Link href={`/sales/quotations?search=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/penjualan/penawaran?search=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {quotations.length === 0 ? (
@@ -337,7 +337,7 @@ export default async function ProjectDetailPage({
                       <DetailTableBody>
                         {quotations.map((q) => (
                           <DetailTableRow key={q.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/sales/quotations/${q.id}`}>{q.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/penjualan/penawaran/${q.id}`}>{q.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(q.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
@@ -357,7 +357,7 @@ export default async function ProjectDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan & Pembayaran</h2>
-                  <Link href={`/sales/invoices?search=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/penjualan/faktur?search=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {invoices.length === 0 ? (
@@ -374,7 +374,7 @@ export default async function ProjectDetailPage({
                       <DetailTableBody>
                         {invoices.map((inv) => (
                           <DetailTableRow key={inv.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/sales/invoices/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/penjualan/faktur/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(inv.paidAmount))}</DetailTableTd>

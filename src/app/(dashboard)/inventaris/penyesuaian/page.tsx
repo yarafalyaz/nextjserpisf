@@ -50,7 +50,7 @@ export default async function StockAdjustmentsPage({
           <AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/penyesuaian" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "processed"].map((s) => (
-              <Link key={s} href={`/inventory/adjustments?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/inventaris/penyesuaian?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

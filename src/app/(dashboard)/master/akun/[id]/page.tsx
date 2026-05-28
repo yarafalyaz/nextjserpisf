@@ -30,7 +30,7 @@ export default async function DetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/accounts/${data.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/master/akun/${data.id}/edit`} variant="primary">Edit</Button>
             <BackButton href="/master/akun" />
           </>
         }

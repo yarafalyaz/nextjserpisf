@@ -30,7 +30,7 @@ const columns = [
         <Avatar size="sm" color="accent">
           <Avatar.Fallback>{getInitials(info.getValue())}</Avatar.Fallback>
         </Avatar>
-        <Link href={`/master/employees/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+        <Link href={`/master/karyawan/${info.row.original.id}`} className="text-primary hover:underline font-medium">
           {info.getValue()}
         </Link>
       </div>
@@ -66,8 +66,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/master/employees/${info.row.original.id}`}
-        editHref={`/master/employees/${info.row.original.id}/edit`}
+        viewHref={`/master/karyawan/${info.row.original.id}`}
+        editHref={`/master/karyawan/${info.row.original.id}/edit`}
         deleteAction={deleteEmployee}
         deleteId={info.row.original.id}
       />

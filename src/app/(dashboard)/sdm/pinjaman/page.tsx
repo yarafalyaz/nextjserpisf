@@ -57,7 +57,7 @@ export default async function EmployeeLoansPage({
           <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/pinjaman" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "active", "paid"].map((s) => (
-              <Link key={s} href={`/hrm/loans?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/sdm/pinjaman?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s === "active" ? "Aktif" : s === "paid" ? "Lunas" : "Semua"}
               </Link>
             ))}

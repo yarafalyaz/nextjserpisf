@@ -48,7 +48,7 @@ export default async function LeaveRequestsPage({
           <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/cuti" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "pending", "approved", "rejected"].map((s) => (
-              <Link key={s} href={`/hrm/leave?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/sdm/cuti?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

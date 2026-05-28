@@ -504,7 +504,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
         const result = await createQuotation(formData)
         if (result.success) {
           showSuccess("Quotation berhasil dibuat")
-          router.push(`/sales/quotations/${result.id}`)
+          router.push(`/penjualan/penawaran/${result.id}`)
           router.refresh()
         }
       } catch (error) {

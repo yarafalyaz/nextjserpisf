@@ -51,7 +51,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
         const result = order?.id ? await updateSalesOrder(order.id, formData) : await createSalesOrder(formData)
         if (result.success) {
           showSuccess(order?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-          router.push(`/sales/orders/${result.id}`)
+          router.push(`/penjualan/pesanan/${result.id}`)
           router.refresh()
         }
       } catch (error) {

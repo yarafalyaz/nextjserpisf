@@ -44,9 +44,9 @@ export default async function SalesOrderDetailPage({
         badge={<StatusChip status={order.status} />}
         actions={
           <>
-            <Button href={`/sales/orders/${order.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/penjualan/pesanan/${order.id}/edit`} variant="primary">Edit</Button>
             {order.status === "approved" && (
-              <Button href={`/sales/down-payments/create?salesOrderId=${order.id}`} variant="primary">+ Down Payment</Button>
+              <Button href={`/penjualan/uang-muka/create?salesOrderId=${order.id}`} variant="primary">+ Down Payment</Button>
             )}
             <PrintButton documentType="order" documentId={order.id} />
             <BackButton href="/penjualan/pesanan" />
@@ -64,13 +64,13 @@ export default async function SalesOrderDetailPage({
       <DetailCard>
         <DetailField
           label="Customer"
-          value={<Link href={`/master/customers/${order.customerId}`}>{order.customer.name}</Link>}
+          value={<Link href={`/master/pelanggan/${order.customerId}`}>{order.customer.name}</Link>}
         />
         <DetailField label="Tanggal" value={formatDate(order.date)} />
         <DetailField label="Tanggal Pengiriman" value={order.deliveryDate ? formatDate(order.deliveryDate) : "-"} />
         <DetailField
           label="Quotation"
-          value={order.quotation ? <Link href={`/sales/quotations/${order.quotation.id}`}>{order.quotation.documentNo}</Link> : "-"}
+          value={order.quotation ? <Link href={`/penjualan/penawaran/${order.quotation.id}`}>{order.quotation.documentNo}</Link> : "-"}
         />
         <DetailField label="Grand Total" value={formatCurrency(Number(order.grandTotal))} />
       </DetailCard>
@@ -128,7 +128,7 @@ export default async function SalesOrderDetailPage({
               <DetailTableBody>
                 {order.deliveryOrders.map((d) => (
                   <DetailTableRow key={d.id}>
-                    <DetailTableTd className="font-mono"><Link href={`/sales/delivery-orders/${d.id}`}>{d.documentNo}</Link></DetailTableTd>
+                    <DetailTableTd className="font-mono"><Link href={`/penjualan/surat-jalan/${d.id}`}>{d.documentNo}</Link></DetailTableTd>
                     <DetailTableTd>{formatDate(d.date)}</DetailTableTd>
                     <DetailTableTd><StatusChip status={d.status} /></DetailTableTd>
                   </DetailTableRow>
@@ -156,7 +156,7 @@ export default async function SalesOrderDetailPage({
               <DetailTableBody>
                 {order.salesInvoices.map((inv) => (
                   <DetailTableRow key={inv.id}>
-                    <DetailTableTd className="font-mono"><Link href={`/sales/invoices/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
+                    <DetailTableTd className="font-mono"><Link href={`/penjualan/faktur/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
                     <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
                     <DetailTableTd><StatusChip status={inv.status} /></DetailTableTd>

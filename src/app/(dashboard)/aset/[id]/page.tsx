@@ -46,7 +46,7 @@ export default async function AssetDetailPage({
         ]}
         badge={<StatusChip status={asset.status} />}
         actions={<>
-          <Button href={`/assets/${asset.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/${asset.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={asset.id} action={deleteAssetTransfer} />
           <BackButton href="/aset" />
         </>}

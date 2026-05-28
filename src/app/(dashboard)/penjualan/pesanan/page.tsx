@@ -63,7 +63,7 @@ export default async function SalesOrdersPage({
             {["", "draft", "confirmed", "completed", "cancelled"].map((s) => (
               <Link
                 key={s}
-                href={`/sales/orders?status=${s}`}
+                href={`/penjualan/pesanan?status=${s}`}
                 className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
               >
                 {s ? statusLabel(s) : "Semua"}

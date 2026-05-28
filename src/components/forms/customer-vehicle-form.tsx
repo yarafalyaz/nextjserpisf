@@ -20,7 +20,7 @@ interface Brand {
 
 interface VehicleData {
   id: number
-  vehicleId: number
+  kendaraanId: number
   brandId: number | null
   modelId: number | null
   variantId: number | null
@@ -85,7 +85,7 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
           await createCustomerVehicle(formData)
           showSuccess("Kendaraan berhasil ditambahkan")
         }
-        router.push(`/master/customers/${customerId}/vehicles`)
+        router.push(`/master/pelanggan/${customerId}/kendaraan`)
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

@@ -50,7 +50,7 @@ export default async function MaterialIssuesPage({
           <AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/pengeluaran-material" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "issued"].map((s) => (
-              <Link key={s} href={`/inventory/material-issues?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/inventaris/pengeluaran-material?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

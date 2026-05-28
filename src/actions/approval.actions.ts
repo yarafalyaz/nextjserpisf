@@ -51,7 +51,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
     })
   }
 
-  revalidatePath(`/settings/approvals/${approvalId}`)
+  revalidatePath(`/pengaturan/persetujuan/${approvalId}`)
   revalidatePath("/pengaturan/persetujuan")
 }
 
@@ -87,6 +87,6 @@ export async function rejectStep(approvalId: number, formData: FormData) {
     },
   })
 
-  revalidatePath(`/settings/approvals/${approvalId}`)
+  revalidatePath(`/pengaturan/persetujuan/${approvalId}`)
   revalidatePath("/pengaturan/persetujuan")
 }

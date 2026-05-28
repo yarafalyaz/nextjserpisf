@@ -51,7 +51,7 @@ export default async function VehicleDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/vehicles/${vehicle.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/kendaraan/${vehicle.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={vehicle.id} action={deleteVehicle} />
             <BackButton href="/kendaraan" />
           </>
@@ -85,7 +85,7 @@ export default async function VehicleDetailPage({
               <DetailTableBody>
                 {vehicle.customerVehicles.map((cv) => (
                   <DetailTableRow key={cv.id}>
-                    <DetailTableTd><Link href={`/master/customers/${cv.customer.id}`}>{cv.customer.name}</Link></DetailTableTd>
+                    <DetailTableTd><Link href={`/master/pelanggan/${cv.customer.id}`}>{cv.customer.name}</Link></DetailTableTd>
                     <DetailTableTd>{formatDate(cv.createdAt)}</DetailTableTd>
                   </DetailTableRow>
                 ))}

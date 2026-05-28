@@ -13,10 +13,10 @@ import { Pencil } from "lucide-react"
 export default async function CustomerVehicleDetailPage({
   params,
 }: {
-  params: Promise<{ id: string; vehicleId: string }>
+  params: Promise<{ id: string; kendaraanId: string }>
 }) {
   await requirePermission("view_customers")
-  const { id, vehicleId } = await params
+  const { id, kendaraanId } = await params
 
   const customer = await prisma.customer.findUnique({
     where: { id: Number(id), deletedAt: null },
@@ -25,7 +25,7 @@ export default async function CustomerVehicleDetailPage({
   if (!customer) notFound()
 
   const cv = await prisma.customerVehicle.findUnique({
-    where: { id: Number(vehicleId) },
+    where: { id: Number(kendaraanId) },
     include: {
       vehicle: {
         include: {
@@ -53,18 +53,18 @@ export default async function CustomerVehicleDetailPage({
         { label: "Dashboard", href: "/" },
         { label: "Master Data", href: "/master" },
         { label: "Customers", href: "/master/pelanggan" },
-        { label: customer.name, href: `/master/customers/${id}` },
-        { label: "Kendaraan", href: `/master/customers/${id}/vehicles` },
+        { label: customer.name, href: `/master/pelanggan/${id}` },
+        { label: "Kendaraan", href: `/master/pelanggan/${id}/kendaraan` },
         { label: "Detail" },
       ]} />
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Detail Kendaraan</h1>
         <div className="flex gap-2">
-          <Link href={`/master/customers/${id}/vehicles/${vehicleId}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
+          <Link href={`/master/pelanggan/${id}/kendaraan/${kendaraanId}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
             <Pencil size={14} /> Edit
           </Link>
-          <Link href={`/master/customers/${id}/vehicles`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
+          <Link href={`/master/pelanggan/${id}/kendaraan`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
       </div>
 

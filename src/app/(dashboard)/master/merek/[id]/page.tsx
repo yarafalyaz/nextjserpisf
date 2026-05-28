@@ -35,7 +35,7 @@ export default async function BrandDetailPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">{brand.name}</h1>
         <div className="flex gap-2">
-          <Link href={`/master/brands/${id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
+          <Link href={`/master/merek/${id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
           <Link href="/master/merek" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
       </div>
@@ -72,7 +72,7 @@ export default async function BrandDetailPage({
                 {brand.items.map((item) => (
                   <DetailTableRow key={item.id}>
                     <DetailTableTd className="font-mono">{item.sku}</DetailTableTd>
-                    <DetailTableTd><Link href={`/master/items/${item.id}`} className="text-primary hover:underline">{item.name}</Link></DetailTableTd>
+                    <DetailTableTd><Link href={`/master/barang/${item.id}`} className="text-primary hover:underline">{item.name}</Link></DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

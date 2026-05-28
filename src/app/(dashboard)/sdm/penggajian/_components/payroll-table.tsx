@@ -30,7 +30,7 @@ const columns = [
   columnHelper.accessor("period", {
     header: "Periode",
     cell: (info) => (
-      <Link href={`/hrm/payroll/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/penggajian/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -68,7 +68,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/hrm/payroll/${info.row.original.id}`}
+        viewHref={`/sdm/penggajian/${info.row.original.id}`}
       />
     ),
   }),

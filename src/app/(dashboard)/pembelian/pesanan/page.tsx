@@ -59,7 +59,7 @@ export default async function PurchaseOrdersPage({
           <FilterDrawer>
             <div className="flex flex-col gap-2">
               {["", "draft", "approved", "ordered", "received", "cancelled"].map((s) => (
-                <Link key={s} href={`/purchase/orders?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+                <Link key={s} href={`/pembelian/pesanan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                   {s ? statusLabel(s) : "Semua"}
                 </Link>
               ))}
@@ -67,7 +67,7 @@ export default async function PurchaseOrdersPage({
           </FilterDrawer>
           <div className="flex gap-1.5 flex-wrap hidden lg:flex">
             {["", "draft", "approved", "ordered", "received", "cancelled"].map((s) => (
-              <Link key={s} href={`/purchase/orders?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/pembelian/pesanan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

@@ -45,7 +45,7 @@ export default async function ApprovalsPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <div className="flex gap-1.5 flex-wrap">
             {["", "pending", "approved", "rejected"].map((s) => (
-              <Link key={s} href={`/settings/approvals?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/pengaturan/persetujuan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}
@@ -74,7 +74,7 @@ export default async function ApprovalsPage({
                     <DetailTableTd><span className={`status-badge status-${a.status}`}>{a.status}</span></DetailTableTd>
                     <DetailTableTd>{formatDate(a.createdAt)}</DetailTableTd>
                     <DetailTableTd>
-                      <Link href={`/settings/approvals/${a.id}`} className="button button--ghost button--sm">Eye</Link>
+                      <Link href={`/pengaturan/persetujuan/${a.id}`} className="button button--ghost button--sm">Eye</Link>
                     </DetailTableTd>
                   </DetailTableRow>
                 ))

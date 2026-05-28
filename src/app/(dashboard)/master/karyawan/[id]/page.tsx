@@ -48,7 +48,7 @@ export default async function EmployeeDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/employees/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/karyawan/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={employee.id} action={deleteEmployee} />
             <BackButton href="/master/karyawan" />
           </>
@@ -111,7 +111,7 @@ export default async function EmployeeDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Kehadiran</h2>
-                  <Link href={`/hrm/attendances?search=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/sdm/absensis?search=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {employee.attendances.length === 0 ? (
@@ -147,7 +147,7 @@ export default async function EmployeeDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Cuti</h2>
-                  <Link href={`/hrm/leave-requests?search=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/sdm/permintaan-cuti?search=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {employee.leaveRequests.length === 0 ? (
@@ -185,7 +185,7 @@ export default async function EmployeeDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Lembur</h2>
-                  <Link href={`/hrm/overtime?search=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/sdm/lembur?search=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {employee.overtimeRequests.length === 0 ? (

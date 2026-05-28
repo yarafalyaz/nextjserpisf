@@ -39,7 +39,7 @@ export default async function AssetCategoryDetailPage({
           { label: category.name },
         ]}
         actions={<>
-          <Button href={`/assets/categories/${category.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/kategori/${category.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={category.id} action={deleteAssetCategory} />
           <BackButton href="/aset/kategori" />
         </>}
@@ -70,7 +70,7 @@ export default async function AssetCategoryDetailPage({
               <DetailTableBody>
                 {category.assets.map((asset) => (
                   <DetailTableRow key={asset.id}>
-                    <DetailTableTd className="font-mono"><Link href={`/assets/${asset.id}`}>{asset.code}</Link></DetailTableTd>
+                    <DetailTableTd className="font-mono"><Link href={`/aset/${asset.id}`}>{asset.code}</Link></DetailTableTd>
                     <DetailTableTd>{asset.name}</DetailTableTd>
                     <DetailTableTd><StatusChip status={asset.status} /></DetailTableTd>
                   </DetailTableRow>

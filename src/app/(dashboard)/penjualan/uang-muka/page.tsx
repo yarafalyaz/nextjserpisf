@@ -58,7 +58,7 @@ export default async function DownPaymentsPage({
             {["", "pending", "confirmed", "cancelled"].map((s) => (
               <Link
                 key={s}
-                href={`/sales/down-payments?status=${s}`}
+                href={`/penjualan/uang-muka?status=${s}`}
                 className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
               >
                 {s ? statusLabel(s) : "Semua"}

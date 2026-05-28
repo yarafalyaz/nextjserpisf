@@ -15,7 +15,7 @@ export function UomForm({ uom }: { uom?: any } = {}) {
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        const res = await fetch("/api/master/uom", {
+        const res = await fetch("/api/master/satuan", {
           method: uom?.id ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

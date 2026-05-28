@@ -31,7 +31,7 @@ export function AssetTable({
       accessorKey: "code",
       header: "Kode",
       cell: ({ row }) => (
-        <Link href={`/assets/${row.original.id}`} className="font-medium text-primary hover:underline">
+        <Link href={`/aset/${row.original.id}`} className="font-medium text-primary hover:underline">
           {row.original.code}
         </Link>
       ),
@@ -126,7 +126,7 @@ export function AssetTable({
       cell: ({ row }) => (
         <div className="flex items-center gap-1 justify-end">
           <Link
-            href={`/assets/${row.original.id}`}
+            href={`/aset/${row.original.id}`}
             className="inline-flex items-center justify-center size-8 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >

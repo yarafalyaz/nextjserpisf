@@ -75,7 +75,7 @@ export async function createVehicle(formData: FormData) {
     await prisma.customerVehicle.create({
       data: {
         customerId,
-        vehicleId: vehicle.id,
+        kendaraanId: vehicle.id,
       },
     })
   }
@@ -183,7 +183,7 @@ export async function createCustomerVehicle(formData: FormData) {
 
   // Find or create Vehicle from variantId
   const variantId = safeId(formData.get("variantId"))
-  let vehicleId: number
+  let kendaraanId: number
 
   if (variantId) {
     // Create a new Vehicle record linked to the variant
@@ -195,15 +195,15 @@ export async function createCustomerVehicle(formData: FormData) {
         color: formData.get("color") as string | null,
       },
     })
-    vehicleId = vehicle.id
+    kendaraanId = vehicle.id
   } else {
-    vehicleId = requireId(formData.get("vehicleId"), "vehicleId")
+    kendaraanId = requireId(formData.get("kendaraanId"), "kendaraanId")
   }
 
   const customerVehicle = await prisma.customerVehicle.create({
     data: {
       customerId,
-      vehicleId,
+      kendaraanId,
       licensePlate: formData.get("licensePlate") as string | null,
       year: safeNumber(formData.get("year")),
       color: formData.get("color") as string | null,
@@ -216,7 +216,7 @@ export async function createCustomerVehicle(formData: FormData) {
     },
   })
 
-  revalidatePath(`/master/customers/${customerId}/vehicles`)
+  revalidatePath(`/master/pelanggan/${customerId}/kendaraan`)
   return { success: true, id: customerVehicle.id }
 }
 
@@ -227,14 +227,14 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
 
   // Find or create Vehicle from variantId
   const variantId = safeId(formData.get("variantId"))
-  let vehicleId: number
+  let kendaraanId: number
 
   const existing = await prisma.customerVehicle.findUniqueOrThrow({ where: { id } })
 
   if (variantId) {
     // Update existing vehicle record
     const updatedVehicle = await prisma.vehicle.update({
-      where: { id: existing.vehicleId },
+      where: { id: existing.kendaraanId },
       data: {
         vehicleVariantId: variantId,
         plateNumber: formData.get("licensePlate") as string | null,
@@ -242,15 +242,15 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
         color: formData.get("color") as string | null,
       },
     })
-    vehicleId = updatedVehicle.id
+    kendaraanId = updatedVehicle.id
   } else {
-    vehicleId = requireId(formData.get("vehicleId"), "vehicleId")
+    kendaraanId = requireId(formData.get("kendaraanId"), "kendaraanId")
   }
 
   await prisma.customerVehicle.update({
     where: { id },
     data: {
-      vehicleId,
+      kendaraanId,
       licensePlate: formData.get("licensePlate") as string | null,
       year: safeNumber(formData.get("year")),
       color: formData.get("color") as string | null,
@@ -263,7 +263,7 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath(`/master/customers/${customerId}/vehicles`)
+  revalidatePath(`/master/pelanggan/${customerId}/kendaraan`)
   return { success: true }
 }
 
@@ -278,6 +278,6 @@ export async function deleteCustomerVehicle(id: number) {
     where: { id },
   })
 
-  revalidatePath(`/master/customers/${vehicle.customerId}/vehicles`)
+  revalidatePath(`/master/pelanggan/${vehicle.customerId}/kendaraan`)
   return { success: true }
 }

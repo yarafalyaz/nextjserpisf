@@ -46,7 +46,7 @@ export default async function WarehouseDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/warehouses/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/gudang/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/master/gudang" />
           </>
         }
@@ -105,7 +105,7 @@ export default async function WarehouseDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Stok</h2>
-                  <Link href={`/inventory/stock-moves?search=${warehouse.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/inventaris/mutasi-stok?search=${warehouse.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {stockMoves.length === 0 ? (
@@ -123,7 +123,7 @@ export default async function WarehouseDetailPage({
                         {stockMoves.map((sm) => (
                           <DetailTableRow key={sm.id}>
                             <DetailTableTd className="font-mono">{sm.documentNo}</DetailTableTd>
-                            <DetailTableTd><Link href={`/master/items/${sm.itemId}`}>{sm.item.name}</Link></DetailTableTd>
+                            <DetailTableTd><Link href={`/master/barang/${sm.itemId}`}>{sm.item.name}</Link></DetailTableTd>
                             <DetailTableTd><StatusChip status={sm.impact === "IN" ? "received" : "returned"} /></DetailTableTd>
                             <DetailTableTd align="right">{Number(sm.qty)}</DetailTableTd>
                             <DetailTableTd>{formatDate(sm.createdAt)}</DetailTableTd>

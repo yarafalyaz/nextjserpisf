@@ -42,7 +42,7 @@ export default async function TaskDetailPage({
         badge={<StatusChip status={task.status} />}
         actions={
           <>
-            <Button href={`/projects/tasks/${task.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/proyek/tugas/${task.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/proyek/tugas" />
           </>
         }
@@ -52,7 +52,7 @@ export default async function TaskDetailPage({
         <DetailField label="Nama Tugas" value={task.name} />
         <DetailField
           label="Proyek"
-          value={<Link href={`/projects/${task.project.id}`} className="text-primary hover:underline">{task.project.name}</Link>}
+          value={<Link href={`/proyek/${task.project.id}`} className="text-primary hover:underline">{task.project.name}</Link>}
         />
         <DetailField label="Status" value={<StatusChip status={task.status} />} />
         <DetailField label="Ditugaskan Ke" value={task.assignee?.name || "-"} />

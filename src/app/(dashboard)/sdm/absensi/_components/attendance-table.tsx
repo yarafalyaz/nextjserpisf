@@ -92,7 +92,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/hrm/attendance/${info.row.original.id}`}
+        viewHref={`/sdm/absensi/${info.row.original.id}`}
       />
     ),
   }),

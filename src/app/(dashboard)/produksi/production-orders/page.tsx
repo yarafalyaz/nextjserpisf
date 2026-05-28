@@ -53,7 +53,7 @@ export default async function ProductionOrdersPage({
           <AppSearchField placeholder="Cari no. dokumen..." action="/produksi/production-orders" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "in_progress", "completed"].map((s) => (
-              <Link key={s} href={`/manufacturing/production-orders?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/produksi/production-orders?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

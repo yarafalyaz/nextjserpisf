@@ -45,7 +45,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/hrm/leave/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/cuti/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -88,7 +88,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/hrm/leave/${info.row.original.id}`}
+        viewHref={`/sdm/cuti/${info.row.original.id}`}
         deleteAction={deleteLeaveRequest}
         deleteId={info.row.original.id}
       />

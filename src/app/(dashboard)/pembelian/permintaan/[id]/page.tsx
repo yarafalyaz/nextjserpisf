@@ -43,7 +43,7 @@ export default async function PurchaseRequestDetailPage({
         badge={<StatusChip status={request.status} />}
         actions={
           <>
-            <Button href={`/purchase/requests/${request.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/pembelian/permintaan/${request.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={request.id} action={deletePurchaseRequest} />
             <BackButton href="/pembelian/permintaan" />
@@ -115,7 +115,7 @@ export default async function PurchaseRequestDetailPage({
               <DetailTableBody>
                 {request.purchaseOrders.map((po) => (
                   <DetailTableRow key={po.id}>
-                    <DetailTableTd className="font-mono"><Link href={`/purchase/orders/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
+                    <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
                     <DetailTableTd>{formatDate(po.date)}</DetailTableTd>
                     <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
                   </DetailTableRow>

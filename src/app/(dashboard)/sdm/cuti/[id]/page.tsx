@@ -39,7 +39,7 @@ export default async function LeaveRequestDetailPage({
         badge={<StatusChip status={leave.status} />}
         actions={
           <>
-            <Button href={`/hrm/leave/${leave.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/sdm/cuti/${leave.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={leave.id} action={deleteLeaveRequest} />
             <BackButton href="/sdm/cuti" />
           </>

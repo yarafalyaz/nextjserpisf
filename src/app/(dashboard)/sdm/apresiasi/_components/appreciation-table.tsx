@@ -34,7 +34,7 @@ const columns = [
   columnHelper.accessor("employee", {
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/hrm/appreciations/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/apresiasi/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue().name}
       </Link>
     ),
@@ -61,8 +61,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/hrm/appreciations/${info.row.original.id}`}
-        editHref={`/hrm/appreciations/${info.row.original.id}/edit`}
+        viewHref={`/sdm/apresiasi/${info.row.original.id}`}
+        editHref={`/sdm/apresiasi/${info.row.original.id}/edit`}
         deleteAction={deleteAppreciation}
         deleteId={info.row.original.id}
       />

@@ -49,7 +49,7 @@ export default async function PurchaseOrderDetailPage({
         badge={<StatusChip status={po.status} />}
         actions={
           <>
-            <Button href={`/purchase/orders/${po.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/pembelian/pesanan/${po.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={po.id} action={deletePurchaseOrder} />
             <BackButton href="/pembelian/pesanan" />
@@ -134,7 +134,7 @@ export default async function PurchaseOrderDetailPage({
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
                   {po.status === "ordered" && (
-                    <Link href={`/purchase/goods-receipts/create?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat GR</Link>
+                    <Link href={`/pembelian/penerimaan/create?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat GR</Link>
                   )}
                 </div>
                 <div className="p-4 px-5">
@@ -151,7 +151,7 @@ export default async function PurchaseOrderDetailPage({
                       <DetailTableBody>
                         {po.goodsReceipts.map((gr) => (
                           <DetailTableRow key={gr.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/purchase/goods-receipts/${gr.id}`}>{gr.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={`/pembelian/penerimaan/${gr.id}`}>{gr.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
                             <DetailTableTd>{gr.items.length} item</DetailTableTd>
                             <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>

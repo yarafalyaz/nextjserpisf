@@ -41,7 +41,7 @@ export default async function VendorPaymentDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/purchase/vendor-payments/${payment.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/pembelian/pembayaran-vendor/${payment.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={payment.id} action={deleteVendorPayment} />
             <BackButton href="/pembelian/pembayaran-vendor" />
@@ -53,7 +53,7 @@ export default async function VendorPaymentDetailPage({
         <DetailField label="No. Dokumen" value={payment.documentNo} mono />
         <DetailField
           label="Vendor"
-          value={<Link href={`/master/vendors/${payment.vendor.id}`}>{payment.vendor.name}</Link>}
+          value={<Link href={`/master/pemasok/${payment.vendor.id}`}>{payment.vendor.name}</Link>}
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />
         <DetailField label="Tanggal Bayar" value={formatDate(payment.paymentDate)} />
@@ -76,7 +76,7 @@ export default async function VendorPaymentDetailPage({
               <DetailTableBody>
                 {payment.allocations.map((alloc) => (
                   <DetailTableRow key={alloc.id}>
-                    <DetailTableTd><Link href={`/purchase/bills/${alloc.vendorBillId}`}>Bill #{alloc.vendorBillId}</Link></DetailTableTd>
+                    <DetailTableTd><Link href={`/pembelian/tagihan/${alloc.vendorBillId}`}>Bill #{alloc.vendorBillId}</Link></DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(alloc.amount))}</DetailTableTd>
                   </DetailTableRow>
                 ))}

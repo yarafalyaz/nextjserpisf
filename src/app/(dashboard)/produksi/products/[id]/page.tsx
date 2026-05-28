@@ -42,7 +42,7 @@ export default async function ProductDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/manufacturing/products/${product.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/produksi/products/${product.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={product.id} action={deleteProduct} />
             <BackButton href="/produksi/products" />
           </>
@@ -97,7 +97,7 @@ export default async function ProductDetailPage({
             <DetailTableBody>
               {product.productionOrders.map((po) => (
                 <DetailTableRow key={po.id}>
-                  <DetailTableTd className="font-mono"><Link href={`/manufacturing/production-orders/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
+                  <DetailTableTd className="font-mono"><Link href={`/produksi/production-orders/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
                   <DetailTableTd align="right">{Number(po.qty)}</DetailTableTd>
                   <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
                 </DetailTableRow>

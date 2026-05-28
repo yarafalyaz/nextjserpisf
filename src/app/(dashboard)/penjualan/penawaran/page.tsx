@@ -70,7 +70,7 @@ export default async function QuotationsPage({
               {["", "draft", "sent", "accepted", "converted", "cancelled"].map((s) => (
                 <Link
                   key={s}
-                  href={`/sales/quotations?status=${s}`}
+                  href={`/penjualan/penawaran?status=${s}`}
                   className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
                 >
                   {s ? statusLabel(s) : "Semua"}
@@ -82,7 +82,7 @@ export default async function QuotationsPage({
             {["", "draft", "sent", "accepted", "converted", "cancelled"].map((s) => (
               <Link
                 key={s}
-                href={`/sales/quotations?status=${s}`}
+                href={`/penjualan/penawaran?status=${s}`}
                 className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}
               >
                 {s ? statusLabel(s) : "Semua"}

@@ -39,7 +39,7 @@ export default async function VehicleModelDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/vehicles/models/${model.id}/edit`} variant="primary">Edit</Button>
+            <Button href={`/kendaraan/model/${model.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={model.id} action={deleteVehicleModel} />
             <BackButton href="/kendaraan/model" />
           </>
@@ -50,7 +50,7 @@ export default async function VehicleModelDetailPage({
         <DetailField label="Nama Model" value={model.name} />
         <DetailField
           label="Merek"
-          value={<Link href={`/vehicles/brands/${model.brand.id}`}>{model.brand.name}</Link>}
+          value={<Link href={`/kendaraan/merek/${model.brand.id}`}>{model.brand.name}</Link>}
         />
         <DetailField label="Dibuat" value={formatDate(model.createdAt)} />
       </DetailCard>

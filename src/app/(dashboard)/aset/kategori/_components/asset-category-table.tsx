@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/assets/categories/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/aset/kategori/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -45,7 +45,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/assets/categories/${info.row.original.id}`}
+        viewHref={`/aset/kategori/${info.row.original.id}`}
         deleteAction={deleteAssetCategory}
         deleteId={info.row.original.id}
       />

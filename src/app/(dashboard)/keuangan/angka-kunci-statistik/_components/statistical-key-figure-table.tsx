@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/finance/statistical-key-figures/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/keuangan/angka-kunci-statistik/${info.row.original.id}`} className="text-primary hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -39,7 +39,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/finance/statistical-key-figures/${info.row.original.id}`}
+        viewHref={`/keuangan/angka-kunci-statistik/${info.row.original.id}`}
         deleteAction={deleteStatisticalKeyFigure}
         deleteId={info.row.original.id}
       />

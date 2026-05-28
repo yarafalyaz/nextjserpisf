@@ -29,7 +29,7 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
       accessorKey: "plateNumber",
       header: "Plat Nomor",
       cell: ({ row }) => (
-        <Link href={`/vehicles/${row.original.id}`} className="font-medium text-primary hover:underline">
+        <Link href={`/kendaraan/${row.original.id}`} className="font-medium text-primary hover:underline">
           {row.original.plateNumber ?? "-"}
         </Link>
       ),
@@ -84,7 +84,7 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
       cell: ({ row }) => (
         <div className="flex items-center gap-1 justify-end">
           <Link
-            href={`/vehicles/${row.original.id}`}
+            href={`/kendaraan/${row.original.id}`}
             className="inline-flex items-center justify-center size-8 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >

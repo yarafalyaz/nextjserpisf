@@ -40,7 +40,7 @@ export default async function DepartmentDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/departments/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/departemen/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={department.id} action={deleteDepartment} />
             <BackButton href="/master/departemen" />
           </>
@@ -66,7 +66,7 @@ export default async function DepartmentDetailPage({
             <DetailTableBody>
               {department.positions.map((pos) => (
                 <DetailTableRow key={pos.id}>
-                  <DetailTableTd><Link href={`/master/positions/${pos.id}`}>{pos.name}</Link></DetailTableTd>
+                  <DetailTableTd><Link href={`/master/jabatan/${pos.id}`}>{pos.name}</Link></DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>
@@ -88,7 +88,7 @@ export default async function DepartmentDetailPage({
             <DetailTableBody>
               {department.employees.map((emp) => (
                 <DetailTableRow key={emp.id}>
-                  <DetailTableTd className="font-mono"><Link href={`/master/employees/${emp.id}`}>{emp.employeeNo}</Link></DetailTableTd>
+                  <DetailTableTd className="font-mono"><Link href={`/master/karyawan/${emp.id}`}>{emp.employeeNo}</Link></DetailTableTd>
                   <DetailTableTd>{emp.name}</DetailTableTd>
                   <DetailTableTd>{emp.email || "-"}</DetailTableTd>
                 </DetailTableRow>

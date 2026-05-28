@@ -56,7 +56,7 @@ export default async function VendorBillsPage({
           <AppSearchField placeholder="Cari no. dokumen atau vendor..." action="/pembelian/tagihan" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "approved", "paid"].map((s) => (
-              <Link key={s} href={`/purchase/bills?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
+              <Link key={s} href={`/pembelian/tagihan?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
                 {s ? statusLabel(s) : "Semua"}
               </Link>
             ))}

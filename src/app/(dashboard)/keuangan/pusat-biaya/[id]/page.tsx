@@ -33,7 +33,7 @@ export default async function CostCenterDetailPage({
           { label: costCenter.name },
         ]}
         actions={<>
-          <Button href={`/finance/cost-centers/${costCenter.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/pusat-biaya/${costCenter.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={costCenter.id} action={deleteCostCenter} />
           <BackButton href="/keuangan/pusat-biaya" />
         </>}
