@@ -1,9 +1,9 @@
 "use client"
 
-import { Chip, cn } from "@heroui/react"
 import { Pencil } from "lucide-react"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
+import { bulkDelete } from "@/actions/bulk.actions"
 import type { ColumnDef } from "@tanstack/react-table"
 
 interface VehicleRow {
@@ -97,5 +97,14 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
     },
   ]
 
-  return <DataTable data={data} columns={columns} ariaLabel="Daftar kendaraan" pageSize={20} />
+  return (
+      <DataTable
+        data={data}
+        columns={columns}
+        ariaLabel="Daftar kendaraan"
+        pageSize={20}
+        selectable={true}
+        onBulkDelete={(ids) => bulkDelete("vehicle", ids)}
+      />
+  )
 }

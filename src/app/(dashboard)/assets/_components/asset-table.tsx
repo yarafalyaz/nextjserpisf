@@ -5,6 +5,7 @@ import { Pencil } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
+import { bulkDelete } from "@/actions/bulk.actions"
 import type { ColumnDef } from "@tanstack/react-table"
 
 interface AssetRow {
@@ -144,6 +145,8 @@ export function AssetTable({
       columns={columns}
       ariaLabel="Daftar aset"
       pageSize={20}
+      selectable={true}
+      onBulkDelete={(ids) => bulkDelete("asset", ids)}
     />
   )
 }
