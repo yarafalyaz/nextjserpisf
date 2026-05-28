@@ -1,9 +1,21 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Clock, MapPin, CheckCircle, LogIn, LogOut, Loader2 } from "lucide-react"
-import { getTodayAttendance, selfCheckIn, selfCheckOut } from "@/actions/self-attendance.actions"
+import { Clock, MapPin, CheckCircle, LogIn, LogOut, Loader2, Navigation } from "lucide-react"
+import { getTodayAttendance, selfCheckIn, selfCheckOut, getCompanyLocation } from "@/actions/self-attendance.actions"
 import { Button } from "@/components/ui/page-header"
+
+// Haversine formula untuk menghitung jarak antara 2 koordinat
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371 // Radius bumi dalam km
+  const dLat = (lat2 - lat1) * (Math.PI / 180)
+  const dLon = (lon2 - lon1) * (Math.PI / 180)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
 
 interface AttendanceStatus {
   id: number
@@ -43,6 +55,8 @@ export function SelfAttendanceWidget() {
   const [geo, setGeo] = useState<GeoCoords | null>(null)
   const [geoLoading, setGeoLoading] = useState(false)
   const [lokasiNama, setLokasiNama] = useState<string | null>(null)
+  const [companyLoc, setCompanyLoc] = useState<{ latitude: number | null; longitude: number | null; radius: number } | null>(null)
+  const [distanceKm, setDistanceKm] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [mounted, setMounted] = useState(false)
 
@@ -67,6 +81,12 @@ export function SelfAttendanceWidget() {
   }, [])
 
   useEffect(() => { loadStatus() }, [loadStatus])
+
+  useEffect(() => {
+    getCompanyLocation().then(data => {
+      if (data) setCompanyLoc(data)
+    }).catch(() => {})
+  }, [])
 
   const getGeo = useCallback((): Promise<GeoCoords | null> => {
     return new Promise((resolve) => {
@@ -108,6 +128,14 @@ export function SelfAttendanceWidget() {
       })
       .catch(() => setLokasiNama("Lokasi Anda"))
   }, [geo])
+
+  // Hitung jarak
+  useEffect(() => {
+    if (geo && companyLoc?.latitude && companyLoc?.longitude) {
+      const dist = calculateDistance(geo.latitude, geo.longitude, companyLoc.latitude, companyLoc.longitude)
+      setDistanceKm(dist)
+    }
+  }, [geo, companyLoc])
 
   const handleCheckIn = async () => {
     setError(null)
@@ -329,16 +357,26 @@ export function SelfAttendanceWidget() {
 
         {/* GPS Status */}
         {mounted && geo && (
-          <div className="flex items-center justify-center gap-1.5 text-xs text-muted">
-            <MapPin size={10} className="text-success" />
-            <a
-              href={`https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline line-clamp-1 max-w-[250px]"
-            >
-              {lokasiNama || "Mencari lokasi..."}
-            </a>
+          <div className="flex flex-col items-center justify-center gap-1 text-center">
+            <div className="flex items-center justify-center gap-1.5 text-xs text-muted">
+              <MapPin size={10} className="text-success shrink-0" />
+              <a
+                href={`https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline line-clamp-1 max-w-[250px]"
+              >
+                {lokasiNama || "Mencari lokasi..."}
+              </a>
+            </div>
+            {distanceKm !== null && (
+              <div className="flex items-center justify-center gap-1.5 text-xs">
+                <Navigation size={10} className={distanceKm <= (companyLoc?.radius || 1) ? "text-success" : "text-warning"} />
+                <span className={distanceKm <= (companyLoc?.radius || 1) ? "text-success font-medium" : "text-warning font-medium"}>
+                  Jarak ke kantor: {distanceKm < 1 ? `${(distanceKm * 1000).toFixed(0)} meter` : `${distanceKm.toFixed(2)} km`}
+                </span>
+              </div>
+            )}
           </div>
         )}
         {mounted && !geo && (

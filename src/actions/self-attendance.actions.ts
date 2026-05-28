@@ -133,3 +133,22 @@ export async function getTodayAttendance() {
       }
     : null
 }
+
+/**
+ * Get company coordinates from settings to calculate distance.
+ */
+export async function getCompanyLocation() {
+  const settings = await prisma.systemSetting.findFirst({
+    select: {
+      companyLatitude: true,
+      companyLongitude: true,
+      attendanceRadiusKm: true,
+    }
+  })
+  if (!settings) return null
+  return {
+    latitude: settings.companyLatitude ? Number(settings.companyLatitude) : null,
+    longitude: settings.companyLongitude ? Number(settings.companyLongitude) : null,
+    radius: settings.attendanceRadiusKm ? Number(settings.attendanceRadiusKm) : 1,
+  }
+}
