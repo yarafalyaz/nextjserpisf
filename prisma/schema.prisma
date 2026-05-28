@@ -1822,7 +1822,7 @@ model AssetTransfer {
   createdBy      Int?     @map("created_by")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
-  asset          Asset    @relation(fields: [assetId], references: [id])
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([assetId], map: "asset_transfers_asset_id_fkey")
   @@map("asset_transfers")
@@ -1898,7 +1898,7 @@ model CustomerVehicle {
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
   customer      Customer    @relation(fields: [customerId], references: [id])
-  vehicle       Vehicle     @relation(fields: [vehicleId], references: [id])
+  vehicle       Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   projects      Project[]
   quotations    Quotation[]
 
