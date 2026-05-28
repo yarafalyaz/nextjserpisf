@@ -1250,7 +1250,9 @@ model WorkOrder {
   updatedAt         DateTime        @updatedAt @map("updated_at")
   items             WorkOrderItem[]
   customer          Customer        @relation(fields: [customerId], references: [id])
+  customerVehicle   CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
   quotation         Quotation?      @relation(fields: [quotationId], references: [id])
+  project           Project?        @relation(fields: [projectId], references: [id])
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -1967,15 +1969,18 @@ model ProjectItem {
 }
 
 model ProjectStage {
-  id        Int                    @id @default(autoincrement())
-  projectId Int                    @map("project_id")
-  name      String
-  sortOrder Int                    @default(0) @map("sort_order")
-  status    String                 @default("pending")
-  createdAt DateTime               @default(now()) @map("created_at")
-  updatedAt DateTime               @updatedAt @map("updated_at")
-  progress  ProjectStageProgress[]
-  project   Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id          Int                    @id @default(autoincrement())
+  projectId   Int                    @map("project_id")
+  name        String
+  sortOrder   Int                    @default(0) @map("sort_order")
+  status      String                 @default("pending")
+  startedAt   DateTime?              @map("started_at")
+  completedAt DateTime?              @map("completed_at")
+  notes       String?                @db.Text
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+  progress    ProjectStageProgress[]
+  project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId], map: "project_stages_project_id_fkey")
   @@map("project_stages")

@@ -228,6 +228,8 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
     })
   })
 
+  await resyncOnEdit(quotationId)
+
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 

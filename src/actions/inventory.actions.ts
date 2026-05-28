@@ -120,7 +120,7 @@ export async function processInventoryTransfer(transferId: number) {
     throw new Error("Transfer hanya bisa diproses dari status draft")
   }
 
-  // Stock Move OUT from source warehouse
+  // Hook creates OUT stock moves (idempotent); action owns status processed.
   await onInventoryTransferProcessed(transferId, Number(user.id))
 
   await prisma.inventoryTransfer.update({
@@ -151,7 +151,7 @@ export async function receiveInventoryTransfer(transferId: number) {
     throw new Error("Transfer hanya bisa di-receive dari status processed")
   }
 
-  // Stock Move IN to destination warehouse
+  // Hook creates IN stock moves/layers (idempotent); action owns status received.
   await onInventoryTransferReceived(transferId, Number(user.id))
 
   await prisma.inventoryTransfer.update({
@@ -213,13 +213,8 @@ export async function completeMaterialIssue(issueId: number) {
     throw new Error("Material Issue hanya bisa di-complete dari status draft")
   }
 
-  // Stock Move OUT per item
+  // Hook creates stock moves, qty updates, journal, and sets status → completed (idempotent).
   await onMaterialIssueStock(issueId, Number(user.id))
-
-  await prisma.materialIssue.update({
-    where: { id: issueId },
-    data: { status: "completed" },
-  })
 
   // Accounting journal
   await onMaterialIssueCompleted(issueId, Number(user.id))

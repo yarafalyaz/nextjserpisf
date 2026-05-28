@@ -1,11 +1,10 @@
-
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 
 /**
  * Purchase Return Hook - Observer pattern replacement.
- * Triggered when a Purchase Return is processed.
+ * Triggered when a Purchase Return is returned.
  * Creates Stock Move OUT per item (goods returned to vendor).
  * Creates Journal Entry (Dr Purchase Return, Cr Inventory)
  */
@@ -20,31 +19,57 @@ export async function onPurchaseReturnProcessed(
       include: { items: true, purchaseOrder: true },
     });
 
-    // Idempotency: check if stock moves already exist
+    // Idempotency: return silently if stock moves already exist
     const existingMoves = await tx.stockMove.findFirst({
       where: {
         referenceType: "PurchaseReturn",
         referenceId: returnId,
       },
     });
-    if (existingMoves) {
-      throw new Error("Stock Move sudah dibuat untuk Purchase Return ini.");
+    if (existingMoves) return;
+
+    // Guard: observer should only run on transition to returned.
+    if (purchaseReturn.status === "returned") {
+      throw new Error("Purchase Return sudah dikembalikan sebelumnya.");
     }
 
-    // Guard: must not be already processed
-    if (purchaseReturn.status === "processed") {
-      throw new Error("Purchase Return sudah diproses sebelumnya.");
-    }
-
-    // Get warehouse from related goods receipt of the same PO
+    // Warehouse resolution fallback:
+    // 1) latest Goods Receipt warehouse for same PO
+    // 2) returned item's default warehouse
+    // 3) first active warehouse
+    // 4) first warehouse
     const goodsReceipt = await tx.goodsReceipt.findFirst({
       where: { purchaseOrderId: purchaseReturn.purchaseOrderId },
       select: { warehouseId: true },
+      orderBy: { createdAt: "desc" },
     });
-    const warehouseId = goodsReceipt?.warehouseId ?? 1;
+
+    const activeWarehouse = await tx.warehouse.findFirst({
+      where: { isActive: true, deletedAt: null },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    const anyWarehouse = activeWarehouse
+      ? null
+      : await tx.warehouse.findFirst({ select: { id: true }, orderBy: { id: "asc" } });
 
     // Create Stock Move OUT per item (goods returned to vendor)
     for (const item of purchaseReturn.items) {
+      if (Number(item.qty) <= 0) continue;
+
+      const dbItem = await tx.item.findUnique({
+        where: { id: item.itemId },
+        select: { defaultWarehouseId: true },
+      });
+      const warehouseId = goodsReceipt?.warehouseId
+        ?? dbItem?.defaultWarehouseId
+        ?? activeWarehouse?.id
+        ?? anyWarehouse?.id;
+
+      if (!warehouseId) {
+        throw new Error("Warehouse retur pembelian tidak ditemukan.");
+      }
+
       const smDocNo = await generateDocumentNumber("SM");
 
       await tx.stockMove.create({
@@ -55,7 +80,7 @@ export async function onPurchaseReturnProcessed(
           qty: item.qty,
           cost: item.cost,
           impact: "OUT",
-          status: "draft",
+          status: "posted",
           referenceType: "PurchaseReturn",
           referenceId: purchaseReturn.id,
           notes: `Retur Pembelian ${purchaseReturn.documentNo}`,
@@ -100,7 +125,7 @@ export async function onPurchaseReturnProcessed(
     await tx.purchaseReturn.update({
       where: { id: returnId },
       data: {
-        status: "processed",
+        status: "returned",
       },
     });
   });

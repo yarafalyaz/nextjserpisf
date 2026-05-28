@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
+import { notificationService } from "@/lib/services/notification.service"
 
 const TASKS = [
   "lock-period",
   "low-stock",
   "overdue-invoice",
+  "late-checkin",
   "cleanup",
 ] as const
 
@@ -76,6 +78,8 @@ async function runTask(task: Task): Promise<string> {
       return await taskLowStockAlert()
     case "overdue-invoice":
       return await taskOverdueInvoiceAlert()
+    case "late-checkin":
+      return await taskLateCheckInAlert()
     case "cleanup":
       return await taskCleanup()
   }
@@ -126,17 +130,6 @@ async function taskLockPeriod(): Promise<string> {
 
 // 2. Low Stock Alert
 async function taskLowStockAlert(): Promise<string> {
-  const lowStockItems = await prisma.item.findMany({
-    where: {
-      isActive: true,
-      deletedAt: null,
-      minStock: { gt: 0 },
-      qtyOnHand: { lte: prisma.item.fields.qtyOnHand }, // raw comparison via SQL
-    },
-    select: { id: true, name: true, sku: true, qtyOnHand: true, minStock: true },
-  })
-
-  // Use raw query since Prisma Decimal comparison is tricky
   const items = await prisma.$queryRaw<
     { id: number; name: string; sku: string; qty_on_hand: number; min_stock: number }[]
   >`
@@ -152,27 +145,16 @@ async function taskLowStockAlert(): Promise<string> {
     return "Semua stok aman"
   }
 
-  // Notify all users with items permission (simple: notify all active users)
-  const users = await prisma.user.findMany({
-    where: { isActive: true },
-    select: { id: true },
-  })
-
-  const itemList = items.slice(0, 5).map((i) => `${i.name} (${i.qty_on_hand})`).join(", ")
-  const suffix = items.length > 5 ? ` dan ${items.length - 5} lainnya` : ""
-
-  for (const user of users) {
-    await prisma.notification.create({
-      data: {
-        userId: user.id,
-        title: "⚠️ Stok Menipis",
-        body: `${items.length} item stok di bawah minimum: ${itemList}${suffix}`,
-        type: "warning",
-      },
+  for (const item of items) {
+    await notificationService.checkAndNotifyLowStock({
+      id: item.id,
+      name: item.name,
+      qtyOnHand: Number(item.qty_on_hand),
+      minStock: Number(item.min_stock),
     })
   }
 
-  return `${items.length} item di bawah stok minimum — notifikasi dikirim ke ${users.length} user`
+  return `${items.length} item di bawah stok minimum — notifikasi dikirim ke admin`
 }
 
 // 3. Overdue Invoice Alert
@@ -214,7 +196,59 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
   return `${overdueInvoices.length} invoice overdue — notifikasi dikirim ke ${users.length} user`
 }
 
-// 4. Cleanup Old Sessions
+// 4. Late Check-in Alert
+async function taskLateCheckInAlert(): Promise<string> {
+  const now = new Date()
+  const dayStart = new Date(now)
+  dayStart.setHours(0, 0, 0, 0)
+  const dayEnd = new Date(now)
+  dayEnd.setHours(23, 59, 59, 999)
+
+  const lateAttendances = await prisma.attendance.findMany({
+    where: {
+      date: { gte: dayStart, lte: dayEnd },
+      OR: [
+        { status: "late" },
+        { lateMinutes: { gt: 0 } },
+      ],
+    },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          name: true,
+          department: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { checkIn: "asc" },
+    take: 20,
+  })
+
+  if (lateAttendances.length === 0) {
+    return "Tidak ada keterlambatan check-in hari ini"
+  }
+
+  for (const attendance of lateAttendances) {
+    if (!attendance.employee) continue
+    const checkInTime = attendance.checkIn
+      ? new Date(attendance.checkIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+      : "-"
+
+    await notificationService.notifyLateCheckIn(
+      {
+        id: attendance.employee.id,
+        name: attendance.employee.name,
+        departmentName: attendance.employee.department?.name,
+      },
+      checkInTime
+    )
+  }
+
+  return `${lateAttendances.length} karyawan telat — notifikasi dikirim ke admin`
+}
+
+// 5. Cleanup Old Sessions
 async function taskCleanup(): Promise<string> {
   const ninetyDaysAgo = new Date()
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)

@@ -559,12 +559,7 @@ export async function processPurchaseReturn(returnId: number) {
     throw new Error("Purchase return hanya bisa diproses dari status draft")
   }
 
-  await prisma.purchaseReturn.update({
-    where: { id: returnId },
-    data: { status: "returned" },
-  })
-
-  // Stock Move OUT
+  // Hook creates stock moves, layers, journal, and sets status → returned (idempotent).
   await onPurchaseReturnStock(returnId, Number(user.id))
 
   // Accounting journal

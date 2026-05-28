@@ -8,6 +8,23 @@ interface LowStockItem {
   minStock: number
 }
 
+interface OverdueInvoice {
+  id: number
+  documentNo: string
+  customerName?: string
+  dueDate: Date | string
+  grandTotal: number | string
+  paidAmount: number | string
+}
+
+interface LateCheckIn {
+  id: number
+  name: string
+  departmentName?: string
+}
+
+type DocumentType = 'WorkOrder' | 'SalesOrder' | 'SalesInvoice'
+
 /**
  * Notification service for system-wide alerts.
  * Handles admin notifications, user-specific notifications,
@@ -87,6 +104,56 @@ export const notificationService = {
         'warning'
       )
     }
+  },
+
+  /**
+   * Notify admins when an invoice is overdue (past due date, not fully paid).
+   * Mirrors Laravel: NotificationService::notifyInvoiceAlmostDue
+   */
+  async notifyOverdueInvoice(invoice: OverdueInvoice): Promise<void> {
+    const remaining = Number(invoice.grandTotal) - Number(invoice.paidAmount)
+    const due = new Date(invoice.dueDate).toLocaleDateString('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    })
+
+    await this.notifyAdmins(
+      `🔴 Invoice ${invoice.documentNo} Jatuh Tempo`,
+      `Jatuh tempo: ${due}. Sisa: Rp ${remaining.toLocaleString('id-ID')}${invoice.customerName ? ` (${invoice.customerName})` : ''}`,
+      'danger'
+    )
+  },
+
+  /**
+   * Notify admins when an employee checks in late.
+   * Mirrors Laravel: NotificationService::notifyLateCheckIn
+   */
+  async notifyLateCheckIn(employee: LateCheckIn, checkInTime: string, scheduledTime?: string): Promise<void> {
+    const dept = employee.departmentName ? ` (${employee.departmentName})` : ''
+
+    await this.notifyAdmins(
+      `⏰ ${employee.name}${dept} Telat Masuk`,
+      `Check-in: ${checkInTime}${scheduledTime ? ` (Jadwal: ${scheduledTime})` : ''}`,
+      'warning'
+    )
+  },
+
+  /**
+   * Notify admins when a document is auto-generated from Down Payment confirmation.
+   * Mirrors Laravel: document-ready notifications from DP observer.
+   */
+  async notifyDocumentReady(type: DocumentType, documentNo: string, context?: string): Promise<void> {
+    const labels: Record<DocumentType, { emoji: string; label: string }> = {
+      WorkOrder:     { emoji: '🔧', label: 'Work Order' },
+      SalesOrder:    { emoji: '📋', label: 'Sales Order' },
+      SalesInvoice:  { emoji: '🧾', label: 'Invoice' },
+    }
+    const info = labels[type] ?? { emoji: '📄', label: type }
+
+    await this.notifyAdmins(
+      `${info.emoji} ${info.label} Siap: ${documentNo}`,
+      `${info.label} ${documentNo} telah dibuat otomatis.${context ? ` ${context}` : ''}`,
+      'info'
+    )
   },
 
   /**
