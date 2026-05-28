@@ -82,7 +82,7 @@ export default async function TaxReportPage({
           <Receipt size={24} />
           <h1>Laporan Pajak (PPN)</h1>
         </div>
-        <ExportButtons title="Tax_Report" />
+        <ExportButtons title="Laporan_Pajak" />
       </div>
 
       <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />

@@ -96,7 +96,7 @@ export default async function ProfitCenterIncomePage({
         <div className="flex items-center gap-2">
           <Building2 size={24} />
           <h1>Laporan Laba Rugi per Profit Center</h1>
-        <ExportButtons title="Profit_Center" />
+        <ExportButtons title="Pusat_Laba" />
         </div>
         <p>
           Periode: {startDate.toLocaleDateString('id-ID')} - {endDate.toLocaleDateString('id-ID')}

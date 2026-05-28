@@ -138,7 +138,7 @@ export default async function FinancialReportsPage({
            reportType === "income-statement" ? "Laba Rugi (Income Statement)" :
            "Reports"}
         </h1>
-        <ExportButtons title="Financial" />
+        <ExportButtons title="Keuangan" />
       </div>
 
       {/* Report Selector */}

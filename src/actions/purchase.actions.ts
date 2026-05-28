@@ -204,7 +204,7 @@ export async function verifyGoodsReceipt(grId: number) {
   await onGoodsReceiptVerified(grId, Number(user.id))
 
   // Notify admins
-  await notificationService.notifyAdmins('Goods Receipt diterima', `/pembelian/penerimaan/${grId}`)
+  await notificationService.notifyAdmins('Penerimaan Barang diterima', `/pembelian/penerimaan/${grId}`)
 
   revalidatePath("/pembelian/penerimaan")
   revalidatePath("/pembelian/pesanan")

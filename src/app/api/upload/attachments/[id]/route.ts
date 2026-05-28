@@ -10,7 +10,7 @@ export async function DELETE(
 ) {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
   }
 
   const { id } = await params

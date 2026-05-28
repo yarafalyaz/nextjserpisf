@@ -9,7 +9,7 @@ import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
   }
 
   const { searchParams } = new URL(request.url)

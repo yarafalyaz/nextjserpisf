@@ -70,7 +70,7 @@ export default async function ArApSummaryPage() {
           <Users size={24} />
           <h1>Ringkasan Piutang & Hutang</h1>
         </div>
-        <ExportButtons title="AR_AP_Summary" />
+        <ExportButtons title="Ringkasan_AR_AP" />
       </div>
 
       {/* KPI */}

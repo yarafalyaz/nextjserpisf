@@ -463,7 +463,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
     <form onSubmit={onSubmit}>
       <Tabs selectedKey={selectedTab} onSelectionChange={(key) => setSelectedTab(String(key))}>
         <Tabs.ListContainer>
-          <Tabs.List aria-label="Settings Tabs">
+          <Tabs.List aria-label="Tab Pengaturan">
             <Tabs.Tab id="company">Perusahaan<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="general">Umum<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="prefixes">Prefix Kode Otomatis<Tabs.Indicator /></Tabs.Tab>

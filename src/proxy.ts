@@ -90,7 +90,7 @@ export async function proxy(req: NextRequest) {
     const token = await getToken({ req, secret: process.env.AUTH_SECRET })
     if (!token) {
       return addSecurityHeaders(
-        NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
       )
     }
     return addSecurityHeaders(NextResponse.next())

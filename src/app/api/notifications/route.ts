@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth/auth"
 
 export async function GET() {
   const session = await auth()
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!session?.user) return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
 
   const userId = Number.parseInt(String(session.user.id), 10)
   if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user" }, { status: 400 })

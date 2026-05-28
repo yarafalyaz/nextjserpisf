@@ -17,7 +17,7 @@ import { isValidCronRequest } from "@/lib/security/cron"
 export async function GET(request: Request) {
   // Verify cron secret
   if (!isValidCronRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
   }
 
   const today = new Date()

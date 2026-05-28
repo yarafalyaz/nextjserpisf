@@ -245,7 +245,7 @@ export default async function SettingsPage() {
               <DisplayField label="Sales Return" value={settings?.salesReturnPrefix} />
               <DisplayField label="Purchase Request" value={settings?.purchaseRequestPrefix} />
               <DisplayField label="Pesanan Pembelian" value={settings?.purchaseOrderPrefix} />
-              <DisplayField label="Goods Receipt" value={settings?.goodsReceiptPrefix} />
+              <DisplayField label="Penerimaan Barang" value={settings?.goodsReceiptPrefix} />
               <DisplayField label="Vendor Bill" value={settings?.vendorBillPrefix} />
               <DisplayField label="Vendor Payment" value={settings?.vendorPaymentPrefix} />
               <DisplayField label="Purchase Return" value={settings?.purchaseReturnPrefix} />

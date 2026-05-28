@@ -57,7 +57,7 @@ export default async function BarcodesPage({
 
         <Table>
           <Table.ScrollContainer>
-            <Table.Content aria-label="Daftar barcode">
+            <Table.Content aria-label="Daftar Barcode">
               <Table.Header>
                 <Table.Column isRowHeader>ID</Table.Column>
                 <Table.Column>Barcode</Table.Column>

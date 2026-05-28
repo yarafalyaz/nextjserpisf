@@ -123,7 +123,7 @@ export async function acceptQuotation(quotationId: number) {
   })
 
   // Notify admins
-  await notificationService.notifyAdmins('Quotation diterima customer', `/penjualan/penawaran/${quotationId}`)
+  await notificationService.notifyAdmins('Penawaran diterima pelanggan', `/penjualan/penawaran/${quotationId}`)
 
   revalidatePath("/penjualan/penawaran")
   return { success: true }
@@ -406,7 +406,7 @@ export async function createSalesReturn(formData: FormData) {
   })
 
   // Notify admins
-  await notificationService.notifyAdmins('Sales Return baru', `/penjualan/retur/${salesReturn.id}`)
+  await notificationService.notifyAdmins('Retur Penjualan baru', `/penjualan/retur/${salesReturn.id}`)
 
   revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }

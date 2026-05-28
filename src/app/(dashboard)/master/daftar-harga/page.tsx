@@ -56,7 +56,7 @@ export default async function PriceListsPage({
 
         <Table>
           <Table.ScrollContainer>
-            <Table.Content aria-label="Daftar price list">
+            <Table.Content aria-label="Daftar Harga">
               <Table.Header>
                 <Table.Column isRowHeader>ID</Table.Column>
                 <Table.Column>Nama</Table.Column>

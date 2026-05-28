@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth/auth"
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
   }
 
   const { searchParams } = new URL(request.url)
@@ -14,12 +14,12 @@ export async function GET(request: Request) {
   const idStr = searchParams.get("id")
 
   if (!type || !idStr) {
-    return NextResponse.json({ error: "Missing type or id" }, { status: 400 })
+    return NextResponse.json({ error: "Tipe atau ID tidak ditemukan" }, { status: 400 })
   }
 
   const id = Number(idStr)
   if (isNaN(id)) {
-    return NextResponse.json({ error: "Invalid ID" }, { status: 400 })
+    return NextResponse.json({ error: "ID tidak valid" }, { status: 400 })
   }
 
   try {
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
         where: { id },
         include: { customer: true, items: true },
       })
-      if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 })
+      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
 
       return NextResponse.json({
         company: companyInfo,
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
         where: { id },
         include: { customer: true, sections: { include: { items: true } } },
       })
-      if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 })
+      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
 
       // Flatten items from all sections
       const allItems = doc.sections.flatMap(sec => sec.items)
@@ -116,7 +116,7 @@ export async function GET(request: Request) {
         where: { id },
         include: { customer: true, items: true },
       })
-      if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 })
+      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
 
       return NextResponse.json({
         company: companyInfo,
@@ -155,7 +155,7 @@ export async function GET(request: Request) {
           items: true,
         },
       })
-      if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 })
+      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
 
       return NextResponse.json({
         company: companyInfo,
@@ -186,9 +186,9 @@ export async function GET(request: Request) {
       })
     }
 
-    return NextResponse.json({ error: "Unsupported type" }, { status: 400 })
+    return NextResponse.json({ error: "Tipe tidak didukung" }, { status: 400 })
   } catch (error) {
     console.error("Print API error:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: "Kesalahan Server Internal" }, { status: 500 })
   }
 }

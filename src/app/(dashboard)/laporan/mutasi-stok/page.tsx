@@ -77,7 +77,7 @@ export default async function StockMovementPage({
           <ArrowLeftRight size={24} />
           <h1>Laporan Mutasi Stok</h1>
         </div>
-        <ExportButtons title="Stock_Movement" />
+        <ExportButtons title="Mutasi_Stok" />
       </div>
 
       <form className="mb-6 flex items-center gap-4 flex-wrap print:hidden">

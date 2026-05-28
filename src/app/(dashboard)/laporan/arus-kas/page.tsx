@@ -90,7 +90,7 @@ export default async function CashFlowPage({
         <div className="flex items-center gap-2">
           <Wallet size={24} />
           <h1>Laporan Arus Kas</h1>
-        <ExportButtons title="Cash_Flow" />
+        <ExportButtons title="Arus_Kas" />
         </div>
         <p>
           Periode: {startDate.toLocaleDateString('id-ID')} - {endDate.toLocaleDateString('id-ID')}

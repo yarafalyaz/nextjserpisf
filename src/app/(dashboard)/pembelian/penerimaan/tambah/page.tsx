@@ -26,7 +26,7 @@ export default async function CreateGoodsReceiptPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{label:"Penerimaan Barang",href:"/pembelian/penerimaan"},{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Goods Receipt</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Penerimaan Barang</h1>
       </div>
       <GoodsReceiptForm
         purchaseOrders={JSON.parse(JSON.stringify(purchaseOrders))}

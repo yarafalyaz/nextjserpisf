@@ -91,7 +91,7 @@ export default async function GeneralLedgerPage({
       <div className="flex items-center gap-2">
         <BookOpen size={24} />
         <h1 className="text-2xl font-bold text-foreground">Buku Besar (General Ledger)</h1>
-        <ExportButtons title="General_Ledger" />
+        <ExportButtons title="Buku_Besar" />
       </div>
 
       <form className="mb-6 flex items-center gap-4 flex-wrap print:hidden">

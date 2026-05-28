@@ -21,27 +21,27 @@ export async function POST(
   // Auth check — reject unauthenticated requests
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
   }
 
   const { path } = await params
   // path = ["sales", "quotations", "123", "approve"]
   if (!Array.isArray(path) || path.length < 3) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 })
+    return NextResponse.json({ error: "Path tidak valid" }, { status: 400 })
   }
 
   const action = path[path.length - 1] // "approve" or "reject"
   const idRaw = path[path.length - 2]
   const id = Number.parseInt(idRaw, 10)
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 })
+    return NextResponse.json({ error: "ID tidak valid" }, { status: 400 })
   }
 
   const moduleKey = path.slice(0, path.length - 2).join("/")
 
   const config = MODULE_MAP[moduleKey]
   if (!config) {
-    return NextResponse.json({ error: "Module not found" }, { status: 404 })
+    return NextResponse.json({ error: "Modul tidak ditemukan" }, { status: 404 })
   }
 
   // Permission check — super_admin bypasses
@@ -52,7 +52,7 @@ export async function POST(
   }
 
   if (action !== "approve" && action !== "reject") {
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    return NextResponse.json({ error: "Aksi tidak valid" }, { status: 400 })
   }
 
   const newStatus = action === "approve" ? "approved" : "rejected"
