@@ -15,7 +15,7 @@ export default async function CreateAdjustmentPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Inventory",href:"/inventory"},{label:"Adjustments",href:"/inventory/adjustments"},{label:"Tambah"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Inventaris",href:"/inventory"},{label:"Penyesuaian",href:"/inventory/adjustments"},{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Stock Adjustment</h1>
       </div>

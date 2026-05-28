@@ -34,7 +34,7 @@ export default async function GoodsReceiptDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Purchase",href:"/purchase"},{label:"Goods Receipts",href:"/purchase/goods-receipts"},{label:"Detail"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/purchase"},{label:"Penerimaan Barang",href:"/purchase/goods-receipts"},{label:"Detail"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Penerimaan Barang {receipt.documentNo}</h1>
         <div className="flex gap-2 items-center">

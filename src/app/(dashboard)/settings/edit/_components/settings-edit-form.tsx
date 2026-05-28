@@ -9,6 +9,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/page-header"
+import { SafeImage } from "@/components/ui/safe-image"
 
 interface Account {
   id: number
@@ -17,8 +18,115 @@ interface Account {
 }
 
 interface SettingsEditFormProps {
-  settings: any
+  settings: SettingsFormValues
   accounts: Account[]
+}
+
+interface SettingsFormValues {
+  assetPrefix?: string | null
+  attendanceRadiusKm?: number | null
+  cashBankAccountId?: number | null
+  cogsAccountId?: number | null
+  companyAddress?: string | null
+  companyCity?: string | null
+  companyDistrict?: string | null
+  companyEmail?: string | null
+  companyLatitude?: number | null
+  companyLogo?: string | null
+  companyLongitude?: number | null
+  companyName?: string | null
+  companyPhone?: string | null
+  companyPostalCode?: string | null
+  companyProvince?: string | null
+  companyTaxId?: string | null
+  companyVillage?: string | null
+  companyWebsite?: string | null
+  costingMethod?: string | null
+  currencyCode?: string | null
+  currencyLocale?: string | null
+  currencySymbol?: string | null
+  customerCodePrefix?: string | null
+  defaultCashAccountId?: number | null
+  deliveryOrderPrefix?: string | null
+  documentNumberFormat?: string | null
+  downPaymentPrefix?: string | null
+  employeeCodePrefix?: string | null
+  employeeReceivableAccountId?: number | null
+  enableAutoCustomerCode?: boolean | null
+  enableAutoEmployeeCode?: boolean | null
+  enableAutoItemCode?: boolean | null
+  enableAutoRackCode?: boolean | null
+  enableAutoRowCode?: boolean | null
+  enableAutoVendorCode?: boolean | null
+  enableAutoWarehouseCode?: boolean | null
+  expensePrefix?: string | null
+  fiscalYearStartMonth?: number | null
+  generalExpenseAccountId?: number | null
+  goodsReceiptPrefix?: string | null
+  inventoryAccountId?: number | null
+  inventoryAdjustmentAccountId?: number | null
+  inventoryTransferPrefix?: string | null
+  itemCodePrefix?: string | null
+  journalPrefix?: string | null
+  latePenaltyPerMinute?: number | null
+  leadPrefix?: string | null
+  manufacturingOrderPrefix?: string | null
+  materialExpenseAccountId?: number | null
+  materialIssueExpenseAccountId?: number | null
+  materialIssuePrefix?: string | null
+  maxLatePenaltyMinutes?: number | null
+  overtimeCoefficient?: number | null
+  overtimeMealBreakEnd?: string | null
+  overtimeMealBreakStart?: string | null
+  overtimeMultiplier?: number | null
+  payrollBankAccountId?: number | null
+  payrollJournalTypeId?: number | null
+  payrollPrefix?: string | null
+  periodLockDate?: string | null
+  pettyCashAccountId?: number | null
+  pettyCashPrefix?: string | null
+  projectPrefix?: string | null
+  purchaseDiscountAccountId?: number | null
+  purchaseExpenseAccountId?: number | null
+  purchaseInventoryAccountId?: number | null
+  purchaseOrderPrefix?: string | null
+  purchasePayableAccountId?: number | null
+  purchaseRequestPrefix?: string | null
+  purchaseReturnAccountId?: number | null
+  purchaseReturnPrefix?: string | null
+  purchaseShippingAccountId?: number | null
+  purchaseTaxAccountId?: number | null
+  quotationCodePrefix?: string | null
+  quotationFooterNotes?: string | null
+  quotationSignatureImage?: string | null
+  quotationSignatureName?: string | null
+  rackCodePrefix?: string | null
+  reconciliationPrefix?: string | null
+  rowCodePrefix?: string | null
+  salariesPayableAccountId?: number | null
+  salaryExpenseAccountId?: number | null
+  salesAccountId?: number | null
+  salesInvoicePrefix?: string | null
+  salesOrderPrefix?: string | null
+  salesPaymentPrefix?: string | null
+  salesReceivableAccountId?: number | null
+  salesReturnAccountId?: number | null
+  salesReturnPrefix?: string | null
+  salesRevenueAccountId?: number | null
+  salesTaxAccountId?: number | null
+  showIsActiveField?: boolean | null
+  showTaxId?: boolean | null
+  stockAdjustmentAccountId?: number | null
+  stockAdjustmentPrefix?: string | null
+  stockMovementPrefix?: string | null
+  ticketPrefix?: string | null
+  timesheetPrefix?: string | null
+  vendorBillPrefix?: string | null
+  vendorCodePrefix?: string | null
+  vendorPaymentPrefix?: string | null
+  warehouseCodePrefix?: string | null
+  wipAccountId?: number | null
+  workOrderPrefix?: string | null
 }
 
 interface AccountMappingField {
@@ -304,6 +412,14 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
     if (url) setSignaturePreview(url)
   }
 
+  function isRedirectError(error: unknown): error is { digest: string } {
+    return typeof error === "object"
+      && error !== null
+      && "digest" in error
+      && typeof (error as { digest?: unknown }).digest === "string"
+      && (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  }
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
@@ -313,9 +429,9 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         if (signaturePreview) formData.set("quotationSignatureImage", signaturePreview)
         await updateSystemSettings(formData)
         showSuccess("Settings berhasil disimpan")
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Next.js redirect throws NEXT_REDIRECT — let it propagate
-        if (error?.digest?.startsWith?.("NEXT_REDIRECT")) throw error
+        if (isRedirectError(error)) throw error
         showError(error instanceof Error ? error.message : "Gagal menyimpan settings")
       }
     })
@@ -332,7 +448,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             <Tabs.Tab id="general">Umum<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="prefixes">Prefix Kode Otomatis<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="overtime">Lembur & Kehadiran<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="quotation">Quotation<Tabs.Indicator /></Tabs.Tab>
+            <Tabs.Tab id="quotation">Penawaran<Tabs.Indicator /></Tabs.Tab>
             <Tabs.Tab id="accounts">Mapping Akun<Tabs.Indicator /></Tabs.Tab>
           </Tabs.List>
         </Tabs.ListContainer>
@@ -426,9 +542,9 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label>Logo Perusahaan</Label>
-                <div className="flex items-center gap-4">
-                  {logoPreview && (
-                    <img src={logoPreview} alt="Logo" className="w-16 h-16 object-contain rounded border border-default" />
+                  <div className="flex items-center gap-4">
+                    {logoPreview && (
+                    <SafeImage src={logoPreview} alt="Logo" width={64} height={64} className="w-16 h-16 object-contain rounded border border-default" />
                   )}
                   <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoChange} className="text-sm" />
                 </div>
@@ -489,7 +605,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="documentNumberFormat" name="documentNumberFormat" placeholder="(tidak dipakai)" defaultValue={settings.documentNumberFormat || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <AppDatePicker label="Period Lock Date" name="periodLockDate" defaultValue={settings.periodLockDate ? (typeof settings.periodLockDate === 'string' ? settings.periodLockDate.split("T")[0] : settings.periodLockDate.toISOString().split("T")[0]) : ""} className="w-full" />
+                <AppDatePicker label="Tanggal Kunci Periode" name="periodLockDate" defaultValue={settings.periodLockDate ? (typeof settings.periodLockDate === 'string' ? (settings.periodLockDate as string).split("T")[0] : (settings.periodLockDate as Date).toISOString().split("T")[0]) : ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-3 justify-end">
                 <div className="flex items-center gap-3">
@@ -518,78 +634,78 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Label htmlFor="itemCodePrefix">Prefix Item</Label>
                 <Input id="itemCodePrefix" name="itemCodePrefix" defaultValue={settings.itemCodePrefix || ""} className="w-full" />
                 <input type="hidden" name="enableAutoItemCode" value="0" />
-                <Switch name="enableAutoItemCode" defaultSelected={settings.enableAutoItemCode !== false}>Auto Code Item</Switch>
+                <Switch name="enableAutoItemCode" defaultSelected={settings.enableAutoItemCode !== false}>Kode Otomatis Barang</Switch>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="warehouseCodePrefix">Prefix Gudang</Label>
                 <Input id="warehouseCodePrefix" name="warehouseCodePrefix" defaultValue={settings.warehouseCodePrefix || ""} className="w-full" />
                 <input type="hidden" name="enableAutoWarehouseCode" value="0" />
-                <Switch name="enableAutoWarehouseCode" defaultSelected={settings.enableAutoWarehouseCode !== false}>Auto Code Gudang</Switch>
+                <Switch name="enableAutoWarehouseCode" defaultSelected={settings.enableAutoWarehouseCode !== false}>Kode Otomatis Gudang</Switch>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="rackCodePrefix">Prefix Rak</Label>
                 <Input id="rackCodePrefix" name="rackCodePrefix" defaultValue={settings.rackCodePrefix || ""} className="w-full" />
                 <input type="hidden" name="enableAutoRackCode" value="0" />
-                <Switch name="enableAutoRackCode" defaultSelected={settings.enableAutoRackCode !== false}>Auto Code Rak</Switch>
+                <Switch name="enableAutoRackCode" defaultSelected={settings.enableAutoRackCode !== false}>Kode Otomatis Rak</Switch>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="rowCodePrefix">Prefix Baris</Label>
                 <Input id="rowCodePrefix" name="rowCodePrefix" defaultValue={settings.rowCodePrefix || ""} className="w-full" />
                 <input type="hidden" name="enableAutoRowCode" value="0" />
-                <Switch name="enableAutoRowCode" defaultSelected={settings.enableAutoRowCode !== false}>Auto Code Baris</Switch>
+                <Switch name="enableAutoRowCode" defaultSelected={settings.enableAutoRowCode !== false}>Kode Otomatis Baris</Switch>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="customerCodePrefix">Prefix Customer</Label>
                 <Input id="customerCodePrefix" name="customerCodePrefix" defaultValue={settings.customerCodePrefix || ""} className="w-full" />
                 <input type="hidden" name="enableAutoCustomerCode" value="0" />
-                <Switch name="enableAutoCustomerCode" defaultSelected={settings.enableAutoCustomerCode !== false}>Auto Code Customer</Switch>
+                <Switch name="enableAutoCustomerCode" defaultSelected={settings.enableAutoCustomerCode !== false}>Kode Otomatis Pelanggan</Switch>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="employeeCodePrefix">Prefix Karyawan</Label>
                 <Input id="employeeCodePrefix" name="employeeCodePrefix" defaultValue={settings.employeeCodePrefix || ""} className="w-full" />
                 <input type="hidden" name="enableAutoEmployeeCode" value="0" />
-                <Switch name="enableAutoEmployeeCode" defaultSelected={settings.enableAutoEmployeeCode !== false}>Auto Code Karyawan</Switch>
+                <Switch name="enableAutoEmployeeCode" defaultSelected={settings.enableAutoEmployeeCode !== false}>Kode Otomatis Karyawan</Switch>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="vendorCodePrefix">Prefix Vendor</Label>
                 <Input id="vendorCodePrefix" name="vendorCodePrefix" defaultValue={settings.vendorCodePrefix || ""} className="w-full" />
                 <input type="hidden" name="enableAutoVendorCode" value="0" />
-                <Switch name="enableAutoVendorCode" defaultSelected={settings.enableAutoVendorCode !== false}>Auto Code Vendor</Switch>
+                <Switch name="enableAutoVendorCode" defaultSelected={settings.enableAutoVendorCode !== false}>Kode Otomatis Pemasok</Switch>
               </div>
             </div>
 
             <h2 className="text-base font-semibold text-foreground mb-4 mt-8">Prefix Dokumen</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="quotationCodePrefix">Quotation</Label>
+                <Label htmlFor="quotationCodePrefix">Penawaran</Label>
                 <Input id="quotationCodePrefix" name="quotationCodePrefix" defaultValue={settings.quotationCodePrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="assetPrefix">Asset</Label>
+                <Label htmlFor="assetPrefix">Aset</Label>
                 <Input id="assetPrefix" name="assetPrefix" defaultValue={settings.assetPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="salesOrderPrefix">Sales Order</Label>
+                <Label htmlFor="salesOrderPrefix">Pesanan Penjualan</Label>
                 <Input id="salesOrderPrefix" name="salesOrderPrefix" defaultValue={settings.salesOrderPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="salesInvoicePrefix">Invoice</Label>
+                <Label htmlFor="salesInvoicePrefix">Faktur</Label>
                 <Input id="salesInvoicePrefix" name="salesInvoicePrefix" defaultValue={settings.salesInvoicePrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="salesPaymentPrefix">Payment</Label>
+                <Label htmlFor="salesPaymentPrefix">Pembayaran</Label>
                 <Input id="salesPaymentPrefix" name="salesPaymentPrefix" defaultValue={settings.salesPaymentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="salesReturnPrefix">Sales Return</Label>
+                <Label htmlFor="salesReturnPrefix">Retur Penjualan</Label>
                 <Input id="salesReturnPrefix" name="salesReturnPrefix" defaultValue={settings.salesReturnPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="purchaseRequestPrefix">Purchase Request</Label>
+                <Label htmlFor="purchaseRequestPrefix">Permintaan Pembelian</Label>
                 <Input id="purchaseRequestPrefix" name="purchaseRequestPrefix" defaultValue={settings.purchaseRequestPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="purchaseOrderPrefix">Purchase Order</Label>
+                <Label htmlFor="purchaseOrderPrefix">Pesanan Pembelian</Label>
                 <Input id="purchaseOrderPrefix" name="purchaseOrderPrefix" defaultValue={settings.purchaseOrderPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -601,7 +717,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="stockAdjustmentPrefix" name="stockAdjustmentPrefix" defaultValue={settings.stockAdjustmentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="workOrderPrefix">Work Order</Label>
+                <Label htmlFor="workOrderPrefix">Perintah Kerja</Label>
                 <Input id="workOrderPrefix" name="workOrderPrefix" defaultValue={settings.workOrderPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -609,11 +725,11 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="timesheetPrefix" name="timesheetPrefix" defaultValue={settings.timesheetPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="downPaymentPrefix">Down Payment</Label>
+                <Label htmlFor="downPaymentPrefix">Uang Muka</Label>
                 <Input id="downPaymentPrefix" name="downPaymentPrefix" defaultValue={settings.downPaymentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="deliveryOrderPrefix">Delivery Order</Label>
+                <Label htmlFor="deliveryOrderPrefix">Surat Jalan</Label>
                 <Input id="deliveryOrderPrefix" name="deliveryOrderPrefix" defaultValue={settings.deliveryOrderPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -621,11 +737,11 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="journalPrefix" name="journalPrefix" defaultValue={settings.journalPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="expensePrefix">Expense</Label>
+                <Label htmlFor="expensePrefix">Biaya</Label>
                 <Input id="expensePrefix" name="expensePrefix" defaultValue={settings.expensePrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pettyCashPrefix">Petty Cash</Label>
+                <Label htmlFor="pettyCashPrefix">Kas Kecil</Label>
                 <Input id="pettyCashPrefix" name="pettyCashPrefix" defaultValue={settings.pettyCashPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -633,27 +749,27 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="reconciliationPrefix" name="reconciliationPrefix" defaultValue={settings.reconciliationPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="payrollPrefix">Payroll</Label>
+                <Label htmlFor="payrollPrefix">Penggajian</Label>
                 <Input id="payrollPrefix" name="payrollPrefix" defaultValue={settings.payrollPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="projectPrefix">Project</Label>
+                <Label htmlFor="projectPrefix">Proyek</Label>
                 <Input id="projectPrefix" name="projectPrefix" defaultValue={settings.projectPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="goodsReceiptPrefix">Goods Receipt</Label>
+                <Label htmlFor="goodsReceiptPrefix">Penerimaan Barang</Label>
                 <Input id="goodsReceiptPrefix" name="goodsReceiptPrefix" defaultValue={settings.goodsReceiptPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorBillPrefix">Vendor Bill</Label>
+                <Label htmlFor="vendorBillPrefix">Tagihan Vendor</Label>
                 <Input id="vendorBillPrefix" name="vendorBillPrefix" defaultValue={settings.vendorBillPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorPaymentPrefix">Vendor Payment</Label>
+                <Label htmlFor="vendorPaymentPrefix">Pembayaran Vendor</Label>
                 <Input id="vendorPaymentPrefix" name="vendorPaymentPrefix" defaultValue={settings.vendorPaymentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="purchaseReturnPrefix">Purchase Return</Label>
+                <Label htmlFor="purchaseReturnPrefix">Retur Pembelian</Label>
                 <Input id="purchaseReturnPrefix" name="purchaseReturnPrefix" defaultValue={settings.purchaseReturnPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -661,19 +777,19 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="ticketPrefix" name="ticketPrefix" defaultValue={settings.ticketPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="leadPrefix">Lead</Label>
+                <Label htmlFor="leadPrefix">Prospek</Label>
                 <Input id="leadPrefix" name="leadPrefix" defaultValue={settings.leadPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="materialIssuePrefix">Material Issue</Label>
+                <Label htmlFor="materialIssuePrefix">Pengeluaran Material</Label>
                 <Input id="materialIssuePrefix" name="materialIssuePrefix" defaultValue={settings.materialIssuePrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="manufacturingOrderPrefix">Manufacturing Order</Label>
+                <Label htmlFor="manufacturingOrderPrefix">Perintah Produksi</Label>
                 <Input id="manufacturingOrderPrefix" name="manufacturingOrderPrefix" defaultValue={settings.manufacturingOrderPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="stockMovementPrefix">Stock Movement</Label>
+                <Label htmlFor="stockMovementPrefix">Pergerakan Stok</Label>
                 <Input id="stockMovementPrefix" name="stockMovementPrefix" defaultValue={settings.stockMovementPrefix || ""} className="w-full" />
               </div>
             </div>
@@ -686,11 +802,11 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Lembur</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="overtimeMultiplier">Overtime Multiplier</Label>
+                <Label htmlFor="overtimeMultiplier">Pengali Lembur</Label>
                 <Input id="overtimeMultiplier" name="overtimeMultiplier" type="number" step="any" defaultValue={String(settings.overtimeMultiplier)} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="overtimeCoefficient">Overtime Coefficient</Label>
+                <Label htmlFor="overtimeCoefficient">Koefisien Lembur</Label>
                 <Input id="overtimeCoefficient" name="overtimeCoefficient" type="number" step="any" defaultValue={String(settings.overtimeCoefficient)} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -727,7 +843,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Quotation</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <Label htmlFor="quotationFooterNotes">Footer Notes</Label>
+                <Label htmlFor="quotationFooterNotes">Catatan Footer</Label>
                 <TextArea id="quotationFooterNotes" name="quotationFooterNotes" placeholder="Catatan footer quotation..." defaultValue={settings.quotationFooterNotes || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -738,7 +854,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Label>Gambar Tanda Tangan</Label>
                 <div className="flex items-center gap-4">
                   {signaturePreview && (
-                    <img src={signaturePreview} alt="Signature" className="w-24 h-12 object-contain rounded border border-default" />
+                    <SafeImage src={signaturePreview} alt="Signature" width={96} height={48} className="w-24 h-12 object-contain rounded border border-default" />
                   )}
                   <input ref={signatureInputRef} type="file" accept="image/*" onChange={handleSignatureChange} className="text-sm" />
                 </div>

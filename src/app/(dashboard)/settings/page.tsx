@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { SafeImage } from "@/components/ui/safe-image"
 
 function DisplayField({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
@@ -148,7 +149,7 @@ export default async function SettingsPage() {
         { label: "Settings" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">System Settings</h1>
+        <h1 className="text-2xl font-bold text-foreground">Pengaturan Sistem</h1>
         <Link href="/settings/edit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-all">
           Edit Settings
         </Link>
@@ -184,7 +185,7 @@ export default async function SettingsPage() {
             {settings?.companyLogo && (
               <div className="mt-3">
                 <span className="text-xs font-medium text-muted uppercase tracking-wide">Logo</span>
-                <img src={settings.companyLogo} alt="Logo" className="mt-1 w-16 h-16 object-contain rounded border border-default" />
+                <SafeImage src={settings.companyLogo} alt="Logo" width={64} height={64} className="mt-1 w-16 h-16 object-contain rounded border border-default" />
               </div>
             )}
           </div>
@@ -301,7 +302,7 @@ export default async function SettingsPage() {
             {settings?.quotationSignatureImage && (
               <div className="mt-3">
                 <span className="text-xs font-medium text-muted uppercase tracking-wide">Gambar Tanda Tangan</span>
-                <img src={settings.quotationSignatureImage} alt="Signature" className="mt-1 w-24 h-12 object-contain rounded border border-default" />
+                <SafeImage src={settings.quotationSignatureImage} alt="Signature" width={96} height={48} className="mt-1 w-24 h-12 object-contain rounded border border-default" />
               </div>
             )}
           </div>
@@ -353,9 +354,9 @@ export default async function SettingsPage() {
           </div>
           <div className="p-4 px-5">
             <div className="flex gap-3 flex-wrap">
-              <Link href="/settings/users" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Users & Roles</Link>
+              <Link href="/settings/users" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Pengguna & Peran</Link>
               <Link href="/master/accounts" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Chart of Accounts</Link>
-              <Link href="/master/warehouses" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Warehouses</Link>
+              <Link href="/master/warehouses" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Gudang</Link>
             </div>
           </div>
         </div>

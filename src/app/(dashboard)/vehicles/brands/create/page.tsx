@@ -9,7 +9,7 @@ export default async function CreateVehicleBrandPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Vehicles",href:"/vehicles"},{label:"Brands",href:"/vehicles/brands"},{label:"Tambah"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Kendaraan",href:"/vehicles"},{label:"Merek",href:"/vehicles/brands"},{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Merek Kendaraan</h1>
       </div>

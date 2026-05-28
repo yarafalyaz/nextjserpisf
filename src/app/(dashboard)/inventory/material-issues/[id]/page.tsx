@@ -29,7 +29,7 @@ export default async function MaterialIssueDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Inventory",href:"/inventory"},{label:"Material Issues",href:"/inventory/material-issues"},{label:"Detail"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Inventaris",href:"/inventory"},{label:"Pengeluaran Material",href:"/inventory/material-issues"},{label:"Detail"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Material Issue {issue.documentNo}</h1>
         <div className="flex gap-2 items-center">
@@ -84,7 +84,7 @@ export default async function MaterialIssueDetailPage({
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Items</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang</h2>
         </div>
         <div className="p-4 px-5">
           {issue.items.length === 0 ? (

@@ -139,7 +139,7 @@ export default async function QuotationDetailPage({
                 {quotation.downPayments.length > 0 && (
                   <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                     <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                      <h2 className="text-[0.9375rem] font-semibold text-foreground">Down Payments</h2>
+                      <h2 className="text-[0.9375rem] font-semibold text-foreground">Uang Muka</h2>
                     </div>
                     <div className="p-4 px-5">
                       <DetailTable>

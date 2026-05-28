@@ -48,7 +48,7 @@ export default async function StockMovesPage({
   { label: "Stock Moves" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Stock Moves</h1>
+        <h1 className="text-2xl font-bold text-foreground">Pergerakan Stok</h1>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

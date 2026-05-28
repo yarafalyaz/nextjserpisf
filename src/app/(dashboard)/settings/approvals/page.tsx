@@ -38,7 +38,7 @@ export default async function ApprovalsPage({
   { label: "Approvals" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Approval Workflow</h1>
+        <h1 className="text-2xl font-bold text-foreground">Alur Persetujuan</h1>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

@@ -114,7 +114,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
         <FormSection title="Item" columns={1}>
           <div>
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-base font-semibold text-foreground">Items</h3>
+              <h3 className="text-base font-semibold text-foreground">Barang</h3>
               <Button onClick={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Item</Button>
             </div>
             <div className="overflow-x-auto">

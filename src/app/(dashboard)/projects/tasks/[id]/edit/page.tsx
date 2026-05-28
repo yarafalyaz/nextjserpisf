@@ -31,7 +31,7 @@ export default async function EditTaskPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Projects",href:"/projects"},{label:"Tasks",href:"/projects/tasks"},{label:"Edit"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Proyek",href:"/projects"},{label:"Tugas",href:"/projects/tasks"},{label:"Edit"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit Tugas: {task.name}</h1>
       </div>

@@ -32,7 +32,7 @@ export default async function VendorBillDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Purchase",href:"/purchase"},{label:"Bills",href:"/purchase/bills"},{label:"Detail"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/purchase"},{label:"Tagihan",href:"/purchase/bills"},{label:"Detail"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tagihan {bill.documentNo}</h1>
         <div className="flex gap-2 items-center">

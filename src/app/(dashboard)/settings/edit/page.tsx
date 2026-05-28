@@ -39,7 +39,7 @@ export default async function SettingsEditPage() {
         { label: "Edit" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit System Settings</h1>
+        <h1 className="text-2xl font-bold text-foreground">Edit Pengaturan Sistem</h1>
       </div>
       <SettingsEditForm settings={serializedSettings} accounts={accounts} />
     </div>

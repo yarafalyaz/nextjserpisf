@@ -50,7 +50,7 @@ export default async function ActivityLogPage({
   { label: "Activity Log" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Activity Log</h1>
+        <h1 className="text-2xl font-bold text-foreground">Log Aktivitas</h1>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

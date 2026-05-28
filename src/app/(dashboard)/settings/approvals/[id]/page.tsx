@@ -35,7 +35,7 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
         { label: `#${approval.id}` },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Approval Detail</h1>
+        <h1 className="text-2xl font-bold text-foreground">Detail Persetujuan</h1>
         <span className={`status-badge status-${approval.status}`}>{approval.status}</span>
       </div>
 

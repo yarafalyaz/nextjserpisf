@@ -46,9 +46,9 @@ export default async function DownPaymentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Sales",href:"/sales"},{label:"Down Payments"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/sales"},{label:"Uang Muka"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Down Payments</h1>
+        <h1 className="text-2xl font-bold text-foreground">Uang Muka</h1>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

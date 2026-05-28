@@ -93,7 +93,7 @@ export default async function PurchaseOrderDetailPage({
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Items</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang</h2>
                 </div>
                 <div className="p-4 px-5">
                   <DetailTable>
@@ -132,7 +132,7 @@ export default async function PurchaseOrderDetailPage({
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Goods Receipts</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
                   {po.status === "ordered" && (
                     <Link href={`/purchase/goods-receipts/create?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat GR</Link>
                   )}
@@ -145,7 +145,7 @@ export default async function PurchaseOrderDetailPage({
                       <DetailTableHead>
                         <DetailTableTh>No. Dokumen</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Items</DetailTableTh>
+                        <DetailTableTh>Barang</DetailTableTh>
                         <DetailTableTh>Status</DetailTableTh>
                       </DetailTableHead>
                       <DetailTableBody>

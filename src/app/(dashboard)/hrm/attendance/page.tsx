@@ -57,7 +57,7 @@ export default async function AttendancePage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Attendance</h1>
+        <h1 className="text-2xl font-bold text-foreground">Absensi</h1>
         <form className="flex gap-2" action="/hrm/attendance">
           <input type="date" name="date" defaultValue={targetDate.toISOString().split("T")[0]} className="form-input" />
           <Button >Filter</Button>

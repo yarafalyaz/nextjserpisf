@@ -145,7 +145,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
         <FormSection title="Item" columns={1}>
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <h3 style={{ margin: 0, fontSize: "1rem" }}>Items</h3>
+              <h3 style={{ margin: 0, fontSize: "1rem" }}>Barang</h3>
               <Button onClick={addItem} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all">+ Tambah Item</Button>
             </div>
 

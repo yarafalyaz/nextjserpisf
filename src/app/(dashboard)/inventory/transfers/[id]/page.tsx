@@ -62,7 +62,7 @@ export default async function InventoryTransferDetailPage({
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Items</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang</h2>
         </div>
         <div className="p-4 px-5">
           {transfer.items.length === 0 ? (

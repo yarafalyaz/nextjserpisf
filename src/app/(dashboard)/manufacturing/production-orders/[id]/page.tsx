@@ -36,7 +36,7 @@ export default async function ProductionOrderDetailPage({
   { label: "Detail" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Production Order {order.documentNo}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Perintah Produksi {order.documentNo}</h1>
         <div className="flex gap-2 items-center">
           <StatusChip status={order.status} />
   <div className="flex gap-2">

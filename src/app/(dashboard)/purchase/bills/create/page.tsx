@@ -23,7 +23,7 @@ export default async function CreateVendorBillPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dashboard",href:"/"},{label:"Purchase",href:"/purchase"},{label:"Bills",href:"/purchase/bills"},{label:"Tambah"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/purchase"},{label:"Tagihan",href:"/purchase/bills"},{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Vendor Bill</h1>
       </div>
