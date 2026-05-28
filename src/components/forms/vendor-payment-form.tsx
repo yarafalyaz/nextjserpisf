@@ -184,7 +184,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
                         <span className="form-attachment-name">{file.originalName}</span>
                         <span className="form-attachment-size">{formatFileSize(file.fileSize)}</span>
                       </div>
-                      <Button onPress={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
+                      <Button type="button" onPress={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
                         <X className="size-4" />
                       </Button>
                     </div>
@@ -228,7 +228,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
         )}
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending || uploading}>
             {isPending ? "Menyimpan..." : payment?.id ? "Update" : "Simpan"}
           </Button>

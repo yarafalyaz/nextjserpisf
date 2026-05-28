@@ -8,6 +8,7 @@ import { DollarSign, Receipt, Users, Package, AlertTriangle } from "lucide-react
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { RevenueChart, SalesStatusChart, TopCustomersChart } from "@/components/dashboard/charts"
+import { NotificationsWidget } from "@/components/dashboard/notifications-widget"
 
 async function getChartData() {
   const sixMonthsAgo = new Date()
@@ -167,6 +168,9 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1">
         <TopCustomersChart data={chartData.topCustomers} />
       </div>
+
+      {/* Notifications Widget */}
+      <NotificationsWidget />
 
       {/* Content Grid */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-5">

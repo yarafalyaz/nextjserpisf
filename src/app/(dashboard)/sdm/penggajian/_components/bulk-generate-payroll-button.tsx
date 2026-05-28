@@ -76,7 +76,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
     <>
       <Button 
         onPress={state.open}
-        variant="solid" 
+        variant="primary" 
         className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white hover:-translate-y-px hover:shadow-md transition-all h-auto"
       >
         <Sparkles size={16} />
@@ -122,6 +122,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
                   <div className="flex flex-col gap-1.5">
                     <AppDatePicker 
                       label="Tanggal Mulai Cut-off *" 
+                      name="startDate"
                       value={startDate}
                       onChange={(d) => setStartDate(d ? d.toString() : "")} 
                     />
@@ -130,6 +131,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
                   <div className="flex flex-col gap-1.5">
                     <AppDatePicker 
                       label="Tanggal Selesai Cut-off *" 
+                      name="endDate"
                       value={endDate}
                       onChange={(d) => setEndDate(d ? d.toString() : "")} 
                     />

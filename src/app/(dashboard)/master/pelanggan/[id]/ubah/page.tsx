@@ -13,9 +13,12 @@ export default async function EditCustomerPage({
 }) {
   await requirePermission("edit_customers")
   const { id } = await params
+  const customerId = Number(id)
+
+  if (!Number.isInteger(customerId) || customerId <= 0) notFound()
 
   const customer = await prisma.customer.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: customerId, deletedAt: null },
   })
 
   if (!customer) notFound()

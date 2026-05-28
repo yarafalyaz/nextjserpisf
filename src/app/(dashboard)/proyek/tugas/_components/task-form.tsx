@@ -18,7 +18,7 @@ interface TaskFormProps {
     description?: string | null
     status: string
     assignedTo?: number | null
-    tanggalMulai?: string | null
+    startDate?: string | null
     dueDate?: string | null
   }
 }
@@ -137,7 +137,7 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : task?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>

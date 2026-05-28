@@ -5,6 +5,7 @@ import type { ColumnDef, SortingState } from "@tanstack/react-table"
 
 import { Table, Checkbox, Pagination, Button, cn } from "@heroui/react"
 import { ChevronUp, Trash2 } from "lucide-react"
+import { showError } from "@/lib/utils/toast"
 import {
   flexRender,
   getCoreRowModel,
@@ -122,10 +123,10 @@ export function DataTable<TData extends { id: number | string }>({
       if (result.success) {
         setSelectedKeys(new Set())
       } else {
-        alert(result.message || "Gagal menghapus data")
+        showError(result.message || "Gagal menghapus data")
       }
     } catch {
-      alert("Terjadi kesalahan saat menghapus data")
+      showError("Terjadi kesalahan saat menghapus data")
     } finally {
       setIsDeleting(false)
       setConfirmOpen(false)

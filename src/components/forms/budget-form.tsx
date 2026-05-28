@@ -86,7 +86,7 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
           </div>
         </FormSection>
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : budget?.id ? "Update" : "Simpan"}
           </Button>

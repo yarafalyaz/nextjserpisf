@@ -66,7 +66,7 @@ export function ApprovePayrollButton({ payrollId }: { payrollId: number }) {
               </Button>
               <Button
                 className="w-full"
-                variant="flat"
+                variant="secondary"
                 onPress={modalState.close}
                 isDisabled={isPending}
               >

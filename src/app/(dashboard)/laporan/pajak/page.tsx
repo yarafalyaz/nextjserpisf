@@ -19,8 +19,8 @@ export default async function TaxReportPage({
   const params = await searchParams
 
   const now = new Date()
-  const startDate = params.startDate ? new Date(params.startDate) : new Date(now.getFullYear(), now.getMonth(), 1)
-  const endDate = params.endDate ? new Date(params.endDate) : now
+  const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), now.getMonth(), 1)
+  const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
 
   // PPN Keluaran (Output Tax) - from Sales Invoices
   const salesInvoices = await prisma.salesInvoice.findMany({

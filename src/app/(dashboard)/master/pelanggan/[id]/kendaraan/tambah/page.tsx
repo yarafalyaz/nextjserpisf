@@ -13,9 +13,12 @@ export default async function CreateCustomerVehiclePage({
 }) {
   await requirePermission("create_customers")
   const { id } = await params
+  const customerId = Number(id)
+
+  if (!Number.isInteger(customerId) || customerId <= 0) notFound()
 
   const customer = await prisma.customer.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: customerId, deletedAt: null },
   })
 
   if (!customer) notFound()
@@ -47,7 +50,7 @@ export default async function CreateCustomerVehiclePage({
         <h1 className="text-2xl font-bold text-foreground">Tambah Kendaraan</h1>
       </div>
 
-      <CustomerVehicleForm customerId={Number(id)} brands={brands} />
+      <CustomerVehicleForm customerId={customerId} brands={brands} />
     </div>
   )
 }

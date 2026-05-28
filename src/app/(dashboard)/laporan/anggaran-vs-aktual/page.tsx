@@ -20,11 +20,11 @@ export default async function BudgetVsActualPage({
   const now = new Date()
   // Default: current quarter
   const currentQuarter = Math.floor(now.getMonth() / 3)
-  const startDate = params.startDate
-    ? new Date(params.startDate)
+  const startDate = params.tanggalMulai
+    ? new Date(params.tanggalMulai)
     : new Date(now.getFullYear(), currentQuarter * 3, 1)
-  const endDate = params.endDate
-    ? new Date(params.endDate)
+  const endDate = params.tanggalSelesai
+    ? new Date(params.tanggalSelesai)
     : new Date(now.getFullYear(), currentQuarter * 3 + 3, 0)
 
   // Fetch budgets that overlap with the period

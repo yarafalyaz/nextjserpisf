@@ -14,8 +14,8 @@ import { AppDatePicker } from "@/components/ui/date-picker"
  * Shows all accounts with their debit and credit totals
  */
 async function getTrialBalanceData(tanggalMulai?: string, tanggalSelesai?: string) {
-  const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1) // Jan 1
-  const end = endDate ? new Date(endDate) : new Date()
+  const start = tanggalMulai ? new Date(tanggalMulai) : new Date(new Date().getFullYear(), 0, 1) // Jan 1
+  const end = tanggalSelesai ? new Date(tanggalSelesai) : new Date()
 
   const entries = await prisma.journalEntry.findMany({
     where: {
@@ -61,8 +61,8 @@ async function getTrialBalanceData(tanggalMulai?: string, tanggalSelesai?: strin
  * Income Statement (P&L)
  */
 async function getIncomeStatementData(tanggalMulai?: string, tanggalSelesai?: string) {
-  const start = startDate ? new Date(startDate) : new Date(new Date().getFullYear(), 0, 1)
-  const end = endDate ? new Date(endDate) : new Date()
+  const start = tanggalMulai ? new Date(tanggalMulai) : new Date(new Date().getFullYear(), 0, 1)
+  const end = tanggalSelesai ? new Date(tanggalSelesai) : new Date()
 
   const entries = await prisma.journalEntry.findMany({
     where: {
@@ -122,8 +122,8 @@ export default async function FinancialReportsPage({
   const params = await searchParams
   const reportType = params.report || "trial-balance"
 
-  const trialBalance = reportType === "trial-balance" ? await getTrialBalanceData(params.startDate, params.endDate) : null
-  const incomeStatement = reportType === "income-statement" ? await getIncomeStatementData(params.startDate, params.endDate) : null
+  const trialBalance = reportType === "trial-balance" ? await getTrialBalanceData(params.tanggalMulai, params.tanggalSelesai) : null
+  const incomeStatement = reportType === "income-statement" ? await getIncomeStatementData(params.tanggalMulai, params.tanggalSelesai) : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -153,8 +153,8 @@ export default async function FinancialReportsPage({
             </ListBox>
           </Select.Popover>
         </Select>
-        <AppDatePicker label="Dari" name="startDate" defaultValue={params.startDate || `${new Date().getFullYear()}-01-01`} className="w-[180px]" />
-        <AppDatePicker label="Sampai" name="endDate" defaultValue={params.endDate || new Date().toISOString().split("T")[0]} className="w-[180px]" />
+        <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || `${new Date().getFullYear()}-01-01`} className="w-[180px]" />
+        <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || new Date().toISOString().split("T")[0]} className="w-[180px]" />
         <Button type="submit" variant="primary" size="sm">Generate</Button>
       </form>
 

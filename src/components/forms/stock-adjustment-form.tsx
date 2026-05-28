@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/page-header"
 interface AdjustmentFormProps {
   warehouses: { id: number; name: string
 }[]
-  adjustment?: { id: number; warehouseId: number; date: string; tipe?: string; reason?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; type: string }> }
+  adjustment?: { id: number; warehouseId: number; date: string; type?: string; reason?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; type: string }> }
   items: { id: number; sku: string; name: string; qtyOnHand: string; cost: string }[]
 }
 
@@ -115,7 +115,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
           <div>
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-base font-semibold text-foreground">Barang</h3>
-              <Button onPress={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Item</Button>
+              <Button type="button" onPress={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Item</Button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
@@ -146,7 +146,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
                       <td className="py-2 px-2"><input type="text" value={item.reason} onChange={(e) => updateItem(i, "reason", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Alasan" /></td>
                       <td className="py-2 px-2 text-center">
                         {adjItems.length > 1 && (
-                          <Button onPress={() => removeItem(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
+                          <Button type="button" onPress={() => removeItem(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
                         )}
                       </td>
                     </tr>
@@ -158,7 +158,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
         </FormSection>
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : adjustment?.id ? "Update" : "Simpan"}
           </Button>

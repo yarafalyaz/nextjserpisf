@@ -1,5 +1,6 @@
 
 import { DocumentSequenceService } from '@/lib/services/document-sequence.service'
+import { prisma } from '@/lib/db/prisma'
 import { getSystemSettings } from './settings'
 
 /**
@@ -49,13 +50,71 @@ const PREFIX_FIELD_MAP: Record<string, string> = {
   POS: undefined as any,  // Position prefix not stored
 }
 
-/** Resolve actual prefix from system settings. Falls back to provided key. */
 async function resolvePrefix(key: string): Promise<string> {
   const field = PREFIX_FIELD_MAP[key]
   if (!field) return key
   const settings = await getSystemSettings()
   const value = (settings as any)[field]
   return value && String(value).trim() !== '' ? String(value) : key
+}
+
+const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: string; softDelete?: boolean }> = {
+  QUO: { model: 'quotation', field: 'documentNo', softDelete: true },
+  SO: { model: 'salesOrder', field: 'documentNo', softDelete: true },
+  INV: { model: 'salesInvoice', field: 'documentNo', softDelete: true },
+  PAY: { model: 'salesPayment', field: 'documentNo' },
+  SR: { model: 'salesReturn', field: 'documentNo' },
+  DP: { model: 'downPayment', field: 'documentNo' },
+  DO: { model: 'deliveryOrder', field: 'documentNo' },
+  PR: { model: 'purchaseRequest', field: 'documentNo' },
+  PO: { model: 'purchaseOrder', field: 'documentNo' },
+  GR: { model: 'goodsReceipt', field: 'documentNo' },
+  BILL: { model: 'vendorBill', field: 'documentNo' },
+  VPAY: { model: 'vendorPayment', field: 'documentNo' },
+  PRET: { model: 'purchaseReturn', field: 'documentNo' },
+  ADJ: { model: 'stockAdjustment', field: 'documentNo' },
+  TRF: { model: 'inventoryTransfer', field: 'documentNo' },
+  MI: { model: 'materialIssue', field: 'documentNo' },
+  WO: { model: 'workOrder', field: 'documentNo' },
+  MO: { model: 'productionOrder', field: 'documentNo' },
+  JRN: { model: 'journalEntry', field: 'journalNumber' },
+  EXP: { model: 'expense', field: 'documentNo', softDelete: true },
+  PC: { model: 'pettyCash', field: 'documentNo' },
+  PAYROLL: { model: 'payroll', field: 'documentNo' },
+  PRJ: { model: 'project', field: 'documentNo' },
+}
+
+async function findReusableSequence(key: string, prefix: string, format: 'complex' | 'simple', month: string, year: number): Promise<number | null> {
+  const source = DOCUMENT_SOURCE_MAP[key]
+  if (!source) return null
+
+  const delegate = prisma[source.model] as unknown as { findMany: (args: any) => Promise<Record<string, string | null>[]> }
+  const where = {
+    ...(format === 'complex'
+      ? { [source.field]: { contains: `/${prefix}/`, endsWith: `/${month}/${year}` } }
+      : { [source.field]: { startsWith: `${prefix}-` } }),
+    ...(source.softDelete ? { deletedAt: null } : {}),
+  }
+
+  const rows = await delegate.findMany({
+    where,
+    select: { [source.field]: true },
+  })
+
+  const used = new Set<number>()
+  for (const row of rows) {
+    const documentNo = row[source.field]
+    if (!documentNo) continue
+    const documentNoText = String(documentNo)
+    const match = format === 'complex'
+      ? documentNoText.match(/^(\d+)\//)
+      : documentNoText.match(/-(\d+)$/)
+    if (match) used.add(Number(match[1]))
+  }
+
+  let reusable = 1
+  while (used.has(reusable)) reusable += 1
+  return reusable
 }
 
 /**
@@ -77,16 +136,14 @@ export async function generateDocumentNumber(
   const prefix = await resolvePrefix(key)
 
   if (format === 'complex') {
-    // Key includes year and month for monthly reset
-    const seqKey = `${prefix}-${year}-${month}`
-    const seq = await DocumentSequenceService.next(seqKey)
+    const seq = await findReusableSequence(key, prefix, format, month, year)
+      ?? await DocumentSequenceService.next(`${prefix}-${year}-${month}`)
     const settings = await getSystemSettings()
     const companyCode = settings.companyName?.substring(0, 3).toUpperCase() ?? 'YRA'
     return `${String(seq).padStart(3, '0')}/${prefix}/${companyCode}/${month}/${year}`
   } else {
-    // Global sequence — never resets
-    const seqKey = `${prefix}-GLOBAL`
-    const seq = await DocumentSequenceService.next(seqKey)
+    const seq = await findReusableSequence(key, prefix, format, month, year)
+      ?? await DocumentSequenceService.next(`${prefix}-GLOBAL`)
     return `${prefix}-${String(seq).padStart(4, '0')}`
   }
 }
@@ -104,14 +161,12 @@ export async function peekNextDocumentNumber(
   const prefix = await resolvePrefix(key)
 
   if (format === 'simple') {
-    const seqKey = `${prefix}-GLOBAL`
-    const current = await DocumentSequenceService.peek(seqKey)
-    const next = current + 1
+    const next = await findReusableSequence(key, prefix, format, month, year)
+      ?? ((await DocumentSequenceService.peek(`${prefix}-GLOBAL`)) + 1)
     return `${prefix}-${String(next).padStart(4, '0')}`
   } else {
-    const seqKey = `${prefix}-${year}-${month}`
-    const current = await DocumentSequenceService.peek(seqKey)
-    const next = current + 1
+    const next = await findReusableSequence(key, prefix, format, month, year)
+      ?? ((await DocumentSequenceService.peek(`${prefix}-${year}-${month}`)) + 1)
     const settings = await getSystemSettings()
     const companyCode = settings.companyName?.substring(0, 3).toUpperCase() ?? 'YRA'
     return `${String(next).padStart(3, '0')}/${prefix}/${companyCode}/${month}/${year}`

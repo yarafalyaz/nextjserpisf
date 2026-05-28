@@ -55,6 +55,29 @@
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 
   --transition: all 0.2s ease;
+
+  /* Bridge HeroUI v3 accent tokens to the app's red brand system. */
+  --accent: var(--color-primary);
+  --accent-hover: var(--color-primary-hover);
+  --accent-foreground: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --accent-soft-hover: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  --accent-soft-foreground: var(--color-primary);
+  --focus: var(--color-primary);
+}
+
+.button.button--primary {
+  --button-bg: var(--color-primary);
+  --button-bg-hover: var(--color-primary-hover);
+  --button-bg-pressed: var(--color-primary-hover);
+  --button-fg: #ffffff;
+}
+
+.button.button--secondary {
+  --button-bg: var(--color-primary-light);
+  --button-bg-hover: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  --button-bg-pressed: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  --button-fg: var(--color-primary);
 }
 
 /* ==================== DARK THEME ==================== */
@@ -88,6 +111,28 @@ html.dark {
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
 
   color-scheme: dark;
+
+  --accent: var(--color-primary);
+  --accent-hover: var(--color-primary-hover);
+  --accent-foreground: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  --accent-soft-hover: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  --accent-soft-foreground: var(--color-primary);
+  --focus: var(--color-primary);
+}
+
+html.dark .button.button--primary {
+  --button-bg: var(--color-primary);
+  --button-bg-hover: var(--color-primary-hover);
+  --button-bg-pressed: var(--color-primary-hover);
+  --button-fg: #ffffff;
+}
+
+html.dark .button.button--secondary {
+  --button-bg: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  --button-bg-hover: color-mix(in srgb, var(--color-primary) 24%, transparent);
+  --button-bg-pressed: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  --button-fg: var(--color-primary);
 }
 
 /* ==================== THEME TOGGLE ==================== */

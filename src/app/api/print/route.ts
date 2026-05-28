@@ -23,10 +23,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [settings, companyName] = await Promise.all([
-      getSystemSettings(),
-      prisma.systemSetting.findFirst(),
-    ])
+    const settings = await getSystemSettings()
 
     const companyInfo = {
       name: settings.companyName || "Yara ERP",
@@ -75,12 +72,26 @@ export async function GET(request: Request) {
     if (type === "quotation") {
       const doc = await prisma.quotation.findUnique({
         where: { id },
-        include: { customer: true, sections: { include: { items: true } } },
+        include: {
+          customer: true,
+          customerVehicle: {
+            include: {
+              vehicle: {
+                include: {
+                  variant: { include: { model: { include: { brand: true } } } },
+                },
+              },
+            },
+          },
+          sections: { include: { items: true } },
+        },
       })
       if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
 
       // Flatten items from all sections
       const allItems = doc.sections.flatMap(sec => sec.items)
+      const vehicleModel = doc.customerVehicle?.vehicle?.variant?.model
+      const vehicleName = vehicleModel ? `${vehicleModel.brand?.name ?? ""} ${vehicleModel.name}`.trim() : ""
 
       return NextResponse.json({
         company: companyInfo,
@@ -92,12 +103,19 @@ export async function GET(request: Request) {
           customerName: doc.customer.name,
           customerAddress: doc.customer.address || doc.customer.street || "",
           customerPhone: doc.customer.phone || "",
+          vehicleName,
+          plateNumber: doc.customerVehicle?.licensePlate || doc.customerVehicle?.vehicle?.plateNumber || "-",
+          paymentMethod: doc.paymentMethod || "",
+          shippingMethod: doc.shippingMethod || "",
+          footerNotes: settings.quotationFooterNotes || "",
+          signatureName: settings.quotationSignatureName || "",
           notes: doc.notes || "",
         },
         items: allItems.map((it, idx) => ({
           no: idx + 1,
           description: it.description || "Item Jasa/Barang",
           qty: Number(it.qty),
+          unit: it.uom || "Set",
           price: Number(it.unitPrice),
           discount: Number(it.discount || 0),
           total: Number(it.total),

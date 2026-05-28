@@ -103,7 +103,7 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
           </div>
         </FormSection>
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : pettyCash?.id ? "Update" : "Simpan"}
           </Button>

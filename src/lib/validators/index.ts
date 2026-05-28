@@ -144,6 +144,8 @@ export const quotationSchema = z.object({
   discount: z.number().min(0).default(0),
   tax: z.number().min(0).default(0),
   grandTotal: z.number().default(0),
+  paymentMethod: z.string().optional(),
+  shippingMethod: z.string().optional(),
   notes: z.string().optional(),
   sections: z.array(quotationSectionSchema).min(1, "Minimal 1 section"),
 })

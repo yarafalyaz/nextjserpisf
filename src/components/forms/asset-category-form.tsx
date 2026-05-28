@@ -49,7 +49,7 @@ export function AssetCategoryForm({ category }: { category?: { id: number; name:
           </div>
         </FormSection>
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : category?.id ? "Update" : "Simpan"}
           </Button>

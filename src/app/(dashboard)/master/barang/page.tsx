@@ -71,7 +71,7 @@ export default async function ItemsPage({
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
-            <Button >Filter</Button>
+            <Button type="submit" >Filter</Button>
           </form>
         </div>
 

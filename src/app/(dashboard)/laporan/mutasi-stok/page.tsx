@@ -20,8 +20,8 @@ export default async function StockMovementPage({
   const params = await searchParams
 
   const now = new Date()
-  const startDate = params.startDate ? new Date(params.startDate) : new Date(now.getFullYear(), now.getMonth(), 1)
-  const endDate = params.endDate ? new Date(params.endDate) : now
+  const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), now.getMonth(), 1)
+  const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
   const warehouseId = params.warehouseId ? parseInt(params.warehouseId) : null
 
   const warehouses = await prisma.warehouse.findMany({
@@ -93,8 +93,8 @@ export default async function StockMovementPage({
             </ListBox>
           </Select.Popover>
         </Select>
-        <AppDatePicker label="Dari" name="startDate" defaultValue={params.startDate || startDate.toISOString().split('T')[0]} className="w-[180px]" />
-        <AppDatePicker label="Sampai" name="endDate" defaultValue={params.endDate || endDate.toISOString().split('T')[0]} className="w-[180px]" />
+        <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || startDate.toISOString().split('T')[0]} className="w-[180px]" />
+        <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || endDate.toISOString().split('T')[0]} className="w-[180px]" />
         <Button type="submit" variant="primary" size="sm">Generate</Button>
       </form>
 

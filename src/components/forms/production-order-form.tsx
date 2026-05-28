@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/page-header"
 
 interface ProductionOrderFormProps {
   products: { id: number; name: string; sku: string | null }[]
-  order?: { id: number; workOrderId: number; itemId: number; productId?: number | null; qty: number; tanggalMulai?: string | null; tanggalSelesai?: string | null; notes?: string | null }
+  order?: { id: number; workOrderId: number; itemId: number; productId?: number | null; qty: number; startDate?: string | null; endDate?: string | null; notes?: string | null }
 }
 
 export function ProductionOrderForm({ products, order }: ProductionOrderFormProps) {
@@ -74,8 +74,8 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending}  id="submit-production-order">
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending}  id="submit-production-order">
           {isPending ? "Menyimpan..." : order?.id ? "Update" : "Simpan"}
         </Button>
       </div>

@@ -17,7 +17,7 @@ export default async function PettyCashPage({
   const params = await searchParams
 
   const where = {
-    ...(params.tipe && { tipe: params.tipe }),
+    ...(params.tipe && { type: params.tipe }),
   }
 
   const records = await prisma.pettyCash.findMany({

@@ -8,16 +8,22 @@ import { I18nProvider } from "react-aria-components"
 interface AppDatePickerProps {
   label: string
   name: string
-  value?: string // ISO date string "YYYY-MM-DD"
-  defaultValue?: string
+  value?: string | Date // ISO date string "YYYY-MM-DD" or Date
+  defaultValue?: string | Date
   onChange?: (dateStr: string) => void
   required?: boolean
   className?: string
 }
 
 export function AppDatePicker({ label, name, value, defaultValue, onChange, required, className }: AppDatePickerProps) {
-  const parsedValue = value ? parseDate(value) : undefined
-  const parsedDefault = defaultValue ? parseDate(defaultValue) : undefined
+  const normalizeDate = (dateValue?: string | Date) => {
+    if (!dateValue) return undefined
+    if (dateValue instanceof Date) return dateValue.toISOString().split("T")[0]
+    return String(dateValue).split("T")[0]
+  }
+
+  const parsedValue = value ? parseDate(normalizeDate(value)!) : undefined
+  const parsedDefault = defaultValue ? parseDate(normalizeDate(defaultValue)!) : undefined
 
   function handleChange(val: DateValue | null) {
     if (val && onChange) {

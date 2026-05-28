@@ -12,12 +12,14 @@ import { FilterDrawer } from "@/components/ui/filter-drawer"
 export default async function JournalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string }>
 }) {
   await requirePermission("view_journals")
 
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
+  const page = Number(params.halaman) || 1
+  const perPage = 100
 
   const where = {
     ...(params.cari && {
@@ -29,14 +31,20 @@ export default async function JournalsPage({
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
   }
 
-  const journals = await prisma.journal.findMany({
-    where,
-    include: {
-      _count: { select: { entries: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  })
+  const [journals, total] = await Promise.all([
+    prisma.journal.findMany({
+      where,
+      include: {
+        _count: { select: { entries: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * perPage,
+      take: perPage,
+    }),
+    prisma.journal.count({ where }),
+  ])
 
+  const totalPages = Math.ceil(total / perPage)
   const data = JSON.parse(JSON.stringify(journals))
 
   return (
@@ -66,6 +74,16 @@ export default async function JournalsPage({
         </div>
 
         <JournalTable data={data} />
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+            <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
+            <div className="flex gap-1">
+              {page > 1 && <Link href={`/keuangan/jurnal?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
+              {page < totalPages && <Link href={`/keuangan/jurnal?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

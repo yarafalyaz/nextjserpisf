@@ -209,7 +209,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
         </FormSection>
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : request?.id ? "Update" : "Simpan"}
           </Button>

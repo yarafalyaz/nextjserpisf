@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react"
 import { Clock, MapPin, CheckCircle, LogIn, LogOut, Loader2, Navigation } from "lucide-react"
 import { getTodayAttendance, selfCheckIn, selfCheckOut, getCompanyLocation } from "@/actions/self-attendance.actions"
 import { Button } from "@/components/ui/page-header"
@@ -47,6 +47,10 @@ interface GeoCoords {
   longitude: number
 }
 
+const subscribeMounted = () => () => {}
+const getMountedSnapshot = () => true
+const getServerMountedSnapshot = () => false
+
 export function SelfAttendanceWidget() {
   const [status, setStatus] = useState<AttendanceStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -56,12 +60,8 @@ export function SelfAttendanceWidget() {
   const [geoLoading, setGeoLoading] = useState(false)
   const [lokasiNama, setLokasiNama] = useState<string | null>(null)
   const [companyLoc, setCompanyLoc] = useState<{ latitude: number | null; longitude: number | null; radius: number } | null>(null)
-  const [distanceKm, setDistanceKm] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [mounted, setMounted] = useState(false)
-
-  // Hydration fix
-  useEffect(() => { setMounted(true) }, [])
+  const mounted = useSyncExternalStore(subscribeMounted, getMountedSnapshot, getServerMountedSnapshot)
 
   const loadStatus = useCallback(async () => {
     try {
@@ -80,7 +80,12 @@ export function SelfAttendanceWidget() {
     return () => clearInterval(t)
   }, [])
 
-  useEffect(() => { loadStatus() }, [loadStatus])
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadStatus()
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [loadStatus])
 
   useEffect(() => {
     getCompanyLocation().then(data => {
@@ -129,12 +134,11 @@ export function SelfAttendanceWidget() {
       .catch(() => setLokasiNama("Lokasi Anda"))
   }, [geo])
 
-  // Hitung jarak
-  useEffect(() => {
+  const distanceKm = useMemo(() => {
     if (geo && companyLoc?.latitude && companyLoc?.longitude) {
-      const dist = calculateDistance(geo.latitude, geo.longitude, companyLoc.latitude, companyLoc.longitude)
-      setDistanceKm(dist)
+      return calculateDistance(geo.latitude, geo.longitude, companyLoc.latitude, companyLoc.longitude)
     }
+    return null
   }, [geo, companyLoc])
 
   const handleCheckIn = async () => {

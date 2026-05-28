@@ -18,10 +18,10 @@ export default async function ProfitCenterIncomePage({
   const params = await searchParams
 
   const now = new Date()
-  const startDate = params.startDate
-    ? new Date(params.startDate)
+  const startDate = params.tanggalMulai
+    ? new Date(params.tanggalMulai)
     : new Date(now.getFullYear(), 0, 1)
-  const endDate = params.endDate ? new Date(params.endDate) : now
+  const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
 
   // Get profit centers
   const profitCenters = await prisma.profitCenter.findMany({ orderBy: { code: 'asc' } })

@@ -35,6 +35,8 @@ export async function createQuotation(formData: FormData) {
         discount: data.discount || 0,
         tax: data.tax || 0,
         grandTotal: data.grandTotal || 0,
+        paymentMethod: data.paymentMethod || null,
+        shippingMethod: data.shippingMethod || null,
         notes: data.notes || null,
         status: "draft",
         createdBy: Number(user.id),
@@ -147,6 +149,8 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
       customerVehicleId: safeId(formData.get("customerVehicleId")),
       date: formData.get("date") ? new Date(formData.get("date") as string) : undefined,
       validUntil: formData.get("validUntil") ? new Date(formData.get("validUntil") as string) : undefined,
+      paymentMethod: formData.get("paymentMethod") as string | null,
+      shippingMethod: formData.get("shippingMethod") as string | null,
       notes: formData.get("notes") as string | null,
       revisionNumber: { increment: 1 },
     },
@@ -455,9 +459,14 @@ export async function createDeliveryOrder(formData: FormData) {
 export async function deleteQuotation(id: number) {
   await requirePermission("delete_quotations")
 
+  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id } })
+
   await prisma.quotation.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: {
+      documentNo: `${quotation.documentNo}__deleted__${id}`,
+      deletedAt: new Date(),
+    },
   })
 
   revalidatePath("/penjualan/penawaran")

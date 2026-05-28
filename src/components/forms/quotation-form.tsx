@@ -5,7 +5,7 @@ import { useTransition, useCallback, useMemo } from "react"
 import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { quotationSchema, type QuotationInput } from "@/lib/validators"
-import { createQuotation } from "@/actions/sales.actions"
+import { createQuotation, updateQuotation } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, TextArea, Label, ComboBox, ListBox, Select } from "@heroui/react"
@@ -461,6 +461,8 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
           discount: 0,
           tax: 0,
           grandTotal: 0,
+          paymentMethod: "",
+          shippingMethod: "",
           notes: "",
           sections: [
             {
@@ -500,11 +502,23 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
     startTransition(async () => {
       try {
         const formData = new FormData()
-        formData.set("data", JSON.stringify(data))
-        const result = await createQuotation(formData)
+        let result: { success: boolean; id?: number }
+        if (quotation?.id) {
+          formData.set("customerId", String(data.customerId))
+          if (data.customerVehicleId) formData.set("customerVehicleId", String(data.customerVehicleId))
+          formData.set("date", data.date)
+          if (data.validUntil) formData.set("validUntil", data.validUntil)
+          formData.set("paymentMethod", data.paymentMethod || "")
+          formData.set("shippingMethod", data.shippingMethod || "")
+          formData.set("notes", data.notes || "")
+          result = await updateQuotation(Number(quotation.id), formData)
+        } else {
+          formData.set("data", JSON.stringify(data))
+          result = await createQuotation(formData)
+        }
         if (result.success) {
-          showSuccess("Quotation berhasil dibuat")
-          router.push(`/penjualan/penawaran/${result.id}`)
+          showSuccess(quotation?.id ? "Quotation berhasil diperbarui" : "Quotation berhasil dibuat")
+          router.push(`/penjualan/penawaran/${result.id || quotation?.id}`)
           router.refresh()
         }
       } catch (error) {
@@ -521,7 +535,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
         <div className="flex flex-col gap-1.5">
           <Label>No. Dokumen</Label>
           <Input
-            value={generatedCode || "Auto-generated"}
+            value={String(quotation?.documentNo || generatedCode || "Auto-generated")}
             readOnly
             className="bg-muted"
           />
@@ -624,6 +638,16 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
             onChange={(val) => setValue("validUntil", val)}
           />
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
+          <Input id="paymentMethod" {...register("paymentMethod")} placeholder="Transfer / Cash / Termin" />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="shippingMethod">Metode Pengiriman</Label>
+          <Input id="shippingMethod" {...register("shippingMethod")} placeholder="Ambil sendiri / Kurir / Ekspedisi" />
+        </div>
         </FormSection>
 
       <FormSection title="Item Quotation" columns={1}>
@@ -703,7 +727,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
       </FormSection>
 
       <FormActions>
-        <Button onPress={() => router.back()}>Batal</Button>
+        <Button type="button" onPress={() => router.back()}>Batal</Button>
         <Button type="submit" variant="primary" isDisabled={isPending}>
           {isPending ? "Menyimpan..." : "Buat Quotation"}
         </Button>

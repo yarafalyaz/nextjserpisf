@@ -3,6 +3,7 @@
 import { FileDown, Printer, FileText } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import { showError } from "@/lib/utils/toast"
 
 export function ExportButtons({ title }: { title: string }) {
   const handlePrint = () => {
@@ -12,7 +13,7 @@ export function ExportButtons({ title }: { title: string }) {
   const handleExportCSV = () => {
     const tables = document.querySelectorAll('[data-report-table]')
     if (tables.length === 0) {
-      alert('Tidak ada data untuk di-export')
+      showError('Tidak ada data untuk di-export')
       return
     }
 
@@ -46,7 +47,7 @@ export function ExportButtons({ title }: { title: string }) {
   const handleExportPDF = () => {
     const tables = document.querySelectorAll('[data-report-table]')
     if (tables.length === 0) {
-      alert('Tidak ada data untuk di-export')
+      showError('Tidak ada data untuk di-export')
       return
     }
 

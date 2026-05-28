@@ -47,6 +47,50 @@ export default async function EditQuotationPage({
     }),
   ])
 
+  const quotation = {
+    ...data,
+    date: data.date.toISOString().split("T")[0],
+    validUntil: data.validUntil?.toISOString().split("T")[0] ?? null,
+    deletedAt: data.deletedAt?.toISOString() ?? null,
+    createdAt: data.createdAt.toISOString(),
+    updatedAt: data.updatedAt.toISOString(),
+    subtotal: Number(data.subtotal),
+    discount: Number(data.discount),
+    tax: Number(data.tax),
+    grandTotal: Number(data.grandTotal),
+    sections: data.sections.map((section) => ({
+      ...section,
+      createdAt: section.createdAt.toISOString(),
+      updatedAt: section.updatedAt.toISOString(),
+      items: section.items.map((item) => ({
+        ...item,
+        qty: Number(item.qty),
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount),
+        total: Number(item.total),
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })),
+    })),
+  }
+
+  const itemOptions = items.map((item) => ({
+    ...item,
+    price: Number(item.price),
+  }))
+
+  const customerVehicleOptions = customerVehicles.map((customerVehicle) => {
+    const vehicle = customerVehicle.vehicle
+    const model = vehicle?.variant?.model
+    return {
+      id: customerVehicle.id,
+      customerId: customerVehicle.customerId,
+      plateNumber: customerVehicle.licensePlate || vehicle?.plateNumber || "-",
+      brandName: model?.brand?.name || "",
+      modelName: model?.name || "",
+    }
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -58,9 +102,9 @@ export default async function EditQuotationPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit Quotation</h1>
       </div>
-      <QuotationForm quotation={data as any} customers={customers as any}
-        customerVehicles={customerVehicles as any}
-        items={items as any} />
+      <QuotationForm quotation={quotation as any} customers={customers as any}
+        customerVehicles={customerVehicleOptions as any}
+        items={itemOptions as any} />
     </div>
   )
 }

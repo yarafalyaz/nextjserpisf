@@ -89,7 +89,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
           </div>
         </FormSection>
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : loan?.id ? "Update" : "Simpan"}
           </Button>

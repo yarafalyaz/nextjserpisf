@@ -37,7 +37,7 @@ export function AssetBrandForm({ brand }: { brand?: { id: number; name: string }
           </div>
         </FormSection>
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : brand?.id ? "Update" : "Simpan"}
           </Button>

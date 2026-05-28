@@ -166,7 +166,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               {imagePreview ? (
                 <div className="image-upload-preview">
                   <img src={imagePreview} alt="Pratinjau" className="image-upload-img" />
-                  <Button onPress={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
+                  <Button type="button" onPress={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
                     <X className="size-4" />
                   </Button>
                 </div>
@@ -479,7 +479,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
         </FormSection>
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending || uploading}>
             {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
           </Button>

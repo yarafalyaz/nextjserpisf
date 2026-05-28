@@ -9,19 +9,30 @@ import { CustomerVehicleForm } from "@/components/forms/customer-vehicle-form"
 export default async function EditCustomerVehiclePage({
   params,
 }: {
-  params: Promise<{ id: string; kendaraanId: string }>
+  params: Promise<{ id: string; vehicleId: string }>
 }) {
   await requirePermission("edit_customers")
-  const { id, kendaraanId } = await params
+  const { id, vehicleId } = await params
+  const customerId = Number(id)
+  const customerVehicleId = Number(vehicleId)
+
+  if (
+    !Number.isInteger(customerId) ||
+    customerId <= 0 ||
+    !Number.isInteger(customerVehicleId) ||
+    customerVehicleId <= 0
+  ) {
+    notFound()
+  }
 
   const customer = await prisma.customer.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: customerId, deletedAt: null },
   })
 
   if (!customer) notFound()
 
   const cv = await prisma.customerVehicle.findUnique({
-    where: { id: Number(kendaraanId) },
+    where: { id: customerVehicleId },
     include: {
       vehicle: {
         include: {
@@ -37,7 +48,7 @@ export default async function EditCustomerVehiclePage({
     },
   })
 
-  if (!cv || cv.customerId !== Number(id)) notFound()
+  if (!cv || cv.customerId !== customerId) notFound()
 
   const brands = await prisma.vehicleBrand.findMany({
     orderBy: { name: "asc" },
@@ -53,7 +64,7 @@ export default async function EditCustomerVehiclePage({
 
   const existingData = {
     id: cv.id,
-    kendaraanId: cv.kendaraanId,
+    vehicleId: cv.vehicleId,
     brandId: cv.vehicle?.variant?.model?.brand?.id || null,
     modelId: cv.vehicle?.variant?.model?.id || null,
     variantId: cv.vehicle?.variant?.id || null,
@@ -83,7 +94,7 @@ export default async function EditCustomerVehiclePage({
         <h1 className="text-2xl font-bold text-foreground">Edit Kendaraan</h1>
       </div>
 
-      <CustomerVehicleForm customerId={Number(id)} brands={brands} vehicle={existingData} />
+      <CustomerVehicleForm customerId={customerId} brands={brands} vehicle={existingData} />
     </div>
   )
 }

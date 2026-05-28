@@ -20,7 +20,7 @@ interface Brand {
 
 interface VehicleData {
   id: number
-  kendaraanId: number
+  vehicleId: number
   brandId: number | null
   modelId: number | null
   variantId: number | null
@@ -248,7 +248,7 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
         </FormSection>
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : vehicle?.id ? "Update" : "Simpan"}
           </Button>

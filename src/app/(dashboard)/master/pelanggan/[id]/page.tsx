@@ -20,9 +20,12 @@ export default async function CustomerDetailPage({
 }) {
   await requirePermission("view_customers")
   const { id } = await params
+  const customerId = Number(id)
+
+  if (!Number.isInteger(customerId) || customerId <= 0) notFound()
 
   const customer = await prisma.customer.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: customerId, deletedAt: null },
     include: {
       quotations: { take: 10, orderBy: { createdAt: "desc" } },
       salesInvoices: { take: 10, orderBy: { createdAt: "desc" } },
@@ -207,7 +210,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.customerVehicles.map((cv) => (
                           <DetailTableRow key={cv.id}>
-                            <DetailTableTd>{cv.vehicle?.variant?.name || `Vehicle #${cv.kendaraanId}`}</DetailTableTd>
+                            <DetailTableTd>{cv.vehicle?.variant?.name || `Vehicle #${cv.vehicleId}`}</DetailTableTd>
                             <DetailTableTd className="font-mono">{cv.vehicle?.plateNumber || "-"}</DetailTableTd>
                             <DetailTableTd>{cv.vehicle?.year || "-"}</DetailTableTd>
                             <DetailTableTd>{cv.vehicle?.color || "-"}</DetailTableTd>

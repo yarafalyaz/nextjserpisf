@@ -18,10 +18,10 @@ export default async function CashFlowPage({
   const params = await searchParams
 
   const now = new Date()
-  const startDate = params.startDate
-    ? new Date(params.startDate)
+  const startDate = params.tanggalMulai
+    ? new Date(params.tanggalMulai)
     : new Date(now.getFullYear(), now.getMonth(), 1)
-  const endDate = params.endDate ? new Date(params.endDate) : now
+  const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
 
   // Get all cash/bank accounts
   const cashAccounts = await prisma.account.findMany({

@@ -144,8 +144,8 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Lead"}</Button>
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Lead"}</Button>
       </div>
     </form>
   )

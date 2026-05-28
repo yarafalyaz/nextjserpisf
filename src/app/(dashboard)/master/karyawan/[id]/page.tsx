@@ -20,8 +20,9 @@ export default async function EmployeeDetailPage({
   params: Promise<{ id: string }>
 }) {
   await requirePermission("view_employees")
+  const { id } = await params
   const numId = Number(id)
-  if (isNaN(numId)) notFound()
+  if (!Number.isInteger(numId) || numId <= 0) notFound()
 
   const employee = await prisma.employee.findUnique({
     where: { id: numId },

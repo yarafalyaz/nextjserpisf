@@ -325,52 +325,56 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
   const mappingProgress = totalCount > 0 ? Math.round((mappedCount / totalCount) * 100) : 0
 
   const handleAutoMap = () => {
-    const findAccount = (keywords: string[]) => {
-      const match = accounts.find(a => {
-        const name = a.name.toLowerCase();
-        const code = a.code.toLowerCase();
-        return keywords.some(k => name.includes(k) || code.includes(k));
-      });
-      return match ? String(match.id) : "";
-    };
+    const normalize = (value: string) => value.toLowerCase().replace(/[&()/-]/g, " ").replace(/\s+/g, " ").trim()
 
-    setSalesReceivable(findAccount(["piutang usaha", "piutang dagang", "receivable"]));
-    setSalesRevenue(findAccount(["pendapatan penjualan", "revenue", "penjualan"]));
-    setSalesTax(findAccount(["ppn keluaran", "ppn keluar", "tax out"]));
-    setSalesReturn(findAccount(["retur penjualan", "sales return"]));
-    setSalesAcc(findAccount(["akun penjualan", "sales account"]));
+    const findAccount = (keywordGroups: string[][]) => {
+      for (const keywords of keywordGroups) {
+        const match = accounts.find((account) => {
+          const haystack = normalize(`${account.code} ${account.name}`)
+          return keywords.every((keyword) => haystack.includes(normalize(keyword)))
+        })
+        if (match) return String(match.id)
+      }
+      return ""
+    }
 
-    setPurchasePayable(findAccount(["hutang usaha", "hutang dagang", "payable", "utang usaha"]));
-    setPurchaseInventory(findAccount(["persediaan", "inventory"]));
-    setPurchaseTax(findAccount(["ppn masukan", "ppn masuk", "tax in"]));
-    setPurchaseExpense(findAccount(["beban pembelian", "purchase expense"]));
-    setPurchaseDiscount(findAccount(["diskon pembelian", "purchase discount"]));
-    setPurchaseShipping(findAccount(["ongkos kirim", "ongkir", "shipping"]));
-    setPurchaseReturn(findAccount(["retur pembelian", "purchase return"]));
+    setSalesReceivable(findAccount([["piutang", "usaha"], ["piutang", "dagang"], ["receivable"]]))
+    setSalesRevenue(findAccount([["pendapatan", "penjualan"], ["revenue"], ["penjualan"]]))
+    setSalesTax(findAccount([["ppn", "keluaran"], ["ppn", "keluar"], ["tax", "out"]]))
+    setSalesReturn(findAccount([["retur", "penjualan"], ["sales", "return"]]))
+    setSalesAcc(findAccount([["pendapatan", "penjualan"], ["akun", "penjualan"], ["sales", "account"], ["penjualan"]]))
 
-    setInventoryAcc(findAccount(["persediaan barang", "persediaan", "inventory"]));
-    setInventoryAdjustment(findAccount(["penyesuaian persediaan", "inventory adjustment"]));
-    setStockAdjustmentAcc(findAccount(["penyesuaian stok", "stock adjustment"]));
-    setCogsAcc(findAccount(["hpp", "harga pokok", "cogs"]));
-    setWipAcc(findAccount(["wip", "barang dalam proses", "work in progress"]));
-    setMaterialExpense(findAccount(["beban material", "material expense"]));
-    setMaterialIssueExpense(findAccount(["beban pengeluaran material", "material issue"]));
+    setPurchasePayable(findAccount([["hutang", "usaha"], ["utang", "usaha"], ["hutang", "dagang"], ["payable"]]))
+    setPurchaseInventory(findAccount([["persediaan", "barang", "dagang"], ["persediaan", "sparepart"], ["persediaan"], ["inventory"]]))
+    setPurchaseTax(findAccount([["ppn", "masukan"], ["ppn", "masuk"], ["tax", "in"]]))
+    setPurchaseExpense(findAccount([["beban", "pembelian"], ["purchase", "expense"]]))
+    setPurchaseDiscount(findAccount([["diskon", "pembelian"], ["purchase", "discount"]]))
+    setPurchaseShipping(findAccount([["ongkos", "kirim"], ["shipping"], ["ongkir"]]))
+    setPurchaseReturn(findAccount([["retur", "pembelian"], ["purchase", "return"]]))
 
-    setPettyCashAcc(findAccount(["kas kecil", "petty cash"]));
-    setCashBankAcc(findAccount(["kas bank", "kas/bank", "bank"]));
-    setGeneralExpense(findAccount(["beban umum", "general expense"]));
-    setDefaultCash(findAccount(["kas default", "kas utama", "kas"]));
+    setInventoryAcc(findAccount([["persediaan", "barang", "dagang"], ["persediaan", "sparepart"], ["persediaan"], ["inventory"]]))
+    setInventoryAdjustment(findAccount([["penyesuaian", "persediaan"], ["inventory", "adj"]]))
+    setStockAdjustmentAcc(findAccount([["penyesuaian", "persediaan"], ["inventory", "adj"], ["stock", "adjustment"]]))
+    setCogsAcc(findAccount([["harga", "pokok", "penjualan"], ["hpp"], ["cogs"]]))
+    setWipAcc(findAccount([["barang", "dalam", "proses"], ["wip"], ["work", "progress"]]))
+    setMaterialExpense(findAccount([["beban", "material"], ["material", "expense"]]))
+    setMaterialIssueExpense(findAccount([["beban", "material"], ["material", "issue"], ["consumables"]]))
 
-    setSalaryExpense(findAccount(["beban gaji", "salary expense"]));
-    setSalariesPayable(findAccount(["hutang gaji", "salaries payable", "utang gaji"]));
-    setPayrollBank(findAccount(["bank payroll", "payroll bank"]));
-    setEmployeeReceivable(findAccount(["piutang karyawan", "employee receivable"]));
-    setPayrollJournalType(findAccount(["jurnal payroll", "payroll journal"]));
-  };
+    setPettyCashAcc(findAccount([["kas", "kecil"], ["petty", "cash"]]))
+    setCashBankAcc(findAccount([["kas", "bank"], ["bank"], ["kas", "utama"], ["kas"]]))
+    setGeneralExpense(findAccount([["beban", "umum"], ["administrasi"], ["general", "expense"]]))
+    setDefaultCash(findAccount([["kas", "utama"], ["kas", "bank"], ["bank"], ["kas"]]))
+
+    setSalaryExpense(findAccount([["beban", "gaji"], ["salary", "expense"]]))
+    setSalariesPayable(findAccount([["hutang", "gaji"], ["utang", "gaji"], ["salaries", "payable"]]))
+    setPayrollBank(findAccount([["bank"], ["kas", "bank"], ["kas", "utama"]]))
+    setEmployeeReceivable(findAccount([["piutang", "karyawan"], ["employee", "receivable"]]))
+    setPayrollJournalType(findAccount([["beban", "gaji"], ["hutang", "gaji"], ["jurnal", "payroll"], ["payroll", "journal"]]))
+  }
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      alert("Browser kamu tidak mendukung geolocation");
+      showError("Browser kamu tidak mendukung geolocation");
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -401,7 +405,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         }
       },
       (err) => {
-        alert("Gagal mengambil lokasi: " + err.message);
+        showError("Gagal mengambil lokasi: " + err.message);
       }
     );
   };
@@ -843,7 +847,8 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-2">
                 <Label htmlFor="payrollCutoffDay">Tanggal Cut-off Penggajian (Tgl akhir siklus per bulan)</Label>
-                <Input id="payrollCutoffDay" name="payrollCutoffDay" type="number" min={1} max={31} defaultValue={String(settings.payrollCutoffDay ?? 25)} className="w-full" description="Contoh: Jika 25, maka siklus penggajian adalah tanggal 26 bulan lalu s/d tanggal 25 bulan ini." />
+                <Input id="payrollCutoffDay" name="payrollCutoffDay" type="number" min={1} max={31} defaultValue={String(settings.payrollCutoffDay ?? 25)} className="w-full" />
+                <p className="text-xs text-muted">Contoh: Jika 25, maka siklus penggajian adalah tanggal 26 bulan lalu s/d tanggal 25 bulan ini.</p>
               </div>
             </div>
           </div>

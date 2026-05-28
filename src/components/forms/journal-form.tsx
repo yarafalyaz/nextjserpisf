@@ -40,7 +40,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!isBalanced) return alert("Debit dan Credit harus balance!")
+    if (!isBalanced) return showError("Debit dan Credit harus balance!")
     startTransition(async () => {
       try {
         const formData = new FormData()
@@ -81,7 +81,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
       <div style={{ marginTop: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Entries</h3>
-          <Button onPress={addEntry} variant="secondary" size="sm">+ Tambah Baris</Button>
+          <Button type="button" onPress={addEntry} variant="secondary" size="sm">+ Tambah Baris</Button>
         </div>
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
           <thead><tr><th>Akun</th><th>Debit</th><th>Credit</th><th>Memo</th><th></th></tr></thead>
@@ -97,7 +97,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
                 <td><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="form-input" /></td>
                 <td><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="form-input" /></td>
                 <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
-                <td>{entries.length > 2 && <Button onPress={() => removeEntry(i)} variant="danger-soft" size="sm">×</Button>}</td>
+                <td>{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} variant="danger-soft" size="sm">×</Button>}</td>
               </tr>
             ))}
           </tbody>
@@ -115,8 +115,8 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
 
       <FormAttachmentUpload referenceType="journal" />
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending || !isBalanced} >{isPending ? "Menyimpan..." : journal?.id ? "Update" : "Simpan"}</Button>
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending || !isBalanced} >{isPending ? "Menyimpan..." : journal?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

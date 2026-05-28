@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrency } from "@/lib/utils/format"
 
 export interface CompanyInfo {
   name: string
@@ -35,6 +35,19 @@ export interface DocumentSummary {
   discount?: number
   tax?: number
   total: number
+}
+
+export interface QuotationPDFInfo extends DocumentInfo {
+  vehicleName?: string | null
+  plateNumber?: string | null
+  paymentMethod?: string | null
+  shippingMethod?: string | null
+  footerNotes?: string | null
+  signatureName?: string | null
+}
+
+export interface QuotationPDFItem extends DocumentItem {
+  unit?: string | null
 }
 
 export function generateTransactionPDF(
@@ -77,7 +90,7 @@ export function generateTransactionPDF(
   }
 
   y += 5
-  let contactInfo = []
+  const contactInfo = []
   if (company.phone) contactInfo.push(`T: ${company.phone}`)
   if (company.email) contactInfo.push(`E: ${company.email}`)
   if (company.website) contactInfo.push(`W: ${company.website}`)
@@ -256,6 +269,124 @@ export function generateTransactionPDF(
   doc.line(145, y + 20, 190, y + 20)
 
   // Output to new tab window
+  const pdfData = doc.output("bloburl")
+  window.open(pdfData, "_blank")
+}
+
+function formatPdfCurrency(value: number, showSymbol = true) {
+  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Number(value || 0))
+  return showSymbol ? `Rp ${formatted}` : formatted
+}
+
+function formatPdfDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value || "-"
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }).replace(/ /g, "-")
+}
+
+export function generateQuotationPDF(
+  company: CompanyInfo,
+  docInfo: QuotationPDFInfo,
+  items: QuotationPDFItem[],
+  summary: DocumentSummary
+) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+  const ml = 14
+  const pageW = 210
+  const black = "#111827"
+
+  doc.setTextColor(black)
+  doc.setFont("Helvetica", "bold")
+  doc.setFontSize(11)
+  doc.text("QUOTATION", pageW - ml, 15, { align: "right" })
+
+  const label = (text: string, x: number, y: number) => {
+    doc.setFont("Helvetica", "normal")
+    doc.setFontSize(8)
+    doc.text(text, x, y)
+    doc.text(":", x + 30, y)
+  }
+  const value = (text: string, x: number, y: number) => {
+    doc.setFont("Helvetica", "normal")
+    doc.setFontSize(8)
+    doc.text(text || "-", x, y)
+  }
+
+  let y = 23
+  label("No", ml, y); value(docInfo.documentNo, ml + 34, y)
+  label("Tanggal", 120, y); value(formatPdfDate(docInfo.date), 154, y)
+  y += 6
+  label("Kepada", ml, y); value(docInfo.customerName, ml + 34, y)
+  label("Kendaraan", 120, y); value(docInfo.vehicleName || "-", 154, y)
+  y += 6
+  label("Alamat", ml, y); value(docInfo.customerAddress || "", ml + 34, y)
+  label("No.Pol", 120, y); value(docInfo.plateNumber || "-", 154, y)
+  y += 6
+  label("Nomor Telepon", ml, y); value(docInfo.customerPhone || "-", ml + 34, y)
+  label("Metode Pembayaran", 120, y); value(docInfo.paymentMethod || "-", 154, y)
+  y += 6
+  label("Email", ml, y); value("-", ml + 34, y)
+  label("Metode Pengiriman", 120, y); value(docInfo.shippingMethod || "", 154, y)
+
+  const tableStart = 57
+  autoTable(doc, {
+    startY: tableStart,
+    margin: { left: ml, right: ml },
+    tableWidth: 182,
+    theme: "grid",
+    head: [["NO", "NAMA BARANG/JASA", "QTY", "UNIT", "HARGA", "SUB TOTAL"]],
+    body: items.map((item) => [
+      item.no,
+      item.description,
+      Number(item.qty).toLocaleString("id-ID"),
+      item.unit || "Set",
+      formatPdfCurrency(item.price),
+      formatPdfCurrency(item.total),
+    ]),
+    styles: { font: "Helvetica", fontSize: 8, textColor: [17, 24, 39], lineColor: [40, 40, 40], lineWidth: 0.12, minCellHeight: 7, cellPadding: { top: 1.8, right: 1.2, bottom: 1.8, left: 1.2 } },
+    headStyles: { fontStyle: "bold", fontSize: 8, halign: "center", fillColor: [255, 255, 255], textColor: [17, 24, 39], lineColor: [40, 40, 40], lineWidth: 0.12 },
+    bodyStyles: { fillColor: [255, 255, 255], lineColor: [40, 40, 40], lineWidth: 0.12 },
+    columnStyles: {
+      0: { cellWidth: 12, halign: "center" },
+      1: { cellWidth: 92 },
+      2: { cellWidth: 13, halign: "center" },
+      3: { cellWidth: 16, halign: "center" },
+      4: { cellWidth: 24, halign: "right" },
+      5: { cellWidth: 25, halign: "right" },
+    },
+  })
+
+  y = Math.max((doc as any).lastAutoTable.finalY + 12, 148)
+  doc.setFont("Helvetica", "bold")
+  doc.setFontSize(8)
+  doc.text("NOTE :", ml, y)
+  doc.setFont("Helvetica", "normal")
+  const noteText = docInfo.notes || "- Untuk DP 50% Dari Harga Total\n- Quotation Ini Berlaku 7 Hari Setelah Tanggal Terbit"
+  doc.text(doc.splitTextToSize(noteText, 105), ml, y + 5)
+
+  const footerY = 205
+  doc.setFont("Helvetica", "normal")
+  doc.setFontSize(8)
+  doc.text("Keterangan :", ml, footerY)
+  const footerText = docInfo.footerNotes || [
+    "- Untuk pembayaran dapat di transfer ke",
+    "Bank Central Asia (BCA)",
+    "No Rekening : 0670 793 494",
+    "Atas Nama : WAHID ACHMAD FAUZI",
+    "Untuk konfirmasi Pembayaran :",
+    "WA 0817-6415-303",
+  ].join("\n")
+  doc.text(doc.splitTextToSize(footerText, 95), ml + 3, footerY + 6)
+
+  doc.setFont("Helvetica", "normal")
+  doc.text("Total", 125, footerY)
+  doc.text(":", 155, footerY)
+  doc.setFont("Helvetica", "bold")
+  doc.text(formatPdfCurrency(summary.total), 195, footerY, { align: "right" })
+
+  doc.setFont("Helvetica", "normal")
+  doc.text(docInfo.signatureName || "Wahid Achmad Fauzi", 155, 260)
+
   const pdfData = doc.output("bloburl")
   window.open(pdfData, "_blank")
 }

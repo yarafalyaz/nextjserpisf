@@ -145,7 +145,7 @@ export function GoodsReceiptForm({ purchaseOrders, warehouses, defaultPoId, rece
         )}
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending || !poId || !warehouseId}>
             {isPending ? "Memproses..." : "Terima Barang"}
           </Button>

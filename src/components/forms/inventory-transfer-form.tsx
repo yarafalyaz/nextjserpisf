@@ -82,7 +82,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
       <div style={{ marginTop: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Barang</h3>
-          <Button onPress={addItem} variant="secondary" size="sm">+ Tambah</Button>
+          <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah</Button>
         </div>
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
           <thead><tr><th>Item</th><th>Qty</th><th></th></tr></thead>
@@ -96,7 +96,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
                   </select>
                 </td>
                 <td><input type="number" min={1} value={item.qty} onChange={(e) => updateItem(i, "qty", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "80px" }} /></td>
-                <td>{transferItems.length > 1 && <Button onPress={() => removeItem(i)} variant="danger-soft" size="sm">×</Button>}</td>
+                <td>{transferItems.length > 1 && <Button type="button" onPress={() => removeItem(i)} variant="danger-soft" size="sm">×</Button>}</td>
               </tr>
             ))}
           </tbody>
@@ -104,8 +104,8 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Transfer"}</Button>
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Transfer"}</Button>
       </div>
     </form>
   )

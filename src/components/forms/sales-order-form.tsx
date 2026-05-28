@@ -121,8 +121,8 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending}  id="submit-sales-order">
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending}  id="submit-sales-order">
           {isPending ? "Menyimpan..." : order?.id ? "Update" : "Simpan"}
         </Button>
       </div>

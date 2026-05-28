@@ -78,8 +78,8 @@ export function WarehouseForm({ warehouse, generatedCode }: WarehouseFormProps) 
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending}  id="submit-warehouse">
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending}  id="submit-warehouse">
           {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
         </Button>
       </div>

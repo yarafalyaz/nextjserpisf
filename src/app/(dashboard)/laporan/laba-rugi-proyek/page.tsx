@@ -19,8 +19,8 @@ export default async function ProjectPnLPage({
   const params = await searchParams
 
   const now = new Date()
-  const startDate = params.startDate ? new Date(params.startDate) : new Date(now.getFullYear(), 0, 1)
-  const endDate = params.endDate ? new Date(params.endDate) : now
+  const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), 0, 1)
+  const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
 
   // Get projects with related revenue & cost data
   const projects = await prisma.project.findMany({

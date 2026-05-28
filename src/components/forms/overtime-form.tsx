@@ -108,7 +108,7 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
           </div>
         </FormSection>
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : overtime?.id ? "Update" : "Simpan"}
           </Button>

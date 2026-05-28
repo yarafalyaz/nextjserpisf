@@ -162,7 +162,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
           </FormSection>
 
           <FormActions>
-            <Button onPress={() => router.back()}>Batal</Button>
+            <Button type="button" onPress={() => router.back()}>Batal</Button>
             <Button type="submit" variant="primary" isDisabled={isPending}>
               {isPending ? "Menyimpan..." : rackRow ? "Update" : "Simpan"}
             </Button>

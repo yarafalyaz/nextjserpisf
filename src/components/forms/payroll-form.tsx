@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition, useState, useEffect } from "react"
+import { useTransition, useState, useEffect, useRef } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { processPayroll, getPayrollEstimation } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -36,16 +36,20 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
   const [late, setLate] = useState(Number(initialData?.lateDeduction) || 0)
 
   // Auto-fetch data gaji & absensi
-  const [isFirstRender, setIsFirstRender] = useState(true)
+  const shouldSkipInitialEstimate = useRef(Boolean(initialData))
   useEffect(() => {
-    if (isFirstRender && initialData) {
-      setIsFirstRender(false)
+    if (shouldSkipInitialEstimate.current) {
+      shouldSkipInitialEstimate.current = false
       return
     }
-    if (employeeId && startDate && endDate) {
+    if (!employeeId || !startDate || !endDate) return
+
+    let cancelled = false
+    const timer = window.setTimeout(() => {
       setIsEstimating(true)
       getPayrollEstimation(employeeId, startDate, endDate)
         .then(data => {
+          if (cancelled) return
           setBaseSalary(data.baseSalary)
           setOvertime(data.overtimeTotal)
           setAppreciation(data.appreciationTotal)
@@ -53,9 +57,17 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
           setLate(data.lateDeduction)
         })
         .catch((e) => {
+          if (cancelled) return
           showError("Gagal menarik data estimasi: " + e.message)
         })
-        .finally(() => setIsEstimating(false))
+        .finally(() => {
+          if (!cancelled) setIsEstimating(false)
+        })
+    }, 0)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
     }
   }, [employeeId, startDate, endDate])
 
@@ -128,8 +140,8 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
             readOnly 
             onChange={() => {}}
             className="opacity-70"
-            description="Otomatis diisi berdasarkan bulan pada Tanggal Selesai."
           />
+          <p className="text-xs text-muted">Otomatis diisi berdasarkan bulan pada Tanggal Selesai.</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -222,7 +234,7 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
       </div>
 
       <div className="flex justify-end gap-3 p-6 border-t border-default bg-surface">
-        <Button onPress={() => router.back()} variant="secondary">Batal</Button>
+        <Button type="button" onPress={() => router.back()} variant="secondary">Batal</Button>
         <Button type="submit" isDisabled={isPending || isEstimating} variant="primary">
           {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Payroll"}
         </Button>

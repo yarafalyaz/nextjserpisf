@@ -60,8 +60,19 @@ export async function createVehicle(formData: FormData) {
     }
   }
 
+  const usedVehicleIds = await prisma.vehicle.findMany({
+    select: { id: true },
+    orderBy: { id: "asc" },
+  })
+  let reusableVehicleId = 1
+  for (const vehicle of usedVehicleIds) {
+    if (vehicle.id === reusableVehicleId) reusableVehicleId += 1
+    else if (vehicle.id > reusableVehicleId) break
+  }
+
   const vehicle = await prisma.vehicle.create({
     data: {
+      id: reusableVehicleId,
       plateNumber: formData.get("plateNo") as string,
       vehicleVariantId,
       year: formData.get("year") ? Number(formData.get("year")) : null,
@@ -75,7 +86,7 @@ export async function createVehicle(formData: FormData) {
     await prisma.customerVehicle.create({
       data: {
         customerId,
-        kendaraanId: vehicle.id,
+        vehicleId: vehicle.id,
       },
     })
   }
@@ -183,7 +194,7 @@ export async function createCustomerVehicle(formData: FormData) {
 
   // Find or create Vehicle from variantId
   const variantId = safeId(formData.get("variantId"))
-  let kendaraanId: number
+  let vehicleId: number
 
   if (variantId) {
     // Create a new Vehicle record linked to the variant
@@ -195,15 +206,15 @@ export async function createCustomerVehicle(formData: FormData) {
         color: formData.get("color") as string | null,
       },
     })
-    kendaraanId = vehicle.id
+    vehicleId = vehicle.id
   } else {
-    kendaraanId = requireId(formData.get("kendaraanId"), "kendaraanId")
+    vehicleId = requireId(formData.get("vehicleId") ?? formData.get("kendaraanId"), "vehicleId")
   }
 
   const customerVehicle = await prisma.customerVehicle.create({
     data: {
       customerId,
-      kendaraanId,
+      vehicleId,
       licensePlate: formData.get("licensePlate") as string | null,
       year: safeNumber(formData.get("year")),
       color: formData.get("color") as string | null,
@@ -227,14 +238,14 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
 
   // Find or create Vehicle from variantId
   const variantId = safeId(formData.get("variantId"))
-  let kendaraanId: number
+  let vehicleId: number
 
   const existing = await prisma.customerVehicle.findUniqueOrThrow({ where: { id } })
 
   if (variantId) {
     // Update existing vehicle record
     const updatedVehicle = await prisma.vehicle.update({
-      where: { id: existing.kendaraanId },
+      where: { id: existing.vehicleId },
       data: {
         vehicleVariantId: variantId,
         plateNumber: formData.get("licensePlate") as string | null,
@@ -242,15 +253,15 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
         color: formData.get("color") as string | null,
       },
     })
-    kendaraanId = updatedVehicle.id
+    vehicleId = updatedVehicle.id
   } else {
-    kendaraanId = requireId(formData.get("kendaraanId"), "kendaraanId")
+    vehicleId = requireId(formData.get("vehicleId") ?? formData.get("kendaraanId"), "vehicleId")
   }
 
   await prisma.customerVehicle.update({
     where: { id },
     data: {
-      kendaraanId,
+      vehicleId,
       licensePlate: formData.get("licensePlate") as string | null,
       year: safeNumber(formData.get("year")),
       color: formData.get("color") as string | null,

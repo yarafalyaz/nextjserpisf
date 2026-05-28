@@ -22,7 +22,11 @@ export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        model?.id ? await updateVehicleModel(model.id, formData) : await createVehicleModel(formData)
+        if (model?.id) {
+          await updateVehicleModel(model.id, formData)
+        } else {
+          await createVehicleModel(formData)
+        }
         showSuccess(model?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/kendaraan/model")
         router.refresh()
@@ -54,8 +58,8 @@ export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : model?.id ? "Update" : "Simpan"}</Button>
+        <Button type="button" onPress={() => router.back()}>Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : model?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

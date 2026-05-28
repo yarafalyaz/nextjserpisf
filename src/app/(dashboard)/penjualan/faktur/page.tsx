@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { InvoiceTable } from "./_components/invoice-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { indoToStatus } from "@/lib/utils/status-labels"
 
 export default async function InvoicesPage({
   searchParams,
@@ -14,7 +15,7 @@ export default async function InvoicesPage({
   await requirePermission("view_sales_invoices")
 
   const params = await searchParams
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
+  const dbStatusParam = params.status ? indoToStatus[params.status] ?? params.status : undefined
   const page = Number(params.halaman) || 1
   const perPage = 20
 
@@ -25,7 +26,7 @@ export default async function InvoicesPage({
         { customer: { name: { contains: params.cari } } },
       ],
     }),
-    ...(params.status && { status: params.status as any }),
+    ...(dbStatusParam && { status: dbStatusParam as any }),
   }
 
   const rawInvoices = await prisma.salesInvoice.findMany({

@@ -111,8 +111,8 @@ export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFor
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending} >{isPending ? "Menyimpan..." : schedule?.id ? "Update" : "Simpan"}</Button>
+        <Button type="button" variant="secondary" onPress={() => router.back()}>Batal</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : schedule?.id ? "Update" : "Simpan"}</Button>
       </div>
     </form>
   )

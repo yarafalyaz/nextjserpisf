@@ -146,7 +146,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
               <h3 style={{ margin: 0, fontSize: "1rem" }}>Barang</h3>
-              <Button onPress={addItem} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all">+ Tambah Item</Button>
+              <Button type="button" onPress={addItem} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all">+ Tambah Item</Button>
             </div>
 
             <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
@@ -203,7 +203,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
                     </td>
                     <td>
                       {poItems.length > 1 && (
-                        <Button onPress={() => removeItem(index)} variant="danger-soft" size="sm">×</Button>
+                        <Button type="button" onPress={() => removeItem(index)} variant="danger-soft" size="sm">×</Button>
                       )}
                     </td>
                   </tr>
@@ -221,7 +221,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
         </FormSection>
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : order?.id ? "Update" : "Simpan"}
           </Button>

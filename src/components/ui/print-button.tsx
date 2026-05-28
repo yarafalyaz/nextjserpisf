@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/page-header"
 import { Printer, Loader2 } from "lucide-react"
 import { showError, showSuccess } from "@/lib/utils/toast"
-import { generateTransactionPDF } from "@/lib/pdf/generator"
+import { generateQuotationPDF, generateTransactionPDF } from "@/lib/pdf/generator"
 
 interface PrintButtonProps {
   title?: string
@@ -31,7 +31,11 @@ export function PrintButton({ title = "Cetak", documentType, documentId, disable
         throw new Error(data.error || "Gagal mengambil data cetak")
       }
 
-      generateTransactionPDF(data.company, data.docInfo, data.items, data.summary)
+      if (documentType === "quotation") {
+        generateQuotationPDF(data.company, data.docInfo, data.items, data.summary)
+      } else {
+        generateTransactionPDF(data.company, data.docInfo, data.items, data.summary)
+      }
       showSuccess("PDF berhasil dibuat")
     } catch (err) {
       showError(err instanceof Error ? err.message : "Terjadi kesalahan saat memproses PDF")

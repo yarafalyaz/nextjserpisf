@@ -111,7 +111,7 @@ const menuItems = [
   { label: "Persetujuan", href: "/pengaturan/persetujuan", icon: CheckCircle2, group: "Sistem" },
   { label: "Notifikasi", href: "/notifikasi", icon: Bell, group: "Sistem" },
   // Aksi Cepat
-  { label: "Buat Pelanggan Baru", href: "/master/pelanggan/create", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Pelanggan Baru", href: "/master/pelanggan/tambah", icon: Plus, group: "Aksi Cepat" },
   { label: "Buat Penawaran", href: "/penjualan/penawaran/tambah", icon: Plus, group: "Aksi Cepat" },
   { label: "Buat Pesanan Pembelian", href: "/pembelian/pesanan/tambah", icon: Plus, group: "Aksi Cepat" },
   { label: "Buat Pembayaran Faktur", href: "/penjualan/pembayaran/tambah", icon: Plus, group: "Aksi Cepat" },

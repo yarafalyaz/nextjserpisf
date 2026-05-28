@@ -302,7 +302,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
         </FormSection>
 
         <FormActions>
-          <Button onPress={() => router.back()}>Batal</Button>
+          <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
             {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
           </Button>

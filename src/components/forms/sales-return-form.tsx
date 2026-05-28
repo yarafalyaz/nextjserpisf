@@ -117,7 +117,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
       <div style={{ marginTop: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Item Retur</h3>
-          <Button onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
+          <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
         </div>
 
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
@@ -156,7 +156,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                 </td>
                 <td>
                   {returnItems.length > 1 && (
-                    <Button onPress={() => removeItem(index)} variant="danger-soft" size="sm">×</Button>
+                    <Button type="button" onPress={() => removeItem(index)} variant="danger-soft" size="sm">×</Button>
                   )}
                 </td>
               </tr>
@@ -166,8 +166,8 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} >Batal</Button>
-        <Button isDisabled={isPending}  id="submit-sales-return">
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending}  id="submit-sales-return">
           {isPending ? "Menyimpan..." : returnData?.id ? "Update" : "Simpan"}
         </Button>
       </div>

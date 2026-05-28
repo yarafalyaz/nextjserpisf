@@ -93,7 +93,7 @@ export default function CreateCurrencyPage() {
         </div>
 
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button onPress={() => router.back()} >Batal</Button>
+          <Button type="button" onPress={() => router.back()} >Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending} id="submit-currency">
             {isPending ? "Menyimpan..." : "Simpan"}
           </Button>
