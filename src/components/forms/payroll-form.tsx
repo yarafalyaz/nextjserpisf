@@ -12,29 +12,36 @@ import { CheckCircle, Loader2 } from "lucide-react"
 
 interface PayrollFormProps {
   employees: { id: number; name: string }[]
+  initialData?: any
 }
 
-export function PayrollForm({ employees }: PayrollFormProps) {
+import { updatePayroll } from "@/actions/hrm.actions"
+export function PayrollForm({ employees, initialData }: PayrollFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isEstimating, setIsEstimating] = useState(false)
 
   // Selection states for auto-calc trigger
-  const [employeeId, setEmployeeId] = useState<number | null>(null)
-  const [startDate, setStartDate] = useState<string>("")
-  const [endDate, setEndDate] = useState<string>("")
+  const [employeeId, setEmployeeId] = useState<number | null>(initialData?.employeeId || null)
+  const [startDate, setStartDate] = useState<string>(initialData?.startDate ? new Date(initialData.startDate).toISOString().substring(0,10) : "")
+  const [endDate, setEndDate] = useState<string>(initialData?.endDate ? new Date(initialData.endDate).toISOString().substring(0,10) : "")
 
   // Basic calculation states just for UI presentation
-  const [baseSalary, setBaseSalary] = useState(0)
-  const [allowances, setAllowances] = useState(0)
-  const [overtime, setOvertime] = useState(0)
-  const [appreciation, setAppreciation] = useState(0)
-  const [deductions, setDeductions] = useState(0)
-  const [loan, setLoan] = useState(0)
-  const [late, setLate] = useState(0)
+  const [baseSalary, setBaseSalary] = useState(Number(initialData?.baseSalary) || 0)
+  const [allowances, setAllowances] = useState(Number(initialData?.allowances) || 0)
+  const [overtime, setOvertime] = useState(Number(initialData?.overtimeTotal) || 0)
+  const [appreciation, setAppreciation] = useState(Number(initialData?.appreciationTotal) || 0)
+  const [deductions, setDeductions] = useState(Number(initialData?.deductions) || 0)
+  const [loan, setLoan] = useState(Number(initialData?.loanDeduction) || 0)
+  const [late, setLate] = useState(Number(initialData?.lateDeduction) || 0)
 
   // Auto-fetch data gaji & absensi
+  const [isFirstRender, setIsFirstRender] = useState(true)
   useEffect(() => {
+    if (isFirstRender && initialData) {
+      setIsFirstRender(false)
+      return
+    }
     if (employeeId && startDate && endDate) {
       setIsEstimating(true)
       getPayrollEstimation(employeeId, startDate, endDate)
@@ -63,7 +70,11 @@ export function PayrollForm({ employees }: PayrollFormProps) {
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        await processPayroll(formData)
+        if (initialData?.id) {
+          await updatePayroll(initialData.id, formData)
+        } else {
+          await processPayroll(formData)
+        }
         showSuccess("Payroll berhasil diproses")
         router.push("/sdm/penggajian")
         router.refresh()
@@ -89,7 +100,7 @@ export function PayrollForm({ employees }: PayrollFormProps) {
 
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="employeeId" className="w-full" isRequired onSelectionChange={(key) => setEmployeeId(key ? Number(key) : null)}>
+          <ComboBox name="employeeId" className="w-full" isRequired defaultSelectedKey={initialData?.employeeId ? String(initialData.employeeId) : undefined} onSelectionChange={(key) => setEmployeeId(key ? Number(key) : null)}>
             <Label>Karyawan *</Label>
             <ComboBox.InputGroup>
               <Input placeholder="Pilih karyawan..." />
@@ -121,15 +132,15 @@ export function PayrollForm({ employees }: PayrollFormProps) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <AppDatePicker label="Tanggal Mulai (Cut-off) *" name="startDate" onChange={(date) => setStartDate(date?.toString() || "")} required />
+          <AppDatePicker label="Tanggal Mulai (Cut-off) *" name="startDate" defaultValue={initialData?.startDate ? new Date(initialData.startDate) : undefined} onChange={(date) => setStartDate(date?.toString() || "")} required />
         </div>
         
         <div className="flex flex-col gap-1.5">
-          <AppDatePicker label="Tanggal Selesai (Cut-off) *" name="endDate" onChange={(date) => setEndDate(date?.toString() || "")} required />
+          <AppDatePicker label="Tanggal Selesai (Cut-off) *" name="endDate" defaultValue={initialData?.endDate ? new Date(initialData.endDate) : undefined} onChange={(date) => setEndDate(date?.toString() || "")} required />
         </div>
 
         <div className="flex flex-col gap-1.5 md:col-span-2">
-          <AppDatePicker label="Tanggal Rencana Pembayaran" name="paymentDate" onChange={() => {}} />
+          <AppDatePicker label="Tanggal Rencana Pembayaran" name="paymentDate" defaultValue={initialData?.paymentDate ? new Date(initialData.paymentDate) : undefined} onChange={() => {}} />
         </div>
       </div>
 
@@ -212,7 +223,7 @@ export function PayrollForm({ employees }: PayrollFormProps) {
       <div className="flex justify-end gap-3 p-6 border-t border-default bg-surface">
         <Button onPress={() => router.back()} variant="secondary">Batal</Button>
         <Button isDisabled={isPending || isEstimating} variant="primary">
-          {isPending ? "Memproses..." : "Proses Payroll"}
+          {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Payroll"}
         </Button>
       </div>
     </form>

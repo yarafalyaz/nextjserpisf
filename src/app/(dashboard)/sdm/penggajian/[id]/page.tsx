@@ -4,8 +4,9 @@ import { prisma } from "@/lib/db/prisma"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { PageHeader, BackButton, Button } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { Pencil } from "lucide-react"
 import {
   DetailTable,
   DetailTableBody,
@@ -44,7 +45,16 @@ export default async function PayrollDetailPage({
           { label: payroll.documentNo },
         ]}
         badge={<StatusChip status={payroll.status} />}
-        actions={<BackButton href="/sdm/penggajian" />}
+        actions={
+          <div className="flex gap-2">
+            {payroll.status === "draft" && (
+              <Button href={`/sdm/penggajian/${payroll.id}/ubah`} variant="secondary">
+                <Pencil size={14} /> Ubah
+              </Button>
+            )}
+            <BackButton href="/sdm/penggajian" />
+          </div>
+        }
       />
 
       <DetailCard title="Informasi Payroll">
