@@ -168,32 +168,30 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
       deletedAt: null,
     },
     include: { customer: { select: { name: true } } },
+    take: 20,
   })
 
   if (overdueInvoices.length === 0) {
     return "Tidak ada invoice overdue"
   }
 
-  const users = await prisma.user.findMany({
-    where: { isActive: true },
-    select: { id: true },
-  })
-
-  const invoiceList = overdueInvoices.slice(0, 5).map((i) => `${i.documentNo} (${i.customer.name})`).join(", ")
+  const invoiceList = overdueInvoices
+    .slice(0, 5)
+    .map((i) => `${i.documentNo} (${i.customer.name})`)
+    .join(", ")
   const suffix = overdueInvoices.length > 5 ? ` dan ${overdueInvoices.length - 5} lainnya` : ""
+  const totalOverdue = overdueInvoices.reduce(
+    (sum, inv) => sum + (Number(inv.grandTotal) - Number(inv.paidAmount)),
+    0
+  )
 
-  for (const user of users) {
-    await prisma.notification.create({
-      data: {
-        userId: user.id,
-        title: "🔴 Invoice Jatuh Tempo",
-        body: `${overdueInvoices.length} invoice belum lunas: ${invoiceList}${suffix}`,
-        type: "error",
-      },
-    })
-  }
+  await notificationService.notifyAdmins(
+    `🔴 ${overdueInvoices.length} Invoice Jatuh Tempo`,
+    `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}. Invoice: ${invoiceList}${suffix}`,
+    "danger"
+  )
 
-  return `${overdueInvoices.length} invoice overdue — notifikasi dikirim ke ${users.length} user`
+  return `${overdueInvoices.length} invoice overdue — notifikasi dikirim ke admin`
 }
 
 // 4. Late Check-in Alert

@@ -421,8 +421,8 @@ export async function getWorkOrderWithCustomerInfo(workOrderId: number) {
     where: { id: workOrderId },
     include: {
       customer: true,
-      quotation: { include: { customerVehicle: { include: { vehicle: true } } } },
-      items: { include: { item: true } },
+      quotation: { include: { customerVehicle: { include: { vehicle: { include: { variant: true } } } } } },
+      items: true,
       project: true,
     },
   })
@@ -441,7 +441,7 @@ export async function getWorkOrderWithCustomerInfo(workOrderId: number) {
       customerName: wo.customer?.name ?? null,
       customerVehicleId: wo.customerVehicleId,
       licensePlate: wo.quotation?.customerVehicle?.licensePlate ?? null,
-      vehicleName: wo.quotation?.customerVehicle?.vehicle?.name ?? null,
+      vehicleName: wo.quotation?.customerVehicle?.vehicle?.variant?.name ?? null,
       projectId: wo.projectId,
       items: wo.items.map((i) => ({
         id: i.id,

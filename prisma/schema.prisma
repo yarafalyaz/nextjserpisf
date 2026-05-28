@@ -1920,6 +1920,7 @@ model CustomerVehicle {
   vehicle       Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   projects      Project[]
   quotations    Quotation[]
+  workOrders    WorkOrder[]
 
   @@index([customerId], map: "customer_vehicles_customer_id_fkey")
   @@index([vehicleId], map: "customer_vehicles_vehicle_id_fkey")
@@ -1949,6 +1950,7 @@ model Project {
   customerVehicle   CustomerVehicle?  @relation(fields: [customerVehicleId], references: [id])
   tasks             Task[]
   timesheets        Timesheet[]
+  workOrders        WorkOrder[]
 
   @@index([customerId], map: "projects_customer_id_fkey")
   @@index([customerVehicleId], map: "projects_customer_vehicle_id_fkey")
