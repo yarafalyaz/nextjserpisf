@@ -10,6 +10,18 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button"
 
+const statusToIndo: Record<string, string> = {
+  draft: "konsep",
+  approved: "disetujui",
+  paid: "dibayar",
+}
+
+const indoToStatus: Record<string, string> = {
+  konsep: "draft",
+  disetujui: "approved",
+  dibayar: "paid",
+}
+
 export default async function PayrollPage({
   searchParams,
 }: {
@@ -18,6 +30,7 @@ export default async function PayrollPage({
   await requirePermission("view_payroll")
 
   const params = await searchParams
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
     ...(params.cari && {
@@ -25,7 +38,7 @@ export default async function PayrollPage({
         { documentNo: { contains: params.cari } },
       ],
     }),
-    ...(params.status && { status: params.status }),
+    ...(dbStatusParam && { status: dbStatusParam }),
   }
 
   const payrolls = await prisma.payroll.findMany({
@@ -63,11 +76,18 @@ export default async function PayrollPage({
         <div className="p-3 px-4 flex flex-col gap-3">
           <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/penggajian" />
           <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "approved", "paid"].map((s) => (
-              <Link key={s} href={`/sdm/penggajian?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>
-                {s ? statusLabel(s) : "Semua"}
-              </Link>
-            ))}
+            {["", "draft", "approved", "paid"].map((dbStatus) => {
+              const urlStatus = dbStatus ? statusToIndo[dbStatus] : ""
+              return (
+                <Link 
+                  key={dbStatus} 
+                  href={`/sdm/penggajian${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+                >
+                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+                </Link>
+              )
+            })}
           </div>
         </div>
 
