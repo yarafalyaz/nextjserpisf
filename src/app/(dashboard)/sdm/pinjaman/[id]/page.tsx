@@ -38,7 +38,7 @@ export default async function EmployeeLoanDetailPage({
         badge={<StatusChip status={loan.status} />}
         actions={
           <>
-            <Button href={`/sdm/pinjaman/${loan.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/sdm/pinjaman/${loan.id}/ubah`} variant="primary">Ubah</Button>
             <DeleteButton id={loan.id} action={deleteEmployeeLoan} />
             <BackButton href="/sdm/pinjaman" />
           </>

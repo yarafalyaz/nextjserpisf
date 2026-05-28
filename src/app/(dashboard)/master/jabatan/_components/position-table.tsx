@@ -35,7 +35,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        editHref={`/master/jabatan/${info.row.original.id}/edit`}
+        editHref={`/master/jabatan/${info.row.original.id}/ubah`}
         deleteAction={deletePosition}
         deleteId={info.row.original.id}
       />

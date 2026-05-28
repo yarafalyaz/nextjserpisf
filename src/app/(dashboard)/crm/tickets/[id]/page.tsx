@@ -39,7 +39,7 @@ export default async function CrmTicketDetailPage({
         ]}
         badge={<><StatusChip status={ticket.status} /><StatusChip status={ticket.priority} /></>}
         actions={<>
-          <Button href={`/crm/tickets/${ticket.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/crm/tickets/${ticket.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={ticket.id} action={deleteTicket} />
           <BackButton href="/crm/tickets" />
         </>}

@@ -50,7 +50,7 @@ export default async function CustomerDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/pelanggan/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/pelanggan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/master/pelanggan" />
           </>
         }

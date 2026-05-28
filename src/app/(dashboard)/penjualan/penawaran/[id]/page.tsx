@@ -47,10 +47,10 @@ export default async function QuotationDetailPage({
         badge={<StatusChip status={quotation.status} />}
         actions={
           <>
-            <Button href={`/penjualan/penawaran/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/penjualan/penawaran/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
             {quotation.status === "approved" && (
-              <Button href={`/penjualan/pesanan/create?penawaranId=${id}`} variant="primary">+ Pesanan Penjualan</Button>
+              <Button href={`/penjualan/pesanan/tambah?penawaranId=${id}`} variant="primary">+ Pesanan Penjualan</Button>
             )}
             <BackButton href="/penjualan/penawaran" />
           </>

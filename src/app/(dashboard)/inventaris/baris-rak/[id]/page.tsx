@@ -45,7 +45,7 @@ export default async function RackRowDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/inventaris/baris-rak/${rackRow.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/inventaris/baris-rak/${rackRow.id}/ubah`} variant="primary">Ubah</Button>
             <DeleteButton id={rackRow.id} action={deleteRackRow} />
             <BackButton href="/inventaris/baris-rak" />
           </>

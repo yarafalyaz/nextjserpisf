@@ -37,7 +37,7 @@ export default async function AssetTransferDetailPage({
           { label: "Detail" },
         ]}
         actions={<>
-          <Button href={`/aset/transfer/${transfer.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/transfer/${transfer.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={transfer.id} action={deleteAssetTransfer} />
           <BackButton href="/aset/transfer" />
         </>}

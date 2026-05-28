@@ -42,7 +42,7 @@ export default async function TaskDetailPage({
         badge={<StatusChip status={task.status} />}
         actions={
           <>
-            <Button href={`/proyek/tugas/${task.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/proyek/tugas/${task.id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/proyek/tugas" />
           </>
         }

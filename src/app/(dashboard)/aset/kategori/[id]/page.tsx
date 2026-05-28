@@ -39,7 +39,7 @@ export default async function AssetCategoryDetailPage({
           { label: category.name },
         ]}
         actions={<>
-          <Button href={`/aset/kategori/${category.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/kategori/${category.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={category.id} action={deleteAssetCategory} />
           <BackButton href="/aset/kategori" />
         </>}

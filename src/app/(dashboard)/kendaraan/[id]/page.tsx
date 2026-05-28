@@ -51,7 +51,7 @@ export default async function VehicleDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/kendaraan/${vehicle.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/kendaraan/${vehicle.id}/ubah`} variant="primary">Ubah</Button>
             <DeleteButton id={vehicle.id} action={deleteVehicle} />
             <BackButton href="/kendaraan" />
           </>

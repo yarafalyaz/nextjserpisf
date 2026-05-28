@@ -40,7 +40,7 @@ export default async function PositionDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/jabatan/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/jabatan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={position.id} action={deletePosition} />
             <BackButton href="/master/jabatan" />
           </>

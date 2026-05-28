@@ -43,7 +43,7 @@ export default async function PurchaseRequestDetailPage({
         badge={<StatusChip status={request.status} />}
         actions={
           <>
-            <Button href={`/pembelian/permintaan/${request.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/pembelian/permintaan/${request.id}/ubah`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={request.id} action={deletePurchaseRequest} />
             <BackButton href="/pembelian/permintaan" />

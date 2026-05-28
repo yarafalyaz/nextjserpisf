@@ -42,7 +42,7 @@ export default async function ExpenseDetailPage({
         ]}
         badge={<StatusChip status={expense.status} />}
         actions={<>
-          <Button href={`/keuangan/pengeluaran/${expense.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/pengeluaran/${expense.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
           <PrintButton />
           <DeleteButton id={expense.id} action={deleteExpense} />
           <BackButton href="/keuangan/pengeluaran" />

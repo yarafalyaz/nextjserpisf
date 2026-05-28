@@ -33,7 +33,7 @@ export default async function HolidayDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/sdm/hari-libur/${holiday.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/sdm/hari-libur/${holiday.id}/ubah`} variant="primary">Ubah</Button>
             <DeleteButton id={holiday.id} action={deleteHoliday} />
             <BackButton href="/sdm/hari-libur" />
           </>

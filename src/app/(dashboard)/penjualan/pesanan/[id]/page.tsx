@@ -44,9 +44,9 @@ export default async function SalesOrderDetailPage({
         badge={<StatusChip status={order.status} />}
         actions={
           <>
-            <Button href={`/penjualan/pesanan/${order.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/penjualan/pesanan/${order.id}/ubah`} variant="primary">Ubah</Button>
             {order.status === "approved" && (
-              <Button href={`/penjualan/uang-muka/create?pesananPenjualanId=${order.id}`} variant="primary">+ Down Payment</Button>
+              <Button href={`/penjualan/uang-muka/tambah?pesananPenjualanId=${order.id}`} variant="primary">+ Down Payment</Button>
             )}
             <PrintButton documentType="order" documentId={order.id} />
             <BackButton href="/penjualan/pesanan" />

@@ -63,7 +63,7 @@ export default async function RolesPage() {
                         <Link href={`/pengaturan/peran/${role.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Detail
                         </Link>
-                        <Link href={`/pengaturan/peran/${role.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+                        <Link href={`/pengaturan/peran/${role.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Edit
                         </Link>
                         <form action={async () => {

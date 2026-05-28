@@ -41,7 +41,7 @@ export default async function InventoryTransferDetailPage({
         badge={<StatusChip status={transfer.status} />}
         actions={
           <>
-            <Button href={`/inventaris/transfer/${transfer.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/inventaris/transfer/${transfer.id}/ubah`} variant="primary">Ubah</Button>
             <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
             <BackButton href="/inventaris/transfer" />
           </>

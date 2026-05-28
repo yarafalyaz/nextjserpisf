@@ -35,7 +35,7 @@ export default async function MaterialIssueDetailPage({
         <div className="flex gap-2 items-center">
           <StatusChip status={issue.status} />
   <div className="flex gap-2">
-          <Link href={`/inventaris/pengeluaran-material/${issue.id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+          <Link href={`/inventaris/pengeluaran-material/${issue.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
           <DeleteButton id={issue.id} action={deleteMaterialIssue} />
                   <Link href="/inventaris/pengeluaran-material" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>

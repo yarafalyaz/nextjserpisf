@@ -41,7 +41,7 @@ export default async function VendorPaymentDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/pembelian/pembayaran-vendor/${payment.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/pembelian/pembayaran-vendor/${payment.id}/ubah`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={payment.id} action={deleteVendorPayment} />
             <BackButton href="/pembelian/pembayaran-vendor" />

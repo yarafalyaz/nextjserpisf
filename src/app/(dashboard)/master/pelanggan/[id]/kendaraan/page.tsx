@@ -92,7 +92,7 @@ export default async function CustomerVehiclesPage({
                         <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
                           <Eye size={14} />
                         </Link>
-                        <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}/edit`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Edit">
+                        <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Edit">
                           <Pencil size={14} />
                         </Link>
                         <DeleteButton id={cv.id} action={deleteCustomerVehicle} />

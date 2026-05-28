@@ -58,14 +58,14 @@ export default async function InvoiceDetailPage({
         badge={<StatusChip status={invoice.status} />}
         actions={
           <>
-            <Button href={`/penjualan/faktur/${invoice.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/penjualan/faktur/${invoice.id}/ubah`} variant="primary">Ubah</Button>
             {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-              <Button href={`/penjualan/pembayaran/create?fakturId=${invoice.id}`} variant="primary" style={{ background: "var(--color-success)", color: "#fff" }}>
+              <Button href={`/penjualan/pembayaran/tambah?fakturId=${invoice.id}`} variant="primary" style={{ background: "var(--color-success)", color: "#fff" }}>
                 Terima Pembayaran
               </Button>
             )}
             {invoice.status === "paid" && (
-              <Button href={`/penjualan/surat-jalan/create?fakturPenjualanId=${invoice.id}`} variant="primary">+ Delivery Order</Button>
+              <Button href={`/penjualan/surat-jalan/tambah?fakturPenjualanId=${invoice.id}`} variant="primary">+ Delivery Order</Button>
             )}
             <PrintButton documentType="invoice" documentId={invoice.id} />
             <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
@@ -194,7 +194,7 @@ export default async function InvoiceDetailPage({
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Pembayaran</h2>
                   {(invoice.status === "posted" || invoice.status === "partial") && (
-                    <Link href={`/penjualan/pembayaran/create?fakturId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Terima Bayar</Link>
+                    <Link href={`/penjualan/pembayaran/tambah?fakturId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Terima Bayar</Link>
                   )}
                 </div>
                 <div className="p-4 px-5">

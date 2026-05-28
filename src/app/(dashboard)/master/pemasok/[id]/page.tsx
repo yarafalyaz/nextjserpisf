@@ -55,7 +55,7 @@ export default async function VendorDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/pemasok/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/pemasok/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/master/pemasok" />
           </>
         }

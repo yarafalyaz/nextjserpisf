@@ -41,7 +41,7 @@ export default async function ItemCategoryDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/kategori-barang/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/kategori-barang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={category.id} action={deleteItemCategory} />
             <BackButton href="/master/kategori-barang" />
           </>

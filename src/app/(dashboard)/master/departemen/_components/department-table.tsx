@@ -40,7 +40,7 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={`/master/departemen/${info.row.original.id}`}
-        editHref={`/master/departemen/${info.row.original.id}/edit`}
+        editHref={`/master/departemen/${info.row.original.id}/ubah`}
         deleteAction={deleteDepartment}
         deleteId={info.row.original.id}
       />

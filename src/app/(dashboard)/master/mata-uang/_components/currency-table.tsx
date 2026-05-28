@@ -39,7 +39,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        editHref={`/master/mata-uang/${info.row.original.id}/edit`}
+        editHref={`/master/mata-uang/${info.row.original.id}/ubah`}
         deleteAction={deleteCurrency}
         deleteId={info.row.original.id}
       />

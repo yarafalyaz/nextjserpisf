@@ -40,7 +40,7 @@ export default async function LeadDetailPage({
         ]}
         badge={<StatusChip status={lead.status} />}
         actions={<>
-          <Button href={`/crm/leads/${lead.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/crm/leads/${lead.id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={lead.id} action={deleteLead} />
           <BackButton href="/crm/leads" />
         </>}

@@ -56,7 +56,7 @@ export default async function AccountsPage({
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
-        <Link href="/master/akun/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-account-btn">
+        <Link href="/master/akun/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-account-btn">
           + Tambah Akun
         </Link>
       </div>
@@ -89,7 +89,7 @@ export default async function AccountsPage({
                       <DetailTableTd className="font-mono">{acc.code}</DetailTableTd>
                       <DetailTableTd>{acc.name}</DetailTableTd>
                       <DetailTableTd>
-                        <Link href={`/master/akun/${acc.id}/edit`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
+                        <Link href={`/master/akun/${acc.id}/ubah`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
                       </DetailTableTd>
                     </DetailTableRow>
                   ))}

@@ -154,7 +154,7 @@ export default async function ItemDetailPage({
         ) : undefined}
         actions={
           <>
-            <Button href={`/master/barang/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/barang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={item.id} action={deleteItem} />
             <BackButton href="/master/barang" />
           </>

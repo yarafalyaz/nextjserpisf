@@ -58,7 +58,7 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={`/crm/leads/${info.row.original.id}`}
-        editHref={`/crm/leads/${info.row.original.id}/edit`}
+        editHref={`/crm/leads/${info.row.original.id}/ubah`}
       />
     ),
   }),

@@ -42,7 +42,7 @@ export default async function PurchaseReturnDetailPage({
         badge={<StatusChip status={purchaseReturn.status} />}
         actions={
           <>
-            <Button href={`/pembelian/retur/${purchaseReturn.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/pembelian/retur/${purchaseReturn.id}/ubah`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
             <BackButton href="/pembelian/retur" />

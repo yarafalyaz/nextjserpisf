@@ -61,7 +61,7 @@ export default async function CustomerVehicleDetailPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Detail Kendaraan</h1>
         <div className="flex gap-2">
-          <Link href={`/master/pelanggan/${id}/kendaraan/${kendaraanId}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
+          <Link href={`/master/pelanggan/${id}/kendaraan/${kendaraanId}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
             <Pencil size={14} /> Edit
           </Link>
           <Link href={`/master/pelanggan/${id}/kendaraan`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>

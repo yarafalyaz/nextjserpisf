@@ -78,7 +78,7 @@ export default async function ProjectDetailPage({
         badge={<StatusChip status={project.status} />}
         actions={
           <>
-            <Button href={`/proyek/${project.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/proyek/${project.id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/proyek" />
           </>
         }

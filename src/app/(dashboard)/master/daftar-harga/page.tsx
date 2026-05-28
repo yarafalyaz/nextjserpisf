@@ -44,7 +44,7 @@ export default async function PriceListsPage({
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Daftar Harga</h1>
-        <Link href="/master/daftar-harga/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-price-list-btn">
+        <Link href="/master/daftar-harga/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-price-list-btn">
           + Tambah Daftar Harga
         </Link>
       </div>

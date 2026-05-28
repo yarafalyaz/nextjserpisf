@@ -46,7 +46,7 @@ export default async function WarehouseDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/gudang/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/gudang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <BackButton href="/master/gudang" />
           </>
         }

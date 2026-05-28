@@ -41,9 +41,9 @@ export default async function DownPaymentDetailPage({
         badge={<StatusChip status={dp.status} />}
         actions={
           <>
-            <Button href={`/penjualan/uang-muka/${dp.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/penjualan/uang-muka/${dp.id}/ubah`} variant="primary">Ubah</Button>
             {dp.status === "paid" && (
-              <Button href={`/produksi/perintah-kerja/create?penawaranId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
+              <Button href={`/produksi/perintah-kerja/tambah?penawaranId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
             )}
             <PrintButton />
             <DeleteButton id={dp.id} action={deleteDownPayment} />

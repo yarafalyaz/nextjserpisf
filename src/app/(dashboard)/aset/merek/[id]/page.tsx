@@ -38,7 +38,7 @@ export default async function AssetBrandDetailPage({
           { label: brand.name },
         ]}
         actions={<>
-          <Button href={`/aset/merek/${brand.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/merek/${brand.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={brand.id} action={deleteAssetBrand} />
           <BackButton href="/aset/merek" />
         </>}

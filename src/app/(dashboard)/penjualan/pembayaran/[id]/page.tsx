@@ -39,7 +39,7 @@ export default async function SalesPaymentDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/penjualan/pembayaran/${payment.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/penjualan/pembayaran/${payment.id}/ubah`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={payment.id} action={deleteSalesPayment} />
             <BackButton href="/penjualan/pembayaran" />

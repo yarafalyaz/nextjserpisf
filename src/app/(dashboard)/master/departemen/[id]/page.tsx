@@ -40,7 +40,7 @@ export default async function DepartmentDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/master/departemen/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/departemen/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={department.id} action={deleteDepartment} />
             <BackButton href="/master/departemen" />
           </>

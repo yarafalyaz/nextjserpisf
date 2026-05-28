@@ -41,7 +41,7 @@ export default async function SalesReturnDetailPage({
         badge={<StatusChip status={salesReturn.status} />}
         actions={
           <>
-            <Button href={`/penjualan/retur/${salesReturn.id}/edit`} variant="primary">Ubah</Button>
+            <Button href={`/penjualan/retur/${salesReturn.id}/ubah`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
             <BackButton href="/penjualan/retur" />
