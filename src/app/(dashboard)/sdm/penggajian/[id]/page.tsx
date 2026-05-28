@@ -20,8 +20,11 @@ export default async function PayrollDetailPage({
 }) {
   const { id } = await params
 
+  const numId = Number(id)
+  if (isNaN(numId)) notFound()
+
   const payroll = await prisma.payroll.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { employee: true },
   })
 
