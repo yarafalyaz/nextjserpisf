@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
@@ -8,6 +8,7 @@ import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/l
 // ==================== CRM TICKET ACTIONS ====================
 
 export async function createTicket(formData: FormData) {
+  try {
   const user = await requirePermission("create_tickets")
 
   const { generateDocumentNumber } = await import("@/lib/utils/document-number")
@@ -32,10 +33,17 @@ export async function createTicket(formData: FormData) {
 
   revalidatePath("/crm/tickets")
   return { success: true, id: ticket.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createTicket]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updateTicket(id: number, formData: FormData) {
+  try {
   "use server"
 
   // Fix #35: Harusnya edit_tickets, bukan create_tickets
@@ -59,21 +67,41 @@ export async function updateTicket(id: number, formData: FormData) {
 
   revalidatePath("/crm/tickets")
   return { success: true, id: ticket.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateTicket]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 export async function deleteTicket(id: number) {
+  try {
   "use server"
   // Fix #22: Add permission check
   await requirePermission("delete_tickets")
   await prisma.crmTicket.delete({ where: { id } })
   revalidatePath("/crm/tickets")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteTicket]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteLead(id: number) {
+  try {
   "use server"
   // Fix #22: Add permission check
   await requirePermission("delete_leads")
   await prisma.lead.delete({ where: { id } })
   revalidatePath("/crm/leads")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteLead]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

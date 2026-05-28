@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived } from "@/lib/hooks/accounting.hook"
 import { onDownPaymentConfirmed } from "@/lib/hooks/down-payment.hook"
@@ -15,6 +15,7 @@ import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/l
 // ==================== QUOTATION ACTIONS ====================
 
 export async function createQuotation(formData: FormData) {
+  try {
   const user = await requirePermission("create_quotations")
 
   const raw = formData.get("data") as string
@@ -86,9 +87,16 @@ export async function createQuotation(formData: FormData) {
 
   revalidatePath("/penjualan/penawaran")
   return { success: true, id: quotation.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createQuotation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function sendQuotation(quotationId: number) {
+  try {
   await requirePermission("edit_quotations")
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
@@ -106,9 +114,16 @@ export async function sendQuotation(quotationId: number) {
 
   revalidatePath("/penjualan/penawaran")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[sendQuotation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function acceptQuotation(quotationId: number) {
+  try {
   await requirePermission("confirm_quotations")
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
@@ -129,9 +144,16 @@ export async function acceptQuotation(quotationId: number) {
 
   revalidatePath("/penjualan/penawaran")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[acceptQuotation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateQuotation(quotationId: number, formData: FormData) {
+  try {
   await requirePermission("edit_quotations")
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
@@ -173,11 +195,18 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
 
   revalidatePath("/penjualan/penawaran")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateQuotation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DOWN PAYMENT ACTIONS ====================
 
 export async function createDownPayment(formData: FormData) {
+  try {
   const user = await requirePermission("create_down_payments")
 
   const documentNo = await generateDocumentNumber("DP")
@@ -216,9 +245,16 @@ export async function createDownPayment(formData: FormData) {
   await onDownPaymentReceived(dp.id, Number(user.id))
   revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createDownPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function confirmDownPayment(dpId: number) {
+  try {
   const user = await requirePermission("edit_down_payments")
 
   await onDownPaymentConfirmed(dpId, Number(user.id))
@@ -228,11 +264,18 @@ export async function confirmDownPayment(dpId: number) {
   revalidatePath("/penjualan/pesanan")
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[confirmDownPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== SALES ORDER ACTIONS ====================
 
 export async function createSalesOrder(formData: FormData) {
+  try {
   const user = await requirePermission("create_sales_orders")
 
   const documentNo = await generateDocumentNumber("SO")
@@ -252,11 +295,18 @@ export async function createSalesOrder(formData: FormData) {
 
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createSalesOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== INVOICE ACTIONS ====================
 
 export async function postInvoice(invoiceId: number) {
+  try {
   const user = await requirePermission("post_sales_invoices")
 
   const invoice = await prisma.salesInvoice.findUniqueOrThrow({
@@ -277,9 +327,16 @@ export async function postInvoice(invoiceId: number) {
 
   revalidatePath("/penjualan/faktur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[postInvoice]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function createSalesInvoice(formData: FormData) {
+  try {
   const user = await requirePermission("create_sales_invoices")
 
   const documentNo = await generateDocumentNumber("INV")
@@ -306,11 +363,18 @@ export async function createSalesInvoice(formData: FormData) {
 
   revalidatePath("/penjualan/faktur")
   return { success: true, id: invoice.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createSalesInvoice]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== PAYMENT ACTIONS ====================
 
 export async function createSalesPayment(formData: FormData) {
+  try {
   const user = await requirePermission("create_sales_payments")
 
   const documentNo = await generateDocumentNumber("PAY")
@@ -349,11 +413,18 @@ export async function createSalesPayment(formData: FormData) {
   revalidatePath("/penjualan/pembayaran")
   revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createSalesPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== SALES RETURN ACTIONS ====================
 
 export async function completeSalesReturn(returnId: number) {
+  try {
   const user = await requirePermission("edit_sales_returns")
 
   const salesReturn = await prisma.salesReturn.findUniqueOrThrow({
@@ -378,9 +449,16 @@ export async function completeSalesReturn(returnId: number) {
 
   revalidatePath("/penjualan/retur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[completeSalesReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function createSalesReturn(formData: FormData) {
+  try {
   const user = await requirePermission("create_sales_returns")
 
   const documentNo = await generateDocumentNumber("SR")
@@ -414,11 +492,18 @@ export async function createSalesReturn(formData: FormData) {
 
   revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createSalesReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELIVERY ORDER ACTIONS ====================
 
 export async function createDeliveryOrder(formData: FormData) {
+  try {
   const user = await requirePermission("create_delivery_orders")
 
   const documentNo = await generateDocumentNumber("DO")
@@ -452,11 +537,18 @@ export async function createDeliveryOrder(formData: FormData) {
 
   revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createDeliveryOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteQuotation(id: number) {
+  try {
   await requirePermission("delete_quotations")
 
   const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id } })
@@ -471,9 +563,16 @@ export async function deleteQuotation(id: number) {
 
   revalidatePath("/penjualan/penawaran")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteQuotation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteSalesPayment(id: number) {
+  try {
   await requirePermission("delete_sales_payments")
 
   const payment = await prisma.salesPayment.findUniqueOrThrow({ where: { id } })
@@ -496,18 +595,32 @@ export async function deleteSalesPayment(id: number) {
   revalidatePath("/penjualan/pembayaran")
   revalidatePath("/penjualan/faktur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteSalesPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteDeliveryOrder(id: number) {
+  try {
   await requirePermission("delete_delivery_orders")
 
   await prisma.deliveryOrder.delete({ where: { id } })
 
   revalidatePath("/penjualan/surat-jalan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteDeliveryOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteDownPayment(id: number) {
+  try {
   await requirePermission("delete_down_payments")
 
   const dp = await prisma.downPayment.findUniqueOrThrow({ where: { id } })
@@ -519,10 +632,17 @@ export async function deleteDownPayment(id: number) {
 
   revalidatePath("/penjualan/uang-muka")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteDownPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updateSalesOrder(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_sales_orders")
@@ -541,9 +661,16 @@ export async function updateSalesOrder(id: number, formData: FormData) {
 
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateSalesOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateSalesInvoice(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_sales_invoices")
@@ -622,9 +749,16 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
 
   revalidatePath("/penjualan/faktur")
   return { success: true, id: result.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateSalesInvoice]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateSalesPayment(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_sales_payments")
@@ -660,9 +794,16 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   revalidatePath("/penjualan/pembayaran")
   revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateSalesPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateSalesReturn(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_sales_returns")
@@ -699,9 +840,16 @@ export async function updateSalesReturn(id: number, formData: FormData) {
 
   revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateSalesReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateDeliveryOrder(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_delivery_orders")
@@ -734,9 +882,16 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
 
   revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateDeliveryOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateDownPayment(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_down_payments")
@@ -779,8 +934,15 @@ export async function updateDownPayment(id: number, formData: FormData) {
 
   revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateDownPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 export async function deleteSalesOrder(id: number) {
+  try {
   "use server"
   // Fix #23: Add permission check
   await requirePermission("delete_sales_orders")
@@ -791,9 +953,16 @@ export async function deleteSalesOrder(id: number) {
   await prisma.salesOrder.delete({ where: { id } })
   revalidatePath("/penjualan/pesanan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteSalesOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteSalesInvoice(id: number) {
+  try {
   "use server"
   // Fix #23: Add permission check
   await requirePermission("delete_sales_invoices")
@@ -804,9 +973,16 @@ export async function deleteSalesInvoice(id: number) {
   await prisma.salesInvoice.delete({ where: { id } })
   revalidatePath("/penjualan/faktur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteSalesInvoice]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteSalesReturn(id: number) {
+  try {
   "use server"
   // Fix #23: Add permission check
   await requirePermission("delete_sales_returns")
@@ -817,4 +993,10 @@ export async function deleteSalesReturn(id: number) {
   await prisma.salesReturn.delete({ where: { id } })
   revalidatePath("/penjualan/retur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteSalesReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

@@ -1,11 +1,12 @@
 "use server"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 export async function createRole(formData: FormData) {
+  try {
   await requirePermission("manage_settings")
 
   const name = formData.get("name") as string
@@ -25,9 +26,15 @@ export async function createRole(formData: FormData) {
 
   revalidatePath("/pengaturan/peran")
   redirect("/pengaturan/peran")
+
+  } catch (e: any) {
+    console.error("[createRole]", e?.message || e)
+    throw e
+  }
 }
 
 export async function updateRole(id: number, formData: FormData) {
+  try {
   await requirePermission("manage_settings")
 
   const name = formData.get("name") as string
@@ -47,9 +54,15 @@ export async function updateRole(id: number, formData: FormData) {
 
   revalidatePath("/pengaturan/peran")
   redirect("/pengaturan/peran")
+
+  } catch (e: any) {
+    console.error("[updateRole]", e?.message || e)
+    throw e
+  }
 }
 
 export async function deleteRole(id: number) {
+  try {
   await requirePermission("manage_settings")
 
   const role = await prisma.role.findUnique({
@@ -66,4 +79,9 @@ export async function deleteRole(id: number) {
 
   revalidatePath("/pengaturan/peran")
   redirect("/pengaturan/peran")
+
+  } catch (e: any) {
+    console.error("[deleteRole]", e?.message || e)
+    throw e
+  }
 }

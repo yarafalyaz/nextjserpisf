@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -42,6 +42,7 @@ async function resolveWorkSchedule(departmentId: number | null | undefined, dayO
 // ==================== ATTENDANCE ACTIONS ====================
 
 export async function checkIn(employeeId: number, latitude?: number, longitude?: number) {
+  try {
   await requirePermission("create_attendance")
 
   const now = new Date()
@@ -108,9 +109,16 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
 
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[checkIn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function checkOut(employeeId: number, latitude?: number, longitude?: number) {
+  try {
   await requirePermission("edit_attendance")
 
   const now = new Date()
@@ -147,9 +155,16 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
 
   revalidatePath("/sdm/absensi")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[checkOut]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function createAttendance(formData: FormData) {
+  try {
   await requirePermission("create_attendance")
 
   const attendance = await prisma.attendance.create({
@@ -170,9 +185,16 @@ export async function createAttendance(formData: FormData) {
 
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createAttendance]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateAttendance(id: number, formData: FormData) {
+  try {
   await requirePermission("edit_attendance")
 
   const attendance = await prisma.attendance.update({
@@ -194,11 +216,18 @@ export async function updateAttendance(id: number, formData: FormData) {
 
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateAttendance]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== LEAVE REQUEST ACTIONS ====================
 
 export async function createLeaveRequest(formData: FormData) {
+  try {
   await requirePermission("create_leave_requests")
 
   const leave = await prisma.leaveRequest.create({
@@ -214,9 +243,16 @@ export async function createLeaveRequest(formData: FormData) {
 
   revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createLeaveRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function approveLeave(leaveId: number) {
+  try {
   const user = await requirePermission("edit_leave_requests")
 
   const leave = await prisma.leaveRequest.findUniqueOrThrow({
@@ -234,9 +270,16 @@ export async function approveLeave(leaveId: number) {
 
   revalidatePath("/sdm/cuti")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[approveLeave]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function rejectLeave(leaveId: number, reason?: string) {
+  try {
   const user = await requirePermission("edit_leave_requests")
 
   await prisma.leaveRequest.update({
@@ -250,11 +293,18 @@ export async function rejectLeave(leaveId: number, reason?: string) {
 
   revalidatePath("/sdm/cuti")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[rejectLeave]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== OVERTIME REQUEST ACTIONS ====================
 
 export async function createOvertimeRequest(formData: FormData) {
+  try {
   await requirePermission("create_overtime_requests")
 
   const overtime = await prisma.overtimeRequest.create({
@@ -273,9 +323,16 @@ export async function createOvertimeRequest(formData: FormData) {
 
   revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createOvertimeRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function approveOvertime(overtimeId: number) {
+  try {
   const user = await requirePermission("edit_overtime_requests")
 
   await prisma.overtimeRequest.update({
@@ -285,11 +342,18 @@ export async function approveOvertime(overtimeId: number) {
 
   revalidatePath("/sdm/lembur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[approveOvertime]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== PAYROLL ACTIONS ====================
 
 export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string) {
+  try {
   const startDate = new Date(startDateStr)
   const endDate = new Date(endDateStr)
 
@@ -339,9 +403,16 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     lateDeduction: latePenalty.totalPenalty,
     lateMinutes: latePenalty.totalLateMinutes,
   }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[getPayrollEstimation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function generateBulkPayroll(period: string, startDateStr: string, endDateStr: string) {
+  try {
   const user = await requirePermission("create_payroll")
   
   const employees = await prisma.employee.findMany({
@@ -386,9 +457,16 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
 
   revalidatePath("/sdm/penggajian")
   return { success: true, count }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[generateBulkPayroll]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function processPayroll(formData: FormData) {
+  try {
   const user = await requirePermission("create_payroll")
 
   const documentNo = await generateDocumentNumber("PAYROLL")
@@ -441,9 +519,16 @@ export async function processPayroll(formData: FormData) {
 
   revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[processPayroll]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updatePayroll(id: number, formData: FormData) {
+  try {
   await requirePermission("edit_payroll")
 
   // Only draft payroll can be edited
@@ -502,9 +587,16 @@ export async function updatePayroll(id: number, formData: FormData) {
 
   revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updatePayroll]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function approvePayroll(payrollId: number) {
+  try {
   const user = await requirePermission("edit_payroll")
 
   const payroll = await prisma.payroll.findUniqueOrThrow({
@@ -522,9 +614,16 @@ export async function approvePayroll(payrollId: number) {
 
   revalidatePath("/sdm/penggajian")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[approvePayroll]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function markPayrollPaid(payrollId: number) {
+  try {
   await requirePermission("edit_payroll")
 
   const payroll = await prisma.payroll.findUniqueOrThrow({
@@ -543,11 +642,18 @@ export async function markPayrollPaid(payrollId: number) {
   revalidatePath("/sdm/penggajian")
   revalidatePath(`/sdm/penggajian/${payrollId}`)
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[markPayrollPaid]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== EMPLOYEE LOAN ACTIONS ====================
 
 export async function createEmployeeLoan(formData: FormData) {
+  try {
   await requirePermission("create_loans")
 
   const totalAmount = requireNumber(formData.get("totalAmount"), "totalAmount")
@@ -566,11 +672,18 @@ export async function createEmployeeLoan(formData: FormData) {
 
   revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createEmployeeLoan]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== TIMESHEET ACTIONS ====================
 
 export async function createTimesheet(formData: FormData) {
+  try {
   await requirePermission("create_timesheets")
 
   const timesheet = await prisma.timesheet.create({
@@ -588,11 +701,18 @@ export async function createTimesheet(formData: FormData) {
 
   revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createTimesheet]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== WORK SCHEDULE ACTIONS ====================
 
 export async function createWorkSchedule(formData: FormData) {
+  try {
   await requirePermission("create_work_schedules")
 
   const name = formData.get("name") as string
@@ -617,11 +737,18 @@ export async function createWorkSchedule(formData: FormData) {
 
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createWorkSchedule]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== HOLIDAY ACTIONS ====================
 
 export async function createHoliday(formData: FormData) {
+  try {
   await requirePermission("create_holidays")
 
   const holiday = await prisma.holiday.create({
@@ -634,66 +761,115 @@ export async function createHoliday(formData: FormData) {
 
   revalidatePath("/sdm/hari-libur")
   return { success: true, id: holiday.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createHoliday]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteLeaveRequest(id: number) {
+  try {
   await requirePermission("delete_leave_requests")
 
   await prisma.leaveRequest.delete({ where: { id } })
 
   revalidatePath("/sdm/cuti")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteLeaveRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteOvertimeRequest(id: number) {
+  try {
   await requirePermission("delete_overtime_requests")
 
   await prisma.overtimeRequest.delete({ where: { id } })
 
   revalidatePath("/sdm/lembur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteOvertimeRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteTimesheet(id: number) {
+  try {
   await requirePermission("delete_timesheets")
 
   await prisma.timesheet.delete({ where: { id } })
 
   revalidatePath("/sdm/lembar-waktu")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteTimesheet]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteEmployeeLoan(id: number) {
+  try {
   await requirePermission("delete_loans")
 
   await prisma.employeeLoan.delete({ where: { id } })
 
   revalidatePath("/sdm/pinjaman")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteEmployeeLoan]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteWorkSchedule(id: number) {
+  try {
   await requirePermission("delete_work_schedules")
 
   await prisma.workSchedule.delete({ where: { id } })
 
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteWorkSchedule]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteHoliday(id: number) {
+  try {
   await requirePermission("delete_holidays")
 
   await prisma.holiday.delete({ where: { id } })
 
   revalidatePath("/sdm/hari-libur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteHoliday]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updateLeaveRequest(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_leave_requests")
@@ -712,9 +888,16 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
 
   revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateLeaveRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateOvertimeRequest(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_overtime_requests")
@@ -736,9 +919,16 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
 
   revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateOvertimeRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateEmployeeLoan(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_loans")
@@ -760,9 +950,16 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
 
   revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateEmployeeLoan]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateTimesheet(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_timesheets")
@@ -783,9 +980,16 @@ export async function updateTimesheet(id: number, formData: FormData) {
 
   revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateTimesheet]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateWorkSchedule(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_work_schedules")
@@ -815,11 +1019,18 @@ export async function updateWorkSchedule(id: number, formData: FormData) {
 
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateWorkSchedule]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DEPARTMENT HOLIDAY ACTIONS ====================
 
 export async function createDepartmentHoliday(formData: FormData) {
+  try {
   await requirePermission("create_holidays")
 
   const holiday = await prisma.departmentHoliday.create({
@@ -833,9 +1044,16 @@ export async function createDepartmentHoliday(formData: FormData) {
 
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createDepartmentHoliday]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateDepartmentHoliday(formData: FormData) {
+  try {
   await requirePermission("create_holidays")
 
   const id = requireId(formData.get("id"), "id")
@@ -852,20 +1070,34 @@ export async function updateDepartmentHoliday(formData: FormData) {
 
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateDepartmentHoliday]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteDepartmentHoliday(id: number) {
+  try {
   await requirePermission("delete_holidays")
 
   await prisma.departmentHoliday.delete({ where: { id } })
 
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteDepartmentHoliday]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== APPRECIATION ACTIONS ====================
 
 export async function createAppreciation(formData: FormData) {
+  try {
   await requirePermission("create_appreciations")
 
   const appreciation = await prisma.appreciation.create({
@@ -880,9 +1112,16 @@ export async function createAppreciation(formData: FormData) {
 
   revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createAppreciation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateAppreciation(formData: FormData) {
+  try {
   await requirePermission("create_appreciations")
 
   const id = requireId(formData.get("id"), "id")
@@ -900,13 +1139,26 @@ export async function updateAppreciation(formData: FormData) {
 
   revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateAppreciation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteAppreciation(id: number) {
+  try {
   await requirePermission("delete_appreciations")
 
   await prisma.appreciation.delete({ where: { id } })
 
   revalidatePath("/sdm/apresiasi")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteAppreciation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

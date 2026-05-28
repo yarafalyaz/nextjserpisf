@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
@@ -9,6 +9,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 // ==================== ASSET CATEGORY ACTIONS ====================
 
 export async function createAssetCategory(formData: FormData) {
+  try {
   await requirePermission("create_asset_categories")
 
   const category = await prisma.assetCategory.create({
@@ -22,11 +23,18 @@ export async function createAssetCategory(formData: FormData) {
 
   revalidatePath("/aset/kategori")
   return { success: true, id: category.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createAssetCategory]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== ASSET BRAND ACTIONS ====================
 
 export async function createAssetBrand(formData: FormData) {
+  try {
   await requirePermission("create_asset_brands")
 
   const brand = await prisma.assetBrand.create({
@@ -37,11 +45,18 @@ export async function createAssetBrand(formData: FormData) {
 
   revalidatePath("/aset/merek")
   return { success: true, id: brand.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createAssetBrand]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== ASSET TRANSFER ACTIONS ====================
 
 export async function createAssetTransfer(formData: FormData) {
+  try {
   const user = await requirePermission("create_asset_transfers")
 
   const assetId = requireId(formData.get("assetId"), "assetId")
@@ -69,39 +84,67 @@ export async function createAssetTransfer(formData: FormData) {
   revalidatePath("/aset/transfer")
   revalidatePath("/aset")
   return { success: true, id: transfer.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createAssetTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteAssetCategory(id: number) {
+  try {
   await requirePermission("delete_asset_categories")
 
   await prisma.assetCategory.delete({ where: { id } })
 
   revalidatePath("/aset/kategori")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteAssetCategory]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteAssetBrand(id: number) {
+  try {
   await requirePermission("delete_asset_brands")
 
   await prisma.assetBrand.delete({ where: { id } })
 
   revalidatePath("/aset/merek")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteAssetBrand]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteAssetTransfer(id: number) {
+  try {
   await requirePermission("delete_asset_transfers")
 
   await prisma.assetTransfer.delete({ where: { id } })
 
   revalidatePath("/aset/transfer")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteAssetTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updateAssetBrand(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_asset_brands")
@@ -115,9 +158,16 @@ export async function updateAssetBrand(id: number, formData: FormData) {
 
   revalidatePath("/aset/merek")
   return { success: true, id: brand.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateAssetBrand]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateAssetCategory(id: number, formData: FormData) {
+  try {
   "use server"
 
   await requirePermission("create_asset_categories")
@@ -134,9 +184,16 @@ export async function updateAssetCategory(id: number, formData: FormData) {
 
   revalidatePath("/aset/kategori")
   return { success: true, id: category.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateAssetCategory]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateAssetTransfer(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_asset_transfers")
@@ -183,8 +240,15 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
 
   revalidatePath("/aset/transfer")
   return { success: true, id: transfer.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateAssetTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 export async function createAsset(formData: FormData) {
+  try {
   "use server"
   await requirePermission("create_assets")
 
@@ -209,4 +273,10 @@ export async function createAsset(formData: FormData) {
 
   revalidatePath("/aset")
   return { success: true, id: asset.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createAsset]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

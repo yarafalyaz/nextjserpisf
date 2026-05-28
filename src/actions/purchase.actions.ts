@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onPurchaseOrderReceived, onPurchaseReturnProcessed, onVendorBillPosted, onVendorPaymentCreated } from "@/lib/hooks/accounting.hook"
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook"
@@ -14,6 +14,7 @@ import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/l
 // ==================== PURCHASE REQUEST ACTIONS ====================
 
 export async function createPurchaseRequest(formData: FormData) {
+  try {
   const user = await requirePermission("create_purchase_requests")
 
   const documentNo = await generateDocumentNumber("PR")
@@ -49,9 +50,16 @@ export async function createPurchaseRequest(formData: FormData) {
 
   revalidatePath("/pembelian/permintaan")
   return { success: true, id: pr.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createPurchaseRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function approvePurchaseRequest(prId: number) {
+  try {
   const user = await requirePermission("edit_purchase_requests")
 
   const pr = await prisma.purchaseRequest.findUniqueOrThrow({
@@ -69,11 +77,18 @@ export async function approvePurchaseRequest(prId: number) {
 
   revalidatePath("/pembelian/permintaan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[approvePurchaseRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== PURCHASE ORDER ACTIONS ====================
 
 export async function createPurchaseOrder(formData: FormData) {
+  try {
   const user = await requirePermission("create_purchase_orders")
 
   const documentNo = await generateDocumentNumber("PO")
@@ -105,9 +120,16 @@ export async function createPurchaseOrder(formData: FormData) {
 
   revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createPurchaseOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function approvePurchaseOrder(poId: number) {
+  try {
   const user = await requirePermission("edit_purchase_orders")
 
   const po = await prisma.purchaseOrder.findUniqueOrThrow({
@@ -125,9 +147,16 @@ export async function approvePurchaseOrder(poId: number) {
 
   revalidatePath("/pembelian/pesanan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[approvePurchaseOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function markPurchaseOrderOrdered(poId: number) {
+  try {
   await requirePermission("edit_purchase_orders")
 
   await prisma.purchaseOrder.update({
@@ -137,9 +166,16 @@ export async function markPurchaseOrderOrdered(poId: number) {
 
   revalidatePath("/pembelian/pesanan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[markPurchaseOrderOrdered]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function markPurchaseOrderReceived(poId: number) {
+  try {
   const user = await requirePermission("edit_purchase_orders")
 
   await prisma.purchaseOrder.update({
@@ -152,11 +188,18 @@ export async function markPurchaseOrderReceived(poId: number) {
 
   revalidatePath("/pembelian/pesanan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[markPurchaseOrderReceived]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== GOODS RECEIPT ACTIONS ====================
 
 export async function createGoodsReceipt(formData: FormData) {
+  try {
   const user = await requirePermission("create_goods_receipts")
 
   const documentNo = await generateDocumentNumber("GR")
@@ -187,9 +230,16 @@ export async function createGoodsReceipt(formData: FormData) {
 
   revalidatePath("/pembelian/penerimaan")
   return { success: true, id: gr.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createGoodsReceipt]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function verifyGoodsReceipt(grId: number) {
+  try {
   const user = await requirePermission("edit_goods_receipts")
 
   const gr = await prisma.goodsReceipt.findUniqueOrThrow({
@@ -209,11 +259,18 @@ export async function verifyGoodsReceipt(grId: number) {
   revalidatePath("/pembelian/penerimaan")
   revalidatePath("/pembelian/pesanan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[verifyGoodsReceipt]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== VENDOR BILL ACTIONS ====================
 
 export async function createVendorBill(formData: FormData) {
+  try {
   const user = await requirePermission("create_vendor_bills")
 
   const documentNo = await generateDocumentNumber("BILL")
@@ -251,11 +308,18 @@ export async function createVendorBill(formData: FormData) {
   await onVendorBillPosted(bill.id, Number(user.id))
   revalidatePath("/pembelian/tagihan")
   return { success: true, id: bill.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createVendorBill]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== VENDOR PAYMENT ACTIONS ====================
 
 export async function createVendorPayment(formData: FormData) {
+  try {
   const user = await requirePermission("create_vendor_payments")
 
   const documentNo = await generateDocumentNumber("VPAY")
@@ -289,11 +353,18 @@ export async function createVendorPayment(formData: FormData) {
 
   revalidatePath("/pembelian/pembayaran")
   return { success: true, id: payment.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createVendorPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== PURCHASE RETURN ACTIONS ====================
 
 export async function createPurchaseReturn(formData: FormData) {
+  try {
   const user = await requirePermission("create_purchase_returns")
 
   const documentNo = await generateDocumentNumber("PRET")
@@ -323,9 +394,16 @@ export async function createPurchaseReturn(formData: FormData) {
 
   revalidatePath("/pembelian/retur")
   return { success: true, id: purchaseReturn.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createPurchaseReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function processPurchaseReturn(returnId: number) {
+  try {
   const user = await requirePermission("edit_purchase_returns")
 
   const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({
@@ -349,11 +427,18 @@ export async function processPurchaseReturn(returnId: number) {
 
   revalidatePath("/pembelian/retur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[processPurchaseReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deletePurchaseRequest(id: number) {
+  try {
   await requirePermission("delete_purchase_requests")
 
   const pr = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id } })
@@ -365,9 +450,16 @@ export async function deletePurchaseRequest(id: number) {
 
   revalidatePath("/pembelian/permintaan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deletePurchaseRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deletePurchaseOrder(id: number) {
+  try {
   await requirePermission("delete_purchase_orders")
 
   const po = await prisma.purchaseOrder.findUniqueOrThrow({
@@ -410,9 +502,16 @@ export async function deletePurchaseOrder(id: number) {
   revalidatePath("/pembelian/pesanan")
   revalidatePath("/pembelian/penerimaan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deletePurchaseOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteGoodsReceipt(id: number) {
+  try {
   await requirePermission("delete_goods_receipts")
 
   const gr = await prisma.goodsReceipt.findUniqueOrThrow({
@@ -446,28 +545,49 @@ export async function deleteGoodsReceipt(id: number) {
   revalidatePath("/pembelian/penerimaan")
   revalidatePath("/pembelian/pesanan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteGoodsReceipt]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteVendorBill(id: number) {
+  try {
   await requirePermission("delete_vendor_bills")
 
   await prisma.vendorBill.delete({ where: { id } })
 
   revalidatePath("/pembelian/tagihan")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteVendorBill]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteVendorPayment(id: number) {
+  try {
   await requirePermission("delete_vendor_payments")
 
   await prisma.vendorPayment.delete({ where: { id } })
 
   revalidatePath("/pembelian/pembayaran")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteVendorPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updatePurchaseRequest(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_purchase_requests")
@@ -505,9 +625,16 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
 
   revalidatePath("/pembelian/permintaan")
   return { success: true, id: pr.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updatePurchaseRequest]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updatePurchaseOrder(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_purchase_orders")
@@ -542,9 +669,16 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 
   revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updatePurchaseOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateVendorBill(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_vendor_bills")
@@ -581,9 +715,16 @@ export async function updateVendorBill(id: number, formData: FormData) {
 
   revalidatePath("/pembelian/tagihan")
   return { success: true, id: bill.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateVendorBill]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateGoodsReceipt(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_goods_receipts")
@@ -623,9 +764,16 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
 
   revalidatePath("/pembelian/penerimaan")
   return { success: true, id: gr.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateGoodsReceipt]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updatePurchaseReturn(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_purchase_returns")
@@ -658,9 +806,16 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
 
   revalidatePath("/pembelian/retur")
   return { success: true, id: purchaseReturn.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updatePurchaseReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateVendorPayment(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_vendor_payments")
@@ -696,10 +851,23 @@ export async function updateVendorPayment(id: number, formData: FormData) {
   await onVendorPaymentCreated(payment.id, Number(user.id))
   revalidatePath("/pembelian/pembayaran-vendor")
   return { success: true, id: payment.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateVendorPayment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 export async function deletePurchaseReturn(id: number) {
+  try {
   "use server"
   await prisma.purchaseReturn.delete({ where: { id } })
   revalidatePath("/pembelian/retur")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deletePurchaseReturn]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

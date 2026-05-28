@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
@@ -9,6 +9,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 // ==================== PROJECT ACTIONS ====================
 
 export async function createProject(formData: FormData) {
+  try {
   const user = await requirePermission("create_projects")
   const documentNo = await generateDocumentNumber("PRJ")
 
@@ -30,9 +31,16 @@ export async function createProject(formData: FormData) {
 
   revalidatePath("/proyek")
   return { success: true, id: project.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createProject]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateProject(projectId: number, formData: FormData) {
+  try {
   await requirePermission("edit_projects")
 
   await prisma.project.update({
@@ -51,22 +59,36 @@ export async function updateProject(projectId: number, formData: FormData) {
 
   revalidatePath("/proyek")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateProject]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteProject(id: number) {
+  try {
   await requirePermission("delete_projects")
 
   await prisma.project.delete({ where: { id } })
 
   revalidatePath("/proyek")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteProject]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== TASK ACTIONS ====================
 
 export async function createTask(formData: FormData) {
+  try {
   await requirePermission("create_projects")
 
   const task = await prisma.task.create({
@@ -83,9 +105,16 @@ export async function createTask(formData: FormData) {
 
   revalidatePath("/proyek/tugas")
   return { success: true, id: task.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createTask]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateTask(formData: FormData) {
+  try {
   await requirePermission("edit_projects")
 
   const id = requireId(formData.get("id"), "id")
@@ -105,13 +134,26 @@ export async function updateTask(formData: FormData) {
 
   revalidatePath("/proyek/tugas")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateTask]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteTask(id: number) {
+  try {
   await requirePermission("delete_projects")
 
   await prisma.task.delete({ where: { id } })
 
   revalidatePath("/proyek/tugas")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteTask]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

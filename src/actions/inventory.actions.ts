@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onStockAdjustmentProcessed, onWorkOrderCompleted, onMaterialIssueCompleted } from "@/lib/hooks/accounting.hook"
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook"
@@ -14,6 +14,7 @@ import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/l
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
 
 export async function createStockAdjustment(formData: FormData) {
+  try {
   const user = await requirePermission("create_stock_adjustments")
 
   const documentNo = await generateDocumentNumber("ADJ")
@@ -33,9 +34,16 @@ export async function createStockAdjustment(formData: FormData) {
 
   revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createStockAdjustment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function processStockAdjustment(adjustmentId: number) {
+  try {
   const user = await requirePermission("edit_stock_adjustments")
 
   const adjustment = await prisma.stockAdjustment.findUniqueOrThrow({
@@ -62,11 +70,18 @@ export async function processStockAdjustment(adjustmentId: number) {
   revalidatePath("/inventaris/penyesuaian")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[processStockAdjustment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== INVENTORY TRANSFER ACTIONS ====================
 
 export async function createInventoryTransfer(formData: FormData) {
+  try {
   const user = await requirePermission("create_inventory_transfers")
 
   const documentNo = await generateDocumentNumber("TRF")
@@ -85,9 +100,16 @@ export async function createInventoryTransfer(formData: FormData) {
 
   revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createInventoryTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function processInventoryTransfer(transferId: number) {
+  try {
   const user = await requirePermission("edit_inventory_transfers")
 
   const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
@@ -109,9 +131,16 @@ export async function processInventoryTransfer(transferId: number) {
   revalidatePath("/inventaris/transfer")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[processInventoryTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function receiveInventoryTransfer(transferId: number) {
+  try {
   const user = await requirePermission("edit_inventory_transfers")
 
   const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
@@ -133,11 +162,18 @@ export async function receiveInventoryTransfer(transferId: number) {
   revalidatePath("/inventaris/transfer")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[receiveInventoryTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== MATERIAL ISSUE ACTIONS ====================
 
 export async function createMaterialIssue(formData: FormData) {
+  try {
   const user = await requirePermission("create_material_issues")
 
   const documentNo = await generateDocumentNumber("MI")
@@ -157,9 +193,16 @@ export async function createMaterialIssue(formData: FormData) {
 
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createMaterialIssue]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function completeMaterialIssue(issueId: number) {
+  try {
   const user = await requirePermission("edit_material_issues")
 
   const issue = await prisma.materialIssue.findUniqueOrThrow({
@@ -184,11 +227,18 @@ export async function completeMaterialIssue(issueId: number) {
   revalidatePath("/inventaris/pengeluaran-material")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[completeMaterialIssue]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== WORK ORDER ACTIONS ====================
 
 export async function createWorkOrder(formData: FormData) {
+  try {
   const user = await requirePermission("create_work_orders")
 
   const documentNo = await generateDocumentNumber("WO")
@@ -221,9 +271,16 @@ export async function createWorkOrder(formData: FormData) {
 
   revalidatePath("/produksi/perintah-kerja")
   return { success: true, id: wo.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createWorkOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateWorkOrder(id: number, formData: FormData) {
+  try {
   const user = await requirePermission("edit_work_orders")
 
   const itemsJson = formData.get("items") as string | null
@@ -261,9 +318,16 @@ export async function updateWorkOrder(id: number, formData: FormData) {
 
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateWorkOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function completeWorkOrder(workOrderId: number) {
+  try {
   const user = await requirePermission("edit_work_orders")
 
   const wo = await prisma.workOrder.findUniqueOrThrow({
@@ -288,11 +352,18 @@ export async function completeWorkOrder(workOrderId: number) {
   revalidatePath("/produksi/perintah-kerja")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[completeWorkOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== RACK ACTIONS ====================
 
 export async function createRack(formData: FormData) {
+  try {
   await requirePermission("create_warehouses")
 
   const rack = await prisma.rack.create({
@@ -305,48 +376,83 @@ export async function createRack(formData: FormData) {
 
   revalidatePath("/inventaris/rak")
   return { success: true, id: rack.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createRack]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteStockAdjustment(id: number) {
+  try {
   await requirePermission("delete_stock_adjustments")
 
   await prisma.stockAdjustment.delete({ where: { id } })
 
   revalidatePath("/inventaris/penyesuaian")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteStockAdjustment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteInventoryTransfer(id: number) {
+  try {
   await requirePermission("delete_inventory_transfers")
 
   await prisma.inventoryTransfer.delete({ where: { id } })
 
   revalidatePath("/inventaris/transfer")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteInventoryTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteMaterialIssue(id: number) {
+  try {
   await requirePermission("delete_material_issues")
 
   await prisma.materialIssue.delete({ where: { id } })
 
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteMaterialIssue]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteRack(id: number) {
+  try {
   await requirePermission("delete_warehouses")
 
   await prisma.rack.delete({ where: { id } })
 
   revalidatePath("/inventaris/rak")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteRack]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updateStockAdjustment(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_stock_adjustments")
@@ -365,9 +471,16 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
   revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateStockAdjustment]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateMaterialIssue(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_material_issues")
@@ -386,9 +499,16 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateMaterialIssue]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateInventoryTransfer(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_inventory_transfers")
@@ -406,11 +526,18 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
 
   revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateInventoryTransfer]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== RACK ROW ACTIONS ====================
 
 export async function createRackRow(formData: FormData) {
+  try {
   await requirePermission("manage_inventory")
 
   const settings = await prisma.systemSetting.findFirst()
@@ -435,9 +562,16 @@ export async function createRackRow(formData: FormData) {
 
   revalidatePath("/inventaris/baris-rak")
   return { success: true, id: rackRow.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createRackRow]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateRackRow(id: number, formData: FormData) {
+  try {
   await requirePermission("manage_inventory")
 
   await prisma.rackRow.update({
@@ -451,13 +585,26 @@ export async function updateRackRow(id: number, formData: FormData) {
 
   revalidatePath("/inventaris/baris-rak")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateRackRow]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteRackRow(id: number) {
+  try {
   await requirePermission("manage_inventory")
 
   await prisma.rackRow.delete({ where: { id } })
 
   revalidatePath("/inventaris/baris-rak")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteRackRow]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

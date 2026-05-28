@@ -1,11 +1,12 @@
 "use server"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 export async function updateSystemSettings(formData: FormData) {
+  try {
   await requirePermission("manage_settings")
 
   const settings = await prisma.systemSetting.findFirst()
@@ -228,4 +229,9 @@ export async function updateSystemSettings(formData: FormData) {
 
   revalidatePath("/pengaturan")
   redirect("/pengaturan")
+
+  } catch (e: any) {
+    console.error("[updateSystemSettings]", e?.message || e)
+    throw e
+  }
 }

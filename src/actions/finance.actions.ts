@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onExpenseApproved, onPettyCashCreated } from "@/lib/hooks/accounting.hook"
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook"
@@ -11,6 +11,7 @@ import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/l
 // ==================== BANK STATEMENT ACTIONS ====================
 
 export async function createBankStatement(formData: FormData) {
+  try {
   const user = await requirePermission("create_journals")
 
   const bankStatement = await prisma.bankStatement.create({
@@ -32,11 +33,18 @@ export async function createBankStatement(formData: FormData) {
 
   revalidatePath("/keuangan/laporan-bank")
   return { success: true, id: bankStatement.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createBankStatement]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== JOURNAL ACTIONS ====================
 
 export async function createJournal(formData: FormData) {
+  try {
   const user = await requirePermission("create_journals")
 
   const documentNo = await generateDocumentNumber("JRN")
@@ -88,9 +96,16 @@ export async function createJournal(formData: FormData) {
 
   revalidatePath("/keuangan/jurnal")
   return { success: true, id: journal.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createJournal]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function postJournal(journalId: number) {
+  try {
   await requirePermission("edit_journals")
 
   const journal = await prisma.journal.findUniqueOrThrow({
@@ -121,11 +136,18 @@ export async function postJournal(journalId: number) {
 
   revalidatePath("/keuangan/jurnal")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[postJournal]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== EXPENSE ACTIONS ====================
 
 export async function createExpense(formData: FormData) {
+  try {
   const user = await requirePermission("create_expenses")
 
   const documentNo = await generateDocumentNumber("EXP")
@@ -163,9 +185,16 @@ export async function createExpense(formData: FormData) {
 
   revalidatePath("/keuangan/pengeluaran")
   return { success: true, id: expense.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createExpense]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function approveExpense(expenseId: number) {
+  try {
   const user = await requirePermission("edit_expenses")
 
   const expense = await prisma.expense.findUniqueOrThrow({
@@ -190,11 +219,18 @@ export async function approveExpense(expenseId: number) {
   revalidatePath("/keuangan/pengeluaran")
   revalidatePath("/keuangan/kas-kecil")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[approveExpense]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== PETTY CASH ACTIONS ====================
 
 export async function createPettyCash(formData: FormData) {
+  try {
   const user = await requirePermission("create_petty_cash")
 
   const documentNo = await generateDocumentNumber("PC")
@@ -240,11 +276,18 @@ export async function createPettyCash(formData: FormData) {
 
   revalidatePath("/keuangan/kas-kecil")
   return { success: true, id: pettyCash.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createPettyCash]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== BANK RECONCILIATION ACTIONS ====================
 
 export async function createBankReconciliation(formData: FormData) {
+  try {
   const user = await requirePermission("create_journals")
 
   const reconciliationNumber = await generateDocumentNumber("REC")
@@ -266,9 +309,16 @@ export async function createBankReconciliation(formData: FormData) {
 
   revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true, id: reconciliation.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createBankReconciliation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function matchReconciliationLine(reconciliationId: number, lineId: number, journalEntryId: number) {
+  try {
   await requirePermission("edit_journals")
 
   await prisma.bankReconciliationItem.create({
@@ -282,9 +332,16 @@ export async function matchReconciliationLine(reconciliationId: number, lineId: 
 
   revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[matchReconciliationLine]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function completeReconciliation(reconciliationId: number) {
+  try {
   await requirePermission("edit_journals")
 
   await prisma.bankReconciliation.update({
@@ -294,11 +351,18 @@ export async function completeReconciliation(reconciliationId: number) {
 
   revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[completeReconciliation]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== BUDGET ACTIONS ====================
 
 export async function createBudget(formData: FormData) {
+  try {
   const user = await requirePermission("create_budgets")
 
   const budget = await prisma.budget.create({
@@ -315,11 +379,18 @@ export async function createBudget(formData: FormData) {
 
   revalidatePath("/keuangan/anggaran")
   return { success: true, id: budget.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createBudget]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== COST CENTER ACTIONS ====================
 
 export async function createCostCenter(formData: FormData) {
+  try {
   await requirePermission("create_cost_centers")
 
   const costCenter = await prisma.costCenter.create({
@@ -333,9 +404,16 @@ export async function createCostCenter(formData: FormData) {
 
   revalidatePath("/keuangan/pusat-biaya")
   return { success: true, id: costCenter.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createCostCenter]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateCostCenter(id: number, formData: FormData) {
+  try {
   await requirePermission("edit_cost_centers")
 
   await prisma.costCenter.update({
@@ -350,11 +428,18 @@ export async function updateCostCenter(id: number, formData: FormData) {
 
   revalidatePath("/keuangan/pusat-biaya")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateCostCenter]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteJournal(id: number) {
+  try {
   await requirePermission("delete_journals")
 
   const journal = await prisma.journal.findUniqueOrThrow({ where: { id } })
@@ -366,9 +451,16 @@ export async function deleteJournal(id: number) {
 
   revalidatePath("/keuangan/jurnal")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteJournal]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteExpense(id: number) {
+  try {
   await requirePermission("delete_expenses")
 
   const expense = await prisma.expense.findUniqueOrThrow({ where: { id } })
@@ -380,46 +472,81 @@ export async function deleteExpense(id: number) {
 
   revalidatePath("/keuangan/pengeluaran")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteExpense]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deletePettyCash(id: number) {
+  try {
   await requirePermission("delete_petty_cash")
 
   await prisma.pettyCash.delete({ where: { id } })
 
   revalidatePath("/keuangan/kas-kecil")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deletePettyCash]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteBudget(id: number) {
+  try {
   await requirePermission("delete_budgets")
 
   await prisma.budget.delete({ where: { id } })
 
   revalidatePath("/keuangan/anggaran")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteBudget]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteCostCenter(id: number) {
+  try {
   await requirePermission("delete_cost_centers")
 
   await prisma.costCenter.delete({ where: { id } })
 
   revalidatePath("/keuangan/pusat-biaya")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteCostCenter]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteStatisticalKeyFigure(id: number) {
+  try {
   await requirePermission("delete_accounts")
 
   await prisma.statisticalKeyFigure.delete({ where: { id } })
 
   revalidatePath("/keuangan/angka-kunci-statistik")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteStatisticalKeyFigure]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updateJournal(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_journals")
@@ -448,9 +575,16 @@ export async function updateJournal(id: number, formData: FormData) {
 
   revalidatePath("/keuangan/jurnal")
   return { success: true, id: journal.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateJournal]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateExpense(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_expenses")
@@ -491,9 +625,16 @@ export async function updateExpense(id: number, formData: FormData) {
 
   revalidatePath("/keuangan/pengeluaran")
   return { success: true, id: expense.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateExpense]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updatePettyCash(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_petty_cash")
@@ -537,9 +678,16 @@ export async function updatePettyCash(id: number, formData: FormData) {
 
   revalidatePath("/keuangan/kas-kecil")
   return { success: true, id: pettyCash.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updatePettyCash]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateBudget(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_budgets")
@@ -559,4 +707,10 @@ export async function updateBudget(id: number, formData: FormData) {
 
   revalidatePath("/keuangan/anggaran")
   return { success: true, id: budget.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateBudget]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }

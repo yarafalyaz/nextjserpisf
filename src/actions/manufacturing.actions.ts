@@ -1,6 +1,6 @@
 "use server"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -9,6 +9,7 @@ import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/l
 // ==================== PRODUCT (BOM) ACTIONS ====================
 
 export async function createProduct(formData: FormData) {
+  try {
   await requirePermission("create_products")
 
   const name = formData.get("name") as string
@@ -47,9 +48,16 @@ export async function createProduct(formData: FormData) {
 
   revalidatePath("/produksi/products")
   return { success: true, id: product.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createProduct]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function updateProduct(id: number, formData: FormData) {
+  try {
   await requirePermission("edit_products")
 
   const name = formData.get("name") as string
@@ -86,11 +94,18 @@ export async function updateProduct(id: number, formData: FormData) {
 
   revalidatePath("/produksi/products")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateProduct]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== PRODUCTION ORDER ACTIONS ====================
 
 export async function createProductionOrder(formData: FormData) {
+  try {
   const user = await requirePermission("create_production_orders")
 
   const documentNo = await generateDocumentNumber("MO")
@@ -128,20 +143,34 @@ export async function createProductionOrder(formData: FormData) {
 
   revalidatePath("/produksi/production-orders")
   return { success: true, id: productionOrder.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[createProductionOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteProduct(id: number) {
+  try {
   await requirePermission("delete_products")
 
   await prisma.product.delete({ where: { id } })
 
   revalidatePath("/produksi/products")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteProduct]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteWorkOrder(id: number) {
+  try {
   await requirePermission("delete_work_orders")
 
   const wo = await prisma.workOrder.findUniqueOrThrow({ where: { id } })
@@ -153,9 +182,16 @@ export async function deleteWorkOrder(id: number) {
 
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteWorkOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 export async function deleteProductionOrder(id: number) {
+  try {
   await requirePermission("delete_production_orders")
 
   const po = await prisma.productionOrder.findUniqueOrThrow({ where: { id } })
@@ -167,10 +203,17 @@ export async function deleteProductionOrder(id: number) {
 
   revalidatePath("/produksi/production-orders")
   return { success: true }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[deleteProductionOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
 
 
 export async function updateProductionOrder(id: number, formData: FormData) {
+  try {
   "use server"
 
   const user = await requirePermission("create_production_orders")
@@ -222,4 +265,10 @@ export async function updateProductionOrder(id: number, formData: FormData) {
 
   revalidatePath("/produksi/production-orders")
   return { success: true, id: productionOrder.id }
+
+  } catch (e: any) {
+    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
+    console.error("[updateProductionOrder]", e?.message || e)
+    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  }
 }
