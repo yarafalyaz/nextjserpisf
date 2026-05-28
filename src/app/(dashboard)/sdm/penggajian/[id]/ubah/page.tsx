@@ -43,6 +43,24 @@ export default async function EditPayrollPage({
     )
   }
 
+  const plainPayroll = {
+    ...payroll,
+    baseSalary: Number(payroll.baseSalary),
+    allowances: Number(payroll.allowances),
+    deductions: Number(payroll.deductions),
+    overtimeTotal: Number(payroll.overtimeTotal),
+    appreciationTotal: Number(payroll.appreciationTotal),
+    loanDeduction: Number(payroll.loanDeduction),
+    lateDeduction: Number(payroll.lateDeduction),
+    netSalary: Number(payroll.netSalary),
+    totalAmount: Number(payroll.totalAmount),
+    startDate: payroll.startDate.toISOString(),
+    endDate: payroll.endDate.toISOString(),
+    paymentDate: payroll.paymentDate ? payroll.paymentDate.toISOString() : null,
+    createdAt: payroll.createdAt.toISOString(),
+    updatedAt: payroll.updatedAt.toISOString(),
+  }
+
   const employees = await prisma.employee.findMany({
     where: { isActive: true, deletedAt: null },
     select: { id: true, name: true }
@@ -61,7 +79,7 @@ export default async function EditPayrollPage({
         ]}
       />
 
-      <PayrollForm employees={employees} initialData={payroll} />
+      <PayrollForm employees={employees} initialData={plainPayroll} />
     </div>
   )
 }
