@@ -52,34 +52,34 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   useEffect(() => {
     fetch("/api/address?tipe=provinces")
       .then(res => res.json())
-      .then(data => setProvinces(data))
+      .then(data => setProvinces(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [])
 
   // Load cities
   useEffect(() => {
     if (!provinceCode) return
-    fetch(`/api/address?tipe=regencies&parentCode=kodeInduk=${provinceCode}`)
+    fetch(`/api/address?tipe=regencies&kodeInduk=${provinceCode}`)
       .then(res => res.json())
-      .then(data => setCities(data))
+      .then(data => setCities(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [provinceCode])
 
   // Load districts
   useEffect(() => {
     if (!cityCode) return
-    fetch(`/api/address?tipe=districts&parentCode=kodeInduk=${cityCode}`)
+    fetch(`/api/address?tipe=districts&kodeInduk=${cityCode}`)
       .then(res => res.json())
-      .then(data => setDistricts(data))
+      .then(data => setDistricts(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [cityCode])
 
   // Load villages
   useEffect(() => {
     if (!districtCode) return
-    fetch(`/api/address?tipe=villages&parentCode=kodeInduk=${districtCode}`)
+    fetch(`/api/address?tipe=villages&kodeInduk=${districtCode}`)
       .then(res => res.json())
-      .then(data => setVillages(data))
+      .then(data => setVillages(Array.isArray(data) ? data : []))
       .catch(() => {})
   }, [districtCode])
 
