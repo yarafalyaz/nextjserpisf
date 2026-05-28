@@ -9,11 +9,21 @@ interface NotificationData {
   lowStockCount: number
   overdueInvoiceCount: number
   pendingApprovalCount: number
+  lateAttendanceCount: number
+  absentEmployeeCount: number
   recentActivities: {
     id: number
     action: string
     modelType: string
     description: string | null
+    createdAt: string
+  }[]
+  latestNotifications: {
+    id: number
+    title: string
+    body: string
+    type: string
+    readAt: string | null
     createdAt: string
   }[]
 }
@@ -69,6 +79,14 @@ export function NotificationsWidget() {
       color: "text-info",
       bg: "bg-info/10",
     },
+    {
+      icon: Clock,
+      label: "Telat Absen",
+      count: data.lateAttendanceCount,
+      href: "/hrm/absensi",
+      color: "text-warning",
+      bg: "bg-warning/10",
+    },
   ]
 
   return (
@@ -79,7 +97,7 @@ export function NotificationsWidget() {
       </div>
 
       {/* Alert Counts */}
-      <div className="grid grid-cols-3 divide-x divide-default">
+      <div className="grid grid-cols-4 divide-x divide-default">
         {alerts.map((alert) => (
           <a
             key={alert.label}
@@ -96,6 +114,35 @@ export function NotificationsWidget() {
           </a>
         ))}
       </div>
+
+      {/* Latest Notifications */}
+      {data.latestNotifications && data.latestNotifications.length > 0 && (
+        <div className="border-t border-default">
+          <div className="px-5 py-3 flex items-center gap-1.5">
+            <Bell size={13} className="text-muted" />
+            <span className="text-xs font-semibold text-muted uppercase tracking-wide">Notifikasi Terbaru</span>
+          </div>
+          <div className="divide-y divide-default">
+            {data.latestNotifications.slice(0, 3).map((notif) => (
+              <div key={notif.id} className={`flex items-start gap-3 px-5 py-3 ${!notif.readAt ? "bg-primary/5" : ""}`}>
+                <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                  notif.type === "danger" ? "bg-danger" :
+                  notif.type === "warning" ? "bg-warning" :
+                  notif.type === "success" ? "bg-success" :
+                  "bg-info"
+                }`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground font-medium truncate">{notif.title}</p>
+                  <p className="text-[0.6875rem] text-muted mt-0.5 truncate">{notif.body}</p>
+                  <p className="text-[0.6875rem] text-muted mt-0.5">
+                    {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: idLocale })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="border-t border-default">

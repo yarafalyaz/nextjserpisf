@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { notificationService } from "@/lib/services/notification.service";
 
 /**
  * Down Payment Hook - Observer pattern replacement.
@@ -31,6 +32,8 @@ export async function onDownPaymentConfirmed(
   dpId: number,
   userId?: number
 ): Promise<void> {
+  const readyDocuments: Array<{ type: "WorkOrder" | "SalesOrder" | "SalesInvoice"; documentNo: string; context: string }> = []
+
   await prisma.$transaction(async (tx) => {
     const dp = await tx.downPayment.findUniqueOrThrow({
       where: { id: dpId },
@@ -321,5 +324,15 @@ export async function onDownPaymentConfirmed(
       where: { id: quotation.id },
       data: { status: "converted" },
     });
+
+    readyDocuments.push(
+      { type: "WorkOrder", documentNo: workOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
+      { type: "SalesOrder", documentNo: salesOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
+      { type: "SalesInvoice", documentNo: invoice.documentNo, context: `Dari DP ${dp.documentNo}` },
+    );
   });
+
+  for (const doc of readyDocuments) {
+    await notificationService.notifyDocumentReady(doc.type, doc.documentNo, doc.context)
+  }
 }
