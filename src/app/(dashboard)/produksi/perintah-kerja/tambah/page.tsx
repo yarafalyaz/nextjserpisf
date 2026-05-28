@@ -32,8 +32,8 @@ export default async function CreateWorkOrderPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Manufacturing", href: "/manufacturing" },
-  { label: "Work Orders", href: "/manufacturing/work-orders" },
+  { label: "Manufacturing", href: "/produksi" },
+  { label: "Work Orders", href: "/produksi/perintah-kerja" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -43,7 +43,7 @@ export default async function DepartmentsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama atau kode..." action="/master/departments" />
+          <AppSearchField placeholder="Cari nama atau kode..." action="/master/departemen" />
         </div>
 
         <DepartmentTable data={tableData} />

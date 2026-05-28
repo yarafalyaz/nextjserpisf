@@ -19,7 +19,7 @@ export function CurrencyEditForm({ currency }: CurrencyEditFormProps) {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await updateCurrency(currency.id, formData)
-      router.push("/master/currencies")
+      router.push("/master/mata-uang")
       router.refresh()
     })
   }

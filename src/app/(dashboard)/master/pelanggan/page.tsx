@@ -47,7 +47,7 @@ export default async function CustomersPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama, kode, atau telepon..." action="/master/customers" />
+          <AppSearchField placeholder="Cari nama, kode, atau telepon..." action="/master/pelanggan" />
         </div>
 
         <CustomerTable data={tableData} />

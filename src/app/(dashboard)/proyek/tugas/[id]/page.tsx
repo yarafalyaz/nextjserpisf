@@ -35,15 +35,15 @@ export default async function TaskDetailPage({
         title={`Tugas: ${task.name}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Projects", href: "/projects" },
-          { label: "Tasks", href: "/projects/tasks" },
+          { label: "Projects", href: "/proyek" },
+          { label: "Tasks", href: "/proyek/tugas" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={task.status} />}
         actions={
           <>
             <Button href={`/projects/tasks/${task.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
-            <BackButton href="/projects/tasks" />
+            <BackButton href="/proyek/tugas" />
           </>
         }
       />

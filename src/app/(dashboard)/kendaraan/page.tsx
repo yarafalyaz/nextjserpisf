@@ -46,7 +46,7 @@ export default async function VehiclesPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Semua Kendaraan</h1>
         <Link
-          href="/vehicles/create"
+          href="/kendaraan/tambah"
           className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
         >
           + Tambah Kendaraan
@@ -55,7 +55,7 @@ export default async function VehiclesPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari plat nomor, warna, atau varian..." action="/vehicles" />
+          <AppSearchField placeholder="Cari plat nomor, warna, atau varian..." action="/kendaraan" />
         </div>
 
         <VehicleTable data={tableData} />

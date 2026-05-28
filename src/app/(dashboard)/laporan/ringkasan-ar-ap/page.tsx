@@ -62,7 +62,7 @@ export default async function ArApSummaryPage() {
       <PrintHeader title="Ringkasan Piutang & Hutang" period={period} />
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "AR/AP Summary" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

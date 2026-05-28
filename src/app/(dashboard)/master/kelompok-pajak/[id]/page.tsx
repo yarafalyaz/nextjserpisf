@@ -22,8 +22,8 @@ export default async function DetailPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Master Data", href: "/master/tax-groups" },
-        { label: "Tax Group", href: "/master/tax-groups" },
+        { label: "Master Data", href: "/master/kelompok-pajak" },
+        { label: "Tax Group", href: "/master/kelompok-pajak" },
         { label: "Detail" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

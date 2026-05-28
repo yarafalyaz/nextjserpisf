@@ -25,8 +25,8 @@ export default async function CreateRolePage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/settings" },
-        { label: "Roles", href: "/settings/roles" },
+        { label: "Settings", href: "/pengaturan" },
+        { label: "Roles", href: "/pengaturan/peran" },
         { label: "Tambah Role" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -73,7 +73,7 @@ export default async function CreateRolePage() {
           <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
             Simpan Role
           </button>
-          <Link href="/settings/roles" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all hover:bg-surface-secondary">
+          <Link href="/pengaturan/peran" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all hover:bg-surface-secondary">
             Batal
           </Link>
         </div>

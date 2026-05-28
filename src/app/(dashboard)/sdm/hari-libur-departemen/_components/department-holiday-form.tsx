@@ -41,7 +41,7 @@ export function DepartmentHolidayForm({ departments, holiday }: DepartmentHolida
       try {
         holiday?.id ? await updateDepartmentHoliday(formData) : await createDepartmentHoliday(formData)
         showSuccess(holiday?.id ? "Hari libur departemen berhasil diupdate" : "Hari libur departemen berhasil ditambahkan")
-        router.push("/hrm/department-holidays")
+        router.push("/sdm/hari-libur-departemen")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

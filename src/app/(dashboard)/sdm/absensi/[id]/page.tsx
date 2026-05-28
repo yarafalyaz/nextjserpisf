@@ -65,8 +65,8 @@ export default async function AttendanceDetailPage({
         title="Detail Absensi"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Absensi", href: "/hrm/attendance" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Absensi", href: "/sdm/absensi" },
           { label: "Detail" },
         ]}
         badge={
@@ -74,7 +74,7 @@ export default async function AttendanceDetailPage({
             {attendance.status}
           </Chip>
         }
-        actions={<BackButton href="/hrm/attendance" />}
+        actions={<BackButton href="/sdm/absensi" />}
       />
 
       <DetailCard title="Informasi Absensi">

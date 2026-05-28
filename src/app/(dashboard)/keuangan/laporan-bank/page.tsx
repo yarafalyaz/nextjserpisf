@@ -34,7 +34,7 @@ export default async function BankStatementsPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/finance" },
+  { label: "Finance", href: "/keuangan" },
   { label: "Bank Statements" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

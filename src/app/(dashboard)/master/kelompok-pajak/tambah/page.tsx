@@ -12,7 +12,7 @@ export default async function CreateTaxGroupPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Tax Groups", href: "/master/tax-groups" },
+  { label: "Tax Groups", href: "/master/kelompok-pajak" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -64,7 +64,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
         formData.append("notes", notesValue)
         adjustment?.id ? await updateStockAdjustment(adjustment.id, formData) : await createStockAdjustment(formData)
         showSuccess(adjustment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/inventory/adjustments")
+        router.push("/inventaris/penyesuaian")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

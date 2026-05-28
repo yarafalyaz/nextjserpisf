@@ -16,7 +16,7 @@ export async function createVehicleBrand(formData: FormData) {
     },
   })
 
-  revalidatePath("/vehicles/brands")
+  revalidatePath("/kendaraan/merek")
   return { success: true, id: brand.id }
 }
 
@@ -32,7 +32,7 @@ export async function createVehicleModel(formData: FormData) {
     },
   })
 
-  revalidatePath("/vehicles/models")
+  revalidatePath("/kendaraan/model")
   return { success: true, id: model.id }
 }
 
@@ -80,7 +80,7 @@ export async function createVehicle(formData: FormData) {
     })
   }
 
-  revalidatePath("/vehicles")
+  revalidatePath("/kendaraan")
   return { success: true, id: vehicle.id }
 }
 
@@ -91,7 +91,7 @@ export async function deleteVehicleBrand(id: number) {
 
   await prisma.vehicleBrand.delete({ where: { id } })
 
-  revalidatePath("/vehicles/brands")
+  revalidatePath("/kendaraan/merek")
   return { success: true }
 }
 
@@ -100,7 +100,7 @@ export async function deleteVehicleModel(id: number) {
 
   await prisma.vehicleModel.delete({ where: { id } })
 
-  revalidatePath("/vehicles/models")
+  revalidatePath("/kendaraan/model")
   return { success: true }
 }
 
@@ -116,7 +116,7 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/vehicles/brands")
+  revalidatePath("/kendaraan/merek")
   return { success: true, id: brand.id }
 }
 
@@ -133,7 +133,7 @@ export async function updateVehicleModel(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/vehicles/models")
+  revalidatePath("/kendaraan/model")
   return { success: true, id: model.id }
 }
 export async function updateVehicle(id: number, formData: FormData) {
@@ -162,7 +162,7 @@ export async function updateVehicle(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/vehicles")
+  revalidatePath("/kendaraan")
   return { success: true }
 }
 // Vehicle delete
@@ -170,7 +170,7 @@ export async function updateVehicle(id: number, formData: FormData) {
 export async function deleteVehicle(id: number) {
   "use server"
   await prisma.vehicle.delete({ where: { id } })
-  revalidatePath("/vehicles")
+  revalidatePath("/kendaraan")
   return { success: true }
 }
 

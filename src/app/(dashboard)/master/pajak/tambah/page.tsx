@@ -17,7 +17,7 @@ export default function CreateTaxPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createTax(formData)
-      router.push("/master/taxes")
+      router.push("/master/pajak")
       router.refresh()
     })
   }
@@ -27,7 +27,7 @@ export default function CreateTaxPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Taxes", href: "/master/taxes" },
+  { label: "Taxes", href: "/master/pajak" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

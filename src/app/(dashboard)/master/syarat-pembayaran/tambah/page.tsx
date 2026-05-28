@@ -17,7 +17,7 @@ export default function CreatePaymentTermPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createPaymentTerm(formData)
-      router.push("/master/payment-terms")
+      router.push("/master/syarat-pembayaran")
       router.refresh()
     })
   }
@@ -27,7 +27,7 @@ export default function CreatePaymentTermPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Termin Pembayaran", href: "/master/payment-terms" },
+  { label: "Termin Pembayaran", href: "/master/syarat-pembayaran" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

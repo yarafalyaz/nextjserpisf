@@ -42,7 +42,7 @@ export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFor
         const formData = new FormData(e.currentTarget)
         schedule?.id ? await updateWorkSchedule(schedule.id, formData) : await createWorkSchedule(formData)
         showSuccess(schedule?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/hrm/work-schedules")
+        router.push("/sdm/jadwal-kerja")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

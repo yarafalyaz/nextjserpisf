@@ -24,7 +24,7 @@ export function EditDepartmentForm({ department }: EditDepartmentFormProps) {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await updateDepartment(department.id, formData)
-      router.push("/master/departments")
+      router.push("/master/departemen")
       router.refresh()
     })
   }

@@ -11,8 +11,8 @@ export default async function CreateCostCenterPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/finance" },
-  { label: "Cost Centers", href: "/finance/cost-centers" },
+  { label: "Finance", href: "/keuangan" },
+  { label: "Cost Centers", href: "/keuangan/pusat-biaya" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

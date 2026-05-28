@@ -921,7 +921,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </Button>
         <Button
           type="button"
-          onPress={() => router.push("/settings")}
+          onPress={() => router.push("/pengaturan")}
           className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"
         >
           Batal

@@ -19,7 +19,7 @@ export default function CreateBrandPage() {
       try {
         await createBrand(formData)
         showSuccess("Brand berhasil ditambahkan")
-        router.push("/master/brands")
+        router.push("/master/merek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -32,7 +32,7 @@ export default function CreateBrandPage() {
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
         { label: "Master Data", href: "/master" },
-        { label: "Brands", href: "/master/brands" },
+        { label: "Brands", href: "/master/merek" },
         { label: "Create" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

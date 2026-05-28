@@ -34,8 +34,8 @@ export default async function SalesReturnDetailPage({
         title={`Retur Penjualan ${salesReturn.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/sales" },
-          { label: "Returns", href: "/sales/returns" },
+          { label: "Sales", href: "/penjualan" },
+          { label: "Returns", href: "/penjualan/retur" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={salesReturn.status} />}
@@ -44,7 +44,7 @@ export default async function SalesReturnDetailPage({
             <Button href={`/sales/returns/${salesReturn.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
-            <BackButton href="/sales/returns" />
+            <BackButton href="/penjualan/retur" />
           </>
         }
       />

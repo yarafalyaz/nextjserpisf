@@ -27,7 +27,7 @@ export function VehicleForm({ brands, models, customers, vehicle }: VehicleFormP
         const result = vehicle?.id ? await updateVehicle(vehicle.id, formData) : await createVehicle(formData)
         if (result.success) {
           showSuccess(vehicle?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-          router.push("/vehicles")
+          router.push("/kendaraan")
           router.refresh()
         }
       } catch (error) {

@@ -90,7 +90,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
           await createEmployee(formData)
         }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-        router.push("/master/employees")
+        router.push("/master/karyawan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

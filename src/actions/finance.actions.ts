@@ -30,7 +30,7 @@ export async function createBankStatement(formData: FormData) {
     },
   })
 
-  revalidatePath("/finance/bank-statements")
+  revalidatePath("/keuangan/laporan-bank")
   return { success: true, id: bankStatement.id }
 }
 
@@ -86,7 +86,7 @@ export async function createJournal(formData: FormData) {
     }
   }
 
-  revalidatePath("/finance/journals")
+  revalidatePath("/keuangan/jurnal")
   return { success: true, id: journal.id }
 }
 
@@ -119,7 +119,7 @@ export async function postJournal(journalId: number) {
     },
   })
 
-  revalidatePath("/finance/journals")
+  revalidatePath("/keuangan/jurnal")
   return { success: true }
 }
 
@@ -161,7 +161,7 @@ export async function createExpense(formData: FormData) {
     }
   }
 
-  revalidatePath("/finance/expenses")
+  revalidatePath("/keuangan/pengeluaran")
   return { success: true, id: expense.id }
 }
 
@@ -187,8 +187,8 @@ export async function approveExpense(expenseId: number) {
   // Sync to PettyCash if paid from petty cash account
   await onExpenseApprovedSyncPettyCash(expenseId)
 
-  revalidatePath("/finance/expenses")
-  revalidatePath("/finance/petty-cash")
+  revalidatePath("/keuangan/pengeluaran")
+  revalidatePath("/keuangan/kas-kecil")
   return { success: true }
 }
 
@@ -238,7 +238,7 @@ export async function createPettyCash(formData: FormData) {
     }
   }
 
-  revalidatePath("/finance/petty-cash")
+  revalidatePath("/keuangan/kas-kecil")
   return { success: true, id: pettyCash.id }
 }
 
@@ -264,7 +264,7 @@ export async function createBankReconciliation(formData: FormData) {
     },
   })
 
-  revalidatePath("/finance/bank-reconciliation")
+  revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true, id: reconciliation.id }
 }
 
@@ -280,7 +280,7 @@ export async function matchReconciliationLine(reconciliationId: number, lineId: 
     },
   })
 
-  revalidatePath("/finance/bank-reconciliation")
+  revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true }
 }
 
@@ -292,7 +292,7 @@ export async function completeReconciliation(reconciliationId: number) {
     data: { status: "completed" },
   })
 
-  revalidatePath("/finance/bank-reconciliation")
+  revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true }
 }
 
@@ -313,7 +313,7 @@ export async function createBudget(formData: FormData) {
     },
   })
 
-  revalidatePath("/finance/budgets")
+  revalidatePath("/keuangan/anggaran")
   return { success: true, id: budget.id }
 }
 
@@ -331,7 +331,7 @@ export async function createCostCenter(formData: FormData) {
     },
   })
 
-  revalidatePath("/finance/cost-centers")
+  revalidatePath("/keuangan/pusat-biaya")
   return { success: true, id: costCenter.id }
 }
 
@@ -348,7 +348,7 @@ export async function updateCostCenter(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/finance/cost-centers")
+  revalidatePath("/keuangan/pusat-biaya")
   return { success: true }
 }
 
@@ -364,7 +364,7 @@ export async function deleteJournal(id: number) {
 
   await prisma.journal.delete({ where: { id } })
 
-  revalidatePath("/finance/journals")
+  revalidatePath("/keuangan/jurnal")
   return { success: true }
 }
 
@@ -378,7 +378,7 @@ export async function deleteExpense(id: number) {
 
   await prisma.expense.delete({ where: { id } })
 
-  revalidatePath("/finance/expenses")
+  revalidatePath("/keuangan/pengeluaran")
   return { success: true }
 }
 
@@ -387,7 +387,7 @@ export async function deletePettyCash(id: number) {
 
   await prisma.pettyCash.delete({ where: { id } })
 
-  revalidatePath("/finance/petty-cash")
+  revalidatePath("/keuangan/kas-kecil")
   return { success: true }
 }
 
@@ -396,7 +396,7 @@ export async function deleteBudget(id: number) {
 
   await prisma.budget.delete({ where: { id } })
 
-  revalidatePath("/finance/budgets")
+  revalidatePath("/keuangan/anggaran")
   return { success: true }
 }
 
@@ -405,7 +405,7 @@ export async function deleteCostCenter(id: number) {
 
   await prisma.costCenter.delete({ where: { id } })
 
-  revalidatePath("/finance/cost-centers")
+  revalidatePath("/keuangan/pusat-biaya")
   return { success: true }
 }
 
@@ -414,7 +414,7 @@ export async function deleteStatisticalKeyFigure(id: number) {
 
   await prisma.statisticalKeyFigure.delete({ where: { id } })
 
-  revalidatePath("/finance/statistical-key-figures")
+  revalidatePath("/keuangan/angka-kunci-statistik")
   return { success: true }
 }
 
@@ -446,7 +446,7 @@ export async function updateJournal(id: number, formData: FormData) {
     }
   }
 
-  revalidatePath("/finance/journals")
+  revalidatePath("/keuangan/jurnal")
   return { success: true, id: journal.id }
 }
 
@@ -489,7 +489,7 @@ export async function updateExpense(id: number, formData: FormData) {
     }
   }
 
-  revalidatePath("/finance/expenses")
+  revalidatePath("/keuangan/pengeluaran")
   return { success: true, id: expense.id }
 }
 
@@ -535,7 +535,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
     }
   }
 
-  revalidatePath("/finance/petty-cash")
+  revalidatePath("/keuangan/kas-kecil")
   return { success: true, id: pettyCash.id }
 }
 
@@ -557,6 +557,6 @@ export async function updateBudget(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/finance/budgets")
+  revalidatePath("/keuangan/anggaran")
   return { success: true, id: budget.id }
 }

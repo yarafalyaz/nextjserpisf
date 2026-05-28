@@ -74,7 +74,7 @@ export default async function TaxReportPage({
       <PrintHeader title="Laporan Pajak (PPN)" period={period} />
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "Tax Report" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

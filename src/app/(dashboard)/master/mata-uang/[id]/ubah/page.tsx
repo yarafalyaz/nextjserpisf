@@ -20,7 +20,7 @@ export default async function EditCurrencyPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Currencies", href: "/master/currencies" },
+  { label: "Currencies", href: "/master/mata-uang" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

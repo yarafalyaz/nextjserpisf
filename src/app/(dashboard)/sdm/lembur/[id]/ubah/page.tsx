@@ -29,7 +29,7 @@ export default async function EditPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "hrm", href: "/hrm/overtime" },
+  { label: "hrm", href: "/sdm/lembur" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -84,7 +84,7 @@ export default async function GeneralLedgerPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "General Ledger" },
       ]} />
 

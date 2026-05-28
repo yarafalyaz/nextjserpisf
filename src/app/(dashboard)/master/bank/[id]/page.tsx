@@ -28,7 +28,7 @@ export default async function BankDetailPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Banks", href: "/master/banks" },
+  { label: "Banks", href: "/master/bank" },
   { label: "Detail" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -36,7 +36,7 @@ export default async function BankDetailPage({
         <div className="flex gap-2">
           <Link href={`/master/banks/${id}/edit`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Edit</Link>
           <DeleteButton id={bank.id} action={deleteBank} />
-          <Link href="/master/banks" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
+          <Link href="/master/bank" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
       </div>
 

@@ -75,7 +75,7 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
           await createVendor(formData)
         }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-        router.push("/master/vendors")
+        router.push("/master/pemasok")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

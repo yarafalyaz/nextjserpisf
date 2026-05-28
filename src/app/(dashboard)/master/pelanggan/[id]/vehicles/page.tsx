@@ -48,7 +48,7 @@ export default async function CustomerVehiclesPage({
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
         { label: "Master Data", href: "/master" },
-        { label: "Customers", href: "/master/customers" },
+        { label: "Customers", href: "/master/pelanggan" },
         { label: customer.name, href: `/master/customers/${id}` },
         { label: "Kendaraan" },
       ]} />

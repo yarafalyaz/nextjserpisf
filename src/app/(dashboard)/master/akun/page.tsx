@@ -62,7 +62,7 @@ export default async function AccountsPage({
       </div>
 
       <div className="p-3 px-4 flex flex-col gap-3">
-        <AppSearchField placeholder="Cari kode atau nama akun..." action="/master/accounts" />
+        <AppSearchField placeholder="Cari kode atau nama akun..." action="/master/akun" />
       </div>
 
       {Object.entries(typeLabels).map(([type, label]) => (

@@ -36,7 +36,7 @@ export async function createCustomer(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/customers")
+  revalidatePath("/master/pelanggan")
   return { success: true, id: customer.id }
 }
 
@@ -63,7 +63,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/customers")
+  revalidatePath("/master/pelanggan")
   return { success: true }
 }
 
@@ -75,7 +75,7 @@ export async function deleteCustomer(customerId: number) {
     data: { deletedAt: new Date() },
   })
 
-  revalidatePath("/master/customers")
+  revalidatePath("/master/pelanggan")
   return { success: true }
 }
 
@@ -112,7 +112,7 @@ export async function createVendor(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/vendors")
+  revalidatePath("/master/pemasok")
   return { success: true, id: vendor.id }
 }
 
@@ -141,7 +141,7 @@ export async function updateVendor(vendorId: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/vendors")
+  revalidatePath("/master/pemasok")
   return { success: true }
 }
 
@@ -180,7 +180,7 @@ export async function createItem(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/items")
+  revalidatePath("/master/barang")
   return { success: true, id: item.id }
 }
 
@@ -211,7 +211,7 @@ export async function updateItem(itemId: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/items")
+  revalidatePath("/master/barang")
   return { success: true }
 }
 
@@ -234,7 +234,7 @@ export async function createWarehouse(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/warehouses")
+  revalidatePath("/master/gudang")
   return { success: true, id: warehouse.id }
 }
 
@@ -250,7 +250,7 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/warehouses")
+  revalidatePath("/master/gudang")
   return { success: true }
 }
 
@@ -295,7 +295,7 @@ export async function createEmployee(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/employees")
+  revalidatePath("/master/karyawan")
   return { success: true, id: employee.id }
 }
 
@@ -331,7 +331,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/employees")
+  revalidatePath("/master/karyawan")
   return { success: true }
 }
 
@@ -355,7 +355,7 @@ export async function createAccount(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/accounts")
+  revalidatePath("/master/akun")
   return { success: true, id: account.id }
 }
 
@@ -372,7 +372,7 @@ export async function createItemCategory(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/items")
+  revalidatePath("/master/barang")
   return { success: true, id: category.id }
 }
 
@@ -388,7 +388,7 @@ export async function updateItemCategory(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/item-categories")
+  revalidatePath("/master/kategori-barang")
   return { success: true }
 }
 
@@ -410,7 +410,7 @@ export async function createDepartment(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/employees")
+  revalidatePath("/master/karyawan")
   return { success: true, id: department.id }
 }
 
@@ -426,7 +426,7 @@ export async function updateDepartment(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/departments")
+  revalidatePath("/master/departemen")
   return { success: true }
 }
 
@@ -448,7 +448,7 @@ export async function createPosition(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/employees")
+  revalidatePath("/master/karyawan")
   return { success: true, id: position.id }
 }
 
@@ -463,7 +463,7 @@ export async function updatePosition(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/positions")
+  revalidatePath("/master/jabatan")
   return { success: true }
 }
 
@@ -535,7 +535,7 @@ export async function createBank(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/banks")
+  revalidatePath("/master/bank")
   return { success: true, id: bank.id }
 }
 
@@ -551,7 +551,7 @@ export async function updateBank(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/banks")
+  revalidatePath("/master/bank")
   return { success: true }
 }
 
@@ -576,7 +576,7 @@ export async function createTax(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/taxes")
+  revalidatePath("/master/pajak")
   return { success: true, id: tax.id }
 }
 
@@ -599,7 +599,7 @@ export async function updateTax(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/taxes")
+  revalidatePath("/master/pajak")
   return { success: true }
 }
 
@@ -616,7 +616,7 @@ export async function createPriceList(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/price-lists")
+  revalidatePath("/master/daftar-harga")
   return { success: true, id: priceList.id }
 }
 
@@ -640,7 +640,7 @@ export async function createCurrency(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/currencies")
+  revalidatePath("/master/mata-uang")
   return { success: true, id: currency.id }
 }
 
@@ -662,7 +662,7 @@ export async function updateCurrency(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/currencies")
+  revalidatePath("/master/mata-uang")
   return { success: true }
 }
 
@@ -679,7 +679,7 @@ export async function createBarcode(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/barcodes")
+  revalidatePath("/master/barcode")
   return { success: true, id: barcodeEntry.id }
 }
 
@@ -700,7 +700,7 @@ export async function createTaxGroup(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/tax-groups")
+  revalidatePath("/master/kelompok-pajak")
   return { success: true, id: taxGroup.id }
 }
 
@@ -717,7 +717,7 @@ export async function createStatisticalKeyFigure(formData: FormData) {
     },
   })
 
-  revalidatePath("/finance/statistical-key-figures")
+  revalidatePath("/keuangan/angka-kunci-statistik")
   return { success: true, id: figure.id }
 }
 
@@ -735,7 +735,7 @@ export async function createPaymentTerm(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/payment-terms")
+  revalidatePath("/master/syarat-pembayaran")
   return { success: true, id: paymentTerm.id }
 }
 
@@ -751,7 +751,7 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/payment-terms")
+  revalidatePath("/master/syarat-pembayaran")
   return { success: true }
 }
 
@@ -760,7 +760,7 @@ export async function deletePaymentTerm(id: number) {
 
   await prisma.paymentTerm.delete({ where: { id } })
 
-  revalidatePath("/master/payment-terms")
+  revalidatePath("/master/syarat-pembayaran")
   return { success: true }
 }
 
@@ -774,7 +774,7 @@ export async function deleteVendor(id: number) {
     data: { deletedAt: new Date() },
   })
 
-  revalidatePath("/master/vendors")
+  revalidatePath("/master/pemasok")
   return { success: true }
 }
 
@@ -786,7 +786,7 @@ export async function deleteItem(id: number) {
     data: { deletedAt: new Date() },
   })
 
-  revalidatePath("/master/items")
+  revalidatePath("/master/barang")
   return { success: true }
 }
 
@@ -798,7 +798,7 @@ export async function deleteWarehouse(id: number) {
     data: { deletedAt: new Date() },
   })
 
-  revalidatePath("/master/warehouses")
+  revalidatePath("/master/gudang")
   return { success: true }
 }
 
@@ -810,7 +810,7 @@ export async function deleteEmployee(id: number) {
     data: { deletedAt: new Date() },
   })
 
-  revalidatePath("/master/employees")
+  revalidatePath("/master/karyawan")
   return { success: true }
 }
 
@@ -819,7 +819,7 @@ export async function deleteDepartment(id: number) {
 
   await prisma.department.delete({ where: { id } })
 
-  revalidatePath("/master/employees")
+  revalidatePath("/master/karyawan")
   return { success: true }
 }
 
@@ -828,7 +828,7 @@ export async function deletePosition(id: number) {
 
   await prisma.position.delete({ where: { id } })
 
-  revalidatePath("/master/employees")
+  revalidatePath("/master/karyawan")
   return { success: true }
 }
 
@@ -837,7 +837,7 @@ export async function deleteBank(id: number) {
 
   await prisma.bank.delete({ where: { id } })
 
-  revalidatePath("/master/banks")
+  revalidatePath("/master/bank")
   return { success: true }
 }
 
@@ -846,7 +846,7 @@ export async function deleteTax(id: number) {
 
   await prisma.tax.delete({ where: { id } })
 
-  revalidatePath("/master/taxes")
+  revalidatePath("/master/pajak")
   return { success: true }
 }
 
@@ -855,7 +855,7 @@ export async function deleteTaxGroup(id: number) {
 
   await prisma.taxGroup.delete({ where: { id } })
 
-  revalidatePath("/master/tax-groups")
+  revalidatePath("/master/kelompok-pajak")
   return { success: true }
 }
 
@@ -864,7 +864,7 @@ export async function deleteCurrency(id: number) {
 
   await prisma.currency.delete({ where: { id } })
 
-  revalidatePath("/master/currencies")
+  revalidatePath("/master/mata-uang")
   return { success: true }
 }
 
@@ -873,7 +873,7 @@ export async function deletePriceList(id: number) {
 
   await prisma.priceList.delete({ where: { id } })
 
-  revalidatePath("/master/price-lists")
+  revalidatePath("/master/daftar-harga")
   return { success: true }
 }
 
@@ -882,7 +882,7 @@ export async function deleteBarcode(id: number) {
 
   await prisma.barcode.delete({ where: { id } })
 
-  revalidatePath("/master/barcodes")
+  revalidatePath("/master/barcode")
   return { success: true }
 }
 
@@ -891,7 +891,7 @@ export async function deleteItemCategory(id: number) {
 
   await prisma.itemCategory.delete({ where: { id } })
 
-  revalidatePath("/master/items")
+  revalidatePath("/master/barang")
   return { success: true }
 }
 
@@ -917,7 +917,7 @@ export async function updateAccount(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/accounts")
+  revalidatePath("/master/akun")
   return { success: true, id: account.id }
 }
 
@@ -932,7 +932,7 @@ export async function createBrand(formData: FormData) {
     },
   })
 
-  revalidatePath("/master/brands")
+  revalidatePath("/master/merek")
   return { success: true, id: brand.id }
 }
 
@@ -946,7 +946,7 @@ export async function updateBrand(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/master/brands")
+  revalidatePath("/master/merek")
   return { success: true }
 }
 
@@ -955,6 +955,6 @@ export async function deleteBrand(id: number) {
 
   await prisma.brand.delete({ where: { id } })
 
-  revalidatePath("/master/brands")
+  revalidatePath("/master/merek")
   return { success: true }
 }

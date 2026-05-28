@@ -23,7 +23,7 @@ export default async function EditDepartmentPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Departments", href: "/master/departments" },
+  { label: "Departments", href: "/master/departemen" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

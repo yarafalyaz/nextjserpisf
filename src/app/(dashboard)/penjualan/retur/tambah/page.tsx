@@ -30,8 +30,8 @@ export default async function CreateSalesReturnPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/sales" },
-  { label: "Returns", href: "/sales/returns" },
+  { label: "Sales", href: "/penjualan" },
+  { label: "Returns", href: "/penjualan/retur" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

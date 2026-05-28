@@ -46,7 +46,7 @@ export default async function ActivityLogPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Settings", href: "/settings" },
+  { label: "Settings", href: "/pengaturan" },
   { label: "Activity Log" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -56,7 +56,7 @@ export default async function ActivityLogPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
           <div className="flex gap-1.5 flex-wrap">
-            <Link href="/settings/activity-log" className={`filter-chip ${!params.modelType ? "active" : ""}`}>Semua</Link>
+            <Link href="/pengaturan/log-aktivitas" className={`filter-chip ${!params.modelType ? "active" : ""}`}>Semua</Link>
             {modelTypes.map((mt) => (
               <Link key={mt.modelType} href={`/settings/activity-log?modelType=${mt.modelType}`} className={`filter-chip ${params.modelType === mt.modelType ? "active" : ""}`}>
                 {mt.modelType}

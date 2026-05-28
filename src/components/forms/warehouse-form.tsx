@@ -48,7 +48,7 @@ export function WarehouseForm({ warehouse, generatedCode }: WarehouseFormProps) 
           await createWarehouse(formData)
         }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-        router.push("/master/warehouses")
+        router.push("/master/gudang")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

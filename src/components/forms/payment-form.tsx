@@ -54,7 +54,7 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
         payment?.id ? await updateSalesPayment(payment.id, formData) : await createSalesPayment(formData)
         showSuccess(payment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/sales/payments")
+        router.push("/penjualan/pembayaran")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

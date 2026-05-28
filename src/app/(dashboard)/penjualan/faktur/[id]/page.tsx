@@ -51,8 +51,8 @@ export default async function InvoiceDetailPage({
         title={`Invoice ${invoice.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/sales" },
-          { label: "Invoices", href: "/sales/invoices" },
+          { label: "Sales", href: "/penjualan" },
+          { label: "Invoices", href: "/penjualan/faktur" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={invoice.status} />}
@@ -69,7 +69,7 @@ export default async function InvoiceDetailPage({
             )}
             <PrintButton documentType="invoice" documentId={invoice.id} />
             <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
-            <BackButton href="/sales/invoices" />
+            <BackButton href="/penjualan/faktur" />
           </>
         }
       />

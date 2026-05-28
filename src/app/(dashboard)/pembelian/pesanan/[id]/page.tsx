@@ -42,8 +42,8 @@ export default async function PurchaseOrderDetailPage({
         title={`PO ${po.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/purchase" },
-          { label: "Orders", href: "/purchase/orders" },
+          { label: "Purchase", href: "/pembelian" },
+          { label: "Orders", href: "/pembelian/pesanan" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={po.status} />}
@@ -52,7 +52,7 @@ export default async function PurchaseOrderDetailPage({
             <Button href={`/purchase/orders/${po.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={po.id} action={deletePurchaseOrder} />
-            <BackButton href="/purchase/orders" />
+            <BackButton href="/pembelian/pesanan" />
           </>
         }
       />

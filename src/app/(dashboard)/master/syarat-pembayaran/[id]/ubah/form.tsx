@@ -24,7 +24,7 @@ export function EditPaymentTermForm({ paymentTerm }: EditPaymentTermFormProps) {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await updatePaymentTerm(paymentTerm.id, formData)
-      router.push("/master/payment-terms")
+      router.push("/master/syarat-pembayaran")
       router.refresh()
     })
   }

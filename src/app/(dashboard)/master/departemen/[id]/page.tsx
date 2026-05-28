@@ -35,14 +35,14 @@ export default async function DepartmentDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Departments", href: "/master/departments" },
+          { label: "Departments", href: "/master/departemen" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/departments/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={department.id} action={deleteDepartment} />
-            <BackButton href="/master/departments" />
+            <BackButton href="/master/departemen" />
           </>
         }
       />

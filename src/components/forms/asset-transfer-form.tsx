@@ -30,7 +30,7 @@ export function AssetTransferForm({ assets, employees = [], transfer }: AssetTra
         const { createAssetTransfer, updateAssetTransfer } = await import("@/actions/asset.actions")
         transfer?.id ? await updateAssetTransfer(transfer.id, formData) : await createAssetTransfer(formData)
         showSuccess(transfer?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/assets/transfers")
+        router.push("/aset/transfer")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

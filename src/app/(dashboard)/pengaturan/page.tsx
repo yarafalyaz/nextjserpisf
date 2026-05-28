@@ -150,7 +150,7 @@ export default async function SettingsPage() {
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pengaturan Sistem</h1>
-        <Link href="/settings/edit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-all">
+        <Link href="/pengaturan/ubah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-all">
           Edit Settings
         </Link>
       </div>
@@ -328,7 +328,7 @@ export default async function SettingsPage() {
                   </p>
                 </div>
                 <Link
-                  href="/settings/edit"
+                  href="/pengaturan/ubah"
                   className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-primary text-white hover:bg-primary/90 transition-all"
                 >
                   Edit Mapping
@@ -354,9 +354,9 @@ export default async function SettingsPage() {
           </div>
           <div className="p-4 px-5">
             <div className="flex gap-3 flex-wrap">
-              <Link href="/settings/users" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Pengguna & Peran</Link>
-              <Link href="/master/accounts" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Chart of Accounts</Link>
-              <Link href="/master/warehouses" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Gudang</Link>
+              <Link href="/pengaturan/pengguna" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Pengguna & Peran</Link>
+              <Link href="/master/akun" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Chart of Accounts</Link>
+              <Link href="/master/gudang" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">Gudang</Link>
             </div>
           </div>
         </div>

@@ -99,7 +99,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
         const { createVendorPayment, updateVendorPayment } = await import("@/actions/purchase.actions")
         payment?.id ? await updateVendorPayment(payment.id, formData) : await createVendorPayment(formData)
         showSuccess(payment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/purchase/vendor-payments")
+        router.push("/pembelian/pembayaran-vendor")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

@@ -52,7 +52,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
         journal?.id ? await updateJournal(journal.id, formData) : await createJournal(formData)
         showSuccess(journal?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/finance/journals")
+        router.push("/keuangan/jurnal")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

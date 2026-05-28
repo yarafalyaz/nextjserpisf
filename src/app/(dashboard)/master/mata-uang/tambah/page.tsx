@@ -16,7 +16,7 @@ export default function CreateCurrencyPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createCurrency(formData)
-      router.push("/master/currencies")
+      router.push("/master/mata-uang")
       router.refresh()
     })
   }
@@ -26,7 +26,7 @@ export default function CreateCurrencyPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Currencies", href: "/master/currencies" },
+  { label: "Currencies", href: "/master/mata-uang" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -23,7 +23,7 @@ export default async function PaymentTermDetailPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Termin Pembayaran", href: "/master/payment-terms" },
+  { label: "Termin Pembayaran", href: "/master/syarat-pembayaran" },
   { label: paymentTerm.name },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

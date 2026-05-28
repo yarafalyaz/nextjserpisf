@@ -36,14 +36,14 @@ export default async function ItemCategoryDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Item Categories", href: "/master/item-categories" },
+          { label: "Item Categories", href: "/master/kategori-barang" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/item-categories/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={category.id} action={deleteItemCategory} />
-            <BackButton href="/master/item-categories" />
+            <BackButton href="/master/kategori-barang" />
           </>
         }
       />

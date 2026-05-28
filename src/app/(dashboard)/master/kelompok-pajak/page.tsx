@@ -54,7 +54,7 @@ export default async function TaxGroupsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama grup pajak..." action="/master/tax-groups" />
+          <AppSearchField placeholder="Cari nama grup pajak..." action="/master/kelompok-pajak" />
         </div>
 
         <Table>

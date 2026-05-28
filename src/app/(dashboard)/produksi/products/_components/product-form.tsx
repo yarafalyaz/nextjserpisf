@@ -79,7 +79,7 @@ export function ProductForm({
 
     startTransition(async () => {
       await createProduct(formData)
-      router.push("/manufacturing/products")
+      router.push("/produksi/products")
       router.refresh()
     })
   }

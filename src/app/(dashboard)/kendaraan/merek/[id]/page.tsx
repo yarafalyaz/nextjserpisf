@@ -32,15 +32,15 @@ export default async function VehicleBrandDetailPage({
         title={`Merek Kendaraan: ${brand.name}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Vehicles", href: "/vehicles" },
-          { label: "Brands", href: "/vehicles/brands" },
+          { label: "Vehicles", href: "/kendaraan" },
+          { label: "Brands", href: "/kendaraan/merek" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/vehicles/brands/${brand.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={brand.id} action={deleteVehicleBrand} />
-            <BackButton href="/vehicles/brands" />
+            <BackButton href="/kendaraan/merek" />
           </>
         }
       />

@@ -43,14 +43,14 @@ export default async function EmployeeDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Employees", href: "/master/employees" },
+          { label: "Employees", href: "/master/karyawan" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/employees/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={employee.id} action={deleteEmployee} />
-            <BackButton href="/master/employees" />
+            <BackButton href="/master/karyawan" />
           </>
         }
       />

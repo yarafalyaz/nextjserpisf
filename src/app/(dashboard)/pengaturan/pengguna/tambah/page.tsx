@@ -16,8 +16,8 @@ export default async function CreateUserPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/settings" },
-        { label: "Users", href: "/settings/users" },
+        { label: "Settings", href: "/pengaturan" },
+        { label: "Users", href: "/pengaturan/pengguna" },
         { label: "Create" },
       ]} />
       <h1 className="text-2xl font-bold text-foreground">Tambah User Baru</h1>

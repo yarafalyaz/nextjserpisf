@@ -18,7 +18,7 @@ export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string
         const formData = new FormData(e.currentTarget)
         brand?.id ? await updateVehicleBrand(brand.id, formData) : await createVehicleBrand(formData)
         showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/vehicles/brands")
+        router.push("/kendaraan/merek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

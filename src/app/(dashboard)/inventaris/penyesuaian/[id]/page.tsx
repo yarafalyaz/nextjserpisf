@@ -33,8 +33,8 @@ export default async function StockAdjustmentDetailPage({
         title={`Penyesuaian Stok ${adjustment.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Inventory", href: "/inventory" },
-          { label: "Penyesuaian", href: "/inventory/adjustments" },
+          { label: "Inventory", href: "/inventaris" },
+          { label: "Penyesuaian", href: "/inventaris/penyesuaian" },
           { label: adjustment.documentNo },
         ]}
         badge={<StatusChip status={adjustment.status} />}
@@ -42,7 +42,7 @@ export default async function StockAdjustmentDetailPage({
           <>
             <Button href={`/inventory/adjustments/${adjustment.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
-            <BackButton href="/inventory/adjustments" />
+            <BackButton href="/inventaris/penyesuaian" />
           </>
         }
       />

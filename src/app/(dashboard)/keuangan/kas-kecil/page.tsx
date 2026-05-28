@@ -39,18 +39,18 @@ export default async function PettyCashPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Petty Cash</h1>
-        <Link href="/finance/petty-cash/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-pc-btn">
+        <Link href="/keuangan/kas-kecil/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-pc-btn">
           + Buat Transaksi
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari petty cash..." action="/finance/petty-cash" />
+          <AppSearchField placeholder="Cari petty cash..." action="/keuangan/kas-kecil" />
           <div className="flex gap-1.5 flex-wrap">
-            <Link href="/finance/petty-cash" className={`filter-chip ${!params.type ? "active" : ""}`}>Semua</Link>
-            <Link href="/finance/petty-cash?type=IN" className={`filter-chip ${params.type === "IN" ? "active" : ""}`}>Masuk</Link>
-            <Link href="/finance/petty-cash?type=OUT" className={`filter-chip ${params.type === "OUT" ? "active" : ""}`}>Keluar</Link>
+            <Link href="/keuangan/kas-kecil" className={`filter-chip ${!params.type ? "active" : ""}`}>Semua</Link>
+            <Link href="/keuangan/kas-kecil?type=IN" className={`filter-chip ${params.type === "IN" ? "active" : ""}`}>Masuk</Link>
+            <Link href="/keuangan/kas-kecil?type=OUT" className={`filter-chip ${params.type === "OUT" ? "active" : ""}`}>Keluar</Link>
           </div>
         </div>
 

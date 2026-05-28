@@ -46,14 +46,14 @@ export default async function DownPaymentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/sales"},{label:"Uang Muka"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Uang Muka"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Uang Muka</h1>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari customer atau quotation..." action="/sales/down-payments" />
+          <AppSearchField placeholder="Cari customer atau quotation..." action="/penjualan/uang-muka" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "pending", "confirmed", "cancelled"].map((s) => (
               <Link

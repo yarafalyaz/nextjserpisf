@@ -19,7 +19,7 @@ export function TaxEditForm({ tax }: TaxEditFormProps) {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await updateTax(tax.id, formData)
-      router.push("/master/taxes")
+      router.push("/master/pajak")
       router.refresh()
     })
   }

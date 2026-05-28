@@ -16,7 +16,7 @@ export default function CreateStatisticalKeyFigurePage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createStatisticalKeyFigure(formData)
-      router.push("/finance/statistical-key-figures")
+      router.push("/keuangan/angka-kunci-statistik")
       router.refresh()
     })
   }

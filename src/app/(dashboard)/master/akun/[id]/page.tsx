@@ -24,14 +24,14 @@ export default async function DetailPage({
         title="Detail Akun"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Master Data", href: "/master/accounts" },
-          { label: "Akun", href: "/master/accounts" },
+          { label: "Master Data", href: "/master/akun" },
+          { label: "Akun", href: "/master/akun" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/accounts/${data.id}/edit`} variant="primary">Edit</Button>
-            <BackButton href="/master/accounts" />
+            <BackButton href="/master/akun" />
           </>
         }
       />

@@ -36,8 +36,8 @@ export default async function ExpenseDetailPage({
         title={`Pengeluaran ${expense.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/finance" },
-          { label: "Expenses", href: "/finance/expenses" },
+          { label: "Finance", href: "/keuangan" },
+          { label: "Expenses", href: "/keuangan/pengeluaran" },
           { label: expense.documentNo },
         ]}
         badge={<StatusChip status={expense.status} />}
@@ -45,7 +45,7 @@ export default async function ExpenseDetailPage({
           <Button href={`/finance/expenses/${expense.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <PrintButton />
           <DeleteButton id={expense.id} action={deleteExpense} />
-          <BackButton href="/finance/expenses" />
+          <BackButton href="/keuangan/pengeluaran" />
         </>}
       />
 

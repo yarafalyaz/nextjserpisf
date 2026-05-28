@@ -37,7 +37,7 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
           await createAppreciation(formData)
         }
         showSuccess(appreciation?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/hrm/appreciations")
+        router.push("/sdm/apresiasi")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

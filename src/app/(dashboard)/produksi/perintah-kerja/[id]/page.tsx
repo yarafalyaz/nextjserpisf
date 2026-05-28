@@ -40,8 +40,8 @@ export default async function WorkOrderDetailPage({
         title={`Work Order ${wo.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Manufacturing", href: "/manufacturing" },
-          { label: "Work Orders", href: "/manufacturing/work-orders" },
+          { label: "Manufacturing", href: "/produksi" },
+          { label: "Work Orders", href: "/produksi/perintah-kerja" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={wo.status} />}
@@ -53,7 +53,7 @@ export default async function WorkOrderDetailPage({
             )}
             <PrintButton documentType="work-order" documentId={wo.id} />
             <DeleteButton id={wo.id} action={deleteWorkOrder} />
-            <BackButton href="/manufacturing/work-orders" />
+            <BackButton href="/produksi/perintah-kerja" />
           </>
         }
       />

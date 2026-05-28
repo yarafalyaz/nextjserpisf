@@ -24,7 +24,7 @@ export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
         const formData = new FormData(e.currentTarget)
         model?.id ? await updateVehicleModel(model.id, formData) : await createVehicleModel(formData)
         showSuccess(model?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/vehicles/models")
+        router.push("/kendaraan/model")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

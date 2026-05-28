@@ -35,8 +35,8 @@ export default async function EditPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Purchase", href: "/purchase" },
-        { label: "Requests", href: "/purchase/requests" },
+        { label: "Purchase", href: "/pembelian" },
+        { label: "Requests", href: "/pembelian/permintaan" },
         { label: data.documentNo },
         { label: "Edit" },
       ]} />

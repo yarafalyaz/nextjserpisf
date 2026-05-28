@@ -49,14 +49,14 @@ export default async function WorkSchedulesPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Jadwal Kerja</h1>
-        <Link href="/hrm/work-schedules/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-schedule-btn">
+        <Link href="/sdm/jadwal-kerja/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-schedule-btn">
           <Clock size={16} /> Tambah Jadwal
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama jadwal..." action="/hrm/work-schedules" />
+          <AppSearchField placeholder="Cari nama jadwal..." action="/sdm/jadwal-kerja" />
         </div>
 
         <WorkScheduleTable data={data} />

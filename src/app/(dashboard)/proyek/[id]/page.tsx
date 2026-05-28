@@ -72,14 +72,14 @@ export default async function ProjectDetailPage({
         title={`Proyek: ${project.name}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Projects", href: "/projects" },
+          { label: "Projects", href: "/proyek" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={project.status} />}
         actions={
           <>
             <Button href={`/projects/${project.id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
-            <BackButton href="/projects" />
+            <BackButton href="/proyek" />
           </>
         }
       />

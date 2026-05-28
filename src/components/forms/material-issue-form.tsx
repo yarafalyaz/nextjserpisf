@@ -44,7 +44,7 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
         formData.append("items", JSON.stringify(miItems))
         issue?.id ? await updateMaterialIssue(issue.id, formData) : await createMaterialIssue(formData)
         showSuccess(issue?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/inventory/material-issues")
+        router.push("/inventaris/pengeluaran-material")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

@@ -33,7 +33,7 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
         const { createWorkOrder, updateWorkOrder } = await import("@/actions/inventory.actions")
         workOrder?.id ? await updateWorkOrder(workOrder.id, formData) : await createWorkOrder(formData)
         showSuccess(workOrder?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/manufacturing/work-orders")
+        router.push("/produksi/perintah-kerja")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

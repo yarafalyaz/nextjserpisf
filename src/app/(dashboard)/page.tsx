@@ -174,7 +174,7 @@ export default async function DashboardPage() {
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Invoice Terbaru</h2>
-            <Link href="/sales/invoices" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+            <Link href="/penjualan/faktur" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
           </div>
           <div className="p-4 px-5">
             <DetailTable>
@@ -206,7 +206,7 @@ export default async function DashboardPage() {
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground"><AlertTriangle size={16} className="inline mr-1.5" />Stok Menipis</h2>
-            <Link href="/master/items" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+            <Link href="/master/barang" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
           </div>
           <div className="p-4 px-5">
             {data.lowStockItems.length === 0 ? (
@@ -236,7 +236,7 @@ export default async function DashboardPage() {
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Pembayaran Terbaru</h2>
-            <Link href="/sales/payments" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+            <Link href="/penjualan/pembayaran" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
           </div>
           <div className="p-4 px-5">
             <DetailTable>

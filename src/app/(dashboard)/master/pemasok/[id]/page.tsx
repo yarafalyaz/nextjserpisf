@@ -50,13 +50,13 @@ export default async function VendorDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Vendors", href: "/master/vendors" },
+          { label: "Vendors", href: "/master/pemasok" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/vendors/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
-            <BackButton href="/master/vendors" />
+            <BackButton href="/master/pemasok" />
           </>
         }
       />

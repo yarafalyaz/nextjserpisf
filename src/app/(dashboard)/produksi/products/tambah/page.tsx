@@ -15,8 +15,8 @@ export default async function CreateProductPage() {
       <AppBreadcrumbs
         items={[
           { label: "Dashboard", href: "/" },
-          { label: "Manufacturing", href: "/manufacturing" },
-          { label: "Products", href: "/manufacturing/products" },
+          { label: "Manufacturing", href: "/produksi" },
+          { label: "Products", href: "/produksi/products" },
           { label: "Create" },
         ]}
       />

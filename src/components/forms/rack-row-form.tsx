@@ -57,7 +57,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
           await createRackRow(formData)
           showSuccess("Data berhasil ditambahkan")
         }
-        router.push("/inventory/rack-rows")
+        router.push("/inventaris/baris-rak")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -67,8 +67,8 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
 
   const breadcrumbs = [
     { label: "Dashboard", href: "/" },
-    { label: "Inventory", href: "/inventory" },
-    { label: "Baris Rak", href: "/inventory/rack-rows" },
+    { label: "Inventory", href: "/inventaris" },
+    { label: "Baris Rak", href: "/inventaris/baris-rak" },
     { label: rackRow ? "Edit" : "Tambah" },
   ]
 

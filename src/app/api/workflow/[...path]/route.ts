@@ -4,14 +4,14 @@ import { auth } from "@/lib/auth/auth"
 import { revalidatePath } from "next/cache"
 
 const MODULE_MAP: Record<string, { model: string; revalidate: string; permission: string }> = {
-  "penjualan/penawaran": { model: "quotation", revalidate: "/sales/quotations", permission: "approve_quotations" },
-  "penjualan/pesanan": { model: "salesOrder", revalidate: "/sales/orders", permission: "approve_sales_orders" },
-  "penjualan/faktur": { model: "salesInvoice", revalidate: "/sales/invoices", permission: "approve_sales_invoices" },
-  "pembelian/permintaan": { model: "purchaseRequest", revalidate: "/purchase/requests", permission: "approve_purchase_requests" },
-  "pembelian/pesanan": { model: "purchaseOrder", revalidate: "/purchase/orders", permission: "approve_purchase_orders" },
-  "pembelian/tagihan": { model: "vendorBill", revalidate: "/purchase/bills", permission: "approve_vendor_bills" },
-  "sdm/cuti": { model: "leaveRequest", revalidate: "/hrm/leave", permission: "approve_leave_requests" },
-  "sdm/lembur": { model: "overtimeRequest", revalidate: "/hrm/overtime", permission: "approve_overtime_requests" },
+  "penjualan/penawaran": { model: "quotation", revalidate: "/penjualan/penawaran", permission: "approve_quotations" },
+  "penjualan/pesanan": { model: "salesOrder", revalidate: "/penjualan/pesanan", permission: "approve_sales_orders" },
+  "penjualan/faktur": { model: "salesInvoice", revalidate: "/penjualan/faktur", permission: "approve_sales_invoices" },
+  "pembelian/permintaan": { model: "purchaseRequest", revalidate: "/pembelian/permintaan", permission: "approve_purchase_requests" },
+  "pembelian/pesanan": { model: "purchaseOrder", revalidate: "/pembelian/pesanan", permission: "approve_purchase_orders" },
+  "pembelian/tagihan": { model: "vendorBill", revalidate: "/pembelian/tagihan", permission: "approve_vendor_bills" },
+  "sdm/cuti": { model: "leaveRequest", revalidate: "/sdm/cuti", permission: "approve_leave_requests" },
+  "sdm/lembur": { model: "overtimeRequest", revalidate: "/sdm/lembur", permission: "approve_overtime_requests" },
 }
 
 export async function POST(

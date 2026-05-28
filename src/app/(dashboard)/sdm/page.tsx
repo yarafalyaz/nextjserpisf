@@ -5,14 +5,14 @@ import {
 } from "lucide-react"
 
 const hrmModules = [
-  { label: "Attendance", href: "/hrm/attendance", icon: Clock, desc: "Absensi karyawan" },
-  { label: "Leave", href: "/hrm/leave", icon: Palmtree, desc: "Cuti karyawan" },
-  { label: "Overtime", href: "/hrm/overtime", icon: Timer, desc: "Lembur" },
-  { label: "Payroll", href: "/hrm/payroll", icon: Banknote, desc: "Penggajian" },
-  { label: "Work Schedules", href: "/hrm/work-schedules", icon: CalendarDays, desc: "Jadwal kerja" },
-  { label: "Timesheets", href: "/hrm/timesheets", icon: Clock, desc: "Timesheet" },
-  { label: "Loans", href: "/hrm/loans", icon: PiggyBank, desc: "Pinjaman karyawan" },
-  { label: "Holidays", href: "/hrm/holidays", icon: Palmtree, desc: "Hari libur" },
+  { label: "Attendance", href: "/sdm/absensi", icon: Clock, desc: "Absensi karyawan" },
+  { label: "Leave", href: "/sdm/cuti", icon: Palmtree, desc: "Cuti karyawan" },
+  { label: "Overtime", href: "/sdm/lembur", icon: Timer, desc: "Lembur" },
+  { label: "Payroll", href: "/sdm/penggajian", icon: Banknote, desc: "Penggajian" },
+  { label: "Work Schedules", href: "/sdm/jadwal-kerja", icon: CalendarDays, desc: "Jadwal kerja" },
+  { label: "Timesheets", href: "/sdm/lembar-waktu", icon: Clock, desc: "Timesheet" },
+  { label: "Loans", href: "/sdm/pinjaman", icon: PiggyBank, desc: "Pinjaman karyawan" },
+  { label: "Holidays", href: "/sdm/hari-libur", icon: Palmtree, desc: "Hari libur" },
 ]
 
 export default function HrmPage() {

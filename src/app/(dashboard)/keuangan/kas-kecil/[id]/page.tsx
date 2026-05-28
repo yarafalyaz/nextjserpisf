@@ -29,14 +29,14 @@ export default async function PettyCashDetailPage({
         title={`Kas Kecil ${pettyCash.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/finance" },
-          { label: "Petty Cash", href: "/finance/petty-cash" },
+          { label: "Finance", href: "/keuangan" },
+          { label: "Petty Cash", href: "/keuangan/kas-kecil" },
           { label: pettyCash.documentNo },
         ]}
         actions={<>
           <Button href={`/finance/petty-cash/${pettyCash.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={pettyCash.id} action={deletePettyCash} />
-          <BackButton href="/finance/petty-cash" />
+          <BackButton href="/keuangan/kas-kecil" />
         </>}
       />
 

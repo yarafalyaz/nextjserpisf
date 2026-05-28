@@ -24,7 +24,7 @@ export function EditBankForm({ bank }: EditBankFormProps) {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await updateBank(bank.id, formData)
-      router.push("/master/banks")
+      router.push("/master/bank")
       router.refresh()
     })
   }

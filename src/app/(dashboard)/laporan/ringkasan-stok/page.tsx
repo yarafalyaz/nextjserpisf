@@ -98,7 +98,7 @@ export default async function InventorySummaryPage() {
       <PrintHeader title="Ringkasan Persediaan" period={period} />
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "Inventory Summary" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

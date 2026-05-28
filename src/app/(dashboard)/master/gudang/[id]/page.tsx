@@ -41,13 +41,13 @@ export default async function WarehouseDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Warehouses", href: "/master/warehouses" },
+          { label: "Warehouses", href: "/master/gudang" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/warehouses/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
-            <BackButton href="/master/warehouses" />
+            <BackButton href="/master/gudang" />
           </>
         }
       />

@@ -16,7 +16,7 @@ export default function CreateBarcodePage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createBarcode(formData)
-      router.push("/master/barcodes")
+      router.push("/master/barcode")
       router.refresh()
     })
   }
@@ -26,7 +26,7 @@ export default function CreateBarcodePage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Barcodes", href: "/master/barcodes" },
+  { label: "Barcodes", href: "/master/barcode" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

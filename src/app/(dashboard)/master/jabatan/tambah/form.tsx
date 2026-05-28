@@ -26,7 +26,7 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
       } else {
         await createPosition(formData)
       }
-      router.push("/master/positions")
+      router.push("/master/jabatan")
       router.refresh()
     })
   }

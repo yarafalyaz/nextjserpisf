@@ -27,7 +27,7 @@ export function TimesheetForm({ employees, projects, tasks = [], timesheet }: Ti
         const formData = new FormData(e.currentTarget)
         timesheet?.id ? await updateTimesheet(timesheet.id, formData) : await createTimesheet(formData)
         showSuccess(timesheet?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/hrm/timesheets")
+        router.push("/sdm/lembar-waktu")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

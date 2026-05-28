@@ -118,7 +118,7 @@ export default async function BudgetVsActualPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "Budget vs Actual" },
       ]} />
 

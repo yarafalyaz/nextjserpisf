@@ -24,8 +24,8 @@ export default async function CreateBudgetPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/finance" },
-  { label: "Budgets", href: "/finance/budgets" },
+  { label: "Finance", href: "/keuangan" },
+  { label: "Budgets", href: "/keuangan/anggaran" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

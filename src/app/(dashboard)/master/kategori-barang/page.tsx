@@ -39,7 +39,7 @@ export default async function ItemCategoriesPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama kategori..." action="/master/item-categories" />
+          <AppSearchField placeholder="Cari nama kategori..." action="/master/kategori-barang" />
         </div>
 
         <ItemCategoryTable data={tableData} />

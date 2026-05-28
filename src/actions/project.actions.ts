@@ -28,7 +28,7 @@ export async function createProject(formData: FormData) {
     },
   })
 
-  revalidatePath("/projects")
+  revalidatePath("/proyek")
   return { success: true, id: project.id }
 }
 
@@ -49,7 +49,7 @@ export async function updateProject(projectId: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/projects")
+  revalidatePath("/proyek")
   return { success: true }
 }
 
@@ -60,7 +60,7 @@ export async function deleteProject(id: number) {
 
   await prisma.project.delete({ where: { id } })
 
-  revalidatePath("/projects")
+  revalidatePath("/proyek")
   return { success: true }
 }
 
@@ -81,7 +81,7 @@ export async function createTask(formData: FormData) {
     },
   })
 
-  revalidatePath("/projects/tasks")
+  revalidatePath("/proyek/tugas")
   return { success: true, id: task.id }
 }
 
@@ -103,7 +103,7 @@ export async function updateTask(formData: FormData) {
     },
   })
 
-  revalidatePath("/projects/tasks")
+  revalidatePath("/proyek/tugas")
   return { success: true }
 }
 
@@ -112,6 +112,6 @@ export async function deleteTask(id: number) {
 
   await prisma.task.delete({ where: { id } })
 
-  revalidatePath("/projects/tasks")
+  revalidatePath("/proyek/tugas")
   return { success: true }
 }

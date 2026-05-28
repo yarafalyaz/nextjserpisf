@@ -19,7 +19,7 @@ export function ItemCategoryEditForm({ category }: ItemCategoryEditFormProps) {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await updateItemCategory(category.id, formData)
-      router.push("/master/item-categories")
+      router.push("/master/kategori-barang")
       router.refresh()
     })
   }

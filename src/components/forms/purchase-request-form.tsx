@@ -55,7 +55,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
         formData.append("items", JSON.stringify(prItems))
         request?.id ? await updatePurchaseRequest(request.id, formData) : await createPurchaseRequest(formData)
         showSuccess(request?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/purchase/requests")
+        router.push("/pembelian/permintaan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

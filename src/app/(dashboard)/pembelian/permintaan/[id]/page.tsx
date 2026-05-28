@@ -36,8 +36,8 @@ export default async function PurchaseRequestDetailPage({
         title={`Purchase Request ${request.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/purchase" },
-          { label: "Requests", href: "/purchase/requests" },
+          { label: "Purchase", href: "/pembelian" },
+          { label: "Requests", href: "/pembelian/permintaan" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={request.status} />}
@@ -46,7 +46,7 @@ export default async function PurchaseRequestDetailPage({
             <Button href={`/purchase/requests/${request.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={request.id} action={deletePurchaseRequest} />
-            <BackButton href="/purchase/requests" />
+            <BackButton href="/pembelian/permintaan" />
           </>
         }
       />

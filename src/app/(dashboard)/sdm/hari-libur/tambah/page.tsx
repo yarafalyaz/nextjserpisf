@@ -18,7 +18,7 @@ export default function CreateHolidayPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createHoliday(formData)
-      router.push("/hrm/holidays")
+      router.push("/sdm/hari-libur")
       router.refresh()
     })
   }

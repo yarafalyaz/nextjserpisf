@@ -31,7 +31,7 @@ export default async function EditVendorPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Vendors", href: "/master/vendors" },
+  { label: "Vendors", href: "/master/pemasok" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -37,17 +37,17 @@ export default async function MaterialIssuesPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Inventaris",href:"/inventory"},{label:"Pengeluaran Material"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Inventaris",href:"/inventaris"},{label:"Pengeluaran Material"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pengeluaran Material</h1>
-        <Link href="/inventory/material-issues/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-mi-btn">
+        <Link href="/inventaris/pengeluaran-material/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-mi-btn">
           + Buat Material Issue
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen..." action="/inventory/material-issues" />
+          <AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/pengeluaran-material" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "issued"].map((s) => (
               <Link key={s} href={`/inventory/material-issues?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>

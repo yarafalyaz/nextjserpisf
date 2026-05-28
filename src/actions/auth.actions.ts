@@ -98,7 +98,7 @@ export async function createUser(formData: FormData) {
     },
   })
 
-  revalidatePath("/settings/users")
+  revalidatePath("/pengaturan/pengguna")
   return { success: true, id: user.id }
 }
 
@@ -115,7 +115,7 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     },
   })
 
-  revalidatePath("/settings/users")
+  revalidatePath("/pengaturan/pengguna")
   return { success: true }
 }
 
@@ -132,7 +132,7 @@ export async function toggleUserActive(userId: number) {
     data: { isActive: !user.isActive },
   })
 
-  revalidatePath("/settings/users")
+  revalidatePath("/pengaturan/pengguna")
   return { success: true }
 }
 
@@ -153,7 +153,7 @@ export async function updateProfile(formData: FormData) {
     data: { name, email },
   })
 
-  revalidatePath("/profile")
+  revalidatePath("/profil")
   revalidatePath("/")
   return { success: true }
 }

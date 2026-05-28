@@ -61,7 +61,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
         const result = downPayment?.id ? await updateDownPayment(downPayment.id, formData) : await createDownPayment(formData)
         if (result.success) {
           showSuccess(downPayment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-          router.push("/sales/down-payments")
+          router.push("/penjualan/uang-muka")
           router.refresh()
         }
       } catch (error) {

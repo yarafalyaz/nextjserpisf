@@ -33,14 +33,14 @@ export default async function AssetBrandDetailPage({
         title={`Merek Aset: ${brand.name}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/assets" },
-          { label: "Brands", href: "/assets/brands" },
+          { label: "Assets", href: "/aset" },
+          { label: "Brands", href: "/aset/merek" },
           { label: brand.name },
         ]}
         actions={<>
           <Button href={`/assets/brands/${brand.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={brand.id} action={deleteAssetBrand} />
-          <BackButton href="/assets/brands" />
+          <BackButton href="/aset/merek" />
         </>}
       />
 

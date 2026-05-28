@@ -22,8 +22,8 @@ export default async function DetailPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Finance", href: "/finance/statistical-key-figures" },
-        { label: "Statistical Key Figure", href: "/finance/statistical-key-figures" },
+        { label: "Finance", href: "/keuangan/angka-kunci-statistik" },
+        { label: "Statistical Key Figure", href: "/keuangan/angka-kunci-statistik" },
         { label: "Detail" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -82,7 +82,7 @@ export async function createQuotation(formData: FormData) {
     return q
   })
 
-  revalidatePath("/sales/quotations")
+  revalidatePath("/penjualan/penawaran")
   return { success: true, id: quotation.id }
 }
 
@@ -102,7 +102,7 @@ export async function sendQuotation(quotationId: number) {
     data: { status: "sent" },
   })
 
-  revalidatePath("/sales/quotations")
+  revalidatePath("/penjualan/penawaran")
   return { success: true }
 }
 
@@ -125,7 +125,7 @@ export async function acceptQuotation(quotationId: number) {
   // Notify admins
   await notificationService.notifyAdmins('Quotation diterima customer', `/sales/quotations/${quotationId}`)
 
-  revalidatePath("/sales/quotations")
+  revalidatePath("/penjualan/penawaran")
   return { success: true }
 }
 
@@ -167,7 +167,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   // Re-sync linked SO/Invoice items
   await resyncOnEdit(quotationId)
 
-  revalidatePath("/sales/quotations")
+  revalidatePath("/penjualan/penawaran")
   return { success: true }
 }
 
@@ -210,7 +210,7 @@ export async function createDownPayment(formData: FormData) {
   })
 
   await onDownPaymentReceived(dp.id, Number(user.id))
-  revalidatePath("/sales/down-payments")
+  revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
 }
 
@@ -219,10 +219,10 @@ export async function confirmDownPayment(dpId: number) {
 
   await onDownPaymentConfirmed(dpId, Number(user.id))
 
-  revalidatePath("/sales/down-payments")
-  revalidatePath("/sales/invoices")
-  revalidatePath("/sales/orders")
-  revalidatePath("/manufacturing/work-orders")
+  revalidatePath("/penjualan/uang-muka")
+  revalidatePath("/penjualan/faktur")
+  revalidatePath("/penjualan/pesanan")
+  revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 }
 
@@ -246,7 +246,7 @@ export async function createSalesOrder(formData: FormData) {
 
   const salesOrder = await prisma.salesOrder.create({ data })
 
-  revalidatePath("/sales/orders")
+  revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
 }
 
@@ -271,7 +271,7 @@ export async function postInvoice(invoiceId: number) {
   // Trigger accounting hook (replaces Laravel Observer)
   await onSalesInvoicePosted(invoiceId, Number(user.id))
 
-  revalidatePath("/sales/invoices")
+  revalidatePath("/penjualan/faktur")
   return { success: true }
 }
 
@@ -300,7 +300,7 @@ export async function createSalesInvoice(formData: FormData) {
     },
   })
 
-  revalidatePath("/sales/invoices")
+  revalidatePath("/penjualan/faktur")
   return { success: true, id: invoice.id }
 }
 
@@ -342,8 +342,8 @@ export async function createSalesPayment(formData: FormData) {
     }
   }
 
-  revalidatePath("/sales/payments")
-  revalidatePath("/sales/invoices")
+  revalidatePath("/penjualan/pembayaran")
+  revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
 }
 
@@ -372,7 +372,7 @@ export async function completeSalesReturn(returnId: number) {
   // Accounting journal
   await onSalesReturnCompleted(returnId, Number(user.id))
 
-  revalidatePath("/sales/returns")
+  revalidatePath("/penjualan/retur")
   return { success: true }
 }
 
@@ -408,7 +408,7 @@ export async function createSalesReturn(formData: FormData) {
   // Notify admins
   await notificationService.notifyAdmins('Sales Return baru', `/sales/returns/${salesReturn.id}`)
 
-  revalidatePath("/sales/returns")
+  revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
 }
 
@@ -446,7 +446,7 @@ export async function createDeliveryOrder(formData: FormData) {
     },
   })
 
-  revalidatePath("/sales/delivery-orders")
+  revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
 }
 
@@ -460,7 +460,7 @@ export async function deleteQuotation(id: number) {
     data: { deletedAt: new Date() },
   })
 
-  revalidatePath("/sales/quotations")
+  revalidatePath("/penjualan/penawaran")
   return { success: true }
 }
 
@@ -484,8 +484,8 @@ export async function deleteSalesPayment(id: number) {
     await onSalesPaymentDeleted(payment.salesInvoiceId)
   }
 
-  revalidatePath("/sales/payments")
-  revalidatePath("/sales/invoices")
+  revalidatePath("/penjualan/pembayaran")
+  revalidatePath("/penjualan/faktur")
   return { success: true }
 }
 
@@ -494,7 +494,7 @@ export async function deleteDeliveryOrder(id: number) {
 
   await prisma.deliveryOrder.delete({ where: { id } })
 
-  revalidatePath("/sales/delivery-orders")
+  revalidatePath("/penjualan/surat-jalan")
   return { success: true }
 }
 
@@ -508,7 +508,7 @@ export async function deleteDownPayment(id: number) {
 
   await prisma.downPayment.delete({ where: { id } })
 
-  revalidatePath("/sales/down-payments")
+  revalidatePath("/penjualan/uang-muka")
   return { success: true }
 }
 
@@ -530,7 +530,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/sales/orders")
+  revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
 }
 
@@ -611,7 +611,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     return invoice
   })
 
-  revalidatePath("/sales/invoices")
+  revalidatePath("/penjualan/faktur")
   return { success: true, id: result.id }
 }
 
@@ -648,8 +648,8 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     }
   }
 
-  revalidatePath("/sales/payments")
-  revalidatePath("/sales/invoices")
+  revalidatePath("/penjualan/pembayaran")
+  revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
 }
 
@@ -688,7 +688,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
     })
   })
 
-  revalidatePath("/sales/returns")
+  revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
 }
 
@@ -723,7 +723,7 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/sales/delivery-orders")
+  revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
 }
 
@@ -768,7 +768,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
     data,
   })
 
-  revalidatePath("/sales/down-payments")
+  revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
 }
 export async function deleteSalesOrder(id: number) {
@@ -780,7 +780,7 @@ export async function deleteSalesOrder(id: number) {
     throw new Error("Hanya Sales Order berstatus draft yang bisa dihapus")
   }
   await prisma.salesOrder.delete({ where: { id } })
-  revalidatePath("/sales/orders")
+  revalidatePath("/penjualan/pesanan")
   return { success: true }
 }
 
@@ -793,7 +793,7 @@ export async function deleteSalesInvoice(id: number) {
     throw new Error("Tidak bisa menghapus invoice yang sudah posted/paid")
   }
   await prisma.salesInvoice.delete({ where: { id } })
-  revalidatePath("/sales/invoices")
+  revalidatePath("/penjualan/faktur")
   return { success: true }
 }
 
@@ -806,6 +806,6 @@ export async function deleteSalesReturn(id: number) {
     throw new Error("Tidak bisa menghapus retur yang sudah completed")
   }
   await prisma.salesReturn.delete({ where: { id } })
-  revalidatePath("/sales/returns")
+  revalidatePath("/penjualan/retur")
   return { success: true }
 }

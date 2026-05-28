@@ -129,7 +129,7 @@ export default async function FinancialReportsPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/reports" },
+  { label: "Reports", href: "/laporan" },
   { label: "Financial" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -142,7 +142,7 @@ export default async function FinancialReportsPage({
       </div>
 
       {/* Report Selector */}
-      <form className="bg-surface rounded-xl border border-default shadow-sm p-6 flex gap-4 flex-wrap items-end print:hidden" action="/reports/financial">
+      <form className="bg-surface rounded-xl border border-default shadow-sm p-6 flex gap-4 flex-wrap items-end print:hidden" action="/laporan/keuangan">
         <Select name="report" defaultSelectedKey={reportType} placeholder="Pilih Laporan" className="w-[200px]">
           <Label>Jenis Laporan</Label>
           <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>

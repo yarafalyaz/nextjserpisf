@@ -51,7 +51,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
         const result = returnData?.id ? await updateSalesReturn(returnData.id, formData) : await createSalesReturn(formData)
         if (result.success) {
           showSuccess(returnData?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-          router.push("/sales/returns")
+          router.push("/penjualan/retur")
           router.refresh()
         }
       } catch (error) {

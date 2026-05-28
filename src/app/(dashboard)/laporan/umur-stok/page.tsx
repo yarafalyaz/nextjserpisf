@@ -63,7 +63,7 @@ export default async function AgingInventoryPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/reports" },
+  { label: "Reports", href: "/laporan" },
   { label: "Aging Inventory" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

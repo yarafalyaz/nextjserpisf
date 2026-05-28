@@ -51,8 +51,8 @@ export default async function EditQuotationPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/sales/quotations" },
-  { label: "Quotation", href: "/sales/quotations" },
+  { label: "Sales", href: "/penjualan/penawaran" },
+  { label: "Quotation", href: "/penjualan/penawaran" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

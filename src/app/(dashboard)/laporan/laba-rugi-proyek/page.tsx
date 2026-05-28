@@ -120,7 +120,7 @@ export default async function ProjectPnLPage({
       <PrintHeader title="Laba Rugi per Project" period={period} />
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "P&L by Project" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

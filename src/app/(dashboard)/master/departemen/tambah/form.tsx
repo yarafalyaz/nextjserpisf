@@ -19,7 +19,7 @@ export function DepartmentCreateForm({ generatedCode }: DepartmentCreateFormProp
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createDepartment(formData)
-      router.push("/master/departments")
+      router.push("/master/departemen")
       router.refresh()
     })
   }

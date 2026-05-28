@@ -23,8 +23,8 @@ export async function createRole(formData: FormData) {
     },
   })
 
-  revalidatePath("/settings/roles")
-  redirect("/settings/roles")
+  revalidatePath("/pengaturan/peran")
+  redirect("/pengaturan/peran")
 }
 
 export async function updateRole(id: number, formData: FormData) {
@@ -45,8 +45,8 @@ export async function updateRole(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/settings/roles")
-  redirect("/settings/roles")
+  revalidatePath("/pengaturan/peran")
+  redirect("/pengaturan/peran")
 }
 
 export async function deleteRole(id: number) {
@@ -64,6 +64,6 @@ export async function deleteRole(id: number) {
 
   await prisma.role.delete({ where: { id } })
 
-  revalidatePath("/settings/roles")
-  redirect("/settings/roles")
+  revalidatePath("/pengaturan/peran")
+  redirect("/pengaturan/peran")
 }

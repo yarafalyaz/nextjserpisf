@@ -19,7 +19,7 @@ export default async function CreateAssetPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Assets", href: "/assets" },
+        { label: "Assets", href: "/aset" },
         { label: "Create" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

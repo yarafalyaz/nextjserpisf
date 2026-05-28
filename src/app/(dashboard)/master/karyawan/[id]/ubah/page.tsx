@@ -24,8 +24,8 @@ export default async function EditEmployeePage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Master Data", href: "/master/employees" },
-  { label: "Karyawan", href: "/master/employees" },
+  { label: "Master Data", href: "/master/karyawan" },
+  { label: "Karyawan", href: "/master/karyawan" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

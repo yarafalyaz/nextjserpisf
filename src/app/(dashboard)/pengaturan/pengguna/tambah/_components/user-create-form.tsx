@@ -36,7 +36,7 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
         showError(result.error)
       } else {
         showSuccess("User berhasil ditambahkan!")
-        router.push("/settings/users")
+        router.push("/pengaturan/pengguna")
       }
     })
   }

@@ -16,7 +16,7 @@ export default function CreateItemCategoryPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createItemCategory(formData)
-      router.push("/master/item-categories")
+      router.push("/master/kategori-barang")
       router.refresh()
     })
   }
@@ -26,7 +26,7 @@ export default function CreateItemCategoryPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Item Categories", href: "/master/item-categories" },
+  { label: "Item Categories", href: "/master/kategori-barang" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

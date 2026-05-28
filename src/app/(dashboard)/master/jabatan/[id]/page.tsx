@@ -35,14 +35,14 @@ export default async function PositionDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Positions", href: "/master/positions" },
+          { label: "Positions", href: "/master/jabatan" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/positions/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={position.id} action={deletePosition} />
-            <BackButton href="/master/positions" />
+            <BackButton href="/master/jabatan" />
           </>
         }
       />

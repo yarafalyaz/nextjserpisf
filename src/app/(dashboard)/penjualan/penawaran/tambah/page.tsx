@@ -59,8 +59,8 @@ export default async function CreateQuotationPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/sales" },
-  { label: "Quotations", href: "/sales/quotations" },
+  { label: "Sales", href: "/penjualan" },
+  { label: "Quotations", href: "/penjualan/penawaran" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

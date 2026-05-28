@@ -44,7 +44,7 @@ export default async function StockMovesPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Inventory", href: "/inventory" },
+  { label: "Inventory", href: "/inventaris" },
   { label: "Stock Moves" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -53,11 +53,11 @@ export default async function StockMovesPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen atau item..." action="/inventory/stock-moves" />
+          <AppSearchField placeholder="Cari no. dokumen atau item..." action="/inventaris/mutasi-stok" />
           <div className="flex gap-1.5 flex-wrap">
-            <Link href="/inventory/stock-moves" className={`filter-chip ${!params.impact ? "active" : ""}`}>Semua</Link>
-            <Link href="/inventory/stock-moves?impact=IN" className={`filter-chip ${params.impact === "IN" ? "active" : ""}`}>IN</Link>
-            <Link href="/inventory/stock-moves?impact=OUT" className={`filter-chip ${params.impact === "OUT" ? "active" : ""}`}>OUT</Link>
+            <Link href="/inventaris/mutasi-stok" className={`filter-chip ${!params.impact ? "active" : ""}`}>Semua</Link>
+            <Link href="/inventaris/mutasi-stok?impact=IN" className={`filter-chip ${params.impact === "IN" ? "active" : ""}`}>IN</Link>
+            <Link href="/inventaris/mutasi-stok?impact=OUT" className={`filter-chip ${params.impact === "OUT" ? "active" : ""}`}>OUT</Link>
           </div>
         </div>
 

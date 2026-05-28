@@ -38,19 +38,19 @@ export default async function ProductionOrdersPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Manufacturing", href: "/manufacturing" },
+  { label: "Manufacturing", href: "/produksi" },
   { label: "Production Orders" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Perintah Produksi</h1>
-        <Link href="/manufacturing/production-orders/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-prodorder-btn">
+        <Link href="/produksi/production-orders/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-prodorder-btn">
           + Buat Production Order
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen..." action="/manufacturing/production-orders" />
+          <AppSearchField placeholder="Cari no. dokumen..." action="/produksi/production-orders" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "in_progress", "completed"].map((s) => (
               <Link key={s} href={`/manufacturing/production-orders?status=${s}`} className={`filter-chip ${params.status === s || (!params.status && !s) ? "active" : ""}`}>

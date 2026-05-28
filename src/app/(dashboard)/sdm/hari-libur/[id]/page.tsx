@@ -27,15 +27,15 @@ export default async function HolidayDetailPage({
         title="Hari Libur"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Hari Libur", href: "/hrm/holidays" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Hari Libur", href: "/sdm/hari-libur" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/hrm/holidays/${holiday.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={holiday.id} action={deleteHoliday} />
-            <BackButton href="/hrm/holidays" />
+            <BackButton href="/sdm/hari-libur" />
           </>
         }
       />

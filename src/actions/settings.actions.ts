@@ -225,6 +225,6 @@ export async function updateSystemSettings(formData: FormData) {
     },
   })
 
-  revalidatePath("/settings")
-  redirect("/settings")
+  revalidatePath("/pengaturan")
+  redirect("/pengaturan")
 }

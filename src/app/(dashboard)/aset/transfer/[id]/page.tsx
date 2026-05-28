@@ -32,14 +32,14 @@ export default async function AssetTransferDetailPage({
         title="Transfer Aset"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/assets" },
-          { label: "Transfers", href: "/assets/transfers" },
+          { label: "Assets", href: "/aset" },
+          { label: "Transfers", href: "/aset/transfer" },
           { label: "Detail" },
         ]}
         actions={<>
           <Button href={`/assets/transfers/${transfer.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={transfer.id} action={deleteAssetTransfer} />
-          <BackButton href="/assets/transfers" />
+          <BackButton href="/aset/transfer" />
         </>}
       />
 

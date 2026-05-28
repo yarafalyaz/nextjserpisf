@@ -27,7 +27,7 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
         const { createPettyCash, updatePettyCash } = await import("@/actions/finance.actions")
         pettyCash?.id ? await updatePettyCash(pettyCash.id, formData) : await createPettyCash(formData)
         showSuccess(pettyCash?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/finance/petty-cash")
+        router.push("/keuangan/kas-kecil")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

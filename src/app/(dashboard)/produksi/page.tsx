@@ -5,9 +5,9 @@ import {
 } from "lucide-react"
 
 const manufacturingModules = [
-  { label: "Products (BOM)", href: "/manufacturing/products", icon: Package, desc: "Bill of Materials" },
-  { label: "Work Orders", href: "/manufacturing/work-orders", icon: Wrench, desc: "Perintah kerja" },
-  { label: "Production Orders", href: "/manufacturing/production-orders", icon: Hammer, desc: "Perintah produksi" },
+  { label: "Products (BOM)", href: "/produksi/products", icon: Package, desc: "Bill of Materials" },
+  { label: "Work Orders", href: "/produksi/perintah-kerja", icon: Wrench, desc: "Perintah kerja" },
+  { label: "Production Orders", href: "/produksi/production-orders", icon: Hammer, desc: "Perintah produksi" },
 ]
 
 export default function ManufacturingPage() {

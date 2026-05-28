@@ -46,14 +46,14 @@ export default async function VehicleDetailPage({
         title={`Kendaraan ${vehicle.plateNumber || `#${vehicle.id}`}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Vehicles", href: "/vehicles" },
+          { label: "Vehicles", href: "/kendaraan" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/vehicles/${vehicle.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={vehicle.id} action={deleteVehicle} />
-            <BackButton href="/vehicles" />
+            <BackButton href="/kendaraan" />
           </>
         }
       />

@@ -30,7 +30,7 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
         const { createBudget, updateBudget } = await import("@/actions/finance.actions")
         budget?.id ? await updateBudget(budget.id, formData) : await createBudget(formData)
         showSuccess(budget?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/finance/budgets")
+        router.push("/keuangan/anggaran")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

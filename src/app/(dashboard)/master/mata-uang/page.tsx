@@ -46,7 +46,7 @@ export default async function CurrenciesPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari mata uang..." action="/master/currencies" />
+          <AppSearchField placeholder="Cari mata uang..." action="/master/mata-uang" />
         </div>
 
         <CurrencyTable data={tableData} />

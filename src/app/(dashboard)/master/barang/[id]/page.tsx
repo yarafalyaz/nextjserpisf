@@ -146,7 +146,7 @@ export default async function ItemDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Items", href: "/master/items" },
+          { label: "Items", href: "/master/barang" },
           { label: "Detail" },
         ]}
         badge={item.isProduct ? (
@@ -156,7 +156,7 @@ export default async function ItemDetailPage({
           <>
             <Button href={`/master/items/${id}/edit`} variant="secondary"><Pencil size={14} /> Edit</Button>
             <DeleteButton id={item.id} action={deleteItem} />
-            <BackButton href="/master/items" />
+            <BackButton href="/master/barang" />
           </>
         }
       />

@@ -40,7 +40,7 @@ export default async function PositionsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama jabatan..." action="/master/positions" />
+          <AppSearchField placeholder="Cari nama jabatan..." action="/master/jabatan" />
         </div>
 
         <PositionTable data={tableData} />

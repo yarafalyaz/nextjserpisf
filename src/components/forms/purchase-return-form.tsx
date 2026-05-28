@@ -50,7 +50,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
         const result = returnData?.id ? await updatePurchaseReturn(returnData.id, formData) : await createPurchaseReturn(formData)
         if (result.success) {
           showSuccess(returnData?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-          router.push("/purchase/returns")
+          router.push("/pembelian/retur")
           router.refresh()
         }
       } catch (error) {

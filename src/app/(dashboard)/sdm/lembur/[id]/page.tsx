@@ -36,8 +36,8 @@ export default async function OvertimeRequestDetailPage({
         title="Pengajuan Lembur"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Lembur", href: "/hrm/overtime" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Lembur", href: "/sdm/lembur" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={overtime.status} />}
@@ -45,7 +45,7 @@ export default async function OvertimeRequestDetailPage({
           <>
             <Button href={`/hrm/overtime/${overtime.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={overtime.id} action={deleteOvertimeRequest} />
-            <BackButton href="/hrm/overtime" />
+            <BackButton href="/sdm/lembur" />
           </>
         }
       />

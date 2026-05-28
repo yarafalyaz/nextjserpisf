@@ -28,14 +28,14 @@ export default async function CostCenterDetailPage({
         title={`Cost Center: ${costCenter.name}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/finance" },
-          { label: "Cost Centers", href: "/finance/cost-centers" },
+          { label: "Finance", href: "/keuangan" },
+          { label: "Cost Centers", href: "/keuangan/pusat-biaya" },
           { label: costCenter.name },
         ]}
         actions={<>
           <Button href={`/finance/cost-centers/${costCenter.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={costCenter.id} action={deleteCostCenter} />
-          <BackButton href="/finance/cost-centers" />
+          <BackButton href="/keuangan/pusat-biaya" />
         </>}
       />
 

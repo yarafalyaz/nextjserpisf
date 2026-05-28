@@ -34,7 +34,7 @@ export default async function ApprovalsPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Settings", href: "/settings" },
+  { label: "Settings", href: "/pengaturan" },
   { label: "Approvals" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

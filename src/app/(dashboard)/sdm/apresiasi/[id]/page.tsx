@@ -36,15 +36,15 @@ export default async function AppreciationDetailPage({
         title="Detail Apresiasi"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Apresiasi", href: "/hrm/appreciations" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Apresiasi", href: "/sdm/apresiasi" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/hrm/appreciations/${appreciation.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={appreciation.id} action={deleteAppreciation} />
-            <BackButton href="/hrm/appreciations" />
+            <BackButton href="/sdm/apresiasi" />
           </>
         }
       />

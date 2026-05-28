@@ -16,7 +16,7 @@ export default function CreatePriceListPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createPriceList(formData)
-      router.push("/master/price-lists")
+      router.push("/master/daftar-harga")
       router.refresh()
     })
   }
@@ -26,7 +26,7 @@ export default function CreatePriceListPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Price Lists", href: "/master/price-lists" },
+  { label: "Price Lists", href: "/master/daftar-harga" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

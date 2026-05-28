@@ -33,8 +33,8 @@ export default async function WorkScheduleDetailPage({
         title="Jadwal Kerja"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Jadwal Kerja", href: "/hrm/work-schedules" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Jadwal Kerja", href: "/sdm/jadwal-kerja" },
           { label: "Detail" },
         ]}
         badge={
@@ -46,7 +46,7 @@ export default async function WorkScheduleDetailPage({
           <>
             <Button href={`/hrm/work-schedules/${schedule.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={schedule.id} action={deleteWorkSchedule} />
-            <BackButton href="/hrm/work-schedules" />
+            <BackButton href="/sdm/jadwal-kerja" />
           </>
         }
       />

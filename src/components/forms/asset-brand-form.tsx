@@ -19,7 +19,7 @@ export function AssetBrandForm({ brand }: { brand?: { id: number; name: string }
         const { createAssetBrand, updateAssetBrand } = await import("@/actions/asset.actions")
         brand?.id ? await updateAssetBrand(brand.id, formData) : await createAssetBrand(formData)
         showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/assets/brands")
+        router.push("/aset/merek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

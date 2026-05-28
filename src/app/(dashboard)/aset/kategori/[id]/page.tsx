@@ -34,14 +34,14 @@ export default async function AssetCategoryDetailPage({
         title={`Kategori Aset: ${category.name}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/assets" },
-          { label: "Categories", href: "/assets/categories" },
+          { label: "Assets", href: "/aset" },
+          { label: "Categories", href: "/aset/kategori" },
           { label: category.name },
         ]}
         actions={<>
           <Button href={`/assets/categories/${category.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={category.id} action={deleteAssetCategory} />
-          <BackButton href="/assets/categories" />
+          <BackButton href="/aset/kategori" />
         </>}
       />
 

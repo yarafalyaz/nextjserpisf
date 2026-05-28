@@ -27,7 +27,7 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
         const result = account?.id ? await updateAccount(account.id, formData) : await createAccount(formData)
         if (result.success) {
           showSuccess(account?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-          router.push("/master/accounts")
+          router.push("/master/akun")
           router.refresh()
         }
       } catch (error) {

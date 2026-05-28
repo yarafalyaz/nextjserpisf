@@ -36,12 +36,12 @@ export default async function PayrollDetailPage({
         title={`Payroll ${payroll.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Payroll", href: "/hrm/payroll" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Payroll", href: "/sdm/penggajian" },
           { label: payroll.documentNo },
         ]}
         badge={<StatusChip status={payroll.status} />}
-        actions={<BackButton href="/hrm/payroll" />}
+        actions={<BackButton href="/sdm/penggajian" />}
       />
 
       <DetailCard title="Informasi Payroll">

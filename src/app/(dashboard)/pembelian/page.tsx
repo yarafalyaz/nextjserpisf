@@ -5,12 +5,12 @@ import {
 } from "lucide-react"
 
 const purchaseModules = [
-  { label: "Requests", href: "/purchase/requests", icon: ClipboardList, desc: "Permintaan pembelian" },
-  { label: "Orders", href: "/purchase/orders", icon: FileCheck, desc: "Pesanan pembelian" },
-  { label: "Goods Receipts", href: "/purchase/goods-receipts", icon: PackageCheck, desc: "Penerimaan barang" },
-  { label: "Vendor Bills", href: "/purchase/bills", icon: FileSpreadsheet, desc: "Tagihan vendor" },
-  { label: "Vendor Payments", href: "/purchase/vendor-payments", icon: Banknote, desc: "Pembayaran ke vendor" },
-  { label: "Returns", href: "/purchase/returns", icon: Undo2, desc: "Retur pembelian" },
+  { label: "Requests", href: "/pembelian/permintaan", icon: ClipboardList, desc: "Permintaan pembelian" },
+  { label: "Orders", href: "/pembelian/pesanan", icon: FileCheck, desc: "Pesanan pembelian" },
+  { label: "Goods Receipts", href: "/pembelian/penerimaan", icon: PackageCheck, desc: "Penerimaan barang" },
+  { label: "Vendor Bills", href: "/pembelian/tagihan", icon: FileSpreadsheet, desc: "Tagihan vendor" },
+  { label: "Vendor Payments", href: "/pembelian/pembayaran-vendor", icon: Banknote, desc: "Pembayaran ke vendor" },
+  { label: "Returns", href: "/pembelian/retur", icon: Undo2, desc: "Retur pembelian" },
 ]
 
 export default function PurchasePage() {

@@ -9,7 +9,7 @@ export default function CreateUomPage() {
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
         { label: "Master Data" },
-        { label: "UoM", href: "/master/uom" },
+        { label: "UoM", href: "/master/satuan" },
         { label: "Create" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

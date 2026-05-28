@@ -34,13 +34,13 @@ export default async function JournalDetailPage({
         title={`Jurnal ${journal.journalNumber}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/finance" },
-          { label: "Jurnal", href: "/finance/journals" },
+          { label: "Finance", href: "/keuangan" },
+          { label: "Jurnal", href: "/keuangan/jurnal" },
           { label: journal.journalNumber },
         ]}
         badge={<StatusChip status={journal.status.toLowerCase()} />}
         actions={<>
-          <BackButton href="/finance/journals" />
+          <BackButton href="/keuangan/jurnal" />
         </>}
       />
 

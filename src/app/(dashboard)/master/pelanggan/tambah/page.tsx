@@ -15,7 +15,7 @@ export default async function CreateCustomerPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Customers", href: "/master/customers" },
+  { label: "Customers", href: "/master/pelanggan" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

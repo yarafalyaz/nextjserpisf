@@ -5,13 +5,13 @@ import {
 } from "lucide-react"
 
 const salesModules = [
-  { label: "Quotations", href: "/sales/quotations", icon: FileText, desc: "Penawaran harga" },
-  { label: "Down Payments", href: "/sales/down-payments", icon: Wallet, desc: "Uang muka penjualan" },
-  { label: "Sales Orders", href: "/sales/orders", icon: ShoppingCart, desc: "Pesanan penjualan" },
-  { label: "Delivery Orders", href: "/sales/delivery-orders", icon: Truck, desc: "Surat jalan" },
-  { label: "Invoices", href: "/sales/invoices", icon: Receipt, desc: "Faktur penjualan" },
-  { label: "Payments", href: "/sales/payments", icon: CreditCard, desc: "Pembayaran masuk" },
-  { label: "Returns", href: "/sales/returns", icon: RotateCcw, desc: "Retur penjualan" },
+  { label: "Quotations", href: "/penjualan/penawaran", icon: FileText, desc: "Penawaran harga" },
+  { label: "Down Payments", href: "/penjualan/uang-muka", icon: Wallet, desc: "Uang muka penjualan" },
+  { label: "Sales Orders", href: "/penjualan/pesanan", icon: ShoppingCart, desc: "Pesanan penjualan" },
+  { label: "Delivery Orders", href: "/penjualan/surat-jalan", icon: Truck, desc: "Surat jalan" },
+  { label: "Invoices", href: "/penjualan/faktur", icon: Receipt, desc: "Faktur penjualan" },
+  { label: "Payments", href: "/penjualan/pembayaran", icon: CreditCard, desc: "Pembayaran masuk" },
+  { label: "Returns", href: "/penjualan/retur", icon: RotateCcw, desc: "Retur penjualan" },
 ]
 
 export default function SalesPage() {

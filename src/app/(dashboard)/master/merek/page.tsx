@@ -39,7 +39,7 @@ export default async function BrandsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama brand..." action="/master/brands" />
+          <AppSearchField placeholder="Cari nama brand..." action="/master/merek" />
         </div>
 
         <BrandTable data={tableData} />

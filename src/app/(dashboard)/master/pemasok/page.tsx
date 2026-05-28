@@ -46,7 +46,7 @@ export default async function VendorsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama atau telepon vendor..." action="/master/vendors" />
+          <AppSearchField placeholder="Cari nama atau telepon vendor..." action="/master/pemasok" />
         </div>
 
         <VendorTable data={tableData} />

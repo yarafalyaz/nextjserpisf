@@ -78,7 +78,7 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
         const { createVendorBill, updateVendorBill } = await import("@/actions/purchase.actions")
         bill?.id ? await updateVendorBill(bill.id, formData) : await createVendorBill(formData)
         showSuccess(bill?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/purchase/bills")
+        router.push("/pembelian/tagihan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

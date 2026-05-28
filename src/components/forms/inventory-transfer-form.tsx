@@ -40,7 +40,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         formData.append("items", JSON.stringify(transferItems))
         transfer?.id ? await updateInventoryTransfer(transfer.id, formData) : await createInventoryTransfer(formData)
         showSuccess(transfer?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/inventory/transfers")
+        router.push("/inventaris/transfer")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

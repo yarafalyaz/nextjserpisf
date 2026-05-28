@@ -25,7 +25,7 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
         const result = order?.id ? await updateProductionOrder(order.id, formData) : await createProductionOrder(formData)
         if (result.success) {
           showSuccess(order?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-          router.push("/manufacturing/production-orders")
+          router.push("/produksi/production-orders")
           router.refresh()
         }
       } catch (error) {

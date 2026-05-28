@@ -21,7 +21,7 @@ export default async function CreateVendorPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Vendors", href: "/master/vendors" },
+  { label: "Vendors", href: "/master/pemasok" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -72,7 +72,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
         formData.append("items", JSON.stringify(poItems))
         order?.id ? await updatePurchaseOrder(order.id, formData) : await createPurchaseOrder(formData)
         showSuccess(order?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/purchase/orders")
+        router.push("/pembelian/pesanan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

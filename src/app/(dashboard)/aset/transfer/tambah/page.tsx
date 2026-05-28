@@ -18,8 +18,8 @@ export default async function CreateAssetTransferPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Assets", href: "/assets" },
-  { label: "Transfers", href: "/assets/transfers" },
+  { label: "Assets", href: "/aset" },
+  { label: "Transfers", href: "/aset/transfer" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

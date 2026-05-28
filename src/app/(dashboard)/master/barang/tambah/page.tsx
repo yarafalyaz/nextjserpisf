@@ -24,7 +24,7 @@ export default async function CreateItemPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Items", href: "/master/items" },
+  { label: "Items", href: "/master/barang" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

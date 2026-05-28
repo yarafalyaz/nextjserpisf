@@ -85,13 +85,13 @@ const menuItems = [
   { label: "Prospek", href: "/crm/leads", icon: Target, group: "CRM" },
   { label: "Tiket", href: "/crm/tickets", icon: Ticket, group: "CRM" },
   // Kendaraan
-  { label: "Kendaraan", href: "/vehicles", icon: Car, group: "Kendaraan" },
+  { label: "Kendaraan", href: "/kendaraan", icon: Car, group: "Kendaraan" },
   { label: "Merek Kendaraan", href: "/kendaraan/merek", icon: Tag, group: "Kendaraan" },
   { label: "Model Kendaraan", href: "/kendaraan/model", icon: Layers, group: "Kendaraan" },
   // Proyek
-  { label: "Proyek", href: "/projects", icon: FolderKanban, group: "Proyek" },
+  { label: "Proyek", href: "/proyek", icon: FolderKanban, group: "Proyek" },
   // Aset
-  { label: "Semua Aset", href: "/assets", icon: Monitor, group: "Aset" },
+  { label: "Semua Aset", href: "/aset", icon: Monitor, group: "Aset" },
   { label: "Kategori Aset", href: "/aset/kategori", icon: Tag, group: "Aset" },
   { label: "Merek Aset", href: "/aset/merek", icon: Layers, group: "Aset" },
   { label: "Transfer Aset", href: "/aset/transfer", icon: ArrowLeftRight, group: "Aset" },
@@ -105,21 +105,21 @@ const menuItems = [
   { label: "Aging Inventaris", href: "/laporan/umur-stok", icon: Package, group: "Laporan" },
   { label: "Profit Center", href: "/laporan/pusat-laba", icon: TrendingUp, group: "Laporan" },
   // Sistem
-  { label: "Pengaturan", href: "/settings", icon: Cog, group: "Sistem" },
+  { label: "Pengaturan", href: "/pengaturan", icon: Cog, group: "Sistem" },
   { label: "Pengguna & Peran", href: "/pengaturan/pengguna", icon: Shield, group: "Sistem" },
   { label: "Log Aktivitas", href: "/pengaturan/log-aktivitas", icon: ScrollText, group: "Sistem" },
   { label: "Persetujuan", href: "/pengaturan/persetujuan", icon: CheckCircle2, group: "Sistem" },
-  { label: "Notifikasi", href: "/notifications", icon: Bell, group: "Sistem" },
+  { label: "Notifikasi", href: "/notifikasi", icon: Bell, group: "Sistem" },
   // Aksi Cepat
   { label: "Buat Pelanggan Baru", href: "/master/customers/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Penawaran", href: "/sales/quotations/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Pesanan Pembelian", href: "/purchase/orders/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Pembayaran Faktur", href: "/sales/payments/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Biaya", href: "/finance/expenses/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Entri Jurnal", href: "/finance/journals/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Surat Jalan", href: "/sales/delivery-orders/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Proyek", href: "/projects/create", icon: Plus, group: "Aksi Cepat" },
-  { label: "Buat Tagihan Vendor", href: "/purchase/bills/create", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Penawaran", href: "/penjualan/penawaran/tambah", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Pesanan Pembelian", href: "/pembelian/pesanan/tambah", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Pembayaran Faktur", href: "/penjualan/pembayaran/tambah", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Biaya", href: "/keuangan/pengeluaran/tambah", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Entri Jurnal", href: "/keuangan/jurnal/tambah", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Surat Jalan", href: "/penjualan/surat-jalan/tambah", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Proyek", href: "/proyek/tambah", icon: Plus, group: "Aksi Cepat" },
+  { label: "Buat Tagihan Vendor", href: "/pembelian/tagihan/tambah", icon: Plus, group: "Aksi Cepat" },
 ]
 
 export function CommandPalette() {

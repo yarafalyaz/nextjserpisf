@@ -45,14 +45,14 @@ export default async function AppreciationsPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Apresiasi Karyawan</h1>
-        <Link href="/hrm/appreciations/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-appreciation-btn">
+        <Link href="/sdm/apresiasi/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-appreciation-btn">
           <Gift size={16} /> Tambah Apresiasi
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama karyawan..." action="/hrm/appreciations" />
+          <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/apresiasi" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "bonus", "reward", "incentive"].map((s) => (
               <Link key={s} href={`/hrm/appreciations?type=${s}`} className={`filter-chip ${params.type === s || (!params.type && !s) ? "active" : ""}`}>

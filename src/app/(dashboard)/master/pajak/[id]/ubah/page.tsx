@@ -20,7 +20,7 @@ export default async function EditTaxPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Taxes", href: "/master/taxes" },
+  { label: "Taxes", href: "/master/pajak" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -19,7 +19,7 @@ export function TaxGroupForm({ taxes }: Props) {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createTaxGroup(formData)
-      router.push("/master/tax-groups")
+      router.push("/master/kelompok-pajak")
       router.refresh()
     })
   }

@@ -31,7 +31,7 @@ export async function createStockAdjustment(formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/adjustments")
+  revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
 }
 
@@ -59,8 +59,8 @@ export async function processStockAdjustment(adjustmentId: number) {
   // Accounting journal
   await onStockAdjustmentProcessed(adjustmentId, Number(user.id))
 
-  revalidatePath("/inventory/adjustments")
-  revalidatePath("/inventory/stock-moves")
+  revalidatePath("/inventaris/penyesuaian")
+  revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 }
 
@@ -83,7 +83,7 @@ export async function createInventoryTransfer(formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/transfers")
+  revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
 }
 
@@ -106,8 +106,8 @@ export async function processInventoryTransfer(transferId: number) {
     data: { status: "processed" },
   })
 
-  revalidatePath("/inventory/transfers")
-  revalidatePath("/inventory/stock-moves")
+  revalidatePath("/inventaris/transfer")
+  revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 }
 
@@ -130,8 +130,8 @@ export async function receiveInventoryTransfer(transferId: number) {
     data: { status: "received" },
   })
 
-  revalidatePath("/inventory/transfers")
-  revalidatePath("/inventory/stock-moves")
+  revalidatePath("/inventaris/transfer")
+  revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 }
 
@@ -155,7 +155,7 @@ export async function createMaterialIssue(formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/material-issues")
+  revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
 }
 
@@ -181,8 +181,8 @@ export async function completeMaterialIssue(issueId: number) {
   // Accounting journal
   await onMaterialIssueCompleted(issueId, Number(user.id))
 
-  revalidatePath("/inventory/material-issues")
-  revalidatePath("/inventory/stock-moves")
+  revalidatePath("/inventaris/pengeluaran-material")
+  revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 }
 
@@ -219,7 +219,7 @@ export async function createWorkOrder(formData: FormData) {
     },
   })
 
-  revalidatePath("/manufacturing/work-orders")
+  revalidatePath("/produksi/perintah-kerja")
   return { success: true, id: wo.id }
 }
 
@@ -259,7 +259,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
     }
   })
 
-  revalidatePath("/manufacturing/work-orders")
+  revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 }
 
@@ -285,8 +285,8 @@ export async function completeWorkOrder(workOrderId: number) {
   // Accounting journal (Dr. WIP, Cr. Inventory)
   await onWorkOrderCompleted(workOrderId, Number(user.id))
 
-  revalidatePath("/manufacturing/work-orders")
-  revalidatePath("/inventory/stock-moves")
+  revalidatePath("/produksi/perintah-kerja")
+  revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 }
 
@@ -303,7 +303,7 @@ export async function createRack(formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/racks")
+  revalidatePath("/inventaris/rak")
   return { success: true, id: rack.id }
 }
 
@@ -314,7 +314,7 @@ export async function deleteStockAdjustment(id: number) {
 
   await prisma.stockAdjustment.delete({ where: { id } })
 
-  revalidatePath("/inventory/adjustments")
+  revalidatePath("/inventaris/penyesuaian")
   return { success: true }
 }
 
@@ -323,7 +323,7 @@ export async function deleteInventoryTransfer(id: number) {
 
   await prisma.inventoryTransfer.delete({ where: { id } })
 
-  revalidatePath("/inventory/transfers")
+  revalidatePath("/inventaris/transfer")
   return { success: true }
 }
 
@@ -332,7 +332,7 @@ export async function deleteMaterialIssue(id: number) {
 
   await prisma.materialIssue.delete({ where: { id } })
 
-  revalidatePath("/inventory/material-issues")
+  revalidatePath("/inventaris/pengeluaran-material")
   return { success: true }
 }
 
@@ -341,7 +341,7 @@ export async function deleteRack(id: number) {
 
   await prisma.rack.delete({ where: { id } })
 
-  revalidatePath("/inventory/racks")
+  revalidatePath("/inventaris/rak")
   return { success: true }
 }
 
@@ -363,7 +363,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/adjustments")
+  revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
 }
 
@@ -384,7 +384,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/material-issues")
+  revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
 }
 
@@ -404,7 +404,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/transfers")
+  revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
 }
 
@@ -433,7 +433,7 @@ export async function createRackRow(formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/rack-rows")
+  revalidatePath("/inventaris/baris-rak")
   return { success: true, id: rackRow.id }
 }
 
@@ -449,7 +449,7 @@ export async function updateRackRow(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/inventory/rack-rows")
+  revalidatePath("/inventaris/baris-rak")
   return { success: true }
 }
 
@@ -458,6 +458,6 @@ export async function deleteRackRow(id: number) {
 
   await prisma.rackRow.delete({ where: { id } })
 
-  revalidatePath("/inventory/rack-rows")
+  revalidatePath("/inventaris/baris-rak")
   return { success: true }
 }

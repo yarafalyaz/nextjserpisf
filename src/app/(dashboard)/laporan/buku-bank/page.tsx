@@ -90,7 +90,7 @@ export default async function BankBookPage({
       <PrintHeader title="Buku Bank" period={period} />
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "Bank Book" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

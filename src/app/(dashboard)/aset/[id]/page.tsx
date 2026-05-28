@@ -41,14 +41,14 @@ export default async function AssetDetailPage({
         title={asset.name}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/assets" },
+          { label: "Assets", href: "/aset" },
           { label: asset.name },
         ]}
         badge={<StatusChip status={asset.status} />}
         actions={<>
           <Button href={`/assets/${asset.id}/edit`} variant="primary"><Pencil size={14} /> Edit</Button>
           <DeleteButton id={asset.id} action={deleteAssetTransfer} />
-          <BackButton href="/assets" />
+          <BackButton href="/aset" />
         </>}
       />
 

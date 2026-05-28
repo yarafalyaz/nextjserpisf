@@ -20,7 +20,7 @@ export default async function EditItemCategoryPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Item Categories", href: "/master/item-categories" },
+  { label: "Item Categories", href: "/master/kategori-barang" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

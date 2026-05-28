@@ -17,7 +17,7 @@ export default function CreateBankPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createBank(formData)
-      router.push("/master/banks")
+      router.push("/master/bank")
       router.refresh()
     })
   }
@@ -27,7 +27,7 @@ export default function CreateBankPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Banks", href: "/master/banks" },
+  { label: "Banks", href: "/master/bank" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -23,7 +23,7 @@ export default async function EditBankPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Banks", href: "/master/banks" },
+  { label: "Banks", href: "/master/bank" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

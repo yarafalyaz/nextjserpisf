@@ -25,8 +25,8 @@ export default async function CreatePurchaseReturnPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Purchase", href: "/purchase" },
-  { label: "Returns", href: "/purchase/returns" },
+  { label: "Purchase", href: "/pembelian" },
+  { label: "Returns", href: "/pembelian/retur" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

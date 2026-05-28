@@ -51,7 +51,7 @@ export default async function PriceListsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama daftar harga..." action="/master/price-lists" />
+          <AppSearchField placeholder="Cari nama daftar harga..." action="/master/daftar-harga" />
         </div>
 
         <Table>

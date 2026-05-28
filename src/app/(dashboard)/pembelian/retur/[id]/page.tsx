@@ -35,8 +35,8 @@ export default async function PurchaseReturnDetailPage({
         title={`Retur Pembelian ${purchaseReturn.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/purchase" },
-          { label: "Returns", href: "/purchase/returns" },
+          { label: "Purchase", href: "/pembelian" },
+          { label: "Returns", href: "/pembelian/retur" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={purchaseReturn.status} />}
@@ -45,7 +45,7 @@ export default async function PurchaseReturnDetailPage({
             <Button href={`/purchase/returns/${purchaseReturn.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
-            <BackButton href="/purchase/returns" />
+            <BackButton href="/pembelian/retur" />
           </>
         }
       />

@@ -36,8 +36,8 @@ export default async function EditRolePage({ params }: { params: Promise<{ id: s
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/settings" },
-        { label: "Roles", href: "/settings/roles" },
+        { label: "Settings", href: "/pengaturan" },
+        { label: "Roles", href: "/pengaturan/peran" },
         { label: role.name, href: `/settings/roles/${role.id}` },
         { label: "Edit" },
       ]} />

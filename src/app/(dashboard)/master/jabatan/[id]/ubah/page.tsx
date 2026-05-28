@@ -25,7 +25,7 @@ export default async function EditPositionPage({
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Positions", href: "/master/positions" },
+  { label: "Positions", href: "/master/jabatan" },
   { label: "Edit" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

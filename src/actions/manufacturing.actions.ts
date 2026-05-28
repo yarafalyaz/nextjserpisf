@@ -45,7 +45,7 @@ export async function createProduct(formData: FormData) {
     },
   })
 
-  revalidatePath("/manufacturing/products")
+  revalidatePath("/produksi/products")
   return { success: true, id: product.id }
 }
 
@@ -84,7 +84,7 @@ export async function updateProduct(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/manufacturing/products")
+  revalidatePath("/produksi/products")
   return { success: true }
 }
 
@@ -126,7 +126,7 @@ export async function createProductionOrder(formData: FormData) {
     },
   })
 
-  revalidatePath("/manufacturing/production-orders")
+  revalidatePath("/produksi/production-orders")
   return { success: true, id: productionOrder.id }
 }
 
@@ -137,7 +137,7 @@ export async function deleteProduct(id: number) {
 
   await prisma.product.delete({ where: { id } })
 
-  revalidatePath("/manufacturing/products")
+  revalidatePath("/produksi/products")
   return { success: true }
 }
 
@@ -151,7 +151,7 @@ export async function deleteWorkOrder(id: number) {
 
   await prisma.workOrder.delete({ where: { id } })
 
-  revalidatePath("/manufacturing/work-orders")
+  revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 }
 
@@ -165,7 +165,7 @@ export async function deleteProductionOrder(id: number) {
 
   await prisma.productionOrder.delete({ where: { id } })
 
-  revalidatePath("/manufacturing/production-orders")
+  revalidatePath("/produksi/production-orders")
   return { success: true }
 }
 
@@ -220,6 +220,6 @@ export async function updateProductionOrder(id: number, formData: FormData) {
     return po
   })
 
-  revalidatePath("/manufacturing/production-orders")
+  revalidatePath("/produksi/production-orders")
   return { success: true, id: productionOrder.id }
 }

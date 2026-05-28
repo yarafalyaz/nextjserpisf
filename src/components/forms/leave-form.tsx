@@ -33,7 +33,7 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
         const formData = new FormData(e.currentTarget)
         leave?.id ? await updateLeaveRequest(leave.id, formData) : await createLeaveRequest(formData)
         showSuccess(leave?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/hrm/leave")
+        router.push("/sdm/cuti")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

@@ -5,11 +5,11 @@ import {
 } from "lucide-react"
 
 const inventoryModules = [
-  { label: "Stock Moves", href: "/inventory/stock-moves", icon: BarChart3, desc: "Pergerakan stok" },
-  { label: "Adjustments", href: "/inventory/adjustments", icon: Scale, desc: "Penyesuaian stok" },
-  { label: "Transfers", href: "/inventory/transfers", icon: ArrowLeftRight, desc: "Transfer antar gudang" },
-  { label: "Material Issues", href: "/inventory/material-issues", icon: Wrench, desc: "Pengeluaran material" },
-  { label: "Racks", href: "/inventory/racks", icon: Grid3X3, desc: "Kelola rak gudang" },
+  { label: "Stock Moves", href: "/inventaris/mutasi-stok", icon: BarChart3, desc: "Pergerakan stok" },
+  { label: "Adjustments", href: "/inventaris/penyesuaian", icon: Scale, desc: "Penyesuaian stok" },
+  { label: "Transfers", href: "/inventaris/transfer", icon: ArrowLeftRight, desc: "Transfer antar gudang" },
+  { label: "Material Issues", href: "/inventaris/pengeluaran-material", icon: Wrench, desc: "Pengeluaran material" },
+  { label: "Racks", href: "/inventaris/rak", icon: Grid3X3, desc: "Kelola rak gudang" },
 ]
 
 export default function InventoryPage() {

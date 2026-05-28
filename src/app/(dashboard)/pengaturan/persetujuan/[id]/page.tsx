@@ -30,8 +30,8 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/settings" },
-        { label: "Approvals", href: "/settings/approvals" },
+        { label: "Settings", href: "/pengaturan" },
+        { label: "Approvals", href: "/pengaturan/persetujuan" },
         { label: `#${approval.id}` },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

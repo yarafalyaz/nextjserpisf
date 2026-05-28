@@ -32,15 +32,15 @@ export default async function RackDetailPage({
         title={`Rak ${rack.name}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Inventory", href: "/inventory" },
-          { label: "Rak", href: "/inventory/racks" },
+          { label: "Inventory", href: "/inventaris" },
+          { label: "Rak", href: "/inventaris/rak" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/inventory/racks/${rack.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={rack.id} action={deleteRack} />
-            <BackButton href="/inventory/racks" />
+            <BackButton href="/inventaris/rak" />
           </>
         }
       />

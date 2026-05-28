@@ -48,7 +48,7 @@ export default async function WarehousesPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama atau kode..." action="/master/warehouses" />
+          <AppSearchField placeholder="Cari nama atau kode..." action="/master/gudang" />
         </div>
 
         <WarehouseTable data={tableData} />

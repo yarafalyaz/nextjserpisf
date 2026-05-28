@@ -47,7 +47,7 @@ export async function createPurchaseRequest(formData: FormData) {
     },
   })
 
-  revalidatePath("/purchase/requests")
+  revalidatePath("/pembelian/permintaan")
   return { success: true, id: pr.id }
 }
 
@@ -67,7 +67,7 @@ export async function approvePurchaseRequest(prId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
-  revalidatePath("/purchase/requests")
+  revalidatePath("/pembelian/permintaan")
   return { success: true }
 }
 
@@ -103,7 +103,7 @@ export async function createPurchaseOrder(formData: FormData) {
   // Notify admins
   await notificationService.notifyAdmins('Purchase Order baru dibuat', `/purchase/orders/${po.id}`)
 
-  revalidatePath("/purchase/orders")
+  revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }
 }
 
@@ -123,7 +123,7 @@ export async function approvePurchaseOrder(poId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
-  revalidatePath("/purchase/orders")
+  revalidatePath("/pembelian/pesanan")
   return { success: true }
 }
 
@@ -135,7 +135,7 @@ export async function markPurchaseOrderOrdered(poId: number) {
     data: { status: "ordered" },
   })
 
-  revalidatePath("/purchase/orders")
+  revalidatePath("/pembelian/pesanan")
   return { success: true }
 }
 
@@ -150,7 +150,7 @@ export async function markPurchaseOrderReceived(poId: number) {
   // Trigger accounting hook
   await onPurchaseOrderReceived(poId, Number(user.id))
 
-  revalidatePath("/purchase/orders")
+  revalidatePath("/pembelian/pesanan")
   return { success: true }
 }
 
@@ -185,7 +185,7 @@ export async function createGoodsReceipt(formData: FormData) {
     },
   })
 
-  revalidatePath("/purchase/goods-receipts")
+  revalidatePath("/pembelian/penerimaan")
   return { success: true, id: gr.id }
 }
 
@@ -206,8 +206,8 @@ export async function verifyGoodsReceipt(grId: number) {
   // Notify admins
   await notificationService.notifyAdmins('Goods Receipt diterima', `/purchase/goods-receipts/${grId}`)
 
-  revalidatePath("/purchase/goods-receipts")
-  revalidatePath("/purchase/orders")
+  revalidatePath("/pembelian/penerimaan")
+  revalidatePath("/pembelian/pesanan")
   return { success: true }
 }
 
@@ -249,7 +249,7 @@ export async function createVendorBill(formData: FormData) {
   }
 
   await onVendorBillPosted(bill.id, Number(user.id))
-  revalidatePath("/purchase/bills")
+  revalidatePath("/pembelian/tagihan")
   return { success: true, id: bill.id }
 }
 
@@ -287,7 +287,7 @@ export async function createVendorPayment(formData: FormData) {
 
   await onVendorPaymentCreated(payment.id, Number(user.id))
 
-  revalidatePath("/purchase/payments")
+  revalidatePath("/pembelian/pembayaran")
   return { success: true, id: payment.id }
 }
 
@@ -321,7 +321,7 @@ export async function createPurchaseReturn(formData: FormData) {
     },
   })
 
-  revalidatePath("/purchase/returns")
+  revalidatePath("/pembelian/retur")
   return { success: true, id: purchaseReturn.id }
 }
 
@@ -347,7 +347,7 @@ export async function processPurchaseReturn(returnId: number) {
   // Accounting journal
   await onPurchaseReturnProcessed(returnId, Number(user.id))
 
-  revalidatePath("/purchase/returns")
+  revalidatePath("/pembelian/retur")
   return { success: true }
 }
 
@@ -363,7 +363,7 @@ export async function deletePurchaseRequest(id: number) {
 
   await prisma.purchaseRequest.delete({ where: { id } })
 
-  revalidatePath("/purchase/requests")
+  revalidatePath("/pembelian/permintaan")
   return { success: true }
 }
 
@@ -407,8 +407,8 @@ export async function deletePurchaseOrder(id: number) {
     await tx.purchaseOrder.delete({ where: { id } })
   })
 
-  revalidatePath("/purchase/orders")
-  revalidatePath("/purchase/goods-receipts")
+  revalidatePath("/pembelian/pesanan")
+  revalidatePath("/pembelian/penerimaan")
   return { success: true }
 }
 
@@ -443,8 +443,8 @@ export async function deleteGoodsReceipt(id: number) {
     }
   })
 
-  revalidatePath("/purchase/goods-receipts")
-  revalidatePath("/purchase/orders")
+  revalidatePath("/pembelian/penerimaan")
+  revalidatePath("/pembelian/pesanan")
   return { success: true }
 }
 
@@ -453,7 +453,7 @@ export async function deleteVendorBill(id: number) {
 
   await prisma.vendorBill.delete({ where: { id } })
 
-  revalidatePath("/purchase/bills")
+  revalidatePath("/pembelian/tagihan")
   return { success: true }
 }
 
@@ -462,7 +462,7 @@ export async function deleteVendorPayment(id: number) {
 
   await prisma.vendorPayment.delete({ where: { id } })
 
-  revalidatePath("/purchase/payments")
+  revalidatePath("/pembelian/pembayaran")
   return { success: true }
 }
 
@@ -503,7 +503,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/purchase/requests")
+  revalidatePath("/pembelian/permintaan")
   return { success: true, id: pr.id }
 }
 
@@ -540,7 +540,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   // Notify admins
   await notificationService.notifyAdmins('Purchase Order baru dibuat', `/purchase/orders/${po.id}`)
 
-  revalidatePath("/purchase/orders")
+  revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }
 }
 
@@ -579,7 +579,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
     }
   }
 
-  revalidatePath("/purchase/bills")
+  revalidatePath("/pembelian/tagihan")
   return { success: true, id: bill.id }
 }
 
@@ -621,7 +621,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
     return updated
   })
 
-  revalidatePath("/purchase/goods-receipts")
+  revalidatePath("/pembelian/penerimaan")
   return { success: true, id: gr.id }
 }
 
@@ -656,7 +656,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/purchase/returns")
+  revalidatePath("/pembelian/retur")
   return { success: true, id: purchaseReturn.id }
 }
 
@@ -694,12 +694,12 @@ export async function updateVendorPayment(id: number, formData: FormData) {
   }
 
   await onVendorPaymentCreated(payment.id, Number(user.id))
-  revalidatePath("/purchase/vendor-payments")
+  revalidatePath("/pembelian/pembayaran-vendor")
   return { success: true, id: payment.id }
 }
 export async function deletePurchaseReturn(id: number) {
   "use server"
   await prisma.purchaseReturn.delete({ where: { id } })
-  revalidatePath("/purchase/returns")
+  revalidatePath("/pembelian/retur")
   return { success: true }
 }

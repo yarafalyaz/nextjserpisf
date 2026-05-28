@@ -27,7 +27,7 @@ export function AssetForm({ categories, brands, asset, generatedCode }: AssetFor
         const formData = new FormData(e.currentTarget)
         await createAsset(formData)
         showSuccess(asset?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/assets")
+        router.push("/aset")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

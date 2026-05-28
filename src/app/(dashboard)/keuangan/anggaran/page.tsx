@@ -33,19 +33,19 @@ export default async function BudgetsPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/finance" },
+  { label: "Finance", href: "/keuangan" },
   { label: "Budgets" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Budgets</h1>
-        <Link href="/finance/budgets/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-budget-btn">
+        <Link href="/keuangan/anggaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-budget-btn">
           + Buat Budget
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama budget..." action="/finance/budgets" />
+          <AppSearchField placeholder="Cari nama budget..." action="/keuangan/anggaran" />
         </div>
 
         <BudgetTable data={data} />

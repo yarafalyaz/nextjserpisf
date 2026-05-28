@@ -46,7 +46,7 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
           await createTask(formData)
         }
         showSuccess(task?.id ? "Tugas berhasil diupdate" : "Tugas berhasil ditambahkan")
-        router.push("/projects/tasks")
+        router.push("/proyek/tugas")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

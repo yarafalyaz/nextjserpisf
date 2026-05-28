@@ -25,13 +25,13 @@ export default async function UomDetailPage({
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
           { label: "Master Data" },
-          { label: "UoM", href: "/master/uom" },
+          { label: "UoM", href: "/master/satuan" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/master/uom/${id}/edit`} variant="primary">Edit</Button>
-            <BackButton href="/master/uom" />
+            <BackButton href="/master/satuan" />
           </>
         }
       />

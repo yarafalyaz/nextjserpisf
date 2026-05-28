@@ -63,8 +63,8 @@ export default async function ItemsPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari SKU atau nama item..." action="/master/items" />
-          <form className="flex gap-2" action="/master/items">
+          <AppSearchField placeholder="Cari SKU atau nama item..." action="/master/barang" />
+          <form className="flex gap-2" action="/master/barang">
             <select name="category" className="form-input" defaultValue={params.category}>
               <option value="">Semua Kategori</option>
               {categories.map((cat) => (

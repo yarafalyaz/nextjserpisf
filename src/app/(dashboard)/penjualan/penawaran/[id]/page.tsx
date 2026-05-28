@@ -40,8 +40,8 @@ export default async function QuotationDetailPage({
         title={`Quotation ${quotation.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/sales" },
-          { label: "Quotations", href: "/sales/quotations" },
+          { label: "Sales", href: "/penjualan" },
+          { label: "Quotations", href: "/penjualan/penawaran" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={quotation.status} />}
@@ -52,7 +52,7 @@ export default async function QuotationDetailPage({
             {quotation.status === "approved" && (
               <Button href={`/sales/orders/create?quotationId=${id}`} variant="primary">+ Sales Order</Button>
             )}
-            <BackButton href="/sales/quotations" />
+            <BackButton href="/penjualan/penawaran" />
           </>
         }
       />

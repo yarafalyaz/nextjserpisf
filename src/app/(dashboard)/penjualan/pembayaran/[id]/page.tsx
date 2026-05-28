@@ -33,8 +33,8 @@ export default async function SalesPaymentDetailPage({
         title={`Pembayaran ${payment.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/sales" },
-          { label: "Payments", href: "/sales/payments" },
+          { label: "Sales", href: "/penjualan" },
+          { label: "Payments", href: "/penjualan/pembayaran" },
           { label: "Detail" },
         ]}
         actions={
@@ -42,7 +42,7 @@ export default async function SalesPaymentDetailPage({
             <Button href={`/sales/payments/${payment.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={payment.id} action={deleteSalesPayment} />
-            <BackButton href="/sales/payments" />
+            <BackButton href="/penjualan/pembayaran" />
           </>
         }
       />

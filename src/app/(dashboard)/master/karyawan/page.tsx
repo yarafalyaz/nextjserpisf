@@ -48,7 +48,7 @@ export default async function EmployeesPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama, NIP, atau telepon..." action="/master/employees" />
+          <AppSearchField placeholder="Cari nama, NIP, atau telepon..." action="/master/karyawan" />
         </div>
 
         <EmployeeTable data={tableData} />

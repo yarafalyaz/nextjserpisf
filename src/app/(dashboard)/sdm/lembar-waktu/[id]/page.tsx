@@ -30,15 +30,15 @@ export default async function TimesheetDetailPage({
         title="Timesheet"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Timesheet", href: "/hrm/timesheets" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Timesheet", href: "/sdm/lembar-waktu" },
           { label: "Detail" },
         ]}
         actions={
           <>
             <Button href={`/hrm/timesheets/${timesheet.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={timesheet.id} action={deleteTimesheet} />
-            <BackButton href="/hrm/timesheets" />
+            <BackButton href="/sdm/lembar-waktu" />
           </>
         }
       />

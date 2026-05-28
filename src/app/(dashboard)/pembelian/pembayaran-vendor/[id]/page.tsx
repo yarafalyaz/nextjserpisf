@@ -35,8 +35,8 @@ export default async function VendorPaymentDetailPage({
         title={`Pembayaran Vendor ${payment.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/purchase" },
-          { label: "Vendor Payments", href: "/purchase/vendor-payments" },
+          { label: "Purchase", href: "/pembelian" },
+          { label: "Vendor Payments", href: "/pembelian/pembayaran-vendor" },
           { label: "Detail" },
         ]}
         actions={
@@ -44,7 +44,7 @@ export default async function VendorPaymentDetailPage({
             <Button href={`/purchase/vendor-payments/${payment.id}/edit`} variant="primary">Edit</Button>
             <PrintButton />
             <DeleteButton id={payment.id} action={deleteVendorPayment} />
-            <BackButton href="/purchase/vendor-payments" />
+            <BackButton href="/pembelian/pembayaran-vendor" />
           </>
         }
       />

@@ -26,7 +26,7 @@ export function UomForm({ uom }: { uom?: any } = {}) {
         })
         if (!res.ok) throw new Error("Gagal menyimpan")
         showSuccess(uom?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/master/uom")
+        router.push("/master/satuan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

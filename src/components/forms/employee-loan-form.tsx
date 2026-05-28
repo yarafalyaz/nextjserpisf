@@ -26,7 +26,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
         const formData = new FormData(e.currentTarget)
         loan?.id ? await updateEmployeeLoan(loan.id, formData) : await createEmployeeLoan(formData)
         showSuccess(loan?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/hrm/loans")
+        router.push("/sdm/pinjaman")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

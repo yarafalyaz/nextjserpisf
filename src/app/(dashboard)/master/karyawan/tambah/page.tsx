@@ -20,7 +20,7 @@ export default async function CreateEmployeePage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Employees", href: "/master/employees" },
+  { label: "Employees", href: "/master/karyawan" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

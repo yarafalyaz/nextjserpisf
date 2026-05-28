@@ -142,7 +142,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
           await createItem(formData)
         }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-        router.push("/master/items")
+        router.push("/master/barang")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

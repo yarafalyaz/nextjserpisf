@@ -31,8 +31,8 @@ export default async function EmployeeLoanDetailPage({
         title="Pinjaman Karyawan"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Pinjaman", href: "/hrm/loans" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Pinjaman", href: "/sdm/pinjaman" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={loan.status} />}
@@ -40,7 +40,7 @@ export default async function EmployeeLoanDetailPage({
           <>
             <Button href={`/hrm/loans/${loan.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={loan.id} action={deleteEmployeeLoan} />
-            <BackButton href="/hrm/loans" />
+            <BackButton href="/sdm/pinjaman" />
           </>
         }
       />

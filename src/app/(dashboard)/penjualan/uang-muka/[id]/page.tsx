@@ -34,8 +34,8 @@ export default async function DownPaymentDetailPage({
         title={`Down Payment ${dp.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/sales" },
-          { label: "Down Payments", href: "/sales/down-payments" },
+          { label: "Sales", href: "/penjualan" },
+          { label: "Down Payments", href: "/penjualan/uang-muka" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={dp.status} />}
@@ -47,7 +47,7 @@ export default async function DownPaymentDetailPage({
             )}
             <PrintButton />
             <DeleteButton id={dp.id} action={deleteDownPayment} />
-            <BackButton href="/sales/down-payments" />
+            <BackButton href="/penjualan/uang-muka" />
           </>
         }
       />

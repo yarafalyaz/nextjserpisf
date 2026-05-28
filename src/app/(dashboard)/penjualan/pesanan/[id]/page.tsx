@@ -37,8 +37,8 @@ export default async function SalesOrderDetailPage({
         title={`Sales Order ${order.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/sales" },
-          { label: "Orders", href: "/sales/orders" },
+          { label: "Sales", href: "/penjualan" },
+          { label: "Orders", href: "/penjualan/pesanan" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={order.status} />}
@@ -49,7 +49,7 @@ export default async function SalesOrderDetailPage({
               <Button href={`/sales/down-payments/create?salesOrderId=${order.id}`} variant="primary">+ Down Payment</Button>
             )}
             <PrintButton documentType="order" documentId={order.id} />
-            <BackButton href="/sales/orders" />
+            <BackButton href="/penjualan/pesanan" />
           </>
         }
       />

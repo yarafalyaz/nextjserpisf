@@ -32,8 +32,8 @@ export default async function LeaveRequestDetailPage({
         title="Pengajuan Cuti"
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/hrm" },
-          { label: "Cuti", href: "/hrm/leave" },
+          { label: "HRM", href: "/sdm" },
+          { label: "Cuti", href: "/sdm/cuti" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={leave.status} />}
@@ -41,7 +41,7 @@ export default async function LeaveRequestDetailPage({
           <>
             <Button href={`/hrm/leave/${leave.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={leave.id} action={deleteLeaveRequest} />
-            <BackButton href="/hrm/leave" />
+            <BackButton href="/sdm/cuti" />
           </>
         }
       />

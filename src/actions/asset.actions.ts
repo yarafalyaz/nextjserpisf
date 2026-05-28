@@ -20,7 +20,7 @@ export async function createAssetCategory(formData: FormData) {
     },
   })
 
-  revalidatePath("/assets/categories")
+  revalidatePath("/aset/kategori")
   return { success: true, id: category.id }
 }
 
@@ -35,7 +35,7 @@ export async function createAssetBrand(formData: FormData) {
     },
   })
 
-  revalidatePath("/assets/brands")
+  revalidatePath("/aset/merek")
   return { success: true, id: brand.id }
 }
 
@@ -66,8 +66,8 @@ export async function createAssetTransfer(formData: FormData) {
     data: { location: toLocation },
   })
 
-  revalidatePath("/assets/transfers")
-  revalidatePath("/assets")
+  revalidatePath("/aset/transfer")
+  revalidatePath("/aset")
   return { success: true, id: transfer.id }
 }
 
@@ -78,7 +78,7 @@ export async function deleteAssetCategory(id: number) {
 
   await prisma.assetCategory.delete({ where: { id } })
 
-  revalidatePath("/assets/categories")
+  revalidatePath("/aset/kategori")
   return { success: true }
 }
 
@@ -87,7 +87,7 @@ export async function deleteAssetBrand(id: number) {
 
   await prisma.assetBrand.delete({ where: { id } })
 
-  revalidatePath("/assets/brands")
+  revalidatePath("/aset/merek")
   return { success: true }
 }
 
@@ -96,7 +96,7 @@ export async function deleteAssetTransfer(id: number) {
 
   await prisma.assetTransfer.delete({ where: { id } })
 
-  revalidatePath("/assets/transfers")
+  revalidatePath("/aset/transfer")
   return { success: true }
 }
 
@@ -113,7 +113,7 @@ export async function updateAssetBrand(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/assets/brands")
+  revalidatePath("/aset/merek")
   return { success: true, id: brand.id }
 }
 
@@ -132,7 +132,7 @@ export async function updateAssetCategory(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/assets/categories")
+  revalidatePath("/aset/kategori")
   return { success: true, id: category.id }
 }
 
@@ -181,7 +181,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
     return updated
   })
 
-  revalidatePath("/assets/transfers")
+  revalidatePath("/aset/transfer")
   return { success: true, id: transfer.id }
 }
 export async function createAsset(formData: FormData) {
@@ -207,6 +207,6 @@ export async function createAsset(formData: FormData) {
     },
   })
 
-  revalidatePath("/assets")
+  revalidatePath("/aset")
   return { success: true, id: asset.id }
 }

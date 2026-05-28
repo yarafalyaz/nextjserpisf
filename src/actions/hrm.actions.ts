@@ -41,7 +41,7 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
     },
   })
 
-  revalidatePath("/hrm/attendance")
+  revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 }
 
@@ -75,7 +75,7 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
     },
   })
 
-  revalidatePath("/hrm/attendance")
+  revalidatePath("/sdm/absensi")
   return { success: true }
 }
 
@@ -98,7 +98,7 @@ export async function createAttendance(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/attendance")
+  revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 }
 
@@ -122,7 +122,7 @@ export async function updateAttendance(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/attendance")
+  revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 }
 
@@ -142,7 +142,7 @@ export async function createLeaveRequest(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/leave")
+  revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
 }
 
@@ -162,7 +162,7 @@ export async function approveLeave(leaveId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
-  revalidatePath("/hrm/leave")
+  revalidatePath("/sdm/cuti")
   return { success: true }
 }
 
@@ -178,7 +178,7 @@ export async function rejectLeave(leaveId: number, reason?: string) {
     },
   })
 
-  revalidatePath("/hrm/leave")
+  revalidatePath("/sdm/cuti")
   return { success: true }
 }
 
@@ -201,7 +201,7 @@ export async function createOvertimeRequest(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/overtime")
+  revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
 }
 
@@ -213,7 +213,7 @@ export async function approveOvertime(overtimeId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
-  revalidatePath("/hrm/overtime")
+  revalidatePath("/sdm/lembur")
   return { success: true }
 }
 
@@ -270,7 +270,7 @@ export async function processPayroll(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/payroll")
+  revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
 }
 
@@ -323,7 +323,7 @@ export async function updatePayroll(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/payroll")
+  revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
 }
 
@@ -343,7 +343,7 @@ export async function approvePayroll(payrollId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
-  revalidatePath("/hrm/payroll")
+  revalidatePath("/sdm/penggajian")
   return { success: true }
 }
 
@@ -366,7 +366,7 @@ export async function createEmployeeLoan(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/loans")
+  revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
 }
 
@@ -388,7 +388,7 @@ export async function createTimesheet(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/timesheets")
+  revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
 }
 
@@ -417,7 +417,7 @@ export async function createWorkSchedule(formData: FormData) {
 
   await prisma.workSchedule.createMany({ data: schedules })
 
-  revalidatePath("/hrm/work-schedules")
+  revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 }
 
@@ -434,7 +434,7 @@ export async function createHoliday(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/holidays")
+  revalidatePath("/sdm/hari-libur")
   return { success: true, id: holiday.id }
 }
 
@@ -445,7 +445,7 @@ export async function deleteLeaveRequest(id: number) {
 
   await prisma.leaveRequest.delete({ where: { id } })
 
-  revalidatePath("/hrm/leave")
+  revalidatePath("/sdm/cuti")
   return { success: true }
 }
 
@@ -454,7 +454,7 @@ export async function deleteOvertimeRequest(id: number) {
 
   await prisma.overtimeRequest.delete({ where: { id } })
 
-  revalidatePath("/hrm/overtime")
+  revalidatePath("/sdm/lembur")
   return { success: true }
 }
 
@@ -463,7 +463,7 @@ export async function deleteTimesheet(id: number) {
 
   await prisma.timesheet.delete({ where: { id } })
 
-  revalidatePath("/hrm/timesheets")
+  revalidatePath("/sdm/lembar-waktu")
   return { success: true }
 }
 
@@ -472,7 +472,7 @@ export async function deleteEmployeeLoan(id: number) {
 
   await prisma.employeeLoan.delete({ where: { id } })
 
-  revalidatePath("/hrm/loans")
+  revalidatePath("/sdm/pinjaman")
   return { success: true }
 }
 
@@ -481,7 +481,7 @@ export async function deleteWorkSchedule(id: number) {
 
   await prisma.workSchedule.delete({ where: { id } })
 
-  revalidatePath("/hrm/work-schedules")
+  revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 }
 
@@ -490,7 +490,7 @@ export async function deleteHoliday(id: number) {
 
   await prisma.holiday.delete({ where: { id } })
 
-  revalidatePath("/hrm/holidays")
+  revalidatePath("/sdm/hari-libur")
   return { success: true }
 }
 
@@ -512,7 +512,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/leave")
+  revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
 }
 
@@ -536,7 +536,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/overtime")
+  revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
 }
 
@@ -560,7 +560,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/loans")
+  revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
 }
 
@@ -583,7 +583,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/timesheets")
+  revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
 }
 
@@ -615,7 +615,7 @@ export async function updateWorkSchedule(id: number, formData: FormData) {
 
   await prisma.workSchedule.createMany({ data: schedules })
 
-  revalidatePath("/hrm/work-schedules")
+  revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 }
 
@@ -633,7 +633,7 @@ export async function createDepartmentHoliday(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/department-holidays")
+  revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
 }
 
@@ -652,7 +652,7 @@ export async function updateDepartmentHoliday(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/department-holidays")
+  revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
 }
 
@@ -661,7 +661,7 @@ export async function deleteDepartmentHoliday(id: number) {
 
   await prisma.departmentHoliday.delete({ where: { id } })
 
-  revalidatePath("/hrm/department-holidays")
+  revalidatePath("/sdm/hari-libur-departemen")
   return { success: true }
 }
 
@@ -680,7 +680,7 @@ export async function createAppreciation(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/appreciations")
+  revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
 }
 
@@ -700,7 +700,7 @@ export async function updateAppreciation(formData: FormData) {
     },
   })
 
-  revalidatePath("/hrm/appreciations")
+  revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
 }
 
@@ -709,6 +709,6 @@ export async function deleteAppreciation(id: number) {
 
   await prisma.appreciation.delete({ where: { id } })
 
-  revalidatePath("/hrm/appreciations")
+  revalidatePath("/sdm/apresiasi")
   return { success: true }
 }

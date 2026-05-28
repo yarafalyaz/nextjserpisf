@@ -21,7 +21,7 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
         const formData = new FormData(e.currentTarget)
         overtime?.id ? await updateOvertimeRequest(overtime.id, formData) : await createOvertimeRequest(formData)
         showSuccess(overtime?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/hrm/overtime")
+        router.push("/sdm/lembur")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

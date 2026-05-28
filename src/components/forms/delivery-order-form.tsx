@@ -27,7 +27,7 @@ export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderF
         const { createDeliveryOrder, updateDeliveryOrder } = await import("@/actions/sales.actions")
         deliveryOrder?.id ? await updateDeliveryOrder(deliveryOrder.id, formData) : await createDeliveryOrder(formData)
         showSuccess(deliveryOrder?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/sales/delivery-orders")
+        router.push("/penjualan/surat-jalan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

@@ -34,8 +34,8 @@ export default async function InventoryTransferDetailPage({
         title={`Transfer Stok ${transfer.documentNo}`}
         breadcrumbs={[
           { label: "Dashboard", href: "/" },
-          { label: "Inventory", href: "/inventory" },
-          { label: "Transfer", href: "/inventory/transfers" },
+          { label: "Inventory", href: "/inventaris" },
+          { label: "Transfer", href: "/inventaris/transfer" },
           { label: transfer.documentNo },
         ]}
         badge={<StatusChip status={transfer.status} />}
@@ -43,7 +43,7 @@ export default async function InventoryTransferDetailPage({
           <>
             <Button href={`/inventory/transfers/${transfer.id}/edit`} variant="primary">Edit</Button>
             <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
-            <BackButton href="/inventory/transfers" />
+            <BackButton href="/inventaris/transfer" />
           </>
         }
       />

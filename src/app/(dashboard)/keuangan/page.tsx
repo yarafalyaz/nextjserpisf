@@ -6,14 +6,14 @@ import {
 } from "lucide-react"
 
 const financeModules = [
-  { label: "Journals", href: "/finance/journals", icon: BookOpenCheck, desc: "Jurnal umum" },
-  { label: "Expenses", href: "/finance/expenses", icon: CircleDollarSign, desc: "Pengeluaran" },
-  { label: "Petty Cash", href: "/finance/petty-cash", icon: Coins, desc: "Kas kecil" },
-  { label: "Budgets", href: "/finance/budgets", icon: PiggyBank, desc: "Anggaran" },
-  { label: "Cost Centers", href: "/finance/cost-centers", icon: Target, desc: "Pusat biaya" },
-  { label: "Bank Statements", href: "/finance/bank-statements", icon: FileSpreadsheet, desc: "Mutasi bank" },
-  { label: "Bank Recon", href: "/finance/bank-reconciliation", icon: Landmark, desc: "Rekonsiliasi bank" },
-  { label: "Statistical KF", href: "/finance/statistical-key-figures", icon: BarChart3, desc: "Key figures statistik" },
+  { label: "Journals", href: "/keuangan/jurnal", icon: BookOpenCheck, desc: "Jurnal umum" },
+  { label: "Expenses", href: "/keuangan/pengeluaran", icon: CircleDollarSign, desc: "Pengeluaran" },
+  { label: "Petty Cash", href: "/keuangan/kas-kecil", icon: Coins, desc: "Kas kecil" },
+  { label: "Budgets", href: "/keuangan/anggaran", icon: PiggyBank, desc: "Anggaran" },
+  { label: "Cost Centers", href: "/keuangan/pusat-biaya", icon: Target, desc: "Pusat biaya" },
+  { label: "Bank Statements", href: "/keuangan/laporan-bank", icon: FileSpreadsheet, desc: "Mutasi bank" },
+  { label: "Bank Recon", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, desc: "Rekonsiliasi bank" },
+  { label: "Statistical KF", href: "/keuangan/angka-kunci-statistik", icon: BarChart3, desc: "Key figures statistik" },
 ]
 
 export default function FinancePage() {

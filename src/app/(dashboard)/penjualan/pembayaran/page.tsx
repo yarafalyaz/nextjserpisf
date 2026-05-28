@@ -47,19 +47,19 @@ export default async function SalesPaymentsPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/sales" },
+  { label: "Sales", href: "/penjualan" },
   { label: "Payments" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pembayaran Penjualan</h1>
-        <Link href="/sales/payments/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-payment-btn">
+        <Link href="/penjualan/pembayaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-payment-btn">
           + Terima Pembayaran
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen atau customer..." action="/sales/payments" />
+          <AppSearchField placeholder="Cari no. dokumen atau customer..." action="/penjualan/pembayaran" />
         </div>
 
         <PaymentTable data={tableData} />

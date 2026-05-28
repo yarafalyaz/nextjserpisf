@@ -50,7 +50,7 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
         expense?.id ? await updateExpense(expense.id, formData) : await createExpense(formData)
         showSuccess(expense?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/finance/expenses")
+        router.push("/keuangan/pengeluaran")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

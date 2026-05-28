@@ -73,7 +73,7 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
         if (isEdit) { await updateCustomer(customer!.id, formData) }
         else { await createCustomer(formData) }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-        router.push("/master/customers")
+        router.push("/master/pelanggan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

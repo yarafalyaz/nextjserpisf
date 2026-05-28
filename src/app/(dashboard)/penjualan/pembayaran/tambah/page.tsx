@@ -29,8 +29,8 @@ export default async function CreatePaymentPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/sales" },
-  { label: "Payments", href: "/sales/payments" },
+  { label: "Sales", href: "/penjualan" },
+  { label: "Payments", href: "/penjualan/pembayaran" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

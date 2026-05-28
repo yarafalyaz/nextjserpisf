@@ -18,7 +18,7 @@ export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code
         const { createCostCenter, updateCostCenter } = await import("@/actions/finance.actions")
         costCenter?.id ? await updateCostCenter(costCenter.id, formData) : await createCostCenter(formData)
         showSuccess(costCenter?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/finance/cost-centers")
+        router.push("/keuangan/pusat-biaya")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

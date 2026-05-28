@@ -19,7 +19,7 @@ export function AssetCategoryForm({ category }: { category?: { id: number; name:
         const { createAssetCategory, updateAssetCategory } = await import("@/actions/asset.actions")
         category?.id ? await updateAssetCategory(category.id, formData) : await createAssetCategory(formData)
         showSuccess(category?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/assets/categories")
+        router.push("/aset/kategori")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

@@ -30,8 +30,8 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/settings" },
-        { label: "Roles", href: "/settings/roles" },
+        { label: "Settings", href: "/pengaturan" },
+        { label: "Roles", href: "/pengaturan/peran" },
         { label: role.name },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

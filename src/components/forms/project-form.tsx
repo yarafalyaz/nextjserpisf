@@ -56,7 +56,7 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
           await createProject(formData)
           showSuccess("Data berhasil ditambahkan")
         }
-        router.push("/projects")
+        router.push("/proyek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

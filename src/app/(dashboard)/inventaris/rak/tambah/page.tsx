@@ -16,7 +16,7 @@ export default function CreateRackPage() {
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       await createRack(formData)
-      router.push("/inventory/racks")
+      router.push("/inventaris/rak")
       router.refresh()
     })
   }
@@ -25,8 +25,8 @@ export default function CreateRackPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Inventory", href: "/inventory" },
-  { label: "Racks", href: "/inventory/racks" },
+  { label: "Inventory", href: "/inventaris" },
+  { label: "Racks", href: "/inventaris/rak" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

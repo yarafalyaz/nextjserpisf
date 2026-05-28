@@ -42,7 +42,7 @@ export default async function BanksPage({
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama atau kode bank..." action="/master/banks" />
+          <AppSearchField placeholder="Cari nama atau kode bank..." action="/master/bank" />
         </div>
 
         <BankTable data={tableData} />

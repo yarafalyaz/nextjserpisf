@@ -78,7 +78,7 @@ export default async function StockValuationPage({
       <PrintHeader title="Stock Valuation per Gudang" period={period} />
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "Stock Valuation" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

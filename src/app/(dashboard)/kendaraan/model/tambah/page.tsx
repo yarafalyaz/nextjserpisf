@@ -17,8 +17,8 @@ export default async function CreateVehicleModelPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Vehicles", href: "/vehicles" },
-  { label: "Models", href: "/vehicles/models" },
+  { label: "Vehicles", href: "/kendaraan" },
+  { label: "Models", href: "/kendaraan/model" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

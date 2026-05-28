@@ -69,7 +69,7 @@ export default async function StockMovementPage({
       <PrintHeader title="Laporan Mutasi Stok" period={period} />
       <AppBreadcrumbs items={[
         { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/reports" },
+        { label: "Reports", href: "/laporan" },
         { label: "Stock Movement" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

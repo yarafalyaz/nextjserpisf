@@ -11,8 +11,8 @@ export default async function CreateAssetCategoryPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Assets", href: "/assets" },
-  { label: "Categories", href: "/assets/categories" },
+  { label: "Assets", href: "/aset" },
+  { label: "Categories", href: "/aset/kategori" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

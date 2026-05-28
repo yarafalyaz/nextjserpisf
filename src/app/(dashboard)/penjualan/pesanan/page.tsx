@@ -48,17 +48,17 @@ export default async function SalesOrdersPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/sales"},{label:"Pesanan"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Pesanan"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pesanan Penjualan</h1>
-<Link href="/sales/orders/create" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-so-btn">
+<Link href="/penjualan/pesanan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-so-btn">
           + Buat Sales Order
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen atau customer..." action="/sales/orders" />
+          <AppSearchField placeholder="Cari no. dokumen atau customer..." action="/penjualan/pesanan" />
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "confirmed", "completed", "cancelled"].map((s) => (
               <Link

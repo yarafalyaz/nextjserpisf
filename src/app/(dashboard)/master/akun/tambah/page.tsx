@@ -23,7 +23,7 @@ export default async function CreateAccountPage() {
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Accounts", href: "/master/accounts" },
+  { label: "Accounts", href: "/master/akun" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

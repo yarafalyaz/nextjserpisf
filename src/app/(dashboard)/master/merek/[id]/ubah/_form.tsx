@@ -22,7 +22,7 @@ export function BrandEditForm({ brand }: BrandEditFormProps) {
       try {
         await updateBrand(brand.id, formData)
         showSuccess("Brand berhasil diperbarui")
-        router.push("/master/brands")
+        router.push("/master/merek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

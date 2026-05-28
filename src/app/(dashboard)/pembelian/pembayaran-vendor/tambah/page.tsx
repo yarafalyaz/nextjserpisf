@@ -25,8 +25,8 @@ export default async function CreateVendorPaymentPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dashboard", href: "/" },
-  { label: "Purchase", href: "/purchase" },
-  { label: "Vendor Payments", href: "/purchase/vendor-payments" },
+  { label: "Purchase", href: "/pembelian" },
+  { label: "Vendor Payments", href: "/pembelian/pembayaran-vendor" },
   { label: "Create" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
