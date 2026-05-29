@@ -216,3 +216,52 @@ test.describe("Master Pemasok CRUD", () => {
     })
   })
 })
+
+test.describe("Master Akun Mutation", () => {
+  test("create → update", async ({ page }) => {
+    const name = `Akun E2E ${ts}`
+    const updated = `Akun E2E Updated ${ts}`
+
+    await page.goto("/master/akun/tambah", { waitUntil: "domcontentloaded" })
+    await page.locator("#name").fill(name)
+
+    // select required type
+    await page.locator("button").filter({ hasText: "Pilih Tipe" }).first().click()
+    await page.locator("[role='option'], [role='menuitem']").filter({ hasText: "ASSET" }).first().click()
+
+    await page.locator("#submit-account").click()
+    await page.waitForURL("**/master/akun", { timeout: 15000 })
+    await page.waitForLoadState("networkidle")
+    await expect(page.locator("body")).toContainText(name)
+
+    // Find edit link directly via the code/name in the table
+    const editLink = page.locator(`a[href*='/ubah']`).filter({ hasText: /Edit/ }).first()
+    // More reliable: find the edit link in the row containing our name
+    const row = page.locator(".font-mono").filter({ hasText: /ACC-/ }).last()
+    await expect(row).toBeVisible()
+    const editHref = `//a[contains(@href, '/ubah')]`
+    // Navigate directly to the edit URL by finding the record's code
+    const nameCell = page.locator("td").filter({ hasText: name }).first()
+    await expect(nameCell).toBeVisible()
+    const nameRow = nameCell.locator("xpath=ancestor::tr")
+    const editAnchor = nameRow.locator("a[href*='/ubah']").first()
+    await editAnchor.click()
+    await page.waitForURL(/\/master\/akun\/\d+\/ubah/, { timeout: 15000 })
+
+    // On edit form: fill name + re-select type (required)
+    await page.locator("#name").fill(updated)
+    // Type select doesn't have defaultValue on edit, click to open and re-select
+    const typeButton = page.locator("button").filter({ hasText: /ASSET|LIABILITY|EQUITY|REVENUE|EXPENSE|Pilih Tipe/ }).first()
+    await typeButton.click()
+    await page.locator("[role='option'], [role='menuitem']").filter({ hasText: "ASSET" }).first().click()
+
+    // Submit and wait for navigation
+    await page.locator("#submit-account").click()
+    await page.waitForLoadState("networkidle")
+    await page.waitForURL(/\/master\/akun/, { timeout: 20000 })
+    await expect(page.locator("body")).toContainText(updated)
+
+    const rowUpdated = page.locator("td").filter({ hasText: updated }).first()
+    await expect(rowUpdated).toBeVisible()
+  })
+})
