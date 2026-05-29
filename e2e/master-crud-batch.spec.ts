@@ -25,12 +25,16 @@ async function crudMaster(
   await page.waitForLoadState("networkidle")
   await expect(page.locator("body")).toContainText(opts.fields[0].value)
 
-  // ─── READ detail link ─────────────────────────────────────────
-  const link = page.locator(opts.linkSelector).filter({ hasText: opts.fields[0].value }).first()
-  await expect(link).toBeVisible()
-  const href = await link.getAttribute("href")
-  if (!href) throw new Error("Detail link not found")
-  const id = href.split("/").pop()
+  // ─── READ detail/edit via ActionDropdown ─────────────────────
+  const rowCreate = page.locator("tr").filter({ hasText: opts.fields[0].value })
+  await expect(rowCreate).toBeVisible()
+  await rowCreate.locator("button[aria-label='Menu']").click()
+  await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+  await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/\\d+\\/ubah`), { timeout: 15000 })
+  const currentUrl = page.url()
+  const idMatch = currentUrl.match(/\/(\d+)\/ubah/)
+  if (!idMatch) throw new Error("Could not parse ID from edit URL")
+  const id = idMatch[1]
 
   // ─── UPDATE ───────────────────────────────────────────────────
   await page.goto(`${opts.listUrl}/${id}/ubah`, { waitUntil: "domcontentloaded" })
@@ -50,9 +54,9 @@ async function crudMaster(
 
   // ─── DELETE ───────────────────────────────────────────────────
   const searchText = opts.fields[0].updated || opts.fields[0].value
-  const row = page.locator("tr").filter({ hasText: searchText })
-  await expect(row).toBeVisible()
-  await row.locator("button[aria-label='Menu']").click()
+  const rowAfterUpdate = page.locator("tr").filter({ hasText: searchText })
+  await expect(rowAfterUpdate).toBeVisible()
+  await rowAfterUpdate.locator("button[aria-label='Menu']").click()
   await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
   // Confirm dialog
   await page.locator("button").filter({ hasText: "Hapus" }).last().click()
@@ -62,9 +66,36 @@ async function crudMaster(
   await expect(page.locator("body")).not.toContainText(searchText)
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// TEST SUITES
-// ═══════════════════════════════════════════════════════════════════
+test.describe("Master Bank CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/master/bank",
+      createUrl: "/master/bank/tambah",
+      fields: [
+        { id: "name", value: `Bank E2E ${ts}`, updated: `Bank E2E Updated ${ts}` },
+        { id: "code", value: `BE2E${String(ts).slice(-5)}` },
+      ],
+      submitId: "submit-bank",
+      linkSelector: "a[href^='/master/bank/']",
+    })
+  })
+})
+
+test.describe("Master Syarat Pembayaran CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/master/syarat-pembayaran",
+      createUrl: "/master/syarat-pembayaran/tambah",
+      fields: [
+        { id: "name", value: `Term E2E ${ts}`, updated: `Term E2E Updated ${ts}` },
+        { id: "code", value: `TE2E${String(ts).slice(-5)}` },
+        { id: "days", value: "7", updated: "14" },
+      ],
+      submitId: "submit-payment-term",
+      linkSelector: "a[href^='/master/syarat-pembayaran/']",
+    })
+  })
+})
 
 test.describe("Master Brand CRUD", () => {
   test("create → update → delete", async ({ page }) => {
