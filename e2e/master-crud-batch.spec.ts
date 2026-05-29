@@ -11,16 +11,24 @@ async function crudMaster(
     listUrl: string
     createUrl: string
     fields: { id: string; value: string; updated?: string }[]
-    submitId: string
-    linkSelector: string // CSS selector to find detail link in list
+    submitId?: string
   }
 ) {
   // ─── CREATE ───────────────────────────────────────────────────
   await page.goto(opts.createUrl, { waitUntil: "domcontentloaded" })
   for (const f of opts.fields) {
-    await page.locator(`#${f.id}`).fill(f.value)
+    await page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first().fill(f.value)
   }
-  await page.locator(`#${opts.submitId}`).click()
+  const createSubmit = page.locator(
+    [
+      opts.submitId ? `#${opts.submitId}` : "",
+      "button[type='submit']",
+      "button:has-text('Simpan')",
+      "button:has-text('Create')",
+      "button:has-text('Tambah')",
+    ].filter(Boolean).join(", ")
+  ).first()
+  await createSubmit.click()
   await page.waitForURL(`**${opts.listUrl}`, { timeout: 15000 })
   await page.waitForLoadState("networkidle")
   await expect(page.locator("body")).toContainText(opts.fields[0].value)
@@ -40,11 +48,17 @@ async function crudMaster(
   await page.goto(`${opts.listUrl}/${id}/ubah`, { waitUntil: "domcontentloaded" })
   for (const f of opts.fields) {
     if (f.updated) {
-      await page.locator(`#${f.id}, input[name='${f.id}']`).first().fill(f.updated)
+      await page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first().fill(f.updated)
     }
   }
-  // Find submit button (may not have same ID on edit form)
-  const submitBtn = page.locator(`#${opts.submitId}, button[type='submit']:has-text('Update')`).first()
+  const submitBtn = page.locator(
+    [
+      opts.submitId ? `#${opts.submitId}` : "",
+      "button[type='submit']",
+      "button:has-text('Update')",
+      "button:has-text('Simpan')",
+    ].filter(Boolean).join(", ")
+  ).first()
   await submitBtn.click()
   await page.waitForURL(`**${opts.listUrl}`, { timeout: 15000 })
   await page.waitForLoadState("networkidle")
@@ -58,7 +72,6 @@ async function crudMaster(
   await expect(rowAfterUpdate).toBeVisible()
   await rowAfterUpdate.locator("button[aria-label='Menu']").click()
   await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
-  // Confirm dialog
   await page.locator("button").filter({ hasText: "Hapus" }).last().click()
   await page.waitForTimeout(1500)
   await page.goto(opts.listUrl, { waitUntil: "domcontentloaded" })
@@ -76,7 +89,6 @@ test.describe("Master Bank CRUD", () => {
         { id: "code", value: `BE2E${String(ts).slice(-5)}` },
       ],
       submitId: "submit-bank",
-      linkSelector: "a[href^='/master/bank/']",
     })
   })
 })
@@ -92,7 +104,6 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
         { id: "days", value: "7", updated: "14" },
       ],
       submitId: "submit-payment-term",
-      linkSelector: "a[href^='/master/syarat-pembayaran/']",
     })
   })
 })
@@ -106,7 +117,6 @@ test.describe("Master Brand CRUD", () => {
         { id: "name", value: `Brand E2E ${ts}`, updated: `Brand E2E Updated ${ts}` },
       ],
       submitId: "submit-brand",
-      linkSelector: "a[href^='/master/merek/']",
     })
   })
 })
@@ -120,7 +130,6 @@ test.describe("Master Kategori Barang CRUD", () => {
         { id: "name", value: `Kategori E2E ${ts}`, updated: `Kategori E2E Updated ${ts}` },
       ],
       submitId: "submit-item-category",
-      linkSelector: "a[href^='/master/kategori-barang/']",
     })
   })
 })
@@ -134,7 +143,6 @@ test.describe("Master Departemen CRUD", () => {
         { id: "name", value: `Dept E2E ${ts}`, updated: `Dept E2E Updated ${ts}` },
       ],
       submitId: "submit-department",
-      linkSelector: "a[href^='/master/departemen/']",
     })
   })
 })
@@ -148,7 +156,35 @@ test.describe("Master Jabatan CRUD", () => {
         { id: "name", value: `Jabatan E2E ${ts}`, updated: `Jabatan E2E Updated ${ts}` },
       ],
       submitId: "submit-position",
-      linkSelector: "a[href^='/master/jabatan/']",
+    })
+  })
+})
+
+test.describe("Master Mata Uang CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/master/mata-uang",
+      createUrl: "/master/mata-uang/tambah",
+      fields: [
+        { id: "code", value: `CUR${String(ts).slice(-5)}`, updated: `CU${String(ts).slice(-4)}` },
+        { id: "name", value: `Currency E2E ${ts}`, updated: `Currency E2E Updated ${ts}` },
+        { id: "rate", value: "1.25", updated: "2.50" },
+      ],
+      submitId: "submit-currency",
+    })
+  })
+})
+
+test.describe("Master Pajak CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/master/pajak",
+      createUrl: "/master/pajak/tambah",
+      fields: [
+        { id: "name", value: `Pajak E2E ${ts}`, updated: `Pajak E2E Updated ${ts}` },
+        { id: "rate", value: "11", updated: "12" },
+      ],
+      submitId: "submit-tax",
     })
   })
 })
