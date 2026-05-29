@@ -56,7 +56,7 @@ describe('FIFO layer handling parity', () => {
       expect(code).toContain('inventoryLayer.findMany')
       expect(code).toContain('remaining')
       expect(code).toContain('qtyOut')
-      expect(code).toMatch(/orderBy:\s*\{\s*createdAt:\s*["']asc["']/s)
+      expect(code).toMatch(/orderBy:\s*\{\s*createdAt:\s*["']asc["']/)
     })
   }
 })
