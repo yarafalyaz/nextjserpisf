@@ -188,3 +188,31 @@ test.describe("Master Pajak CRUD", () => {
     })
   })
 })
+
+test.describe("Master Pelanggan CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/master/pelanggan",
+      createUrl: "/master/pelanggan/tambah",
+      fields: [
+        { id: "name", value: `Customer E2E ${ts}`, updated: `Customer E2E Updated ${ts}` },
+        { id: "phone", value: `0812${String(ts).slice(-8)}`, updated: `0813${String(ts).slice(-8)}` },
+        { id: "email", value: `cust${String(ts).slice(-6)}@e2e.test`, updated: `custupd${String(ts).slice(-6)}@e2e.test` },
+      ],
+    })
+  })
+})
+
+test.describe("Master Pemasok CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/master/pemasok",
+      createUrl: "/master/pemasok/tambah",
+      fields: [
+        { id: "name", value: `Vendor E2E ${ts}`, updated: `Vendor E2E Updated ${ts}` },
+        { id: "phone", value: `0822${String(ts).slice(-8)}`, updated: `0823${String(ts).slice(-8)}` },
+        { id: "email", value: `vendor${String(ts).slice(-6)}@e2e.test`, updated: `vendorupd${String(ts).slice(-6)}@e2e.test` },
+      ],
+    })
+  })
+})
