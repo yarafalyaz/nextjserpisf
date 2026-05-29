@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: [["html", { open: "never" }], ["list"]],
 
   use: {
-    baseURL: "http://localhost:3999",
+    baseURL: "http://localhost:4001",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -39,9 +39,9 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "npm run dev -- --port 3999",
-    url: "http://localhost:3999",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    command: "AUTH_TRUST_HOST=true NEXTAUTH_URL=http://localhost:4001 npm run build && AUTH_TRUST_HOST=true NEXTAUTH_URL=http://localhost:4001 npx next start -p 4001",
+    url: "http://localhost:4001",
+    reuseExistingServer: false,
+    timeout: 300_000,
   },
 })
