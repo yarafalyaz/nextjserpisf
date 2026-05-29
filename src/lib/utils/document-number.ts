@@ -82,6 +82,13 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   PC: { model: 'pettyCash', field: 'documentNo' },
   PAYROLL: { model: 'payroll', field: 'documentNo' },
   PRJ: { model: 'project', field: 'documentNo' },
+  // Master data simple codes
+  CUST: { model: 'customer', field: 'code', softDelete: true },
+  VND: { model: 'vendor', field: 'code' },
+  ITM: { model: 'item', field: 'sku' },
+  WH: { model: 'warehouse', field: 'code' },
+  EMP: { model: 'employee', field: 'code' },
+  ACC: { model: 'account', field: 'code' },
 }
 
 async function findReusableSequence(key: string, prefix: string, format: 'complex' | 'simple', month: string, year: number): Promise<number | null> {
