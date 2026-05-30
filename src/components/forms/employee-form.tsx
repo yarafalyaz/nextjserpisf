@@ -46,6 +46,13 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
   const [isPending, startTransition] = useTransition()
   const isEdit = !!employee
 
+  const toDateInputValue = (value?: string | Date | null) => {
+    if (!value) return ""
+    if (typeof value === "string") return value.includes("T") ? value.split("T")[0] : value
+    if (value instanceof Date) return value.toISOString().split("T")[0]
+    return ""
+  }
+
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<EmployeeInput>({
     resolver: zodResolver(employeeSchema) as any,
     defaultValues: {
@@ -54,11 +61,11 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
       email: employee?.email || "",
       phone: employee?.phone || "",
       gender: employee?.gender || "",
-      dateOfBirth: employee?.dateOfBirth || "",
+      dateOfBirth: toDateInputValue(employee?.dateOfBirth as any),
       maritalStatus: employee?.maritalStatus || "",
       departmentId: employee?.departmentId || undefined,
       positionId: employee?.positionId || undefined,
-      joinDate: employee?.joinDate || new Date().toISOString().split("T")[0],
+      joinDate: toDateInputValue(employee?.joinDate as any) || new Date().toISOString().split("T")[0],
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
     },

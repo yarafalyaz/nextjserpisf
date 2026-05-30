@@ -36,7 +36,6 @@ test.describe("Master Karyawan CRUD", () => {
     await page.locator("button[type='submit']").first().click()
 
     await page.waitForURL("**/master/karyawan", { timeout: 20000 })
-    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
     // UPDATE
@@ -53,18 +52,19 @@ test.describe("Master Karyawan CRUD", () => {
 
     await page.locator("#name").fill(updated)
     await page.locator("#email").fill(updatedEmail)
-    await page.getByRole("button", { name: /^Update$/ }).first().click()
+    await page.locator("form").evaluate((form) => (form as HTMLFormElement).requestSubmit())
 
-    // Verifikasi update langsung dari halaman edit (robust meski redirect tidak konsisten)
-    await page.waitForLoadState("networkidle")
+    // Sukses update harus redirect ke listing
+    await page.waitForURL("**/master/karyawan", { timeout: 20000 })
+    await expect(page.locator("body")).toContainText(updated)
+
+    // Verifikasi ulang dari halaman edit by id
     await page.goto(`/master/karyawan/${employeeId}/ubah`, { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
     await expect(page.locator("#name")).toHaveValue(updated)
     await expect(page.locator("#email")).toHaveValue(updatedEmail)
 
     // DELETE
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
 
     const rowAfterUpdate = page.locator("tr").filter({ hasText: updated }).first()
     const rowCount = await rowAfterUpdate.count()
@@ -77,7 +77,6 @@ test.describe("Master Karyawan CRUD", () => {
 
     await page.waitForTimeout(1500)
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updated)
     await expect(page.locator("body")).not.toContainText(name)
   })

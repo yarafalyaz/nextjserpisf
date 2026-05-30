@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test"
 
+const E2E_PORT = process.env.E2E_PORT || "4101"
+const E2E_BASE_URL = `http://localhost:${E2E_PORT}`
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -9,7 +12,7 @@ export default defineConfig({
   reporter: [["html", { open: "never" }], ["list"]],
 
   use: {
-    baseURL: "http://localhost:4001",
+    baseURL: E2E_BASE_URL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -39,9 +42,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: "AUTH_TRUST_HOST=true NEXTAUTH_URL=http://localhost:4001 npm run build && AUTH_TRUST_HOST=true NEXTAUTH_URL=http://localhost:4001 npx next start -p 4001",
-    url: "http://localhost:4001",
-    reuseExistingServer: true,
+    command: `AUTH_TRUST_HOST=true NEXTAUTH_URL=${E2E_BASE_URL} npm run build && AUTH_TRUST_HOST=true NEXTAUTH_URL=${E2E_BASE_URL} npx next start -p ${E2E_PORT}`,
+    url: E2E_BASE_URL,
+    reuseExistingServer: false,
     timeout: 300_000,
   },
 })
+

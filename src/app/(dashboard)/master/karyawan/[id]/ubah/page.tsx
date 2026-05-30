@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
 import { EmployeeForm } from "@/components/forms/employee-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -11,6 +12,7 @@ export default async function EditEmployeePage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  await requirePermission("edit_employees")
 
   const data = await prisma.employee.findUnique({
     where: { id: Number(id) },
