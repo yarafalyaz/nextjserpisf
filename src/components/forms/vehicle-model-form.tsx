@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/page-header"
 interface VehicleModelFormProps {
   brands: { id: number; name: string
 }[]
-  model?: { id: number; name: string; brandId: number }
+  model?: { id: number; name: string; brandId?: number; vehicleBrandId?: number }
 }
 
 export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
@@ -40,7 +40,12 @@ export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="brandId" className="w-full" isRequired>
+          <ComboBox
+            name="brandId"
+            className="w-full"
+            isRequired
+            defaultSelectedKey={model?.brandId || model?.vehicleBrandId ? String(model.brandId ?? model.vehicleBrandId) : undefined}
+          >
             <Label>Merek Kendaraan *</Label>
             <ComboBox.InputGroup><Input placeholder="Cari merek..." /><ComboBox.Trigger /></ComboBox.InputGroup>
             <ComboBox.Popover>
