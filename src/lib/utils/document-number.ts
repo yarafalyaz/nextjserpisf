@@ -87,7 +87,7 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   VND: { model: 'vendor', field: 'code' },
   ITM: { model: 'item', field: 'sku' },
   WH: { model: 'warehouse', field: 'code' },
-  EMP: { model: 'employee', field: 'code' },
+  EMP: { model: 'employee', field: 'employeeNo' },
   ACC: { model: 'account', field: 'code' },
 }
 

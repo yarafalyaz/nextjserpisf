@@ -8,7 +8,7 @@ setup("authenticate", async ({ page }) => {
   const authDir = path.dirname(authFile)
   if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true })
 
-  const email = process.env.E2E_EMAIL || "admin@silengkap.id"
+  const email = process.env.E2E_EMAIL || "admin@yaraerp.co.id"
   const password = process.env.E2E_PASSWORD || "password123"
 
   await page.goto("/login")

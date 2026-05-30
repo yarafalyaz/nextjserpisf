@@ -85,9 +85,15 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
           })
         }
         if (isEdit) {
-          await updateEmployee(employee!.id, formData)
+          const result = await updateEmployee(employee!.id, formData)
+          if (!result?.success) {
+            throw new Error(result?.error || "Gagal memperbarui data karyawan")
+          }
         } else {
-          await createEmployee(formData)
+          const result = await createEmployee(formData)
+          if (!result?.success) {
+            throw new Error(result?.error || "Gagal menambah data karyawan")
+          }
         }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/master/karyawan")
