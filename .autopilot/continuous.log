@@ -1,0 +1,2 @@
+2026-05-31 03:23:57 +0700 | run:cron-114b7cf2 | status:ERROR | detail:Playwright master-employee-crud hang/no output setelah seed; sebelumnya auth failed lalu seed sukses; test terakhir dibatalkan manual; next: investigasi selector department/posisi + startup server 4001
+[2026-05-31 03:38:51 +0700] run=cron:114b7cf2 task=vitest-config scope=exclude-e2e result=success notes="vitest only run unit tests in src; e2e remain playwright"
