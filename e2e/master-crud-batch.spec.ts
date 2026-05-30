@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 
 const ts = Date.now()
 
@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }, testInfo) => {
 // CRUD helper: reusable for simple master modules
 // ═══════════════════════════════════════════════════════════════════
 async function crudMaster(
-  page: any,
+  page: Page,
   opts: {
     listUrl: string
     createUrl: string
