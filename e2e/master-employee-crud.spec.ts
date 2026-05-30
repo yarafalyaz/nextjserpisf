@@ -36,10 +36,16 @@ test.describe("Master Karyawan CRUD", () => {
     await page.locator("button[type='submit']").first().click()
 
     await page.waitForURL("**/master/karyawan", { timeout: 20000 })
-    await expect(page.locator("body")).toContainText(name)
+
+    // Data baru bisa muncul di halaman lain karena pagination default 20.
+    // Gunakan pencarian agar baris target selalu ter-filter.
+    const searchInput = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
+    await searchInput.fill(name)
+    await searchInput.press("Enter")
+    await expect(page.locator("tr").filter({ hasText: name }).first()).toBeVisible({ timeout: 15000 })
 
     // UPDATE
-    const row = page.locator("tr").filter({ hasText: name })
+    const row = page.locator("tr").filter({ hasText: name }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
@@ -52,7 +58,7 @@ test.describe("Master Karyawan CRUD", () => {
 
     await page.locator("#name").fill(updated)
     await page.locator("#email").fill(updatedEmail)
-    await page.locator("form").evaluate((form) => (form as HTMLFormElement).requestSubmit())
+    await page.locator("button[type='submit']").first().click()
 
     // Sukses update harus redirect ke listing
     await page.waitForURL("**/master/karyawan", { timeout: 20000 })
