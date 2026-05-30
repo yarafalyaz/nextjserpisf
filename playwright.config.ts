@@ -41,7 +41,7 @@ export default defineConfig({
   webServer: {
     command: "AUTH_TRUST_HOST=true NEXTAUTH_URL=http://localhost:4001 npm run build && AUTH_TRUST_HOST=true NEXTAUTH_URL=http://localhost:4001 npx next start -p 4001",
     url: "http://localhost:4001",
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 300_000,
   },
 })

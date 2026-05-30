@@ -2,6 +2,12 @@ import { test, expect } from "@playwright/test"
 
 const ts = Date.now()
 
+test.beforeEach(async ({ page }, testInfo) => {
+  if (testInfo.project.name.includes("mobile")) {
+    test.skip(true, "Batch CRUD ini khusus desktop; mobile sidebar overlay menghalangi interaksi form")
+  }
+})
+
 // ═══════════════════════════════════════════════════════════════════
 // CRUD helper: reusable for simple master modules
 // ═══════════════════════════════════════════════════════════════════
@@ -263,5 +269,57 @@ test.describe("Master Akun Mutation", () => {
 
     const rowUpdated = page.locator("td").filter({ hasText: updated }).first()
     await expect(rowUpdated).toBeVisible()
+  })
+})
+
+test.describe("Kendaraan Merek CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/kendaraan/merek",
+      createUrl: "/kendaraan/merek/tambah",
+      fields: [
+        { id: "name", value: `Vehicle Brand E2E ${ts}`, updated: `Vehicle Brand E2E Updated ${ts}` },
+      ],
+    })
+  })
+})
+
+test.describe("Aset Merek CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/aset/merek",
+      createUrl: "/aset/merek/tambah",
+      fields: [
+        { id: "name", value: `Asset Brand E2E ${ts}`, updated: `Asset Brand E2E Updated ${ts}` },
+      ],
+    })
+  })
+})
+
+test.describe("Aset Kategori CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/aset/kategori",
+      createUrl: "/aset/kategori/tambah",
+      fields: [
+        { id: "name", value: `Asset Category E2E ${ts}`, updated: `Asset Category E2E Updated ${ts}` },
+        { id: "code", value: `AC${String(ts).slice(-5)}` },
+        { id: "depreciationRate", value: "10", updated: "11" },
+        { id: "usefulLife", value: "5", updated: "6" },
+      ],
+    })
+  })
+})
+
+test.describe("Keuangan Cost Center CRUD", () => {
+  test("create → update → delete", async ({ page }) => {
+    await crudMaster(page, {
+      listUrl: "/keuangan/pusat-biaya",
+      createUrl: "/keuangan/pusat-biaya/tambah",
+      fields: [
+        { id: "code", value: `CC${String(ts).slice(-5)}`, updated: `CU${String(ts).slice(-5)}` },
+        { id: "name", value: `Cost Center E2E ${ts}`, updated: `Cost Center E2E Updated ${ts}` },
+      ],
+    })
   })
 })
