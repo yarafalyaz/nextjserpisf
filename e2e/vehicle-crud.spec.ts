@@ -46,8 +46,14 @@ test.describe("Kendaraan CRUD", () => {
 
     const updatedRow = page.locator("tr").filter({ hasText: updatedPlate }).first()
     await expect(updatedRow).toBeVisible()
-    await updatedRow.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
+
+    const updatedDetailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: updatedPlate }).first()
+    await expect(updatedDetailLink).toBeVisible()
+    await updatedDetailLink.click()
+
+    const deleteBtn = page.getByRole("button").filter({ has: page.locator("svg.lucide-trash2") }).first()
+    await expect(deleteBtn).toBeVisible()
+    await deleteBtn.click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
     await page.waitForTimeout(1500)
@@ -56,3 +62,4 @@ test.describe("Kendaraan CRUD", () => {
     await expect(page.locator("body")).not.toContainText(updatedPlate)
   })
 })
+
