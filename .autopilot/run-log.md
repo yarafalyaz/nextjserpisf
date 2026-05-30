@@ -1,0 +1,1 @@
+[2026-05-31 05:27 WIB] FAIL e2e/inventory-rack-row-crud.spec.ts: create rack row gagal (server: "Field rackId harus berupa ID yang valid"). Percobaan keyboard select (ArrowDown/Enter) belum menyelesaikan issue. Next: stabilkan pemilihan ComboBox gudang+rak / verifikasi payload rackId sebelum submit.
