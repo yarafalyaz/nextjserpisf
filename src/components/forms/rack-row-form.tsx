@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { createRackRow, updateRackRow } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, Label, ComboBox, ListBox } from "@heroui/react"
@@ -35,17 +35,21 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId)
   const [rackId, setRackId] = useState(rackRow ? String(rackRow.rackId) : "")
 
-  const selectedWarehouse = warehouses.find((w) => String(w.id) === warehouseId)
+  const selectedWarehouse = useMemo(
+    () => warehouses.find((w) => String(w.id) === warehouseId),
+    [warehouses, warehouseId],
+  )
   const racks = selectedWarehouse?.racks ?? []
 
-  useEffect(() => {
-    if (rackId && !racks.some((r) => String(r.id) === rackId)) {
+  function handleWarehouseChange(key: React.Key | null) {
+    const nextWarehouseId = String(key ?? "")
+    const nextWarehouse = warehouses.find((w) => String(w.id) === nextWarehouseId)
+
+    setWarehouseId(nextWarehouseId)
+
+    if (!nextWarehouse || !nextWarehouse.racks.some((r) => String(r.id) === rackId)) {
       setRackId("")
     }
-  }, [rackId, racks])
-
-  function handleWarehouseChange(key: React.Key | null) {
-    setWarehouseId(String(key ?? ""))
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
