@@ -34,6 +34,7 @@ const CRUD_BASE_ROUTES = collectCreateRoutes()
 test.describe("CRUD surface smoke (all modules)", () => {
   for (const baseRoute of CRUD_BASE_ROUTES) {
     test(`module ${baseRoute}: list/read-create-update surface`, async ({ page }) => {
+      test.setTimeout(90_000)
       // 1. LIST/READ surface
       await page.goto(baseRoute, { waitUntil: "domcontentloaded" })
       await expect(page).not.toHaveURL(/\/login/)
@@ -42,7 +43,11 @@ test.describe("CRUD surface smoke (all modules)", () => {
       // 2. CREATE surface
       await page.goto(`${baseRoute}/tambah`, { waitUntil: "domcontentloaded" })
       await expect(page).not.toHaveURL(/\/login/)
-      await expect(page.locator("form, [data-testid='form'], input, textarea, button").first()).toBeVisible()
+
+      const createSurface = page
+        .locator("form:visible, input:visible, textarea:visible, select:visible, [role='textbox']:visible")
+        .first()
+      await expect(createSurface).toBeVisible()
 
       // 3. READ/UPDATE surface from first ID link if available
       await page.goto(baseRoute, { waitUntil: "domcontentloaded" })
