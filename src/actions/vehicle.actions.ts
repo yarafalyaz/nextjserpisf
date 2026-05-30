@@ -118,7 +118,7 @@ export async function deleteVehicleModel(id: number) {
 export async function updateVehicleBrand(id: number, formData: FormData) {
   "use server"
 
-  await requirePermission("create_vehicle_brands")
+  await requirePermission("edit_vehicle_brands")
 
   const brand = await prisma.vehicleBrand.update({
     where: { id },
