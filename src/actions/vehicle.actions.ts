@@ -134,7 +134,7 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
 export async function updateVehicleModel(id: number, formData: FormData) {
   "use server"
 
-  await requirePermission("create_vehicle_models")
+  await requirePermission("edit_vehicle_models")
 
   const model = await prisma.vehicleModel.update({
     where: { id },
@@ -149,7 +149,7 @@ export async function updateVehicleModel(id: number, formData: FormData) {
 }
 export async function updateVehicle(id: number, formData: FormData) {
   "use server"
-  await requirePermission("create_vehicles")
+  await requirePermission("edit_vehicles")
 
   const modelId = formData.get("modelId") ? Number(formData.get("modelId")) : null
 
@@ -180,6 +180,7 @@ export async function updateVehicle(id: number, formData: FormData) {
 
 export async function deleteVehicle(id: number) {
   "use server"
+  await requirePermission("delete_vehicles")
   await prisma.vehicle.delete({ where: { id } })
   revalidatePath("/kendaraan")
   return { success: true }
