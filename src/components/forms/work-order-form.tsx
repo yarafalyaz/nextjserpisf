@@ -31,7 +31,15 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
         const formData = new FormData(e.currentTarget)
         formData.append("items", JSON.stringify(woItems))
         const { createWorkOrder, updateWorkOrder } = await import("@/actions/inventory.actions")
-        workOrder?.id ? await updateWorkOrder(workOrder.id, formData) : await createWorkOrder(formData)
+        if (workOrder?.id) {
+
+          await updateWorkOrder(workOrder.id, formData)
+
+        } else {
+
+          await createWorkOrder(formData)
+
+        }
         showSuccess(workOrder?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/produksi/perintah-kerja")
         router.refresh()

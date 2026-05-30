@@ -97,7 +97,15 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
           formData.set("attachmentIds", JSON.stringify(uploadedFiles.map((f) => f.id)))
         }
         const { createVendorPayment, updateVendorPayment } = await import("@/actions/purchase.actions")
-        payment?.id ? await updateVendorPayment(payment.id, formData) : await createVendorPayment(formData)
+        if (payment?.id) {
+
+          await updateVendorPayment(payment.id, formData)
+
+        } else {
+
+          await createVendorPayment(formData)
+
+        }
         showSuccess(payment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/pembelian/pembayaran-vendor")
         router.refresh()

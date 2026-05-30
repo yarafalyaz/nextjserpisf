@@ -17,7 +17,15 @@ export function AssetCategoryForm({ category }: { category?: { id: number; name:
       try {
         const formData = new FormData(e.currentTarget)
         const { createAssetCategory, updateAssetCategory } = await import("@/actions/asset.actions")
-        category?.id ? await updateAssetCategory(category.id, formData) : await createAssetCategory(formData)
+        if (category?.id) {
+
+          await updateAssetCategory(category.id, formData)
+
+        } else {
+
+          await createAssetCategory(formData)
+
+        }
         showSuccess(category?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/aset/kategori")
         router.refresh()

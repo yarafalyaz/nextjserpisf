@@ -76,7 +76,15 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
         formData.set("grandTotal", String(grandTotal))
         formData.set("items", JSON.stringify(billItems))
         const { createVendorBill, updateVendorBill } = await import("@/actions/purchase.actions")
-        bill?.id ? await updateVendorBill(bill.id, formData) : await createVendorBill(formData)
+        if (bill?.id) {
+
+          await updateVendorBill(bill.id, formData)
+
+        } else {
+
+          await createVendorBill(formData)
+
+        }
         showSuccess(bill?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/pembelian/tagihan")
         router.refresh()

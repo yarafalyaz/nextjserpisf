@@ -72,7 +72,15 @@ export function GoodsReceiptForm({ purchaseOrders, warehouses, defaultPoId, rece
           warehouseId: item.warehouseId ? Number(item.warehouseId) : null,
         }))
         formData.append("items", JSON.stringify(items))
-        receipt?.id ? await updateGoodsReceipt(receipt.id, formData) : await createGoodsReceipt(formData)
+        if (receipt?.id) {
+
+          await updateGoodsReceipt(receipt.id, formData)
+
+        } else {
+
+          await createGoodsReceipt(formData)
+
+        }
         showSuccess(receipt?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/pembelian/penerimaan")
         router.refresh()

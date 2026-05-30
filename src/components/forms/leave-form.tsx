@@ -31,7 +31,15 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        leave?.id ? await updateLeaveRequest(leave.id, formData) : await createLeaveRequest(formData)
+        if (leave?.id) {
+
+          await updateLeaveRequest(leave.id, formData)
+
+        } else {
+
+          await createLeaveRequest(formData)
+
+        }
         showSuccess(leave?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/sdm/cuti")
         router.refresh()

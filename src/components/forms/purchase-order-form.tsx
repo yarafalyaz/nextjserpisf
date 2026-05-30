@@ -70,7 +70,15 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
         formData.append("items", JSON.stringify(poItems))
-        order?.id ? await updatePurchaseOrder(order.id, formData) : await createPurchaseOrder(formData)
+        if (order?.id) {
+
+          await updatePurchaseOrder(order.id, formData)
+
+        } else {
+
+          await createPurchaseOrder(formData)
+
+        }
         showSuccess(order?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/pembelian/pesanan")
         router.refresh()

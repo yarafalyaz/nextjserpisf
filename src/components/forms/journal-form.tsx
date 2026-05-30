@@ -50,7 +50,15 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
         const nativeFormData = new FormData(e.currentTarget)
         const attachmentIdsValue = nativeFormData.get("attachmentIds")
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
-        journal?.id ? await updateJournal(journal.id, formData) : await createJournal(formData)
+        if (journal?.id) {
+
+          await updateJournal(journal.id, formData)
+
+        } else {
+
+          await createJournal(formData)
+
+        }
         showSuccess(journal?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/keuangan/jurnal")
         router.refresh()

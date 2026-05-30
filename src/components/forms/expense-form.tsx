@@ -48,7 +48,15 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
         const nativeFormData = new FormData(event?.target)
         const attachmentIdsValue = nativeFormData.get("attachmentIds")
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
-        expense?.id ? await updateExpense(expense.id, formData) : await createExpense(formData)
+        if (expense?.id) {
+
+          await updateExpense(expense.id, formData)
+
+        } else {
+
+          await createExpense(formData)
+
+        }
         showSuccess(expense?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/keuangan/pengeluaran")
         router.refresh()

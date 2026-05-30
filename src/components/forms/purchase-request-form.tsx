@@ -53,7 +53,15 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
         formData.append("requestDate", requestDate)
         formData.append("description", description)
         formData.append("items", JSON.stringify(prItems))
-        request?.id ? await updatePurchaseRequest(request.id, formData) : await createPurchaseRequest(formData)
+        if (request?.id) {
+
+          await updatePurchaseRequest(request.id, formData)
+
+        } else {
+
+          await createPurchaseRequest(formData)
+
+        }
         showSuccess(request?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/pembelian/permintaan")
         router.refresh()

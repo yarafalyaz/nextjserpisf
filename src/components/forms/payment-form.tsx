@@ -52,7 +52,15 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
         const nativeFormData = new FormData(event?.target)
         const attachmentIdsValue = nativeFormData.get("attachmentIds")
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
-        payment?.id ? await updateSalesPayment(payment.id, formData) : await createSalesPayment(formData)
+        if (payment?.id) {
+
+          await updateSalesPayment(payment.id, formData)
+
+        } else {
+
+          await createSalesPayment(formData)
+
+        }
         showSuccess(payment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/penjualan/pembayaran")
         router.refresh()

@@ -19,7 +19,15 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        overtime?.id ? await updateOvertimeRequest(overtime.id, formData) : await createOvertimeRequest(formData)
+        if (overtime?.id) {
+
+          await updateOvertimeRequest(overtime.id, formData)
+
+        } else {
+
+          await createOvertimeRequest(formData)
+
+        }
         showSuccess(overtime?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/sdm/lembur")
         router.refresh()

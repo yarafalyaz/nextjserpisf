@@ -25,7 +25,15 @@ export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderF
       try {
         const formData = new FormData(e.currentTarget)
         const { createDeliveryOrder, updateDeliveryOrder } = await import("@/actions/sales.actions")
-        deliveryOrder?.id ? await updateDeliveryOrder(deliveryOrder.id, formData) : await createDeliveryOrder(formData)
+        if (deliveryOrder?.id) {
+
+          await updateDeliveryOrder(deliveryOrder.id, formData)
+
+        } else {
+
+          await createDeliveryOrder(formData)
+
+        }
         showSuccess(deliveryOrder?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/penjualan/surat-jalan")
         router.refresh()

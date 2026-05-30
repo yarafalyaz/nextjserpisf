@@ -24,7 +24,15 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        loan?.id ? await updateEmployeeLoan(loan.id, formData) : await createEmployeeLoan(formData)
+        if (loan?.id) {
+
+          await updateEmployeeLoan(loan.id, formData)
+
+        } else {
+
+          await createEmployeeLoan(formData)
+
+        }
         showSuccess(loan?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/sdm/pinjaman")
         router.refresh()

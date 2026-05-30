@@ -17,7 +17,15 @@ export function AssetBrandForm({ brand }: { brand?: { id: number; name: string }
       try {
         const formData = new FormData(e.currentTarget)
         const { createAssetBrand, updateAssetBrand } = await import("@/actions/asset.actions")
-        brand?.id ? await updateAssetBrand(brand.id, formData) : await createAssetBrand(formData)
+        if (brand?.id) {
+
+          await updateAssetBrand(brand.id, formData)
+
+        } else {
+
+          await createAssetBrand(formData)
+
+        }
         showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/aset/merek")
         router.refresh()

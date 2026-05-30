@@ -16,7 +16,15 @@ export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code
       try {
         const formData = new FormData(e.currentTarget)
         const { createCostCenter, updateCostCenter } = await import("@/actions/finance.actions")
-        costCenter?.id ? await updateCostCenter(costCenter.id, formData) : await createCostCenter(formData)
+        if (costCenter?.id) {
+
+          await updateCostCenter(costCenter.id, formData)
+
+        } else {
+
+          await createCostCenter(formData)
+
+        }
         showSuccess(costCenter?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/keuangan/pusat-biaya")
         router.refresh()

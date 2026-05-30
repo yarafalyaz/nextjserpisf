@@ -40,7 +40,15 @@ export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFor
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        schedule?.id ? await updateWorkSchedule(schedule.id, formData) : await createWorkSchedule(formData)
+        if (schedule?.id) {
+
+          await updateWorkSchedule(schedule.id, formData)
+
+        } else {
+
+          await createWorkSchedule(formData)
+
+        }
         showSuccess(schedule?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/sdm/jadwal-kerja")
         router.refresh()

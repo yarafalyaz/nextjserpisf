@@ -25,7 +25,15 @@ export function TimesheetForm({ employees, projects, tasks = [], timesheet }: Ti
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        timesheet?.id ? await updateTimesheet(timesheet.id, formData) : await createTimesheet(formData)
+        if (timesheet?.id) {
+
+          await updateTimesheet(timesheet.id, formData)
+
+        } else {
+
+          await createTimesheet(formData)
+
+        }
         showSuccess(timesheet?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/sdm/lembar-waktu")
         router.refresh()

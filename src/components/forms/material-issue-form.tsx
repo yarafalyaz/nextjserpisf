@@ -42,7 +42,15 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
         formData.append("warehouseId", warehouseId)
         formData.append("date", new Date().toISOString().split("T")[0])
         formData.append("items", JSON.stringify(miItems))
-        issue?.id ? await updateMaterialIssue(issue.id, formData) : await createMaterialIssue(formData)
+        if (issue?.id) {
+
+          await updateMaterialIssue(issue.id, formData)
+
+        } else {
+
+          await createMaterialIssue(formData)
+
+        }
         showSuccess(issue?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/inventaris/pengeluaran-material")
         router.refresh()

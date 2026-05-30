@@ -28,7 +28,15 @@ export function AssetTransferForm({ assets, employees = [], transfer }: AssetTra
       try {
         const formData = new FormData(e.currentTarget)
         const { createAssetTransfer, updateAssetTransfer } = await import("@/actions/asset.actions")
-        transfer?.id ? await updateAssetTransfer(transfer.id, formData) : await createAssetTransfer(formData)
+        if (transfer?.id) {
+
+          await updateAssetTransfer(transfer.id, formData)
+
+        } else {
+
+          await createAssetTransfer(formData)
+
+        }
         showSuccess(transfer?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/aset/transfer")
         router.refresh()

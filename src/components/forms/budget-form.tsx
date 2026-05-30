@@ -28,7 +28,15 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
       try {
         const formData = new FormData(e.currentTarget)
         const { createBudget, updateBudget } = await import("@/actions/finance.actions")
-        budget?.id ? await updateBudget(budget.id, formData) : await createBudget(formData)
+        if (budget?.id) {
+
+          await updateBudget(budget.id, formData)
+
+        } else {
+
+          await createBudget(formData)
+
+        }
         showSuccess(budget?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/keuangan/anggaran")
         router.refresh()

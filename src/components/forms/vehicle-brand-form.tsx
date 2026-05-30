@@ -16,7 +16,15 @@ export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        brand?.id ? await updateVehicleBrand(brand.id, formData) : await createVehicleBrand(formData)
+        if (brand?.id) {
+
+          await updateVehicleBrand(brand.id, formData)
+
+        } else {
+
+          await createVehicleBrand(formData)
+
+        }
         showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/kendaraan/merek")
         router.refresh()

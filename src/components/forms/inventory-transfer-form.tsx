@@ -38,7 +38,15 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         formData.append("destinationWarehouseId", destId)
         formData.append("date", new Date().toISOString().split("T")[0])
         formData.append("items", JSON.stringify(transferItems))
-        transfer?.id ? await updateInventoryTransfer(transfer.id, formData) : await createInventoryTransfer(formData)
+        if (transfer?.id) {
+
+          await updateInventoryTransfer(transfer.id, formData)
+
+        } else {
+
+          await createInventoryTransfer(formData)
+
+        }
         showSuccess(transfer?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/inventaris/transfer")
         router.refresh()

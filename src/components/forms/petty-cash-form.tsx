@@ -25,7 +25,13 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
       try {
         const formData = new FormData(e.currentTarget)
         const { createPettyCash, updatePettyCash } = await import("@/actions/finance.actions")
-        pettyCash?.id ? await updatePettyCash(pettyCash.id, formData) : await createPettyCash(formData)
+
+        if (pettyCash?.id) {
+          await updatePettyCash(pettyCash.id, formData)
+        } else {
+          await createPettyCash(formData)
+        }
+
         showSuccess(pettyCash?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/keuangan/kas-kecil")
         router.refresh()
