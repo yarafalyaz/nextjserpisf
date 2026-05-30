@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { createRackRow, updateRackRow } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, Label, ComboBox, ListBox } from "@heroui/react"
@@ -38,9 +38,14 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
   const selectedWarehouse = warehouses.find((w) => String(w.id) === warehouseId)
   const racks = selectedWarehouse?.racks ?? []
 
+  useEffect(() => {
+    if (rackId && !racks.some((r) => String(r.id) === rackId)) {
+      setRackId("")
+    }
+  }, [rackId, racks])
+
   function handleWarehouseChange(key: React.Key | null) {
     setWarehouseId(String(key ?? ""))
-    setRackId("")
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -83,6 +88,8 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
 
       <form onSubmit={onSubmit}>
         <FormCard>
+          <input type="hidden" name="rackId" value={rackId} />
+
           <FormSection title="Informasi Umum">
             {/* Warehouse select */}
             <div className="flex flex-col gap-1.5">
