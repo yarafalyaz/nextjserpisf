@@ -1,5 +1,19 @@
 import { test, expect } from "@playwright/test"
 
+async function closeMobileSidebarIfOpen(page: import("@playwright/test").Page) {
+  const overlay = page.locator(".sidebar-overlay")
+  if (!(await overlay.isVisible().catch(() => false))) return
+
+  const closeBtn = page.locator(".sidebar-close-btn")
+  if (await closeBtn.isVisible().catch(() => false)) {
+    await closeBtn.click({ force: true })
+  } else {
+    await page.keyboard.press("Escape")
+  }
+
+  await expect(overlay).toBeHidden()
+}
+
 test.describe("Master Gudang E2E CRUD Mutation", () => {
   const testWarehouseName = `Gudang E2E Test - ${Date.now()}`
   const updatedWarehouseName = `Gudang E2E Test (Updated) - ${Date.now()}`
@@ -10,6 +24,7 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
     // ─── 1. CREATE ──────────────────────────────────────────────────────────
     await page.goto("/master/gudang/tambah")
     await page.waitForLoadState("networkidle")
+    await closeMobileSidebarIfOpen(page)
 
     // Fill form
     await page.locator("#name").fill(testWarehouseName)
@@ -39,6 +54,7 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
     // ─── 2. READ & UPDATE ───────────────────────────────────────────────────
     await page.goto(`/master/gudang/${warehouseId}/ubah`)
     await page.waitForLoadState("networkidle")
+    await closeMobileSidebarIfOpen(page)
 
     await expect(page.locator("#name")).toHaveValue(testWarehouseName)
     await expect(page.locator("#address")).toHaveValue(warehouseAddress)
