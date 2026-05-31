@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import Image from "next/image"
 import { prisma } from "@/lib/db/prisma"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
@@ -73,7 +74,16 @@ export default async function DownPaymentDetailPage({
         <DetailCard>
           <DetailField
             label="Bukti Pembayaran"
-            value={<img src={dp.proofImage} alt="Bukti pembayaran" className="max-w-[400px] rounded-lg" />}
+            value={
+              <Image
+                src={dp.proofImage}
+                alt="Bukti pembayaran"
+                width={400}
+                height={300}
+                className="max-w-[400px] h-auto rounded-lg"
+                unoptimized
+              />
+            }
             colSpan="full"
           />
         </DetailCard>

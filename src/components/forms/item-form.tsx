@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTransition, useMemo, useState, useRef } from "react"
 import { useForm, Controller } from "react-hook-form"
@@ -165,7 +166,14 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
             <div className="image-upload-area">
               {imagePreview ? (
                 <div className="image-upload-preview">
-                  <img src={imagePreview} alt="Pratinjau" className="image-upload-img" />
+                  <Image
+                    src={imagePreview}
+                    alt="Pratinjau"
+                    width={240}
+                    height={240}
+                    className="image-upload-img"
+                    unoptimized
+                  />
                   <Button type="button" onPress={handleRemoveImage} className="image-upload-remove" aria-label="Hapus gambar">
                     <X className="size-4" />
                   </Button>

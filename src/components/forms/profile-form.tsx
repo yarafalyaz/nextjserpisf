@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useState, useTransition, useRef } from "react"
 import { useSession } from "next-auth/react"
@@ -86,7 +87,14 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
         <div className="profile-top">
           <div className="profile-avatar-upload" onClick={() => fileInputRef.current?.click()}>
             {avatarUrl ? (
-              <img src={avatarUrl} alt="Avatar" className="profile-avatar-img" />
+              <Image
+                src={avatarUrl}
+                alt="Avatar"
+                width={96}
+                height={96}
+                className="profile-avatar-img"
+                unoptimized
+              />
             ) : (
               <div className="profile-avatar-large">
                 {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}

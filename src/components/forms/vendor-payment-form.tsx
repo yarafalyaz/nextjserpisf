@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useState, useTransition, useRef } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
@@ -183,7 +184,14 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
                     <div key={file.id} className="form-attachment-item">
                       <div className="form-attachment-icon">
                         {file.mimeType.startsWith("image/") ? (
-                          <img src={file.fileUrl} alt={file.originalName} className="form-attachment-thumb" />
+                          <Image
+                            src={file.fileUrl}
+                            alt={file.originalName}
+                            width={40}
+                            height={40}
+                            className="form-attachment-thumb"
+                            unoptimized
+                          />
                         ) : (
                           <FileText className="size-5 text-muted" />
                         )}
