@@ -6,6 +6,10 @@ import { getSystemSettings } from "@/lib/utils/settings"
 
 export default async function CreateRackRowPage() {
   const warehouses = await prisma.warehouse.findMany({
+    where: {
+      deletedAt: null,
+      racks: { some: {} },
+    },
     include: { racks: { select: { id: true, name: true } } },
     orderBy: { name: "asc" },
   })

@@ -59,13 +59,18 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
 
     startTransition(async () => {
       try {
+        let result: { success: boolean; error?: string }
         if (rackRow) {
-          await updateRackRow(rackRow.id, formData)
-          showSuccess("Data berhasil diupdate")
+          result = await updateRackRow(rackRow.id, formData)
         } else {
-          await createRackRow(formData)
-          showSuccess("Data berhasil ditambahkan")
+          result = await createRackRow(formData)
         }
+
+        if (!result?.success) {
+          throw new Error(result?.error || "Gagal menyimpan data")
+        }
+
+        showSuccess(rackRow ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.push("/inventaris/baris-rak")
         router.refresh()
       } catch (error) {
