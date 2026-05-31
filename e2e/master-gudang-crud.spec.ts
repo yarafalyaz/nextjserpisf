@@ -85,8 +85,10 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
     await expect(confirmButton).toBeVisible()
     await confirmButton.click()
 
-    // Wait for delete action to finish and reload list
-    await page.waitForTimeout(1500)
+    // Tunggu dialog tertutup + toast sukses agar tidak pakai delay statis
+    await expect(page.locator("[role='dialog']").filter({ hasText: "Hapus data ini?" })).toBeHidden({ timeout: 15000 })
+    await expect(page.locator("text=Data berhasil dihapus").first()).toBeVisible({ timeout: 15000 })
+
     await page.goto("/master/gudang")
     await page.waitForLoadState("networkidle")
 
