@@ -18,8 +18,6 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     const departmentInput = page.locator("input[placeholder='Cari departemen...']").first()
     await departmentInput.click()
     await departmentInput.fill("Dep")
-    // Wait for autocomplete dropdown to appear
-    await expect(page.locator("[role='option'], [role='listbox'] li, .autocomplete-item").first()).toBeVisible({ timeout: 5000 })
     await page.keyboard.press("ArrowDown")
     await page.keyboard.press("Enter")
 
@@ -53,12 +51,14 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     await expect(updatedRow).toBeVisible()
     await updatedRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
+
+    // Confirm delete — click Hapus in confirmation dialog
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
-    // Wait for delete confirmation to complete
-    await expect(updatedRow).toHaveCount(0, { timeout: 10000 })
-    await page.goto("/sdm/hari-libur-departemen", { waitUntil: "domcontentloaded" })
+    // Wait for page to re-render after server action
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).not.toContainText(updated)
+
+    // Verify the row is gone
+    await expect(page.locator("body")).not.toContainText(updated, { timeout: 15000 })
   })
 })

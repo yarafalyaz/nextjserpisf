@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
@@ -17,23 +17,26 @@ async function closeMobileSidebarIfOpen(page: Page) {
   await expect(overlay).toBeHidden()
 }
 
-test.describe("Pengaturan Peran CRUD", () => {
+test.describe("Master Bank CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
-    skipOnMobile(testInfo.project.name, "Role CRUD khusus desktop; sidebar overlay intercepts clicks on mobile")
+    skipOnMobile(testInfo.project.name, "Bank CRUD khusus desktop")
   })
 
   test("create → detail → update → delete", async ({ page }) => {
-    const name = `role-e2e-${ts}`
-    const updated = `role-e2e-updated-${ts}`
+    const name = `bank-e2e-${ts}`
+    const code = `BNK${ts}`
+    const updated = `bank-e2e-updated-${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
-    await page.goto("/pengaturan/peran/tambah", { waitUntil: "domcontentloaded" })
+    await page.goto("/master/bank/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Role" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Bank" })).toBeVisible()
+
     await page.locator("#name").fill(name)
+    await page.locator("#code").fill(code)
     await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/pengaturan/peran", { timeout: 15000 })
+    await page.waitForURL("**/master/bank", { timeout: 15000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
@@ -41,41 +44,47 @@ test.describe("Pengaturan Peran CRUD", () => {
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name })
     await expect(createdRow).toBeVisible()
-    await createdRow.locator("a").filter({ hasText: "Detail" }).click({ force: true })
+    await createdRow.locator("a").filter({ hasText: name }).click({ force: true })
 
-    await page.waitForURL(/\/pengaturan\/peran\/\d+$/, { timeout: 15000 })
+    await page.waitForURL(/\/master\/bank\/\d+$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible()
+    await expect(page.locator("body")).toContainText(name)
+    await expect(page.locator("body")).toContainText(code)
 
     // ─── UPDATE ───────────────────────────────────────────────
-    await page.getByRole("link", { name: "Edit Role" }).click({ force: true })
-    await page.waitForURL(/\/pengaturan\/peran\/\d+\/ubah$/, { timeout: 15000 })
+    await page.goto("/master/bank", { waitUntil: "domcontentloaded" })
+    await closeMobileSidebarIfOpen(page)
+
+    const rowForEdit = page.locator("tr").filter({ hasText: name })
+    await expect(rowForEdit).toBeVisible()
+
+    // Open ActionDropdown → Edit
+    await rowForEdit.locator("button[aria-label='Menu']").click()
+    await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+
+    await page.waitForURL(/\/master\/bank\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/pengaturan/peran", { timeout: 15000 })
+    await page.waitForURL("**/master/bank", { timeout: 15000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
-    // Server action form: deleteRole → revalidatePath → redirect("/pengaturan/peran")
-    // The redirect triggers a React re-render on the same URL.
     const updatedRow = page.locator("tr").filter({ hasText: updated })
     await expect(updatedRow).toBeVisible()
 
-    const hapusButton = updatedRow.locator("button[type='submit']", { hasText: "Hapus" })
-    await expect(hapusButton).toBeVisible()
+    await updatedRow.locator("button[aria-label='Menu']").click()
+    await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
 
-    // Click Hapus — server action POSTs internally, deletes, revalidates, redirects
-    await hapusButton.click()
+    // Confirm dialog
+    const confirmBtn = page.locator("button").filter({ hasText: "Hapus" }).last()
+    await expect(confirmBtn).toBeVisible()
+    await confirmBtn.click({ force: true })
 
-    // Wait for the page to re-render after server action completes
-    // The redirect causes a full page re-render with fresh data
     await page.waitForLoadState("networkidle")
-
-    // Verify the row is gone — use body text check which survives re-renders
-    await expect(page.locator("body")).not.toContainText(updated, { timeout: 15000 })
+    await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0, { timeout: 15000 })
   })
 })
