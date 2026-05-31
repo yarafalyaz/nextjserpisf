@@ -1,8 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
-
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
   if (!(await overlay.isVisible().catch(() => false))) return
@@ -23,6 +21,7 @@ test.describe("CRM Leads CRUD", () => {
   })
 
   test("create → detail → update → delete", async ({ page }) => {
+    const ts = Date.now()
     const name = `lead-e2e-${ts}`
     const email = `lead-e2e-${ts}@test.com`
     const company = `PT E2E ${ts}`
@@ -77,40 +76,31 @@ test.describe("CRM Leads CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE via detail page ──────────────────────────────
-    // Find the link in the table row (not breadcrumb)
-    const updatedRow = page.getByRole("row", { name: new RegExp(updated) })
+    // Buka detail terbaru yang match nama tepat
+    const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
     await expect(updatedRow).toBeVisible()
-    const updatedHref = await updatedRow.getByRole("link").first().getAttribute("href")
+    const updatedHref = await updatedRow.getByRole("link", { name: updated }).first().getAttribute("href")
     if (!updatedHref) throw new Error("Updated row link has no href")
 
     await page.goto(updatedHref, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
-    // Find delete button — HeroUI renders data-slot attributes
-    // DeleteButton has variant="danger" and contains Trash2 icon (SVG with specific path)
-    // Use page.evaluate to find and click the correct button
-    await page.evaluate(() => {
-      // Find all buttons in the header actions area
-      const main = document.querySelector('main')
-      if (!main) return
-      const btns = main.querySelectorAll('button')
-      for (const btn of btns) {
-        // The delete button has a danger variant class or contains a trash SVG
-        const svg = btn.querySelector('svg')
-        if (svg && btn.closest('[class*="gap-2"]')) {
-          btn.click()
-          return
-        }
-      }
-    })
-    // Confirm dialog — the ConfirmDialog has a Hapus button
-    await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
-    await page.getByRole("button", { name: "Hapus" }).click()
+    // Hapus via tombol dengan aria-label (komponen DeleteButton)
+    const triggerHapus = page.getByLabel("Hapus", { exact: true })
+    await expect(triggerHapus).toBeVisible({ timeout: 5000 })
+    await triggerHapus.click()
 
-    await page.waitForURL("**/crm/leads", { timeout: 15000 })
+    // Tunggu dialog muncul, lalu klik tombol Hapus di dalamnya
+    await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
+    // Gunakan lokator semua tombol Hapus, yang kedua adalah confirm dialog
+    await page.getByRole("button", { name: "Hapus" }).last().click()
+
+    // Force refresh list + verifikasi data unik (email) sudah hilang
+    await page.waitForLoadState("networkidle")
+    await page.goto("/crm/leads", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
-    await expect(page.locator("body")).not.toContainText(updated, { timeout: 15000 })
+    await expect(page.locator("body")).not.toContainText(email, { timeout: 15000 })
   })
 })

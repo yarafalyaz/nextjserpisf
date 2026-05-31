@@ -29,6 +29,7 @@ export function DeleteButton({ id, action }: DeleteButtonProps) {
         isDisabled={isPending}
         variant="danger"
         size="sm"
+        aria-label="Hapus"
       >
         <Trash2 size={15} />
       </Button>
