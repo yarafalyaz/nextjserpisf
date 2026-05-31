@@ -37,8 +37,7 @@ test.describe("Kendaraan CRUD", () => {
     await page.locator("#color").first().fill(updatedColor)
     await page.locator("#submit-vehicle").first().click()
 
-    await page.waitForTimeout(1200)
-    await page.goto("/kendaraan", { waitUntil: "domcontentloaded" })
+    await page.waitForURL("**/kendaraan", { timeout: 20000 })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updatedPlate)
     await expect(page.locator("body")).toContainText(updatedColor)
@@ -55,8 +54,7 @@ test.describe("Kendaraan CRUD", () => {
     await deleteBtn.click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
-    await page.waitForTimeout(1500)
-    await page.goto("/kendaraan", { waitUntil: "domcontentloaded" })
+    await page.waitForURL("**/kendaraan", { timeout: 20000 })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updatedPlate)
   })
