@@ -84,7 +84,9 @@ test.describe("Master Karyawan CRUD", () => {
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
-    await page.waitForTimeout(1500)
+    await expect(page.locator("[role='dialog']")).toBeHidden({ timeout: 10000 })
+    await expect(page.locator("text=Data berhasil dihapus").first()).toBeVisible({ timeout: 15000 })
+
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
     const postDeleteSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
     await postDeleteSearch.fill(phone)
