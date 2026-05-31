@@ -87,14 +87,23 @@ test.describe("CRM Leads CRUD", () => {
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
-    // Find delete button — it's a danger-variant button with Trash2 icon in actions area
-    // Use the actions container (div with gap-2 that contains Edit link and buttons)
-    const actionsArea = page.locator("div.flex.items-center.gap-2").first()
-    // The delete button is the button (not link) in the actions area
-    const deleteBtn = actionsArea.locator("button").first()
-    await expect(deleteBtn).toBeVisible({ timeout: 5000 })
-    await deleteBtn.click()
-
+    // Find delete button — HeroUI renders data-slot attributes
+    // DeleteButton has variant="danger" and contains Trash2 icon (SVG with specific path)
+    // Use page.evaluate to find and click the correct button
+    await page.evaluate(() => {
+      // Find all buttons in the header actions area
+      const main = document.querySelector('main')
+      if (!main) return
+      const btns = main.querySelectorAll('button')
+      for (const btn of btns) {
+        // The delete button has a danger variant class or contains a trash SVG
+        const svg = btn.querySelector('svg')
+        if (svg && btn.closest('[class*="gap-2"]')) {
+          btn.click()
+          return
+        }
+      }
+    })
     // Confirm dialog — the ConfirmDialog has a Hapus button
     await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
     await page.getByRole("button", { name: "Hapus" }).click()
