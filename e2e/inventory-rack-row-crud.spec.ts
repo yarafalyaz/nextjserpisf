@@ -20,12 +20,14 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     const warehouseInput = page.locator("input[placeholder='Cari gudang...']").first()
     await warehouseInput.click()
     await warehouseInput.fill("Gudang Utama")
+    await page.waitForTimeout(1000) // yield untuk search delay Combobox
     // Pilih opsi eksplisit agar selectedKey benar-benar terset
     await page.getByRole("option", { name: /Gudang Utama/i }).first().click()
 
     const rackInput = page.locator("input[placeholder='Cari rak...']").first()
     await expect(rackInput).toBeEnabled({ timeout: 10000 })
     await rackInput.click()
+    await page.waitForTimeout(1000) // yield untuk search delay/fetching dependents
 
     const rackOptions = page.getByRole("option")
     const rackCount = await rackOptions.count()
