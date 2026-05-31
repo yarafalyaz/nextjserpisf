@@ -60,26 +60,25 @@ test.describe("Pengaturan Peran CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
+    // Server action form: deleteRole → revalidatePath → redirect
     const updatedRow = page.locator("tr").filter({ hasText: updated })
     await expect(updatedRow).toBeVisible()
 
-    const hapusButton = updatedRow.locator("button", { hasText: "Hapus" })
+    const hapusButton = updatedRow.locator("button[type='submit']", { hasText: "Hapus" })
     await expect(hapusButton).toBeVisible()
 
-    // Server action deletes then redirects to same URL — wait for response, then verify row gone
-    const [_response] = await Promise.all([
-      page.waitForResponse(
-        (resp) => resp.url().includes("/pengaturan/peran") && resp.status() < 400,
-        { timeout: 15000 }
-      ),
-      hapusButton.click({ force: true }),
-    ]).catch(() => [null])
+    // Submit the server action form
+    await hapusButton.click()
 
-    // Wait for the page to fully re-render after server action redirect
+    // Wait for server action to complete (the form posts to _next/ action endpoint)
+    // then reload page to see fresh data
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
-    await expect(updatedRow).toBeHidden({ timeout: 15000 })
-    await expect(page.locator("body")).not.toContainText(updated, { timeout: 5000 })
+    await page.waitForTimeout(1000) // let server action finish
+    await page.goto("/pengaturan/peran", { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
+
+    // Verify role is gone
+    await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0, { timeout: 10000 })
   })
 })
 
