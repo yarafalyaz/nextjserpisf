@@ -20,6 +20,7 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    if (!isEdit) formData.delete("code")
     startTransition(async () => {
       if (isEdit) {
         await updatePosition(position!.id, formData)

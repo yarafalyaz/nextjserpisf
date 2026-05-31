@@ -548,21 +548,36 @@ export async function createPosition(formData: FormData) {
   try {
   await requirePermission("create_positions")
 
-  let code = (formData.get("code") as string) || null
-  if (!code) {
-    code = await generateDocumentNumber("POS", "simple")
+  const submittedCode = (formData.get("code") as string) || null
+  let code = submittedCode
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!code) {
+      code = await generateDocumentNumber("POS", "simple")
+    }
+
+    try {
+      const position = await prisma.position.create({
+        data: {
+          name: formData.get("name") as string,
+          code,
+          departmentId: safeId(formData.get("departmentId")),
+        },
+      })
+
+      revalidatePath("/master/karyawan")
+      return { success: true, id: position.id }
+    } catch (createErr: any) {
+      const isUniqueCodeConflict = createErr?.code === "P2002" && (
+        (Array.isArray(createErr?.meta?.target) && createErr.meta.target.includes("code")) ||
+        String(createErr?.message || "").includes("positions_code_key")
+      )
+      if (!isUniqueCodeConflict) throw createErr
+      code = null
+    }
   }
 
-  const position = await prisma.position.create({
-    data: {
-      name: formData.get("name") as string,
-      code,
-      departmentId: safeId(formData.get("departmentId")),
-    },
-  })
-
-  revalidatePath("/master/karyawan")
-  return { success: true, id: position.id }
+  return { success: false, error: "Gagal membuat kode jabatan unik, silakan coba lagi" }
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
