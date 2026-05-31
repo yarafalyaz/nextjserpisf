@@ -44,7 +44,7 @@ export default defineConfig({
   webServer: {
     command: `AUTH_TRUST_HOST=true NEXTAUTH_URL=${E2E_BASE_URL} npm run build && AUTH_TRUST_HOST=true NEXTAUTH_URL=${E2E_BASE_URL} npx next start -p ${E2E_PORT}`,
     url: E2E_BASE_URL,
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 300_000,
   },
 })

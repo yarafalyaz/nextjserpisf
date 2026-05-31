@@ -13,3 +13,5 @@
 [2026-05-31 09:00:42 +0700] E2E fail inventory-rack-row-crud: create step row baru tidak muncul di list (timeout toContainText). Perubahan test direvert, lanjut investigasi run berikutnya.
 [2026-05-31 13:22:36 +0700] e2e/vehicle-brand-crud.spec.ts gagal awal: strict locator #name resolve 2 elemen. Fix: ganti selector ke input[name="name"].first(). Re-test chromium: PASS.
 2026-05-31 14:28:12 +0700 | run:cron-114b7cf2 | status:OK | detail:stabilize e2e/vehicle-crud by removing fixed sleeps (waitForTimeout) and using deterministic waitForURL after update/delete redirect; verify: build OK, e2e vehicle-crud pass (chromium), plus employee/rack-row/vehicle-brand/model specs pass in this run.
+
+[2026-05-31 15:02:49 WIB] Set Playwright reuseExistingServer untuk dev lokal agar targeted E2E tidak gagal saat port 4101 tersisa dari run terhenti. Verifikasi: unit test, lint, build, targeted master-employee CRUD, targeted master-gudang CRUD hijau. Full E2E sempat SIGTERM karena timeout run, bukan assertion failure (berhenti setelah 86 pass).
