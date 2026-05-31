@@ -14,7 +14,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     const updated = `Vehicle Brand E2E Updated ${ts}`
 
     await page.goto("/kendaraan/merek/tambah", { waitUntil: "domcontentloaded" })
-    await page.locator("#name").fill(name)
+    await page.locator("input[name='name']").first().fill(name)
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
@@ -29,7 +29,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     const id = idMatch[1]
 
     await page.goto(`/kendaraan/merek/${id}/ubah`, { waitUntil: "domcontentloaded" })
-    await page.locator("#name").fill(updated)
+    await page.locator("input[name='name']").first().fill(updated)
     await page.getByRole("button", { name: /^Update$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
