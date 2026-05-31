@@ -93,7 +93,7 @@ export const employeeSchema = z.object({
   positionId: z.number().optional(),
   joinDate: z.string().min(1, "Tanggal masuk wajib diisi"),
   paymentFrequency: z.string().default("MONTHLY"),
-  baseSalary: z.number().min(0).default(0),
+  baseSalary: z.number().min(0).default(0).or(z.string().transform((val) => Number(val.replace(/\D/g, '')) || 0)),
   idNumber: z.string().optional(),
   npwp: z.string().optional(),
   bankName: z.string().optional(),
