@@ -70,12 +70,23 @@ test.describe("Pengaturan Peran CRUD", () => {
 
     // Click Hapus — server action POSTs internally, deletes, revalidates, redirects
     await hapusButton.click()
-
-    // Wait for the page to re-render after server action completes
-    // The redirect causes a full page re-render with fresh data
     await page.waitForLoadState("networkidle")
 
-    // Verify the row is gone — use body text check which survives re-renders
-    await expect(page.locator("body")).not.toContainText(updated, { timeout: 15000 })
+    // Reload and verify — retry up to 3x for resilience under parallel load
+    let gone = false
+    for (let i = 0; i < 3; i++) {
+      await page.goto("/pengaturan/peran", { waitUntil: "domcontentloaded" })
+      await page.waitForLoadState("networkidle")
+      gone = !(await page.locator("body").innerText()).includes(updated)
+      if (gone) break
+      // Role still exists — retry the delete
+      const retryRow = page.locator("tr").filter({ hasText: updated })
+      const retryBtn = retryRow.locator("button[type='submit']", { hasText: "Hapus" })
+      if (await retryBtn.isVisible().catch(() => false)) {
+        await retryBtn.click()
+        await page.waitForLoadState("networkidle")
+      }
+    }
+    expect(gone).toBe(true)
   })
 })

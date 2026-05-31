@@ -77,26 +77,27 @@ test.describe("CRM Leads CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE via detail page ──────────────────────────────
-    // Navigate to detail page
-    const updatedDetailLink = page.getByRole("link", { name: updated }).first()
-    await expect(updatedDetailLink).toBeVisible()
-    const updatedHref = await updatedDetailLink.getAttribute("href")
-    if (!updatedHref) throw new Error("Updated detail link has no href")
+    // Find the link in the table row (not breadcrumb)
+    const updatedRow = page.getByRole("row", { name: new RegExp(updated) })
+    await expect(updatedRow).toBeVisible()
+    const updatedHref = await updatedRow.getByRole("link").first().getAttribute("href")
+    if (!updatedHref) throw new Error("Updated row link has no href")
 
     await page.goto(updatedHref, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
-    // Find and click delete button on detail page
-    // Usually a trash icon button with danger styling
-    const deleteBtn = page.getByRole("button", { name: /hapus|delete/i }).or(
-      page.locator("button").filter({ hasText: /hapus/i }).last()
-    )
-    await deleteBtn.click({ timeout: 10000 })
+    // Find delete button — it's a danger-variant button with Trash2 icon in actions area
+    // Use the actions container (div with gap-2 that contains Edit link and buttons)
+    const actionsArea = page.locator("div.flex.items-center.gap-2").first()
+    // The delete button is the button (not link) in the actions area
+    const deleteBtn = actionsArea.locator("button").first()
+    await expect(deleteBtn).toBeVisible({ timeout: 5000 })
+    await deleteBtn.click()
 
-    // Confirm dialog
-    const confirmBtn = page.getByRole("button", { name: "Hapus" }).last()
-    await confirmBtn.click({ timeout: 10000 })
+    // Confirm dialog — the ConfirmDialog has a Hapus button
+    await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
+    await page.getByRole("button", { name: "Hapus" }).click()
 
     await page.waitForURL("**/crm/leads", { timeout: 15000 })
     await page.waitForLoadState("networkidle")
