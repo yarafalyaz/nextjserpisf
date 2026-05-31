@@ -17,42 +17,45 @@ async function closeMobileSidebarIfOpen(page: Page) {
   await expect(overlay).toBeHidden()
 }
 
-test.describe("Aset Kategori CRUD", () => {
+test.describe("Master Pajak CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
-    skipOnMobile(testInfo.project.name, "Kategori Aset CRUD khusus desktop")
+    skipOnMobile(testInfo.project.name, "Pajak CRUD khusus desktop")
   })
 
   test("create → detail → update → delete", async ({ page }) => {
-    const name = `kategori-e2e-${ts}`
-    const updated = `kategori-e2e-updated-${ts}`
+    const name = `PPN E2E ${ts}`
+    const updated = `PPN E2E Updated ${ts}`
+    const rate = "11"
 
     // ─── CREATE ────────────────────────────────────────────────
-    await page.goto("/aset/kategori/tambah", { waitUntil: "domcontentloaded" })
+    await page.goto("/master/pajak/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Kategori Aset" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible()
 
-    await page.locator("#name").fill(name)
-    await page.locator("#code").fill(`KAT-${ts}`)
-    await page.locator("#depreciationRate").fill("10")
-    await page.locator("#usefulLife").fill("5")
-    await page.locator("button[type='submit']").click()
+    await page.locator("#tax-name").fill(name)
+    await page.locator("#tax-rate").fill(rate)
+    await page.locator("#submit-tax").click()
 
-    await page.waitForURL("**/aset/kategori", { timeout: 15000 })
+    await page.waitForURL("**/master/pajak", { timeout: 15000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── DETAIL ───────────────────────────────────────────────
-    const detailLink = page.getByRole("link", { name }).first()
+    const detailLink = page
+      .locator("a[href^='/master/pajak/']")
+      .filter({ hasText: name })
+      .first()
     await expect(detailLink).toBeVisible()
-    await detailLink.click({ force: true })
+    const detailHref = await detailLink.getAttribute("href")
+    if (!detailHref) throw new Error("Could not get detail href")
+    await page.goto(detailHref, { waitUntil: "domcontentloaded" })
 
-    await page.waitForURL(/\/aset\/kategori\/\d+$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
-    await page.goto("/aset/kategori", { waitUntil: "domcontentloaded" })
+    await page.goto("/master/pajak", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
@@ -61,12 +64,14 @@ test.describe("Aset Kategori CRUD", () => {
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Edit" }).first().click()
 
-    await page.waitForURL(/\/aset\/kategori\/\d+\/ubah$/, { timeout: 15000 })
+    await page.waitForURL(/\/master\/pajak\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
-    await page.locator("#name").fill(updated)
-    await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/aset/kategori", { timeout: 15000 })
+    // Edit form has no explicit id, use name attribute
+    await page.locator('input[name="name"]').fill(updated)
+    await page.getByRole("button", { name: "Update" }).click()
+
+    await page.waitForURL("**/master/pajak", { timeout: 15000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)
@@ -78,9 +83,11 @@ test.describe("Aset Kategori CRUD", () => {
     await updatedRow.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
 
+    // Confirm dialog
     await page.getByRole("button", { name: "Hapus" }).last().click()
     await page.waitForLoadState("networkidle")
 
+    // Verify gone
     await expect(page.getByRole("row", { name: new RegExp(updated) })).toHaveCount(0, { timeout: 15000 })
   })
 })

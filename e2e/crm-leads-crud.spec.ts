@@ -44,25 +44,27 @@ test.describe("CRM Leads CRUD", () => {
     await expect(page.locator("body")).toContainText(name)
 
     // ─── DETAIL ───────────────────────────────────────────────
-    const createdRow = page.locator("tr").filter({ hasText: name })
-    await expect(createdRow).toBeVisible()
-    await createdRow.locator("a").filter({ hasText: name }).click({ force: true })
+    const detailLink = page.getByRole("link", { name }).first()
+    await expect(detailLink).toBeVisible()
+    const href = await detailLink.getAttribute("href")
+    if (!href) throw new Error("Detail link has no href")
 
-    await page.waitForURL(/\/crm\/leads\/\d+$/, { timeout: 15000 })
+    await page.goto(href, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
     await expect(page.locator("body")).toContainText(email)
 
     // ─── UPDATE ───────────────────────────────────────────────
+    // Go back to list, open edit from dropdown
     await page.goto("/crm/leads", { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
-    const rowForEdit = page.locator("tr").filter({ hasText: name })
-    await expect(rowForEdit).toBeVisible()
-
-    // Open ActionDropdown → Edit
-    await rowForEdit.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+    const row = page.getByRole("row", { name: new RegExp(name) })
+    await expect(row).toBeVisible()
+    await row.getByRole("button", { name: "Menu" }).click()
+    await page.getByRole("menuitem", { name: "Edit" }).first().click()
 
     await page.waitForURL(/\/crm\/leads\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
@@ -74,26 +76,27 @@ test.describe("CRM Leads CRUD", () => {
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)
 
-    // ─── DELETE (via detail page) ─────────────────────────────
-    // Navigate to detail page — no delete action on list dropdown
-    const updatedRow = page.locator("tr").filter({ hasText: updated })
-    await expect(updatedRow).toBeVisible()
-    await updatedRow.locator("a").filter({ hasText: updated }).click({ force: true })
+    // ─── DELETE via detail page ──────────────────────────────
+    // Navigate to detail page
+    const updatedDetailLink = page.getByRole("link", { name: updated }).first()
+    await expect(updatedDetailLink).toBeVisible()
+    const updatedHref = await updatedDetailLink.getAttribute("href")
+    if (!updatedHref) throw new Error("Updated detail link has no href")
 
-    await page.waitForURL(/\/crm\/leads\/\d+$/, { timeout: 15000 })
+    await page.goto(updatedHref, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
-    // Click delete button (trash icon with danger variant)
-    await page.locator("button").filter({ has: page.locator("svg") }).last().click({ force: true })
+    // Find and click delete button on detail page
+    // Usually a trash icon button with danger styling
+    const deleteBtn = page.getByRole("button", { name: /hapus|delete/i }).or(
+      page.locator("button").filter({ hasText: /hapus/i }).last()
+    )
+    await deleteBtn.click({ timeout: 10000 })
 
     // Confirm dialog
-    const confirmBtn = page.locator("[role='dialog'], [data-dialog]").locator("button").filter({ hasText: "Hapus" })
-    if (await confirmBtn.isVisible().catch(() => false)) {
-      await confirmBtn.click({ force: true })
-    } else {
-      // Fallback: find Hapus button in any dialog-like overlay
-      await page.locator("button").filter({ hasText: "Hapus" }).last().click({ force: true })
-    }
+    const confirmBtn = page.getByRole("button", { name: "Hapus" }).last()
+    await confirmBtn.click({ timeout: 10000 })
 
     await page.waitForURL("**/crm/leads", { timeout: 15000 })
     await page.waitForLoadState("networkidle")
