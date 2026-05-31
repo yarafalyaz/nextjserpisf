@@ -1,11 +1,10 @@
 import { test, expect } from "@playwright/test"
+import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
 
 test.beforeEach(async ({}, testInfo) => {
-  if (testInfo.project.name.includes("mobile")) {
-    test.skip(true, "Employee CRUD fokus desktop")
-  }
+  skipOnMobile(testInfo.project.name, "Employee CRUD fokus desktop")
 })
 
 test.describe("Master Karyawan CRUD", () => {

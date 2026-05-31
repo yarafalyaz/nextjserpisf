@@ -1,11 +1,10 @@
 import { test, expect, type Page } from "@playwright/test"
+import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
 
 test.beforeEach(async ({}, testInfo) => {
-  if (testInfo.project.name.includes("mobile")) {
-    test.skip(true, "Batch CRUD ini khusus desktop; mobile sidebar overlay menghalangi interaksi form")
-  }
+  skipOnMobile(testInfo.project.name, "Batch CRUD ini khusus desktop; mobile sidebar overlay menghalangi interaksi form")
 })
 
 // ═══════════════════════════════════════════════════════════════════
