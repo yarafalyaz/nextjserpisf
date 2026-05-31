@@ -1,12 +1,20 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 
 const ts = Date.now()
 
-test.beforeEach(async ({}, testInfo) => {
-  if (testInfo.project.name.includes("mobile")) {
-    test.skip(true, "Desktop-focused CRUD interaction")
+async function closeMobileSidebarIfOpen(page: Page) {
+  const overlay = page.locator(".sidebar-overlay")
+  if (!(await overlay.isVisible().catch(() => false))) return
+
+  const closeBtn = page.locator(".sidebar-close-btn")
+  if (await closeBtn.isVisible().catch(() => false)) {
+    await closeBtn.click({ force: true })
+  } else {
+    await page.keyboard.press("Escape")
   }
-})
+
+  await expect(overlay).toBeHidden()
+}
 
 test.describe("Inventaris Baris Rak CRUD", () => {
   test("create → detail → update → delete", async ({ page }) => {
@@ -15,6 +23,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/inventaris/baris-rak/tambah", { waitUntil: "domcontentloaded" })
+    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible()
 
     const warehouseInput = page.locator("input[placeholder='Cari gudang...']").first()
@@ -56,10 +65,10 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
-    await page.getByRole("link", { name: "Ubah" }).click()
-    await page.waitForURL(`**/inventaris/baris-rak/${id}/ubah`, { timeout: 15000 })
+    await page.goto(`/inventaris/baris-rak/${id}/ubah`, { waitUntil: "domcontentloaded" })
+    await closeMobileSidebarIfOpen(page)
 
-    await page.locator("#name").fill(updated)
+    await page.locator("#name").first().fill(updated)
     await page.getByRole("button", { name: /^Update$/ }).first().click()
 
     await page.waitForTimeout(1200)
@@ -68,6 +77,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
+    await closeMobileSidebarIfOpen(page)
     const updatedRow = page.locator("tr").filter({ hasText: updated })
     await expect(updatedRow).toBeVisible()
     await updatedRow.locator("button[aria-label='Menu']").click()
