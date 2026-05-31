@@ -65,14 +65,14 @@ async function main() {
   let employee = await prisma.employee.findFirst();
   if (!employee) {
     employee = await prisma.employee.create({
-      data: { name: "GAP Employee", code: "EMP-GAP-001" } as any,
+      data: { name: "GAP Employee", employeeNo: "EMP-GAP-001", joinDate: new Date() },
     });
   }
 
   let employee2 = await prisma.employee.findFirst({ where: { NOT: { id: employee.id } } });
   if (!employee2) {
     employee2 = await prisma.employee.create({
-      data: { name: "GAP Employee 2", code: "EMP-GAP-002" } as any,
+      data: { name: "GAP Employee 2", employeeNo: "EMP-GAP-002", joinDate: new Date() },
     });
   }
 

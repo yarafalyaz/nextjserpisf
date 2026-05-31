@@ -30,8 +30,9 @@ async function main() {
   try {
     await resyncOnEdit(quo.id);
     console.log("3. resyncOnEdit() completed ✓ (no crash)");
-  } catch (e: any) {
-    console.log("3. resyncOnEdit() error:", e.message);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.log("3. resyncOnEdit() error:", message);
   }
 
   // Verify

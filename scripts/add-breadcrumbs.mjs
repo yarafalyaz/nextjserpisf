@@ -169,19 +169,10 @@ function buildBreadcrumbItems(parts) {
     // edit is last, [id] before it, page slug before that
     pageSlug = parts[parts.length - 3]
   }
-  
-  // Handle nested pages (e.g., assets/brands, vehicles/brands, vehicles/models)
-  // Check if the page is a sub-resource of the module
-  let isSubResource = false
-  let parentSlug = null
-  if (parts.length >= 3 && moduleName !== 'master') {
-    // e.g. assets/brands/page.tsx or assets/brands/create/page.tsx
-    // The module itself might have a list page (assets/page.tsx)
-    // and sub-resources like assets/brands, assets/categories, assets/transfers
-    if (pageType === 'list' && parts.length === 2) {
-      // Direct sub-resource list: e.g. assets/brands
-      pageSlug = parts[1]
-    }
+
+  // Handle direct sub-resource list pages: e.g. assets/brands, vehicles/models
+  if (parts.length === 2 && moduleName !== 'master' && pageType === 'list') {
+    pageSlug = parts[1]
   }
   
   const pageLabel = getPageLabel(pageSlug, moduleName)
@@ -293,11 +284,6 @@ function addBreadcrumbsToFile(filePath, items) {
   console.log(`DONE: ${filePath}`)
 }
 
-// Special handling for pages that are module-level (e.g., projects/page.tsx, vehicles/page.tsx, assets/page.tsx)
-function isModuleLevelListPage(parts) {
-  return parts.length === 2 && parts[1] === 'page.tsx'
-}
-
 // Main
 const allPages = findAllPages(ROOT)
 let processed = 0
@@ -329,7 +315,6 @@ for (const filePath of allPages) {
     // This is a module-level list page like projects/page.tsx -> parts = ['projects']
     // Actually with parsePath removing page.tsx, projects/page.tsx -> ['projects']
     const moduleLabel = MODULE_LABELS[moduleName]
-    const pageLabel = PAGE_LABELS[moduleName] || moduleLabel
     items = [
       { label: 'Dashboard', href: '/' },
       { label: moduleLabel },

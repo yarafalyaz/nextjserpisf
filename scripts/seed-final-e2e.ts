@@ -55,7 +55,7 @@ async function main() {
   });
   console.log("   Topup:", pc1.documentNo, "Rp 5.000.000");
 
-  const pc2 = await prisma.pettyCash.create({
+  await prisma.pettyCash.create({
     data: {
       documentNo: await generateDocumentNumber("PC"),
       type: "expense",
@@ -71,7 +71,7 @@ async function main() {
     },
   });
 
-  const pc3 = await prisma.pettyCash.create({
+  await prisma.pettyCash.create({
     data: {
       documentNo: await generateDocumentNumber("PC"),
       type: "expense",
