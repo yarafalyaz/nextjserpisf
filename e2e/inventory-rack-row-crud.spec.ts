@@ -16,6 +16,13 @@ async function closeMobileSidebarIfOpen(page: Page) {
   await expect(overlay).toBeHidden()
 }
 
+async function submitAndWaitForListPage(page: Page, buttonName: RegExp) {
+  await Promise.all([
+    page.waitForURL(/\/inventaris\/baris-rak$/, { timeout: 15000 }),
+    page.getByRole("button", { name: buttonName }).first().click(),
+  ])
+}
+
 test.describe("Inventaris Baris Rak CRUD", () => {
   test("create → detail → update → delete", async ({ page }) => {
     const name = `Baris Rak E2E ${ts}`
@@ -29,16 +36,16 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     const warehouseInput = page.locator("input[placeholder='Cari gudang...']").first()
     await warehouseInput.click()
     await warehouseInput.fill("Gudang Utama")
-    await page.waitForTimeout(1000) // yield untuk search delay Combobox
-    // Pilih opsi eksplisit agar selectedKey benar-benar terset
-    await page.getByRole("option", { name: /Gudang Utama/i }).first().click()
+    const warehouseOption = page.getByRole("option", { name: /Gudang Utama/i }).first()
+    await expect(warehouseOption).toBeVisible({ timeout: 10000 })
+    await warehouseOption.click()
 
     const rackInput = page.locator("input[placeholder='Cari rak...']").first()
     await expect(rackInput).toBeEnabled({ timeout: 10000 })
     await rackInput.click()
-    await page.waitForTimeout(1000) // yield untuk search delay/fetching dependents
 
     const rackOptions = page.getByRole("option")
+    await expect(rackOptions.first()).toBeVisible({ timeout: 10000 })
     const rackCount = await rackOptions.count()
     test.skip(rackCount === 0, "Tidak ada data rak pada gudang terpilih untuk skenario CRUD baris rak")
 
@@ -46,9 +53,8 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await expect(page.locator("input[name='rackId']")).toHaveValue(/\d+/, { timeout: 10000 })
 
     await page.locator("#name").fill(name)
-    await page.getByRole("button", { name: /^Simpan$/ }).first().click()
+    await submitAndWaitForListPage(page, /^Simpan$/)
 
-    await page.waitForTimeout(1200)
     await page.goto("/inventaris/baris-rak", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
@@ -69,9 +75,8 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").first().fill(updated)
-    await page.getByRole("button", { name: /^Update$/ }).first().click()
+    await submitAndWaitForListPage(page, /^Update$/)
 
-    await page.waitForTimeout(1200)
     await page.goto("/inventaris/baris-rak", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)
@@ -84,7 +89,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
-    await page.waitForTimeout(1500)
+    await expect(page.locator("[role='dialog']")).toBeHidden({ timeout: 10000 })
     await page.goto("/inventaris/baris-rak", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updated)
