@@ -1,10 +1,17 @@
-[2026-05-31 15:54 WIB] autopilot run
+[2026-05-31 16:24 WIB] autopilot run
   ✅ Build: clean (0 errors)
   ✅ TS: clean (0 errors)
-  ✅ New e2e/aset-brand-crud.spec.ts — full CRUD /aset/merek
-  ✅ New e2e/master-bank-crud.spec.ts — full CRUD /master/bank
-  ✅ New e2e/master-department-crud.spec.ts — full CRUD /master/departemen
-  ✅ New e2e/crm-leads-crud.spec.ts — full CRUD /crm/leads
-  ✅ Simplify delete assertions in sdm-department-holiday + settings-role
-  ✅ Commits: ac242ea, 29dc855 (pushed)
-  ⏭️ Next candidates: master-jabatan-crud, master-merek-crud, master-pajak-crud, master-satuan-crud, inventaris-rak-crud
+  ✅ Improved selectors in asset-category-crud + crm-leads-crud (getByRole > raw locator)
+  ✅ New e2e/master-pajak-crud.spec.ts — full CRUD /master/pajak
+  ✅ New e2e/master-merek-crud.spec.ts — full CRUD /master/merek
+  ✅ New e2e/keuangan-pusat-biaya-crud.spec.ts — full CRUD /keuangan/pusat-biaya
+  ✅ Commits: b07dea3, 28f82bd, 2c6b7bc (pushed)
+  ⏭️ Next candidates:
+    - master-pelanggan-crud (/master/pelanggan)
+    - master-pemasok-crud (/master/pemasok)
+    - master-akun-crud (/master/akun)
+    - crm-tickets-crud (/crm/tickets)
+    - master-kategori-barang-crud (/master/kategori-barang)
+    - master-mata-uang-crud (/master/mata-uang)
+    - keuangan-pengeluaran-crud (/keuangan/pengeluaran)
+    - keuangan-jurnal-crud (/keuangan/jurnal)
