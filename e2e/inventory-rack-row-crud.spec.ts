@@ -83,15 +83,21 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     await closeMobileSidebarIfOpen(page)
-    const updatedRow = page.locator("tr").filter({ hasText: updated })
+    const updatedRow = page.locator("tr").filter({ has: page.locator(`a[href='/inventaris/baris-rak/${id}']`) })
     await expect(updatedRow).toBeVisible()
     await updatedRow.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
-    await page.locator("button").filter({ hasText: "Hapus" }).last().click()
+    
+    // Perbaikan: gunakan page.getByRole() untuk mencari menuitem
+    await page.getByRole("menuitem", { name: "Hapus" }).click()
 
-    await expect(page.locator("[role='dialog']")).toBeHidden({ timeout: 10000 })
+    const confirmDialog = page.locator("[role='alertdialog'], [role='dialog']").filter({ hasText: "Hapus data ini?" }).first()
+    await expect(confirmDialog).toBeVisible({ timeout: 10000 })
+    await confirmDialog.getByRole("button", { name: /^Hapus$/ }).click()
+    await expect(confirmDialog).toBeHidden({ timeout: 10000 })
+
+
     await page.goto("/inventaris/baris-rak", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).not.toContainText(updated)
+    await expect(page.locator(`a[href='/inventaris/baris-rak/${id}']`)).toHaveCount(0)
   })
 })
