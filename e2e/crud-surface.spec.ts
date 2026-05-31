@@ -60,7 +60,9 @@ test.describe("CRUD surface smoke (all modules)", () => {
         const candidateHref = await detailLinks.nth(i).getAttribute("href")
         if (!candidateHref) continue
         if (candidateHref.includes("/tambah")) continue
-        if (!new RegExp(`^${baseRoute}/\\d+(?:/ubah)?$`).test(candidateHref)) continue
+
+        const basePattern = new RegExp(`^${baseRoute}/[^/]+(?:/ubah)?$`)
+        if (!basePattern.test(candidateHref)) continue
 
         await page.goto(candidateHref, { waitUntil: "domcontentloaded" })
         await expect(page.locator("body")).not.toContainText(/Unhandled Runtime Error|Something went wrong/i)
