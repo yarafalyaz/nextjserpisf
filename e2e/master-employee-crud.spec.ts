@@ -50,12 +50,24 @@ test.describe("Master Karyawan CRUD", () => {
     await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
 
     await page.waitForURL(/\/master\/karyawan\/\d+\/ubah/, { timeout: 20000 })
-    const editUrl = page.url()
-    const idMatch = editUrl.match(/\/master\/karyawan\/(\d+)\/ubah/)
-    if (!idMatch) throw new Error("Gagal parse ID karyawan dari URL edit")
 
     await expect(page.locator("#name").first()).toHaveValue(name)
     await expect(page.locator("#email").first()).toHaveValue(email)
+
+    await page.locator("#name").fill(updated)
+    await page.locator("button[type='submit']").first().click()
+
+    // Beberapa kondisi tidak auto-redirect meski update sukses.
+    // Verifikasi via toast lalu lanjut ke halaman list secara eksplisit.
+    const successToast = page.locator("text=Data berhasil diperbarui").first()
+    await expect(successToast).toBeVisible({ timeout: 20000 })
+
+    await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
+
+    const postUpdateSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
+    await postUpdateSearch.fill(updated)
+    await postUpdateSearch.press("Enter")
+    await expect(page.locator("tr").filter({ hasText: updated }).first()).toBeVisible({ timeout: 15000 })
 
     // DELETE
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
