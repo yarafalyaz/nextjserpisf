@@ -14,6 +14,7 @@ test.describe("Master Karyawan CRUD", () => {
     const name = `Karyawan E2E ${ts}`
     const updated = `Karyawan E2E Updated ${ts}`
     const email = `karyawan${String(ts).slice(-6)}@e2e.test`
+    const phone = `0812${String(ts).slice(-8)}`
 
     // CREATE
     await page.goto("/master/karyawan/tambah", { waitUntil: "domcontentloaded" })
@@ -30,7 +31,7 @@ test.describe("Master Karyawan CRUD", () => {
 
     await page.locator("#name").fill(name)
     await page.locator("#email").fill(email)
-    await page.locator("#phone").fill(`0812${String(ts).slice(-8)}`)
+    await page.locator("#phone").fill(phone)
     await page.locator("#baseSalary").fill("7500000")
     await page.locator("button[type='submit']").first().click()
 
@@ -72,19 +73,12 @@ test.describe("Master Karyawan CRUD", () => {
     // DELETE
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
 
-    // Coba cari nama terbaru dulu, fallback ke nama awal
+    // Gunakan telepon unik agar stabil meski nama/email berubah setelah update.
     const listSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
-    await listSearch.fill(updated)
+    await listSearch.fill(phone)
     await listSearch.press("Enter")
 
-    let targetRow = page.locator("tr").filter({ hasText: updated }).first()
-    const updatedVisible = await targetRow.isVisible().catch(() => false)
-    if (!updatedVisible) {
-      await listSearch.fill(name)
-      await listSearch.press("Enter")
-      targetRow = page.locator("tr").filter({ hasText: name }).first()
-    }
-
+    const targetRow = page.locator("tr").filter({ hasText: phone }).first()
     await expect(targetRow).toBeVisible({ timeout: 15000 })
     await targetRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
@@ -92,8 +86,10 @@ test.describe("Master Karyawan CRUD", () => {
 
     await page.waitForTimeout(1500)
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).not.toContainText(updated)
-    await expect(page.locator("body")).not.toContainText(name)
+    const postDeleteSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
+    await postDeleteSearch.fill(phone)
+    await postDeleteSearch.press("Enter")
+    await expect(page.locator("tr").filter({ hasText: phone })).toHaveCount(0)
   })
 })
 
