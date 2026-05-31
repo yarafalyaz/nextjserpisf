@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test"
 
 const ts = Date.now()
 
-test.beforeEach(async ({ page }, testInfo) => {
+test.beforeEach(async ({}, testInfo) => {
   if (testInfo.project.name.includes("mobile")) {
     test.skip(true, "Batch CRUD ini khusus desktop; mobile sidebar overlay menghalangi interaksi form")
   }
@@ -240,12 +240,10 @@ test.describe("Master Akun Mutation", () => {
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
-    // Find edit link directly via the code/name in the table
-    const editLink = page.locator(`a[href*='/ubah']`).filter({ hasText: /Edit/ }).first()
     // More reliable: find the edit link in the row containing our name
     const row = page.locator(".font-mono").filter({ hasText: /ACC-/ }).last()
     await expect(row).toBeVisible()
-    const editHref = `//a[contains(@href, '/ubah')]`
+
     // Navigate directly to the edit URL by finding the record's code
     const nameCell = page.locator("td").filter({ hasText: name }).first()
     await expect(nameCell).toBeVisible()

@@ -14,7 +14,6 @@ test.describe("Master Karyawan CRUD", () => {
     const name = `Karyawan E2E ${ts}`
     const updated = `Karyawan E2E Updated ${ts}`
     const email = `karyawan${String(ts).slice(-6)}@e2e.test`
-    const updatedEmail = `karyawanupd${String(ts).slice(-6)}@e2e.test`
 
     // CREATE
     await page.goto("/master/karyawan/tambah", { waitUntil: "domcontentloaded" })
@@ -54,7 +53,6 @@ test.describe("Master Karyawan CRUD", () => {
     const editUrl = page.url()
     const idMatch = editUrl.match(/\/master\/karyawan\/(\d+)\/ubah/)
     if (!idMatch) throw new Error("Gagal parse ID karyawan dari URL edit")
-    const employeeId = idMatch[1]
 
     await expect(page.locator("#name").first()).toHaveValue(name)
     await expect(page.locator("#email").first()).toHaveValue(email)
