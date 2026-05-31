@@ -51,21 +51,24 @@ test.describe("CRUD surface smoke (all modules)", () => {
 
       // 3. READ/UPDATE surface from first ID link if available
       await page.goto(baseRoute, { waitUntil: "domcontentloaded" })
-      const detailLink = page.locator(`a[href^="${baseRoute}/"]`).filter({
-        hasNotText: "tambah",
-      }).first()
+      const detailLinks = page.locator(`a[href^="${baseRoute}/"]`).filter({
+        hasNotText: /tambah/i,
+      })
 
-      const hasDetail = await detailLink.count()
-      if (hasDetail > 0) {
-        const href = await detailLink.getAttribute("href")
-        if (href && !href.endsWith("/tambah")) {
-          await page.goto(href, { waitUntil: "domcontentloaded" })
-          await expect(page.locator("body")).not.toContainText(/Unhandled Runtime Error|Something went wrong/i)
+      const linkCount = await detailLinks.count()
+      for (let i = 0; i < linkCount; i++) {
+        const candidateHref = await detailLinks.nth(i).getAttribute("href")
+        if (!candidateHref) continue
+        if (candidateHref.includes("/tambah")) continue
+        if (!new RegExp(`^${baseRoute}/\\d+(?:/ubah)?$`).test(candidateHref)) continue
 
-          const editHref = href.endsWith("/ubah") ? href : `${href}/ubah`
-          await page.goto(editHref, { waitUntil: "domcontentloaded" })
-          await expect(page.locator("body")).not.toContainText(/Unhandled Runtime Error|Something went wrong/i)
-        }
+        await page.goto(candidateHref, { waitUntil: "domcontentloaded" })
+        await expect(page.locator("body")).not.toContainText(/Unhandled Runtime Error|Something went wrong/i)
+
+        const editHref = candidateHref.endsWith("/ubah") ? candidateHref : `${candidateHref}/ubah`
+        await page.goto(editHref, { waitUntil: "domcontentloaded" })
+        await expect(page.locator("body")).not.toContainText(/Unhandled Runtime Error|Something went wrong/i)
+        break
       }
     })
   }
