@@ -67,18 +67,16 @@ test.describe("Pengaturan Peran CRUD", () => {
     const hapusButton = updatedRow.locator("button[type='submit']", { hasText: "Hapus" })
     await expect(hapusButton).toBeVisible()
 
-    // Submit the server action form
+    // Click Hapus → server action POSTs, deletes, revalidates + redirects
     await hapusButton.click()
 
-    // Wait for server action to complete (the form posts to _next/ action endpoint)
-    // then reload page to see fresh data
-    await page.waitForLoadState("networkidle")
-    await page.waitForTimeout(1000) // let server action finish
+    // Wait for the row to be removed from DOM after server action completes
+    await expect(updatedRow).toHaveCount(0, { timeout: 15000 })
+
+    // Double-check with a fresh page load
     await page.goto("/pengaturan/peran", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-
-    // Verify role is gone
-    await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0, { timeout: 10000 })
+    await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0, { timeout: 5000 })
   })
 })
 

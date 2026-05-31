@@ -58,7 +58,8 @@ test.describe("Kendaraan Model CRUD", () => {
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
-    await page.waitForTimeout(1500)
+    // Wait for delete to complete
+    await expect(updatedRow).toHaveCount(0, { timeout: 10000 })
     await page.goto("/kendaraan/model", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updated)
