@@ -10,7 +10,6 @@ import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { Avatar } from "@heroui/react"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function CustomerDetailPage({

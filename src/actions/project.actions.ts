@@ -221,11 +221,9 @@ export async function syncProjectStatus(projectId: number) {
   const completed = stages.filter((s) => s.status === "completed").length
   const inProgress = stages.filter((s) => s.status === "in_progress").length
 
-  let projectStatus = project.status
 
   if (completed === total) {
     // All stages completed → project + WO done
-    projectStatus = "completed"
     await prisma.project.update({
       where: { id: projectId },
       data: { status: "completed", endDate: new Date() },
@@ -244,7 +242,6 @@ export async function syncProjectStatus(projectId: number) {
   } else if (inProgress > 0 || completed > 0) {
     // Some stages in progress or completed
     if (project.status === "active" || project.status === "pending") {
-      projectStatus = "in_progress"
       await prisma.project.update({
         where: { id: projectId },
         data: { status: "in_progress" },

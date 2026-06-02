@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef } from "react"
 import { Upload, X, FileText } from "lucide-react"
