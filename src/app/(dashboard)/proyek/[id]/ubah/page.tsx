@@ -44,7 +44,7 @@ export default async function EditProjectPage({
         <h1 className="text-2xl font-bold text-foreground">Edit Proyek: {project.name}</h1>
       </div>
       <ProjectForm
-        customers={customers as any}
+        customers={customers}
         customerVehicles={customerVehicles}
         project={{
           ...project,

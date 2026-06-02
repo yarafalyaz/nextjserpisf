@@ -43,7 +43,16 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit Purchase Request</h1>
       </div>
-      <PurchaseRequestForm request={data as any} items={items} employees={employees} />
+      <PurchaseRequestForm request={{
+        id: data.id,
+        title: data.title,
+        date: data.date.toISOString().split("T")[0],
+        requestedBy: data.requestedBy != null ? String(data.requestedBy) : null,
+        notes: data.notes,
+        requestDate: data.requestDate?.toISOString().split("T")[0] ?? null,
+        description: data.description,
+        items: data.items.map((item) => ({ itemId: item.itemId, qty: Number(item.qty), notes: item.notes ?? "" })),
+      }} items={items} employees={employees} />
     </div>
   )
 }

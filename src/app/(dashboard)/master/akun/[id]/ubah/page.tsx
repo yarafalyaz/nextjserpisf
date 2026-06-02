@@ -31,7 +31,7 @@ export default async function EditAccountPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit Akun</h1>
       </div>
-      <AccountForm account={data as any} accounts={parentAccounts} />
+      <AccountForm account={{ id: data.id, code: data.code, name: data.name, type: data.type, parentId: data.parentId, description: data.description }} accounts={parentAccounts} />
     </div>
   )
 }
