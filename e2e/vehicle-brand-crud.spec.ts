@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
@@ -7,6 +7,16 @@ test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
 
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
+}
+
 test.describe("Kendaraan Merek CRUD", () => {
   test("create → update → delete", async ({ page }) => {
     const name = `Vehicle Brand E2E ${ts}`
@@ -14,6 +24,7 @@ test.describe("Kendaraan Merek CRUD", () => {
 
     await page.goto("/kendaraan/merek/tambah", { waitUntil: "domcontentloaded" })
     await page.locator("input[name='name']").first().fill(name)
+    await waitForHydration(page)
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
@@ -47,4 +58,3 @@ test.describe("Kendaraan Merek CRUD", () => {
     await expect(page.locator("body")).not.toContainText(updated)
   })
 })
-

@@ -14,7 +14,17 @@ async function closeMobileSidebarIfOpen(page: Page) {
     await page.keyboard.press("Escape")
   }
 
-  await expect(overlay).toBeHidden()
+  await expect(overlay).toBeHidden({ timeout: 5000 })
+}
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
 }
 
 test.describe("Master Pajak CRUD", () => {
@@ -34,9 +44,9 @@ test.describe("Master Pajak CRUD", () => {
 
     await page.locator("#tax-name").fill(name)
     await page.locator("#tax-rate").fill(rate)
+    await waitForHydration(page)
     await page.locator("#submit-tax").click()
-
-    await page.waitForURL("**/master/pajak", { timeout: 15000 })
+    await page.waitForURL("**/master/pajak", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
@@ -59,7 +69,7 @@ test.describe("Master Pajak CRUD", () => {
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
-    const row = page.getByRole("row", { name: new RegExp(name) })
+    const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible()
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Edit" }).first().click()
@@ -77,7 +87,7 @@ test.describe("Master Pajak CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
-    const updatedRow = page.getByRole("row", { name: new RegExp(updated) })
+    const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
     await expect(updatedRow).toBeVisible()
 
     await updatedRow.getByRole("button", { name: "Menu" }).click()

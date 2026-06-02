@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
@@ -6,6 +6,16 @@ const ts = Date.now()
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
+}
 
 test.describe("Kendaraan CRUD", () => {
   test("create → update → delete", async ({ page }) => {
@@ -18,6 +28,7 @@ test.describe("Kendaraan CRUD", () => {
     await page.locator("#plateNo").first().fill(plate)
     await page.locator("#year").first().fill("2024")
     await page.locator("#color").first().fill(color)
+    await waitForHydration(page)
     await page.locator("#submit-vehicle").first().click()
 
     await page.waitForURL("**/kendaraan", { timeout: 20000 })
@@ -35,6 +46,7 @@ test.describe("Kendaraan CRUD", () => {
     await page.locator("#plateNo").first().fill(updatedPlate)
     await page.locator("#year").first().fill("2025")
     await page.locator("#color").first().fill(updatedColor)
+    await waitForHydration(page)
     await page.locator("#submit-vehicle").first().click()
 
     await page.waitForURL("**/kendaraan", { timeout: 20000 })
@@ -59,4 +71,3 @@ test.describe("Kendaraan CRUD", () => {
     await expect(page.locator("body")).not.toContainText(updatedPlate)
   })
 })
-

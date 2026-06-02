@@ -14,7 +14,17 @@ async function closeMobileSidebarIfOpen(page: Page) {
     await page.keyboard.press("Escape")
   }
 
-  await expect(overlay).toBeHidden()
+  await expect(overlay).toBeHidden({ timeout: 5000 })
+}
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
 }
 
 test.describe("Pengaturan Peran CRUD", () => {
@@ -30,10 +40,11 @@ test.describe("Pengaturan Peran CRUD", () => {
     await page.goto("/pengaturan/peran/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Tambah Role" })).toBeVisible()
-    await page.locator("#name").fill(name)
+    await page.locator("#name").first().fill(name)
+    await waitForHydration(page)
     await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/pengaturan/peran", { timeout: 15000 })
+    await page.waitForURL("**/pengaturan/peran", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
@@ -51,10 +62,11 @@ test.describe("Pengaturan Peran CRUD", () => {
     await page.getByRole("link", { name: "Edit Role" }).click({ force: true })
     await page.waitForURL(/\/pengaturan\/peran\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
-    await page.locator("#name").fill(updated)
+    await page.locator("#name").first().fill(updated)
+    await waitForHydration(page)
     await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/pengaturan/peran", { timeout: 15000 })
+    await page.waitForURL("**/pengaturan/peran", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)

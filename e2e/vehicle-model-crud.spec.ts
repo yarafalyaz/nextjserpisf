@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
@@ -6,6 +6,16 @@ const ts = Date.now()
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
+}
 
 test.describe("Kendaraan Model CRUD", () => {
   test("create → update → delete", async ({ page }) => {
@@ -22,6 +32,7 @@ test.describe("Kendaraan Model CRUD", () => {
     await brandInput.press("Enter")
 
     await page.locator("#name").fill(name)
+    await waitForHydration(page)
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/model", { timeout: 20000 })

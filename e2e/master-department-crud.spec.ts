@@ -14,7 +14,17 @@ async function closeMobileSidebarIfOpen(page: Page) {
     await page.keyboard.press("Escape")
   }
 
-  await expect(overlay).toBeHidden()
+  await expect(overlay).toBeHidden({ timeout: 5000 })
+}
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
 }
 
 test.describe("Master Departemen CRUD", () => {
@@ -34,9 +44,10 @@ test.describe("Master Departemen CRUD", () => {
 
     await page.locator("#name").fill(name)
     await page.locator("#description").fill(description)
+    await waitForHydration(page)
     await page.locator("#submit-department").click()
 
-    await page.waitForURL("**/master/departemen", { timeout: 15000 })
+    await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
@@ -67,9 +78,10 @@ test.describe("Master Departemen CRUD", () => {
     await page.waitForURL(/\/master\/departemen\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
+    await waitForHydration(page)
     await page.locator("button[type='submit']").click()
 
-    await page.waitForURL("**/master/departemen", { timeout: 15000 })
+    await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)

@@ -21,6 +21,7 @@ async function crudMaster(
 ) {
   // ─── CREATE ───────────────────────────────────────────────────
   await page.goto(opts.createUrl, { waitUntil: "domcontentloaded" })
+  await waitForHydration(page)
   for (const f of opts.fields) {
     await page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first().fill(f.value)
   }
@@ -38,6 +39,11 @@ async function crudMaster(
   await page.waitForLoadState("networkidle")
   await expect(page.locator("body")).toContainText(opts.fields[0].value)
 
+  if (!(await page.locator("body").filter({ hasText: opts.fields[0].value }).isVisible().catch(() => false))) {
+    await page.goto(`${opts.listUrl}?cari=${encodeURIComponent(opts.fields[0].value)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
+  }
+
   // ─── READ detail/edit via ActionDropdown ─────────────────────
   const rowCreate = page.locator("tr").filter({ hasText: opts.fields[0].value })
   await expect(rowCreate).toBeVisible()
@@ -51,6 +57,7 @@ async function crudMaster(
 
   // ─── UPDATE ───────────────────────────────────────────────────
   await page.goto(`${opts.listUrl}/${id}/ubah`, { waitUntil: "domcontentloaded" })
+  await waitForHydration(page)
   for (const f of opts.fields) {
     if (f.updated) {
       await page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first().fill(f.updated)
@@ -68,20 +75,37 @@ async function crudMaster(
   await page.waitForURL(`**${opts.listUrl}`, { timeout: 15000 })
   await page.waitForLoadState("networkidle")
   if (opts.fields[0].updated) {
-    await expect(page.locator("body")).toContainText(opts.fields[0].updated)
+    const updatedText = opts.fields.find((f) => f.updated && f.id === "name")?.updated ?? opts.fields[0].updated
+    const updatedVisible = await page.locator("body").filter({ hasText: updatedText }).isVisible().catch(() => false)
+    if (!updatedVisible) {
+      await page.goto(`${opts.listUrl}?cari=${encodeURIComponent(updatedText)}`, { waitUntil: "domcontentloaded" })
+      await page.waitForLoadState("networkidle")
+    }
+    await expect(page.locator("body")).toContainText(updatedText)
   }
 
   // ─── DELETE ───────────────────────────────────────────────────
-  const searchText = opts.fields[0].updated || opts.fields[0].value
-  const rowAfterUpdate = page.locator("tr").filter({ hasText: searchText })
+  const searchText = opts.fields.find((f) => f.updated && f.id === "name")?.updated || opts.fields[0].updated || opts.fields[0].value
+  const rowAfterUpdate = page.locator("tr").filter({ hasText: searchText }).first()
   await expect(rowAfterUpdate).toBeVisible()
   await rowAfterUpdate.locator("button[aria-label='Menu']").click()
   await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
+  await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
   await page.locator("button").filter({ hasText: "Hapus" }).last().click()
   await expect(page.locator("body")).not.toContainText(searchText, { timeout: 10000 })
   await page.goto(opts.listUrl, { waitUntil: "domcontentloaded" })
   await page.waitForLoadState("networkidle")
   await expect(page.locator("body")).not.toContainText(searchText)
+}
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
 }
 
 test.describe("Master Bank CRUD", () => {

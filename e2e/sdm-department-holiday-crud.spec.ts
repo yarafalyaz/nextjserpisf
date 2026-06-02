@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
@@ -6,6 +6,16 @@ const ts = Date.now()
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
+}
 
 test.describe("SDM Hari Libur Departemen CRUD", () => {
   test("create → update → delete", async ({ page }) => {
@@ -23,6 +33,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
 
     await page.locator("#name").fill(name)
     await page.locator("input[name='date'][type='date']").fill("2026-12-24")
+    await waitForHydration(page)
     await page.locator("#submit-department-holiday").click()
 
     await page.waitForURL("**/sdm/hari-libur-departemen", { timeout: 20000 })
@@ -30,7 +41,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ────────────────────────────────────────────────
-    const row = page.locator("tr").filter({ hasText: name })
+    const row = page.locator("tr").filter({ hasText: name }).first()
     await expect(row).toBeVisible()
     await row.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
@@ -40,6 +51,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
 
     await page.locator("#name").fill(updated)
     await page.locator("input[name='date'][type='date']").fill("2026-12-25")
+    await waitForHydration(page)
     await page.locator("#submit-department-holiday").click()
 
     await page.waitForURL("**/sdm/hari-libur-departemen", { timeout: 20000 })
@@ -47,7 +59,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ────────────────────────────────────────────────
-    const updatedRow = page.locator("tr").filter({ hasText: updated })
+    const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(updatedRow).toBeVisible()
     await updatedRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()

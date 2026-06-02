@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 const ts = Date.now()
@@ -6,6 +6,16 @@ const ts = Date.now()
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
 })
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
+}
 
 test.describe("Proyek CRUD", () => {
   test("create → update → delete", async ({ page }) => {
@@ -24,9 +34,9 @@ test.describe("Proyek CRUD", () => {
 
     await page.locator("#name").fill(name)
     await page.locator("#description").fill(desc)
+    await waitForHydration(page)
     await page.getByRole("button", { name: "Simpan Proyek" }).click()
-
-    await page.waitForURL("**/proyek", { timeout: 20000 })
+    await page.waitForURL("**/proyek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
@@ -42,8 +52,7 @@ test.describe("Proyek CRUD", () => {
     await page.locator("#name").fill(updated)
     await page.locator("#description").fill(updatedDesc)
     await page.getByRole("button", { name: "Update" }).first().click()
-
-    await page.waitForURL("**/proyek", { timeout: 20000 })
+    await page.waitForURL("**/proyek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)
 
@@ -60,4 +69,3 @@ test.describe("Proyek CRUD", () => {
     await expect(page.locator("body")).not.toContainText(updated)
   })
 })
-

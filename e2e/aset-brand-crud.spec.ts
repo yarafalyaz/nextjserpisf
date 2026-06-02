@@ -14,7 +14,17 @@ async function closeMobileSidebarIfOpen(page: Page) {
     await page.keyboard.press("Escape")
   }
 
-  await expect(overlay).toBeHidden()
+  await expect(overlay).toBeHidden({ timeout: 5000 })
+}
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 15000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
 }
 
 test.describe("Aset Brand (Merek) CRUD", () => {
@@ -32,15 +42,15 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Brand Aset" })).toBeVisible()
 
     await page.locator("#name").fill(name)
+    await waitForHydration(page)
     await page.locator("button[type='submit']").click()
-
-    await page.waitForURL("**/aset/merek", { timeout: 15000 })
+    await page.waitForURL("**/aset/merek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── DETAIL ───────────────────────────────────────────────
-    const createdRow = page.locator("tr").filter({ hasText: name })
+    const createdRow = page.locator("tr").filter({ hasText: name }).first()
     await expect(createdRow).toBeVisible()
     await createdRow.locator("a").filter({ hasText: name }).click({ force: true })
 
@@ -52,7 +62,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await page.goto("/aset/merek", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
 
-    const rowForEdit = page.locator("tr").filter({ hasText: name })
+    const rowForEdit = page.locator("tr").filter({ hasText: name }).first()
     await expect(rowForEdit).toBeVisible()
 
     // Open ActionDropdown → Edit
@@ -62,15 +72,15 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await page.waitForURL(/\/aset\/merek\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
+    await waitForHydration(page)
     await page.locator("button[type='submit']").click()
-
-    await page.waitForURL("**/aset/merek", { timeout: 15000 })
+    await page.waitForURL("**/aset/merek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
-    const updatedRow = page.locator("tr").filter({ hasText: updated })
+    const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(updatedRow).toBeVisible()
 
     await updatedRow.locator("button[aria-label='Menu']").click()

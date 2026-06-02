@@ -1,6 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
 
-async function closeMobileSidebarIfOpen(page: import("@playwright/test").Page) {
+async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
   if (!(await overlay.isVisible().catch(() => false))) return
 
@@ -12,6 +12,16 @@ async function closeMobileSidebarIfOpen(page: import("@playwright/test").Page) {
   }
 
   await expect(overlay).toBeHidden()
+}
+
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
 }
 
 test.describe("Master Gudang E2E CRUD Mutation", () => {

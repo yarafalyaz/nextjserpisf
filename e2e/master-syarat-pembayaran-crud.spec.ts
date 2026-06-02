@@ -17,6 +17,16 @@ async function closeMobileSidebarIfOpen(page: Page) {
   await expect(overlay).toBeHidden()
 }
 
+
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
+}
+
+async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
+  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
+}
+
 test.describe("Master Syarat Pembayaran CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {
     skipOnMobile(testInfo.project.name, "Syarat Pembayaran CRUD khusus desktop")
@@ -41,6 +51,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     await page.locator("#code").fill(code)
     await page.locator("#days").fill("14")
 
+    await waitForHydration(page)
     await page.getByRole("button", { name: "Simpan" }).click()
 
     await page.waitForURL("**/master/syarat-pembayaran", { timeout: 15000 })
