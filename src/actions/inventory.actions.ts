@@ -1,5 +1,6 @@
 "use server"
 
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onStockAdjustmentProcessed, onWorkOrderCompleted, onMaterialIssueCompleted } from "@/lib/hooks/accounting.hook"
@@ -35,10 +36,10 @@ export async function createStockAdjustment(formData: FormData) {
   revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createStockAdjustment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createStockAdjustment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -71,10 +72,10 @@ export async function processStockAdjustment(adjustmentId: number) {
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[processStockAdjustment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[processStockAdjustment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -101,10 +102,10 @@ export async function createInventoryTransfer(formData: FormData) {
   revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createInventoryTransfer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createInventoryTransfer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -132,10 +133,10 @@ export async function processInventoryTransfer(transferId: number) {
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[processInventoryTransfer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[processInventoryTransfer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -163,10 +164,10 @@ export async function receiveInventoryTransfer(transferId: number) {
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[receiveInventoryTransfer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[receiveInventoryTransfer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -194,10 +195,10 @@ export async function createMaterialIssue(formData: FormData) {
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createMaterialIssue]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createMaterialIssue]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -223,10 +224,10 @@ export async function completeMaterialIssue(issueId: number) {
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[completeMaterialIssue]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[completeMaterialIssue]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -267,10 +268,10 @@ export async function createWorkOrder(formData: FormData) {
   revalidatePath("/produksi/perintah-kerja")
   return { success: true, id: wo.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createWorkOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createWorkOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -314,10 +315,10 @@ export async function updateWorkOrder(id: number, formData: FormData) {
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateWorkOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateWorkOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -348,10 +349,10 @@ export async function completeWorkOrder(workOrderId: number) {
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[completeWorkOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[completeWorkOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -372,10 +373,10 @@ export async function createRack(formData: FormData) {
   revalidatePath("/inventaris/rak")
   return { success: true, id: rack.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createRack]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createRack]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -397,10 +398,10 @@ export async function deleteStockAdjustment(id: number) {
   revalidatePath("/inventaris/penyesuaian")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteStockAdjustment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteStockAdjustment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -418,10 +419,10 @@ export async function deleteInventoryTransfer(id: number) {
   revalidatePath("/inventaris/transfer")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteInventoryTransfer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteInventoryTransfer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -439,10 +440,10 @@ export async function deleteMaterialIssue(id: number) {
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteMaterialIssue]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteMaterialIssue]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -455,10 +456,10 @@ export async function deleteRack(id: number) {
   revalidatePath("/inventaris/rak")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteRack]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteRack]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -490,10 +491,10 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
   revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateStockAdjustment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateStockAdjustment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -524,10 +525,10 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateMaterialIssue]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateMaterialIssue]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -557,10 +558,10 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
   revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateInventoryTransfer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateInventoryTransfer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -593,10 +594,10 @@ export async function createRackRow(formData: FormData) {
   revalidatePath("/inventaris/baris-rak")
   return { success: true, id: rackRow.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createRackRow]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createRackRow]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -616,10 +617,10 @@ export async function updateRackRow(id: number, formData: FormData) {
   revalidatePath("/inventaris/baris-rak")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateRackRow]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateRackRow]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -632,9 +633,9 @@ export async function deleteRackRow(id: number) {
   revalidatePath("/inventaris/baris-rak")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteRackRow]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteRackRow]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

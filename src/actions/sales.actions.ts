@@ -1,5 +1,6 @@
 "use server"
 
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived } from "@/lib/hooks/accounting.hook"
@@ -88,10 +89,10 @@ export async function createQuotation(formData: FormData) {
   revalidatePath("/penjualan/penawaran")
   return { success: true, id: quotation.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createQuotation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -115,10 +116,10 @@ export async function sendQuotation(quotationId: number) {
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[sendQuotation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[sendQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -145,10 +146,10 @@ export async function acceptQuotation(quotationId: number) {
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[acceptQuotation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[acceptQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -173,10 +174,10 @@ export async function rejectQuotation(quotationId: number) {
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[rejectQuotation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[rejectQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -233,10 +234,10 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[reviseQuotation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[reviseQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -306,10 +307,10 @@ export async function convertQuotationToOrder(quotationId: number) {
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[convertQuotationToOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[convertQuotationToOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -344,10 +345,10 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateQuotation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -400,10 +401,10 @@ export async function createDownPayment(formData: FormData) {
   revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createDownPayment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createDownPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -419,10 +420,10 @@ export async function confirmDownPayment(dpId: number) {
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[confirmDownPayment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[confirmDownPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -450,10 +451,10 @@ export async function createSalesOrder(formData: FormData) {
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createSalesOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createSalesOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -466,10 +467,10 @@ export async function confirmSalesOrder(id: number) {
   await prisma.salesOrder.update({ where: { id }, data: { status: "confirmed" } })
   revalidatePath("/penjualan/pesanan")
   return { success: true }
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[confirmSalesOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[confirmSalesOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -481,10 +482,10 @@ export async function processSalesOrder(id: number) {
   await prisma.salesOrder.update({ where: { id }, data: { status: "processing" } })
   revalidatePath("/penjualan/pesanan")
   return { success: true }
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[processSalesOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[processSalesOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -496,10 +497,10 @@ export async function completeSalesOrder(id: number) {
   await prisma.salesOrder.update({ where: { id }, data: { status: "completed" } })
   revalidatePath("/penjualan/pesanan")
   return { success: true }
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[completeSalesOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[completeSalesOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -533,10 +534,10 @@ export async function postInvoice(invoiceId: number) {
   revalidatePath("/penjualan/faktur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[postInvoice]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[postInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -569,10 +570,10 @@ export async function createSalesInvoice(formData: FormData) {
   revalidatePath("/penjualan/faktur")
   return { success: true, id: invoice.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createSalesInvoice]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createSalesInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -630,10 +631,10 @@ export async function createSalesPayment(formData: FormData) {
   revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createSalesPayment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createSalesPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -666,10 +667,10 @@ export async function completeSalesReturn(returnId: number) {
   revalidatePath("/penjualan/retur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[completeSalesReturn]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[completeSalesReturn]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -709,10 +710,10 @@ export async function createSalesReturn(formData: FormData) {
   revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createSalesReturn]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createSalesReturn]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -754,10 +755,10 @@ export async function createDeliveryOrder(formData: FormData) {
   revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createDeliveryOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createDeliveryOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -800,10 +801,10 @@ export async function deleteQuotation(id: number) {
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteQuotation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -832,10 +833,10 @@ export async function deleteSalesPayment(id: number) {
   revalidatePath("/penjualan/faktur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteSalesPayment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteSalesPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -848,10 +849,10 @@ export async function deleteDeliveryOrder(id: number) {
   revalidatePath("/penjualan/surat-jalan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteDeliveryOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteDeliveryOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -869,10 +870,10 @@ export async function deleteDownPayment(id: number) {
   revalidatePath("/penjualan/uang-muka")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteDownPayment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteDownPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -904,10 +905,10 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateSalesOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateSalesOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -998,10 +999,10 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   revalidatePath("/penjualan/faktur")
   return { success: true, id: result.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateSalesInvoice]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateSalesInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1051,10 +1052,10 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateSalesPayment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateSalesPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1098,10 +1099,10 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateSalesReturn]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateSalesReturn]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1141,10 +1142,10 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
   revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateDeliveryOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateDeliveryOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1204,10 +1205,10 @@ export async function updateDownPayment(id: number, formData: FormData) {
   revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateDownPayment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateDownPayment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 export async function deleteSalesOrder(id: number) {
@@ -1230,10 +1231,10 @@ export async function deleteSalesOrder(id: number) {
   revalidatePath("/penjualan/pesanan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteSalesOrder]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteSalesOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1252,10 +1253,10 @@ export async function deleteSalesInvoice(id: number) {
   revalidatePath("/penjualan/faktur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteSalesInvoice]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteSalesInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1273,9 +1274,9 @@ export async function deleteSalesReturn(id: number) {
   revalidatePath("/penjualan/retur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteSalesReturn]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteSalesReturn]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

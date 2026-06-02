@@ -1,5 +1,6 @@
 "use server"
 
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
@@ -34,10 +35,10 @@ export async function createTicket(formData: FormData) {
   revalidatePath("/crm/tickets")
   return { success: true, id: ticket.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createTicket]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createTicket]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -69,10 +70,10 @@ export async function updateTicket(id: number, formData: FormData) {
   revalidatePath("/crm/tickets")
   return { success: true, id: ticket.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateTicket]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateTicket]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 export async function deleteTicket(id: number) {
@@ -85,10 +86,10 @@ export async function deleteTicket(id: number) {
   revalidatePath("/crm/tickets")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteTicket]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteTicket]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -102,9 +103,9 @@ export async function deleteLead(id: number) {
   revalidatePath("/crm/leads")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteLead]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteLead]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

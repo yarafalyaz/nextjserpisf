@@ -1,5 +1,6 @@
 "use server"
 
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
@@ -110,10 +111,10 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[checkIn]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[checkIn]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -156,10 +157,10 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
   revalidatePath("/sdm/absensi")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[checkOut]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[checkOut]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -186,10 +187,10 @@ export async function createAttendance(formData: FormData) {
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createAttendance]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createAttendance]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -217,10 +218,10 @@ export async function updateAttendance(id: number, formData: FormData) {
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateAttendance]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateAttendance]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -244,10 +245,10 @@ export async function createLeaveRequest(formData: FormData) {
   revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createLeaveRequest]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createLeaveRequest]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -271,10 +272,10 @@ export async function approveLeave(leaveId: number) {
   revalidatePath("/sdm/cuti")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[approveLeave]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[approveLeave]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -294,10 +295,10 @@ export async function rejectLeave(leaveId: number, reason?: string) {
   revalidatePath("/sdm/cuti")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[rejectLeave]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[rejectLeave]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -324,10 +325,10 @@ export async function createOvertimeRequest(formData: FormData) {
   revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createOvertimeRequest]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createOvertimeRequest]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -343,10 +344,10 @@ export async function approveOvertime(overtimeId: number) {
   revalidatePath("/sdm/lembur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[approveOvertime]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[approveOvertime]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -404,10 +405,10 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     lateMinutes: latePenalty.totalLateMinutes,
   }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[getPayrollEstimation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[getPayrollEstimation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -459,10 +460,10 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
   revalidatePath("/sdm/penggajian")
   return { success: true, count }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[generateBulkPayroll]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[generateBulkPayroll]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -521,10 +522,10 @@ export async function processPayroll(formData: FormData) {
   revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[processPayroll]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[processPayroll]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -589,10 +590,10 @@ export async function updatePayroll(id: number, formData: FormData) {
   revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updatePayroll]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updatePayroll]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -616,10 +617,10 @@ export async function approvePayroll(payrollId: number) {
   revalidatePath("/sdm/penggajian")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[approvePayroll]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[approvePayroll]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -644,10 +645,10 @@ export async function markPayrollPaid(payrollId: number) {
   revalidatePath(`/sdm/penggajian/${payrollId}`)
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[markPayrollPaid]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[markPayrollPaid]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -674,10 +675,10 @@ export async function createEmployeeLoan(formData: FormData) {
   revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createEmployeeLoan]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createEmployeeLoan]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -703,10 +704,10 @@ export async function createTimesheet(formData: FormData) {
   revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createTimesheet]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createTimesheet]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -739,10 +740,10 @@ export async function createWorkSchedule(formData: FormData) {
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createWorkSchedule]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createWorkSchedule]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -763,10 +764,10 @@ export async function createHoliday(formData: FormData) {
   revalidatePath("/sdm/hari-libur")
   return { success: true, id: holiday.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createHoliday]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createHoliday]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -781,10 +782,10 @@ export async function deleteLeaveRequest(id: number) {
   revalidatePath("/sdm/cuti")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteLeaveRequest]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteLeaveRequest]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -797,10 +798,10 @@ export async function deleteOvertimeRequest(id: number) {
   revalidatePath("/sdm/lembur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteOvertimeRequest]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteOvertimeRequest]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -813,10 +814,10 @@ export async function deleteTimesheet(id: number) {
   revalidatePath("/sdm/lembar-waktu")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteTimesheet]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteTimesheet]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -829,10 +830,10 @@ export async function deleteEmployeeLoan(id: number) {
   revalidatePath("/sdm/pinjaman")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteEmployeeLoan]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteEmployeeLoan]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -845,10 +846,10 @@ export async function deleteWorkSchedule(id: number) {
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteWorkSchedule]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteWorkSchedule]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -861,10 +862,10 @@ export async function deleteHoliday(id: number) {
   revalidatePath("/sdm/hari-libur")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteHoliday]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteHoliday]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -891,10 +892,10 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
   revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateLeaveRequest]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateLeaveRequest]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -923,10 +924,10 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
   revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateOvertimeRequest]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateOvertimeRequest]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -955,10 +956,10 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
   revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateEmployeeLoan]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateEmployeeLoan]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -986,10 +987,10 @@ export async function updateTimesheet(id: number, formData: FormData) {
   revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateTimesheet]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateTimesheet]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1026,10 +1027,10 @@ export async function updateWorkSchedule(id: number, formData: FormData) {
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateWorkSchedule]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateWorkSchedule]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1051,10 +1052,10 @@ export async function createDepartmentHoliday(formData: FormData) {
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createDepartmentHoliday]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createDepartmentHoliday]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1077,10 +1078,10 @@ export async function updateDepartmentHoliday(formData: FormData) {
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateDepartmentHoliday]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateDepartmentHoliday]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1093,10 +1094,10 @@ export async function deleteDepartmentHoliday(id: number) {
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteDepartmentHoliday]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteDepartmentHoliday]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1119,10 +1120,10 @@ export async function createAppreciation(formData: FormData) {
   revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createAppreciation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createAppreciation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1146,10 +1147,10 @@ export async function updateAppreciation(formData: FormData) {
   revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateAppreciation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateAppreciation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1162,9 +1163,9 @@ export async function deleteAppreciation(id: number) {
   revalidatePath("/sdm/apresiasi")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteAppreciation]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteAppreciation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

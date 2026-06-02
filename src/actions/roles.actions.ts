@@ -1,5 +1,6 @@
 "use server"
 
+import { getErrorMessage } from "@/lib/utils/error"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
@@ -27,8 +28,8 @@ export async function createRole(formData: FormData) {
   revalidatePath("/pengaturan/peran")
   redirect("/pengaturan/peran")
 
-  } catch (e: any) {
-    console.error("[createRole]", e?.message || e)
+  } catch (e: unknown) {
+    console.error("[createRole]", getErrorMessage(e) || e)
     throw e
   }
 }
@@ -55,8 +56,8 @@ export async function updateRole(id: number, formData: FormData) {
   revalidatePath("/pengaturan/peran")
   redirect("/pengaturan/peran")
 
-  } catch (e: any) {
-    console.error("[updateRole]", e?.message || e)
+  } catch (e: unknown) {
+    console.error("[updateRole]", getErrorMessage(e) || e)
     throw e
   }
 }
@@ -80,8 +81,8 @@ export async function deleteRole(id: number) {
   revalidatePath("/pengaturan/peran")
   redirect("/pengaturan/peran")
 
-  } catch (e: any) {
-    console.error("[deleteRole]", e?.message || e)
+  } catch (e: unknown) {
+    console.error("[deleteRole]", getErrorMessage(e) || e)
     throw e
   }
 }

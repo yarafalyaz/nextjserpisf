@@ -1,5 +1,6 @@
 "use server"
 
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
@@ -41,10 +42,10 @@ export async function createCustomer(formData: FormData) {
   revalidatePath("/master/pelanggan")
   return { success: true, id: customer.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createCustomer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createCustomer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -75,10 +76,10 @@ export async function updateCustomer(customerId: number, formData: FormData) {
   revalidatePath("/master/pelanggan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateCustomer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateCustomer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -94,10 +95,10 @@ export async function deleteCustomer(customerId: number) {
   revalidatePath("/master/pelanggan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteCustomer]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteCustomer]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -138,10 +139,10 @@ export async function createVendor(formData: FormData) {
   revalidatePath("/master/pemasok")
   return { success: true, id: vendor.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createVendor]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createVendor]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -174,10 +175,10 @@ export async function updateVendor(vendorId: number, formData: FormData) {
   revalidatePath("/master/pemasok")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateVendor]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateVendor]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -220,10 +221,10 @@ export async function createItem(formData: FormData) {
   revalidatePath("/master/barang")
   return { success: true, id: item.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createItem]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createItem]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -258,10 +259,10 @@ export async function updateItem(itemId: number, formData: FormData) {
   revalidatePath("/master/barang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateItem]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateItem]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -288,10 +289,10 @@ export async function createWarehouse(formData: FormData) {
   revalidatePath("/master/gudang")
   return { success: true, id: warehouse.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createWarehouse]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createWarehouse]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -311,10 +312,10 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
   revalidatePath("/master/gudang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateWarehouse]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateWarehouse]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -363,10 +364,10 @@ export async function createEmployee(formData: FormData) {
   revalidatePath("/master/karyawan")
   return { success: true, id: employee.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createEmployee]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createEmployee]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -406,10 +407,10 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
   revalidatePath("/master/karyawan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateEmployee]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateEmployee]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -437,10 +438,10 @@ export async function createAccount(formData: FormData) {
   revalidatePath("/master/akun")
   return { success: true, id: account.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createAccount]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createAccount]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -461,10 +462,10 @@ export async function createItemCategory(formData: FormData) {
   revalidatePath("/master/barang")
   return { success: true, id: category.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createItemCategory]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createItemCategory]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -484,10 +485,10 @@ export async function updateItemCategory(id: number, formData: FormData) {
   revalidatePath("/master/kategori-barang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateItemCategory]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateItemCategory]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -513,10 +514,10 @@ export async function createDepartment(formData: FormData) {
   revalidatePath("/master/karyawan")
   return { success: true, id: department.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createDepartment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createDepartment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -536,10 +537,10 @@ export async function updateDepartment(id: number, formData: FormData) {
   revalidatePath("/master/departemen")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateDepartment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateDepartment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -580,10 +581,10 @@ export async function createPosition(formData: FormData) {
 
   return { success: false, error: "Gagal membuat kode jabatan unik, silakan coba lagi" }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createPosition]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createPosition]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -602,10 +603,10 @@ export async function updatePosition(id: number, formData: FormData) {
   revalidatePath("/master/jabatan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updatePosition]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updatePosition]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -637,10 +638,10 @@ export async function createLead(formData: FormData) {
   revalidatePath("/crm/leads")
   redirect("/crm/leads")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createLead]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createLead]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -670,10 +671,10 @@ export async function updateLead(id: number, formData: FormData) {
   revalidatePath("/crm/leads")
   redirect("/crm/leads")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateLead]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateLead]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -695,10 +696,10 @@ export async function createBank(formData: FormData) {
   revalidatePath("/master/bank")
   return { success: true, id: bank.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createBank]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createBank]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -718,10 +719,10 @@ export async function updateBank(id: number, formData: FormData) {
   revalidatePath("/master/bank")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateBank]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateBank]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -750,10 +751,10 @@ export async function createTax(formData: FormData) {
   revalidatePath("/master/pajak")
   redirect("/master/pajak")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createTax]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createTax]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -780,10 +781,10 @@ export async function updateTax(id: number, formData: FormData) {
   revalidatePath("/master/pajak")
   redirect("/master/pajak")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateTax]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateTax]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -804,10 +805,10 @@ export async function createPriceList(formData: FormData) {
   revalidatePath("/master/daftar-harga")
   return { success: true, id: priceList.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createPriceList]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createPriceList]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -835,10 +836,10 @@ export async function createCurrency(formData: FormData) {
   revalidatePath("/master/mata-uang")
   return { success: true, id: currency.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createCurrency]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createCurrency]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -864,10 +865,10 @@ export async function updateCurrency(id: number, formData: FormData) {
   revalidatePath("/master/mata-uang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateCurrency]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateCurrency]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -888,10 +889,10 @@ export async function createBarcode(formData: FormData) {
   revalidatePath("/master/barcode")
   return { success: true, id: barcodeEntry.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createBarcode]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createBarcode]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -916,10 +917,10 @@ export async function createTaxGroup(formData: FormData) {
   revalidatePath("/master/kelompok-pajak")
   return { success: true, id: taxGroup.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createTaxGroup]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createTaxGroup]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -940,10 +941,10 @@ export async function createStatisticalKeyFigure(formData: FormData) {
   revalidatePath("/keuangan/angka-kunci-statistik")
   return { success: true, id: figure.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createStatisticalKeyFigure]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createStatisticalKeyFigure]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -965,10 +966,10 @@ export async function createPaymentTerm(formData: FormData) {
   revalidatePath("/master/syarat-pembayaran")
   return { success: true, id: paymentTerm.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createPaymentTerm]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createPaymentTerm]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -988,10 +989,10 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
   revalidatePath("/master/syarat-pembayaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updatePaymentTerm]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updatePaymentTerm]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1004,10 +1005,10 @@ export async function deletePaymentTerm(id: number) {
   revalidatePath("/master/syarat-pembayaran")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deletePaymentTerm]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deletePaymentTerm]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1025,10 +1026,10 @@ export async function deleteVendor(id: number) {
   revalidatePath("/master/pemasok")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteVendor]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteVendor]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1044,10 +1045,10 @@ export async function deleteItem(id: number) {
   revalidatePath("/master/barang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteItem]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteItem]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1063,10 +1064,10 @@ export async function deleteWarehouse(id: number) {
   revalidatePath("/master/gudang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteWarehouse]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteWarehouse]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1082,10 +1083,10 @@ export async function deleteEmployee(id: number) {
   revalidatePath("/master/karyawan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteEmployee]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteEmployee]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1098,10 +1099,10 @@ export async function deleteDepartment(id: number) {
   revalidatePath("/master/karyawan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteDepartment]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteDepartment]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1114,10 +1115,10 @@ export async function deletePosition(id: number) {
   revalidatePath("/master/karyawan")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deletePosition]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deletePosition]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1130,10 +1131,10 @@ export async function deleteBank(id: number) {
   revalidatePath("/master/bank")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteBank]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteBank]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1146,10 +1147,10 @@ export async function deleteTax(id: number) {
   revalidatePath("/master/pajak")
   redirect("/master/pajak")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteTax]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteTax]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1162,10 +1163,10 @@ export async function deleteTaxGroup(id: number) {
   revalidatePath("/master/kelompok-pajak")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteTaxGroup]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteTaxGroup]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1178,10 +1179,10 @@ export async function deleteCurrency(id: number) {
   revalidatePath("/master/mata-uang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteCurrency]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteCurrency]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1194,10 +1195,10 @@ export async function deletePriceList(id: number) {
   revalidatePath("/master/daftar-harga")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deletePriceList]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deletePriceList]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1210,10 +1211,10 @@ export async function deleteBarcode(id: number) {
   revalidatePath("/master/barcode")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteBarcode]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteBarcode]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1226,10 +1227,10 @@ export async function deleteItemCategory(id: number) {
   revalidatePath("/master/barang")
   return { success: true }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteItemCategory]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteItemCategory]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1260,10 +1261,10 @@ export async function updateAccount(id: number, formData: FormData) {
   revalidatePath("/master/akun")
   return { success: true, id: account.id }
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateAccount]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateAccount]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1282,10 +1283,10 @@ export async function createBrand(formData: FormData) {
   revalidatePath("/master/merek")
   redirect("/master/merek")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[createBrand]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createBrand]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1303,10 +1304,10 @@ export async function updateBrand(id: number, formData: FormData) {
   revalidatePath("/master/merek")
   redirect("/master/merek")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[updateBrand]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateBrand]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
 
@@ -1319,9 +1320,9 @@ export async function deleteBrand(id: number) {
   revalidatePath("/master/merek")
   redirect("/master/merek")
 
-  } catch (e: any) {
-    if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
-    console.error("[deleteBrand]", e?.message || e)
-    return { success: false, error: e?.message || "Terjadi kesalahan" }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteBrand]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

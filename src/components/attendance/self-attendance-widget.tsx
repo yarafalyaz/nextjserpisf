@@ -1,5 +1,7 @@
 "use client"
 
+import { getErrorMessage } from "@/lib/utils/error"
+
 import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react"
 import { Clock, MapPin, CheckCircle, LogIn, LogOut, Loader2, Navigation } from "lucide-react"
 import { getTodayAttendance, selfCheckIn, selfCheckOut, getCompanyLocation } from "@/actions/self-attendance.actions"
@@ -151,8 +153,8 @@ export function SelfAttendanceWidget() {
     try {
       await selfCheckIn(coords?.latitude, coords?.longitude)
       await loadStatus()
-    } catch (e: any) {
-      setError(e.message || "Gagal check-in")
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Gagal check-in"))
     } finally {
       setActionLoading(null)
     }
@@ -167,8 +169,8 @@ export function SelfAttendanceWidget() {
     try {
       await selfCheckOut(coords?.latitude, coords?.longitude)
       await loadStatus()
-    } catch (e: any) {
-      setError(e.message || "Gagal check-out")
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, "Gagal check-out"))
     } finally {
       setActionLoading(null)
     }

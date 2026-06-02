@@ -1,5 +1,6 @@
 "use server"
 
+import { getErrorMessage } from "@/lib/utils/error"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
@@ -230,8 +231,8 @@ export async function updateSystemSettings(formData: FormData) {
   revalidatePath("/pengaturan")
   redirect("/pengaturan")
 
-  } catch (e: any) {
-    console.error("[updateSystemSettings]", e?.message || e)
+  } catch (e: unknown) {
+    console.error("[updateSystemSettings]", getErrorMessage(e) || e)
     throw e
   }
 }

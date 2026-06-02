@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@/lib/utils/error"
 import { auth } from "@/lib/auth/auth"
 
 /**
@@ -9,9 +10,9 @@ export function action<T extends (...args: any[]) => Promise<any>>(fn: T): T & {
   const wrapped = (async (...args: any[]) => {
     try {
       return await fn(...args)
-    } catch (e: any) {
-      console.error("[Action Error]", fn.name || "unknown", e?.message || e)
-      return { success: false, error: e?.message || "Terjadi kesalahan server" }
+    } catch (e: unknown) {
+      console.error("[Action Error]", fn.name || "unknown", getErrorMessage(e) || e)
+      return { success: false, error: getErrorMessage(e, "Terjadi kesalahan server") }
     }
   }) as T & { protect: (permission?: string) => T }
 
@@ -29,9 +30,9 @@ export function action<T extends (...args: any[]) => Promise<any>>(fn: T): T & {
           await requirePermission(permission)
         }
         return await fn(...args)
-      } catch (e: any) {
-        console.error("[Action Error]", fn.name || "unknown", e?.message || e)
-        return { success: false, error: e?.message || "Terjadi kesalahan server" }
+      } catch (e: unknown) {
+        console.error("[Action Error]", fn.name || "unknown", getErrorMessage(e) || e)
+        return { success: false, error: getErrorMessage(e, "Terjadi kesalahan server") }
       }
     }) as T & { protect: (permission?: string) => T }
     return protectedFn
