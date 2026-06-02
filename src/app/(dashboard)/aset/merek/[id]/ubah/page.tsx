@@ -28,7 +28,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <AssetBrandForm brand={data as any} />
+      <AssetBrandForm brand={{ id: data.id, name: data.name }} />
     </div>
   )
 }

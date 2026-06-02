@@ -31,7 +31,7 @@ export default async function EditPositionPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Edit Jabatan: {position.name}</h1>
       </div>
-      <PositionCreateForm departments={departments as any} position={position} />
+      <PositionCreateForm departments={departments} position={position} />
     </div>
   )
 }
