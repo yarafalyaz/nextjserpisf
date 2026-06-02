@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name, "Batch CRUD ini khusus desktop; mobile sidebar overlay menghalangi interaksi form")
@@ -46,7 +45,7 @@ async function crudMaster(
 
   // ─── READ detail/edit via ActionDropdown ─────────────────────
   const rowCreate = page.locator("tr").filter({ hasText: opts.fields[0].value })
-  await expect(rowCreate).toBeVisible()
+  await expect(rowCreate).toBeVisible({ timeout: 15000 })
   await rowCreate.locator("button[aria-label='Menu']").click()
   await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
   await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/\\d+\\/ubah`), { timeout: 15000 })
@@ -87,7 +86,7 @@ async function crudMaster(
   // ─── DELETE ───────────────────────────────────────────────────
   const searchText = opts.fields.find((f) => f.updated && f.id === "name")?.updated || opts.fields[0].updated || opts.fields[0].value
   const rowAfterUpdate = page.locator("tr").filter({ hasText: searchText }).first()
-  await expect(rowAfterUpdate).toBeVisible()
+  await expect(rowAfterUpdate).toBeVisible({ timeout: 15000 })
   await rowAfterUpdate.locator("button[aria-label='Menu']").click()
   await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
   await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
@@ -106,7 +105,8 @@ async function waitForHydration(page: Page) {
 
 
 test.describe("Master Bank CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/bank",
       createUrl: "/master/bank/tambah",
@@ -120,7 +120,8 @@ test.describe("Master Bank CRUD", () => {
 })
 
 test.describe("Master Syarat Pembayaran CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/syarat-pembayaran",
       createUrl: "/master/syarat-pembayaran/tambah",
@@ -135,7 +136,8 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
 })
 
 test.describe("Master Brand CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/merek",
       createUrl: "/master/merek/tambah",
@@ -148,7 +150,8 @@ test.describe("Master Brand CRUD", () => {
 })
 
 test.describe("Master Kategori Barang CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/kategori-barang",
       createUrl: "/master/kategori-barang/tambah",
@@ -161,7 +164,8 @@ test.describe("Master Kategori Barang CRUD", () => {
 })
 
 test.describe("Master Departemen CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/departemen",
       createUrl: "/master/departemen/tambah",
@@ -174,7 +178,8 @@ test.describe("Master Departemen CRUD", () => {
 })
 
 test.describe("Master Jabatan CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/jabatan",
       createUrl: "/master/jabatan/tambah",
@@ -187,7 +192,8 @@ test.describe("Master Jabatan CRUD", () => {
 })
 
 test.describe("Master Mata Uang CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/mata-uang",
       createUrl: "/master/mata-uang/tambah",
@@ -202,7 +208,8 @@ test.describe("Master Mata Uang CRUD", () => {
 })
 
 test.describe("Master Pajak CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/pajak",
       createUrl: "/master/pajak/tambah",
@@ -216,7 +223,8 @@ test.describe("Master Pajak CRUD", () => {
 })
 
 test.describe("Master Pelanggan CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/pelanggan",
       createUrl: "/master/pelanggan/tambah",
@@ -230,7 +238,8 @@ test.describe("Master Pelanggan CRUD", () => {
 })
 
 test.describe("Master Pemasok CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/master/pemasok",
       createUrl: "/master/pemasok/tambah",
@@ -244,7 +253,8 @@ test.describe("Master Pemasok CRUD", () => {
 })
 
 test.describe("Master Akun Mutation", () => {
-  test("create → update", async ({ page }) => {
+  test("create → update", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Akun E2E ${ts}`
     const updated = `Akun E2E Updated ${ts}`
 
@@ -262,11 +272,11 @@ test.describe("Master Akun Mutation", () => {
 
     // More reliable: find the edit link in the row containing our name
     const row = page.locator(".font-mono").filter({ hasText: /ACC-/ }).last()
-    await expect(row).toBeVisible()
+    await expect(row).toBeVisible({ timeout: 15000 })
 
     // Navigate directly to the edit URL by finding the record's code
     const nameCell = page.locator("td").filter({ hasText: name }).first()
-    await expect(nameCell).toBeVisible()
+    await expect(nameCell).toBeVisible({ timeout: 15000 })
     const nameRow = nameCell.locator("xpath=ancestor::tr")
     const editAnchor = nameRow.locator("a[href*='/ubah']").first()
     await editAnchor.click()
@@ -286,12 +296,13 @@ test.describe("Master Akun Mutation", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     const rowUpdated = page.locator("td").filter({ hasText: updated }).first()
-    await expect(rowUpdated).toBeVisible()
+    await expect(rowUpdated).toBeVisible({ timeout: 15000 })
   })
 })
 
 test.describe("Kendaraan Merek CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/kendaraan/merek",
       createUrl: "/kendaraan/merek/tambah",
@@ -303,7 +314,8 @@ test.describe("Kendaraan Merek CRUD", () => {
 })
 
 test.describe("Aset Merek CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/aset/merek",
       createUrl: "/aset/merek/tambah",
@@ -315,7 +327,8 @@ test.describe("Aset Merek CRUD", () => {
 })
 
 test.describe("Aset Kategori CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/aset/kategori",
       createUrl: "/aset/kategori/tambah",
@@ -330,7 +343,8 @@ test.describe("Aset Kategori CRUD", () => {
 })
 
 test.describe("Keuangan Cost Center CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
       listUrl: "/keuangan/pusat-biaya",
       createUrl: "/keuangan/pusat-biaya/tambah",

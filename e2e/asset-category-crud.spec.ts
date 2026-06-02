@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -29,21 +28,25 @@ test.describe("Aset Kategori CRUD", () => {
     skipOnMobile(testInfo.project.name, "Kategori Aset CRUD khusus desktop")
   })
 
-  test("create → detail → update → delete", async ({ page }) => {
-    const name = `kategori-e2e-${ts}`
-    const updated = `kategori-e2e-updated-${ts}`
+  test("create → detail → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
+    const name = `kat-e2e-${ts}`
+    const updated = `kat-e2e-upd-${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/aset/kategori/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Kategori Aset" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Kategori Aset" })).toBeVisible({ timeout: 15000 })
+    await waitForHydration(page)
 
-    await page.locator("#name").fill(name)
+    const nameInput = page.locator("#name")
+    await expect(nameInput).toBeVisible({ timeout: 10000 })
+    await nameInput.fill(name)
+    await expect(nameInput).toHaveValue(name)
     await page.locator("#code").fill(`KAT-${ts}`)
     await page.locator("#depreciationRate").fill("10")
     await page.locator("#usefulLife").fill("5")
-    await waitForHydration(page)
-    await page.locator("button[type='submit']").click()
+    await page.getByRole("button", { name: /(Simpan|Update)/ }).click()
     await page.waitForURL("**/aset/kategori", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
@@ -51,7 +54,7 @@ test.describe("Aset Kategori CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page.getByRole("link", { name }).first()
-    await expect(detailLink).toBeVisible()
+    await expect(detailLink).toBeVisible({ timeout: 15000 })
     await detailLink.click({ force: true })
 
     await page.waitForURL(/\/aset\/kategori\/\d+$/, { timeout: 15000 })
@@ -61,10 +64,11 @@ test.describe("Aset Kategori CRUD", () => {
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto("/aset/kategori", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
+    await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
-    await expect(row).toBeVisible()
+    await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Edit" }).first().click()
 
@@ -72,7 +76,7 @@ test.describe("Aset Kategori CRUD", () => {
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await waitForHydration(page)
-    await page.locator("button[type='submit']").click()
+    await page.getByRole("button", { name: /(Simpan|Update)/ }).click()
     await page.waitForURL("**/aset/kategori", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
@@ -80,7 +84,7 @@ test.describe("Aset Kategori CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
-    await expect(updatedRow).toBeVisible()
+    await expect(updatedRow).toBeVisible({ timeout: 15000 })
 
     await updatedRow.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()

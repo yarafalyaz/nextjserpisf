@@ -17,16 +17,17 @@ setup("authenticate", async ({ page }) => {
   await page.locator("#password").fill(password)
   await page.locator("#login-submit").click()
 
-  // If login works, we'll be redirected away from /login
   try {
     await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 8_000 })
     await page.context().storageState({ path: authFile })
     console.log("[E2E] Auth OK — storageState saved")
-  } catch {
-    console.warn("[E2E] Auth FAILED (wrong credentials or DB mismatch).")
-    console.warn("[E2E] Saving empty state; protected-page tests will skip.")
-
-    // Write empty state so dependent tests don't crash
-    fs.writeFileSync(authFile, JSON.stringify({ cookies: [], origins: [] }, null, 2))
+  } catch (err) {
+    console.error("[E2E] Auth FAILED (wrong credentials or DB mismatch).", err)
+    if (!process.env.CI) {
+      console.warn("[E2E] Saving empty state; protected-page tests will skip.")
+      fs.writeFileSync(authFile, JSON.stringify({ cookies: [], origins: [] }, null, 2))
+    } else {
+      throw new Error(`Authentication setup failed! E2E tests cannot proceed. Details: ${err}`)
+    }
   }
 })

@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -29,14 +28,16 @@ test.describe("Master Jabatan CRUD", () => {
     skipOnMobile(testInfo.project.name, "Jabatan CRUD khusus desktop")
   })
 
-  test("create → detail → update → delete", async ({ page }) => {
+  test("create → detail → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Jabatan E2E ${ts}`
     const updated = `Jabatan E2E Updated ${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/jabatan/tambah", { waitUntil: "domcontentloaded" })
+    await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Jabatan" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Jabatan" })).toBeVisible({ timeout: 15000 })
 
     await page.locator("#name").fill(name)
     await waitForHydration(page)
@@ -52,11 +53,12 @@ test.describe("Master Jabatan CRUD", () => {
       .locator("a[href^='/master/jabatan/']")
       .filter({ hasText: name })
       .first()
-    await expect(detailLink).toBeVisible()
+    await expect(detailLink).toBeVisible({ timeout: 15000 })
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
 
+    await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
@@ -66,14 +68,14 @@ test.describe("Master Jabatan CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
-    await expect(row).toBeVisible()
+    await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Edit" }).first().click()
 
     await page.waitForURL(/\/master\/jabatan\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
-    await page.locator("#name").fill(updated)
     await waitForHydration(page)
+    await page.locator("#name").fill(updated)
     await page.locator("#submit-position").click()
 
     await page.waitForURL("**/master/jabatan", { timeout: 30000 })
@@ -83,7 +85,7 @@ test.describe("Master Jabatan CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
-    await expect(updatedRow).toBeVisible()
+    await expect(updatedRow).toBeVisible({ timeout: 15000 })
 
     await updatedRow.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()

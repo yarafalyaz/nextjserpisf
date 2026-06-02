@@ -1,14 +1,14 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name, "Employee CRUD fokus desktop")
 })
 
 test.describe("Master Karyawan CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     test.setTimeout(90_000)
     const name = `Karyawan E2E ${ts}`
     const updated = `Karyawan E2E Updated ${ts}`

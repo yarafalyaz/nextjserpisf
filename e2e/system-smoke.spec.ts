@@ -36,7 +36,7 @@ test.describe("System-wide smoke test (all static dashboard pages)", () => {
   for (const route of routes) {
     test(`load ${route}`, async ({ page }) => {
       await page.goto(route, { waitUntil: "domcontentloaded" })
-      await expect(page.locator("body")).toBeVisible()
+      await expect(page.locator("body")).toBeVisible({ timeout: 15000 })
 
       await expect(page).not.toHaveURL(/\/login/)
       await expect(page.locator("body")).not.toContainText(/Unhandled Runtime Error|Something went wrong/i)

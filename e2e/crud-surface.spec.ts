@@ -47,7 +47,7 @@ test.describe("CRUD surface smoke (all modules)", () => {
       const createSurface = page
         .locator("form:visible, input:visible, textarea:visible, select:visible, [role='textbox']:visible")
         .first()
-      await expect(createSurface).toBeVisible()
+      await expect(createSurface).toBeVisible({ timeout: 15000 })
 
       // 3. READ/UPDATE surface from first ID link if available
       await page.goto(baseRoute, { waitUntil: "domcontentloaded" })

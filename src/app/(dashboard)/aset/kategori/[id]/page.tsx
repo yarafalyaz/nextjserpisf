@@ -18,9 +18,11 @@ export default async function AssetCategoryDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const numId = Number(id)
+  if (isNaN(numId)) notFound()
 
   const category = await prisma.assetCategory.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       assets: { take: 10, orderBy: { createdAt: "desc" } },
     },

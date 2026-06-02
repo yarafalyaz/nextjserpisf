@@ -102,10 +102,10 @@ async function main() {
       notes: "E2E delivery order",
       status: "draft",
       items: {
-        create: salesOrder.items.map((soItem) => ({
+        create: salesOrder.items.map((soItem: { id: number; itemId: number | null; qty: number | { toString(): string } }) => ({
           salesOrderItemId: soItem.id,
-          itemId: soItem.itemId!,
-          qty: soItem.qty,
+          item: { connect: { id: soItem.itemId! } },
+          qty: Number(soItem.qty),
           unit: "PCS",
         })),
       },
@@ -214,8 +214,8 @@ async function main() {
     },
     include: { entries: true },
   });
-  const totalDebit = manualJournal.entries.reduce((sum, entry) => sum + Number(entry.debit), 0);
-  const totalCredit = manualJournal.entries.reduce((sum, entry) => sum + Number(entry.credit), 0);
+  const totalDebit = manualJournal.entries.reduce((sum: number, entry: { debit: unknown; credit: unknown }) => sum + Number(entry.debit), 0);
+  const totalCredit = manualJournal.entries.reduce((sum: number, entry: { debit: unknown; credit: unknown }) => sum + Number(entry.credit), 0);
   assert(totalDebit === totalCredit, "Manual journal tidak balance");
   await prisma.journal.update({
     where: { id: manualJournal.id },

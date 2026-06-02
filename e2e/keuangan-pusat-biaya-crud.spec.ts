@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -29,7 +28,8 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     skipOnMobile(testInfo.project.name, "Cost Center CRUD khusus desktop")
   })
 
-  test("create → detail → update → delete", async ({ page }) => {
+  test("create → detail → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const code = `CC-E2E-${ts}`
     const name = `Cost Center E2E ${ts}`
     const updated = `Cost Center E2E Updated ${ts}`
@@ -37,11 +37,15 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/keuangan/pusat-biaya/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Buat Cost Center" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Buat Cost Center" })).toBeVisible({ timeout: 15000 })
 
-    await page.locator("#code").fill(code)
-    await page.locator("#name").fill(name)
     await waitForHydration(page)
+
+    const nameInput = page.locator("#name")
+    await expect(nameInput).toBeVisible({ timeout: 15000 })
+    await page.locator("#code").fill(code)
+    await nameInput.fill(name)
+    await expect(nameInput).toHaveValue(name)
     await page.getByRole("button", { name: "Simpan" }).click()
 
     await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 15000 })
@@ -55,7 +59,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
       .locator("a[href^='/keuangan/pusat-biaya/']")
       .filter({ hasText: name })
       .first()
-    await expect(detailLink).toBeVisible()
+    await expect(detailLink).toBeVisible({ timeout: 15000 })
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })

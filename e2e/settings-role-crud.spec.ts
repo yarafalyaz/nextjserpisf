@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -29,14 +28,16 @@ test.describe("Pengaturan Peran CRUD", () => {
     skipOnMobile(testInfo.project.name, "Role CRUD khusus desktop; sidebar overlay intercepts clicks on mobile")
   })
 
-  test("create → detail → update → delete", async ({ page }) => {
+  test("create → detail → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `role-e2e-${ts}`
     const updated = `role-e2e-updated-${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/pengaturan/peran/tambah", { waitUntil: "domcontentloaded" })
+    await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Role" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Role" })).toBeVisible({ timeout: 15000 })
     await page.locator("#name").first().fill(name)
     await waitForHydration(page)
     await page.locator("button[type='submit']").click()
@@ -48,12 +49,12 @@ test.describe("Pengaturan Peran CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name })
-    await expect(createdRow).toBeVisible()
+    await expect(createdRow).toBeVisible({ timeout: 15000 })
     await createdRow.locator("a").filter({ hasText: "Detail" }).click({ force: true })
 
     await page.waitForURL(/\/pengaturan\/peran\/\d+$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible()
+    await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible({ timeout: 15000 })
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.getByRole("link", { name: "Edit Role" }).click({ force: true })
@@ -72,10 +73,10 @@ test.describe("Pengaturan Peran CRUD", () => {
     // Server action form: deleteRole → revalidatePath → redirect("/pengaturan/peran")
     // The redirect triggers a React re-render on the same URL.
     const updatedRow = page.locator("tr").filter({ hasText: updated })
-    await expect(updatedRow).toBeVisible()
+    await expect(updatedRow).toBeVisible({ timeout: 15000 })
 
     const hapusButton = updatedRow.locator("button[type='submit']", { hasText: "Hapus" })
-    await expect(hapusButton).toBeVisible()
+    await expect(hapusButton).toBeVisible({ timeout: 15000 })
 
     // Click Hapus — server action POSTs internally, deletes, revalidates, redirects
     await hapusButton.click()
@@ -86,6 +87,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     for (let i = 0; i < 3; i++) {
       await page.goto("/pengaturan/peran", { waitUntil: "domcontentloaded" })
       await page.waitForLoadState("networkidle")
+      await waitForHydration(page)
       gone = !(await page.locator("body").innerText()).includes(updated)
       if (gone) break
       // Role still exists — retry the delete

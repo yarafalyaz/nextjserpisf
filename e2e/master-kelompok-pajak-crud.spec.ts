@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -29,14 +28,16 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     skipOnMobile(testInfo.project.name, "Kelompok Pajak CRUD khusus desktop")
   })
 
-  test("create → delete", async ({ page }) => {
+  test("create → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Grup E2E ${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/kelompok-pajak/tambah", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
+    await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 15000 })
 
     await page.locator("#name").fill(name)
     await waitForHydration(page)
@@ -75,6 +76,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await page.goto(`/master/kelompok-pajak?cari=${encodeURIComponent(name)}`, {
       waitUntil: "domcontentloaded",
     })
+    await waitForHydration(page)
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(name, { timeout: 15000 })
   })

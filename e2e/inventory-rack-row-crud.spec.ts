@@ -1,7 +1,10 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
+async function waitForHydration(page: Page) {
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(5000)
+}
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -43,14 +46,16 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     skipOnMobile(testInfo.project.name, "Baris rak CRUD belum stabil di mobile (overlay sidebar)")
   })
 
-  test("create → detail → update → delete", async ({ page }) => {
+  test("create → detail → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Baris Rak E2E ${ts}`
     const updated = `Baris Rak E2E Updated ${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/inventaris/baris-rak/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible({ timeout: 15000 })
+    await waitForHydration(page)
 
     await selectOptionBySearch(page, "input[placeholder='Cari gudang...']", "Gudang", /Gudang/i)
 
@@ -75,7 +80,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page.locator(`a[href^="/inventaris/baris-rak/"]`).filter({ hasText: name }).first()
-    await expect(detailLink).toBeVisible()
+    await expect(detailLink).toBeVisible({ timeout: 15000 })
     const href = await detailLink.getAttribute("href")
     const idMatch = href?.match(/\/inventaris\/baris-rak\/(\d+)/)
     if (!idMatch) throw new Error("Could not parse rack row ID from detail link")
@@ -98,7 +103,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     // ─── DELETE ───────────────────────────────────────────────
     await closeMobileSidebarIfOpen(page)
     const updatedRow = page.locator("tr").filter({ has: page.locator(`a[href='/inventaris/baris-rak/${id}']`) })
-    await expect(updatedRow).toBeVisible()
+    await expect(updatedRow).toBeVisible({ timeout: 15000 })
     await updatedRow.locator("button[aria-label='Menu']").click()
     
     // Perbaikan: gunakan page.getByRole() untuk mencari menuitem

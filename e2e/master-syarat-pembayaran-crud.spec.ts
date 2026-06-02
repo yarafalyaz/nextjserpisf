@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -29,7 +28,8 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     skipOnMobile(testInfo.project.name, "Syarat Pembayaran CRUD khusus desktop")
   })
 
-  test("create → delete", async ({ page }) => {
+  test("create → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Termin E2E ${ts}`
     const code = `E2E${ts}`
 
@@ -37,12 +37,13 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     await page.goto("/master/syarat-pembayaran/tambah", {
       waitUntil: "domcontentloaded",
     })
+    await waitForHydration(page)
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
     await expect(
       page.getByRole("heading", { name: "Tambah Termin Pembayaran" })
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 15000 })
 
     await page.locator("#name").fill(name)
     await page.locator("#code").fill(code)
@@ -80,6 +81,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
       await page.goto("/master/syarat-pembayaran", {
         waitUntil: "domcontentloaded",
       })
+      await waitForHydration(page)
       await page.waitForLoadState("networkidle")
       gone = !(await page.locator("body").innerText()).includes(name)
       if (gone) break

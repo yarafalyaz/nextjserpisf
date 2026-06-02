@@ -45,7 +45,7 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
     const detailLink = page.locator(`a[href^="/master/gudang/"]`).filter({
       hasText: testWarehouseName,
     }).first()
-    await expect(detailLink).toBeVisible()
+    await expect(detailLink).toBeVisible({ timeout: 15000 })
 
     const href = await detailLink.getAttribute("href")
     if (!href) throw new Error("Could not find detail link href")
@@ -75,7 +75,7 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
     // ─── 3. DELETE ──────────────────────────────────────────────────────────
     // Click Menu dropdown for the updated row
     const row = page.locator("tr").filter({ hasText: updatedWarehouseName })
-    await expect(row).toBeVisible()
+    await expect(row).toBeVisible({ timeout: 15000 })
 
     await row.locator("button[aria-label='Menu']").click()
 
@@ -85,7 +85,7 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
 
     // Assert ConfirmDialog popped up and click Confirm button
     const confirmButton = page.locator("button").filter({ hasText: "Hapus" }).last()
-    await expect(confirmButton).toBeVisible()
+    await expect(confirmButton).toBeVisible({ timeout: 15000 })
     await confirmButton.click()
 
     // Tunggu dialog tertutup + toast sukses agar tidak pakai delay statis

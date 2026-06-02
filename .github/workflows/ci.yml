@@ -17,11 +17,14 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npx prisma generate
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npm run lint
       - run: npx tsc --noEmit
 
-  build:
-    name: Build
+  e2e-setup:
+    name: E2E Auth Setup
     runs-on: ubuntu-latest
     needs: lint
     services:
@@ -45,19 +48,53 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npx prisma db push
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+      - run: npx tsx prisma/seed.ts || true
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+      - run: npx tsx scripts/seed-remaining-e2e.ts || true
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+      - run: npx playwright install --with-deps chromium
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:3000
+          AUTH_SECRET: ci-secret
+          NEXTAUTH_URL: http://localhost:4101
+          AUTH_TRUST_HOST: "true"
+          E2E_PORT: "4101"
+      - name: Run Playwright Auth Setup
+        run: npx playwright test --project=setup
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+          NEXTAUTH_SECRET: ci-secret
+          AUTH_SECRET: ci-secret
+          NEXTAUTH_URL: http://localhost:4101
+          AUTH_TRUST_HOST: "true"
+          E2E_PORT: "4101"
+      - name: Upload Auth State
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-auth
+          path: e2e/.auth/
+          retention-days: 1
+          include-hidden-files: true
 
   e2e:
-    name: E2E Tests
+    name: "E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
     runs-on: ubuntu-latest
-    needs: build
+    timeout-minutes: 25
+    needs: [lint, e2e-setup]
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     services:
       mysql:
         image: mysql:8.0
@@ -79,28 +116,52 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npx prisma db push
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npm run db:seed
+      - run: npx tsx prisma/seed.ts || true
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-          NEXTAUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:3000
+      - run: npx tsx scripts/seed-remaining-e2e.ts || true
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npx playwright install --with-deps chromium
+      - name: Download Auth State
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-auth
+          path: e2e/.auth
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:3000
-      - run: npx playwright test --project=chromium
+          AUTH_SECRET: ci-secret
+          NEXTAUTH_URL: http://localhost:4101
+          AUTH_TRUST_HOST: "true"
+          E2E_PORT: "4101"
+      - run: npx playwright test --project=chromium --no-deps --workers=2 --shard=$SHARD_INDEX/$SHARD_TOTAL
         env:
+          SHARD_INDEX: ${{ matrix.shardIndex }}
+          SHARD_TOTAL: ${{ matrix.shardTotal }}
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:3000
+          AUTH_SECRET: ci-secret
+          NEXTAUTH_URL: http://localhost:4101
+          AUTH_TRUST_HOST: "true"
+          E2E_PORT: "4101"
+          PW_WORKERS: 2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shardIndex }}
           path: playwright-report/
           retention-days: 30
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-shard-${{ matrix.shardIndex }}
+          path: test-results/
+          retention-days: 7

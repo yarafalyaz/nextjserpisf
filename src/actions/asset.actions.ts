@@ -211,7 +211,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
     where: { id },
   })
 
-  const transfer = await prisma.$transaction(async (tx) => {
+  const transfer = await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
     // If asset changed, revert old asset location first
     if (oldTransfer.assetId !== assetId && oldTransfer.fromLocation) {
       await tx.asset.update({

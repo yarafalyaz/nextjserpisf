@@ -11,9 +11,11 @@ export default async function EditPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const numId = Number(id)
+  if (isNaN(numId)) notFound()
 
   const data = await prisma.assetBrand.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!data) notFound()

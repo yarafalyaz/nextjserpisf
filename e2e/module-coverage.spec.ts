@@ -1,6 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
 
-const ts = Date.now()
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
@@ -41,7 +40,8 @@ test.describe("Produksi - Work Order CRUD", () => {
 })
 
 test.describe("Inventaris - Rak CRUD", () => {
-  test("create → detail → delete", async ({ page }) => {
+  test("create → detail → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Rak E2E ${ts}`
     const code = `RE2E${String(ts).slice(-4)}`
 

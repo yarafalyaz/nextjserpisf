@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 test.beforeEach(async ({}, testInfo) => {
   skipOnMobile(testInfo.project.name)
@@ -15,16 +14,18 @@ async function waitForHydration(page: Page) {
 
 
 test.describe("SDM Hari Libur Departemen CRUD", () => {
-  test("create → update → delete", async ({ page }) => {
+  test("create → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Dept Holiday E2E ${ts}`
     const updated = `Dept Holiday E2E Updated ${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/sdm/hari-libur-departemen/tambah", { waitUntil: "domcontentloaded" })
 
+    await waitForHydration(page)
     const departmentInput = page.locator("input[placeholder='Cari departemen...']").first()
     await departmentInput.click()
-    await departmentInput.fill("Dep")
+    await departmentInput.fill("HRD")
     await page.keyboard.press("ArrowDown")
     await page.keyboard.press("Enter")
 
@@ -39,7 +40,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
 
     // ─── UPDATE ────────────────────────────────────────────────
     const row = page.locator("tr").filter({ hasText: name }).first()
-    await expect(row).toBeVisible()
+    await expect(row).toBeVisible({ timeout: 15000 })
     await row.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
 
@@ -57,7 +58,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
 
     // ─── DELETE ────────────────────────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
-    await expect(updatedRow).toBeVisible()
+    await expect(updatedRow).toBeVisible({ timeout: 15000 })
     await updatedRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
 

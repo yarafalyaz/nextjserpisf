@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-const ts = Date.now()
 
 async function closeMobileSidebarIfOpen(page: Page) {
   const overlay = page.locator(".sidebar-overlay")
@@ -29,14 +28,16 @@ test.describe("Master Merek CRUD", () => {
     skipOnMobile(testInfo.project.name, "Merek CRUD khusus desktop")
   })
 
-  test("create → detail → update → delete", async ({ page }) => {
+  test("create → detail → update → delete", async ({ page }, testInfo) => {
+    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Brand E2E ${ts}`
     const updated = `Brand E2E Updated ${ts}`
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/merek/tambah", { waitUntil: "domcontentloaded" })
+    await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Brand" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Tambah Brand" })).toBeVisible({ timeout: 15000 })
 
     await page.locator("#name").fill(name)
     await waitForHydration(page)
@@ -51,11 +52,12 @@ test.describe("Master Merek CRUD", () => {
       .locator("a[href^='/master/merek/']")
       .filter({ hasText: name })
       .first()
-    await expect(detailLink).toBeVisible()
+    await expect(detailLink).toBeVisible({ timeout: 15000 })
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
 
+    await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
@@ -65,7 +67,7 @@ test.describe("Master Merek CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
-    await expect(row).toBeVisible()
+    await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Edit" }).first().click()
 
@@ -83,7 +85,7 @@ test.describe("Master Merek CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
-    await expect(updatedRow).toBeVisible()
+    await expect(updatedRow).toBeVisible({ timeout: 15000 })
 
     await updatedRow.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()

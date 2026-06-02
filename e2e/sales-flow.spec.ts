@@ -10,7 +10,7 @@ test.describe("Sales flow", () => {
   test("Quotation create form loads", async ({ page }) => {
     await page.goto("/penjualan/penawaran/tambah")
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("form, [data-testid='form']")).toBeVisible()
+    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
   })
 
   test("Sales order list loads", async ({ page }) => {

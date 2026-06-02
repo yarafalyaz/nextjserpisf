@@ -16,9 +16,11 @@ export default async function VehicleBrandDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const numId = Number(id)
+  if (isNaN(numId)) notFound()
 
   const brand = await prisma.vehicleBrand.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       models: true,
     },
