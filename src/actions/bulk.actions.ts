@@ -203,7 +203,7 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     // Intentional dynamic dispatch — model validated against ALLOWED_MODELS
     const prismaModel = (prisma as any)[model]
     if (!prismaModel) {
