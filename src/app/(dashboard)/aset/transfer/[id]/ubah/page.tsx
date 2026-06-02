@@ -30,7 +30,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <AssetTransferForm transfer={data as any} assets={assets as any}/>
+      <AssetTransferForm transfer={{ id: data.id, assetId: data.assetId, fromEmployeeId: data.fromEmployeeId, toEmployeeId: data.toEmployeeId, transferDate: data.transferDate.toISOString().split('T')[0], notes: data.notes }} assets={assets}/>
     </div>
   )
 }

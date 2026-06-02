@@ -30,7 +30,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <ProductionOrderForm order={data as any} products={products as any}/>
+      <ProductionOrderForm order={data as any} products={products}/>
     </div>
   )
 }

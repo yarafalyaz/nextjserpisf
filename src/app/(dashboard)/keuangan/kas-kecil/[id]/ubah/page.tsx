@@ -30,7 +30,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <PettyCashForm pettyCash={data as any} accounts={accounts as any}/>
+      <PettyCashForm pettyCash={{ id: data.id, date: data.date.toISOString().split('T')[0], description: data.description, amount: Number(data.amount), accountId: data.accountId ?? 0 }} accounts={accounts}/>
     </div>
   )
 }

@@ -30,7 +30,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <LeaveForm leave={data as any} employees={employees as any}/>
+      <LeaveForm leave={{ id: data.id, employeeId: data.employeeId, leaveType: data.type, startDate: data.startDate.toISOString().split('T')[0], endDate: data.endDate.toISOString().split('T')[0], reason: data.reason }} employees={employees}/>
     </div>
   )
 }

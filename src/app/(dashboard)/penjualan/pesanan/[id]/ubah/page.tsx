@@ -30,7 +30,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <SalesOrderForm order={data as any} customers={customers as any}/>
+      <SalesOrderForm order={{ id: data.id, customerId: data.customerId, date: data.date.toISOString().split('T')[0], notes: data.notes }} customers={customers}/>
     </div>
   )
 }
