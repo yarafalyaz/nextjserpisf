@@ -464,8 +464,9 @@ export async function deleteRack(id: number) {
 
 
 export async function updateStockAdjustment(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_stock_adjustments")
 
@@ -497,8 +498,9 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 }
 
 export async function updateMaterialIssue(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_material_issues")
 
@@ -530,8 +532,9 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 }
 
 export async function updateInventoryTransfer(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_inventory_transfers")
 

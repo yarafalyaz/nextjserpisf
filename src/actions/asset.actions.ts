@@ -145,8 +145,9 @@ export async function deleteAssetTransfer(id: number) {
 
 
 export async function updateAssetBrand(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_asset_brands")
 
@@ -168,8 +169,9 @@ export async function updateAssetBrand(id: number, formData: FormData) {
 }
 
 export async function updateAssetCategory(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_asset_categories")
 
@@ -194,8 +196,9 @@ export async function updateAssetCategory(id: number, formData: FormData) {
 }
 
 export async function updateAssetTransfer(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   const user = await requirePermission("create_asset_transfers")
 
@@ -249,8 +252,9 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
   }
 }
 export async function createAsset(formData: FormData) {
-  try {
   "use server"
+
+  try {
   await requirePermission("create_assets")
 
   let code = (formData.get("code") as string) || ""

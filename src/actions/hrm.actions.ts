@@ -870,8 +870,9 @@ export async function deleteHoliday(id: number) {
 
 
 export async function updateLeaveRequest(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_leave_requests")
 
@@ -898,8 +899,9 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
 }
 
 export async function updateOvertimeRequest(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_overtime_requests")
 
@@ -929,8 +931,9 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
 }
 
 export async function updateEmployeeLoan(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_loans")
 
@@ -960,8 +963,9 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
 }
 
 export async function updateTimesheet(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_timesheets")
 
@@ -990,8 +994,9 @@ export async function updateTimesheet(id: number, formData: FormData) {
 }
 
 export async function updateWorkSchedule(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_work_schedules")
 

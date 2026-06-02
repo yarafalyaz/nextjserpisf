@@ -614,8 +614,9 @@ export async function deleteStatisticalKeyFigure(id: number) {
 
 
 export async function updateJournal(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   await requirePermission("create_journals")
 
@@ -720,8 +721,9 @@ export async function reverseJournal(journalId: number) {
 }
 
 export async function updateExpense(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   const user = await requirePermission("create_expenses")
 
@@ -776,8 +778,9 @@ export async function updateExpense(id: number, formData: FormData) {
 }
 
 export async function updatePettyCash(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   const user = await requirePermission("create_petty_cash")
 
@@ -835,8 +838,9 @@ export async function updatePettyCash(id: number, formData: FormData) {
 }
 
 export async function updateBudget(id: number, formData: FormData) {
-  try {
   "use server"
+
+  try {
 
   const user = await requirePermission("create_budgets")
 
