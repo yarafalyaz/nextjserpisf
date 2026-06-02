@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable react-hooks/incompatible-library */
 
 import Image from "next/image"
 import { useRouter } from "next/navigation"

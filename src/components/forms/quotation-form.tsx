@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
 import { useTransition, useCallback, useMemo } from "react"

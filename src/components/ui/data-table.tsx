@@ -1,4 +1,5 @@
 "use client"
+/* eslint-disable react-hooks/incompatible-library */
 
 import type { SortDescriptor, Selection } from "@heroui/react"
 import type { ColumnDef, SortingState } from "@tanstack/react-table"
