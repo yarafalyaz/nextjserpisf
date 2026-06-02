@@ -3,6 +3,7 @@
 import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 
@@ -22,7 +23,7 @@ export async function createAssetCategory(formData: FormData) {
   })
 
   revalidatePath("/aset/kategori")
-  return { success: true, id: category.id }
+  redirect("/aset/kategori")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -44,7 +45,7 @@ export async function createAssetBrand(formData: FormData) {
   })
 
   revalidatePath("/aset/merek")
-  return { success: true, id: brand.id }
+  redirect("/aset/merek")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -101,7 +102,7 @@ export async function deleteAssetCategory(id: number) {
   await prisma.assetCategory.delete({ where: { id } })
 
   revalidatePath("/aset/kategori")
-  return { success: true }
+  redirect("/aset/kategori")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -117,7 +118,7 @@ export async function deleteAssetBrand(id: number) {
   await prisma.assetBrand.delete({ where: { id } })
 
   revalidatePath("/aset/merek")
-  return { success: true }
+  redirect("/aset/merek")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -157,7 +158,7 @@ export async function updateAssetBrand(id: number, formData: FormData) {
   })
 
   revalidatePath("/aset/merek")
-  return { success: true, id: brand.id }
+  redirect("/aset/merek")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -183,7 +184,7 @@ export async function updateAssetCategory(id: number, formData: FormData) {
   })
 
   revalidatePath("/aset/kategori")
-  return { success: true, id: category.id }
+  redirect("/aset/kategori")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e

@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 
 // ==================== CUSTOMER ACTIONS ====================
@@ -634,7 +635,7 @@ export async function createLead(formData: FormData) {
 
   await prisma.lead.create({ data })
   revalidatePath("/crm/leads")
-  return { success: true }
+  redirect("/crm/leads")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -667,7 +668,7 @@ export async function updateLead(id: number, formData: FormData) {
   })
 
   revalidatePath("/crm/leads")
-  return { success: true }
+  redirect("/crm/leads")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -747,7 +748,7 @@ export async function createTax(formData: FormData) {
   })
 
   revalidatePath("/master/pajak")
-  return { success: true, id: tax.id }
+  redirect("/master/pajak")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -777,7 +778,7 @@ export async function updateTax(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/pajak")
-  return { success: true }
+  redirect("/master/pajak")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -1143,7 +1144,7 @@ export async function deleteTax(id: number) {
   await prisma.tax.delete({ where: { id } })
 
   revalidatePath("/master/pajak")
-  return { success: true }
+  redirect("/master/pajak")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -1278,7 +1279,7 @@ export async function createBrand(formData: FormData) {
   })
 
   revalidatePath("/master/merek")
-  return { success: true, id: brand.id }
+  redirect("/master/merek")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -1299,7 +1300,7 @@ export async function updateBrand(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/merek")
-  return { success: true }
+  redirect("/master/merek")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e
@@ -1315,7 +1316,7 @@ export async function deleteBrand(id: number) {
   await prisma.brand.delete({ where: { id } })
 
   revalidatePath("/master/merek")
-  return { success: true }
+  redirect("/master/merek")
 
   } catch (e: any) {
     if (e?.digest?.startsWith?.("NEXT_REDIRECT")) throw e

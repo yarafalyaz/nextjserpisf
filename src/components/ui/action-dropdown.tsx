@@ -36,7 +36,10 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
     if (!deleteAction || !deleteId) return
     startTransition(async () => {
       try {
-        await deleteAction(deleteId)
+        const result = await deleteAction(deleteId)
+        if (!result?.success) {
+          throw new Error((result as { error?: string } | undefined)?.error || "Gagal menghapus data")
+        }
         showSuccess("Data berhasil dihapus")
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menghapus data")

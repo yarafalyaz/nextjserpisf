@@ -20,7 +20,7 @@ async function closeMobileSidebarIfOpen(page: Page) {
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
+  await page.waitForTimeout(5000)
 }
 
 async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
@@ -42,6 +42,7 @@ test.describe("Master Merek CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Brand" })).toBeVisible()
 
     await page.locator("#name").fill(name)
+    await waitForHydration(page)
     await page.locator("#submit-brand").click()
     await page.waitForURL("**/master/merek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
@@ -75,6 +76,7 @@ test.describe("Master Merek CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").fill(updated)
+    await waitForHydration(page)
     await page.getByRole("button", { name: "Update" }).click()
 
     await page.waitForURL("**/master/merek", { timeout: 15000 })

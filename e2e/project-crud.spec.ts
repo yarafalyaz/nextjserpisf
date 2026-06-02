@@ -10,7 +10,7 @@ test.beforeEach(async ({}, testInfo) => {
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
+  await page.waitForTimeout(5000)
 }
 
 async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {

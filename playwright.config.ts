@@ -1,14 +1,18 @@
 import { defineConfig, devices } from "@playwright/test"
+import os from "node:os"
 
 const E2E_PORT = process.env.E2E_PORT || "4101"
 const E2E_BASE_URL = `http://localhost:${E2E_PORT}`
+const CPU_COUNT = os.cpus().length
+const SAFE_MAX_WORKERS = Math.max(1, Math.min(CPU_COUNT, 4))
+const DEFAULT_WORKERS = process.env.CI ? Math.max(1, Math.floor(CPU_COUNT * 0.6)) : SAFE_MAX_WORKERS
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  workers: process.env.PW_WORKERS ? Number(process.env.PW_WORKERS) : DEFAULT_WORKERS,
   reporter: [["html", { open: "never" }], ["list"]],
 
   use: {

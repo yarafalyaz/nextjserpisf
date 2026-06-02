@@ -3,6 +3,7 @@
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 import { requireId, safeId, safeNumber } from "@/lib/utils/safe-parse"
 
 // ==================== VEHICLE BRAND ACTIONS ====================
@@ -17,7 +18,7 @@ export async function createVehicleBrand(formData: FormData) {
   })
 
   revalidatePath("/kendaraan/merek")
-  return { success: true, id: brand.id }
+  redirect("/kendaraan/merek")
 }
 
 // ==================== VEHICLE MODEL ACTIONS ====================
@@ -128,7 +129,7 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
   })
 
   revalidatePath("/kendaraan/merek")
-  return { success: true, id: brand.id }
+  redirect("/kendaraan/merek")
 }
 
 export async function updateVehicleModel(id: number, formData: FormData) {
