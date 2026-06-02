@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { PrismaClient, Prisma, StockMove } from '@prisma/client'
 import { notificationService } from './notification.service'

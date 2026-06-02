@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { JournalService } from '@/lib/services/journal.service'
 import { generateDocumentNumber } from '@/lib/utils/document-number'
 import { getSystemSettings } from '@/lib/utils/settings'
