@@ -37,7 +37,7 @@ export default async function InvoicesPage({
     take: perPage,
   })
 
-  const [, total] = await Promise.all([
+  const [,] = await Promise.all([
     Promise.resolve(rawInvoices),
     prisma.salesInvoice.count({ where }),
   ])

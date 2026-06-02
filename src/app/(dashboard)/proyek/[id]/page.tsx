@@ -232,7 +232,7 @@ export default async function ProjectDetailPage({
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada tahapan</p>
                   ) : (
                     <div className="relative border-l-2 border-primary/20 ml-4 my-2 flex flex-col gap-6">
-                      {project.stages.map((stage, idx) => {
+                      {project.stages.map((stage) => {
                         const isStageActive = stage.status === "active"
                         const isStageDone = stage.status === "completed"
                         const currentPercent = stage.progress[0]?.percentage ?? 0

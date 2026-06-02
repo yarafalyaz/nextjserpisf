@@ -11,7 +11,6 @@ export default async function CreateDownPaymentPage({
 }) {
   const params = await searchParams
   const quotationId = params.quotationId ? Number(params.quotationId) : undefined
-  const _salesOrderId = params.salesOrderId ? Number(params.salesOrderId) : undefined
 
   const [customers, quotations] = await Promise.all([
     prisma.customer.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),

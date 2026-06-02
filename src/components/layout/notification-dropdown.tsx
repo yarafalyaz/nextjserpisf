@@ -43,7 +43,7 @@ export function NotificationDropdown() {
         setNotifications(data.notifications || [])
         setUnreadCount(data.unreadCount || 0)
       }
-    } catch (e) {
+    } catch {
       // silent
     } finally {
       setLoading(false)

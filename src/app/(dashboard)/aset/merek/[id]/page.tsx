@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteAssetBrand } from "@/actions/asset.actions"

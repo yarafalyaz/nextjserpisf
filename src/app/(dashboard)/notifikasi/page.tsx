@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { auth } from "@/lib/auth/auth"
 import { formatDate } from "@/lib/utils/format"
-import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 export default async function NotificationsPage() {

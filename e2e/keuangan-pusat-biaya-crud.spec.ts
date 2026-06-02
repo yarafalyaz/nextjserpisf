@@ -91,8 +91,6 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await page.locator("input[placeholder*='Cari kode atau nama']").fill(code)
     await page.waitForTimeout(400)
 
-    const _updatedVisible = await page.locator("body").textContent().then((t) => (t || "").includes(updated))
-
     // ─── DELETE ───────────────────────────────────────────────
     await page.goto(`/keuangan/pusat-biaya?cari=${encodeURIComponent(code)}`, {
       waitUntil: "domcontentloaded",

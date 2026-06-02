@@ -46,14 +46,12 @@ function SectionItems({
   items,
   setValue,
   register,
-  errors,
 }: {
   sectionIndex: number
   control: any
   items: ItemOption[]
   setValue: any
   register: any
-  errors: any
 }) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -118,7 +116,6 @@ function SectionItems({
               onRecalc={recalcItem}
               onRemove={() => remove(itemIndex)}
               canRemove={fields.length > 1}
-              errors={errors}
             />
           ))}
         </tbody>
@@ -160,7 +157,6 @@ function SectionItemRow({
   onRecalc,
   onRemove,
   canRemove,
-  errors,
 }: {
   sectionIndex: number
   itemIndex: number
@@ -172,7 +168,6 @@ function SectionItemRow({
   onRecalc: (itemIndex: number) => void
   onRemove: () => void
   canRemove: boolean
-  errors: any
 }) {
   const prefix = `sections.${sectionIndex}.items.${itemIndex}`
   const watchedItem = useWatch({ control, name: prefix })
@@ -705,7 +700,6 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
               items={items}
               setValue={setValue}
               register={register}
-              errors={errors?.sections?.[sectionIndex]?.items}
             />
           </div>
         ))}
