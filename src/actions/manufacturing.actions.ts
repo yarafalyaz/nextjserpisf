@@ -524,9 +524,10 @@ export async function deleteProductionOrder(id: number) {
 
 
 export async function updateProductionOrder(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_production_orders")
 
   // Fix #33: Jangan generate documentNo baru (bocor sequence)

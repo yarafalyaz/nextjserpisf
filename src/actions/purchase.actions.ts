@@ -776,9 +776,10 @@ export async function deleteVendorPayment(id: number) {
 
 
 export async function updatePurchaseRequest(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   const user = await requirePermission("create_purchase_requests")
 
   const existingPr = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id } })
@@ -828,9 +829,10 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
 }
 
 export async function updatePurchaseOrder(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   const user = await requirePermission("create_purchase_orders")
 
   const existingPo = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
@@ -877,9 +879,10 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 }
 
 export async function updateVendorBill(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   const user = await requirePermission("create_vendor_bills")
 
   const existingBill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } })
@@ -928,9 +931,10 @@ export async function updateVendorBill(id: number, formData: FormData) {
 }
 
 export async function updateGoodsReceipt(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_goods_receipts")
 
   const existingGr = await prisma.goodsReceipt.findUniqueOrThrow({ where: { id } })
@@ -982,9 +986,10 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
 }
 
 export async function updatePurchaseReturn(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   const user = await requirePermission("create_purchase_returns")
 
   const ret = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
@@ -1029,9 +1034,10 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
 }
 
 export async function updateVendorPayment(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   const user = await requirePermission("create_vendor_payments")
 
   const existingPayment = await prisma.vendorPayment.findUniqueOrThrow({ where: { id } })
@@ -1078,8 +1084,9 @@ export async function updateVendorPayment(id: number, formData: FormData) {
   }
 }
 export async function deletePurchaseReturn(id: number) {
-  try {
   "use server"
+
+  try {
   const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
   if (purchaseReturn.status !== "draft") {
     throw new Error("Hanya retur draft yang dapat dihapus")

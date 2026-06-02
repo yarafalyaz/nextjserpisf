@@ -88,8 +88,8 @@ async function runTask(task: Task): Promise<string> {
 // 1. Auto Lock Period
 async function taskLockPeriod(): Promise<string> {
   const now = new Date()
-  const day = now.getDate()
-  const hour = now.getHours()
+  const _day = now.getDate()
+  const _hour = now.getHours()
 
   // Only lock on the 1st of the month at ~00:00 (previous month end)
   // Or allow manual trigger any time

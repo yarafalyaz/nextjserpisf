@@ -16,7 +16,7 @@ export default async function ApprovalsPage({
   searchParams: Promise<{ status?: string }>
 }) {
   await requirePermission("view_dashboard")
-  const session = await auth()
+  const _session = await auth()
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 

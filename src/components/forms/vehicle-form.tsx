@@ -24,7 +24,11 @@ export function VehicleForm({ brands, models, customers, vehicle }: VehicleFormP
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        vehicle?.id ? await updateVehicle(vehicle.id, formData) : await createVehicle(formData)
+        if (vehicle?.id) {
+          await updateVehicle(vehicle.id, formData)
+        } else {
+          await createVehicle(formData)
+        }
         showSuccess(vehicle?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
         router.refresh()
       } catch (error) {

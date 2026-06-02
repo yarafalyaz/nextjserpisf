@@ -39,7 +39,11 @@ export function DepartmentHolidayForm({ departments, holiday }: DepartmentHolida
     }
     startTransition(async () => {
       try {
-        holiday?.id ? await updateDepartmentHoliday(formData) : await createDepartmentHoliday(formData)
+        if (holiday?.id) {
+          await updateDepartmentHoliday(formData)
+        } else {
+          await createDepartmentHoliday(formData)
+        }
         showSuccess(holiday?.id ? "Hari libur departemen berhasil diupdate" : "Hari libur departemen berhasil ditambahkan")
         router.push("/sdm/hari-libur-departemen")
         router.refresh()

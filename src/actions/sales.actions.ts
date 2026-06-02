@@ -878,9 +878,10 @@ export async function deleteDownPayment(id: number) {
 
 
 export async function updateSalesOrder(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_sales_orders")
 
   const existing = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
@@ -911,9 +912,10 @@ export async function updateSalesOrder(id: number, formData: FormData) {
 }
 
 export async function updateSalesInvoice(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_sales_invoices")
 
   const existingInvoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
@@ -1004,9 +1006,10 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
 }
 
 export async function updateSalesPayment(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_sales_payments")
 
   // Fetch old invoiceId before update to handle invoice reassignment
@@ -1056,9 +1059,10 @@ export async function updateSalesPayment(id: number, formData: FormData) {
 }
 
 export async function updateSalesReturn(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_sales_returns")
 
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
@@ -1102,9 +1106,10 @@ export async function updateSalesReturn(id: number, formData: FormData) {
 }
 
 export async function updateDeliveryOrder(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_delivery_orders")
   const salesOrderId = requireId(formData.get("salesOrderId"), "salesOrderId")
   const salesOrder = await prisma.salesOrder.findUnique({
@@ -1144,9 +1149,10 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
 }
 
 export async function updateDownPayment(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_down_payments")
 
   // Fix #2: Jangan generate documentNo baru
@@ -1205,8 +1211,9 @@ export async function updateDownPayment(id: number, formData: FormData) {
   }
 }
 export async function deleteSalesOrder(id: number) {
-  try {
   "use server"
+
+  try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_orders")
   await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
@@ -1231,8 +1238,9 @@ export async function deleteSalesOrder(id: number) {
 }
 
 export async function deleteSalesInvoice(id: number) {
-  try {
   "use server"
+
+  try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_invoices")
   await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
@@ -1252,8 +1260,9 @@ export async function deleteSalesInvoice(id: number) {
 }
 
 export async function deleteSalesReturn(id: number) {
-  try {
   "use server"
+
+  try {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_returns")
   const sr = await prisma.salesReturn.findUniqueOrThrow({ where: { id } })

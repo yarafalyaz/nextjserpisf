@@ -1235,9 +1235,10 @@ export async function deleteItemCategory(id: number) {
 
 
 export async function updateAccount(id: number, formData: FormData) {
-  try {
+
   "use server"
 
+  try {
   await requirePermission("create_accounts")
 
   let code = (formData.get("code") as string) || null
