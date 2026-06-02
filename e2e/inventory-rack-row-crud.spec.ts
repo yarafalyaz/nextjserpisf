@@ -37,10 +37,6 @@ async function submitAndWaitForListPage(page: Page, buttonName: RegExp) {
 }
 
 
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(5000)
-}
 
 test.describe("Inventaris Baris Rak CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {

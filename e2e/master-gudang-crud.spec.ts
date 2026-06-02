@@ -15,10 +15,6 @@ async function closeMobileSidebarIfOpen(page: Page) {
 }
 
 
-async function waitForHydration(page: Page) {
-  await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(5000)
-}
 
 
 test.describe("Master Gudang E2E CRUD Mutation", () => {

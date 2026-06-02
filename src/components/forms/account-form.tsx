@@ -17,7 +17,6 @@ interface AccountFormProps {
 export function AccountForm({ accounts, generatedCode, account }: AccountFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const _isEdit = false
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

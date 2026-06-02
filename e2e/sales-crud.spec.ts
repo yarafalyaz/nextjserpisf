@@ -1,20 +1,11 @@
 import { test, expect, type Page } from "@playwright/test"
 
-const ts = Date.now()
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
   await page.waitForTimeout(5000)
 }
 
-async function selectComboBox(page: Page, label: string, searchText: string) {
-  const group = page.locator(".flex.flex-col.gap-1\\.5").filter({ hasText: label }).first()
-  const input = group.locator("input").first()
-  await input.fill(searchText)
-  await page.waitForTimeout(500)
-  const option = page.locator("[role='option'], [role='listbox'] li").filter({ hasText: searchText }).first()
-  await option.click()
-}
 
 test.describe("Penjualan - Sales Order CRUD", () => {
   test("create → detail → delete", async ({ page }) => {

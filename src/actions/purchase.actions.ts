@@ -1,6 +1,6 @@
 "use server"
 
-import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onPurchaseOrderReceived, onPurchaseReturnProcessed, onVendorBillPosted, onVendorPaymentCreated } from "@/lib/hooks/accounting.hook"
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook"

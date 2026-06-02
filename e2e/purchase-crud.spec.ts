@@ -1,6 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
 
-const ts = Date.now()
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")

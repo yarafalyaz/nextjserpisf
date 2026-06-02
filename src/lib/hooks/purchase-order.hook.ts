@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db/prisma";
 
 export async function onPurchaseOrderCreated(
   purchaseOrderId: number,
-  userId?: number
+  __userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const po = await tx.purchaseOrder.findUniqueOrThrow({

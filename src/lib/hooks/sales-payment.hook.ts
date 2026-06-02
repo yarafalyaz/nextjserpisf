@@ -44,7 +44,7 @@ async function recalculateInvoicePaymentState(invoiceId: number): Promise<void> 
  */
 export async function onSalesPaymentCreated(
   paymentId: number,
-  userId?: number
+  __userId?: number
 ): Promise<void> {
   const payment = await prisma.salesPayment.findUniqueOrThrow({
     where: { id: paymentId },

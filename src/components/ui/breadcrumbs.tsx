@@ -1,7 +1,7 @@
 'use client'
 
 import { Breadcrumbs } from '@heroui/react'
-import Link from 'next/link'
+
 
 export interface BreadcrumbItem {
   label: string

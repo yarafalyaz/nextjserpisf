@@ -31,6 +31,7 @@ interface DownPaymentFormProps {
   defaultCustomerId?: number
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function DownPaymentForm({ customers, quotations, downPayment, defaultQuotationId, defaultCustomerId }: DownPaymentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
