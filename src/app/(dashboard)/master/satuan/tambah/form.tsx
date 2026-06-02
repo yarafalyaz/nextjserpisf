@@ -6,7 +6,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input, Label } from "@heroui/react"
 import { Button } from "@/components/ui/page-header"
 
-export function UomForm({ uom }: { uom?: any } = {}) {
+export function UomForm({ uom }: { uom?: { id?: number; name?: string | null; symbol?: string | null } } = {}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 

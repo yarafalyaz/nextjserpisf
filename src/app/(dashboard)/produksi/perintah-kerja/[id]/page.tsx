@@ -84,7 +84,7 @@ export default async function WorkOrderDetailPage({
                 <DetailTableTh align="right">Total</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
-                {wo.items.map((item: any) => (
+                {wo.items.map((item) => (
                   <DetailTableRow key={item.id}>
                     <DetailTableTd>Item #{item.itemId}</DetailTableTd>
                     <DetailTableTd>{item.description || "-"}</DetailTableTd>

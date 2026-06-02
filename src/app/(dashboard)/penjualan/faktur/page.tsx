@@ -7,6 +7,8 @@ import { InvoiceTable } from "./_components/invoice-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { indoToStatus } from "@/lib/utils/status-labels"
 
+import { SalesInvoiceStatus } from "@prisma/client"
+
 export default async function InvoicesPage({
   searchParams,
 }: {
@@ -26,7 +28,7 @@ export default async function InvoicesPage({
         { customer: { name: { contains: params.cari } } },
       ],
     }),
-    ...(dbStatusParam && { status: dbStatusParam as any }),
+    ...(dbStatusParam && { status: dbStatusParam as SalesInvoiceStatus }),
   }
 
   const rawInvoices = await prisma.salesInvoice.findMany({

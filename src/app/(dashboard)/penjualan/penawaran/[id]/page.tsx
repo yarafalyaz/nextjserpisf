@@ -123,7 +123,7 @@ export default async function QuotationDetailPage({
                             <DetailTableRow key={item.id}>
                               <DetailTableTd>{item.description || "-"}</DetailTableTd>
                               <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                              <DetailTableTd>{(item as any).uom || "-"}</DetailTableTd>
+                              <DetailTableTd>{item.uom || "-"}</DetailTableTd>
                               <DetailTableTd align="right">{formatCurrency(Number(item.unitPrice))}</DetailTableTd>
                               <DetailTableTd align="right">{formatCurrency(Number(item.discount))}</DetailTableTd>
                               <DetailTableTd align="right">{formatCurrency(Number(item.total))}</DetailTableTd>

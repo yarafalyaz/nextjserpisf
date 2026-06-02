@@ -12,7 +12,18 @@ import { Button } from "@/components/ui/page-header"
 interface AssetFormProps {
   categories: { id: number; name: string }[]
   brands: { id: number; name: string }[]
-  asset?: any
+  asset?: {
+    id?: number
+    name?: string | null
+    code?: string | null
+    categoryId?: number | null
+    brandId?: number | null
+    purchaseDate?: string | null
+    purchasePrice?: number | string | null
+    location?: string | null
+    status?: string | null
+    description?: string | null
+  }
   generatedCode: string
 }
 
