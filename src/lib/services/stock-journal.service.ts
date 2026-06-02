@@ -1,7 +1,7 @@
 import { JournalService } from '@/lib/services/journal.service'
 import { generateDocumentNumber } from '@/lib/utils/document-number'
 import { getSystemSettings } from '@/lib/utils/settings'
-import type { PrismaClient } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 
 /**
  * Stock Journal Service — creates journal entries for inventory movements.
@@ -63,7 +63,7 @@ export const stockJournalService = {
    * when vendor bill is entered.
    */
   async onGoodsReceipt(
-    tx: PrismaClient,
+    tx: Prisma.TransactionClient,
     items: JournalItemInput[],
     grDocumentNo: string,
     grId: number,
@@ -114,7 +114,7 @@ export const stockJournalService = {
    *     Cr Inventory Account
    */
   async onStockAdjustment(
-    tx: PrismaClient,
+    tx: Prisma.TransactionClient,
     items: Array<JournalItemInput & { difference: number }>,
     adjDocumentNo: string,
     adjId: number,
@@ -168,7 +168,7 @@ export const stockJournalService = {
    *   Cr Inventory Account
    */
   async onMaterialIssue(
-    tx: PrismaClient,
+    tx: Prisma.TransactionClient,
     items: JournalItemInput[],
     miDocumentNo: string,
     miId: number,
@@ -215,7 +215,7 @@ export const stockJournalService = {
    *   Cr Sales Return Account
    */
   async onSalesReturn(
-    tx: PrismaClient,
+    tx: Prisma.TransactionClient,
     items: JournalItemInput[],
     srDocumentNo: string,
     srId: number,
@@ -261,7 +261,7 @@ export const stockJournalService = {
    *   Cr Inventory Account
    */
   async onPurchaseReturn(
-    tx: PrismaClient,
+    tx: Prisma.TransactionClient,
     items: JournalItemInput[],
     prDocumentNo: string,
     prId: number,
@@ -307,7 +307,7 @@ export const stockJournalService = {
    *   Cr Inventory Account
    */
   async onWorkOrderCompleted(
-    tx: PrismaClient,
+    tx: Prisma.TransactionClient,
     items: JournalItemInput[],
     woDocumentNo: string,
     woId: number,

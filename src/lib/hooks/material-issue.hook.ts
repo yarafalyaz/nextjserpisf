@@ -80,7 +80,7 @@ export async function onMaterialIssueCompleted(
 
     // Create Journal Entry (Dr Material Expense, Cr Inventory)
     await stockJournalService.onMaterialIssue(
-      tx as any,
+      tx,
       issue.items.map((i) => ({
         qty: Number(i.qty),
         cost: Number(i.cost),

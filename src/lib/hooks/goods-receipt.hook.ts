@@ -131,7 +131,7 @@ export async function onGoodsReceiptVerified(
 
     // ─── 4. Create Journal Entry ──────────────────────────────────────
     await stockJournalService.onGoodsReceipt(
-      tx as any,
+      tx,
       goodsReceipt.items.map((i) => ({
         qty: Number(i.qty),
         cost: Number(i.unitCost ?? 0),

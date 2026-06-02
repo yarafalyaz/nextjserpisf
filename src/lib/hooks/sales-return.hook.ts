@@ -82,7 +82,7 @@ export async function onSalesReturnCompleted(
 
     // Create Journal Entry (Dr Inventory, Cr Sales Return)
     await stockJournalService.onSalesReturn(
-      tx as any,
+      tx,
       salesReturn.items.map((i) => ({
         qty: Number(i.qty),
         cost: Number(i.cost),

@@ -12,7 +12,7 @@ export async function logActivity(
   modelType: string,
   modelId: number,
   description?: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ) {
   try {
     const session = await auth()

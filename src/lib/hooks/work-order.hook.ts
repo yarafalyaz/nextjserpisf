@@ -90,7 +90,7 @@ export async function onWorkOrderCompleted(
 
     // Create Journal Entry (Dr WIP, Cr Inventory)
     await stockJournalService.onWorkOrderCompleted(
-      tx as any,
+      tx,
       workOrder.items
         .filter((i) => Number(i.qty) > 0)
         .map((i) => ({

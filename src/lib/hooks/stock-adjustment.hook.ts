@@ -100,7 +100,7 @@ export async function onStockAdjustmentProcessed(
 
     // Create Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment)
     await stockJournalService.onStockAdjustment(
-      tx as any,
+      tx,
       adjustment.items.map((i) => ({
         qty: Number(i.actualQty),
         cost: Number(i.unitCost),
