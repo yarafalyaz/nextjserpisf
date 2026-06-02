@@ -93,7 +93,7 @@ export async function createVehicle(formData: FormData) {
   }
 
   revalidatePath("/kendaraan")
-  return { success: true, id: vehicle.id }
+  redirect("/kendaraan")
 }
 
 // ==================== DELETE ACTIONS ====================
@@ -175,7 +175,7 @@ export async function updateVehicle(id: number, formData: FormData) {
   })
 
   revalidatePath("/kendaraan")
-  return { success: true }
+  redirect("/kendaraan")
 }
 // Vehicle delete
 

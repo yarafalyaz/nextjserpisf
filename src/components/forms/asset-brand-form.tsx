@@ -27,7 +27,6 @@ export function AssetBrandForm({ brand }: { brand?: { id: number; name: string }
 
         }
         showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/aset/merek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

@@ -26,7 +26,6 @@ export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string
 
         }
         showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
-        router.push("/kendaraan/merek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")

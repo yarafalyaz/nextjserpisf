@@ -47,7 +47,6 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
           await createLead(formData)
         }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-        router.push("/crm/leads")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
