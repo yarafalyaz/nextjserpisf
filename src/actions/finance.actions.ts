@@ -617,7 +617,7 @@ export async function updateJournal(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_journals")
+  await requirePermission("create_journals")
 
   // Laravel parity: only DRAFT journals can be edited
   const existing = await prisma.journal.findUniqueOrThrow({ where: { id } })

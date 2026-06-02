@@ -13,7 +13,7 @@ export async function createAssetCategory(formData: FormData) {
   try {
   await requirePermission("create_asset_categories")
 
-  const category = await prisma.assetCategory.create({
+  await prisma.assetCategory.create({
     data: {
       name: formData.get("name") as string,
       code: formData.get("code") as string | null,
@@ -38,7 +38,7 @@ export async function createAssetBrand(formData: FormData) {
   try {
   await requirePermission("create_asset_brands")
 
-  const brand = await prisma.assetBrand.create({
+  await prisma.assetBrand.create({
     data: {
       name: formData.get("name") as string,
     },
@@ -150,7 +150,7 @@ export async function updateAssetBrand(id: number, formData: FormData) {
 
   await requirePermission("create_asset_brands")
 
-  const brand = await prisma.assetBrand.update({
+  await prisma.assetBrand.update({
     where: { id },
     data: {
       name: formData.get("name") as string,
@@ -173,7 +173,7 @@ export async function updateAssetCategory(id: number, formData: FormData) {
 
   await requirePermission("create_asset_categories")
 
-  const category = await prisma.assetCategory.update({
+  await prisma.assetCategory.update({
     where: { id },
     data: {
       name: formData.get("name") as string,

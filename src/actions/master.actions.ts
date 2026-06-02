@@ -731,7 +731,7 @@ export async function createTax(formData: FormData) {
   try {
   await requirePermission("create_taxes")
 
-  const tax = await prisma.tax.create({
+  await prisma.tax.create({
     data: {
       name: formData.get("name") as string,
       rate: (safeNumber(formData.get("rate")) ?? 0),
@@ -1272,7 +1272,7 @@ export async function createBrand(formData: FormData) {
   try {
   await requirePermission("create_items")
 
-  const brand = await prisma.brand.create({
+  await prisma.brand.create({
     data: {
       name: formData.get("name") as string,
     },

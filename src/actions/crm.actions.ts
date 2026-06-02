@@ -47,7 +47,7 @@ export async function updateTicket(id: number, formData: FormData) {
   "use server"
 
   // Fix #35: Harusnya edit_tickets, bukan create_tickets
-  const user = await requirePermission("edit_tickets")
+  await requirePermission("edit_tickets")
 
   const ticket = await prisma.crmTicket.update({
     where: { id },

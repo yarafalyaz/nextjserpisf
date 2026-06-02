@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth/auth"
 import { revalidatePath } from "next/cache"
 
 export async function approveStep(approvalId: number, formData: FormData) {
-  const user = await requirePermission("view_dashboard")
+  await requirePermission("view_dashboard")
   const session = await auth()
   const notes = formData.get("notes") as string | null
 
@@ -56,7 +56,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
 }
 
 export async function rejectStep(approvalId: number, formData: FormData) {
-  const user = await requirePermission("view_dashboard")
+  await requirePermission("view_dashboard")
   const session = await auth()
   const notes = formData.get("notes") as string | null
 

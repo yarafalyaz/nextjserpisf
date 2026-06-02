@@ -276,7 +276,7 @@ export async function createWorkOrder(formData: FormData) {
 
 export async function updateWorkOrder(id: number, formData: FormData) {
   try {
-  const user = await requirePermission("edit_work_orders")
+  await requirePermission("edit_work_orders")
 
   const itemsJson = formData.get("items") as string | null
   const items = safeJsonParse<{ itemId: number; qty: number; cost: number; description?: string; status?: string }[]>(itemsJson) ?? []
@@ -467,7 +467,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_stock_adjustments")
+  await requirePermission("create_stock_adjustments")
 
   const adj = await prisma.stockAdjustment.findUniqueOrThrow({ where: { id } })
   if (adj.status !== "draft") {
@@ -500,7 +500,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_material_issues")
+  await requirePermission("create_material_issues")
 
   const mi = await prisma.materialIssue.findUniqueOrThrow({ where: { id } })
   if (mi.status !== "draft") {
@@ -533,7 +533,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_inventory_transfers")
+  await requirePermission("create_inventory_transfers")
 
   const tf = await prisma.inventoryTransfer.findUniqueOrThrow({ where: { id } })
   if (tf.status !== "draft") {

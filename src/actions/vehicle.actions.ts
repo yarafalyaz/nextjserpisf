@@ -11,7 +11,7 @@ import { requireId, safeId, safeNumber } from "@/lib/utils/safe-parse"
 export async function createVehicleBrand(formData: FormData) {
   await requirePermission("create_vehicle_brands")
 
-  const brand = await prisma.vehicleBrand.create({
+  await prisma.vehicleBrand.create({
     data: {
       name: formData.get("name") as string,
     },
@@ -121,7 +121,7 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
 
   await requirePermission("edit_vehicle_brands")
 
-  const brand = await prisma.vehicleBrand.update({
+  await prisma.vehicleBrand.update({
     where: { id },
     data: {
       name: formData.get("name") as string,

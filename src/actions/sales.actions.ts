@@ -881,7 +881,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_sales_orders")
+  await requirePermission("create_sales_orders")
 
   const existing = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (existing.status !== "draft") {
@@ -914,7 +914,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_sales_invoices")
+  await requirePermission("create_sales_invoices")
 
   const existingInvoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
   if (existingInvoice.status !== "draft") {
@@ -1007,7 +1007,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_sales_payments")
+  await requirePermission("create_sales_payments")
 
   // Fetch old invoiceId before update to handle invoice reassignment
   const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true } })
@@ -1059,7 +1059,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_sales_returns")
+  await requirePermission("create_sales_returns")
 
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
   const itemsJson = formData.get("items") as string
@@ -1147,7 +1147,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_down_payments")
+  await requirePermission("create_down_payments")
 
   // Fix #2: Jangan generate documentNo baru
   let proofImage: string | null | undefined = undefined

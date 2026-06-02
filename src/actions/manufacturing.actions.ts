@@ -527,7 +527,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_production_orders")
+  await requirePermission("create_production_orders")
 
   // Fix #33: Jangan generate documentNo baru (bocor sequence)
   const productId = requireId(formData.get("productId"), "productId")

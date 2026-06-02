@@ -214,7 +214,7 @@ export async function markPurchaseOrderReceived(poId: number) {
 
 export async function cancelPurchaseOrder(poId: number) {
   try {
-  const user = await requirePermission("edit_purchase_orders")
+  await requirePermission("edit_purchase_orders")
 
   const po = await prisma.purchaseOrder.findUniqueOrThrow({
     where: { id: poId },
@@ -931,7 +931,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
   try {
   "use server"
 
-  const user = await requirePermission("create_goods_receipts")
+  await requirePermission("create_goods_receipts")
 
   const existingGr = await prisma.goodsReceipt.findUniqueOrThrow({ where: { id } })
   if (existingGr.status !== "draft") {
