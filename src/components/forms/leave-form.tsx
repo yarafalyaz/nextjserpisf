@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createLeaveRequest, updateLeaveRequest } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"

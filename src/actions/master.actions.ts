@@ -1,11 +1,11 @@
 "use server"
 
-import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
+import { safeId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
 
 // ==================== CUSTOMER ACTIONS ====================
 

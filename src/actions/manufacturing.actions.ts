@@ -1,10 +1,10 @@
 "use server"
 
-import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
-import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
+import { requireId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
 import { onWorkOrderCompleted as onWorkOrderStock } from "@/lib/hooks/work-order.hook"
 import { onWorkOrderCompleted } from "@/lib/hooks/accounting.hook"
 

@@ -1,6 +1,6 @@
 "use server"
 
-import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"

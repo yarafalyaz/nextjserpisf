@@ -1,9 +1,9 @@
 "use server"
 
-import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
-import { requireId, safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
+import { requireId, safeNumber } from "@/lib/utils/safe-parse"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 
 // ==================== PROJECT ACTIONS ====================

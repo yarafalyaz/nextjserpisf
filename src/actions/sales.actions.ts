@@ -1,6 +1,6 @@
 "use server"
 
-import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived } from "@/lib/hooks/accounting.hook"
 import { onDownPaymentConfirmed } from "@/lib/hooks/down-payment.hook"
@@ -10,7 +10,7 @@ import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
-import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/lib/utils/safe-parse"
+import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
 
 // ==================== QUOTATION ACTIONS ====================
 

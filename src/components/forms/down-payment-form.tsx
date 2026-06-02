@@ -8,7 +8,7 @@ import { z } from "zod"
 import { createDownPayment, updateDownPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label, InputGroup, TextField, Input, TextArea } from "@heroui/react"
+import { Select, ComboBox, ListBox, Label, InputGroup, Input, TextArea } from "@heroui/react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
 
