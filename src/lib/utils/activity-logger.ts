@@ -7,8 +7,8 @@ export async function logActivity(params: {
   modelType: string
   modelId?: number
   description?: string
-  oldValues?: any
-  newValues?: any
+  oldValues?: unknown
+  newValues?: unknown
   ipAddress?: string
 }) {
   try {

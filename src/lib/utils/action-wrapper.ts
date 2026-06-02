@@ -6,8 +6,8 @@ import { auth } from "@/lib/auth/auth"
  * Usage: export const myAction = action(async (formData) => { ... })
  * Or with permission: export const myAction = action(async (formData) => { ... }).protect("manage_sales")
  */
-export function action<T extends (...args: any[]) => Promise<any>>(fn: T): T & { protect: (permission?: string) => T } {
-  const wrapped = (async (...args: any[]) => {
+export function action<T extends (...args: unknown[]) => Promise<unknown>>(fn: T): T & { protect: (permission?: string) => T } {
+  const wrapped = (async (...args: unknown[]) => {
     try {
       return await fn(...args)
     } catch (e: unknown) {
@@ -17,7 +17,7 @@ export function action<T extends (...args: any[]) => Promise<any>>(fn: T): T & {
   }) as T & { protect: (permission?: string) => T }
 
   wrapped.protect = (permission?: string) => {
-    const protectedFn = (async (...args: any[]) => {
+    const protectedFn = (async (...args: unknown[]) => {
       try {
         // Auth check
         const session = await auth()

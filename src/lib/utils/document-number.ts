@@ -8,7 +8,7 @@ import { getSystemSettings } from './settings'
  * generateDocumentNumber resolves the actual prefix from system settings
  * using this map, falling back to the key itself.
  */
-const PREFIX_FIELD_MAP: Record<string, string> = {
+const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   QUO: 'quotationCodePrefix',
   SO: 'salesOrderPrefix',
   INV: 'salesInvoicePrefix',
@@ -45,16 +45,16 @@ const PREFIX_FIELD_MAP: Record<string, string> = {
   AST: 'assetCodePrefix',
   WH: 'warehouseCodePrefix',
   EMP: 'employeeCodePrefix',
-  ACC: undefined as any, // Account prefix not stored separately
-  DEPT: undefined as any, // Department prefix not stored
-  POS: undefined as any,  // Position prefix not stored
+  ACC: undefined as string | undefined, // Account prefix not stored separately
+  DEPT: undefined as string | undefined, // Department prefix not stored
+  POS: undefined as string | undefined,  // Position prefix not stored
 }
 
 async function resolvePrefix(key: string): Promise<string> {
   const field = PREFIX_FIELD_MAP[key]
   if (!field) return key
   const settings = await getSystemSettings()
-  const value = (settings as any)[field]
+  const value = (settings as Record<string, unknown>)[field]
   return value && String(value).trim() !== '' ? String(value) : key
 }
 
@@ -95,7 +95,7 @@ async function findReusableSequence(key: string, prefix: string, format: 'comple
   const source = DOCUMENT_SOURCE_MAP[key]
   if (!source) return null
 
-  const delegate = prisma[source.model] as unknown as { findMany: (args: any) => Promise<Record<string, string | null>[]> }
+  const delegate = prisma[source.model] as unknown as { findMany: (args: Record<string, unknown>) => Promise<Record<string, string | null>[]> }
   const where = {
     ...(format === 'complex'
       ? { [source.field]: { contains: `/${prefix}/`, endsWith: `/${month}/${year}` } }
