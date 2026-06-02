@@ -23,9 +23,6 @@ async function waitForHydration(page: Page) {
   await page.waitForTimeout(5000)
 }
 
-async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
-  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
-}
 
 test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {

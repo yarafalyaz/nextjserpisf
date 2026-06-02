@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { JournalForm } from "@/components/forms/journal-form"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 
 export default async function CreateJournalPage() {
   await requirePermission("create_journals")

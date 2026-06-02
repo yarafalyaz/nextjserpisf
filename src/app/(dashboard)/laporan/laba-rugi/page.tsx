@@ -6,9 +6,9 @@ import { formatCurrency } from '@/lib/utils/format'
 import { TrendingUp, DollarSign, Percent, BarChart3 } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { ExportButtons } from "@/components/reports/export-buttons"
-import { PrintHeader } from "@/components/reports/print-header"
-import { DatePresets } from "@/components/reports/date-presets"
+import { } from "@/components/reports/export-buttons"
+import { } from "@/components/reports/print-header"
+import { } from "@/components/reports/date-presets"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
 
 export default async function IncomeStatementPage({

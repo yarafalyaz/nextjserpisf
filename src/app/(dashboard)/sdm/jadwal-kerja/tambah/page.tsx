@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { WorkScheduleForm } from "@/components/forms/work-schedule-form"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 
 export default async function CreateWorkSchedulePage() {
   await requirePermission("view_work_schedules")

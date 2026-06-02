@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Clock } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { WorkScheduleTable } from "./_components/work-schedule-table"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 
 export default async function WorkSchedulesPage({
   searchParams,

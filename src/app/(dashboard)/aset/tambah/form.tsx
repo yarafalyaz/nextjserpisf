@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createAsset } from "@/actions/asset.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label } from "@heroui/react"
+import { Input, TextArea, Select, ListBox, Label } from "@heroui/react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 
 import { Button } from "@/components/ui/page-header"

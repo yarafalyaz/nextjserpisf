@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 import { PettyCashTable } from "./_components/petty-cash-table"
 
 export default async function PettyCashPage({

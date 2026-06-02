@@ -7,7 +7,7 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { Banknote } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { LoanTable } from "./_components/loan-table"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 
 export default async function EmployeeLoansPage({
   searchParams,

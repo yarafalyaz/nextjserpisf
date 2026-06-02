@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createStatisticalKeyFigure } from "@/actions/master.actions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 import { Input, Label } from "@heroui/react"
 import { Button } from "@/components/ui/page-header"
 

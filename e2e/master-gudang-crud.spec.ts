@@ -20,9 +20,6 @@ async function waitForHydration(page: Page) {
   await page.waitForTimeout(5000)
 }
 
-async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 20000 } = {}) {
-  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
-}
 
 test.describe("Master Gudang E2E CRUD Mutation", () => {
   const testWarehouseName = `Gudang E2E Test - ${Date.now()}`

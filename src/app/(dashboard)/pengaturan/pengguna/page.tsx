@@ -1,4 +1,4 @@
-import { Eye, Pencil } from "lucide-react"
+import { Pencil } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"

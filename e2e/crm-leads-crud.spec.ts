@@ -21,9 +21,6 @@ async function waitForHydration(page: Page) {
   await page.waitForTimeout(5000)
 }
 
-async function waitForNavigation(page: Page, url: string | RegExp, { timeout = 15000 } = {}) {
-  await Promise.race([page.waitForURL(url, { timeout }), page.waitForLoadState("networkidle")])
-}
 
 test.describe("CRM Leads CRUD", () => {
   test.beforeEach(async ({}, testInfo) => {

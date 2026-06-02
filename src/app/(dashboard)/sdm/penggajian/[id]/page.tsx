@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency, formatPeriod } from "@/lib/utils/format"
+import { formatDate, formatPeriod } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton, Button } from "@/components/ui/page-header"

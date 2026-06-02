@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { HolidayTable } from "./_components/holiday-table"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 
 export default async function HolidaysPage({
   searchParams,

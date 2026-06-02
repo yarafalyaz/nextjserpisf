@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { TimesheetTable } from "./_components/timesheet-table"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 
 export default async function TimesheetsPage({
   searchParams,

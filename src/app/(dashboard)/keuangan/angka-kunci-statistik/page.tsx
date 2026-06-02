@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 import { StatisticalKeyFigureTable } from "./_components/statistical-key-figure-table"
 
 export default async function StatisticalKeyFiguresPage({

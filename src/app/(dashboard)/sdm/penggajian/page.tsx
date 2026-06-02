@@ -7,7 +7,7 @@ import Link from "next/link"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PayrollTable } from "./_components/payroll-table"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/page-header"
 
 import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button"
