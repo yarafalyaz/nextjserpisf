@@ -19,13 +19,25 @@ test.describe("Kendaraan Model CRUD", () => {
     const name = `Vehicle Model E2E ${ts}`
     const updated = `Vehicle Model E2E Updated ${ts}`
 
-    // ─── CREATE ────────────────────────────────────────────────
-    await page.goto("/kendaraan/model/tambah", { waitUntil: "domcontentloaded" })
+    const brandName = `Brand-E2E-${ts}`
 
-    // Choose brand via the ComboBox input — type to trigger popover then pick first option
-    const brandInput = page.locator("input[placeholder='Cari merek...']").first()
+    // ─── CREATE BRAND ──────────────────────────────────────────
+    await page.goto("/kendaraan/merek/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
+    await page.locator("input[name='name']").first().fill(brandName)
+    await page.getByRole("button", { name: /^Simpan$/ }).first().click()
+    await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
+    await page.waitForLoadState("networkidle")
+
+    // ─── CREATE MODEL ──────────────────────────────────────────
+    await page.goto("/kendaraan/model/tambah", { waitUntil: "domcontentloaded" })
+    await waitForHydration(page)
+
+    // Choose brand via the ComboBox input — type brandName, wait for filtered option, then pick
+    const brandInput = page.locator("input[placeholder='Cari merek...']").first()
     await brandInput.click()
+    await brandInput.fill(brandName)
+    await page.waitForTimeout(1000)
     await brandInput.press("ArrowDown")
     await brandInput.press("Enter")
 
@@ -53,6 +65,8 @@ test.describe("Kendaraan Model CRUD", () => {
     await expect(nameInput).toHaveValue(updated)
     const editBrandInput = page.locator("input[placeholder='Cari merek...']").first()
     await editBrandInput.click()
+    await editBrandInput.fill(brandName)
+    await page.waitForTimeout(1000)
     await editBrandInput.press("ArrowDown")
     await editBrandInput.press("Enter")
     await page.getByRole("button", { name: /^Update$/ }).first().click()
@@ -73,5 +87,15 @@ test.describe("Kendaraan Model CRUD", () => {
     await page.goto("/kendaraan/model", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updated)
+
+    // ─── DELETE BRAND ──────────────────────────────────────────
+    await page.goto("/kendaraan/merek", { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
+    const brandRow = page.locator("tr").filter({ hasText: brandName })
+    await expect(brandRow).toBeVisible({ timeout: 15000 })
+    await brandRow.locator("button[aria-label='Menu']").click()
+    await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
+    await page.locator("button").filter({ hasText: "Hapus" }).last().click()
+    await expect(brandRow).toHaveCount(0, { timeout: 10000 })
   })
 })

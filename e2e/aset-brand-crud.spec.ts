@@ -52,7 +52,10 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name }).first()
     await expect(createdRow).toBeVisible({ timeout: 15000 })
-    await createdRow.locator("a").filter({ hasText: name }).click({ force: true })
+    const linkElement = createdRow.locator("a").filter({ hasText: name }).first()
+    const detailHref = await linkElement.getAttribute("href")
+    if (!detailHref) throw new Error("Could not find href on detail link")
+    await page.goto(new URL(detailHref, page.url()).toString(), { waitUntil: "domcontentloaded" })
 
     await page.waitForURL(/\/aset\/merek\/\d+$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)

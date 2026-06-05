@@ -55,7 +55,9 @@ test.describe("Aset Kategori CRUD", () => {
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page.getByRole("link", { name }).first()
     await expect(detailLink).toBeVisible({ timeout: 15000 })
-    await detailLink.click({ force: true })
+    const detailHref = await detailLink.getAttribute("href")
+    if (!detailHref) throw new Error("Could not find href on detail link")
+    await page.goto(new URL(detailHref, page.url()).toString(), { waitUntil: "domcontentloaded" })
 
     await page.waitForURL(/\/aset\/kategori\/\d+$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
