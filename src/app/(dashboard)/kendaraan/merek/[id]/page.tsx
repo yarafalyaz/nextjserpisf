@@ -12,12 +12,12 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 export default async function VehicleBrandDetailPage({
   params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+}: Readonly<{
+  params: Promise<Readonly<{ id: string }>>
+}>) {
   const { id } = await params
   const numId = Number(id)
-  if (isNaN(numId)) notFound()
+  if (Number.isNaN(numId)) notFound()
 
   const brand = await prisma.vehicleBrand.findUnique({
     where: { id: numId },

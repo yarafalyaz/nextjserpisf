@@ -14,12 +14,12 @@ import { Pencil } from "lucide-react"
 
 export default async function AssetCategoryDetailPage({
   params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+}: Readonly<{
+  params: Promise<Readonly<{ id: string }>>
+}>) {
   const { id } = await params
   const numId = Number(id)
-  if (isNaN(numId)) notFound()
+  if (Number.isNaN(numId)) notFound()
 
   const category = await prisma.assetCategory.findUnique({
     where: { id: numId },

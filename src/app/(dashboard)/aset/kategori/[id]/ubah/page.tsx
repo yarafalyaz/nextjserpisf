@@ -7,12 +7,12 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 export default async function EditPage({
   params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+}: Readonly<{
+  params: Promise<Readonly<{ id: string }>>
+}>) {
   const { id } = await params
   const numId = Number(id)
-  if (isNaN(numId)) notFound()
+  if (Number.isNaN(numId)) notFound()
 
   const data = await prisma.assetCategory.findUnique({
     where: { id: numId },

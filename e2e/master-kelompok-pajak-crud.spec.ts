@@ -24,7 +24,7 @@ async function waitForHydration(page: Page) {
 
 
 test.describe("Master Kelompok Pajak CRUD", () => {
-  test.beforeEach(async ({}, testInfo) => {
+  test.beforeEach(async ({ }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Kelompok Pajak CRUD khusus desktop")
   })
 
