@@ -29,14 +29,14 @@ jobs:
     needs: lint
     services:
       mysql:
-        image: mysql:8.0
+        image: mariadb:10.11
         env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_DATABASE: yara_erp
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
+          MARIADB_DATABASE: yara_erp
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping --silent"
+          --health-cmd="mariadb-admin ping --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -97,14 +97,14 @@ jobs:
         shardTotal: [4]
     services:
       mysql:
-        image: mysql:8.0
+        image: mariadb:10.11
         env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
-          MYSQL_DATABASE: yara_erp
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
+          MARIADB_DATABASE: yara_erp
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping --silent"
+          --health-cmd="mariadb-admin ping --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -141,7 +141,7 @@ jobs:
           NEXTAUTH_URL: http://localhost:4101
           AUTH_TRUST_HOST: "true"
           E2E_PORT: "4101"
-      - run: npx playwright test --project=chromium --no-deps --workers=2 --shard=$SHARD_INDEX/$SHARD_TOTAL
+      - run: npx playwright test --project=chromium --no-deps --workers=1 --shard=$SHARD_INDEX/$SHARD_TOTAL
         env:
           SHARD_INDEX: ${{ matrix.shardIndex }}
           SHARD_TOTAL: ${{ matrix.shardTotal }}
@@ -151,7 +151,7 @@ jobs:
           NEXTAUTH_URL: http://localhost:4101
           AUTH_TRUST_HOST: "true"
           E2E_PORT: "4101"
-          PW_WORKERS: 2
+          PW_WORKERS: 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
