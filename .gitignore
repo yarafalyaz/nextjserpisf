@@ -42,4 +42,6 @@ next-env.d.ts
 e2e/.auth/
 test-results/
 playwright-report/
+playwright-report-shard-*/
+playwright-report-shard-*
 memory/
