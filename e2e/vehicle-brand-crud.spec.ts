@@ -26,6 +26,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
+    await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
@@ -43,6 +44,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     await page.getByRole("button", { name: /^Update$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
+    await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)
 
@@ -53,7 +55,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
     await expect(updatedRow).toHaveCount(0, { timeout: 10000 })
-    await page.goto("/kendaraan/merek", { waitUntil: "domcontentloaded" })
+    await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updated)
   })

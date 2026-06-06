@@ -29,6 +29,7 @@ test.describe("Kendaraan CRUD", () => {
     await page.locator("#submit-vehicle").first().click()
 
     await page.waitForURL("**/kendaraan", { timeout: 20000 })
+    await page.goto(`/kendaraan?cari=${encodeURIComponent(plate)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(plate)
 
@@ -47,6 +48,7 @@ test.describe("Kendaraan CRUD", () => {
     await page.locator("#submit-vehicle").first().click()
 
     await page.waitForURL("**/kendaraan", { timeout: 20000 })
+    await page.goto(`/kendaraan?cari=${encodeURIComponent(updatedPlate)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updatedPlate)
     await expect(page.locator("body")).toContainText(updatedColor)
@@ -63,7 +65,9 @@ test.describe("Kendaraan CRUD", () => {
     await deleteBtn.click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
-    await page.waitForURL("**/kendaraan", { timeout: 20000 })
+    // deleteVehicle action hanya revalidatePath tanpa redirect; tunggu transition lalu cek list terfilter
+    await page.waitForTimeout(2000)
+    await page.goto(`/kendaraan?cari=${encodeURIComponent(updatedPlate)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updatedPlate)
   })
