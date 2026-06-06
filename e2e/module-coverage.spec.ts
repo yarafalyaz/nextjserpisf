@@ -3,7 +3,7 @@ import { test, expect, type Page } from "@playwright/test"
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(3000)
 }
 
 test.describe("Produksi - Products CRUD", () => {

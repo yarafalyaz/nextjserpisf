@@ -56,10 +56,10 @@ jobs:
       - run: npx prisma db push
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx prisma/seed.ts || true
+      - run: npx tsx prisma/seed.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx scripts/seed-remaining-e2e.ts || true
+      - run: npx tsx scripts/seed-remaining-e2e.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npx playwright install --with-deps chromium
@@ -124,10 +124,10 @@ jobs:
       - run: npx prisma db push
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx prisma/seed.ts || true
+      - run: npx tsx prisma/seed.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx scripts/seed-remaining-e2e.ts || true
+      - run: npx tsx scripts/seed-remaining-e2e.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npx playwright install --with-deps chromium

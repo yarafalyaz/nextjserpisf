@@ -19,7 +19,7 @@ async function closeMobileSidebarIfOpen(page: Page) {
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(2000)
 }
 
 
@@ -80,7 +80,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     const row = page.locator("tr").filter({ hasText: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).first().click()
-    await page.waitForTimeout(5000)
+    await page.waitForTimeout(2000)
     await page.getByRole("menuitem", { name: "Edit" }).first().click()
 
     await page.waitForURL(/\/keuangan\/pusat-biaya\/\d+\/ubah$/, { timeout: 15000 })
@@ -107,7 +107,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     // 1. Open dropdown
     await updatedRow.getByRole("button", { name: "Menu" }).first().click()
-    await page.waitForTimeout(5000)
+    await page.waitForTimeout(2000)
     // 2. Click Hapus menu item
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
     // 3. Wait for confirm dialog

@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test"
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle", { timeout: 15000 })
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(2000)
 }
 
 test.describe("Produksi - Production Order CRUD", () => {

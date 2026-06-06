@@ -19,7 +19,7 @@ async function closeMobileSidebarIfOpen(page: Page) {
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(2000)
 }
 
 
@@ -60,7 +60,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     // 1. Open dropdown menu
     await row.getByRole("button", { name: "Menu" }).click()
     // 2. Wait for dropdown popover to be visible
-    await page.waitForTimeout(5000)
+    await page.waitForTimeout(2000)
     // 3. Click Hapus menu item
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
     // 4. Wait for confirm dialog to appear
