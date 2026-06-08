@@ -220,7 +220,6 @@ function SettingSwitch({ name, label, defaultSelected }: { name: string; label: 
 export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [selectedTab, setSelectedTab] = useState("company")
   const [logoPreview, setLogoPreview] = useState<string | null>(settings.companyLogo || null)
   const [latitude, setLatitude] = useState(settings.companyLatitude ? String(settings.companyLatitude) : "")
   const [longitude, setLongitude] = useState(settings.companyLongitude ? String(settings.companyLongitude) : "")
@@ -466,39 +465,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
 
   return (
     <form onSubmit={onSubmit}>
-      <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Sidebar Navigation */}
-        <nav className="w-full shrink-0 lg:w-56">
-          <div className="sticky top-14 flex flex-row gap-1 overflow-x-auto rounded-lg border bg-card p-1 lg:flex-col lg:overflow-x-visible">
-            {[
-              { key: "company", label: "Perusahaan" },
-              { key: "general", label: "Umum" },
-              { key: "prefixes", label: "Penomoran" },
-              { key: "overtime", label: "Lembur & Kehadiran" },
-              { key: "quotation", label: "Penawaran" },
-              { key: "accounts", label: "Mapping Akun" },
-            ].map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setSelectedTab(item.key)}
-                className={`whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
-                  selectedTab === item.key
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </nav>
-
-        {/* Content Area */}
-        <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-6">
 
         {/* Section: Perusahaan */}
-        <div className={selectedTab === "company" ? "" : "hidden"}>
+        <div>
           <div className="rounded-xl border bg-card p-6">
           {/* Hidden inputs to pass data */}
             <input type="hidden" name="salesReceivableAccountId" value={salesReceivable} />
@@ -599,7 +569,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </div>
 
         {/* Tab 2: Umum */}
-        <div className={selectedTab === "general" ? "" : "hidden"}>
+        <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Umum</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -657,7 +627,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </div>
 
         {/* Tab 3: Prefix Kode Otomatis */}
-        <div className={selectedTab === "prefixes" ? "" : "hidden"}>
+        <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Prefix Kode Entitas</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -831,7 +801,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </div>
 
         {/* Tab 4: Lembur & Kehadiran */}
-        <div className={selectedTab === "overtime" ? "" : "hidden"}>
+        <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Lembur</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -885,7 +855,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </div>
 
         {/* Tab 5: Quotation */}
-        <div className={selectedTab === "quotation" ? "" : "hidden"}>
+        <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Penawaran</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -912,7 +882,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </div>
 
         {/* Tab 6: Mapping Akun */}
-        <div className={selectedTab === "accounts" ? "" : "hidden"}>
+        <div>
           <div className="rounded-xl border bg-card p-6">
             <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -948,8 +918,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             </div>
           </div>
         </div>
-      </div>{/* end content area */}
-      </div>{/* end flex row */}
+      </div>{/* end sections */}
 
       {/* Submit */}
       <div className="flex items-center gap-3 mt-6">

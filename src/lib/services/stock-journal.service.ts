@@ -148,15 +148,15 @@ export const stockJournalService = {
       entries: [
         {
           accountId: isIncrease ? accounts.inventory : accounts.stockAdj!,
-          debit: isIncrease ? absValue : 0,
-          credit: isIncrease ? 0 : absValue,
-          memo: `${isIncrease ? 'Debit' : 'Kredit'} - Adj ${adjDocumentNo}`,
+          debit: absValue,
+          credit: 0,
+          memo: `Debit - Adj ${adjDocumentNo}`,
         },
         {
           accountId: isIncrease ? accounts.stockAdj! : accounts.inventory,
-          debit: isIncrease ? 0 : absValue,
-          credit: isIncrease ? absValue : 0,
-          memo: `${isIncrease ? 'Kredit' : 'Debit'} - Adj ${adjDocumentNo}`,
+          debit: 0,
+          credit: absValue,
+          memo: `Kredit - Adj ${adjDocumentNo}`,
         },
       ],
     })
