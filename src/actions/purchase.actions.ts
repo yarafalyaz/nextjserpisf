@@ -1247,6 +1247,8 @@ export async function deletePurchaseReturn(id: number) {
   "use server"
 
   try {
+  await requirePermission("delete_purchase_returns")
+
   const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
   if (purchaseReturn.status !== "draft") {
     throw new Error("Hanya retur draft yang dapat dihapus")

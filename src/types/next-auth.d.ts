@@ -5,6 +5,7 @@ declare module "next-auth" {
   interface User extends DefaultUser {
     roles: string[];
     permissions: string[];
+    isActive?: boolean;
   }
 
   interface Session {
@@ -12,6 +13,7 @@ declare module "next-auth" {
       id: string;
       roles: string[];
       permissions: string[];
+      isActive: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -21,5 +23,6 @@ declare module "next-auth/jwt" {
     id: string;
     roles: string[];
     permissions: string[];
+    isActive: boolean;
   }
 }

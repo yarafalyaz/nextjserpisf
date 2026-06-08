@@ -45,6 +45,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           id: String(user.id),
           email: user.email,
           name: user.name,
+          isActive: user.isActive,
           roles: user.roles.map((r) => r.name),
           permissions: [
             ...new Set(
@@ -60,6 +61,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id ?? "";
         token.name = user.name;
+        token.isActive = (user as any).isActive !== false;
         token.roles = (user as any).roles;
         token.permissions = (user as any).permissions;
       }
@@ -93,12 +95,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (dbUser && dbUser.isActive) {
             token.name = dbUser.name;
             token.avatar = dbUser.avatar;
+            token.isActive = true;
             token.roles = dbUser.roles.map((r) => r.name);
             token.permissions = [
               ...new Set(dbUser.roles.flatMap((r) => r.permissions.map((p) => p.name))),
             ];
           } else {
-            // User deleted or deactivated → strip all access.
+            // User deleted or deactivated → invalidate the token for all guards.
+            token.isActive = false;
             token.roles = [];
             token.permissions = [];
           }
@@ -116,6 +120,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.image = token.avatar as string | null;
         session.user.roles = token.roles as string[];
         session.user.permissions = token.permissions as string[];
+        session.user.isActive = token.isActive !== false;
       }
       return session;
     },

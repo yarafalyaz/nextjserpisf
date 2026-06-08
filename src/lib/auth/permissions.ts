@@ -5,7 +5,7 @@ import { auth } from "./auth";
  */
 export async function requireAuth() {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user || session.user.isActive === false) {
     throw new Error("Unauthorized: Silakan login terlebih dahulu.");
   }
   return session.user;
@@ -51,7 +51,7 @@ export async function requireRole(role: string) {
 export async function hasPermission(permission: string): Promise<boolean> {
   const session = await auth();
   const user = session?.user;
-  if (!user) return false;
+  if (!user || user.isActive === false) return false;
   if (user.roles?.includes("super_admin")) return true;
   return user.permissions?.includes(permission) ?? false;
 }
