@@ -72,12 +72,13 @@ test.describe("Master Karyawan CRUD", () => {
     // DELETE
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
 
-    // Gunakan telepon unik agar stabil meski nama/email berubah setelah update.
+    // DataTable filter bawaan EmployeeTable terikat ke kolom name.
+    // Cari nama terbaru agar tidak bergantung pada telepon yang tidak difilter client-side.
     const listSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
-    await listSearch.fill(phone)
+    await listSearch.fill(updated)
     await listSearch.press("Enter")
 
-    const targetRow = page.locator("tr").filter({ hasText: phone }).first()
+    const targetRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(targetRow).toBeVisible({ timeout: 15000 })
     await targetRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
@@ -88,9 +89,9 @@ test.describe("Master Karyawan CRUD", () => {
 
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
     const postDeleteSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
-    await postDeleteSearch.fill(phone)
+    await postDeleteSearch.fill(updated)
     await postDeleteSearch.press("Enter")
-    await expect(page.locator("tr").filter({ hasText: phone })).toHaveCount(0)
+    await expect(page.locator("tr").filter({ hasText: updated })).toHaveCount(0)
   })
 })
 

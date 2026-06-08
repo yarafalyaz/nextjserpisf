@@ -25,9 +25,8 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     await waitForHydration(page)
     const departmentInput = page.locator("input[placeholder='Cari departemen...']").first()
     await departmentInput.click()
-    await departmentInput.fill("HRD")
-    await page.keyboard.press("ArrowDown")
-    await page.keyboard.press("Enter")
+    await departmentInput.press("Enter")
+    await expect(departmentInput).not.toHaveValue("", { timeout: 5000 })
 
     await page.locator("#name").fill(name)
     await waitForHydration(page)
