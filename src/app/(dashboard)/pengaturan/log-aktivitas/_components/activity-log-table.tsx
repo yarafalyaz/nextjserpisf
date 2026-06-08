@@ -31,6 +31,76 @@ const actionBadge: Record<string, string> = {
   LOGIN: "border-transparent bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
 }
 
+const actionLabel: Record<string, string> = {
+  CREATE: "Buat",
+  UPDATE: "Ubah",
+  DELETE: "Hapus",
+  LOGIN: "Login",
+}
+
+const modelLabel: Record<string, string> = {
+  VehicleVariant: "Varian Kendaraan",
+  VehicleModel: "Model Kendaraan",
+  VehicleBrand: "Merek Kendaraan",
+  Vehicle: "Kendaraan",
+  Customer: "Pelanggan",
+  Supplier: "Pemasok",
+  Item: "Barang",
+  ItemCategory: "Kategori Barang",
+  Brand: "Merek",
+  Warehouse: "Gudang",
+  Employee: "Karyawan",
+  Department: "Departemen",
+  Position: "Jabatan",
+  Account: "Akun",
+  Bank: "Bank",
+  Tax: "Pajak",
+  TaxGroup: "Grup Pajak",
+  Currency: "Mata Uang",
+  PaymentTerm: "Termin Pembayaran",
+  PaymentMethod: "Metode Pembayaran",
+  ShippingMethod: "Metode Pengiriman",
+  Unit: "Satuan",
+  SalesQuotation: "Penawaran",
+  SalesOrder: "Pesanan Penjualan",
+  SalesInvoice: "Faktur Penjualan",
+  SalesPayment: "Pembayaran Penjualan",
+  SalesReturn: "Retur Penjualan",
+  DeliveryNote: "Surat Jalan",
+  PurchaseRequest: "Permintaan Pembelian",
+  PurchaseOrder: "Pesanan Pembelian",
+  GoodsReceipt: "Penerimaan Barang",
+  VendorBill: "Tagihan Vendor",
+  VendorPayment: "Pembayaran Vendor",
+  PurchaseReturn: "Retur Pembelian",
+  Project: "Proyek",
+  ProjectStage: "Tahap Proyek",
+  StockAdjustment: "Penyesuaian Stok",
+  StockTransfer: "Transfer Stok",
+  MaterialIssue: "Pengeluaran Material",
+  Journal: "Jurnal",
+  Expense: "Biaya",
+  PettyCash: "Kas Kecil",
+  Budget: "Anggaran",
+  CostCenter: "Pusat Biaya",
+  Asset: "Aset",
+  AssetCategory: "Kategori Aset",
+  AssetBrand: "Merek Aset",
+  Role: "Peran",
+  User: "Pengguna",
+  SystemSetting: "Pengaturan",
+  Lead: "Prospek",
+  Ticket: "Tiket",
+  Attendance: "Absensi",
+  Leave: "Cuti",
+  Overtime: "Lembur",
+  Payroll: "Penggajian",
+  Loan: "Pinjaman",
+  ProductionOrder: "Perintah Produksi",
+  WorkOrder: "Perintah Kerja",
+  BOM: "BOM Produk",
+}
+
 const columns: ColumnDef<LogRow, unknown>[] = [
   {
     accessorKey: "createdAt",
@@ -57,7 +127,7 @@ const columns: ColumnDef<LogRow, unknown>[] = [
     header: "Aksi",
     cell: ({ row }) => (
       <Badge variant="outline" className={actionBadge[row.original.action] || ""}>
-        {row.original.action}
+        {actionLabel[row.original.action] || row.original.action}
       </Badge>
     ),
     filterFn: "equals",
@@ -66,7 +136,7 @@ const columns: ColumnDef<LogRow, unknown>[] = [
     accessorKey: "modelType",
     header: "Model",
     cell: ({ row }) => (
-      <span className="font-mono text-xs">{row.original.modelType}</span>
+      <span className="text-xs">{modelLabel[row.original.modelType] || row.original.modelType}</span>
     ),
     filterFn: "equals",
   },
@@ -155,7 +225,7 @@ export function ActivityLogTable({
               <SelectItem value="all">Semua aksi</SelectItem>
               {actions.map((a) => (
                 <SelectItem key={a} value={a}>
-                  {a}
+                  {actionLabel[a] || a}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -169,7 +239,7 @@ export function ActivityLogTable({
               <SelectItem value="all">Semua model</SelectItem>
               {modelTypes.map((m) => (
                 <SelectItem key={m} value={m}>
-                  {m}
+                  {modelLabel[m] || m}
                 </SelectItem>
               ))}
             </SelectContent>

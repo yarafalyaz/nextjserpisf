@@ -1421,14 +1421,7 @@ export async function updateAccount(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_accounts")
-
-  let code = (formData.get("code") as string) || null
-  if (!code) {
-    code = await generateDocumentNumber("ACC", "simple")
-  }
-
-  const account = await prisma.account.update({
+  await requirePermission("edit_accounts")
     where: { id },
     data: {
       code,
