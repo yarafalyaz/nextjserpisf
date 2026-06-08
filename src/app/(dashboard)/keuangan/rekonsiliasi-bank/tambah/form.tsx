@@ -5,9 +5,9 @@ import { useState, useTransition } from "react"
 import { createBankReconciliation } from "@/actions/finance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
-import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 import { AppDatePicker } from "@/components/ui/date-picker"
@@ -57,12 +57,12 @@ export function BankReconciliationForm({ accounts }: Props) {
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="statementBalance">Saldo Rekening Koran *</Label>
-            <Input id="statementBalance" name="statementBalance" type="number" step="0.01" placeholder="0" required />
+            <CurrencyInput id="statementBalance" name="statementBalance" placeholder="0" prefix="Rp" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bookBalance">Saldo Buku</Label>
-            <Input id="bookBalance" name="bookBalance" type="number" step="0.01" placeholder="0" />
+            <CurrencyInput id="bookBalance" name="bookBalance" placeholder="0" prefix="Rp" />
           </div>
 
           <AppDatePicker label="Periode Mulai" name="periodStart" />

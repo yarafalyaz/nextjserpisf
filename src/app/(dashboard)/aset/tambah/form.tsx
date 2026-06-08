@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
 import { FormSelect } from "@/components/ui/form-select"
 import { AppDatePicker } from "@/components/ui/date-picker"
+import { CurrencyInput } from "@/components/ui/currency-input"
 
 import { Button } from "@/components/ui/page-header"
 
@@ -88,11 +89,11 @@ export function AssetForm({ categories, brands, asset, generatedCode }: AssetFor
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="purchasePrice">Harga Pembelian</Label>
-          <Input id="purchasePrice" name="purchasePrice" type="number" placeholder="0" defaultValue={asset?.purchasePrice || ""} />
+          <CurrencyInput id="purchasePrice" name="purchasePrice" placeholder="0" prefix="Rp" defaultValue={asset?.purchasePrice ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="residualValue">Nilai Residu</Label>
-          <Input id="residualValue" name="residualValue" type="number" placeholder="0" defaultValue={asset?.residualValue || ""} />
+          <CurrencyInput id="residualValue" name="residualValue" placeholder="0" prefix="Rp" defaultValue={asset?.residualValue ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="depreciationMethod">Metode Penyusutan</Label>

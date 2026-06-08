@@ -395,14 +395,11 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
           <span className="totals-label">Diskon</span>
           <div className="totals-input">
             <span className="totals-prefix">Rp</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="form-input"
-              style={{ fontSize: "0.875rem", padding: "6px 8px", textAlign: "right", maxWidth: "160px" }}
-              defaultValue={discount}
-              onChange={(e) => setValue("discount", (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))}
+            <CurrencyInput
+              value={discount}
+              onChange={(v) => setValue("discount", v)}
+              className="text-right"
+              style={{ maxWidth: "160px" }}
             />
           </div>
         </div>
@@ -410,14 +407,11 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
           <span className="totals-label">Pajak</span>
           <div className="totals-input">
             <span className="totals-prefix">Rp</span>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="form-input"
-              style={{ fontSize: "0.875rem", padding: "6px 8px", textAlign: "right", maxWidth: "160px" }}
-              defaultValue={tax}
-              onChange={(e) => setValue("tax", (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))}
+            <CurrencyInput
+              value={tax}
+              onChange={(v) => setValue("tax", v)}
+              className="text-right"
+              style={{ maxWidth: "160px" }}
             />
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { disposeAsset } from "@/actions/asset.actions"
 import { Button } from "@/components/ui/page-header"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { showSuccess, showError } from "@/lib/utils/toast"
 
 /** Dispose-asset control: prompts for proceeds then records the disposal + gain/loss. */
@@ -42,13 +43,12 @@ export function DisposeAssetButton({ assetId, bookValue }: { assetId: number; bo
   return (
     <div className="flex items-center gap-2 flex-wrap rounded-lg border border-default p-2 bg-surface">
       <span className="text-sm text-muted-foreground">Nilai jual:</span>
-      <input
-        type="number"
+      <CurrencyInput
+        value={p}
+        onChange={(v) => setProceeds(String(v))}
         min={0}
-        value={proceeds}
-        onChange={(e) => setProceeds(e.target.value)}
-        className="form-input w-32"
-        style={{ padding: "6px 8px" }}
+        prefix="Rp"
+        className="w-40"
       />
       <span className={`text-xs ${gainLoss >= 0 ? "text-success" : "text-danger"}`}>
         {gainLoss >= 0 ? "Laba" : "Rugi"} Rp {Math.abs(gainLoss).toLocaleString("id-ID")}
