@@ -17,7 +17,7 @@ export default async function CreateMaterialIssuePage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Inventaris",href:"/inventaris"},{label:"Pengeluaran Material",href:"/inventaris/pengeluaran-material"},{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Material Issue</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Pengeluaran Material</h1>
       </div>
       <MaterialIssueForm warehouses={warehouses} items={JSON.parse(JSON.stringify(items))} />
     </div>

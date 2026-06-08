@@ -1,10 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createTicket, updateTicket } from "@/actions/crm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 interface TicketFormProps {
@@ -18,6 +22,8 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!ticket?.id
+  const [customerId, setCustomerId] = useState<string | null>(null)
+  const [assignedTo, setAssignedTo] = useState<string | null>(ticket?.assignedTo ? String(ticket.assignedTo) : null)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -26,9 +32,11 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
         const formData = new FormData(e.currentTarget)
         const result = ticket?.id ? await updateTicket(ticket.id, formData) : await createTicket(formData)
         if (result.success) {
-          showSuccess(ticket?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+          showSuccess(ticket?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/crm/tickets")
           router.refresh()
+        } else {
+          showError(result.error || "Gagal menyimpan data")
         }
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -46,90 +54,87 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
           </div>
         )}
         <div className="flex flex-col gap-1.5 col-span-full">
-          <Label htmlFor="subject">Subject *</Label>
-          <Input id="subject" name="subject" placeholder="Subject ticket" required defaultValue={ticket?.subject ?? ""} />
+          <Label htmlFor="subject">Subjek *</Label>
+          <Input id="subject" name="subject" placeholder="Subjek tiket" required defaultValue={ticket?.subject ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <TextArea id="description" name="description" rows={4} placeholder="Deskripsi masalah..." defaultValue={ticket?.description ?? ""} />
+          <Textarea id="description" name="description" rows={4} placeholder="Deskripsi masalah..." defaultValue={ticket?.description ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="customerId" className="w-full">
-            <Label>Customer</Label>
-            <ComboBox.InputGroup><Input placeholder="Cari customer..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {customers.map((c) => (
-                  <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>{c.name}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="customerId">Pelanggan</Label>
+          <Combobox
+            id="customerId"
+            name="customerId"
+            options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+            value={customerId}
+            onChange={setCustomerId}
+            placeholder="Cari pelanggan..."
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerName">Nama Customer (Non-Registered)</Label>
-          <Input id="customerName" name="customerName" placeholder="Nama customer" defaultValue={ticket?.customerName ?? ""} />
+          <Label htmlFor="customerName">Nama Pelanggan (Belum Terdaftar)</Label>
+          <Input id="customerName" name="customerName" placeholder="Nama pelanggan" defaultValue={ticket?.customerName ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerEmail">Email Customer</Label>
+          <Label htmlFor="customerEmail">Email Pelanggan</Label>
           <Input id="customerEmail" name="customerEmail" type="email" placeholder="email@example.com" defaultValue={ticket?.customerEmail ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerPhone">Telepon Customer</Label>
+          <Label htmlFor="customerPhone">Telepon Pelanggan</Label>
           <Input id="customerPhone" name="customerPhone" type="tel" inputMode="numeric" placeholder="08xxxxxxxxxx" defaultValue={ticket?.customerPhone ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Select name="type" defaultSelectedKey={ticket?.type || undefined} className="w-full">
-            <Label>Tipe</Label>
-            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Tipe"}</Select.Value><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="inquiry" textValue="Inquiry">Inquiry<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="complaint" textValue="Complaint">Complaint<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="support" textValue="Support">Support<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="feedback" textValue="Feedback">Feedback<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="other" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Label htmlFor="type">Tipe</Label>
+          <FormSelect
+            id="type"
+            name="type"
+            defaultValue={ticket?.type || undefined}
+            placeholder="Pilih Tipe"
+            options={[
+              { value: "inquiry", label: "Pertanyaan" },
+              { value: "complaint", label: "Keluhan" },
+              { value: "support", label: "Dukungan" },
+              { value: "feedback", label: "Masukan" },
+              { value: "other", label: "Lainnya" },
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Select name="priority" defaultSelectedKey={ticket?.priority || "medium"} className="w-full">
-            <Label>Prioritas *</Label>
-            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="low" textValue="Low">Low<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="medium" textValue="Medium">Medium<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="high" textValue="High">High<ListBox.ItemIndicator /></ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Label htmlFor="priority">Prioritas *</Label>
+          <FormSelect
+            id="priority"
+            name="priority"
+            defaultValue={ticket?.priority || "medium"}
+            options={[
+              { value: "low", label: "Rendah" },
+              { value: "medium", label: "Sedang" },
+              { value: "high", label: "Tinggi" },
+            ]}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="assignedTo" className="w-full">
-            <Label>Ditugaskan Ke</Label>
-            <ComboBox.InputGroup><Input placeholder="Cari user..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {users.map((u) => (
-                  <ListBox.Item key={u.id} id={String(u.id)} textValue={u.name}>{u.name}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="assignedTo">Ditugaskan Ke</Label>
+          <Combobox
+            id="assignedTo"
+            name="assignedTo"
+            options={users.map((u) => ({ value: String(u.id), label: u.name }))}
+            value={assignedTo}
+            onChange={setAssignedTo}
+            placeholder="Cari pengguna..."
+          />
         </div>
         {isEdit && (
           <div className="flex flex-col gap-1.5 col-span-full">
             <Label htmlFor="resolutionNotes">Catatan Resolusi</Label>
-            <TextArea id="resolutionNotes" name="resolutionNotes" rows={3} placeholder="Catatan penyelesaian tiket..." defaultValue={ticket?.resolutionNotes ?? ""} />
+            <Textarea id="resolutionNotes" name="resolutionNotes" rows={3} placeholder="Catatan penyelesaian tiket..." defaultValue={ticket?.resolutionNotes ?? ""} />
           </div>
         )}
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-ticket">
-          {isPending ? "Menyimpan..." : ticket?.id ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : ticket?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

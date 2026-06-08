@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 
 /**
  * Work Order Hook - Observer pattern replacement.
@@ -15,6 +16,8 @@ export async function onWorkOrderCompleted(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent calls for the same work order.
+    await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
     const workOrder = await tx.workOrder.findUniqueOrThrow({
       where: { id: workOrderId },
       include: { items: true },
@@ -67,25 +70,19 @@ export async function onWorkOrderCompleted(
         },
       });
 
-      // Update item qtyOnHand
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
+      // Lock the item row to serialize global qtyOnHand updates.
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
 
-      // FIFO layer consumption
-      const layers = await tx.inventoryLayer.findMany({
-        where: { itemId: item.itemId, remaining: { gt: 0 } },
-        orderBy: { createdAt: "asc" },
+      // Consume FIFO from the resolved warehouse (guards per-warehouse stock).
+      await consumeFifoLayers(tx, {
+        itemId: item.itemId,
+        warehouseId: resolvedWarehouseId,
+        qty: Number(item.qty),
+        label: `WO ${workOrder.documentNo}`,
       });
-      let qtyToConsume = Number(item.qty);
-      for (const layer of layers) {
-        if (qtyToConsume <= 0) break;
-        const available = Number(layer.remaining);
-        const consume = Math.min(available, qtyToConsume);
-        await tx.inventoryLayer.update({
-          where: { id: layer.id },
-          data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
-        });
-        qtyToConsume -= consume;
-      }
+
+      // Update item qtyOnHand (global total)
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
     }
 
     // Create Journal Entry (Dr WIP, Cr Inventory)

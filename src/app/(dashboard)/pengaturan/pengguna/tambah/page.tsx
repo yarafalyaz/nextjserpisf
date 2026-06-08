@@ -15,12 +15,12 @@ export default async function CreateUserPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/pengaturan" },
-        { label: "Users", href: "/pengaturan/pengguna" },
-        { label: "Create" },
+        { label: "Dasbor", href: "/" },
+        { label: "Pengaturan", href: "/pengaturan" },
+        { label: "Pengguna", href: "/pengaturan/pengguna" },
+        { label: "Tambah" },
       ]} />
-      <h1 className="text-2xl font-bold text-foreground">Tambah User Baru</h1>
+      <h1 className="text-2xl font-bold text-foreground">Tambah Pengguna Baru</h1>
       <UserCreateForm roles={roles} />
     </div>
   )

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 
 /**
  * Inventory Transfer Hook - Observer pattern replacement.
@@ -21,6 +22,9 @@ export async function onTransferProcessed(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent calls for the same transfer (prevents double-processing
+    // racing past the idempotency check below).
+    await tx.$queryRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
     const transfer = await tx.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
       include: { items: true },
@@ -42,13 +46,26 @@ export async function onTransferProcessed(
 
       const smDocNo = await generateDocumentNumber("SM");
 
+      // Lock the item row to serialize global qtyOnHand updates.
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+
+      // Consume FIFO from the SOURCE warehouse — track cost so the destination
+      // layer can preserve the cost basis (avoids transfers zeroing out COGS).
+      const { consumedCost } = await consumeFifoLayers(tx, {
+        itemId: item.itemId,
+        warehouseId: transfer.sourceWarehouseId,
+        qty: Number(item.qty),
+        label: `transfer ${transfer.documentNo}`,
+      });
+      const unitCost = Number(item.qty) > 0 ? consumedCost / Number(item.qty) : 0;
+
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
           warehouseId: transfer.sourceWarehouseId,
           qty: item.qty,
-          cost: 0,
+          cost: unitCost,
           impact: "OUT",
           status: "posted",
           referenceType: "InventoryTransfer",
@@ -58,25 +75,8 @@ export async function onTransferProcessed(
         },
       });
 
-      // Update item qtyOnHand in source warehouse
+      // Update item qtyOnHand (global total)
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
-
-      // FIFO layer consumption
-      const layers = await tx.inventoryLayer.findMany({
-        where: { itemId: item.itemId, remaining: { gt: 0 } },
-        orderBy: { createdAt: "asc" },
-      });
-      let qtyToConsume = Number(item.qty);
-      for (const layer of layers) {
-        if (qtyToConsume <= 0) break;
-        const available = Number(layer.remaining);
-        const consume = Math.min(available, qtyToConsume);
-        await tx.inventoryLayer.update({
-          where: { id: layer.id },
-          data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
-        });
-        qtyToConsume -= consume;
-      }
     }
   });
 }
@@ -92,6 +92,8 @@ export async function onTransferReceived(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent calls for the same transfer.
+    await tx.$queryRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
     const transfer = await tx.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
       include: { items: true },
@@ -118,13 +120,26 @@ export async function onTransferReceived(
 
       const smDocNo = await generateDocumentNumber("SM");
 
+      // Preserve the cost basis carried by the matching OUT move (FIFO cost
+      // captured when the transfer was processed) instead of zeroing it.
+      const outMove = await tx.stockMove.findFirst({
+        where: {
+          referenceType: "InventoryTransfer",
+          referenceId: transfer.id,
+          impact: "OUT",
+          itemId: item.itemId,
+        },
+        select: { cost: true },
+      });
+      const carriedUnitCost = Number(outMove?.cost ?? 0);
+
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
           warehouseId: transfer.destinationWarehouseId,
           qty: item.qty,
-          cost: 0,
+          cost: carriedUnitCost,
           impact: "IN",
           status: "posted",
           referenceType: "InventoryTransfer",
@@ -134,24 +149,21 @@ export async function onTransferReceived(
         },
       });
 
-      // Update item qtyOnHand in destination warehouse
+      // Update item qtyOnHand (global total)
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
 
-      // Create FIFO inventory layer for received stock
+      // Create FIFO inventory layer for received stock in the DESTINATION warehouse
       const sm = await tx.stockMove.findFirst({
         where: { documentNo: smDocNo },
         select: { id: true },
       });
       if (sm) {
-        await tx.inventoryLayer.create({
-          data: {
-            itemId: item.itemId,
-            stockMoveId: sm.id,
-            qtyIn: item.qty,
-            qtyOut: 0,
-            remaining: item.qty,
-            unitCost: 0,
-          },
+        await createInLayer(tx, {
+          itemId: item.itemId,
+          warehouseId: transfer.destinationWarehouseId,
+          stockMoveId: sm.id,
+          qty: Number(item.qty),
+          unitCost: carriedUnitCost,
         });
       }
     }

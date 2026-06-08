@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react"
+import { Pencil, AlertTriangle } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -13,6 +13,8 @@ import { deleteItem } from "@/actions/master.actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { QrCodeDisplay } from "@/components/ui/qr-code-display"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 
 export default async function ItemDetailPage({
   params,
@@ -26,12 +28,22 @@ export default async function ItemDetailPage({
     where: { id: Number(id) },
     include: {
       category: true,
+      warehouse: true,
+      rack: true,
+      rackRow: true,
       stockMoves: { orderBy: { createdAt: "desc" }, include: { warehouse: true } },
       inventoryLayers: { where: { remaining: { gt: 0 } }, orderBy: { createdAt: "asc" } },
+      uomConversions: { orderBy: { code: "asc" } },
+      itemBatches: { orderBy: { createdAt: "desc" } },
+      itemSerials: { orderBy: { createdAt: "desc" } },
     },
   })
 
   if (!item) notFound()
+
+  const baseUrl = process.env.NEXTAUTH_URL ?? ""
+  const trackCode = item.sku
+  const qrUrl = `${baseUrl}/inventaris/scan?code=${encodeURIComponent(trackCode)}`
 
   const isLowStock = Number(item.minStock) > 0 && Number(item.qtyOnHand) <= Number(item.minStock)
 
@@ -144,9 +156,9 @@ export default async function ItemDetailPage({
       <PageHeader
         title={item.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Items", href: "/master/barang" },
+          { label: "Item", href: "/master/barang" },
           { label: "Detail" },
         ]}
         badge={item.isProduct ? (
@@ -154,12 +166,22 @@ export default async function ItemDetailPage({
         ) : undefined}
         actions={
           <>
-            <Button href={`/master/barang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/barang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <DeleteButton id={item.id} action={deleteItem} />
             <BackButton href="/master/barang" />
           </>
         }
       />
+
+      {isLowStock && (
+        <Alert variant="warning">
+          <AlertTriangle />
+          <AlertTitle>Stok menipis</AlertTitle>
+          <AlertDescription>
+            Stok saat ini {Number(item.qtyOnHand)} {item.unitOfMeasure} sudah di bawah atau sama dengan minimum ({Number(item.minStock)} {item.unitOfMeasure}). Pertimbangkan untuk melakukan pembelian.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <DetailTabs
         ariaLabel="Item detail tabs"
@@ -176,7 +198,7 @@ export default async function ItemDetailPage({
                   <DetailField label="Stok Saat Ini" value={
                     <span className={isLowStock ? "text-danger" : ""}>
                       {Number(item.qtyOnHand)} {item.unitOfMeasure}
-                      {isLowStock && " ⚠️"}
+                      {isLowStock && " (Stok Menipis)"}
                     </span>
                   } />
                   <DetailField label="Minimum Stok" value={String(Number(item.minStock))} />
@@ -184,10 +206,77 @@ export default async function ItemDetailPage({
                   <DetailField label="Harga Jual" value={formatCurrency(Number(item.price))} />
                   <DetailField label="Nilai Stok" value={formatCurrency(Number(item.qtyOnHand) * Number(item.cost))} />
                 </DetailCard>
+
+                <DetailCard>
+                  <DetailField label="Gudang" value={item.warehouse?.name || "-"} />
+                  <DetailField label="Rak" value={item.rack?.name || "-"} />
+                  <DetailField label="Baris" value={item.rackRow?.name || "-"} />
+                </DetailCard>
+
+                <DetailSection title="QR Code">
+                  <QrCodeDisplay value={qrUrl} size={148} />
+                  <p className="text-xs text-muted-foreground mt-2">Scan QR ini untuk membuka data barang (akses sesuai hak login).</p>
+                </DetailSection>
                 {item.description && (
                   <DetailCard>
                     <DetailField label="Deskripsi" value={item.description} colSpan="full" />
                   </DetailCard>
+                )}
+                {item.uomConversions.length > 0 && (
+                  <DetailSection title="Satuan Alternatif">
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Kode Satuan</DetailTableTh>
+                        <DetailTableTh align="right">Faktor ke Satuan Dasar ({item.unitOfMeasure})</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {item.uomConversions.map((u) => (
+                          <DetailTableRow key={u.id}>
+                            <DetailTableTd>{u.code}</DetailTableTd>
+                            <DetailTableTd align="right">{Number(u.factorToBase)}</DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  </DetailSection>
+                )}
+                {item.itemBatches.length > 0 && (
+                  <DetailSection title="Batch/Lot">
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Batch/Lot</DetailTableTh>
+                        <DetailTableTh align="right">Jml</DetailTableTh>
+                        <DetailTableTh>Kedaluwarsa</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {item.itemBatches.map((b) => (
+                          <DetailTableRow key={b.id}>
+                            <DetailTableTd>{b.batchNumber}</DetailTableTd>
+                            <DetailTableTd align="right">{Number(b.qty)} {item.unitOfMeasure}</DetailTableTd>
+                            <DetailTableTd>{b.expiryDate ? formatDate(b.expiryDate) : "-"}</DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  </DetailSection>
+                )}
+                {item.itemSerials.length > 0 && (
+                  <DetailSection title="Nomor Seri">
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>Nomor Seri</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {item.itemSerials.map((s) => (
+                          <DetailTableRow key={s.id}>
+                            <DetailTableTd>{s.serialNumber}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={s.status} /></DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  </DetailSection>
                 )}
               </>
             ),
@@ -198,7 +287,7 @@ export default async function ItemDetailPage({
             content: (
               <DetailSection title="FIFO Layers (Sisa)">
                 {item.inventoryLayers.length === 0 ? (
-                  <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada layer aktif</p>
+                  <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada layer aktif</p>
                 ) : (
                   <DetailTable>
                     <DetailTableHead>
@@ -231,11 +320,11 @@ export default async function ItemDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Transaksi</h2>
-                  <span className="text-xs text-muted">{stockMovesWithRef.length} transaksi</span>
+                  <span className="text-xs text-muted-foreground">{stockMovesWithRef.length} transaksi</span>
                 </div>
                 <div className="p-4 px-5">
                   {stockMovesWithRef.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada transaksi</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada transaksi</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -243,7 +332,7 @@ export default async function ItemDetailPage({
                         <DetailTableTh>No. Dokumen</DetailTableTh>
                         <DetailTableTh>Tipe</DetailTableTh>
                         <DetailTableTh>Masuk/Keluar</DetailTableTh>
-                        <DetailTableTh align="right">Qty</DetailTableTh>
+                        <DetailTableTh align="right">Jml</DetailTableTh>
                         <DetailTableTh align="right">Harga Satuan</DetailTableTh>
                         <DetailTableTh>Pihak</DetailTableTh>
                         <DetailTableTh>Gudang</DetailTableTh>
@@ -258,7 +347,7 @@ export default async function ItemDetailPage({
                               ) : sm.documentNo}
                             </DetailTableTd>
                             <DetailTableTd>
-                              <span className="text-xs text-muted">{sm.referenceType || sm.moveType || "-"}</span>
+                              <span className="text-xs text-muted-foreground">{sm.referenceType || sm.moveType || "-"}</span>
                             </DetailTableTd>
                             <DetailTableTd>
                               <StatusChip status={sm.impact === "IN" ? "received" : "returned"} />
@@ -266,7 +355,7 @@ export default async function ItemDetailPage({
                             <DetailTableTd align="right">{Number(sm.qty)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(sm.cost))}</DetailTableTd>
                             <DetailTableTd>
-                              {sm.partyLabel && <span className="text-xs text-muted">{sm.partyLabel}: </span>}
+                              {sm.partyLabel && <span className="text-xs text-muted-foreground">{sm.partyLabel}: </span>}
                               <span className="text-sm">{sm.party}</span>
                             </DetailTableTd>
                             <DetailTableTd>{sm.warehouse?.name || "-"}</DetailTableTd>

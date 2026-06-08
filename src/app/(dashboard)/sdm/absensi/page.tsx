@@ -2,11 +2,11 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { AppSearchField } from "@/components/ui/search-field"
 import { AttendanceTable } from "./_components/attendance-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { SelfAttendanceWidget } from "@/components/attendance/self-attendance-widget"
 import { Button } from "@/components/ui/page-header"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { auth } from "@/lib/auth/auth"
 
 export default async function AttendancePage({
@@ -75,19 +75,13 @@ export default async function AttendancePage({
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-xl font-bold text-foreground">Riwayat Absensi</h2>
-        <form className="flex gap-2" action="/sdm/absensi">
-          <input type="date" name="date" defaultValue={targetDate.toISOString().split("T")[0]} className="form-input" />
+        <form className="flex items-end gap-2" action="/sdm/absensi">
+          <AppDatePicker name="date" defaultValue={targetDate.toISOString().split("T")[0]} className="w-44" />
           <Button type="submit">Filter</Button>
         </form>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/absensi" />
-        </div>
-
-        <AttendanceTable data={data} />
-      </div>
+      <AttendanceTable data={data} />
     </div>
   )
 }

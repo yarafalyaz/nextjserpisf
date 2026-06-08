@@ -8,7 +8,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 export default async function CreateVehiclePage() {
   await requirePermission("create_vehicles")
 
-  const [brands, models, customers] = await Promise.all([
+  const [brands, models, variants, customers] = await Promise.all([
     prisma.vehicleBrand.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
@@ -16,6 +16,10 @@ export default async function CreateVehiclePage() {
     prisma.vehicleModel.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, vehicleBrandId: true },
+    }),
+    prisma.vehicleVariant.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, vehicleModelId: true, drivetrain: true, transmission: true },
     }),
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
@@ -30,7 +34,7 @@ export default async function CreateVehiclePage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Kendaraan</h1>
       </div>
-      <VehicleForm brands={brands} models={models} customers={customers} />
+      <VehicleForm brands={brands} models={models} variants={variants} customers={customers} />
     </div>
   )
 }

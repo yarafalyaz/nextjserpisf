@@ -40,7 +40,7 @@ export function StatCard({ label, value, icon, trend, trendValue, className = ""
     <div className={`bg-surface rounded-xl border border-default shadow-sm p-5 ${className}`}>
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted uppercase tracking-wide">{label}</span>
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</span>
           <span className="text-2xl font-bold text-foreground">{value}</span>
           {trendValue && (
             <span className={`text-xs font-medium ${trendColor}`}>{trendValue}</span>

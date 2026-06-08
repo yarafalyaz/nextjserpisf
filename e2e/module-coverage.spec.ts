@@ -9,7 +9,7 @@ async function waitForHydration(page: Page) {
 test.describe("Produksi - Products CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/produksi/products", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Product")
+    await expect(page.locator("body")).toContainText("Produk")
 
     await page.goto("/produksi/products/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
@@ -20,7 +20,7 @@ test.describe("Produksi - Products CRUD", () => {
 test.describe("Produksi - Production Order CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/produksi/production-orders", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Production")
+    await expect(page.locator("body")).toContainText("Produksi")
 
     await page.goto("/produksi/production-orders/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
@@ -50,12 +50,16 @@ test.describe("Inventaris - Rak CRUD", () => {
 
     const codeInput = page.locator("#code").first()
     await expect(codeInput).toBeVisible({ timeout: 10000 })
-    await codeInput.fill(code)
+    // Code is auto-generated (read-only) when auto-code is enabled; only fill if editable.
+    if (await codeInput.isEditable()) {
+      await codeInput.fill(code)
+    }
     await page.locator("#name").first().fill(name)
 
-    // Get warehouse ID from DB (via API or hardcoded seed value)
-    // Seed creates warehouse with code WH-MAIN, assume ID=1
-    await page.locator("#warehouseId").first().fill("1")
+    // Warehouse is a searchable combobox; pick the first available warehouse.
+    const warehouseInput = page.locator("input[placeholder='Cari gudang...']").first()
+    await warehouseInput.click()
+    await page.locator("[role='option']").first().click()
 
     await page.locator("#submit-rack, button[type='submit']").first().click()
 
@@ -107,7 +111,7 @@ test.describe("Penjualan - Uang Muka (Advance) CRUD", () => {
 
     await page.goto("/penjualan/uang-muka/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await expect(page.locator("body")).toContainText("Down Payment")
+    await expect(page.locator("body")).toContainText("Uang Muka")
   })
 })
 
@@ -187,11 +191,11 @@ test.describe("Keuangan - Kas Kecil CRUD", () => {
 test.describe("Keuangan - Pengeluaran CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/keuangan/pengeluaran", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Expenses")
+    await expect(page.locator("body")).toContainText("Pengeluaran")
 
     await page.goto("/keuangan/pengeluaran/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await expect(page.locator("body")).toContainText("Expense")
+    await expect(page.locator("body")).toContainText("Pengeluaran")
   })
 })
 
@@ -202,7 +206,7 @@ test.describe("Keuangan - Anggaran CRUD", () => {
 
     await page.goto("/keuangan/anggaran/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await expect(page.locator("body")).toContainText("Budget")
+    await expect(page.locator("body")).toContainText("Anggaran")
   })
 })
 
@@ -238,11 +242,11 @@ test.describe("SDM - Jadwal Kerja CRUD", () => {
 test.describe("CRM - Tickets CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/crm/tickets", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Ticket")
+    await expect(page.locator("body")).toContainText("Tiket")
 
     await page.goto("/crm/tickets/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await expect(page.locator("body")).toContainText("Ticket")
+    await expect(page.locator("body")).toContainText("Tiket")
   })
 })
 

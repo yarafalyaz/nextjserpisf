@@ -30,13 +30,13 @@ const columns = [
     },
   }),
   columnHelper.accessor("customer.name", {
-    header: "Customer",
+    header: "Pelanggan",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("name", {
     header: "Judul Proyek",
     cell: (info) => (
-      <Link href={`/proyek/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/proyek/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue() || "-"}
       </Link>
     ),
@@ -57,7 +57,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "itemsCount",
-    header: "Items",
+    header: "Item",
     cell: (info) => info.row.original._count?.items ?? 0,
   }),
   columnHelper.display({
@@ -77,9 +77,11 @@ const columns = [
 
 interface ProjectTableProps {
   data: ProjectData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function ProjectTable({ data }: ProjectTableProps) {
+export function ProjectTable({ data, toolbar, filters }: ProjectTableProps) {
   return (
     <DataTable
       data={data}
@@ -87,6 +89,8 @@ export function ProjectTable({ data }: ProjectTableProps) {
       ariaLabel="Daftar proyek"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("project", ids)}
     />
   )

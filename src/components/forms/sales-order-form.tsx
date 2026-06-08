@@ -9,11 +9,13 @@ import { z } from "zod"
 import { createSalesOrder, updateSalesOrder } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { TextArea, ComboBox, Input, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 const salesOrderSchema = z.object({
-  customerId: z.number({ error: "Customer wajib dipilih" }).min(1, "Customer wajib dipilih"),
+  customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
   date: z.string().min(1, "Tanggal wajib diisi"),
   deliveryDate: z.string().optional(),
   notes: z.string().optional(),
@@ -37,9 +39,10 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesOrderInput>({
     resolver: zodResolver(salesOrderSchema),
     defaultValues: {
-      date: new Date().toISOString().split("T")[0],
+      customerId: order?.customerId,
+      date: order?.date ?? new Date().toISOString().split("T")[0],
       deliveryDate: "",
-      notes: "",
+      notes: order?.notes ?? "",
     },
   })
 
@@ -52,9 +55,11 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
         })
         const result = order?.id ? await updateSalesOrder(order.id, formData) : await createSalesOrder(formData)
         if (result.success) {
-          showSuccess(order?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+          showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push(`/penjualan/pesanan/${result.id}`)
           router.refresh()
+        } else {
+          showError(result.error || "Gagal menyimpan data")
         }
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -66,31 +71,18 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
     <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="customerId">Pelanggan *</Label>
           <Controller
             name="customerId"
             control={control}
             render={({ field }) => (
-              <ComboBox
-                selectedKey={field.value ? String(field.value) : null}
-                onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                className="w-full"
-              >
-                <Label>Customer *</Label>
-                <ComboBox.InputGroup>
-                  <Input placeholder="Cari customer..." />
-                  <ComboBox.Trigger />
-                </ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {customers.map((c) => (
-                      <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>
-                        {c.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <Combobox
+                id="customerId"
+                value={field.value ? String(field.value) : null}
+                onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                placeholder="Cari pelanggan..."
+                options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+              />
             )}
           />
           {errors.customerId && <span className="text-xs text-danger mt-1">{errors.customerId.message}</span>}
@@ -118,14 +110,14 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
-          <TextArea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk sales order ini..." />
+          <Textarea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk pesanan penjualan ini..." />
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-sales-order">
-          {isPending ? "Menyimpan..." : order?.id ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : order?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

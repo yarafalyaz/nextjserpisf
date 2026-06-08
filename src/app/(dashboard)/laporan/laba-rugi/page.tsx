@@ -6,9 +6,6 @@ import { formatCurrency } from '@/lib/utils/format'
 import { TrendingUp, DollarSign, Percent, BarChart3 } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { } from "@/components/reports/export-buttons"
-import { } from "@/components/reports/print-header"
-import { } from "@/components/reports/date-presets"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
 
 export default async function IncomeStatementPage({
@@ -24,6 +21,7 @@ export default async function IncomeStatementPage({
     ? new Date(params.tanggalMulai)
     : new Date(now.getFullYear(), 0, 1)
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
+  endDate.setHours(23, 59, 59, 999)
 
   // Fetch all accounts with journal entries in period
   const accounts = await prisma.account.findMany({
@@ -32,7 +30,7 @@ export default async function IncomeStatementPage({
       journalEntries: {
         where: {
           journal: {
-            status: 'POSTED',
+            status: { in: ['POSTED', 'REVERSED'] },
             transactionDate: { gte: startDate, lte: endDate },
           },
         },
@@ -80,9 +78,9 @@ export default async function IncomeStatementPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/laporan" },
-        { label: "Income Statement" },
+        { label: "Dasbor", href: "/" },
+        { label: "Laporan", href: "/laporan" },
+        { label: "Laba Rugi" },
       ]} />
 
       <div className="flex items-center gap-2">
@@ -110,7 +108,7 @@ export default async function IncomeStatementPage({
             <DollarSign size={20} className="text-primary" />
           </div>
           <div>
-            <p className="text-xs text-muted">Total Pendapatan</p>
+            <p className="text-xs text-muted-foreground">Total Pendapatan</p>
             <p className="text-sm font-semibold text-foreground">{formatCurrency(totalRevenue)}</p>
           </div>
         </div>
@@ -119,7 +117,7 @@ export default async function IncomeStatementPage({
             <BarChart3 size={20} className="text-success" />
           </div>
           <div>
-            <p className="text-xs text-muted">Laba Kotor</p>
+            <p className="text-xs text-muted-foreground">Laba Kotor</p>
             <p className="text-sm font-semibold text-foreground">{formatCurrency(grossProfit)}</p>
           </div>
         </div>
@@ -128,7 +126,7 @@ export default async function IncomeStatementPage({
             <TrendingUp size={20} className="text-info" />
           </div>
           <div>
-            <p className="text-xs text-muted">Laba Bersih</p>
+            <p className="text-xs text-muted-foreground">Laba Bersih</p>
             <p className="text-sm font-semibold text-foreground">{formatCurrency(netProfit)}</p>
           </div>
         </div>
@@ -137,7 +135,7 @@ export default async function IncomeStatementPage({
             <Percent size={20} className="text-warning" />
           </div>
           <div>
-            <p className="text-xs text-muted">Margin</p>
+            <p className="text-xs text-muted-foreground">Margin</p>
             <p className="text-sm font-semibold text-foreground">{margin.toFixed(1)}%</p>
           </div>
         </div>
@@ -147,7 +145,7 @@ export default async function IncomeStatementPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Laporan Laba Rugi Multi-Step</h2>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             {startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} - {endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>

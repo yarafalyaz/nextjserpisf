@@ -62,12 +62,12 @@ export default async function AgingInventoryPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/laporan" },
-  { label: "Aging Inventory" },
+  { label: "Dasbor", href: "/" },
+  { label: "Laporan", href: "/laporan" },
+  { label: "Umur Persediaan" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground"><Package size={20} /> Aging Persediaan (Inventory)</h1>
+        <h1 className="text-2xl font-bold text-foreground"><Package size={20} /> Umur Persediaan</h1>
         <ExportButtons title="Aging_Inventory" />
       </div>
 
@@ -75,14 +75,14 @@ export default async function AgingInventoryPage() {
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex flex-col">
-            <span className="text-[0.8125rem] text-muted font-medium">Total Item Aktif</span>
+            <span className="text-[0.8125rem] text-muted-foreground font-medium">Total Item Aktif</span>
             <span className="text-xl font-bold text-foreground">{totalItems}</span>
           </div>
         </div>
         {Object.entries(summary).map(([group, count]) => (
           <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md" key={group}>
             <div className="flex flex-col">
-              <span className="text-[0.8125rem] text-muted font-medium">{group}</span>
+              <span className="text-[0.8125rem] text-muted-foreground font-medium">{group}</span>
               <span className="text-xl font-bold text-foreground">{count} item</span>
             </div>
           </div>
@@ -96,14 +96,14 @@ export default async function AgingInventoryPage() {
             <DetailTableHead>
               <DetailTableTh>Nama Item</DetailTableTh>
               <DetailTableTh>SKU</DetailTableTh>
-              <DetailTableTh align="right">Qty</DetailTableTh>
+              <DetailTableTh align="right">Jml</DetailTableTh>
               <DetailTableTh>Tanggal Pergerakan Terakhir</DetailTableTh>
               <DetailTableTh align="right">Umur (Hari)</DetailTableTh>
               <DetailTableTh>Kelompok Umur</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {data.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada persediaan</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 px-4 text-muted-foreground">Tidak ada persediaan</DetailTableTd></DetailTableRow>
               ) : (
                 data.map((row) => (
                   <DetailTableRow key={row.id}>

@@ -32,6 +32,8 @@ export const STATUS_LABELS: Record<string, string> = {
   // Inventory
   processed: "Diproses",
   issued: "Dikeluarkan",
+  IN: "Masuk",
+  OUT: "Keluar",
 
   // Sales
   confirmed: "Terkonfirmasi",

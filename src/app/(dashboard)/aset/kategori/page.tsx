@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
-import { AppSearchField } from "@/components/ui/search-field"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AssetCategoryTable } from "./_components/asset-category-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -38,9 +37,9 @@ export default async function AssetCategoriesPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Assets", href: "/aset" },
-  { label: "Categories" },
+  { label: "Dasbor", href: "/" },
+  { label: "Aset", href: "/aset" },
+  { label: "Kategori" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Kategori Aset</h1>
@@ -49,13 +48,7 @@ export default async function AssetCategoriesPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama kategori..." action="/aset/kategori" />
-        </div>
-
-        <AssetCategoryTable data={data} />
-      </div>
+      <AssetCategoryTable data={data} />
     </div>
   )
 }

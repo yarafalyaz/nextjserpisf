@@ -8,32 +8,32 @@ import { CronTaskList } from "./_components/cron-task-list"
 const CRON_TASKS = [
   {
     key: "lock-period",
-    name: "Auto Lock Period",
-    description: "Kunci period transaksi di akhir bulan",
+    name: "Kunci Periode Otomatis",
+    description: "Kunci periode transaksi di akhir bulan",
     schedule: "Tanggal 1 jam 00:00",
   },
   {
     key: "low-stock",
-    name: "Low Stock Alert",
+    name: "Peringatan Stok Menipis",
     description: "Cek item yang stoknya di bawah minimum",
     schedule: "Setiap hari",
   },
   {
     key: "overdue-invoice",
-    name: "Overdue Invoice Alert",
+    name: "Peringatan Faktur Jatuh Tempo",
     description: "Cek invoice yang sudah jatuh tempo",
     schedule: "Setiap hari",
   },
   {
     key: "cleanup",
-    name: "Cleanup Old Logs",
-    description: "Hapus log activity > 90 hari",
+    name: "Bersihkan Log Lama",
+    description: "Hapus log aktivitas > 90 hari",
     schedule: "Mingguan",
   },
 ]
 
 export default async function CronPage() {
-  await requirePermission("pengaturan.view")
+  await requirePermission("manage_settings")
 
   const logs = await prisma.cronLog.findMany({
     orderBy: { ranAt: "desc" },
@@ -62,8 +62,8 @@ export default async function CronPage() {
 
       <div>
         <h1 className="text-2xl font-bold text-foreground">Cron Jobs</h1>
-        <p className="text-sm text-muted mt-1">
-          Kelola scheduled tasks otomatis sistem
+        <p className="text-sm text-muted-foreground mt-1">
+          Kelola tugas terjadwal otomatis sistem
         </p>
       </div>
 

@@ -30,9 +30,9 @@ export default async function ProductionOrderDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Manufacturing", href: "/produksi" },
-  { label: "Production Orders", href: "/produksi/production-orders" },
+  { label: "Dasbor", href: "/" },
+  { label: "Manufaktur", href: "/produksi" },
+  { label: "Perintah Produksi", href: "/produksi/production-orders" },
   { label: "Detail" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -50,23 +50,23 @@ export default async function ProductionOrderDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Dokumen</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Dokumen</span>
             <span className="text-[0.9375rem] text-foreground font-medium font-mono">{order.documentNo}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Produk</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Produk</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{order.product.name}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Qty</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Jml</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{Number(order.qty)}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</span>
             <span className="text-[0.9375rem] text-foreground font-medium"><StatusChip status={order.status} /></span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dibuat</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(order.createdAt)}</span>
           </div>
         </div>
@@ -79,12 +79,12 @@ export default async function ProductionOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {order.materials.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada material</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada material</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
-                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh align="right">Jml</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {order.materials.map((mat) => (

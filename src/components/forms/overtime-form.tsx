@@ -5,7 +5,10 @@ import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createOvertimeRequest, updateOvertimeRequest } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -13,22 +16,17 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(overtime?.date ? new Date(overtime.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0])
+  const [employeeId, setEmployeeId] = useState<string | null>(overtime?.employeeId ? String(overtime.employeeId) : null)
+  const [projectId, setProjectId] = useState<string | null>(overtime?.projectId ? String(overtime.projectId) : null)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        if (overtime?.id) {
-
-          await updateOvertimeRequest(overtime.id, formData)
-
-        } else {
-
-          await createOvertimeRequest(formData)
-
-        }
-        showSuccess(overtime?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        const result = overtime?.id ? await updateOvertimeRequest(overtime.id, formData) : await createOvertimeRequest(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(overtime?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/sdm/lembur")
         router.refresh()
       } catch (error) {
@@ -42,43 +40,27 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <ComboBox name="employeeId" className="w-full" isRequired defaultSelectedKey={overtime?.employeeId ? String(overtime.employeeId) : undefined}>
-              <Label>Karyawan *</Label>
-              <ComboBox.InputGroup>
-                <Input placeholder="Cari karyawan..." />
-                <ComboBox.Trigger />
-              </ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {employees.map((e) => (
-                    <ListBox.Item key={e.id} id={String(e.id)} textValue={e.name}>
-                      {e.name}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label htmlFor="employeeId">Karyawan *</Label>
+            <Combobox
+              id="employeeId"
+              name="employeeId"
+              options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+              value={employeeId}
+              onChange={setEmployeeId}
+              placeholder="Cari karyawan..."
+            />
           </div>
           {projects && projects.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <ComboBox name="projectId" className="w-full" defaultSelectedKey={overtime?.projectId ? String(overtime.projectId) : undefined}>
-                <Label>Proyek</Label>
-                <ComboBox.InputGroup>
-                  <Input placeholder="Cari proyek..." />
-                  <ComboBox.Trigger />
-                </ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {projects.map((p) => (
-                      <ListBox.Item key={p.id} id={String(p.id)} textValue={p.name}>
-                        {p.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <Label htmlFor="projectId">Proyek</Label>
+              <Combobox
+                id="projectId"
+                name="projectId"
+                options={projects.map((p) => ({ value: String(p.id), label: p.name }))}
+                value={projectId}
+                onChange={setProjectId}
+                placeholder="Cari proyek..."
+              />
             </div>
           )}
           <div className="flex flex-col gap-1.5">
@@ -112,13 +94,13 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
         <FormSection title="Lainnya" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="reason">Alasan</Label>
-            <TextArea id="reason" name="reason" rows={3} placeholder="Alasan lembur..." defaultValue={overtime?.reason ?? ""} />
+            <Textarea id="reason" name="reason" rows={3} placeholder="Alasan lembur..." defaultValue={overtime?.reason ?? ""} />
           </div>
         </FormSection>
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : overtime?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : overtime?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

@@ -9,7 +9,8 @@ import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteSalesInvoice } from "@/actions/sales.actions"
+import { deleteSalesInvoice, voidSalesInvoice } from "@/actions/sales.actions"
+import { VoidButton } from "@/components/ui/void-button"
 import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
@@ -17,6 +18,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
+import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
 export default async function InvoiceDetailPage({
   params,
@@ -39,21 +41,30 @@ export default async function InvoiceDetailPage({
 
   if (!invoice) notFound()
 
-  // Fetch available items for the editor
+  // Fetch available items for the editor (termasuk metadata UoM & serial)
   const availableItems = await prisma.item.findMany({
     where: { isActive: true },
-    select: { id: true, name: true, sku: true, price: true },
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      price: true,
+      unitOfMeasure: true,
+      trackSerial: true,
+      uomConversions: { select: { code: true, factorToBase: true } },
+    },
     orderBy: { name: "asc" },
   })
 
+  const pmMap = await getPaymentMethodMap()
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Invoice ${invoice.documentNo}`}
+        title={`Faktur ${invoice.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/penjualan" },
-          { label: "Invoices", href: "/penjualan/faktur" },
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Faktur", href: "/penjualan/faktur" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={invoice.status} />}
@@ -61,14 +72,17 @@ export default async function InvoiceDetailPage({
           <>
             <Button href={`/penjualan/faktur/${invoice.id}/ubah`} variant="primary">Ubah</Button>
             {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-              <Button href={`/penjualan/pembayaran/tambah?fakturId=${invoice.id}`} variant="primary" style={{ background: "var(--color-success)", color: "#fff" }}>
+              <Button href={`/penjualan/pembayaran/tambah?invoiceId=${invoice.id}`} variant="primary" className="bg-[var(--color-success)] text-white">
                 Terima Pembayaran
               </Button>
             )}
             {invoice.status === "paid" && (
-              <Button href={`/penjualan/surat-jalan/tambah?fakturPenjualanId=${invoice.id}`} variant="primary">+ Delivery Order</Button>
+              <Button href={`/penjualan/surat-jalan/tambah?fakturPenjualanId=${invoice.id}`} variant="primary">+ Surat Jalan</Button>
             )}
             <PrintButton documentType="invoice" documentId={invoice.id} />
+            {invoice.status !== "draft" && invoice.status !== "cancelled" && (
+              <VoidButton id={invoice.id} action={voidSalesInvoice} />
+            )}
             <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
             <BackButton href="/penjualan/faktur" />
           </>
@@ -76,7 +90,7 @@ export default async function InvoiceDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Invoice detail tabs"
+        ariaLabel="Tab detail faktur"
         tabs={[
           {
             id: "info",
@@ -108,7 +122,7 @@ export default async function InvoiceDetailPage({
           },
           {
             id: "items",
-            label: "Items",
+            label: "Item",
             content: (
               <InvoiceItemsEditor
                 invoiceId={invoice.id}
@@ -127,8 +141,20 @@ export default async function InvoiceDetailPage({
                   unitPrice: Number(item.unitPrice),
                   discount: Number(item.discount ?? 0),
                   total: Number(item.total),
+                  uom: item.uom ?? null,
+                  serialNumbers: Array.isArray(item.serialNumbers)
+                    ? (item.serialNumbers as unknown[]).map((s) => String(s))
+                    : [],
                 }))}
-                availableItems={availableItems.map((i) => ({ id: i.id, name: i.name, sku: i.sku, price: Number(i.price ?? 0) }))}
+                availableItems={availableItems.map((i) => ({
+                  id: i.id,
+                  name: i.name,
+                  sku: i.sku,
+                  price: Number(i.price ?? 0),
+                  unitOfMeasure: i.unitOfMeasure,
+                  trackSerial: i.trackSerial,
+                  uomConversions: i.uomConversions.map((c) => ({ code: c.code, factorToBase: Number(c.factorToBase) })),
+                }))}
                 paidAmount={Number(invoice.paidAmount ?? 0)}
                 editable={invoice.status !== "paid" && invoice.status !== "cancelled"}
               />
@@ -136,15 +162,15 @@ export default async function InvoiceDetailPage({
           },
           {
             id: "down-payment",
-            label: "Down Payment",
+            label: "Uang Muka",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Down Payment</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Uang Muka</h2>
                 </div>
                 <div className="p-4 px-5">
                   {(!invoice.quotation?.downPayments || invoice.quotation.downPayments.length === 0) ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada down payment</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada uang muka</p>
                   ) : (
                     <>
                       <DetailTable>
@@ -160,7 +186,7 @@ export default async function InvoiceDetailPage({
                             <DetailTableRow key={dp.id}>
                               <DetailTableTd className="font-mono">{dp.documentNo}</DetailTableTd>
                               <DetailTableTd>{formatDate(dp.paymentDate)}</DetailTableTd>
-                              <DetailTableTd>{dp.paymentMethod || "-"}</DetailTableTd>
+                              <DetailTableTd>{resolvePaymentMethodName(dp.paymentMethod, pmMap)}</DetailTableTd>
                               <DetailTableTd><StatusChip status={dp.status} /></DetailTableTd>
                               <DetailTableTd align="right">{formatCurrency(Number(dp.amount))}</DetailTableTd>
                             </DetailTableRow>
@@ -195,12 +221,12 @@ export default async function InvoiceDetailPage({
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Pembayaran</h2>
                   {(invoice.status === "posted" || invoice.status === "partial") && (
-                    <Link href={`/penjualan/pembayaran/tambah?fakturId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Terima Bayar</Link>
+                    <Link href={`/penjualan/pembayaran/tambah?invoiceId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Terima Bayar</Link>
                   )}
                 </div>
                 <div className="p-4 px-5">
                   {invoice.payments.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada pembayaran</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pembayaran</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -214,7 +240,7 @@ export default async function InvoiceDetailPage({
                           <DetailTableRow key={pay.id}>
                             <DetailTableTd className="font-mono">{pay.documentNo}</DetailTableTd>
                             <DetailTableTd>{formatDate(pay.paymentDate)}</DetailTableTd>
-                            <DetailTableTd>{pay.paymentMethod}</DetailTableTd>
+                            <DetailTableTd>{resolvePaymentMethodName(pay.paymentMethod, pmMap)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(pay.amount))}</DetailTableTd>
                           </DetailTableRow>
                         ))}

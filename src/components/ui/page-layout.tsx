@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@heroui/react"
+import { cn } from "@/lib/utils"
 
 export function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={cn("flex flex-col gap-6", className)}>{children}</div>
@@ -15,5 +15,5 @@ export function PageTitle({ children, className }: { children: React.ReactNode; 
 }
 
 export function PageSubtitle({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <p className={cn("text-[0.9375rem] text-muted mt-1", className)}>{children}</p>
+  return <p className={cn("text-[0.9375rem] text-muted-foreground mt-1", className)}>{children}</p>
 }

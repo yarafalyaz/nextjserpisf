@@ -39,14 +39,14 @@ export default async function WarehouseDetailPage({
       <PageHeader
         title={warehouse.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Warehouses", href: "/master/gudang" },
+          { label: "Gudang", href: "/master/gudang" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/gudang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/gudang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <BackButton href="/master/gudang" />
           </>
         }
@@ -75,7 +75,7 @@ export default async function WarehouseDetailPage({
                 {/* Racks */}
                 <DetailSection title="Rak">
                   {warehouse.racks.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada rak</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada rak</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -109,14 +109,14 @@ export default async function WarehouseDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {stockMoves.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada pergerakan stok</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pergerakan stok</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
                         <DetailTableTh>No. Dokumen</DetailTableTh>
                         <DetailTableTh>Item</DetailTableTh>
                         <DetailTableTh>Impact</DetailTableTh>
-                        <DetailTableTh align="right">Qty</DetailTableTh>
+                        <DetailTableTh align="right">Jml</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>
                       </DetailTableHead>
                       <DetailTableBody>

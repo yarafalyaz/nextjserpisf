@@ -99,7 +99,7 @@ export const notificationService = {
   async checkAndNotifyLowStock(item: LowStockItem): Promise<void> {
     if (item.minStock > 0 && item.qtyOnHand <= item.minStock) {
       await this.notifyAdmins(
-        `⚠️ Stok ${item.name} Menipis`,
+        `Stok ${item.name} Menipis`,
         `Stok saat ini: ${item.qtyOnHand} (Minimum: ${item.minStock}). Segera lakukan pembelian.`,
         'warning'
       )
@@ -117,7 +117,7 @@ export const notificationService = {
     })
 
     await this.notifyAdmins(
-      `🔴 Invoice ${invoice.documentNo} Jatuh Tempo`,
+      `Invoice ${invoice.documentNo} Jatuh Tempo`,
       `Jatuh tempo: ${due}. Sisa: Rp ${remaining.toLocaleString('id-ID')}${invoice.customerName ? ` (${invoice.customerName})` : ''}`,
       'danger'
     )
@@ -131,7 +131,7 @@ export const notificationService = {
     const dept = employee.departmentName ? ` (${employee.departmentName})` : ''
 
     await this.notifyAdmins(
-      `⏰ ${employee.name}${dept} Telat Masuk`,
+      `${employee.name}${dept} Telat Masuk`,
       `Check-in: ${checkInTime}${scheduledTime ? ` (Jadwal: ${scheduledTime})` : ''}`,
       'warning'
     )
@@ -142,15 +142,15 @@ export const notificationService = {
    * Mirrors Laravel: document-ready notifications from DP observer.
    */
   async notifyDocumentReady(type: DocumentType, documentNo: string, context?: string): Promise<void> {
-    const labels: Record<DocumentType, { emoji: string; label: string }> = {
-      WorkOrder:     { emoji: '🔧', label: 'Work Order' },
-      SalesOrder:    { emoji: '📋', label: 'Sales Order' },
-      SalesInvoice:  { emoji: '🧾', label: 'Invoice' },
+    const labels: Record<DocumentType, { label: string }> = {
+      WorkOrder:     { label: 'Work Order' },
+      SalesOrder:    { label: 'Sales Order' },
+      SalesInvoice:  { label: 'Invoice' },
     }
-    const info = labels[type] ?? { emoji: '📄', label: type }
+    const info = labels[type] ?? { label: type }
 
     await this.notifyAdmins(
-      `${info.emoji} ${info.label} Siap: ${documentNo}`,
+      `${info.label} Siap: ${documentNo}`,
       `${info.label} ${documentNo} telah dibuat otomatis.${context ? ` ${context}` : ''}`,
       'info'
     )

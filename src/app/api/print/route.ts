@@ -2,6 +2,15 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { auth } from "@/lib/auth/auth"
+import { hasPermission } from "@/lib/auth/permissions"
+import { paymentMethodLabel, shippingMethodLabel } from "@/lib/utils/method-labels"
+
+const PRINT_PERMISSION: Record<string, string> = {
+  invoice: "view_sales_invoices",
+  quotation: "view_quotations",
+  order: "view_sales_orders",
+  "work-order": "view_work_orders",
+}
 
 export async function GET(request: Request) {
   const session = await auth()
@@ -15,6 +24,12 @@ export async function GET(request: Request) {
 
   if (!type || !idStr) {
     return NextResponse.json({ error: "Tipe atau ID tidak ditemukan" }, { status: 400 })
+  }
+
+  // Permission check per document type (prevents IDOR — any user reading any doc by id)
+  const requiredPerm = PRINT_PERMISSION[type]
+  if (requiredPerm && !(await hasPermission(requiredPerm))) {
+    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
   }
 
   const id = Number(idStr)
@@ -63,7 +78,7 @@ export async function GET(request: Request) {
         summary: {
           subtotal: Number(doc.subtotal),
           discount: Number(doc.discount || 0),
-          tax: Number(doc.tax || 0),
+          tax: Number(doc.taxAmount || 0),
           total: Number(doc.grandTotal),
         },
       })
@@ -93,6 +108,14 @@ export async function GET(request: Request) {
       const vehicleModel = doc.customerVehicle?.vehicle?.variant?.model
       const vehicleName = vehicleModel ? `${vehicleModel.brand?.name ?? ""} ${vehicleModel.name}`.trim() : ""
 
+      // Resolve method names from master data (fallback to static labels for legacy codes)
+      const [pmRow, smRow] = await Promise.all([
+        doc.paymentMethod ? prisma.paymentMethod.findUnique({ where: { code: doc.paymentMethod }, select: { name: true } }) : null,
+        doc.shippingMethod ? prisma.shippingMethod.findUnique({ where: { code: doc.shippingMethod }, select: { name: true } }) : null,
+      ])
+      const paymentMethodText = pmRow?.name ?? paymentMethodLabel(doc.paymentMethod)
+      const shippingMethodText = smRow?.name ?? shippingMethodLabel(doc.shippingMethod)
+
       return NextResponse.json({
         company: companyInfo,
         docInfo: {
@@ -105,8 +128,8 @@ export async function GET(request: Request) {
           customerPhone: doc.customer.phone || "",
           vehicleName,
           plateNumber: doc.customerVehicle?.licensePlate || doc.customerVehicle?.vehicle?.plateNumber || "-",
-          paymentMethod: doc.paymentMethod || "",
-          shippingMethod: doc.shippingMethod || "",
+          paymentMethod: paymentMethodText,
+          shippingMethod: shippingMethodText,
           footerNotes: settings.quotationFooterNotes || "",
           signatureName: settings.quotationSignatureName || "",
           notes: doc.notes || "",

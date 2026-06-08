@@ -36,14 +36,14 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/aset/merek/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Brand Aset" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Merek Aset" })).toBeVisible({ timeout: 15000 })
     await waitForHydration(page)
 
     const nameInput = page.locator("#name")
     await expect(nameInput).toBeVisible({ timeout: 10000 })
     await nameInput.fill(name)
     await expect(nameInput).toHaveValue(name)
-    await page.getByRole("button", { name: /(Simpan|Update)/ }).click()
+    await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await page.waitForURL("**/aset/merek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
@@ -71,13 +71,13 @@ test.describe("Aset Brand (Merek) CRUD", () => {
 
     // Open ActionDropdown → Edit
     await rowForEdit.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+    await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/aset\/merek\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await waitForHydration(page)
-    await page.getByRole("button", { name: /(Simpan|Update)/ }).click()
+    await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await page.waitForURL("**/aset/merek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
+import { onSalesInvoicePosted } from "@/lib/hooks/accounting.hook";
 
 /**
  * Down Payment Hook - Observer pattern replacement.
@@ -33,8 +34,12 @@ export async function onDownPaymentConfirmed(
   userId?: number
 ): Promise<void> {
   const readyDocuments: Array<{ type: "WorkOrder" | "SalesOrder" | "SalesInvoice"; documentNo: string; context: string }> = []
+  let postedInvoiceId: number | null = null
 
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent confirmDownPayment calls so the idempotency checks below
+    // cannot both pass and double-create WO/SO/Invoice (+ double revenue).
+    await tx.$queryRaw`SELECT id FROM down_payments WHERE id = ${dpId} FOR UPDATE`;
     const dp = await tx.downPayment.findUniqueOrThrow({
       where: { id: dpId },
       include: {
@@ -54,7 +59,6 @@ export async function onDownPaymentConfirmed(
 
     // Guard: already confirmed — silent skip (idempotency)
     if (dp.status === "confirmed") {
-      console.log(`[DownPayment] Skipping: DP ${dp.documentNo} already confirmed.`);
       return;
     }
 
@@ -73,21 +77,18 @@ export async function onDownPaymentConfirmed(
       where: { quotationId: quotation.id },
     });
     if (existingWO) {
-      console.log(`[DownPayment] Skipping idempotent: WO already exists for quotation ${quotation.documentNo}`);
       return;
     }
     const existingSO = await tx.salesOrder.findFirst({
       where: { quotationId: quotation.id },
     });
     if (existingSO) {
-      console.log(`[DownPayment] Skipping idempotent: SO already exists for quotation ${quotation.documentNo}`);
       return;
     }
     const existingInv = await tx.salesInvoice.findFirst({
       where: { quotationId: quotation.id },
     });
     if (existingInv) {
-      console.log(`[DownPayment] Skipping idempotent: Invoice already exists for quotation ${quotation.documentNo}`);
       return;
     }
 
@@ -111,8 +112,12 @@ export async function onDownPaymentConfirmed(
     
     try {
       for (const item of allItems) {
-        // Cari produk BOM berdasarkan nama item/deskripsi quotation
-        const matchedProduct = await tx.product.findFirst({
+        // Cari produk BOM berdasarkan nama item/deskripsi quotation. Lewati jika
+        // nama kosong — `contains: ""` akan cocok dengan produk pertama mana pun
+        // dan menghasilkan catatan BOM yang salah.
+        const matchedProduct = item.itemName.trim() === ""
+          ? null
+          : await tx.product.findFirst({
           where: {
             name: {
               contains: item.itemName,
@@ -311,6 +316,27 @@ export async function onDownPaymentConfirmed(
       });
     }
 
+    // Record the DP as a SalesPayment so later payment recalculation includes it
+    // (recalc sums SalesPayment rows; without this, paidAmount would be overwritten
+    // and the DP "lost"). No payment journal here — the cash was already journaled
+    // at down-payment receipt (onDownPaymentReceived), so adding one would double cash.
+    if (Number(dp.amount) > 0) {
+      const payDocNo = await generateDocumentNumber("PAY");
+      await tx.salesPayment.create({
+        data: {
+          documentNo: payDocNo,
+          salesInvoiceId: invoice.id,
+          customerId: quotation.customerId,
+          amount: dp.amount,
+          paymentDate: new Date(),
+          paymentMethod: "down_payment",
+          notes: `Uang muka dari DP ${dp.documentNo}`,
+          createdBy: userId ?? null,
+        },
+      });
+    }
+    postedInvoiceId = invoice.id;
+
     // ─── 5. Update Down Payment status ───────────────────────────────
     await tx.downPayment.update({
       where: { id: dpId },
@@ -334,5 +360,11 @@ export async function onDownPaymentConfirmed(
 
   for (const doc of readyDocuments) {
     await notificationService.notifyDocumentReady(doc.type, doc.documentNo, doc.context)
+  }
+
+  // Recognize revenue + COGS + stock-out for the auto-generated invoice (it is
+  // created already "posted", so trigger the posting hook once after commit).
+  if (postedInvoiceId !== null) {
+    await onSalesInvoicePosted(postedInvoiceId, userId)
   }
 }

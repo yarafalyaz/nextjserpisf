@@ -4,7 +4,12 @@ import { useRouter } from "next/navigation"
 import { useTransition, useMemo, useState } from "react"
 import { createCustomerVehicle, updateCustomerVehicle } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label, Checkbox, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -80,7 +85,7 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
 
         if (vehicle?.id) {
           await updateCustomerVehicle(vehicle.id, formData)
-          showSuccess("Kendaraan berhasil diupdate")
+          showSuccess("Kendaraan berhasil diperbarui")
         } else {
           await createCustomerVehicle(formData)
           showSuccess("Kendaraan berhasil ditambahkan")
@@ -98,84 +103,42 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
       <FormCard>
         <FormSection title="Informasi Kendaraan">
           <div className="flex flex-col gap-1.5">
-            <ComboBox
-              selectedKey={selectedBrandId ? String(selectedBrandId) : null}
-              onSelectionChange={(key) => {
+            <Label>Merek Kendaraan *</Label>
+            <Combobox
+              value={selectedBrandId ? String(selectedBrandId) : null}
+              onChange={(key) => {
                 setSelectedBrandId(key ? Number(key) : null)
                 setSelectedModelId(null)
                 setSelectedVariantId(null)
               }}
-              className="w-full"
-            >
-              <Label>Brand Kendaraan *</Label>
-              <ComboBox.InputGroup>
-                <Input placeholder="Cari brand..." />
-                <ComboBox.Trigger />
-              </ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {brands.map((brand) => (
-                    <ListBox.Item key={brand.id} id={String(brand.id)} textValue={brand.name}>
-                      {brand.name}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+              placeholder="Cari merek..."
+              options={brands.map((brand) => ({ value: String(brand.id), label: brand.name }))}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <ComboBox
-              selectedKey={selectedModelId ? String(selectedModelId) : null}
-              onSelectionChange={(key) => {
+            <Label>Model Kendaraan *</Label>
+            <Combobox
+              value={selectedModelId ? String(selectedModelId) : null}
+              onChange={(key) => {
                 setSelectedModelId(key ? Number(key) : null)
                 setSelectedVariantId(null)
               }}
-              className="w-full"
-              isDisabled={!selectedBrandId}
-            >
-              <Label>Model Kendaraan *</Label>
-              <ComboBox.InputGroup>
-                <Input placeholder="Cari model..." />
-                <ComboBox.Trigger />
-              </ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {models.map((model) => (
-                    <ListBox.Item key={model.id} id={String(model.id)} textValue={model.name}>
-                      {model.name}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+              disabled={!selectedBrandId}
+              placeholder="Cari model..."
+              options={models.map((model) => ({ value: String(model.id), label: model.name }))}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <ComboBox
-              selectedKey={selectedVariantId ? String(selectedVariantId) : null}
-              onSelectionChange={(key) => setSelectedVariantId(key ? Number(key) : null)}
-              className="w-full"
-              isDisabled={!selectedModelId}
-            >
-              <Label>Varian *</Label>
-              <ComboBox.InputGroup>
-                <Input placeholder="Cari varian..." />
-                <ComboBox.Trigger />
-              </ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {variants.map((variant) => (
-                    <ListBox.Item key={variant.id} id={String(variant.id)} textValue={variant.name}>
-                      {variant.name}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label>Varian *</Label>
+            <Combobox
+              value={selectedVariantId ? String(selectedVariantId) : null}
+              onChange={(key) => setSelectedVariantId(key ? Number(key) : null)}
+              disabled={!selectedModelId}
+              placeholder="Cari varian..."
+              options={variants.map((variant) => ({ value: String(variant.id), label: variant.name }))}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -201,21 +164,18 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Select
-              selectedKey={vehicle?.transmission || null}
+            <Label htmlFor="transmission">Transmisi</Label>
+            <FormSelect
+              id="transmission"
               name="transmission"
-              className="w-full"
-            >
-              <Label>Transmisi</Label>
-              <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Transmisi"}</Select.Value><Select.Indicator /></Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="manual" textValue="Manual">Manual<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item id="automatic" textValue="Automatic">Automatic<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item id="cvt" textValue="CVT">CVT<ListBox.ItemIndicator /></ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
+              defaultValue={vehicle?.transmission || undefined}
+              placeholder="Pilih Transmisi"
+              options={[
+                { value: "manual", label: "Manual" },
+                { value: "automatic", label: "Otomatis" },
+                { value: "cvt", label: "CVT" },
+              ]}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -232,25 +192,19 @@ export function CustomerVehicleForm({ customerId, brands, vehicle }: CustomerVeh
         <FormSection title="Lainnya" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
-            <TextArea id="notes" name="notes" defaultValue={vehicle?.notes || ""} rows={3} placeholder="Catatan tambahan..." />
+            <Textarea id="notes" name="notes" defaultValue={vehicle?.notes || ""} rows={3} placeholder="Catatan tambahan..." />
           </div>
 
           <div className="flex items-center gap-2">
-            <Checkbox isSelected={isActive} onChange={setIsActive} id="isActive">
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              <Checkbox.Content>
-                <Label htmlFor="isActive">Aktif</Label>
-              </Checkbox.Content>
-            </Checkbox>
+            <Checkbox id="isActive" checked={isActive} onCheckedChange={(checked) => setIsActive(checked === true)} />
+            <Label htmlFor="isActive">Aktif</Label>
           </div>
         </FormSection>
 
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : vehicle?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : vehicle?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

@@ -30,7 +30,6 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     await page.keyboard.press("Enter")
 
     await page.locator("#name").fill(name)
-    await page.locator("input[name='date'][type='date']").fill("2026-12-24")
     await waitForHydration(page)
     await page.locator("#submit-department-holiday").click()
 
@@ -42,13 +41,12 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     const row = page.locator("tr").filter({ hasText: name }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+    await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/sdm\/hari-libur-departemen\/\d+\/ubah/, { timeout: 20000 })
     await page.waitForLoadState("networkidle")
 
     await page.locator("#name").fill(updated)
-    await page.locator("input[name='date'][type='date']").fill("2026-12-25")
     await waitForHydration(page)
     await page.locator("#submit-department-holiday").click()
 

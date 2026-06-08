@@ -70,7 +70,7 @@ test.describe("Kendaraan Model CRUD", () => {
     await page.waitForTimeout(1000)
     await editBrandInput.press("ArrowDown")
     await editBrandInput.press("Enter")
-    await page.getByRole("button", { name: /^Update$/ }).first().click()
+    await page.getByRole("button", { name: /^Update$|^Perbarui$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/model", { timeout: 20000 })
     await page.goto(`/kendaraan/model?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })

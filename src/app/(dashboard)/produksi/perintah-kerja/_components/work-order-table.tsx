@@ -23,7 +23,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. WO",
     cell: (info) => (
-      <Link href={`/produksi/perintah-kerja/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/produksi/perintah-kerja/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -59,16 +59,20 @@ const columns = [
 
 interface WorkOrderTableProps {
   data: WorkOrder[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function WorkOrderTable({ data }: WorkOrderTableProps) {
+export function WorkOrderTable({ data, toolbar, filters }: WorkOrderTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar work order"
+      ariaLabel="Daftar perintah kerja"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("workOrder", ids)}
     />
   )

@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { createStockAdjustment, updateStockAdjustment } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label, ComboBox, ListBox, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -26,7 +28,7 @@ interface AdjItem {
 export function StockAdjustmentForm({ warehouses, items, adjustment }: AdjustmentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [warehouseId, setWarehouseId] = useState("")
+  const [warehouseId, setWarehouseId] = useState(adjustment?.warehouseId ? String(adjustment.warehouseId) : "")
   const [type, setType] = useState(adjustment?.type ?? "increase")
   const [adjItems, setAdjItems] = useState<AdjItem[]>([{ itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "" }])
 
@@ -71,7 +73,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
           await createStockAdjustment(formData)
 
         }
-        showSuccess(adjustment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(adjustment?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/inventaris/penyesuaian")
         router.refresh()
       } catch (error) {
@@ -85,37 +87,37 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <ComboBox
-              selectedKey={warehouseId || null}
-              onSelectionChange={(key) => setWarehouseId(String(key))}
-              className="w-full"
-            >
-              <Label>Gudang *</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari gudang..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {warehouses.map((w) => (
-                    <ListBox.Item key={w.id} id={String(w.id)} textValue={w.name}>{w.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label htmlFor="warehouseId">Gudang *</Label>
+            <Combobox
+              id="warehouseId"
+              value={warehouseId || null}
+              onChange={(key) => setWarehouseId(key ?? "")}
+              placeholder="Cari gudang..."
+              options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Tipe *</Label>
-            <select name="type" value={type} onChange={(e) => setType(e.target.value)} className="form-input">
-              <option value="increase">Increase</option>
-              <option value="decrease">Decrease</option>
-              <option value="recount">Recount</option>
-              <option value="correction">Correction</option>
-            </select>
+            <Combobox
+              name="type"
+              value={type}
+              onChange={(key) => setType(key ?? "")}
+              placeholder="Cari tipe..."
+              className="w-full"
+              options={[
+                { value: "increase", label: "Penambahan" },
+                { value: "decrease", label: "Pengurangan" },
+                { value: "recount", label: "Hitung Ulang" },
+                { value: "correction", label: "Koreksi" },
+              ]}
+            />
           </div>
         </FormSection>
 
         <FormSection title="Catatan" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="stock-adjustment-notes">Catatan</Label>
-            <TextArea id="stock-adjustment-notes" name="notes" placeholder="Catatan tambahan (opsional)" defaultValue={adjustment?.notes || ""} />
+            <Textarea id="stock-adjustment-notes" name="notes" placeholder="Catatan tambahan (opsional)" defaultValue={adjustment?.notes || ""} />
           </div>
         </FormSection>
 
@@ -141,10 +143,13 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
                   {adjItems.map((item, i) => (
                     <tr key={i} className="border-b border-default/50">
                       <td className="py-2 px-2">
-                        <select value={item.itemId} onChange={(e) => updateItem(i, "itemId", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }}>
-                          <option value={0}>Pilih Item</option>
-                          {items.map((it) => <option key={it.id} value={it.id}>{it.sku} - {it.name}</option>)}
-                        </select>
+                        <Combobox
+                          value={item.itemId ? String(item.itemId) : null}
+                          onChange={(key) => updateItem(i, "itemId", key ?? "")}
+                          placeholder="Pilih Item"
+                          className="w-full"
+                          options={items.map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name}` }))}
+                        />
                       </td>
                       <td className="py-2 px-2 text-right">{item.currentQty}</td>
                       <td className="py-2 px-2"><input type="number" value={item.newQty} onChange={(e) => updateItem(i, "newQty", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "80px" }} /></td>
@@ -168,7 +173,7 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : adjustment?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : adjustment?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

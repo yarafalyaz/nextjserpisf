@@ -23,19 +23,19 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/pembayaran/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/pembayaran/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
   }),
   columnHelper.accessor((row) => row.salesInvoice.documentNo, {
     id: "invoiceNo",
-    header: "Invoice",
+    header: "Faktur",
     cell: (info) => <span className="font-mono">{info.getValue()}</span>,
   }),
   columnHelper.accessor((row) => row.salesInvoice.customer.name, {
     id: "customerName",
-    header: "Customer",
+    header: "Pelanggan",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("paymentDate", {
@@ -75,6 +75,8 @@ export function PaymentTable({ data }: PaymentTableProps) {
       ariaLabel="Daftar pembayaran sales"
       pageSize={20}
       selectable={true}
+      searchColumn="documentNo"
+      searchPlaceholder="Cari no. dokumen atau pelanggan..."
       onBulkDelete={(ids) => bulkDelete("salesPayment", ids)}
     />
   )

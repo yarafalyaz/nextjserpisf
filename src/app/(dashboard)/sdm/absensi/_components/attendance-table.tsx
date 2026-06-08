@@ -5,7 +5,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatDate } from "@/lib/utils/format"
-import { Chip } from "@heroui/react"
+import { Badge } from "@/components/ui/shadcn/badge"
 import { MapPin, Clock } from "lucide-react"
 
 interface AttendanceData {
@@ -63,11 +63,11 @@ const columns = [
       const row = info.row.original
       const hasCheckInGps = row.checkInLatitude !== null && row.checkInLongitude !== null
       const hasCheckOutGps = row.checkOutLatitude !== null && row.checkOutLongitude !== null
-      if (!hasCheckInGps && !hasCheckOutGps) return <span className="text-muted">-</span>
+      if (!hasCheckInGps && !hasCheckOutGps) return <span className="text-muted-foreground">-</span>
       return (
-        <Chip size="sm" variant="soft" color="success">
+        <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
           <span className="inline-flex items-center gap-1"><MapPin size={12} />{hasCheckInGps && hasCheckOutGps ? "Masuk/Pulang" : hasCheckInGps ? "Masuk" : "Pulang"}</span>
-        </Chip>
+        </Badge>
       )
     },
   }),
@@ -76,14 +76,21 @@ const columns = [
     header: "Lembur",
     cell: (info) => {
       const row = info.row.original
-      if (!row.overtimeMinutes || row.overtimeMinutes <= 0) return <span className="text-muted">-</span>
+      if (!row.overtimeMinutes || row.overtimeMinutes <= 0) return <span className="text-muted-foreground">-</span>
       const jam = Math.floor(row.overtimeMinutes / 60)
       const menit = row.overtimeMinutes % 60
       const label = jam > 0 ? (menit > 0 ? `${jam} jam ${menit} menit` : `${jam} jam`) : `${menit} menit`
       return (
-        <Chip size="sm" variant="soft" color={row.overtimeApproved ? "success" : "warning"}>
+        <Badge
+          variant="outline"
+          className={
+            row.overtimeApproved
+              ? "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+              : "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+          }
+        >
           <span className="inline-flex items-center gap-1"><Clock size={12} />{label}</span>
-        </Chip>
+        </Badge>
       )
     },
   }),
@@ -92,7 +99,7 @@ const columns = [
     header: "Terlambat",
     cell: (info) => {
       const lateMinutes = info.row.original.lateMinutes ?? 0
-      if (lateMinutes <= 0) return <span className="text-muted">-</span>
+      if (lateMinutes <= 0) return <span className="text-muted-foreground">-</span>
       return <span className="text-warning font-medium">{lateMinutes} mnt</span>
     },
   }),
@@ -120,6 +127,8 @@ export function AttendanceTable({ data }: AttendanceTableProps) {
       ariaLabel="Daftar absensi"
       pageSize={20}
       selectable={false}
+      searchColumn="employee"
+      searchPlaceholder="Cari nama karyawan..."
     />
   )
 }

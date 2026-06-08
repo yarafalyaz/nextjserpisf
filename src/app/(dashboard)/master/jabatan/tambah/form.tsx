@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createPosition, updatePosition } from "@/actions/master.actions"
-import { Input, Select, ListBox, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/page-header"
 
 interface PositionCreateFormProps {
@@ -46,22 +48,21 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Select name="departmentId" defaultSelectedKey={position?.departmentId ? String(position.departmentId) : undefined} className="w-full">
-            <Label htmlFor="departmentId">Departemen</Label>
-            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Departemen"}</Select.Value><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {departments.map((d) => <ListBox.Item key={String(d.id)} id={String(d.id)} textValue={d.name}>{d.name}<ListBox.ItemIndicator /></ListBox.Item>)}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Label htmlFor="departmentId">Departemen</Label>
+          <FormSelect
+            id="departmentId"
+            name="departmentId"
+            defaultValue={position?.departmentId ? String(position.departmentId) : undefined}
+            placeholder="Pilih Departemen"
+            options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+          />
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" variant="primary" isDisabled={isPending} id="submit-position">
-          {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

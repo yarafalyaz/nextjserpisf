@@ -16,13 +16,13 @@ export default async function CreateProductionOrderPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Manufacturing", href: "/produksi" },
-  { label: "Production Orders", href: "/produksi/production-orders" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Manufaktur", href: "/produksi" },
+  { label: "Perintah Produksi", href: "/produksi/production-orders" },
+  { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Production Order</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Perintah Produksi</h1>
       </div>
       <ProductionOrderForm products={products} />
     </div>

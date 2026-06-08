@@ -23,7 +23,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/lembar-waktu/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/lembar-waktu/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -63,9 +63,11 @@ export function TimesheetTable({ data }: TimesheetTableProps) {
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar timesheet"
+      ariaLabel="Daftar lembar waktu"
       pageSize={20}
       selectable={true}
+      searchColumn="employeeName"
+      searchPlaceholder="Cari nama karyawan..."
       onBulkDelete={(ids) => bulkDelete("timesheet", ids)}
     />
   )

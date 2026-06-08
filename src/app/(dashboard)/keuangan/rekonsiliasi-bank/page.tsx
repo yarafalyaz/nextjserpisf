@@ -1,4 +1,3 @@
-import { } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -42,12 +41,12 @@ export default async function BankReconciliationPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/keuangan" },
-  { label: "Bank Reconciliation" },
+  { label: "Dasbor", href: "/" },
+  { label: "Keuangan", href: "/keuangan" },
+  { label: "Rekonsiliasi Bank" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Bank Reconciliation</h1>
+        <h1 className="text-2xl font-bold text-foreground">Rekonsiliasi Bank</h1>
         <Link href="/keuangan/rekonsiliasi-bank/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-recon-btn">
           + Buat Rekonsiliasi
         </Link>
@@ -74,16 +73,16 @@ export default async function BankReconciliationPage({
         <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
-              <DetailTableTh>Tanggal Statement</DetailTableTh>
-              <DetailTableTh>Saldo Statement</DetailTableTh>
-              <DetailTableTh>Matched Items</DetailTableTh>
+              <DetailTableTh>Tanggal Laporan</DetailTableTh>
+              <DetailTableTh>Saldo Laporan</DetailTableTh>
+              <DetailTableTh>Item Tercocok</DetailTableTh>
               <DetailTableTh>Status</DetailTableTh>
               <DetailTableTh>Dibuat</DetailTableTh>
               <DetailTableTh>Aksi</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {reconciliations.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 px-4 text-muted">Tidak ada data rekonsiliasi</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 px-4 text-muted-foreground">Tidak ada data rekonsiliasi</DetailTableTd></DetailTableRow>
               ) : (
                 reconciliations.map((r) => (
                   <DetailTableRow key={r.id}>
@@ -104,7 +103,7 @@ export default async function BankReconciliationPage({
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between p-3 px-5 border-t border-default">
-            <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
+            <span className="text-[0.8125rem] text-muted-foreground">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
               {page > 1 && <Link href={`/keuangan/rekonsiliasi-bank?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
               {page < totalPages && <Link href={`/keuangan/rekonsiliasi-bank?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}

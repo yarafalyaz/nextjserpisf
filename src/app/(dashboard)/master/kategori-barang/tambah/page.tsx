@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createItemCategory } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Input, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateItemCategoryPage() {
@@ -24,10 +25,10 @@ export default function CreateItemCategoryPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Item Categories", href: "/master/kategori-barang" },
-  { label: "Create" },
+  { label: "Kategori Barang", href: "/master/kategori-barang" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Kategori Barang</h1>

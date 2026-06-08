@@ -47,7 +47,7 @@ export function NotificationsWidget() {
           <Bell size={16} className="text-foreground" />
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Notifikasi Aktif</h2>
         </div>
-        <div className="px-5 py-10 text-center text-sm text-muted">Memuat...</div>
+        <div className="px-5 py-10 text-center text-sm text-muted-foreground">Memuat...</div>
       </div>
     )
   }
@@ -67,7 +67,7 @@ export function NotificationsWidget() {
       icon: FileText,
       label: "Invoice Overdue",
       count: data.overdueInvoiceCount,
-      href: "/penjualan/tagihan",
+      href: "/penjualan/faktur",
       color: "text-danger",
       bg: "bg-danger/10",
     },
@@ -75,7 +75,7 @@ export function NotificationsWidget() {
       icon: ClipboardCheck,
       label: "Pending Approval",
       count: data.pendingApprovalCount,
-      href: "/persetujuan",
+      href: "/pengaturan/persetujuan",
       color: "text-info",
       bg: "bg-info/10",
     },
@@ -83,7 +83,7 @@ export function NotificationsWidget() {
       icon: Clock,
       label: "Telat Absen",
       count: data.lateAttendanceCount,
-      href: "/hrm/absensi",
+      href: "/sdm/absensi",
       color: "text-warning",
       bg: "bg-warning/10",
     },
@@ -107,10 +107,10 @@ export function NotificationsWidget() {
             <div className={`flex items-center justify-center w-10 h-10 rounded-lg ${alert.bg}`}>
               <alert.icon size={18} className={alert.color} />
             </div>
-            <span className={`text-lg font-bold ${alert.count > 0 ? alert.color : "text-muted"}`}>
+            <span className={`text-lg font-bold ${alert.count > 0 ? alert.color : "text-muted-foreground"}`}>
               {alert.count}
             </span>
-            <span className="text-[0.6875rem] text-muted text-center leading-tight">{alert.label}</span>
+            <span className="text-[0.6875rem] text-muted-foreground text-center leading-tight">{alert.label}</span>
           </a>
         ))}
       </div>
@@ -119,8 +119,8 @@ export function NotificationsWidget() {
       {data.latestNotifications && data.latestNotifications.length > 0 && (
         <div className="border-t border-default">
           <div className="px-5 py-3 flex items-center gap-1.5">
-            <Bell size={13} className="text-muted" />
-            <span className="text-xs font-semibold text-muted uppercase tracking-wide">Notifikasi Terbaru</span>
+            <Bell size={13} className="text-muted-foreground" />
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notifikasi Terbaru</span>
           </div>
           <div className="divide-y divide-default">
             {data.latestNotifications.slice(0, 3).map((notif) => (
@@ -133,8 +133,8 @@ export function NotificationsWidget() {
                 }`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-foreground font-medium truncate">{notif.title}</p>
-                  <p className="text-[0.6875rem] text-muted mt-0.5 truncate">{notif.body}</p>
-                  <p className="text-[0.6875rem] text-muted mt-0.5">
+                  <p className="text-[0.6875rem] text-muted-foreground mt-0.5 truncate">{notif.body}</p>
+                  <p className="text-[0.6875rem] text-muted-foreground mt-0.5">
                     {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true, locale: idLocale })}
                   </p>
                 </div>
@@ -147,11 +147,11 @@ export function NotificationsWidget() {
       {/* Recent Activity */}
       <div className="border-t border-default">
         <div className="px-5 py-3 flex items-center gap-1.5">
-          <Clock size={13} className="text-muted" />
-          <span className="text-xs font-semibold text-muted uppercase tracking-wide">Aktivitas Terbaru</span>
+          <Clock size={13} className="text-muted-foreground" />
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Aktivitas Terbaru</span>
         </div>
         {data.recentActivities.length === 0 ? (
-          <div className="px-5 pb-4 text-xs text-muted">Belum ada aktivitas</div>
+          <div className="px-5 pb-4 text-xs text-muted-foreground">Belum ada aktivitas</div>
         ) : (
           <div className="divide-y divide-default">
             {data.recentActivities.map((act) => (
@@ -161,7 +161,7 @@ export function NotificationsWidget() {
                   <p className="text-xs text-foreground font-medium truncate">
                     {act.description || `${act.action} ${act.modelType}`}
                   </p>
-                  <p className="text-[0.6875rem] text-muted mt-0.5">
+                  <p className="text-[0.6875rem] text-muted-foreground mt-0.5">
                     {formatDistanceToNow(new Date(act.createdAt), { addSuffix: true, locale: idLocale })}
                   </p>
                 </div>

@@ -37,17 +37,17 @@ export default async function QuotationDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Quotation ${quotation.documentNo}`}
+        title={`Penawaran ${quotation.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/penjualan" },
-          { label: "Quotations", href: "/penjualan/penawaran" },
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Penawaran", href: "/penjualan/penawaran" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={quotation.status} />}
         actions={
           <>
-            <Button href={`/penjualan/penawaran/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/penjualan/penawaran/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
             {quotation.status === "approved" && (
               <Button href={`/penjualan/pesanan/tambah?penawaranId=${id}`} variant="primary">+ Pesanan Penjualan</Button>
@@ -99,7 +99,7 @@ export default async function QuotationDetailPage({
           },
           {
             id: "items",
-            label: "Items",
+            label: "Item",
             content: (
               <>
                 {/* Sections & Items */}
@@ -112,8 +112,8 @@ export default async function QuotationDetailPage({
                       <DetailTable>
                         <DetailTableHead>
                           <DetailTableTh>Deskripsi</DetailTableTh>
-                          <DetailTableTh align="right">Qty</DetailTableTh>
-                          <DetailTableTh>UoM</DetailTableTh>
+                          <DetailTableTh align="right">Jml</DetailTableTh>
+                          <DetailTableTh>Satuan</DetailTableTh>
                           <DetailTableTh align="right">Harga</DetailTableTh>
                           <DetailTableTh align="right">Diskon</DetailTableTh>
                           <DetailTableTh align="right">Total</DetailTableTh>
@@ -166,7 +166,7 @@ export default async function QuotationDetailPage({
           },
           {
             id: "history",
-            label: "History",
+            label: "Riwayat",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -174,11 +174,11 @@ export default async function QuotationDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {quotation.histories.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada riwayat</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada riwayat</p>
                   ) : (
                     quotation.histories.map((h) => (
                       <div key={h.id} className="py-2 border-b border-default text-[0.8125rem]">
-                        <strong>{h.action}</strong> — {h.description || ""} <span className="text-muted">({formatDate(h.createdAt)})</span>
+                        <strong>{h.action}</strong> — {h.description || ""} <span className="text-muted-foreground">({formatDate(h.createdAt)})</span>
                       </div>
                     ))
                   )}

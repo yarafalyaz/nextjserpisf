@@ -4,7 +4,8 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
-import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived } from "@/lib/hooks/accounting.hook"
+import type { TxClient } from "@/lib/db/prisma"
+import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived, deleteJournalByReference, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
 import { onDownPaymentConfirmed } from "@/lib/hooks/down-payment.hook"
 import { onSalesPaymentCreated as onSalesPaymentRecalculate, onSalesPaymentUpdated, onSalesPaymentDeleted } from "@/lib/hooks/sales-payment.hook"
 import { onSalesReturnCompleted as onSalesReturnStock } from "@/lib/hooks/sales-return.hook"
@@ -13,6 +14,7 @@ import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== QUOTATION ACTIONS ====================
 
@@ -87,6 +89,7 @@ export async function createQuotation(formData: FormData) {
     return q
   })
 
+  await logActivity("create", "Quotation", quotation.id, `Membuat penawaran #${quotation.id}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true, id: quotation.id }
 
@@ -114,6 +117,7 @@ export async function sendQuotation(quotationId: number) {
     data: { status: "sent" },
   })
 
+  await logActivity("send", "Quotation", quotationId, `Mengirim penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
@@ -144,6 +148,7 @@ export async function acceptQuotation(quotationId: number) {
   // Notify admins
   await notificationService.notifyAdmins('Penawaran diterima pelanggan', `/penjualan/penawaran/${quotationId}`)
 
+  await logActivity("accept", "Quotation", quotationId, `Menerima penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
@@ -172,6 +177,7 @@ export async function rejectQuotation(quotationId: number) {
     data: { status: "rejected" },
   })
 
+  await logActivity("reject", "Quotation", quotationId, `Menolak penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
@@ -232,6 +238,7 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
 
   await resyncOnEdit(quotationId)
 
+  await logActivity("revise", "Quotation", quotationId, `Merevisi penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
@@ -304,6 +311,7 @@ export async function convertQuotationToOrder(quotationId: number) {
     return so
   })
 
+  await logActivity("convert", "Quotation", quotationId, `Konversi penawaran #${quotationId} ke Sales Order #${salesOrder.id}`)
   revalidatePath("/penjualan/penawaran")
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
@@ -343,6 +351,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   // Re-sync linked SO/Invoice items
   await resyncOnEdit(quotationId)
 
+  await logActivity("update", "Quotation", quotationId, `Memperbarui penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
@@ -399,6 +408,7 @@ export async function createDownPayment(formData: FormData) {
   })
 
   await onDownPaymentReceived(dp.id, Number(user.id))
+  await logActivity("create", "DownPayment", dp.id, `Membuat uang muka #${dp.id}`)
   revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
 
@@ -415,6 +425,7 @@ export async function confirmDownPayment(dpId: number) {
 
   await onDownPaymentConfirmed(dpId, Number(user.id))
 
+  await logActivity("confirm", "DownPayment", dpId, `Konfirmasi uang muka #${dpId}`)
   revalidatePath("/penjualan/uang-muka")
   revalidatePath("/penjualan/faktur")
   revalidatePath("/penjualan/pesanan")
@@ -449,6 +460,7 @@ export async function createSalesOrder(formData: FormData) {
 
   const salesOrder = await prisma.salesOrder.create({ data })
 
+  await logActivity("create", "SalesOrder", salesOrder.id, `Membuat sales order #${salesOrder.id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
 
@@ -466,6 +478,7 @@ export async function confirmSalesOrder(id: number) {
   const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (so.status !== "draft") throw new Error("Sales Order hanya bisa dikonfirmasi dari status draft")
   await prisma.salesOrder.update({ where: { id }, data: { status: "confirmed" } })
+  await logActivity("confirm", "SalesOrder", id, `Konfirmasi sales order #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
   } catch (e: unknown) {
@@ -481,6 +494,7 @@ export async function processSalesOrder(id: number) {
   const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (so.status !== "confirmed") throw new Error("Sales Order hanya bisa diproses dari status confirmed")
   await prisma.salesOrder.update({ where: { id }, data: { status: "processing" } })
+  await logActivity("process", "SalesOrder", id, `Memproses sales order #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
   } catch (e: unknown) {
@@ -496,6 +510,7 @@ export async function completeSalesOrder(id: number) {
   const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (so.status !== "processing") throw new Error("Sales Order hanya bisa diselesaikan dari status processing")
   await prisma.salesOrder.update({ where: { id }, data: { status: "completed" } })
+  await logActivity("complete", "SalesOrder", id, `Menyelesaikan sales order #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
   } catch (e: unknown) {
@@ -524,6 +539,32 @@ export async function postInvoice(invoiceId: number) {
     throw new Error("Invoice tidak memiliki item")
   }
 
+  // Credit limit enforcement: block posting if it pushes the customer's
+  // outstanding receivable above their credit limit (0 = no limit).
+  const customer = await prisma.customer.findUnique({
+    where: { id: invoice.customerId },
+    select: { creditLimit: true, name: true },
+  })
+  const creditLimit = Number(customer?.creditLimit ?? 0)
+  if (creditLimit > 0) {
+    const outstanding = await prisma.salesInvoice.aggregate({
+      where: {
+        customerId: invoice.customerId,
+        status: { in: ["posted", "partial"] },
+        id: { not: invoiceId },
+      },
+      _sum: { grandTotal: true, paidAmount: true },
+    })
+    const currentAr = Number(outstanding._sum.grandTotal ?? 0) - Number(outstanding._sum.paidAmount ?? 0)
+    const projected = currentAr + (Number(invoice.grandTotal) - Number(invoice.paidAmount))
+    if (projected > creditLimit) {
+      throw new Error(
+        `Melebihi batas kredit pelanggan ${customer?.name ?? ""}. ` +
+          `Batas: ${creditLimit.toLocaleString("id-ID")}, proyeksi piutang: ${projected.toLocaleString("id-ID")}.`
+      )
+    }
+  }
+
   await prisma.salesInvoice.update({
     where: { id: invoiceId },
     data: { status: "posted" },
@@ -532,6 +573,7 @@ export async function postInvoice(invoiceId: number) {
   // Trigger accounting hook (replaces Laravel Observer)
   await onSalesInvoicePosted(invoiceId, Number(user.id))
 
+  await logActivity("post", "SalesInvoice", invoiceId, `Posting faktur penjualan #${invoiceId}`)
   revalidatePath("/penjualan/faktur")
   return { success: true }
 
@@ -568,6 +610,7 @@ export async function createSalesInvoice(formData: FormData) {
     },
   })
 
+  await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur penjualan #${invoice.id}`)
   revalidatePath("/penjualan/faktur")
   return { success: true, id: invoice.id }
 
@@ -596,24 +639,27 @@ export async function createSalesPayment(formData: FormData) {
     throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
   }
 
-  const payment = await prisma.salesPayment.create({
-    data: {
-      documentNo,
-      salesInvoiceId,
-      customerId: invoice.customerId,
-      amount,
-      paymentDate: new Date(formData.get("paymentDate") as string),
-      paymentMethod: formData.get("paymentMethod") as string,
-      accountId: safeId(formData.get("accountId")),
-      notes: formData.get("notes") as string | null,
-      createdBy: Number(user.id),
-    },
+  // Atomic: create payment + recalc invoice state in one transaction.
+  const payment = await prisma.$transaction(async (tx) => {
+    const created = await tx.salesPayment.create({
+      data: {
+        documentNo,
+        salesInvoiceId,
+        customerId: invoice.customerId,
+        amount,
+        paymentDate: new Date(formData.get("paymentDate") as string),
+        paymentMethod: formData.get("paymentMethod") as string,
+        accountId: safeId(formData.get("accountId")),
+        notes: formData.get("notes") as string | null,
+        createdBy: Number(user.id),
+      },
+    })
+    // Recalculate invoice paid amount/status atomically with the payment insert
+    await onSalesPaymentRecalculate(created.id, tx)
+    return created
   })
 
-  // Recalculate invoice status
-  await onSalesPaymentRecalculate(payment.id)
-
-  // Create accounting journal
+  // Create accounting journal (idempotent; guarded by unique referenceType+referenceId)
   await onSalesPaymentCreated(payment.id, Number(user.id))
 
   // Associate uploaded attachments with the new payment
@@ -628,6 +674,7 @@ export async function createSalesPayment(formData: FormData) {
     }
   }
 
+  await logActivity("create", "SalesPayment", payment.id, `Membuat pembayaran penjualan #${payment.id}`)
   revalidatePath("/penjualan/pembayaran")
   revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
@@ -654,17 +701,15 @@ export async function completeSalesReturn(returnId: number) {
     throw new Error("Sales return sudah completed")
   }
 
-  await prisma.salesReturn.update({
-    where: { id: returnId },
-    data: { status: "completed" },
-  })
-
-  // Stock Move IN
+  // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
+  // set it here first, otherwise the hook's "already completed" guard aborts and
+  // stock is never returned while the accounting leg still posts (GL/stock drift).
   await onSalesReturnStock(returnId, Number(user.id))
 
   // Accounting journal
   await onSalesReturnCompleted(returnId, Number(user.id))
 
+  await logActivity("complete", "SalesReturn", returnId, `Menyelesaikan retur penjualan #${returnId}`)
   revalidatePath("/penjualan/retur")
   return { success: true }
 
@@ -683,24 +728,44 @@ export async function createSalesReturn(formData: FormData) {
 
   const itemsJson = formData.get("items") as string
   const items = safeJsonParse<any[]>(itemsJson) ?? []
+  const validItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
+  const returnItemIds = validItems.map((it: any) => Number(it.itemId))
+  const returnCostRows = returnItemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: returnItemIds } }, select: { id: true, cost: true, price: true } })
+    : []
+  const returnCostMap = new Map(returnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
+  const masterPriceMap = new Map(returnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
+
+  // Selling price for the AR reduction: prefer the original invoice line price,
+  // fall back to the item master price, then cost.
+  const invoiceId = safeId(formData.get("salesInvoiceId"))
+  const invoicePriceMap = new Map<number, number>()
+  if (invoiceId) {
+    const invItems = await prisma.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: invoiceId, itemId: { in: returnItemIds.length ? returnItemIds : [-1] } },
+      select: { itemId: true, unitPrice: true },
+    })
+    for (const it of invItems) if (it.itemId != null) invoicePriceMap.set(it.itemId, Number(it.unitPrice))
+  }
+  const resolvePrice = (itemId: number) =>
+    invoicePriceMap.get(itemId) ?? (masterPriceMap.get(itemId) || returnCostMap.get(itemId) || 0)
 
   const salesReturn = await prisma.salesReturn.create({
     data: {
       documentNo,
-      salesInvoiceId: safeId(formData.get("salesInvoiceId")),
+      salesInvoiceId: invoiceId,
       customerId: requireId(formData.get("customerId"), "customerId"),
       date: new Date(formData.get("date") as string),
       reason: formData.get("reason") as string | null,
       status: "draft",
       createdBy: Number(user.id),
       items: {
-        create: items
-          .filter((item: any) => item.itemId > 0 && item.qty > 0)
-          .map((item: any) => ({
-            itemId: item.itemId,
-            qty: item.qty,
-            cost: 0,
-          })),
+        create: validItems.map((item: any) => ({
+          itemId: Number(item.itemId),
+          qty: item.qty,
+          cost: returnCostMap.get(Number(item.itemId)) ?? 0,
+          price: resolvePrice(Number(item.itemId)),
+        })),
       },
     },
   })
@@ -708,6 +773,7 @@ export async function createSalesReturn(formData: FormData) {
   // Notify admins
   await notificationService.notifyAdmins('Retur Penjualan baru', `/penjualan/retur/${salesReturn.id}`)
 
+  await logActivity("create", "SalesReturn", salesReturn.id, `Membuat retur penjualan #${salesReturn.id}`)
   revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
 
@@ -753,6 +819,7 @@ export async function createDeliveryOrder(formData: FormData) {
     },
   })
 
+  await logActivity("create", "DeliveryOrder", deliveryOrder.id, `Membuat surat jalan #${deliveryOrder.id}`)
   revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
 
@@ -780,6 +847,11 @@ export async function deleteQuotation(id: number) {
     })
     const invoiceIds = invoices.map((inv) => inv.id)
 
+    // Reverse GL + stock for each linked invoice before cascading the delete.
+    for (const invId of invoiceIds) {
+      await reverseSalesInvoicePostingTx(tx, invId)
+    }
+
     if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
@@ -799,6 +871,7 @@ export async function deleteQuotation(id: number) {
     await tx.quotation.delete({ where: { id } })
   })
 
+  await logActivity("delete", "Quotation", id, `Menghapus penawaran #${id}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
 
@@ -815,13 +888,10 @@ export async function deleteSalesPayment(id: number) {
 
   const payment = await prisma.salesPayment.findUniqueOrThrow({ where: { id } })
 
-  // Check if related invoice is already posted
-  if (payment.salesInvoiceId) {
-    const invoice = await prisma.salesInvoice.findUnique({ where: { id: payment.salesInvoiceId } })
-    if (invoice?.status === "posted") {
-      throw new Error("Tidak bisa menghapus payment untuk invoice yang sudah posted")
-    }
-  }
+  // Reverse the cash-receipt journal (Dr Cash / Cr Piutang) before removing the
+  // record, otherwise the GL keeps cash/receivable overstated. Mirrors the
+  // vendor-payment delete path.
+  await deleteJournalByReference("SalesPayment", id)
 
   await prisma.salesPayment.delete({ where: { id } })
 
@@ -830,6 +900,7 @@ export async function deleteSalesPayment(id: number) {
     await onSalesPaymentDeleted(payment.salesInvoiceId)
   }
 
+  await logActivity("delete", "SalesPayment", id, `Menghapus pembayaran penjualan #${id}`)
   revalidatePath("/penjualan/pembayaran")
   revalidatePath("/penjualan/faktur")
   return { success: true }
@@ -847,6 +918,7 @@ export async function deleteDeliveryOrder(id: number) {
 
   await prisma.deliveryOrder.delete({ where: { id } })
 
+  await logActivity("delete", "DeliveryOrder", id, `Menghapus surat jalan #${id}`)
   revalidatePath("/penjualan/surat-jalan")
   return { success: true }
 
@@ -866,8 +938,11 @@ export async function deleteDownPayment(id: number) {
     throw new Error("Hanya down payment draft yang bisa dihapus")
   }
 
+  // Reverse any journal posted at draft creation before removing the record.
+  await deleteJournalByReference("DownPayment", id)
   await prisma.downPayment.delete({ where: { id } })
 
+  await logActivity("delete", "DownPayment", id, `Menghapus uang muka #${id}`)
   revalidatePath("/penjualan/uang-muka")
   return { success: true }
 
@@ -903,6 +978,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "SalesOrder", salesOrder.id, `Memperbarui sales order #${salesOrder.id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
 
@@ -926,7 +1002,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   }
 
   const itemsJson = formData.get("items") as string | null
-  const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number }>>(itemsJson) ?? []) : null
+  const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null }>>(itemsJson) ?? []) : null
 
   const result = await prisma.$transaction(async (tx) => {
     // Update header
@@ -958,6 +1034,8 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
             unitPrice: item.unitPrice,
             discount: item.discount ?? 0,
             total: (item.qty * item.unitPrice) - (item.discount ?? 0),
+            uom: item.uom || null,
+            serialNumbers: item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
           })),
         })
       }
@@ -997,6 +1075,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     return invoice
   })
 
+  await logActivity("update", "SalesInvoice", result.id, `Memperbarui faktur penjualan #${result.id}`)
   revalidatePath("/penjualan/faktur")
   return { success: true, id: result.id }
 
@@ -1012,7 +1091,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_sales_payments")
+  const user = await requirePermission("create_sales_payments")
 
   // Fetch old invoiceId before update to handle invoice reassignment
   const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true } })
@@ -1029,6 +1108,11 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       notes: formData.get("notes") as string | null,
     },
   })
+
+  // Keep the GL in sync with the edited amount/account/invoice: reverse the old
+  // cash-receipt journal and repost it from the updated payment.
+  await deleteJournalByReference("SalesPayment", id)
+  await onSalesPaymentCreated(payment.id, Number(user.id))
 
   // Recalculate new invoice
   await onSalesPaymentUpdated(payment.salesInvoiceId)
@@ -1049,6 +1133,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     }
   }
 
+  await logActivity("update", "SalesPayment", payment.id, `Memperbarui pembayaran penjualan #${payment.id}`)
   revalidatePath("/penjualan/pembayaran")
   revalidatePath("/penjualan/faktur")
   return { success: true, id: payment.id }
@@ -1070,6 +1155,25 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
   const itemsJson = formData.get("items") as string
   const items = safeJsonParse<any[]>(itemsJson) ?? []
+  const validReturnItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
+  const updReturnIds = validReturnItems.map((it: any) => Number(it.itemId))
+  const updReturnCostRows = updReturnIds.length
+    ? await prisma.item.findMany({ where: { id: { in: updReturnIds } }, select: { id: true, cost: true, price: true } })
+    : []
+  const updReturnCostMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
+  const updMasterPriceMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
+
+  const updInvoiceId = safeId(formData.get("salesInvoiceId"))
+  const updInvoicePriceMap = new Map<number, number>()
+  if (updInvoiceId) {
+    const invItems = await prisma.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: updInvoiceId, itemId: { in: updReturnIds.length ? updReturnIds : [-1] } },
+      select: { itemId: true, unitPrice: true },
+    })
+    for (const it of invItems) if (it.itemId != null) updInvoicePriceMap.set(it.itemId, Number(it.unitPrice))
+  }
+  const resolveUpdPrice = (itemId: number) =>
+    updInvoicePriceMap.get(itemId) ?? (updMasterPriceMap.get(itemId) || updReturnCostMap.get(itemId) || 0)
 
   const salesReturn = await prisma.$transaction(async (tx) => {
     // Delete existing items to prevent duplicates
@@ -1080,23 +1184,24 @@ export async function updateSalesReturn(id: number, formData: FormData) {
     return tx.salesReturn.update({
       where: { id },
       data: {
-        salesInvoiceId: safeId(formData.get("salesInvoiceId")),
+        salesInvoiceId: updInvoiceId,
         customerId: requireId(formData.get("customerId"), "customerId"),
         date: new Date(formData.get("date") as string),
         reason: formData.get("reason") as string | null,
         items: {
-          create: items
-            .filter((item: any) => item.itemId > 0 && item.qty > 0)
+          create: validReturnItems
             .map((item: any) => ({
-              itemId: item.itemId,
+              itemId: Number(item.itemId),
               qty: item.qty,
-              cost: 0,
+              cost: updReturnCostMap.get(Number(item.itemId)) ?? 0,
+              price: resolveUpdPrice(Number(item.itemId)),
             })),
         },
       },
     })
   })
 
+  await logActivity("update", "SalesReturn", salesReturn.id, `Memperbarui retur penjualan #${salesReturn.id}`)
   revalidatePath("/penjualan/retur")
   return { success: true, id: salesReturn.id }
 
@@ -1140,6 +1245,7 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "DeliveryOrder", deliveryOrder.id, `Memperbarui surat jalan #${deliveryOrder.id}`)
   revalidatePath("/penjualan/surat-jalan")
   return { success: true, id: deliveryOrder.id }
 
@@ -1203,6 +1309,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
     data,
   })
 
+  await logActivity("update", "DownPayment", dp.id, `Memperbarui uang muka #${dp.id}`)
   revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
 
@@ -1222,6 +1329,10 @@ export async function deleteSalesOrder(id: number) {
   await prisma.$transaction(async (tx) => {
     const invoices = await tx.salesInvoice.findMany({ where: { salesOrderId: id }, select: { id: true } })
     const invoiceIds = invoices.map((inv) => inv.id)
+    // Reverse GL + stock for each linked invoice before cascading the delete.
+    for (const invId of invoiceIds) {
+      await reverseSalesInvoicePostingTx(tx, invId)
+    }
     if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
@@ -1229,6 +1340,7 @@ export async function deleteSalesOrder(id: number) {
     await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } })
     await tx.salesOrder.delete({ where: { id } })
   })
+  await logActivity("delete", "SalesOrder", id, `Menghapus sales order #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
 
@@ -1247,16 +1359,133 @@ export async function deleteSalesInvoice(id: number) {
   await requirePermission("delete_sales_invoices")
   await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
   await prisma.$transaction(async (tx) => {
+    await reverseSalesInvoicePostingTx(tx, id)
+    await tx.transactionAttachment.deleteMany({ where: { referenceType: "sales_invoice", referenceId: id } })
     await tx.salesPayment.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoice.delete({ where: { id } })
   })
+  await logActivity("delete", "SalesInvoice", id, `Menghapus faktur penjualan #${id}`)
   revalidatePath("/penjualan/faktur")
   return { success: true }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[deleteSalesInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * Reverse all GL + stock side effects of a (possibly posted) sales invoice so the
+ * record can be safely removed without leaving orphaned journals or lost stock.
+ *
+ * Reverses, atomically within the caller's transaction:
+ *  - Revenue journal (referenceType "SalesInvoice") and COGS journal ("SalesInvoiceCOGS").
+ *  - Cash-receipt journals of every linked payment (referenceType "SalesPayment").
+ *  - Physical stock-out: for each StockMove OUT posted by onSalesInvoicePosted, the
+ *    global qtyOnHand is restored and a reversing inbound FIFO layer is created at
+ *    the same cost basis so per-warehouse availability stays consistent. The OUT
+ *    moves are then deleted.
+ *
+ * No-op for draft invoices (no journals / no stock moves exist yet).
+ * Note: serial-tracked items previously marked "used" are not restored to
+ * "available" here; manual correction is required for serialized stock.
+ */
+async function reverseSalesInvoicePostingTx(tx: TxClient, invoiceId: number): Promise<void> {
+  // 1. Restore stock for every OUT move created at posting time.
+  const outMoves = await tx.stockMove.findMany({
+    where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT" },
+    select: { id: true, itemId: true, warehouseId: true, qty: true, cost: true },
+  })
+  for (const m of outMoves) {
+    const qty = Number(m.qty)
+    if (qty <= 0) continue
+    await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${m.itemId}`
+    const revMove = await tx.stockMove.create({
+      data: {
+        documentNo: `SM-REV-INV-${invoiceId}-${m.id}`,
+        itemId: m.itemId,
+        warehouseId: m.warehouseId,
+        qty,
+        cost: m.cost,
+        impact: "IN",
+        status: "posted",
+        referenceType: "SalesInvoiceReversal",
+        referenceId: invoiceId,
+        notes: `Pembalikan stok penghapusan faktur #${invoiceId}`,
+      },
+    })
+    await tx.inventoryLayer.create({
+      data: {
+        itemId: m.itemId,
+        warehouseId: m.warehouseId,
+        stockMoveId: revMove.id,
+        qtyIn: qty,
+        qtyOut: 0,
+        remaining: qty,
+        unitCost: m.cost,
+      },
+    })
+  }
+  if (outMoves.length > 0) {
+    await tx.stockMove.deleteMany({ where: { id: { in: outMoves.map((m) => m.id) } } })
+  }
+
+  // 2. Reverse the revenue + COGS journals.
+  await deleteJournalByReferenceTx(tx, ["SalesInvoice", "SalesInvoiceCOGS"], invoiceId)
+
+  // 3. Reverse the cash-receipt journal of every linked payment.
+  const payments = await tx.salesPayment.findMany({
+    where: { salesInvoiceId: invoiceId },
+    select: { id: true },
+  })
+  if (payments.length > 0) {
+    await deleteJournalByReferenceTx(tx, "SalesPayment", payments.map((p) => p.id))
+  }
+}
+
+/**
+ * Void (cancel) a posted sales invoice while keeping the record for audit.
+ * Reverses the revenue + COGS journals and restores stock (via
+ * reverseSalesInvoicePostingTx), then marks the invoice "cancelled". Payments
+ * must be removed first so cash/AR stay consistent.
+ */
+export async function voidSalesInvoice(id: number) {
+  "use server"
+
+  try {
+  await requirePermission("delete_sales_invoices")
+  const invoice = await prisma.salesInvoice.findUniqueOrThrow({
+    where: { id },
+    include: { payments: { select: { id: true } } },
+  })
+  if (invoice.status === "draft") {
+    throw new Error("Faktur draft tidak perlu dibatalkan. Gunakan hapus.")
+  }
+  if (invoice.status === "cancelled") {
+    throw new Error("Faktur sudah dibatalkan.")
+  }
+  if (invoice.payments.length > 0) {
+    throw new Error("Hapus pembayaran faktur ini terlebih dahulu sebelum membatalkan.")
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await reverseSalesInvoicePostingTx(tx, id)
+    await tx.salesInvoice.update({
+      where: { id },
+      data: { status: "cancelled", paymentStatus: "cancelled", paidAmount: 0 },
+    })
+  })
+
+  await logActivity("void", "SalesInvoice", id, `Membatalkan faktur penjualan #${id}`)
+  revalidatePath("/penjualan/faktur")
+  revalidatePath(`/penjualan/faktur/${id}`)
+  return { success: true }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[voidSalesInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
@@ -1272,6 +1501,7 @@ export async function deleteSalesReturn(id: number) {
     throw new Error("Tidak bisa menghapus retur yang sudah completed")
   }
   await prisma.salesReturn.delete({ where: { id } })
+  await logActivity("delete", "SalesReturn", id, `Menghapus retur penjualan #${id}`)
   revalidatePath("/penjualan/retur")
   return { success: true }
 

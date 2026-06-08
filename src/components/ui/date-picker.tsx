@@ -1,73 +1,117 @@
 "use client"
 
-import { Calendar, DateField, DatePicker as HeroDatePicker, Label } from "@heroui/react"
-import { parseDate } from "@internationalized/date"
-import type { DateValue } from "@internationalized/date"
-import { I18nProvider } from "react-aria-components"
+import { useState } from "react"
+import { CalendarIcon } from "lucide-react"
+import { format } from "date-fns"
+import { id as idLocale } from "date-fns/locale"
+
+import { Label } from "@/components/ui/shadcn/label"
+import { Button } from "@/components/ui/shadcn/button"
+import { Calendar } from "@/components/ui/shadcn/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/shadcn/popover"
+import { cn } from "@/lib/utils"
 
 interface AppDatePickerProps {
-  label: string
+  label?: string
   name: string
   value?: string | Date // ISO date string "YYYY-MM-DD" or Date
   defaultValue?: string | Date
   onChange?: (dateStr: string) => void
   required?: boolean
+  disabled?: boolean
+  placeholder?: string
   className?: string
 }
 
-export function AppDatePicker({ label, name, value, defaultValue, onChange, required, className }: AppDatePickerProps) {
-  const normalizeDate = (dateValue?: string | Date) => {
-    if (!dateValue) return undefined
-    if (dateValue instanceof Date) return dateValue.toISOString().split("T")[0]
-    return String(dateValue).split("T")[0]
-  }
+/** Format a Date to a local "YYYY-MM-DD" string (avoids UTC off-by-one). */
+function toISODateLocal(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
+}
 
-  const parsedValue = value ? parseDate(normalizeDate(value)!) : undefined
-  const parsedDefault = defaultValue ? parseDate(normalizeDate(defaultValue)!) : undefined
+/** Normalize incoming value to a local "YYYY-MM-DD" string. */
+function normalizeDate(dateValue?: string | Date): string {
+  if (!dateValue) return ""
+  if (dateValue instanceof Date) return toISODateLocal(dateValue)
+  return String(dateValue).split("T")[0]
+}
 
-  function handleChange(val: DateValue | null) {
-    if (val && onChange) {
-      onChange(val.toString())
-    }
+/** Parse a "YYYY-MM-DD" string into a local Date (midnight local time). */
+function parseISODateLocal(str: string): Date | undefined {
+  if (!str) return undefined
+  const [y, m, d] = str.split("-").map(Number)
+  if (!y || !m || !d) return undefined
+  return new Date(y, m - 1, d)
+}
+
+export function AppDatePicker({
+  label,
+  name,
+  value,
+  defaultValue,
+  onChange,
+  required,
+  disabled,
+  placeholder = "Pilih tanggal",
+  className,
+}: AppDatePickerProps) {
+  const isControlled = value !== undefined
+  const [internal, setInternal] = useState<string>(normalizeDate(defaultValue))
+  const [open, setOpen] = useState(false)
+  const current = isControlled ? normalizeDate(value) : internal
+  const selectedDate = parseISODateLocal(current)
+
+  function handleSelect(date: Date | undefined) {
+    const next = date ? toISODateLocal(date) : ""
+    if (!isControlled) setInternal(next)
+    onChange?.(next)
+    setOpen(false)
   }
 
   return (
-    <I18nProvider locale="id-ID">
-      <HeroDatePicker
-        name={name}
-        value={parsedValue}
-        defaultValue={parsedDefault}
-        onChange={handleChange}
-        isRequired={required}
-        className={className}
-      >
-        <Label className="text-sm font-medium text-foreground">{label}</Label>
-        <DateField.Group fullWidth className="form-input" style={{ display: "flex", alignItems: "center", gap: "4px", padding: "8px 12px" }}>
-          <DateField.Input style={{ display: "flex", gap: "2px", flex: 1 }}>
-            {(segment) => <DateField.Segment segment={segment} />}
-          </DateField.Input>
-          <DateField.Suffix>
-            <HeroDatePicker.Trigger>
-              <HeroDatePicker.TriggerIndicator />
-            </HeroDatePicker.Trigger>
-          </DateField.Suffix>
-        </DateField.Group>
-        <HeroDatePicker.Popover placement="bottom start" className="z-50 min-w-[280px]">
-          <Calendar aria-label={label} className="p-3">
-            <Calendar.Header>
-              <Calendar.NavButton slot="previous" />
-              <Calendar.Heading />
-              <Calendar.NavButton slot="next" />
-            </Calendar.Header>
-            <Calendar.Grid className="w-full">
-              <Calendar.GridHeader>
-                {(day) => <Calendar.HeaderCell>{day}</Calendar.HeaderCell>}
-              </Calendar.GridHeader>
-              <Calendar.GridBody>{(date) => <Calendar.Cell date={date} />}</Calendar.GridBody>
-            </Calendar.Grid>
-          </Calendar>
-        </HeroDatePicker.Popover>
-      </HeroDatePicker>
-    </I18nProvider>
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      {label && (
+        <Label htmlFor={`${name}-trigger`} className="text-sm font-medium text-foreground">
+          {label}
+        </Label>
+      )}
+      {/* Hidden input keeps server-action FormData(name) working unchanged. */}
+      <input type="hidden" name={name} value={current} />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            id={`${name}-trigger`}
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            aria-required={required}
+            className={cn(
+              "h-10 w-full justify-start gap-2 px-3 font-normal",
+              !current && "text-muted-foreground"
+            )}
+          >
+            <CalendarIcon className="size-4 opacity-70" />
+            {selectedDate
+              ? format(selectedDate, "d MMMM yyyy", { locale: idLocale })
+              : placeholder}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={handleSelect}
+            defaultMonth={selectedDate}
+            autoFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
   )
 }

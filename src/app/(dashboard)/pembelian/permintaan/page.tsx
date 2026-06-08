@@ -42,20 +42,21 @@ export default async function PurchaseRequestsPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Permintaan Pembelian</h1>
         <Link href="/pembelian/permintaan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-pr-btn">
-          + Buat PR
+          + Buat Permintaan
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/permintaan" />
+      <PurchaseRequestTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/permintaan" />}
+        filters={
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
               const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
               return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/pembelian/permintaan${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                <Link
+                  key={dbStatus}
+                  href={`/pembelian/permintaan${urlStatus ? `?status=${urlStatus}` : ""}`}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -63,10 +64,8 @@ export default async function PurchaseRequestsPage({
               )
             })}
           </div>
-        </div>
-
-        <PurchaseRequestTable data={tableData} />
-      </div>
+        }
+      />
     </div>
   )
 }

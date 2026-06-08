@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -19,19 +18,25 @@ export default async function EditPage({
 
   if (!data) notFound()
 
+  const journal = {
+    id: data.id,
+    date: data.transactionDate.toISOString().split("T")[0],
+    description: data.description,
+  }
+
   const accounts = await prisma.account.findMany({ orderBy: { code: "asc" } })
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "finance", href: "/keuangan/jurnal" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Keuangan", href: "/keuangan/jurnal" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <JournalForm journal={data as any} accounts={accounts as any}/>
+      <JournalForm journal={journal} accounts={accounts}/>
     </div>
   )
 }

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
   const userId = Number.parseInt(String(session.user.id), 10)
-  if (!Number.isInteger(referenceIdNum) || referenceIdNum <= 0) {
+  if (!Number.isInteger(referenceIdNum) || referenceIdNum < 0) {
     return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
   }
   if (!Number.isInteger(userId) || userId <= 0) {
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid referenceType" }, { status: 400 })
   }
 
-  // Save to public/uploads/attachments/{referenceType}
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "attachments", safeRefType)
+  // Save to private/uploads/attachments/{referenceType} (NOT public/ — served via authenticated route)
+  const uploadDir = path.join(process.cwd(), "private", "uploads", "attachments", safeRefType)
   await mkdir(uploadDir, { recursive: true })
 
   // Sanitize extension - only allow alphanumeric
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   await writeFile(filepath, buffer)
 
-  const fileUrl = `/uploads/attachments/${safeRefType}/${filename}`
+  const fileUrl = `/api/attachments/${safeRefType}/${filename}`
 
   // Save to database
   const attachment = await prisma.transactionAttachment.create({

@@ -32,8 +32,8 @@ export default async function StockAdjustmentDetailPage({
       <PageHeader
         title={`Penyesuaian Stok ${adjustment.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Inventory", href: "/inventaris" },
+          { label: "Dasbor", href: "/" },
+          { label: "Inventaris", href: "/inventaris" },
           { label: "Penyesuaian", href: "/inventaris/penyesuaian" },
           { label: adjustment.documentNo },
         ]}
@@ -74,11 +74,11 @@ export default async function StockAdjustmentDetailPage({
         </div>
         <div className="p-4 px-5">
           {adjustment.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
                 <DetailTableTh align="right">Qty Sistem</DetailTableTh>
                 <DetailTableTh align="right">Qty Aktual</DetailTableTh>
                 <DetailTableTh align="right">Selisih</DetailTableTh>

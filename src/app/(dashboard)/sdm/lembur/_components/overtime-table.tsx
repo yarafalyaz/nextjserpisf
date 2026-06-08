@@ -26,7 +26,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/lembur/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/lembur/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -71,9 +71,11 @@ const columns = [
 
 interface OvertimeTableProps {
   data: OvertimeRequest[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function OvertimeTable({ data }: OvertimeTableProps) {
+export function OvertimeTable({ data, toolbar, filters }: OvertimeTableProps) {
   return (
     <DataTable
       data={data}
@@ -81,6 +83,8 @@ export function OvertimeTable({ data }: OvertimeTableProps) {
       ariaLabel="Daftar lembur"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("overtime", ids)}
     />
   )

@@ -17,9 +17,9 @@ const columnHelper = createColumnHelper<Brand>()
 
 const columns = [
   columnHelper.accessor("name", {
-    header: "Nama Brand",
+    header: "Nama Merek",
     cell: (info) => (
-      <Link href={`/master/merek/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/merek/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -54,6 +54,8 @@ export function BrandTable({ data }: BrandTableProps) {
       ariaLabel="Daftar brand"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama merek..."
       onBulkDelete={(ids) => bulkDelete("brand", ids)}
     />
   )

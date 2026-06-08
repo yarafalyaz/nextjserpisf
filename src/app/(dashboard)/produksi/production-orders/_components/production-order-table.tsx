@@ -24,7 +24,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/produksi/production-orders/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/produksi/production-orders/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -34,7 +34,7 @@ const columns = [
     header: "Produk",
   }),
   columnHelper.accessor("quantity", {
-    header: "Qty",
+    header: "Jml",
     cell: (info) => Number(info.getValue()),
   }),
   columnHelper.accessor("createdAt", {
@@ -64,16 +64,20 @@ const columns = [
 
 interface ProductionOrderTableProps {
   data: ProductionOrder[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function ProductionOrderTable({ data }: ProductionOrderTableProps) {
+export function ProductionOrderTable({ data, toolbar, filters }: ProductionOrderTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar production order"
+      ariaLabel="Daftar perintah produksi"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("productionOrder", ids)}
     />
   )

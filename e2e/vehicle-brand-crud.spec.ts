@@ -41,7 +41,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     await waitForHydration(page)
     await page.locator("input[name='name']").first().fill(updated)
     await expect(page.locator("input[name='name']").first()).toHaveValue(updated)
-    await page.getByRole("button", { name: /^Update$/ }).first().click()
+    await page.getByRole("button", { name: /^Update$|^Perbarui$/ }).first().click()
 
     await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
     await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })

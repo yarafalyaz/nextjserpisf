@@ -16,7 +16,7 @@ export default async function SettingsEditPage() {
   })
 
   if (!settings) {
-    return <div className="p-6 text-danger">System settings not found.</div>
+    return <div className="p-6 text-danger">Pengaturan sistem tidak ditemukan.</div>
   }
 
   // Serialize Decimal fields to number/string for client component
@@ -34,12 +34,12 @@ export default async function SettingsEditPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/pengaturan" },
-        { label: "Edit" },
+        { label: "Dasbor", href: "/" },
+        { label: "Pengaturan", href: "/pengaturan" },
+        { label: "Ubah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Pengaturan Sistem</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Pengaturan Sistem</h1>
       </div>
       <SettingsEditForm settings={serializedSettings} accounts={accounts} />
     </div>

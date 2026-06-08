@@ -1,7 +1,7 @@
 'use client'
 
-import { Breadcrumbs } from '@heroui/react'
-
+import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 
 export interface BreadcrumbItem {
   label: string
@@ -10,22 +10,26 @@ export interface BreadcrumbItem {
 
 export function AppBreadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   return (
-    <Breadcrumbs className="mb-4">
-      {items.map((item, index) => {
-        const isLast = index === items.length - 1
-        if (isLast || !item.href) {
+    <nav aria-label="Breadcrumbs" className="mb-4">
+      <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1
           return (
-            <Breadcrumbs.Item key={index}>
-              {item.label}
-            </Breadcrumbs.Item>
+            <li key={index} className="flex items-center gap-1.5">
+              {isLast || !item.href ? (
+                <span className={isLast ? 'font-medium text-foreground' : ''} aria-current={isLast ? 'page' : undefined}>
+                  {item.label}
+                </span>
+              ) : (
+                <Link href={item.href} className="transition-colors hover:text-foreground">
+                  {item.label}
+                </Link>
+              )}
+              {!isLast && <ChevronRight className="size-3.5 opacity-50" aria-hidden />}
+            </li>
           )
-        }
-        return (
-          <Breadcrumbs.Item key={index} href={item.href}>
-            {item.label}
-          </Breadcrumbs.Item>
-        )
-      })}
-    </Breadcrumbs>
+        })}
+      </ol>
+    </nav>
   )
 }

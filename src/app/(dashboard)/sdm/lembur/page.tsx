@@ -6,7 +6,6 @@ import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { OvertimeTable } from "./_components/overtime-table"
-import { } from "@/components/ui/breadcrumbs"
 
 export default async function OvertimePage({
   searchParams,
@@ -35,6 +34,19 @@ export default async function OvertimePage({
 
   const data = JSON.parse(JSON.stringify(overtimes))
 
+  const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    return (
+      <Link
+        key={dbStatus}
+        href={`/sdm/lembur${urlStatus ? `?status=${urlStatus}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -44,27 +56,11 @@ export default async function OvertimePage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/lembur" />
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "pending", "approved", "rejected"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/sdm/lembur${urlStatus ? `?status=${urlStatus}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-
-        <OvertimeTable data={data} />
-      </div>
+      <OvertimeTable
+        data={data}
+        toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/lembur" />}
+        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+      />
     </div>
   )
 }

@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
-import { AppSearchField } from "@/components/ui/search-field"
 import { VehicleTable } from "./_components/vehicle-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
@@ -54,13 +53,7 @@ export default async function VehiclesPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari plat nomor, warna, atau varian..." action="/kendaraan" />
-        </div>
-
-        <VehicleTable data={tableData} />
-      </div>
+      <VehicleTable data={tableData} />
     </div>
   )
 }

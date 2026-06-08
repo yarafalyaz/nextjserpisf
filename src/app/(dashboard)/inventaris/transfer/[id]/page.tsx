@@ -33,8 +33,8 @@ export default async function InventoryTransferDetailPage({
       <PageHeader
         title={`Transfer Stok ${transfer.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Inventory", href: "/inventaris" },
+          { label: "Dasbor", href: "/" },
+          { label: "Inventaris", href: "/inventaris" },
           { label: "Transfer", href: "/inventaris/transfer" },
           { label: transfer.documentNo },
         ]}
@@ -66,12 +66,12 @@ export default async function InventoryTransferDetailPage({
         </div>
         <div className="p-4 px-5">
           {transfer.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
-                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh align="right">Jml</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {transfer.items.map((item) => (

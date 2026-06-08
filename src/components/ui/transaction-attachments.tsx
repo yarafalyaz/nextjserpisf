@@ -42,7 +42,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
 
   const fetchAttachments = useCallback(async () => {
     try {
-      const res = await fetch(`/api/upload/attachments?tipeReferensi=${referenceType}&referenceId=referensiId=${referenceId}`)
+      const res = await fetch(`/api/upload/attachments?tipeReferensi=${referenceType}&referensiId=${referenceId}`)
       if (res.ok) {
         const data = await res.json()
         setAttachments(data)
@@ -152,7 +152,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         <div className="attachment-loading">Memuat lampiran...</div>
       ) : attachments.length === 0 ? (
         <div className="attachment-empty">
-          <FileText className="size-8 text-muted" />
+          <FileText className="size-8 text-muted-foreground" />
           <span>Belum ada lampiran bukti</span>
         </div>
       ) : (
@@ -174,7 +174,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
                 <span className="attachment-size">{formatFileSize(att.fileSize)}</span>
               </div>
               <div className="attachment-actions">
-                <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="button button--secondary button--sm attachment-action-link" title="Download">
+                <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="button button--secondary button--sm attachment-action-link" title="Unduh">
                   <Download className="size-3.5" />
                 </a>
                 <Button onPress={() => handleDeleteClick(att.id)} variant="danger-soft" size="sm" className="attachment-action-button" title="Hapus">

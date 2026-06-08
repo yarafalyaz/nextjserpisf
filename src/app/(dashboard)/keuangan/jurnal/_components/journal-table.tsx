@@ -27,7 +27,7 @@ const columns = [
   columnHelper.accessor("journalNumber", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/keuangan/jurnal/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/keuangan/jurnal/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -46,7 +46,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "entriesCount",
-    header: "Lines",
+    header: "Baris",
     cell: (info) => info.row.original._count?.entries ?? 0,
   }),
   columnHelper.display({
@@ -65,9 +65,11 @@ const columns = [
 
 interface JournalTableProps {
   data: JournalData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function JournalTable({ data }: JournalTableProps) {
+export function JournalTable({ data, toolbar, filters }: JournalTableProps) {
   return (
     <DataTable
       data={data}
@@ -75,6 +77,8 @@ export function JournalTable({ data }: JournalTableProps) {
       ariaLabel="Daftar journal"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("journal", ids)}
     />
   )

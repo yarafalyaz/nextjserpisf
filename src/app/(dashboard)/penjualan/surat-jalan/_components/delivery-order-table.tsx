@@ -24,7 +24,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/surat-jalan/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/surat-jalan/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -33,7 +33,7 @@ const columns = [
     header: "No. DO",
     cell: (info) => {
       const val = info.getValue()
-      return val ? <span className="font-mono">{val}</span> : <span className="text-muted">-</span>
+      return val ? <span className="font-mono">{val}</span> : <span className="text-muted-foreground">-</span>
     },
   }),
   columnHelper.accessor((row) => row.salesOrder.documentNo, {
@@ -43,7 +43,7 @@ const columns = [
   }),
   columnHelper.accessor((row) => row.salesOrder.customer.name, {
     id: "customerName",
-    header: "Customer",
+    header: "Pelanggan",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("date", {
@@ -72,9 +72,11 @@ const columns = [
 
 interface DeliveryOrderTableProps {
   data: DeliveryOrder[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function DeliveryOrderTable({ data }: DeliveryOrderTableProps) {
+export function DeliveryOrderTable({ data, toolbar, filters }: DeliveryOrderTableProps) {
   return (
     <DataTable
       data={data}
@@ -82,6 +84,8 @@ export function DeliveryOrderTable({ data }: DeliveryOrderTableProps) {
       ariaLabel="Daftar delivery order"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("deliveryOrder", ids)}
     />
   )

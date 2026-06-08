@@ -35,6 +35,18 @@ export default async function StockAdjustmentsPage({
 
   const tableData = JSON.parse(JSON.stringify(adjustments))
 
+  const statusChips = ["", "draft", "processed"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    return (
+      <Link
+        key={dbStatus}
+        href={`/inventaris/penyesuaian${urlStatus ? `?status=${urlStatus}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,31 +54,15 @@ export default async function StockAdjustmentsPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Penyesuaian Stok</h1>
 <Link href="/inventaris/penyesuaian/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-adj-btn">
-          + Buat Adjustment
+          + Buat Penyesuaian
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/penyesuaian" />
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "processed"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/inventaris/penyesuaian${urlStatus ? `?status=${urlStatus}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-
-        <AdjustmentTable data={tableData} />
-      </div>
+      <AdjustmentTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/penyesuaian" />}
+        filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
+      />
     </div>
   )
 }

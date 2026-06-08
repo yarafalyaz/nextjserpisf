@@ -3,9 +3,9 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { AppSearchField } from "@/components/ui/search-field"
 import { VendorPaymentTable } from "./_components/vendor-payment-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
 export default async function VendorPaymentsPage({
   searchParams,
@@ -31,9 +31,11 @@ export default async function VendorPaymentsPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const pmMap = await getPaymentMethodMap()
   const payments = rawPayments.map((p) => ({
     ...p,
     amount: Number(p.amount),
+    paymentMethod: resolvePaymentMethodName(p.paymentMethod, pmMap),
   }))
 
   const tableData = JSON.parse(JSON.stringify(payments))
@@ -42,9 +44,9 @@ export default async function VendorPaymentsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Purchase", href: "/pembelian" },
-  { label: "Vendor Payments" },
+  { label: "Dasbor", href: "/" },
+  { label: "Pembelian", href: "/pembelian" },
+  { label: "Pembayaran Vendor" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pembayaran Vendor</h1>
@@ -53,13 +55,7 @@ export default async function VendorPaymentsPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen atau vendor..." action="/pembelian/pembayaran-vendor" />
-        </div>
-
-        <VendorPaymentTable data={tableData} />
-      </div>
+      <VendorPaymentTable data={tableData} />
     </div>
   )
 }

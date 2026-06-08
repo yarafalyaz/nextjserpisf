@@ -45,7 +45,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/cuti/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/cuti/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -98,9 +98,11 @@ const columns = [
 
 interface LeaveTableProps {
   data: LeaveRequest[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function LeaveTable({ data }: LeaveTableProps) {
+export function LeaveTable({ data, toolbar, filters }: LeaveTableProps) {
   return (
     <DataTable
       data={data}
@@ -108,6 +110,8 @@ export function LeaveTable({ data }: LeaveTableProps) {
       ariaLabel="Daftar cuti"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("leave", ids)}
     />
   )

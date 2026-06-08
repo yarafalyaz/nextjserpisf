@@ -5,7 +5,6 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { } from "@/components/reports/report-date-filter"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 export default async function ActivityLogPage({
@@ -45,9 +44,9 @@ export default async function ActivityLogPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Settings", href: "/pengaturan" },
-  { label: "Activity Log" },
+  { label: "Dasbor", href: "/" },
+  { label: "Pengaturan", href: "/pengaturan" },
+  { label: "Log Aktivitas" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Log Aktivitas</h1>
@@ -69,14 +68,14 @@ export default async function ActivityLogPage({
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Waktu</DetailTableTh>
-              <DetailTableTh>Action</DetailTableTh>
+              <DetailTableTh>Aksi</DetailTableTh>
               <DetailTableTh>Model</DetailTableTh>
               <DetailTableTh>ID</DetailTableTh>
               <DetailTableTh>Deskripsi</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {logs.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 text-muted">Belum ada activity log</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 text-muted-foreground">Belum ada log aktivitas</DetailTableTd></DetailTableRow>
               ) : (
                 logs.map((log) => (
                   <DetailTableRow key={log.id}>
@@ -100,7 +99,7 @@ export default async function ActivityLogPage({
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between p-3 px-5 border-t border-default">
-            <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
+            <span className="text-[0.8125rem] text-muted-foreground">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
               {page > 1 && <Link href={`/pengaturan/log-aktivitas?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
               {page < totalPages && <Link href={`/pengaturan/log-aktivitas?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}

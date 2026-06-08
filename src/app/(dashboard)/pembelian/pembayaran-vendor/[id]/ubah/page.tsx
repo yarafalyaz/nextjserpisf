@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { VendorPaymentForm } from "@/components/forms/vendor-payment-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { getActivePaymentMethods } from "@/lib/services/method.service"
 
 export default async function EditPage({
   params,
@@ -19,19 +19,38 @@ export default async function EditPage({
 
   if (!data) notFound()
 
+  const payment = {
+    id: data.id,
+    vendorId: data.vendorId,
+    amount: Number(data.amount),
+    date: data.paymentDate.toISOString().split("T")[0],
+    accountId: data.accountId,
+    notes: data.notes,
+    referenceNumber: data.referenceNumber,
+    bankAccount: data.bankAccount,
+  }
+
   const [vendors, bills] = await Promise.all([prisma.vendor.findMany({ orderBy: { name: "asc" } }), prisma.vendorBill.findMany({ where: { status: { not: "paid" } }, orderBy: { createdAt: "desc" } })])
+  const paymentMethods = await getActivePaymentMethods()
+
+  const billOptions = bills.map((b) => ({
+    id: b.id,
+    documentNo: b.documentNo,
+    vendorId: b.vendorId,
+    grandTotal: Number(b.grandTotal),
+  }))
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "purchase", href: "/pembelian/pembayaran-vendor" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Pembayaran Vendor", href: "/pembelian/pembayaran-vendor" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <VendorPaymentForm payment={data as any} vendors={vendors as any} bills={bills as any}/>
+      <VendorPaymentForm payment={payment} vendors={vendors} bills={billOptions} paymentMethods={paymentMethods}/>
     </div>
   )
 }

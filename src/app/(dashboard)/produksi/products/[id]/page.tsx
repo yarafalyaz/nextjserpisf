@@ -30,14 +30,20 @@ export default async function ProductDetailPage({
 
   if (!product) notFound()
 
+  const materialItems = await prisma.item.findMany({
+    where: { id: { in: product.materials.map((m) => m.itemId) } },
+    select: { id: true, sku: true, name: true, unitOfMeasure: true },
+  })
+  const itemMap = new Map(materialItems.map((it) => [it.id, it]))
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title={product.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Manufacturing", href: "/produksi" },
-          { label: "Products", href: "/produksi/products" },
+          { label: "Dasbor", href: "/" },
+          { label: "Manufaktur", href: "/produksi" },
+          { label: "Produk", href: "/produksi/products" },
           { label: "Detail" },
         ]}
         actions={
@@ -50,11 +56,10 @@ export default async function ProductDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="SKU" value={product.sku || "-"} mono />
         <DetailField label="Kode Produk" value={product.code || "-"} mono />
         <DetailField label="Nama" value={product.name} />
-        <DetailField label="Vehicle Brand" value={product.vehicleBrand?.name || "-"} />
-        <DetailField label="Vehicle Model" value={product.vehicleModel?.name || "-"} />
+        <DetailField label="Merek Kendaraan" value={product.vehicleBrand?.name || "-"} />
+        <DetailField label="Model Kendaraan" value={product.vehicleModel?.name || "-"} />
         <DetailField label="Dibuat" value={formatDate(product.createdAt)} />
         {product.description && (
           <DetailField label="Deskripsi" value={product.description} colSpan="full" />
@@ -64,34 +69,45 @@ export default async function ProductDetailPage({
       {/* Bill of Materials */}
       <DetailSection title="Bill of Materials">
         {product.materials.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada material</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada material</p>
         ) : (
           <DetailTable>
             <DetailTableHead>
-              <DetailTableTh>Item ID</DetailTableTh>
-              <DetailTableTh align="right">Qty</DetailTableTh>
+              <DetailTableTh>Barang</DetailTableTh>
+              <DetailTableTh align="right">Jml</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
-              {product.materials.map((mat) => (
-                <DetailTableRow key={mat.id}>
-                  <DetailTableTd>Item #{mat.itemId}</DetailTableTd>
-                  <DetailTableTd align="right">{Number(mat.qty)}</DetailTableTd>
-                </DetailTableRow>
-              ))}
+              {product.materials.map((mat) => {
+                const it = itemMap.get(mat.itemId)
+                return (
+                  <DetailTableRow key={mat.id}>
+                    <DetailTableTd>
+                      {it ? (
+                        <Link href={`/master/barang/${it.id}`} className="hover:underline">
+                          <span className="font-mono text-muted-foreground">{it.sku}</span> — {it.name}
+                        </Link>
+                      ) : (
+                        `Item #${mat.itemId}`
+                      )}
+                    </DetailTableTd>
+                    <DetailTableTd align="right">{Number(mat.qty)} {it?.unitOfMeasure ?? ""}</DetailTableTd>
+                  </DetailTableRow>
+                )
+              })}
             </DetailTableBody>
           </DetailTable>
         )}
       </DetailSection>
 
       {/* Recent Production Orders */}
-      <DetailSection title="Production Order Terbaru">
+      <DetailSection title="Perintah Produksi Terbaru">
         {product.productionOrders.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada production order</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada perintah produksi</p>
         ) : (
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>No. Dokumen</DetailTableTh>
-              <DetailTableTh align="right">Qty</DetailTableTh>
+              <DetailTableTh align="right">Jml</DetailTableTh>
               <DetailTableTh>Status</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>

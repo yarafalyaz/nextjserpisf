@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateDepartment } from "@/actions/master.actions"
-import { Input, TextArea, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 interface EditDepartmentFormProps {
@@ -44,14 +46,14 @@ export function EditDepartmentForm({ department }: EditDepartmentFormProps) {
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <TextArea id="description" name="description" rows={3} placeholder="Deskripsi departemen" defaultValue={department.description || ""} />
+          <Textarea id="description" name="description" rows={3} placeholder="Deskripsi departemen" defaultValue={department.description || ""} />
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" variant="primary" isDisabled={isPending} id="submit-department">
-          {isPending ? "Menyimpan..." : "Update"}
+          {isPending ? "Menyimpan..." : "Perbarui"}
         </Button>
       </div>
     </form>

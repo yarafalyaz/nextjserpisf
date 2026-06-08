@@ -5,15 +5,20 @@ import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
-export function PettyCashForm({ accounts, pettyCash, currentBalance }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; description?: string | null; amount: number; accountId: number; notes?: string | null; balanceBefore?: number; balanceAfter?: number }; currentBalance?: number }) {
+export function PettyCashForm({ accounts, pettyCash, currentBalance }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; balanceBefore?: number; balanceAfter?: number }; currentBalance?: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(pettyCash?.date ?? new Date().toISOString().split("T")[0])
+  const [type, setType] = useState(pettyCash?.type ?? "IN")
+  const [accountId, setAccountId] = useState<string | null>(pettyCash?.accountId ? String(pettyCash.accountId) : null)
 
   const assetAccounts = accounts.filter((a) => a.type === "ASSET")
   const expenseAccounts = accounts.filter((a) => a.type === "EXPENSE")
@@ -26,13 +31,10 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
         const formData = new FormData(e.currentTarget)
         const { createPettyCash, updatePettyCash } = await import("@/actions/finance.actions")
 
-        if (pettyCash?.id) {
-          await updatePettyCash(pettyCash.id, formData)
-        } else {
-          await createPettyCash(formData)
-        }
+        const result = pettyCash?.id ? await updatePettyCash(pettyCash.id, formData) : await createPettyCash(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
 
-        showSuccess(pettyCash?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(pettyCash?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/keuangan/kas-kecil")
         router.refresh()
       } catch (error) {
@@ -46,16 +48,17 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Select name="type" defaultSelectedKey="IN" className="w-full" isRequired>
-              <Label>Tipe *</Label>
-              <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="IN" textValue="Masuk (Pengisian)">Masuk (Pengisian)<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item id="OUT" textValue="Keluar (Pengeluaran)">Keluar (Pengeluaran)<ListBox.ItemIndicator /></ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
+            <Label htmlFor="type">Tipe *</Label>
+            <FormSelect
+              id="type"
+              name="type"
+              value={type}
+              onValueChange={setType}
+              options={[
+                { value: "IN", label: "Masuk (Pengisian)" },
+                { value: "OUT", label: "Keluar (Pengeluaran)" },
+              ]}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker
@@ -67,17 +70,15 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <ComboBox name="accountId" className="w-full">
-              <Label>Akun Sumber (IN) / Beban (OUT)</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari akun..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {allAccounts.map((a) => (
-                    <ListBox.Item key={a.id} id={String(a.id)} textValue={`${a.code} - ${a.name}`}>{a.group}: {a.code} - {a.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label htmlFor="accountId">Akun Sumber (IN) / Beban (OUT)</Label>
+            <Combobox
+              id="accountId"
+              name="accountId"
+              options={allAccounts.map((a) => ({ value: String(a.id), label: `${a.group}: ${a.code} - ${a.name}` }))}
+              value={accountId}
+              onChange={setAccountId}
+              placeholder="Cari akun..."
+            />
           </div>
         </FormSection>
         <FormSection title="Keuangan">
@@ -89,20 +90,20 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
         <FormSection title="Detail" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="description">Deskripsi</Label>
-            <TextArea id="description" name="description" rows={3} placeholder="Deskripsi transaksi kas kecil..." defaultValue={pettyCash?.description ?? ""} />
+            <Textarea id="description" name="description" rows={3} placeholder="Deskripsi transaksi kas kecil..." defaultValue={pettyCash?.description ?? ""} />
           </div>
           <FormAttachmentUpload referenceType="petty_cash" />
         </FormSection>
         <FormSection title="Lainnya" columns={1}>
           <div className="p-4 bg-surface-secondary/50 rounded-lg border border-default">
-            <p className="text-xs font-medium text-muted uppercase tracking-wide mb-2">Informasi Saldo</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Informasi Saldo</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted">Saldo Sebelum</span>
+                <span className="text-xs text-muted-foreground">Saldo Sebelum</span>
                 <span className="text-sm font-medium text-foreground">Rp {(pettyCash?.balanceBefore ?? currentBalance ?? 0).toLocaleString("id-ID")}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-muted">Saldo Setelah</span>
+                <span className="text-xs text-muted-foreground">Saldo Setelah</span>
                 <span className="text-sm font-medium text-foreground">{pettyCash?.balanceAfter != null ? `Rp ${pettyCash.balanceAfter.toLocaleString("id-ID")}` : "Dihitung otomatis saat simpan"}</span>
               </div>
             </div>
@@ -111,7 +112,7 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : pettyCash?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : pettyCash?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

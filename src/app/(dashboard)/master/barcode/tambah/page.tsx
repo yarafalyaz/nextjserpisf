@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createBarcode } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Input, Select, ListBox, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateBarcodePage() {
@@ -24,10 +26,10 @@ export default function CreateBarcodePage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Barcodes", href: "/master/barcode" },
-  { label: "Create" },
+  { label: "Barcode", href: "/master/barcode" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Barcode</h1>
@@ -40,25 +42,25 @@ export default function CreateBarcodePage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="itemId">Item ID *</Label>
-            <Input id="itemId" name="itemId" type="number" placeholder="ID item" required />
+            <Label htmlFor="itemId">ID Barang *</Label>
+            <Input id="itemId" name="itemId" type="number" placeholder="ID barang" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Select name="type" defaultSelectedKey="EAN13" className="w-full">
-              <Label htmlFor="type">Tipe</Label>
-              <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "EAN13"}</Select.Value><Select.Indicator /></Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item key="EAN13" id="EAN13" textValue="EAN13">EAN13<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item key="EAN8" id="EAN8" textValue="EAN8">EAN8<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item key="UPC" id="UPC" textValue="UPC">UPC<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item key="CODE128" id="CODE128" textValue="CODE128">CODE128<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item key="CODE39" id="CODE39" textValue="CODE39">CODE39<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item key="QR" id="QR" textValue="QR">QR<ListBox.ItemIndicator /></ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
+            <Label htmlFor="type">Tipe</Label>
+            <FormSelect
+              id="type"
+              name="type"
+              defaultValue="EAN13"
+              options={[
+                { value: "EAN13", label: "EAN13" },
+                { value: "EAN8", label: "EAN8" },
+                { value: "UPC", label: "UPC" },
+                { value: "CODE128", label: "CODE128" },
+                { value: "CODE39", label: "CODE39" },
+                { value: "QR", label: "QR" },
+              ]}
+            />
           </div>
         </div>
 

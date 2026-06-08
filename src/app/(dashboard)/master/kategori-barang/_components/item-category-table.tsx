@@ -19,7 +19,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/kategori-barang/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/kategori-barang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -54,6 +54,8 @@ export function ItemCategoryTable({ data }: ItemCategoryTableProps) {
       ariaLabel="Daftar kategori item"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama kategori..."
       onBulkDelete={(ids) => bulkDelete("itemCategory", ids)}
     />
   )

@@ -1,11 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createLeaveRequest, updateLeaveRequest } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { TextArea, Label, Select, ComboBox, Input, ListBox } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 interface LeaveFormProps {
@@ -25,6 +28,8 @@ const leaveTypes = [
 export function LeaveForm({ employees, leave }: LeaveFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [employeeId, setEmployeeId] = useState<string | null>(leave?.employeeId ? String(leave.employeeId) : null)
+  const [leaveType, setLeaveType] = useState(leave?.leaveType ?? "annual")
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -40,7 +45,7 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
           await createLeaveRequest(formData)
 
         }
-        showSuccess(leave?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(leave?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/sdm/cuti")
         router.refresh()
       } catch (error) {
@@ -53,44 +58,31 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="employeeId" isRequired className="w-full">
-            <Label>Karyawan *</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Cari karyawan..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {employees.map((emp) => (
-                  <ListBox.Item key={emp.id} id={String(emp.id)} textValue={emp.name}>
-                    {emp.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="employeeId">Karyawan *</Label>
+          <Combobox
+            id="employeeId"
+            name="employeeId"
+            options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+            value={employeeId}
+            onChange={setEmployeeId}
+            placeholder="Cari karyawan..."
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Select name="type" isRequired defaultSelectedKey="annual" className="w-full">
-            <Label>Tipe Cuti *</Label>
-            <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {leaveTypes.map((lt) => (
-                  <ListBox.Item key={lt.id} id={lt.id} textValue={lt.name}>
-                    {lt.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Label htmlFor="type">Tipe Cuti *</Label>
+          <FormSelect
+            id="type"
+            name="type"
+            value={leaveType}
+            onValueChange={setLeaveType}
+            options={leaveTypes.map((lt) => ({ value: lt.id, label: lt.name }))}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
             label="Mulai"
             name="startDate"
+            defaultValue={leave?.startDate ?? ""}
             onChange={() => {}}
             required
           />
@@ -99,18 +91,19 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
           <AppDatePicker
             label="Selesai"
             name="endDate"
+            defaultValue={leave?.endDate ?? ""}
             onChange={() => {}}
             required
           />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label>Alasan</Label>
-          <TextArea name="reason" className="w-full" rows={3} placeholder="Alasan cuti..." defaultValue={leave?.reason ?? ""} />
+          <Textarea name="reason" className="w-full" rows={3} placeholder="Alasan cuti..." defaultValue={leave?.reason ?? ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : leave?.id ? "Update" : "Simpan"}</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : leave?.id ? "Perbarui" : "Simpan"}</Button>
       </div>
     </form>
   )

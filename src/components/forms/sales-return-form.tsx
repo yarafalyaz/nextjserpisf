@@ -5,7 +5,9 @@ import { useState, useTransition } from "react"
 import { createSalesReturn, updateSalesReturn } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 interface SalesReturnFormProps {
@@ -25,6 +27,8 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [salesInvoiceId, setSalesInvoiceId] = useState(returnData?.salesInvoiceId ? String(returnData.salesInvoiceId) : "")
+  const [customerId, setCustomerId] = useState("")
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([{ itemId: 0, qty: 1 }])
 
   function addItem() {
@@ -50,9 +54,11 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
         formData.append("items", JSON.stringify(returnItems))
         const result = returnData?.id ? await updateSalesReturn(returnData.id, formData) : await createSalesReturn(formData)
         if (result.success) {
-          showSuccess(returnData?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+          showSuccess(returnData?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/penjualan/retur")
           router.refresh()
+        } else {
+          showError(result.error || "Gagal menyimpan data")
         }
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -64,37 +70,27 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="salesInvoiceId" className="w-full">
-            <Label>Invoice (Opsional)</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Cari invoice..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {invoices.map((inv) => (
-                  <ListBox.Item key={inv.id} id={String(inv.id)} textValue={inv.documentNo}>{inv.documentNo}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="salesInvoiceId">Faktur (Opsional)</Label>
+          <Combobox
+            id="salesInvoiceId"
+            name="salesInvoiceId"
+            value={salesInvoiceId || null}
+            onChange={(key) => setSalesInvoiceId(key ?? "")}
+            placeholder="Cari faktur..."
+            options={invoices.map((inv) => ({ value: String(inv.id), label: inv.documentNo }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="customerId" className="w-full" isRequired>
-            <Label>Customer</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Cari customer..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {customers.map((c) => (
-                  <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>{c.name}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="customerId">Pelanggan</Label>
+          <Combobox
+            id="customerId"
+            name="customerId"
+            value={customerId || null}
+            onChange={(key) => setCustomerId(key ?? "")}
+            placeholder="Cari pelanggan..."
+            options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -109,7 +105,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="reason">Alasan Retur</Label>
-          <TextArea id="reason" name="reason" rows={3} placeholder="Alasan pengembalian barang..." defaultValue={returnData?.reason ?? ""} />
+          <Textarea id="reason" name="reason" rows={3} placeholder="Alasan pengembalian barang..." defaultValue={returnData?.reason ?? ""} />
         </div>
       </div>
 
@@ -124,7 +120,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
           <thead>
             <tr>
               <th>Item</th>
-              <th style={{ width: "100px" }}>Qty</th>
+              <th style={{ width: "100px" }}>Jml</th>
               <th style={{ width: "40px" }}></th>
             </tr>
           </thead>
@@ -132,17 +128,13 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
             {returnItems.map((ri, index) => (
               <tr key={index}>
                 <td>
-                  <select
-                    value={ri.itemId}
-                    onChange={(e) => updateItem(index, "itemId", (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0))}
-                    className="form-input"
-                    style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
-                  >
-                    <option value={0}>Pilih Item</option>
-                    {items.map((item) => (
-                      <option key={item.id} value={item.id}>{item.sku} - {item.name}</option>
-                    ))}
-                  </select>
+                  <Combobox
+                    options={items.map((item) => ({ value: String(item.id), label: `${item.sku} - ${item.name}` }))}
+                    value={ri.itemId ? String(ri.itemId) : null}
+                    onChange={(key) => updateItem(index, "itemId", key ? Number(key) : 0)}
+                    placeholder="Cari item..."
+                    className="w-full"
+                  />
                 </td>
                 <td>
                   <input
@@ -168,7 +160,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-sales-return">
-          {isPending ? "Menyimpan..." : returnData?.id ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : returnData?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

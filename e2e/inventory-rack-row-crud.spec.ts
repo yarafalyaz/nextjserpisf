@@ -94,7 +94,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").first().fill(updated)
-    await submitAndWaitForListPage(page, /^Update$/)
+    await submitAndWaitForListPage(page, /^Update$|^Perbarui$/)
 
     await page.goto("/inventaris/baris-rak", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")

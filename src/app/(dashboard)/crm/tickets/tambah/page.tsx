@@ -24,13 +24,13 @@ export default async function CreateTicketPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "CRM", href: "/crm" },
-  { label: "Tickets", href: "/crm/tickets" },
-  { label: "Create" },
+  { label: "Tiket", href: "/crm/tickets" },
+  { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Ticket</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Tiket</h1>
       </div>
       <TicketForm customers={customers} users={users} />
     </div>

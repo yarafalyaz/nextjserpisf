@@ -23,7 +23,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/pembayaran-vendor/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/pembelian/pembayaran-vendor/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -71,6 +71,8 @@ export function VendorPaymentTable({ data }: VendorPaymentTableProps) {
       ariaLabel="Daftar pembayaran vendor"
       pageSize={20}
       selectable={true}
+      searchColumn="documentNo"
+      searchPlaceholder="Cari no. dokumen atau vendor..."
       onBulkDelete={(ids) => bulkDelete("vendorPayment", ids)}
     />
   )

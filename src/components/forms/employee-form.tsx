@@ -10,7 +10,11 @@ import { employeeSchema, type EmployeeInput } from "@/lib/validators"
 import { createEmployee, updateEmployee } from "@/actions/master.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, ComboBox, ListBox, Select, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
+import { Combobox } from "@/components/ui/combobox"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -41,9 +45,10 @@ interface EmployeeFormProps {
   departments: { id: number; name: string }[]
   positions: { id: number; name: string }[]
   generatedCode?: string
+  enableAutoCode?: boolean
 }
 
-export function EmployeeForm({ employee, departments, positions, generatedCode }: EmployeeFormProps) {
+export function EmployeeForm({ employee, departments, positions, generatedCode, enableAutoCode = true }: EmployeeFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!employee
@@ -58,7 +63,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<EmployeeInput>({
     resolver: zodResolver(employeeSchema) as any,
     defaultValues: {
-      employeeNo: employee?.employeeNo || generatedCode || "",
+      employeeNo: employee?.employeeNo || (enableAutoCode ? generatedCode : "") || "",
       name: employee?.name || "",
       email: employee?.email || "",
       phone: employee?.phone || "",
@@ -117,7 +122,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
         <FormSection title="Data Pribadi">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="employeeNo">No. Karyawan</Label>
-            <Input id="employeeNo" {...register("employeeNo")} readOnly className="bg-muted" />
+            <Input id="employeeNo" {...register("employeeNo")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan no. karyawan manual"} />
             {errors.employeeNo && <span className="text-xs text-danger mt-1">{errors.employeeNo.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -134,16 +139,17 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               name="gender"
               control={control}
               render={({ field }) => (
-                <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
+                <>
                   <Label>Jenis Kelamin</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item key="M" id="M" textValue="Laki-laki">Laki-laki<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="F" id="F" textValue="Perempuan">Perempuan<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                  <RadioGroup value={field.value || ""} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="M" /> Laki-laki
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="F" /> Perempuan
+                    </label>
+                  </RadioGroup>
+                </>
               )}
             />
           </div>
@@ -160,17 +166,20 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               name="maritalStatus"
               control={control}
               render={({ field }) => (
-                <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
+                <>
                   <Label>Status Pernikahan</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item key="Single" id="Single" textValue="Belum Menikah">Belum Menikah<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="Married" id="Married" textValue="Menikah">Menikah<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="Divorced" id="Divorced" textValue="Cerai">Cerai<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                  <RadioGroup value={field.value || ""} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="Single" /> Belum Menikah
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="Married" /> Menikah
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="Divorced" /> Cerai
+                    </label>
+                  </RadioGroup>
+                </>
               )}
             />
           </div>
@@ -182,27 +191,15 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               name="departmentId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
-                  <Label>Department</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari department..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {departments.map((d) => (
-                        <ListBox.Item key={d.id} id={String(d.id)} textValue={d.name}>
-                          {d.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label>Departemen</Label>
+                  <Combobox
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Cari departemen..."
+                    options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+                  />
+                </>
               )}
             />
           </div>
@@ -211,27 +208,15 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               name="positionId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
+                <>
                   <Label>Posisi</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari posisi..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {positions.map((p) => (
-                        <ListBox.Item key={p.id} id={String(p.id)} textValue={p.name}>
-                          {p.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                  <Combobox
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Cari posisi..."
+                    options={positions.map((p) => ({ value: String(p.id), label: p.name }))}
+                  />
+                </>
               )}
             />
           </div>
@@ -250,16 +235,17 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
               name="paymentFrequency"
               control={control}
               render={({ field }) => (
-                <Select selectedKey={field.value || "MONTHLY"} onSelectionChange={(key) => field.onChange(String(key))} className="w-full">
+                <>
                   <Label>Tipe Pembayaran</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item key="MONTHLY" id="MONTHLY" textValue="Bulanan">Bulanan<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="WEEKLY" id="WEEKLY" textValue="Mingguan">Mingguan<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                  <RadioGroup value={field.value || "MONTHLY"} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="MONTHLY" /> Bulanan
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="WEEKLY" /> Mingguan
+                    </label>
+                  </RadioGroup>
+                </>
               )}
             />
           </div>
@@ -307,7 +293,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
         <FormSection title="Alamat" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="street">Alamat</Label>
-            <TextArea id="street" {...register("street")} rows={2} placeholder="Alamat lengkap" />
+            <Textarea id="street" {...register("street")} rows={2} placeholder="Alamat lengkap" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <AddressPicker defaultValues={{ province: employee?.province ?? undefined, city: employee?.employeeCity ?? employee?.city ?? undefined, district: employee?.employeeDistrict ?? undefined, village: employee?.employeeVillage ?? undefined, postalCode: employee?.postalCode ?? undefined }} />
@@ -317,7 +303,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode }
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

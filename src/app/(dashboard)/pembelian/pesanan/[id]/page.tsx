@@ -41,9 +41,9 @@ export default async function PurchaseOrderDetailPage({
       <PageHeader
         title={`PO ${po.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/pembelian" },
-          { label: "Orders", href: "/pembelian/pesanan" },
+          { label: "Dasbor", href: "/" },
+          { label: "Pembelian", href: "/pembelian" },
+          { label: "Pesanan", href: "/pembelian/pesanan" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={po.status} />}
@@ -73,8 +73,8 @@ export default async function PurchaseOrderDetailPage({
                 <DetailCard>
                   <DetailField label="Pemasok" value={po.vendor.name} />
                   <DetailField label="Tanggal" value={formatDate(po.date)} />
-                  <DetailField label="Expected" value={formatDate(po.expectedDate)} />
-                  <DetailField label="PR Ref" value={po.purchaseRequest?.documentNo || "-"} mono />
+                  <DetailField label="Tanggal Diharapkan" value={formatDate(po.expectedDate)} />
+                  <DetailField label="Ref. PR" value={po.purchaseRequest?.documentNo || "-"} mono />
                   <DetailField label="Total Keseluruhan" value={formatCurrency(Number(po.grandTotal))} />
                 </DetailCard>
 
@@ -89,7 +89,7 @@ export default async function PurchaseOrderDetailPage({
           },
           {
             id: "items",
-            label: "Items",
+            label: "Item",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -98,9 +98,9 @@ export default async function PurchaseOrderDetailPage({
                 <div className="p-4 px-5">
                   <DetailTable>
                     <DetailTableHead>
-                      <DetailTableTh>Item ID</DetailTableTh>
-                      <DetailTableTh align="right">Qty</DetailTableTh>
-                      <DetailTableTh align="right">Received</DetailTableTh>
+                      <DetailTableTh>ID Barang</DetailTableTh>
+                      <DetailTableTh align="right">Jml</DetailTableTh>
+                      <DetailTableTh align="right">Diterima</DetailTableTh>
                       <DetailTableTh align="right">Harga</DetailTableTh>
                       <DetailTableTh align="right">Total</DetailTableTh>
                     </DetailTableHead>
@@ -134,12 +134,12 @@ export default async function PurchaseOrderDetailPage({
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
                   {po.status === "ordered" && (
-                    <Link href={`/pembelian/penerimaan/tambah?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat GR</Link>
+                    <Link href={`/pembelian/penerimaan/tambah?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Penerimaan</Link>
                   )}
                 </div>
                 <div className="p-4 px-5">
                   {po.goodsReceipts.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada goods receipt</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada penerimaan barang</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

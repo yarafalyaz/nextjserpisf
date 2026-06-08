@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { EmployeeLoanForm } from "@/components/forms/employee-loan-form"
-import { } from "@/components/ui/breadcrumbs"
 
 export default async function CreateLoanPage() {
   await requirePermission("view_employee_loans")

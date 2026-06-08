@@ -1,8 +1,9 @@
 "use client"
 
-import { Chip, cn } from "@heroui/react"
 import { Pencil } from "lucide-react"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/shadcn/badge"
 import { formatCurrency } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
 import { bulkDelete } from "@/actions/bulk.actions"
@@ -31,7 +32,7 @@ export function AssetTable({
       accessorKey: "code",
       header: "Kode",
       cell: ({ row }) => (
-        <Link href={`/aset/${row.original.id}`} className="font-medium text-primary hover:underline">
+        <Link href={`/aset/${row.original.id}`} className="font-medium text-foreground hover:underline">
           {row.original.code}
         </Link>
       ),
@@ -45,7 +46,7 @@ export function AssetTable({
         <div className="flex flex-col">
           <span className="font-medium">{row.original.name}</span>
           {row.original.location && (
-            <span className="text-xs text-muted">{row.original.location}</span>
+            <span className="text-xs text-muted-foreground">{row.original.location}</span>
           )}
         </div>
       ),
@@ -82,17 +83,17 @@ export function AssetTable({
       cell: ({ row }) => {
         const cond = row.original.condition
         return (
-          <Chip
-            size="sm"
-            variant="soft"
+          <Badge
+            variant="outline"
             className={cn(
-              cond === "good" && "bg-success-soft text-success-soft-foreground",
-              cond === "fair" && "bg-warning-soft text-warning-soft-foreground",
-              cond === "poor" && "bg-danger-soft text-danger-soft-foreground",
+              "font-medium border-transparent",
+              cond === "good" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+              cond === "fair" && "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+              cond === "poor" && "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
             )}
           >
             {cond === "good" ? "Baik" : cond === "fair" ? "Cukup" : cond === "poor" ? "Rusak" : cond}
-          </Chip>
+          </Badge>
         )
       },
       size: 100,
@@ -104,18 +105,18 @@ export function AssetTable({
       cell: ({ row }) => {
         const s = row.original.status
         return (
-          <Chip
-            size="sm"
-            variant="soft"
+          <Badge
+            variant="outline"
             className={cn(
-              s === "active" && "bg-success-soft text-success-soft-foreground",
-              s === "inactive" && "bg-default-soft text-default-soft-foreground",
-              s === "disposed" && "bg-danger-soft text-danger-soft-foreground",
-              s === "maintenance" && "bg-warning-soft text-warning-soft-foreground",
+              "font-medium border-transparent",
+              s === "active" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+              s === "inactive" && "bg-muted text-muted-foreground",
+              s === "disposed" && "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+              s === "maintenance" && "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
             )}
           >
             {s === "active" ? "Aktif" : s === "inactive" ? "Nonaktif" : s === "disposed" ? "Dibuang" : s === "maintenance" ? "Perbaikan" : s}
-          </Chip>
+          </Badge>
         )
       },
       size: 110,
@@ -127,7 +128,7 @@ export function AssetTable({
         <div className="flex items-center gap-1 justify-end">
           <Link
             href={`/aset/${row.original.id}`}
-            className="inline-flex items-center justify-center size-8 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary transition-all"
+            className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >
             <Pencil size={15} />
@@ -146,6 +147,8 @@ export function AssetTable({
       ariaLabel="Daftar aset"
       pageSize={20}
       selectable={true}
+      searchColumn="code"
+      searchPlaceholder="Cari nama, kode, atau lokasi..."
       onBulkDelete={(ids) => bulkDelete("asset", ids)}
     />
   )

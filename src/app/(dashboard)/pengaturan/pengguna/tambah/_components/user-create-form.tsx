@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation"
 import { useTransition, useState } from "react"
 import { createUser } from "@/actions/auth.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label, Button } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Button } from "@/components/ui/page-header"
 
 interface UserCreateFormProps {
   roles: { id: number; name: string }[]
@@ -35,7 +37,7 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
       if (result.error) {
         showError(result.error)
       } else {
-        showSuccess("User berhasil ditambahkan!")
+        showSuccess("Pengguna berhasil ditambahkan!")
         router.push("/pengaturan/pengguna")
       }
     })
@@ -53,11 +55,11 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
           <Input id="email" name="email" type="email" placeholder="email@example.com" required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="password" className="text-sm font-semibold">Password</Label>
+          <Label htmlFor="password" className="text-sm font-semibold">Kata Sandi</Label>
           <Input id="password" name="password" type="password" placeholder="Minimal 8 karakter" required minLength={8} />
         </div>
         <div className="flex flex-col gap-2">
-          <Label className="text-sm font-semibold">Role</Label>
+          <Label className="text-sm font-semibold">Peran</Label>
           <div className="p-3 border border-default rounded-lg bg-background min-h-[88px]">
             <div className="flex flex-wrap gap-3">
               {roleOptions.map(role => {
@@ -86,7 +88,7 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
           Batal
         </Button>
         <Button type="submit" variant="primary" isDisabled={isPending} size="lg">
-          {isPending ? "Menyimpan..." : "Simpan User"}
+          {isPending ? "Menyimpan..." : "Simpan Pengguna"}
         </Button>
       </div>
     </form>

@@ -22,7 +22,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/retur/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/retur/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -56,9 +56,11 @@ const columns = [
 
 interface ReturnTableProps {
   data: SalesReturn[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function ReturnTable({ data }: ReturnTableProps) {
+export function ReturnTable({ data, toolbar, filters }: ReturnTableProps) {
   return (
     <DataTable
       data={data}
@@ -66,6 +68,8 @@ export function ReturnTable({ data }: ReturnTableProps) {
       ariaLabel="Daftar retur penjualan"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("salesReturn", ids)}
     />
   )

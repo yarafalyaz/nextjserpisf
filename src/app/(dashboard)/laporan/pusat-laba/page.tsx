@@ -22,6 +22,7 @@ export default async function ProfitCenterIncomePage({
     ? new Date(params.tanggalMulai)
     : new Date(now.getFullYear(), 0, 1)
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
+  endDate.setHours(23, 59, 59, 999)
 
   // Get profit centers
   const profitCenters = await prisma.profitCenter.findMany({ orderBy: { code: 'asc' } })
@@ -31,7 +32,7 @@ export default async function ProfitCenterIncomePage({
     where: {
       account: { type: 'REVENUE' },
       journal: {
-        status: 'POSTED',
+        status: { in: ['POSTED', 'REVERSED'] },
         transactionDate: { gte: startDate, lte: endDate },
       },
     },
@@ -43,7 +44,7 @@ export default async function ProfitCenterIncomePage({
     where: {
       account: { type: 'EXPENSE' },
       journal: {
-        status: 'POSTED',
+        status: { in: ['POSTED', 'REVERSED'] },
         transactionDate: { gte: startDate, lte: endDate },
       },
     },
@@ -88,14 +89,14 @@ export default async function ProfitCenterIncomePage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/laporan" },
-  { label: "Profit Center Income" },
+  { label: "Dasbor", href: "/" },
+  { label: "Laporan", href: "/laporan" },
+  { label: "Pusat Laba" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
           <Building2 size={24} />
-          <h1>Laporan Laba Rugi per Profit Center</h1>
+          <h1>Laporan Laba Rugi per Pusat Laba</h1>
         <ExportButtons title="Pusat_Laba" />
         </div>
         <p>
@@ -108,7 +109,7 @@ export default async function ProfitCenterIncomePage({
       {/* Profit Centers List */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Daftar Profit Center</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Daftar Pusat Laba</h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable>
@@ -125,13 +126,13 @@ export default async function ProfitCenterIncomePage({
               ))}
               {profitCenters.length === 0 && (
                 <DetailTableRow>
-                  <DetailTableTd colSpan={2} className="text-center">Belum ada profit center</DetailTableTd>
+                  <DetailTableTd colSpan={2} className="text-center">Belum ada pusat laba</DetailTableTd>
                 </DetailTableRow>
               )}
             </DetailTableBody>
           </DetailTable>
-          <p className="mt-3 text-sm text-muted">
-            Alokasi per profit center akan tersedia setelah jurnal dihubungkan ke profit center.
+          <p className="mt-3 text-sm text-muted-foreground">
+            Alokasi per pusat laba akan tersedia setelah jurnal dihubungkan ke pusat laba.
           </p>
         </div>
       </div>
@@ -142,19 +143,19 @@ export default async function ProfitCenterIncomePage({
           <div className="text-xl font-bold text-success">
             {formatCurrency(totalRevenue)}
           </div>
-          <div className="text-[0.8125rem] text-muted font-medium">Total Pendapatan</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Pendapatan</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-xl font-bold text-danger">
             {formatCurrency(totalExpense)}
           </div>
-          <div className="text-[0.8125rem] text-muted font-medium">Total Beban</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Beban</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className={`text-xl font-bold ${netIncome >= 0 ? "text-success" : "text-danger"}`}>
             {formatCurrency(netIncome)}
           </div>
-          <div className="text-[0.8125rem] text-muted font-medium">Laba (Rugi) Bersih</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Laba (Rugi) Bersih</div>
         </div>
       </div>
 
@@ -231,7 +232,7 @@ export default async function ProfitCenterIncomePage({
         <div className={`text-xl font-bold ${netIncome >= 0 ? "text-success" : "text-danger"}`}>
           {formatCurrency(netIncome)}
         </div>
-        <div className="text-[0.8125rem] text-muted font-medium">Laba (Rugi) Bersih Keseluruhan</div>
+        <div className="text-[0.8125rem] text-muted-foreground font-medium">Laba (Rugi) Bersih Keseluruhan</div>
       </div>
     </div>
   )

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -19,19 +18,26 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const [vendors, items] = await Promise.all([prisma.vendor.findMany({ orderBy: { name: "asc" } }), prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, qtyOnHand: true, cost: true } }).then(items => items.map(i => ({ ...i, qtyOnHand: String(i.qtyOnHand), cost: String(i.cost) })))])
+  const order = {
+    id: data.id,
+    vendorId: data.vendorId,
+    date: data.date.toISOString().split("T")[0],
+    notes: data.notes,
+  }
+
+  const [vendors, items] = await Promise.all([prisma.vendor.findMany({ orderBy: { name: "asc" } }), prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, cost: true, unitOfMeasure: true } }).then(items => items.map(i => ({ ...i, cost: String(i.cost) })))])
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "purchase", href: "/pembelian/pesanan" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Pesanan", href: "/pembelian/pesanan" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <PurchaseOrderForm order={data as any} vendors={vendors as any} items={items as any}/>
+      <PurchaseOrderForm order={order} vendors={vendors} items={items}/>
     </div>
   )
 }

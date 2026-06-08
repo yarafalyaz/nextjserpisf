@@ -21,7 +21,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/sdm/hari-libur/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/hari-libur/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -61,6 +61,8 @@ export function HolidayTable({ data }: HolidayTableProps) {
       ariaLabel="Daftar hari libur"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama hari libur..."
       onBulkDelete={(ids) => bulkDelete("holiday", ids)}
     />
   )

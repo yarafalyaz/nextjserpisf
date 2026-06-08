@@ -1,6 +1,6 @@
 "use client"
 
-import { cn } from "@heroui/react"
+import { cn } from "@/lib/utils"
 
 interface DetailTableProps {
   children: React.ReactNode
@@ -42,7 +42,7 @@ export function DetailTableTh({
     <th
       colSpan={colSpan}
       className={cn(
-        "py-2.5 px-3 text-xs font-semibold text-muted uppercase tracking-wide",
+        "py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide",
         align === "right" && "text-right",
         align === "center" && "text-center",
         className

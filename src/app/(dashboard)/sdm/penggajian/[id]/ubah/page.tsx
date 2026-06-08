@@ -27,17 +27,17 @@ export default async function EditPayrollPage({
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
-          title="Ubah Payroll"
+          title="Ubah Penggajian"
           breadcrumbs={[
-            { label: "Dashboard", href: "/" },
-            { label: "HRM", href: "/sdm" },
+            { label: "Dasbor", href: "/" },
+            { label: "SDM", href: "/sdm" },
             { label: "Penggajian", href: "/sdm/penggajian" },
             { label: "Ubah" },
           ]}
           actions={<BackButton href={`/sdm/penggajian/${id}`} />}
         />
         <div className="p-6 bg-danger/10 border border-danger/20 rounded-xl text-danger">
-          Hanya payroll dengan status <strong>Draft</strong> yang dapat diubah.
+          Hanya penggajian dengan status <strong>Draft</strong> yang dapat diubah.
         </div>
       </div>
     )
@@ -69,10 +69,10 @@ export default async function EditPayrollPage({
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
       <PageHeader
-        title={`Ubah Payroll: ${payroll.documentNo}`}
+        title={`Ubah Penggajian: ${payroll.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Penggajian", href: "/sdm/penggajian" },
           { label: payroll.documentNo, href: `/sdm/penggajian/${payroll.id}` },
           { label: "Ubah" },

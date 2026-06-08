@@ -46,7 +46,7 @@ test.describe("Penjualan - Sales Order CRUD", () => {
     await waitForHydration(page)
 
     // Select customer
-    const selected = await selectFirstComboBoxOption(page, "Cari customer...")
+    const selected = await selectFirstComboBoxOption(page, "Cari pelanggan...")
     if (!selected) {
       test.skip(true, "No customers available in database — seeding issue")
       return
@@ -69,7 +69,7 @@ test.describe("Penjualan - Sales Invoice CRUD", () => {
     await waitForHydration(page)
 
     // Select customer
-    const selected = await selectFirstComboBoxOption(page, "Cari customer...")
+    const selected = await selectFirstComboBoxOption(page, "Cari pelanggan...")
     if (!selected) {
       test.skip(true, "No customers available in database — seeding issue")
       return

@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 
 /**
  * Material Issue Hook - Observer pattern replacement.
@@ -15,6 +16,8 @@ export async function onMaterialIssueCompleted(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent calls for the same material issue.
+    await tx.$queryRaw`SELECT id FROM material_issues WHERE id = ${issueId} FOR UPDATE`;
     const issue = await tx.materialIssue.findUniqueOrThrow({
       where: { id: issueId },
       include: { items: true },
@@ -36,8 +39,10 @@ export async function onMaterialIssueCompleted(
     }
 
     // Create Stock Move OUT per item
+    const journalItems: { qty: number; cost: number }[] = [];
     for (const item of issue.items) {
-      if (Number(item.qty) <= 0) continue;
+      const qty = Number(item.qty);
+      if (qty <= 0) continue;
 
       const smDocNo = await generateDocumentNumber("SM");
 
@@ -57,34 +62,32 @@ export async function onMaterialIssueCompleted(
         },
       });
 
-      // Update item qtyOnHand
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
+      // Lock the item row to serialize global qtyOnHand updates.
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
 
-      // FIFO layer consumption
-      const layers = await tx.inventoryLayer.findMany({
-        where: { itemId: item.itemId, remaining: { gt: 0 } },
-        orderBy: { createdAt: "asc" },
+      // Consume FIFO from the issue's warehouse (guards per-warehouse stock).
+      const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
+        itemId: item.itemId,
+        warehouseId: issue.warehouseId,
+        qty,
+        label: `pengeluaran material ${issue.documentNo}`,
       });
-      let qtyToConsume = Number(item.qty);
-      for (const layer of layers) {
-        if (qtyToConsume <= 0) break;
-        const available = Number(layer.remaining);
-        const consume = Math.min(available, qtyToConsume);
-        await tx.inventoryLayer.update({
-          where: { id: layer.id },
-          data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
-        });
-        qtyToConsume -= consume;
-      }
+
+      // Update item qtyOnHand (global total)
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${item.itemId}`;
+
+      // Journal credits Inventory at the ACTUAL FIFO cost consumed (not master cost),
+      // so GL matches the stock subledger reduction. Falls back to master cost for any
+      // shortfall portion.
+      const fallback = Number(item.cost ?? 0);
+      const totalCost = consumedCost + shortfall * fallback;
+      journalItems.push({ qty, cost: qty > 0 ? totalCost / qty : fallback });
     }
 
     // Create Journal Entry (Dr Material Expense, Cr Inventory)
     await stockJournalService.onMaterialIssue(
       tx,
-      issue.items.map((i) => ({
-        qty: Number(i.qty),
-        cost: Number(i.cost),
-      })),
+      journalItems,
       issue.documentNo ?? `MI-${issueId}`,
       issueId,
       userId

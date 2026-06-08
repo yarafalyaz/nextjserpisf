@@ -48,14 +48,14 @@ export default async function VendorDetailPage({
       <PageHeader
         title={vendor.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Vendors", href: "/master/pemasok" },
+          { label: "Pemasok", href: "/master/pemasok" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/pemasok/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/pemasok/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <BackButton href="/master/pemasok" />
           </>
         }
@@ -89,7 +89,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.purchaseOrders.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada purchase order</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada purchase order</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -125,7 +125,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {goodsReceipts.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada penerimaan barang</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada penerimaan barang</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -163,7 +163,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {purchaseReturns.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada retur</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada retur</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -199,7 +199,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.vendorBills.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada tagihan</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada tagihan</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

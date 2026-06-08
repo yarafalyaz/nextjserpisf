@@ -3,34 +3,33 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import {
   Users, Factory, Package, Tag, Layers, Building2, UserCircle,
   Briefcase, BookOpen, Landmark, BadgeDollarSign, ListOrdered,
-  Globe, FileSpreadsheet, ScanBarcode, CalendarDays, Scale
+  Globe, ScanBarcode, CalendarDays, Scale
 } from "lucide-react"
 
 const masterModules = [
-  { label: "Customers", href: "/master/pelanggan", icon: Users, desc: "Kelola data pelanggan" },
-  { label: "Vendors", href: "/master/pemasok", icon: Factory, desc: "Kelola data vendor/supplier" },
-  { label: "Items", href: "/master/barang", icon: Package, desc: "Kelola data barang" },
-  { label: "Item Categories", href: "/master/kategori-barang", icon: Tag, desc: "Kategori barang" },
-  { label: "Brands", href: "/master/merek", icon: Layers, desc: "Kelola brand/merek" },
-  { label: "Warehouses", href: "/master/gudang", icon: Building2, desc: "Kelola gudang" },
-  { label: "Employees", href: "/master/karyawan", icon: UserCircle, desc: "Kelola data karyawan" },
-  { label: "Departments", href: "/master", icon: Briefcase, desc: "Kelola departemen" },
-  { label: "Positions", href: "/master/jabatan", icon: Briefcase, desc: "Kelola jabatan" },
-  { label: "Accounts (COA)", href: "/master/akun", icon: BookOpen, desc: "Chart of Accounts" },
-  { label: "Banks", href: "/master/bank", icon: Landmark, desc: "Kelola data bank" },
-  { label: "Taxes", href: "/master/pajak", icon: BadgeDollarSign, desc: "Kelola pajak" },
-  { label: "Tax Groups", href: "/master/kelompok-pajak", icon: ListOrdered, desc: "Grup pajak" },
-  { label: "Currencies", href: "/master/mata-uang", icon: Globe, desc: "Kelola mata uang" },
-  { label: "Price Lists", href: "/master/daftar-harga", icon: FileSpreadsheet, desc: "Daftar harga" },
-  { label: "Barcodes", href: "/master/barcode", icon: ScanBarcode, desc: "Kelola barcode" },
+  { label: "Pelanggan", href: "/master/pelanggan", icon: Users, desc: "Kelola data pelanggan" },
+  { label: "Pemasok", href: "/master/pemasok", icon: Factory, desc: "Kelola data vendor/supplier" },
+  { label: "Item", href: "/master/barang", icon: Package, desc: "Kelola data barang" },
+  { label: "Kategori Barang", href: "/master/kategori-barang", icon: Tag, desc: "Kategori barang" },
+  { label: "Merek", href: "/master/merek", icon: Layers, desc: "Kelola brand/merek" },
+  { label: "Gudang", href: "/master/gudang", icon: Building2, desc: "Kelola gudang" },
+  { label: "Karyawan", href: "/master/karyawan", icon: UserCircle, desc: "Kelola data karyawan" },
+  { label: "Departemen", href: "/master", icon: Briefcase, desc: "Kelola departemen" },
+  { label: "Jabatan", href: "/master/jabatan", icon: Briefcase, desc: "Kelola jabatan" },
+  { label: "Akun (COA)", href: "/master/akun", icon: BookOpen, desc: "Chart of Accounts" },
+  { label: "Bank", href: "/master/bank", icon: Landmark, desc: "Kelola data bank" },
+  { label: "Pajak", href: "/master/pajak", icon: BadgeDollarSign, desc: "Kelola pajak" },
+  { label: "Kelompok Pajak", href: "/master/kelompok-pajak", icon: ListOrdered, desc: "Grup pajak" },
+  { label: "Mata Uang", href: "/master/mata-uang", icon: Globe, desc: "Kelola mata uang" },
+  { label: "Barcode", href: "/master/barcode", icon: ScanBarcode, desc: "Kelola barcode" },
   { label: "Payment Terms", href: "/master/syarat-pembayaran", icon: CalendarDays, desc: "Termin pembayaran" },
-  { label: "UoM", href: "/master/satuan", icon: Scale, desc: "Satuan ukuran" },
+  { label: "Satuan", href: "/master/satuan", icon: Scale, desc: "Satuan ukuran" },
 ]
 
 export default function MasterPage() {
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Master Data" }]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data" }]} />
       <h1 className="text-2xl font-bold text-foreground">Data Master</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -47,7 +46,7 @@ export default function MasterPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">{mod.label}</p>
-                <p className="text-xs text-muted">{mod.desc}</p>
+                <p className="text-xs text-muted-foreground">{mod.desc}</p>
               </div>
             </Link>
           )

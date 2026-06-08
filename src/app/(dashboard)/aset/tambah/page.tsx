@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -19,14 +18,14 @@ export default async function CreateAssetPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Assets", href: "/aset" },
-        { label: "Create" },
+        { label: "Dasbor", href: "/" },
+        { label: "Aset", href: "/aset" },
+        { label: "Tambah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Aset</h1>
       </div>
-      <AssetForm categories={categories as any} brands={brands as any} generatedCode={generatedCode} />
+      <AssetForm categories={categories} brands={brands} generatedCode={generatedCode} />
     </div>
   )
 }

@@ -9,7 +9,9 @@ import { purchaseOrderSchema, type PurchaseOrderInput } from "@/lib/validators"
 import { createPurchaseOrder, updatePurchaseOrder } from "@/actions/purchase.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { TextArea, Label, ComboBox, Input, ListBox } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -37,8 +39,9 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<PurchaseOrderInput>({
     resolver: zodResolver(purchaseOrderSchema),
     defaultValues: {
-      date: new Date().toISOString().split("T")[0],
-      notes: "",
+      vendorId: order?.vendorId,
+      date: order?.date ?? new Date().toISOString().split("T")[0],
+      notes: order?.notes ?? "",
       purchaseRequestId: defaultPrId,
     },
   })
@@ -80,7 +83,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
           await createPurchaseOrder(formData)
 
         }
-        showSuccess(order?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/pembelian/pesanan")
         router.refresh()
       } catch (error) {
@@ -94,32 +97,19 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="vendorId">Pemasok *</Label>
             <Controller
               name="vendorId"
               control={control}
               rules={{}}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
-                  <Label>Vendor *</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari vendor..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {vendors.map((v) => (
-                        <ListBox.Item key={v.id} id={String(v.id)} textValue={v.name}>
-                          {v.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <Combobox
+                  id="vendorId"
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                  placeholder="Cari pemasok..."
+                  options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+                />
               )}
             />
             {errors.vendorId && <span className="text-xs text-danger mt-1">{errors.vendorId.message}</span>}
@@ -136,7 +126,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker
-              label="Expected Delivery"
+              label="Perkiraan Pengiriman"
               name="expectedDate"
               value={watch("expectedDate")}
               onChange={(val) => setValue("expectedDate", val)}
@@ -147,7 +137,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
         <FormSection title="Detail" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
-            <TextArea id="notes" {...register("notes")} rows={2} placeholder="Catatan PO..." />
+            <Textarea id="notes" {...register("notes")} rows={2} placeholder="Catatan PO..." />
           </div>
         </FormSection>
 
@@ -162,7 +152,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
               <thead>
                 <tr>
                   <th>Item</th>
-                  <th style={{ width: "80px" }}>Qty</th>
+                  <th style={{ width: "80px" }}>Jml</th>
                   <th style={{ width: "120px" }}>Harga</th>
                   <th style={{ width: "100px" }}>Diskon</th>
                   <th style={{ width: "120px" }}>Total</th>
@@ -173,17 +163,13 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
                 {poItems.map((poItem, index) => (
                   <tr key={index}>
                     <td>
-                      <select
-                        value={poItem.itemId}
-                        onChange={(e) => updateItem(index, "itemId", Number(e.target.value))}
-                        className="form-input"
-                        style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
-                      >
-                        <option value={0}>Pilih Item</option>
-                        {items.map((item) => (
-                          <option key={item.id} value={item.id}>{item.sku} - {item.name}</option>
-                        ))}
-                      </select>
+                      <Combobox
+                        value={poItem.itemId ? String(poItem.itemId) : null}
+                        onChange={(key) => updateItem(index, "itemId", key ? Number(key) : 0)}
+                        options={items.map((item) => ({ value: String(item.id), label: `${item.sku} - ${item.name}` }))}
+                        placeholder="Pilih Item"
+                        className="w-full"
+                      />
                     </td>
                     <td>
                       <input
@@ -232,7 +218,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : order?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : order?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

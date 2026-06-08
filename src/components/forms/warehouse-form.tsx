@@ -7,7 +7,9 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { warehouseSchema, type WarehouseInput } from "@/lib/validators"
 import { createWarehouse, updateWarehouse } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/page-header"
 
 interface WarehouseFormProps {
@@ -18,9 +20,10 @@ interface WarehouseFormProps {
     address: string | null
   }
   generatedCode?: string
+  enableAutoCode?: boolean
 }
 
-export function WarehouseForm({ warehouse, generatedCode }: WarehouseFormProps) {
+export function WarehouseForm({ warehouse, generatedCode, enableAutoCode = true }: WarehouseFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!warehouse
@@ -29,7 +32,7 @@ export function WarehouseForm({ warehouse, generatedCode }: WarehouseFormProps) 
     resolver: zodResolver(warehouseSchema),
     defaultValues: {
       name: warehouse?.name || "",
-      code: warehouse?.code || generatedCode || "",
+      code: warehouse?.code || (enableAutoCode ? generatedCode : "") || "",
       address: warehouse?.address || "",
     },
   })
@@ -42,11 +45,8 @@ export function WarehouseForm({ warehouse, generatedCode }: WarehouseFormProps) 
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
 
-        if (isEdit) {
-          await updateWarehouse(warehouse!.id, formData)
-        } else {
-          await createWarehouse(formData)
-        }
+        const result = isEdit ? await updateWarehouse(warehouse!.id, formData) : await createWarehouse(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/master/gudang")
         router.refresh()
@@ -61,7 +61,7 @@ export function WarehouseForm({ warehouse, generatedCode }: WarehouseFormProps) 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="code">Kode Gudang *</Label>
-          <Input id="code" {...register("code")} readOnly className="bg-muted" />
+          <Input id="code" {...register("code")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"} />
           {errors.code && <span className="text-xs text-danger mt-1">{errors.code.message}</span>}
         </div>
 
@@ -73,14 +73,14 @@ export function WarehouseForm({ warehouse, generatedCode }: WarehouseFormProps) 
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="address">Alamat</Label>
-          <TextArea id="address" {...register("address")} rows={3} placeholder="Alamat gudang" />
+          <Textarea id="address" {...register("address")} rows={3} placeholder="Alamat gudang" />
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-warehouse">
-          {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

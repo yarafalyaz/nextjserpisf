@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation"
 import { useMemo, useState, useTransition } from "react"
 import { createRackRow, updateRackRow } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label, ComboBox, ListBox } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Combobox } from "@/components/ui/combobox"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -41,7 +43,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
   )
   const racks = selectedWarehouse?.racks ?? []
 
-  function handleWarehouseChange(key: React.Key | null) {
+  function handleWarehouseChange(key: string | null) {
     const nextWarehouseId = String(key ?? "")
     const nextWarehouse = warehouses.find((w) => String(w.id) === nextWarehouseId)
 
@@ -70,7 +72,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
           throw new Error(result?.error || "Gagal menyimpan data")
         }
 
-        showSuccess(rackRow ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(rackRow ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/inventaris/baris-rak")
         router.refresh()
       } catch (error) {
@@ -80,8 +82,8 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
   }
 
   const breadcrumbs = [
-    { label: "Dashboard", href: "/" },
-    { label: "Inventory", href: "/inventaris" },
+    { label: "Dasbor", href: "/" },
+    { label: "Inventaris", href: "/inventaris" },
     { label: "Baris Rak", href: "/inventaris/baris-rak" },
     { label: rackRow ? "Edit" : "Tambah" },
   ]
@@ -102,41 +104,27 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
           <FormSection title="Informasi Umum">
             {/* Warehouse select */}
             <div className="flex flex-col gap-1.5">
-              <ComboBox
-                selectedKey={warehouseId || null}
-                onSelectionChange={handleWarehouseChange}
-                className="w-full"
-              >
-                <Label>Gudang *</Label>
-                <ComboBox.InputGroup><Input placeholder="Cari gudang..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {warehouses.map((w) => (
-                      <ListBox.Item key={w.id} id={String(w.id)} textValue={w.name}>{w.name}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <Label htmlFor="warehouseId">Gudang *</Label>
+              <Combobox
+                id="warehouseId"
+                value={warehouseId || null}
+                onChange={handleWarehouseChange}
+                placeholder="Cari gudang..."
+                options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+              />
             </div>
 
             {/* Rack select (filtered by warehouse) */}
             <div className="flex flex-col gap-1.5">
-              <ComboBox
-                selectedKey={rackId || null}
-                onSelectionChange={(key) => setRackId(String(key ?? ""))}
-                className="w-full"
-                isDisabled={!warehouseId}
-              >
-                <Label>Rak *</Label>
-                <ComboBox.InputGroup><Input placeholder="Cari rak..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {racks.map((r) => (
-                      <ListBox.Item key={r.id} id={String(r.id)} textValue={r.name}>{r.name}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <Label htmlFor="rackIdSelect">Rak *</Label>
+              <Combobox
+                id="rackIdSelect"
+                value={rackId || null}
+                onChange={(key) => setRackId(key ?? "")}
+                placeholder="Cari rak..."
+                disabled={!warehouseId}
+                options={racks.map((r) => ({ value: String(r.id), label: r.name }))}
+              />
             </div>
 
             {/* Code input */}
@@ -157,7 +145,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
                 <Label>Kode</Label>
                 <Input
                   disabled
-                  placeholder="Auto-generated"
+                  placeholder="Dibuat otomatis"
                   defaultValue={rackRow?.code || ""}
                 />
                 <input type="hidden" name="code" value={rackRow?.code || ""} />
@@ -180,7 +168,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
           <FormActions>
             <Button type="button" onPress={() => router.back()}>Batal</Button>
             <Button type="submit" variant="primary" isDisabled={isPending}>
-              {isPending ? "Menyimpan..." : rackRow ? "Update" : "Simpan"}
+              {isPending ? "Menyimpan..." : rackRow ? "Perbarui" : "Simpan"}
             </Button>
           </FormActions>
         </FormCard>

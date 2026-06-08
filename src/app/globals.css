@@ -1,5 +1,20 @@
 @import "tailwindcss";
-@import "@heroui/styles";
+@import "tw-animate-css";
+
+/* Enable class-based dark mode for shadcn `dark:` utilities (app toggles html.dark). */
+@custom-variant dark (&:is(.dark *));
+
+/* Tailwind v4 defaults bare `border`/`divide` utilities to currentColor.
+   shadcn components (Table, Input, Button outline, etc.) expect the default
+   border color to be the `--border` token, so set it globally. Explicit
+   `border-default`/`border-*` utilities still override this. */
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--border, #e2e8f0);
+  }
+}
 
 @theme {
   --color-primary: #dc2626;
@@ -10,7 +25,144 @@
   --color-surface: var(--bg-card, #ffffff);
   --color-surface-secondary: var(--bg-secondary, #f8fafc);
   --color-foreground: var(--text-primary, #0f172a);
-  --color-muted: var(--text-muted, #64748b);
+  --color-muted: var(--bg-tertiary, #f1f5f9);
+  /* Tokens previously provided by @heroui/styles, now app-owned. */
+  --color-default: var(--border-color, #e2e8f0);
+  --color-default-soft: var(--bg-tertiary, #f1f5f9);
+  --color-default-soft-foreground: var(--text-secondary, #475569);
+  --color-default-100: var(--bg-tertiary, #f1f5f9);
+  --color-default-600: var(--text-secondary, #475569);
+  --color-default-hover: var(--text-muted, #94a3b8);
+  --color-muted-foreground: var(--text-secondary, #475569);
+  --color-content: var(--bg-card, #ffffff);
+
+  /* Soft / numeric semantic scales previously from @heroui/styles. */
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --color-primary-soft-foreground: var(--color-primary);
+  --color-primary-600: var(--color-primary);
+  --color-success-soft: color-mix(in srgb, var(--color-success) 14%, transparent);
+  --color-success-soft-foreground: var(--color-success);
+  --color-success-600: var(--color-success);
+  --color-warning-soft: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  --color-warning-soft-foreground: var(--color-warning);
+  --color-warning-600: var(--color-warning);
+  --color-danger-soft: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  --color-danger-soft-foreground: var(--color-danger);
+  --color-danger-600: var(--color-danger);
+}
+
+/* ==================== SHADCN/UI DESIGN TOKENS ====================
+   Only NEW tokens are mapped here. Existing tokens (--color-primary,
+   --color-foreground, --color-muted, --color-secondary, --color-surface,
+   --color-default) keep their current meaning so the legacy HeroUI-era
+   utility classes used across the app remain unchanged during migration. */
+@theme inline {
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent-bg);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+}
+
+:root {
+  --radius: 0.625rem;
+
+  --background: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --primary-foreground: #ffffff;
+  --secondary-foreground: #0f172a;
+
+  /* shadcn neutral hover surface (distinct from HeroUI red --accent bridge) */
+  --accent-bg: #f1f5f9;
+  --accent-fg: #0f172a;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #dc2626;
+  /* Sidebar — brand-aligned (red accents on light surface) */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #475569;
+  --sidebar-primary: #dc2626;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in srgb, #dc2626 10%, transparent);
+  --sidebar-accent-foreground: #dc2626;
+  --sidebar-border: #e8edf3;
+  --sidebar-ring: #dc2626;
+
+  /* Chart palette */
+  --chart-1: #dc2626;
+  --chart-2: #2563eb;
+  --chart-3: #16a34a;
+  --chart-4: #f59e0b;
+  --chart-5: #7c3aed;
+  --chart-6: #0891b2;
+}
+
+html.dark {
+  --background: #0f1219;
+  --card: #161b26;
+  --card-foreground: #f1f5f9;
+  --popover: #161b26;
+  --popover-foreground: #f1f5f9;
+
+  --primary-foreground: #ffffff;
+  --secondary-foreground: #f1f5f9;
+
+  --accent-bg: #242938;
+  --accent-fg: #f1f5f9;
+
+  --destructive: #f87171;
+  --destructive-foreground: #0f172a;
+
+  --border: #2d3548;
+  --input: #2d3548;
+  --ring: #ef4444;
+  /* Sidebar — match the main content background for a seamless surface */
+  --sidebar: #0f1219;
+  --sidebar-foreground: #94a3b8;
+  --sidebar-primary: #ef4444;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in srgb, #ef4444 16%, transparent);
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #1c2331;
+  --sidebar-ring: #ef4444;
+
+  /* Chart palette (dark) */
+  --chart-1: #f87171;
+  --chart-2: #60a5fa;
+  --chart-3: #4ade80;
+  --chart-4: #fbbf24;
+  --chart-5: #a78bfa;
+  --chart-6: #22d3ee;
 }
 
 /* HeroUI v3 styles must be imported after Tailwind CSS. */
@@ -243,15 +395,10 @@ html.dark table tr:hover td {
   background: var(--bg-tertiary);
 }
 
-html.dark .bg-muted {
-  background-color: var(--bg-tertiary) !important;
-}
-
 html.dark .header-logout-btn:hover,
 html.dark .header-dropdown-danger:hover {
   background: rgba(248, 113, 113, 0.1);
 }
-
 
 /* Custom Search Field */
 .app-search-field {
@@ -463,8 +610,7 @@ html.dark .filter-chip.active {
   border-color: var(--color-primary);
 }
 
-/* Dropdown & Popover */
-html.dark [data-placement],
+/* Dropdown & Popover (legacy custom classes only) */
 html.dark .dropdown-menu,
 html.dark .popover {
   background: var(--bg-card);
@@ -485,11 +631,6 @@ html.dark .section-title {
   color: var(--text-primary);
 }
 
-/* Links */
-html.dark a:not([class*="text-white"]):not([class*="bg-primary"]):not([class*="nav-item"]):not([class*="header-"]):not([class*="dropdown"]):not([class*="filter-chip"]) {
-  color: var(--color-primary);
-}
-
 /* Error states */
 html.dark .form-error {
   color: var(--color-danger);
@@ -505,16 +646,6 @@ html.dark .totals-section {
 html.dark [style*="background: #fef2f2"],
 html.dark .error-bg {
   background: rgba(248, 113, 113, 0.1) !important;
-}
-
-/* ComboBox & ListBox */
-html.dark [role="listbox"] {
-  background: var(--bg-card);
-  border-color: var(--border-color);
-}
-
-html.dark [role="option"]:hover {
-  background: var(--bg-tertiary);
 }
 
 /* Pagination */
@@ -535,16 +666,7 @@ html.dark .search-field input {
   border-color: var(--border-color);
 }
 
-/* Tooltip */
-html.dark [role="tooltip"] {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-/* ==================== HEROUI DARK MODE ==================== */
-/* HeroUI handles its own dark mode via the 'dark' class on <html>.
-   We only override our custom elements, not HeroUI internals. */
-
+/* ==================== LEGACY CUSTOM ELEMENTS (DARK) ==================== */
 
 /* Buttons - ensure text is visible */
 html.dark .btn {
@@ -571,23 +693,11 @@ html.dark .table-action-btn:hover {
   background: var(--bg-tertiary);
 }
 
-/* Modal / Dialog */
-html.dark [role="dialog"],
+/* Modal / Dialog (legacy custom class only) */
 html.dark .modal-content {
   background: var(--bg-card);
   color: var(--text-primary);
   border-color: var(--border-color);
-}
-
-/* Alert Dialog overlay */
-html.dark [data-slot="backdrop"] {
-  background: rgba(0, 0, 0, 0.7);
-}
-
-/* Select/ComboBox trigger button */
-html.dark button[data-slot="trigger"],
-html.dark .react-aria-Button {
-  color: var(--text-primary);
 }
 
 /* Quotation form table */
@@ -1261,8 +1371,6 @@ body {
   margin: 0;
 }
 
-
-
 /* ==================== SKELETON LOADING ==================== */
 .skeleton {
   background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border-color) 50%, var(--bg-tertiary) 75%);
@@ -1422,7 +1530,6 @@ html.dark [cmdk-group-heading] {
 .cmdk-item-label {
   flex: 1;
 }
-
 
 /* Mobile sidebar overlay */
 @media (max-width: 1024px) {
@@ -1807,12 +1914,6 @@ html.dark [cmdk-group-heading] {
   margin: 24px 0;
 }
 
-/* ==================== READ-ONLY FIELD ==================== */
-.bg-muted {
-  background-color: var(--bg-tertiary, #f5f5f5) !important;
-  cursor: not-allowed;
-}
-
 /* ==================== IMAGE UPLOAD ==================== */
 .image-upload-area {
   position: relative;
@@ -1885,10 +1986,6 @@ html.dark [cmdk-group-heading] {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-primary);
-}
-
-.hidden {
-  display: none;
 }
 
 /* ==================== TRANSACTION ATTACHMENTS ==================== */

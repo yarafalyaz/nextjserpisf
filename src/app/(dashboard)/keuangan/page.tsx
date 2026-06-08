@@ -6,20 +6,20 @@ import {
 } from "lucide-react"
 
 const financeModules = [
-  { label: "Journals", href: "/keuangan/jurnal", icon: BookOpenCheck, desc: "Jurnal umum" },
-  { label: "Expenses", href: "/keuangan/pengeluaran", icon: CircleDollarSign, desc: "Pengeluaran" },
-  { label: "Petty Cash", href: "/keuangan/kas-kecil", icon: Coins, desc: "Kas kecil" },
-  { label: "Budgets", href: "/keuangan/anggaran", icon: PiggyBank, desc: "Anggaran" },
-  { label: "Cost Centers", href: "/keuangan/pusat-biaya", icon: Target, desc: "Pusat biaya" },
-  { label: "Bank Statements", href: "/keuangan/laporan-bank", icon: FileSpreadsheet, desc: "Mutasi bank" },
-  { label: "Bank Recon", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, desc: "Rekonsiliasi bank" },
-  { label: "Statistical KF", href: "/keuangan/angka-kunci-statistik", icon: BarChart3, desc: "Key figures statistik" },
+  { label: "Jurnal", href: "/keuangan/jurnal", icon: BookOpenCheck, desc: "Jurnal umum" },
+  { label: "Pengeluaran", href: "/keuangan/pengeluaran", icon: CircleDollarSign, desc: "Pengeluaran" },
+  { label: "Kas Kecil", href: "/keuangan/kas-kecil", icon: Coins, desc: "Kas kecil" },
+  { label: "Anggaran", href: "/keuangan/anggaran", icon: PiggyBank, desc: "Anggaran" },
+  { label: "Pusat Biaya", href: "/keuangan/pusat-biaya", icon: Target, desc: "Pusat biaya" },
+  { label: "Laporan Bank", href: "/keuangan/laporan-bank", icon: FileSpreadsheet, desc: "Mutasi bank" },
+  { label: "Rekonsiliasi Bank", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, desc: "Rekonsiliasi bank" },
+  { label: "Angka Kunci Statistik", href: "/keuangan/angka-kunci-statistik", icon: BarChart3, desc: "Key figures statistik" },
 ]
 
 export default function FinancePage() {
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Finance" }]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Keuangan" }]} />
       <h1 className="text-2xl font-bold text-foreground">Keuangan</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {financeModules.map((mod) => {
@@ -31,7 +31,7 @@ export default function FinancePage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">{mod.label}</p>
-                <p className="text-xs text-muted">{mod.desc}</p>
+                <p className="text-xs text-muted-foreground">{mod.desc}</p>
               </div>
             </Link>
           )

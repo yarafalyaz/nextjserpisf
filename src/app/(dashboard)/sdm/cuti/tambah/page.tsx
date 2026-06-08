@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { LeaveForm } from "@/components/forms/leave-form"
-import { } from "@/components/ui/breadcrumbs"
 
 export default async function CreateLeavePage() {
   await requirePermission("view_leave_requests")

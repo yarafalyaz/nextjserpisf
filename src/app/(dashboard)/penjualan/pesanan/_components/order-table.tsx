@@ -23,7 +23,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/pesanan/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/pesanan/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -34,7 +34,7 @@ const columns = [
   }),
   columnHelper.accessor((row) => row.customer.name, {
     id: "customerName",
-    header: "Customer",
+    header: "Pelanggan",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("grandTotal", {
@@ -62,9 +62,11 @@ const columns = [
 
 interface OrderTableProps {
   data: SalesOrder[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function OrderTable({ data }: OrderTableProps) {
+export function OrderTable({ data, toolbar, filters }: OrderTableProps) {
   return (
     <DataTable
       data={data}
@@ -72,6 +74,8 @@ export function OrderTable({ data }: OrderTableProps) {
       ariaLabel="Daftar sales order"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("salesOrder", ids)}
     />
   )

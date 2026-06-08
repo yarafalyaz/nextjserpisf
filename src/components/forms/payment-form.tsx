@@ -10,7 +10,9 @@ import { createSalesPayment, updateSalesPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Select, ComboBox, ListBox, Label, InputGroup } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -20,9 +22,10 @@ interface PaymentFormProps {
   accounts: { id: number; code: string; name: string }[]
   defaultInvoiceId?: number
   payment?: { id: number }
+  paymentMethods?: { code: string; name: string }[]
 }
 
-export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: PaymentFormProps) {
+export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment, paymentMethods = [] }: PaymentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -34,7 +37,7 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
         ? Number(invoices.find(i => i.id === defaultInvoiceId)?.grandTotal ?? 0) - Number(invoices.find(i => i.id === defaultInvoiceId)?.paidAmount ?? 0)
         : 0,
       paymentDate: new Date().toISOString().split("T")[0],
-      paymentMethod: "transfer",
+      paymentMethod: "",
       notes: "",
     },
   })
@@ -62,7 +65,7 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
           await createSalesPayment(formData)
 
         }
-        showSuccess(payment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(payment?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/penjualan/pembayaran")
         router.refresh()
       } catch (error) {
@@ -80,27 +83,16 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
               name="salesInvoiceId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
-                  <Label>Invoice *</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari invoice..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {invoices.map((inv) => (
-                        <ListBox.Item key={inv.id} id={String(inv.id)} textValue={`${inv.documentNo} - ${inv.customer.name}`}>
-                          {inv.documentNo} - {inv.customer.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="salesInvoiceId">Faktur *</Label>
+                  <Combobox
+                    id="salesInvoiceId"
+                    options={invoices.map((inv) => ({ value: String(inv.id), label: `${inv.documentNo} - ${inv.customer.name}` }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Cari faktur..."
+                  />
+                </>
               )}
             />
             {errors.salesInvoiceId && <span className="text-xs text-danger mt-1">{errors.salesInvoiceId.message}</span>}
@@ -126,19 +118,19 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
               name="paymentMethod"
               control={control}
               render={({ field }) => (
-                <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
-                  <Label>Metode Bayar *</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="transfer" textValue="Transfer Bank">Transfer Bank<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item id="cash" textValue="Tunai">Tunai<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item id="check" textValue="Cek/Giro">Cek/Giro<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item id="card" textValue="Kartu Kredit/Debit">Kartu Kredit/Debit<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item id="ewallet" textValue="E-Wallet">E-Wallet<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                <>
+                  <Label htmlFor="paymentMethod">Metode Bayar *</Label>
+                  <Combobox
+                    id="paymentMethod"
+                    value={field.value || null}
+                    onChange={(v) => field.onChange(v ?? "")}
+                    placeholder="Pilih / ketik metode..."
+                    options={(paymentMethods.length > 0
+                      ? paymentMethods
+                      : [{ code: "transfer", name: "Transfer Bank" }, { code: "cash", name: "Tunai" }]
+                    ).map((m) => ({ value: m.code, label: m.name }))}
+                  />
+                </>
               )}
             />
             {errors.paymentMethod && <span className="text-xs text-danger mt-1">{errors.paymentMethod.message}</span>}
@@ -147,10 +139,7 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="amount">Jumlah Bayar (Rp) *</Label>
-            <InputGroup>
-              <InputGroup.Prefix>Rp</InputGroup.Prefix>
-              <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" />} />
-            </InputGroup>
+            <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" prefix="Rp" />} />
             {errors.amount && <span className="text-xs text-danger mt-1">{errors.amount.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -158,27 +147,16 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
               name="accountId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
-                  <Label>Akun Kas/Bank</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari akun..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {accounts.map((acc) => (
-                        <ListBox.Item key={acc.id} id={String(acc.id)} textValue={`${acc.code} - ${acc.name}`}>
-                          {acc.code} - {acc.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="accountId">Akun Kas/Bank</Label>
+                  <Combobox
+                    id="accountId"
+                    options={accounts.map((acc) => ({ value: String(acc.id), label: `${acc.code} - ${acc.name}` }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Cari akun..."
+                  />
+                </>
               )}
             />
           </div>
@@ -186,7 +164,7 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment }: P
         <FormSection title="Lainnya" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
-            <TextArea id="notes" {...register("notes")} rows={2} placeholder="Catatan pembayaran..." />
+            <Textarea id="notes" {...register("notes")} rows={2} placeholder="Catatan pembayaran..." />
           </div>
           <FormAttachmentUpload referenceType="sales_payment" />
         </FormSection>

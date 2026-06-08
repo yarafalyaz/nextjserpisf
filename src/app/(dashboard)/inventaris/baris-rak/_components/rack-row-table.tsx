@@ -41,7 +41,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/inventaris/baris-rak/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/inventaris/baris-rak/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -77,6 +77,8 @@ export function RackRowTable({ data }: RackRowTableProps) {
       ariaLabel="Daftar baris rak"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama atau kode baris rak..."
       onBulkDelete={(ids) => bulkDelete("rackRow", ids)}
     />
   )

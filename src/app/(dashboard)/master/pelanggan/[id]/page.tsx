@@ -45,14 +45,14 @@ export default async function CustomerDetailPage({
       <PageHeader
         title={customer.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Customers", href: "/master/pelanggan" },
+          { label: "Pelanggan", href: "/master/pelanggan" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/pelanggan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/pelanggan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <BackButton href="/master/pelanggan" />
           </>
         }
@@ -87,7 +87,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.quotations.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada quotation</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada quotation</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -123,7 +123,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.salesInvoices.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada invoice</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada invoice</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -161,7 +161,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.projects.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada proyek</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada proyek</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -197,7 +197,7 @@ export default async function CustomerDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {customer.customerVehicles.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada kendaraan</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada kendaraan</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

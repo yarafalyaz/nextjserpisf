@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/aset/kategori/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/aset/kategori/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -66,6 +66,8 @@ export function AssetCategoryTable({ data }: AssetCategoryTableProps) {
       ariaLabel="Daftar kategori aset"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama kategori..."
       onBulkDelete={(ids) => bulkDelete("assetCategory", ids)}
     />
   )

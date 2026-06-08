@@ -47,7 +47,7 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
       {/* Task List */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Scheduled Tasks</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Tugas Terjadwal</h2>
         </div>
         <div className="divide-y divide-default">
           {tasks.map((task) => (
@@ -67,17 +67,17 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted mt-0.5">{task.description}</p>
-                <p className="text-xs text-muted mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Jadwal: {task.schedule}
                   {task.lastRun && (
                     <> · Terakhir: {formatDate(task.lastRun.ranAt)}{" "}
-                      {task.lastRun.duration !== null && <span className="text-muted">({task.lastRun.duration}ms)</span>}
+                      {task.lastRun.duration !== null && <span className="text-muted-foreground">({task.lastRun.duration}ms)</span>}
                     </>
                   )}
                 </p>
                 {task.lastRun?.message && (
-                  <p className="text-xs text-muted mt-1 truncate max-w-lg">{task.lastRun.message}</p>
+                  <p className="text-xs text-muted-foreground mt-1 truncate max-w-lg">{task.lastRun.message}</p>
                 )}
               </div>
               <button
@@ -94,7 +94,7 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
                     Berjalan…
                   </>
                 ) : (
-                  "Run Now"
+                  "Jalankan Sekarang"
                 )}
               </button>
             </div>
@@ -111,20 +111,20 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
       {/* Run History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat 10 Run Terakhir</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat 10 Eksekusi Terakhir</h2>
         </div>
         {logs.length === 0 ? (
-          <div className="px-5 py-10 text-center text-sm text-muted">Belum ada riwayat</div>
+          <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada riwayat</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-default text-left">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide">Waktu</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide">Task</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide">Durasi</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted uppercase tracking-wide">Pesan</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Waktu</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tugas</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Durasi</th>
+                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pesan</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-default">
@@ -143,8 +143,8 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
                         {log.status}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-muted">{log.duration !== null ? `${log.duration}ms` : "-"}</td>
-                    <td className="px-5 py-3 text-muted max-w-xs truncate">{log.message || "-"}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{log.duration !== null ? `${log.duration}ms` : "-"}</td>
+                    <td className="px-5 py-3 text-muted-foreground max-w-xs truncate">{log.message || "-"}</td>
                   </tr>
                 ))}
               </tbody>

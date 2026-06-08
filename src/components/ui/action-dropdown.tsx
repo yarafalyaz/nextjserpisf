@@ -2,8 +2,16 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { Button, Dropdown, Label, Description, Header, Separator, Tooltip } from "@heroui/react"
 import { MoreVertical, Eye, Pencil, Trash2, Printer } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/shadcn/dropdown-menu"
+import { Button } from "@/components/ui/shadcn/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
@@ -19,18 +27,6 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
-
-  function handleAction(key: React.Key) {
-    if (key === "view" && viewHref) {
-      router.push(viewHref)
-    } else if (key === "edit" && editHref) {
-      router.push(editHref)
-    } else if (key === "print" && printAction) {
-      printAction()
-    } else if (key === "delete" && deleteAction && deleteId) {
-      setIsDeleteOpen(true)
-    }
-  }
 
   function handleDelete() {
     if (!deleteAction || !deleteId) return
@@ -50,72 +46,49 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
 
   return (
     <>
-      <Tooltip delay={0}>
-        <Dropdown>
-          <Button isIconOnly aria-label="Menu" variant="ghost" size="sm" isDisabled={isPending}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button aria-label="Menu" variant="ghost" size="icon" disabled={isPending}>
             <MoreVertical className="size-4" />
           </Button>
-        <Dropdown.Popover>
-          <Dropdown.Menu onAction={handleAction}>
-            <Dropdown.Section>
-              <Header>Aksi</Header>
-              {viewHref && (
-                <Dropdown.Item id="view" textValue="Lihat Detail">
-                  <div className="flex h-8 items-start justify-center pt-px">
-                    <Eye className="size-4 shrink-0 text-muted" />
-                  </div>
-                  <div className="flex flex-col">
-                    <Label>Lihat Detail</Label>
-                    <Description>Buka halaman detail</Description>
-                  </div>
-                </Dropdown.Item>
-              )}
-              {editHref && (
-                <Dropdown.Item id="edit" textValue="Edit">
-                  <div className="flex h-8 items-start justify-center pt-px">
-                    <Pencil className="size-4 shrink-0 text-muted" />
-                  </div>
-                  <div className="flex flex-col">
-                    <Label>Edit</Label>
-                    <Description>Ubah data</Description>
-                  </div>
-                </Dropdown.Item>
-              )}
-              {printAction && (
-                <Dropdown.Item id="print" textValue="Cetak PDF">
-                  <div className="flex h-8 items-start justify-center pt-px">
-                    <Printer className="size-4 shrink-0 text-muted" />
-                  </div>
-                  <div className="flex flex-col">
-                    <Label>Cetak PDF</Label>
-                    <Description>Ekspor dokumen ke PDF</Description>
-                  </div>
-                </Dropdown.Item>
-              )}
-            </Dropdown.Section>
-            {deleteAction && deleteId && (
-              <>
-                <Separator />
-                <Dropdown.Section>
-                  <Dropdown.Item id="delete" textValue="Hapus" variant="danger">
-                    <div className="flex h-8 items-start justify-center pt-px">
-                      <Trash2 className="size-4 shrink-0 text-danger" />
-                    </div>
-                    <div className="flex flex-col">
-                      <Label>Hapus</Label>
-                      <Description>Hapus data permanen</Description>
-                    </div>
-                  </Dropdown.Item>
-                </Dropdown.Section>
-              </>
-            )}
-          </Dropdown.Menu>
-        </Dropdown.Popover>
-      </Dropdown>
-        <Tooltip.Content>
-          <p>Menu aksi</p>
-        </Tooltip.Content>
-      </Tooltip>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>Aksi</DropdownMenuLabel>
+          {viewHref && (
+            <DropdownMenuItem onSelect={() => router.push(viewHref)}>
+              <Eye className="size-4 text-muted-foreground" />
+              Lihat Detail
+            </DropdownMenuItem>
+          )}
+          {editHref && (
+            <DropdownMenuItem onSelect={() => router.push(editHref)}>
+              <Pencil className="size-4 text-muted-foreground" />
+              Ubah
+            </DropdownMenuItem>
+          )}
+          {printAction && (
+            <DropdownMenuItem onSelect={() => printAction()}>
+              <Printer className="size-4 text-muted-foreground" />
+              Cetak PDF
+            </DropdownMenuItem>
+          )}
+          {deleteAction && deleteId && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={(e) => {
+                  e.preventDefault()
+                  setIsDeleteOpen(true)
+                }}
+              >
+                <Trash2 className="size-4" />
+                Hapus
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <ConfirmDialog
         isOpen={isDeleteOpen}

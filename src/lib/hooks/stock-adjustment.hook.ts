@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 
 /**
  * Stock Adjustment Hook - Observer pattern replacement.
@@ -15,6 +16,8 @@ export async function onStockAdjustmentProcessed(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent calls for the same adjustment.
+    await tx.$queryRaw`SELECT id FROM stock_adjustments WHERE id = ${adjustmentId} FOR UPDATE`;
     const adjustment = await tx.stockAdjustment.findUniqueOrThrow({
       where: { id: adjustmentId },
       include: { items: true },
@@ -65,36 +68,25 @@ export async function onStockAdjustmentProcessed(
       const qtyDiff = Number(item.difference);
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qtyDiff} WHERE id = ${item.itemId}`;
 
-      // FIFO layer handling
+      // FIFO layer handling (scoped to the adjustment warehouse)
       if (qtyDiff > 0) {
-        // Positive adjustment — create new layer
-        await tx.inventoryLayer.create({
-          data: {
-            itemId: item.itemId,
-            stockMoveId: sm.id,
-            qtyIn: qtyDiff,
-            qtyOut: 0,
-            remaining: qtyDiff,
-            unitCost: item.unitCost ?? 0,
-          },
+        // Positive adjustment — create new layer in this warehouse
+        await createInLayer(tx, {
+          itemId: item.itemId,
+          warehouseId: adjustment.warehouseId,
+          stockMoveId: sm.id,
+          qty: qtyDiff,
+          unitCost: Number(item.unitCost ?? 0),
         });
       } else if (qtyDiff < 0) {
-        // Negative adjustment — consume from oldest layers
-        const layers = await tx.inventoryLayer.findMany({
-          where: { itemId: item.itemId, remaining: { gt: 0 } },
-          orderBy: { createdAt: "asc" },
+        // Negative adjustment — lock item row, then consume oldest layers in WH
+        await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+        await consumeFifoLayers(tx, {
+          itemId: item.itemId,
+          warehouseId: adjustment.warehouseId,
+          qty: Math.abs(qtyDiff),
+          label: `penyesuaian ${adjustment.documentNo}`,
         });
-        let qtyToConsume = Math.abs(qtyDiff);
-        for (const layer of layers) {
-          if (qtyToConsume <= 0) break;
-          const available = Number(layer.remaining);
-          const consume = Math.min(available, qtyToConsume);
-          await tx.inventoryLayer.update({
-            where: { id: layer.id },
-            data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
-          });
-          qtyToConsume -= consume;
-        }
       }
     }
 

@@ -36,9 +36,9 @@ export default async function SalesOrderDetailPage({
       <PageHeader
         title={`Pesanan Penjualan ${order.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/penjualan" },
-          { label: "Orders", href: "/penjualan/pesanan" },
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Pesanan", href: "/penjualan/pesanan" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={order.status} />}
@@ -46,7 +46,7 @@ export default async function SalesOrderDetailPage({
           <>
             <Button href={`/penjualan/pesanan/${order.id}/ubah`} variant="primary">Ubah</Button>
             {order.status === "approved" && (
-              <Button href={`/penjualan/uang-muka/tambah?pesananPenjualanId=${order.id}`} variant="primary">+ Down Payment</Button>
+              <Button href={`/penjualan/uang-muka/tambah?pesananPenjualanId=${order.id}`} variant="primary">+ Uang Muka</Button>
             )}
             <PrintButton documentType="order" documentId={order.id} />
             <BackButton href="/penjualan/pesanan" />
@@ -84,7 +84,7 @@ export default async function SalesOrderDetailPage({
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Deskripsi</DetailTableTh>
-              <DetailTableTh align="right">Qty</DetailTableTh>
+              <DetailTableTh align="right">Jml</DetailTableTh>
               <DetailTableTh align="right">Harga</DetailTableTh>
               <DetailTableTh align="right">Diskon</DetailTableTh>
               <DetailTableTh align="right">Total</DetailTableTh>
@@ -143,7 +143,7 @@ export default async function SalesOrderDetailPage({
       {order.salesInvoices.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Invoice</h2>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">Faktur</h2>
           </div>
           <div className="p-4 px-5">
             <DetailTable>

@@ -8,6 +8,7 @@ import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteWorkOrder } from "@/actions/manufacturing.actions"
+import { WorkOrderActions } from "./_components/work-order-actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { PrintButton } from "@/components/ui/print-button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -32,22 +33,33 @@ export default async function WorkOrderDetailPage({
 
   if (!wo) notFound()
 
+  const [completedMi, defaultWarehouse] = await Promise.all([
+    prisma.materialIssue.findFirst({ where: { workOrderId: wo.id, status: "completed" }, select: { id: true } }),
+    prisma.warehouse.findFirst({ where: { isActive: true }, select: { id: true }, orderBy: { id: "asc" } }),
+  ])
+
   const totalCost = wo.items.reduce((sum, item) => sum + Number(item.qty) * Number(item.cost), 0)
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Work Order ${wo.documentNo}`}
+        title={`Perintah Kerja ${wo.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Manufacturing", href: "/produksi" },
-          { label: "Work Orders", href: "/produksi/perintah-kerja" },
+          { label: "Dasbor", href: "/" },
+          { label: "Manufaktur", href: "/produksi" },
+          { label: "Perintah Kerja", href: "/produksi/perintah-kerja" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={wo.status} />}
         actions={
           <>
             <Button href={`/produksi/perintah-kerja/${wo.id}/ubah`} variant="primary">Ubah</Button>
+            <WorkOrderActions
+              workOrderId={wo.id}
+              status={wo.status}
+              hasCompletedMaterialIssue={!!completedMi}
+              defaultWarehouseId={defaultWarehouse?.id ?? null}
+            />
             {wo.status === "completed" && (
               <Button href={`/penjualan/faktur/tambah?pesananPenjualanId=${wo.quotationId}`} variant="primary">+ Sales Invoice</Button>
             )}
@@ -72,15 +84,15 @@ export default async function WorkOrderDetailPage({
         </div>
         <div className="p-4 px-5">
           {wo.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada material</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada material</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
                 <DetailTableTh>Deskripsi</DetailTableTh>
                 <DetailTableTh>Status</DetailTableTh>
-                <DetailTableTh align="right">Qty</DetailTableTh>
-                <DetailTableTh align="right">Cost/Unit</DetailTableTh>
+                <DetailTableTh align="right">Jml</DetailTableTh>
+                <DetailTableTh align="right">Biaya/Unit</DetailTableTh>
                 <DetailTableTh align="right">Total</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>

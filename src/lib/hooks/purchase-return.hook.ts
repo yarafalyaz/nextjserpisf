@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
-import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 
 /**
  * Purchase Return Hook - Observer pattern replacement.
@@ -89,35 +89,21 @@ export async function onPurchaseReturnProcessed(
       // Update item qtyOnHand
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
 
-      // FIFO layer consumption
-      const layers = await tx.inventoryLayer.findMany({
-        where: { itemId: item.itemId, remaining: { gt: 0 } },
-        orderBy: { createdAt: "asc" },
+      // FIFO layer consumption scoped to the resolved warehouse (allowShortfall:
+      // a return is never blocked by stock, mirroring the sales-invoice path).
+      await consumeFifoLayers(tx, {
+        itemId: item.itemId,
+        warehouseId,
+        qty: Number(item.qty),
+        allowShortfall: true,
+        label: `retur pembelian ${purchaseReturn.documentNo}`,
       });
-      let qtyToConsume = Number(item.qty);
-      for (const layer of layers) {
-        if (qtyToConsume <= 0) break;
-        const available = Number(layer.remaining);
-        const consume = Math.min(available, qtyToConsume);
-        await tx.inventoryLayer.update({
-          where: { id: layer.id },
-          data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
-        });
-        qtyToConsume -= consume;
-      }
     }
 
-    // Create Journal Entry (Dr Purchase Return, Cr Inventory)
-    await stockJournalService.onPurchaseReturn(
-      tx,
-      purchaseReturn.items.map((i) => ({
-        qty: Number(i.qty),
-        cost: Number(i.cost),
-      })),
-      purchaseReturn.documentNo ?? `PRET-${returnId}`,
-      returnId,
-      userId
-    );
+    // Stock-only hook: GL for a purchase return is posted exclusively by
+    // accounting.hook.onPurchaseReturnProcessed (Dr Hutang / Cr Persediaan).
+    // Posting a journal here too would collide on referenceType "PurchaseReturn"
+    // and suppress the payable-reducing journal (AP would stay overstated).
 
     // Update Purchase Return status
     await tx.purchaseReturn.update({

@@ -7,7 +7,10 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { vendorSchema, type VendorInput } from "@/lib/validators"
 import { createVendor, updateVendor } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, Select, ListBox, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { FormSelect } from "@/components/ui/form-select"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -30,10 +33,11 @@ interface VendorFormProps {
     paymentTermId: number | null
   }
   generatedCode?: string
+  enableAutoCode?: boolean
   paymentTerms?: { id: number; name: string }[]
 }
 
-export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorFormProps) {
+export function VendorForm({ vendor, generatedCode, enableAutoCode = true, paymentTerms = [] }: VendorFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!vendor
@@ -41,7 +45,7 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
   const { register, handleSubmit, control, formState: { errors } } = useForm<VendorInput>({
     resolver: zodResolver(vendorSchema),
     defaultValues: {
-      code: vendor?.code || generatedCode || "",
+      code: vendor?.code || (enableAutoCode ? generatedCode : "") || "",
       name: vendor?.name || "",
       email: vendor?.email || "",
       phone: vendor?.phone || "",
@@ -89,12 +93,12 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="code">ID Pemasok</Label>
-            <Input id="code" {...register("code")} readOnly className="bg-muted" />
+            <Input id="code" {...register("code")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"} />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Vendor *</Label>
-            <Input id="name" {...register("name")} placeholder="Nama vendor" />
+            <Label htmlFor="name">Nama Pemasok *</Label>
+            <Input id="name" {...register("name")} placeholder="Nama pemasok" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
 
@@ -113,17 +117,16 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
               name="paymentTermId"
               control={control}
               render={({ field }) => (
-                <Select selectedKey={field.value ? String(field.value) : ""} onSelectionChange={(key) => field.onChange(key ? Number(key) : null)} className="w-full">
-                  <Label>Termin Pembayaran</Label>
-                  <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih termin"}</Select.Value><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {paymentTerms.map((pt) => (
-                        <ListBox.Item key={String(pt.id)} id={String(pt.id)} textValue={pt.name}>{pt.name}<ListBox.ItemIndicator /></ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                <>
+                  <Label htmlFor="paymentTermId">Termin Pembayaran</Label>
+                  <FormSelect
+                    id="paymentTermId"
+                    value={field.value ? String(field.value) : ""}
+                    onValueChange={(value) => field.onChange(value ? Number(value) : null)}
+                    placeholder="Pilih termin"
+                    options={paymentTerms.map((pt) => ({ value: String(pt.id), label: pt.name }))}
+                  />
+                </>
               )}
             />
           </div>
@@ -138,7 +141,7 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
         <FormSection title="Alamat">
           <div className="flex flex-col gap-1.5 col-span-full">
             <Label htmlFor="street">Alamat Jalan</Label>
-            <TextArea id="address" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
+            <Textarea id="address" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
           </div>
           <AddressPicker defaultValues={{ province: vendor?.province ?? undefined, city: vendor?.city ?? undefined, district: vendor?.districtVendor ?? undefined, village: vendor?.villageVendor ?? undefined, postalCode: vendor?.postalCode ?? undefined }} />
         </FormSection>
@@ -146,7 +149,7 @@ export function VendorForm({ vendor, generatedCode, paymentTerms = [] }: VendorF
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

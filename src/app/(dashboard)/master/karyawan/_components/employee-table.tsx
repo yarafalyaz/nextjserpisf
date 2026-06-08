@@ -7,7 +7,7 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { deleteEmployee } from "@/actions/master.actions"
 import { getInitials } from "@/lib/utils/format"
-import { Avatar} from "@heroui/react"
+import { Avatar, AvatarFallback } from "@/components/ui/shadcn/avatar"
 import { bulkDelete } from "@/actions/bulk.actions"
 
 interface Employee {
@@ -27,10 +27,10 @@ const columns = [
     header: "Nama",
     cell: (info) => (
       <div className="flex items-center gap-2">
-        <Avatar size="sm" color="accent">
-          <Avatar.Fallback>{getInitials(info.getValue())}</Avatar.Fallback>
+        <Avatar size="sm" className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400">
+          <AvatarFallback className="bg-transparent text-inherit">{getInitials(info.getValue())}</AvatarFallback>
         </Avatar>
-        <Link href={`/master/karyawan/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+        <Link href={`/master/karyawan/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
           {info.getValue()}
         </Link>
       </div>
@@ -87,6 +87,8 @@ export function EmployeeTable({ data }: EmployeeTableProps) {
       ariaLabel="Daftar karyawan"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama, NIP, atau telepon..."
       onBulkDelete={(ids) => bulkDelete("employee", ids)}
     />
   )

@@ -33,13 +33,13 @@ export default async function AssetBrandDetailPage({
       <PageHeader
         title={`Merek Aset: ${brand.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/aset" },
-          { label: "Brands", href: "/aset/merek" },
+          { label: "Dasbor", href: "/" },
+          { label: "Aset", href: "/aset" },
+          { label: "Merek", href: "/aset/merek" },
           { label: brand.name },
         ]}
         actions={<>
-          <Button href={`/aset/merek/${brand.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/merek/${brand.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={brand.id} action={deleteAssetBrand} />
           <BackButton href="/aset/merek" />
         </>}
@@ -57,7 +57,7 @@ export default async function AssetBrandDetailPage({
         </div>
         <div className="p-4 px-5">
           {brand.models.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada model</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada model</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

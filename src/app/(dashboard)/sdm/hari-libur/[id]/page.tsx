@@ -26,8 +26,8 @@ export default async function HolidayDetailPage({
       <PageHeader
         title="Hari Libur"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Hari Libur", href: "/sdm/hari-libur" },
           { label: "Detail" },
         ]}

@@ -45,6 +45,8 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   AST: 'assetCodePrefix',
   WH: 'warehouseCodePrefix',
   EMP: 'employeeCodePrefix',
+  MTP: 'paymentMethodCodePrefix',
+  MTK: 'shippingMethodCodePrefix',
   ACC: undefined as string | undefined, // Account prefix not stored separately
   DEPT: undefined as string | undefined, // Department prefix not stored
   POS: undefined as string | undefined,  // Position prefix not stored
@@ -52,10 +54,13 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
 
 async function resolvePrefix(key: string): Promise<string> {
   const field = PREFIX_FIELD_MAP[key]
-  if (!field) return key
+  // Normalize: strip any trailing separator/space so the caller can always append
+  // its own "-" without producing a double dash (e.g. default "CUST-" -> "CUST").
+  const normalize = (p: string) => p.trim().replace(/[-\s]+$/, '')
+  if (!field) return normalize(key)
   const settings = await getSystemSettings()
   const value = (settings as Record<string, unknown>)[field]
-  return value && String(value).trim() !== '' ? String(value) : key
+  return value && String(value).trim() !== '' ? normalize(String(value)) : normalize(key)
 }
 
 const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: string; softDelete?: boolean }> = {
@@ -82,18 +87,36 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   PC: { model: 'pettyCash', field: 'documentNo' },
   PAYROLL: { model: 'payroll', field: 'documentNo' },
   PRJ: { model: 'project', field: 'documentNo' },
-  // Master data simple codes
-  CUST: { model: 'customer', field: 'code', softDelete: true },
+  // Master data simple codes. NOTE: we deliberately do NOT filter soft-deleted
+  // rows here. The code/sku/employeeNo columns carry a UNIQUE constraint that
+  // also covers soft-deleted rows, so a soft-deleted record keeps its code
+  // reserved. Counting only visible rows would hand out a number that collides
+  // with a soft-deleted row's reserved code. Scanning ALL rows keeps the next
+  // number both data-driven (a HARD delete lowers it) and collision-free.
+  CUST: { model: 'customer', field: 'code' },
   VND: { model: 'vendor', field: 'code' },
   ITM: { model: 'item', field: 'sku' },
   WH: { model: 'warehouse', field: 'code' },
   EMP: { model: 'employee', field: 'employeeNo' },
   ACC: { model: 'account', field: 'code' },
+  POS: { model: 'position', field: 'code' },
+  DEPT: { model: 'department', field: 'code' },
+  PRD: { model: 'product', field: 'code' },
+  AST: { model: 'asset', field: 'code' },
+  MTP: { model: 'paymentMethod', field: 'code' },
+  MTK: { model: 'shippingMethod', field: 'code' },
 }
 
-async function findReusableSequence(key: string, prefix: string, format: 'complex' | 'simple', month: string, year: number): Promise<number | null> {
+/**
+ * Find the highest sequence number already used for this key/period, by scanning
+ * the source documents. Used only as a FLOOR for the atomic counter so that the
+ * counter never collides with legacy/manually-entered document numbers. Returns 0
+ * when there are no existing documents. We intentionally do NOT reuse gaps from
+ * deleted/voided documents (audit continuity).
+ */
+async function findMaxSequence(key: string, prefix: string, format: 'complex' | 'simple', month: string, year: number): Promise<number> {
   const source = DOCUMENT_SOURCE_MAP[key]
-  if (!source) return null
+  if (!source) return 0
 
   const delegate = prisma[source.model] as unknown as { findMany: (args: Record<string, unknown>) => Promise<Record<string, string | null>[]> }
   const where = {
@@ -108,7 +131,7 @@ async function findReusableSequence(key: string, prefix: string, format: 'comple
     select: { [source.field]: true },
   })
 
-  const used = new Set<number>()
+  let max = 0
   for (const row of rows) {
     const documentNo = row[source.field]
     if (!documentNo) continue
@@ -116,12 +139,12 @@ async function findReusableSequence(key: string, prefix: string, format: 'comple
     const match = format === 'complex'
       ? documentNoText.match(/^(\d+)\//)
       : documentNoText.match(/-(\d+)$/)
-    if (match) used.add(Number(match[1]))
+    if (match) {
+      const n = Number(match[1])
+      if (n > max) max = n
+    }
   }
-
-  let reusable = 1
-  while (used.has(reusable)) reusable += 1
-  return reusable
+  return max
 }
 
 /**
@@ -143,14 +166,19 @@ export async function generateDocumentNumber(
   const prefix = await resolvePrefix(key)
 
   if (format === 'complex') {
-    const seq = await findReusableSequence(key, prefix, format, month, year)
-      ?? await DocumentSequenceService.next(`${prefix}-${year}-${month}`)
+    const seqKey = `${prefix}-${year}-${month}`
+    const floor = await findMaxSequence(key, prefix, format, month, year)
+    const seq = await DocumentSequenceService.next(seqKey, floor)
     const settings = await getSystemSettings()
     const companyCode = settings.companyName?.substring(0, 3).toUpperCase() ?? 'YRA'
     return `${String(seq).padStart(3, '0')}/${prefix}/${companyCode}/${month}/${year}`
   } else {
-    const seq = await findReusableSequence(key, prefix, format, month, year)
-      ?? await DocumentSequenceService.next(`${prefix}-GLOBAL`)
+    // Master-data codes (CUST/VND/ITM/EMP/POS/WH/ACC/...) are DATA-DRIVEN:
+    // next = (highest sequence currently in the table) + 1. This reflects the
+    // actual records — deleting rows lowers the next number — instead of using a
+    // monotonic counter that never decrements. The unique code column + caller
+    // retry loop handle the rare concurrent-create collision.
+    const seq = (await findMaxSequence(key, prefix, format, month, year)) + 1
     return `${prefix}-${String(seq).padStart(4, '0')}`
   }
 }
@@ -168,12 +196,14 @@ export async function peekNextDocumentNumber(
   const prefix = await resolvePrefix(key)
 
   if (format === 'simple') {
-    const next = await findReusableSequence(key, prefix, format, month, year)
-      ?? ((await DocumentSequenceService.peek(`${prefix}-GLOBAL`)) + 1)
+    // Data-driven (mirror generateDocumentNumber): next = max in table + 1.
+    const maxUsed = await findMaxSequence(key, prefix, format, month, year)
+    const next = maxUsed + 1
     return `${prefix}-${String(next).padStart(4, '0')}`
   } else {
-    const next = await findReusableSequence(key, prefix, format, month, year)
-      ?? ((await DocumentSequenceService.peek(`${prefix}-${year}-${month}`)) + 1)
+    const maxUsed = await findMaxSequence(key, prefix, format, month, year)
+    const counter = await DocumentSequenceService.peek(`${prefix}-${year}-${month}`)
+    const next = Math.max(maxUsed, counter) + 1
     const settings = await getSystemSettings()
     const companyCode = settings.companyName?.substring(0, 3).toUpperCase() ?? 'YRA'
     return `${String(next).padStart(3, '0')}/${prefix}/${companyCode}/${month}/${year}`

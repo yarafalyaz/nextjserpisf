@@ -22,7 +22,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/keuangan/anggaran/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/keuangan/anggaran/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -65,6 +65,8 @@ export function BudgetTable({ data }: BudgetTableProps) {
       ariaLabel="Daftar budget"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama anggaran..."
       onBulkDelete={(ids) => bulkDelete("budget", ids)}
     />
   )

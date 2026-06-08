@@ -49,10 +49,11 @@ export class InventoryService {
    * Handle incoming stock — creates a new inventory layer and increments qty_on_hand.
    */
   private async handleIn(tx: TxClient, move: StockMove): Promise<void> {
-    // Create inventory layer for FIFO tracking
+    // Create inventory layer for FIFO tracking (scoped to the move's warehouse)
     await tx.inventoryLayer.create({
       data: {
         itemId: move.itemId,
+        warehouseId: move.warehouseId ?? null,
         stockMoveId: move.id,
         qtyIn: move.qty,
         qtyOut: 0,
@@ -88,13 +89,21 @@ export class InventoryService {
       )
     }
 
-    // FIFO consumption — lock layers ordered by creation date
-    const layers = await tx.$queryRaw<any[]>`
-      SELECT * FROM inventory_layers
-      WHERE item_id = ${move.itemId} AND remaining > 0
-      ORDER BY created_at ASC, id ASC
-      FOR UPDATE
-    `
+    // FIFO consumption — lock layers ordered by creation date, scoped to the
+    // move's warehouse so stock physically in another warehouse is never drawn.
+    const layers = move.warehouseId != null
+      ? await tx.$queryRaw<any[]>`
+          SELECT * FROM inventory_layers
+          WHERE item_id = ${move.itemId} AND warehouse_id = ${move.warehouseId} AND remaining > 0
+          ORDER BY created_at ASC, id ASC
+          FOR UPDATE
+        `
+      : await tx.$queryRaw<any[]>`
+          SELECT * FROM inventory_layers
+          WHERE item_id = ${move.itemId} AND remaining > 0
+          ORDER BY created_at ASC, id ASC
+          FOR UPDATE
+        `
 
     let qtyToConsume = Number(move.qty)
     let totalCost = 0
@@ -117,7 +126,8 @@ export class InventoryService {
     }
 
     if (qtyToConsume > 0) {
-      throw new Error('Inkonsistensi data: layer FIFO tidak mencukupi.')
+      const where = move.warehouseId != null ? ` di gudang #${move.warehouseId}` : ''
+      throw new Error(`Stok tidak mencukupi untuk item ${item.sku}${where}. Kurang ${qtyToConsume}.`)
     }
 
     // Update cost on move (weighted average from consumed layers)
@@ -222,6 +232,22 @@ export async function issueProjectMaterials(
 
   for (const pi of project.items) {
     if (!pi.itemId) continue
+
+    // Idempotency: skip items already issued for this project (prevents
+    // double stock consumption if a previous run failed partway).
+    const existing = await prisma.stockMove.findFirst({
+      where: {
+        referenceType: 'project_material_issue',
+        referenceId: projectId,
+        itemId: pi.itemId,
+      },
+      select: { id: true },
+    })
+    if (existing) {
+      results.push(existing.id)
+      continue
+    }
+
     const documentNo = await generateDocumentNumber('SM')
 
     const move = await prisma.stockMove.create({

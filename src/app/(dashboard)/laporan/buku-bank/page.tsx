@@ -8,7 +8,9 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { PrintHeader } from "@/components/reports/print-header"
-import { Select, ListBox, Label, Button } from "@heroui/react"
+import { FormSelect } from "@/components/ui/form-select"
+import { Label } from "@/components/ui/shadcn/label"
+import { Button } from "@/components/ui/page-header"
 import { AppDatePicker } from "@/components/ui/date-picker"
 
 export default async function BankBookPage({
@@ -22,6 +24,7 @@ export default async function BankBookPage({
   const now = new Date()
   const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), now.getMonth(), 1)
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
+  endDate.setHours(23, 59, 59, 999)
   const accountId = params.accountId ? parseInt(params.accountId) : null
 
   // Get bank/cash accounts (code starts with 1-1)
@@ -48,7 +51,7 @@ export default async function BankBookPage({
     const openingEntries = await prisma.journalEntry.findMany({
       where: {
         accountId,
-        journal: { status: 'POSTED', transactionDate: { lt: startDate } },
+        journal: { status: { in: ['POSTED', 'REVERSED'] }, transactionDate: { lt: startDate } },
       },
     })
     openingBalance = openingEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0)
@@ -56,7 +59,7 @@ export default async function BankBookPage({
     const periodEntries = await prisma.journalEntry.findMany({
       where: {
         accountId,
-        journal: { status: 'POSTED', transactionDate: { gte: startDate, lte: endDate } },
+        journal: { status: { in: ['POSTED', 'REVERSED'] }, transactionDate: { gte: startDate, lte: endDate } },
       },
       include: {
         journal: { select: { journalNumber: true, transactionDate: true, description: true } },
@@ -89,9 +92,9 @@ export default async function BankBookPage({
     <div className="flex flex-col gap-6">
       <PrintHeader title="Buku Bank" period={period} />
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/laporan" },
-        { label: "Bank Book" },
+        { label: "Dasbor", href: "/" },
+        { label: "Laporan", href: "/laporan" },
+        { label: "Buku Bank" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
@@ -102,25 +105,23 @@ export default async function BankBookPage({
       </div>
 
       <form className="mb-6 flex items-center gap-4 flex-wrap print:hidden">
-        <Select name="accountId" defaultSelectedKey={params.accountId || ""} placeholder="-- Pilih Rekening --" className="w-[280px]">
-          <Label>Rekening</Label>
-          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id="" textValue="-- Pilih Rekening --">-- Pilih Rekening --<ListBox.ItemIndicator /></ListBox.Item>
-              {bankAccounts.map(a => (
-                <ListBox.Item key={String(a.id)} id={String(a.id)} textValue={`${a.code} - ${a.name}`}>{a.code} - {a.name}<ListBox.ItemIndicator /></ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        <div className="flex flex-col gap-1.5 w-[280px]">
+          <Label htmlFor="accountId">Rekening</Label>
+          <FormSelect
+            id="accountId"
+            name="accountId"
+            defaultValue={params.accountId || undefined}
+            placeholder="-- Pilih Rekening --"
+            options={bankAccounts.map(a => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
+          />
+        </div>
         <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || startDate.toISOString().split('T')[0]} className="w-[180px]" />
         <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || endDate.toISOString().split('T')[0]} className="w-[180px]" />
-        <Button type="submit" variant="primary" size="sm">Generate</Button>
+        <Button type="submit" variant="primary" size="sm">Tampilkan</Button>
       </form>
 
       {!accountId && (
-        <div className="bg-surface rounded-xl p-8 border border-default text-center text-muted">
+        <div className="bg-surface rounded-xl p-8 border border-default text-center text-muted-foreground">
           Pilih rekening bank/kas untuk melihat mutasi
         </div>
       )}
@@ -130,19 +131,19 @@ export default async function BankBookPage({
           {/* KPI */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
             <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-              <div className="text-[0.8125rem] text-muted font-medium">Saldo Awal</div>
+              <div className="text-[0.8125rem] text-muted-foreground font-medium">Saldo Awal</div>
               <div className="text-lg font-bold">{formatCurrency(openingBalance)}</div>
             </div>
             <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-              <div className="text-[0.8125rem] text-muted font-medium">Total Masuk</div>
+              <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Masuk</div>
               <div className="text-lg font-bold text-success">{formatCurrency(totalDebit)}</div>
             </div>
             <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-              <div className="text-[0.8125rem] text-muted font-medium">Total Keluar</div>
+              <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Keluar</div>
               <div className="text-lg font-bold text-danger">{formatCurrency(totalCredit)}</div>
             </div>
             <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-              <div className="text-[0.8125rem] text-muted font-medium">Saldo Akhir</div>
+              <div className="text-[0.8125rem] text-muted-foreground font-medium">Saldo Akhir</div>
               <div className={`text-lg font-bold ${closingBalance >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(closingBalance)}</div>
             </div>
           </div>
@@ -151,7 +152,7 @@ export default async function BankBookPage({
           <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
             <div className="flex items-center justify-between p-4 px-5 border-b border-default">
               <h2 className="text-[0.9375rem] font-semibold text-foreground">Mutasi {selectedAccount.code} - {selectedAccount.name}</h2>
-              <span className="text-sm text-muted">{rows.length} transaksi</span>
+              <span className="text-sm text-muted-foreground">{rows.length} transaksi</span>
             </div>
             <div className="p-4 px-5">
               <DetailTable data-report-table="Bank Book">
@@ -184,7 +185,7 @@ export default async function BankBookPage({
                     </DetailTableRow>
                   ))}
                   {rows.length === 0 && (
-                    <DetailTableRow><DetailTableTd colSpan={6} className="text-center text-muted py-6">Tidak ada mutasi dalam periode ini</DetailTableTd></DetailTableRow>
+                    <DetailTableRow><DetailTableTd colSpan={6} className="text-center text-muted-foreground py-6">Tidak ada mutasi dalam periode ini</DetailTableTd></DetailTableRow>
                   )}
                   <DetailTableRow className="font-bold border-t-2 border-default">
                     <DetailTableTd colSpan={3}>TOTAL / SALDO AKHIR</DetailTableTd>

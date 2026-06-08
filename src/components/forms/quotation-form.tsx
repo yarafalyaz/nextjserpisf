@@ -10,7 +10,10 @@ import { quotationSchema, type QuotationInput } from "@/lib/validators"
 import { createQuotation, updateQuotation } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, Label, ComboBox, ListBox } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -37,6 +40,8 @@ interface QuotationFormProps {
   customerVehicles: CustomerVehicle[]
   items: ItemOption[]
   generatedCode?: string
+  paymentMethods?: { code: string; name: string }[]
+  shippingMethods?: { code: string; name: string }[]
   quotation?: Record<string, unknown> // for edit mode
 }
 
@@ -96,8 +101,8 @@ function SectionItems({
           <tr>
             <th style={{ minWidth: "200px" }}>Item</th>
             <th style={{ minWidth: "140px" }}>Deskripsi</th>
-            <th style={{ width: "70px" }}>Qty</th>
-            <th style={{ width: "70px" }}>UoM</th>
+            <th style={{ width: "70px" }}>Jml</th>
+            <th style={{ width: "70px" }}>Satuan</th>
             <th style={{ width: "120px" }}>Harga Satuan</th>
             <th style={{ width: "160px" }}>Diskon</th>
             <th style={{ width: "120px" }}>Total</th>
@@ -138,7 +143,7 @@ function SectionItems({
           })
         }
         variant="secondary" size="sm"
-        style={{ marginTop: "8px" }}
+        className="mt-2"
       >
         + Tambah Item
       </Button>
@@ -193,7 +198,7 @@ function SectionItemRow({
                 setValue(`${prefix}.uom`, "PCS")
               }
             }}
-            title={isCustomMode ? "Ubah ke Produk Master" : "Quick Add Jasa Bebas"}
+            title={isCustomMode ? "Ubah ke Produk Master" : "Tambah Cepat Jasa Bebas"}
             className={`p-1.5 rounded-lg border transition-all text-xs shrink-0 flex items-center justify-center ${
               isCustomMode 
                 ? "bg-warning-soft border-warning text-warning-soft-foreground font-bold" 
@@ -218,9 +223,9 @@ function SectionItemRow({
               name={`${prefix}.itemId`}
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => {
+                <Combobox
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => {
                     if (key) {
                       onItemSelect(itemIndex, Number(key))
                       // Set description automatically from item name if master item selected
@@ -230,22 +235,9 @@ function SectionItemRow({
                       }
                     }
                   }}
-                  className="w-full"
-                >
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Pilih item..." style={{ fontSize: "0.8125rem", padding: "6px 8px" }} />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {items.map((item) => (
-                        <ListBox.Item key={item.id} id={String(item.id)} textValue={item.name}>
-                          {item.name}
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                  placeholder="Pilih item..."
+                  options={items.map((item) => ({ value: String(item.id), label: item.name }))}
+                />
               )}
             />
           )}
@@ -298,18 +290,24 @@ function SectionItemRow({
       </td>
       <td>
         <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-          <select
-            {...register(`${prefix}.discountType`)}
-            className="form-input"
-            style={{ fontSize: "0.8125rem", padding: "6px 8px", width: "60px", flexShrink: 0 }}
-            onChange={(e) => {
-              setValue(`${prefix}.discountType`, e.target.value)
-              setTimeout(() => onRecalc(itemIndex), 0)
-            }}
-          >
-            <option value="fixed">Rp</option>
-            <option value="percent">%</option>
-          </select>
+          <Controller
+            name={`${prefix}.discountType`}
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                value={field.value ?? "fixed"}
+                onChange={(key) => {
+                  field.onChange(key ?? "")
+                  setTimeout(() => onRecalc(itemIndex), 0)
+                }}
+                options={[
+                  { value: "fixed", label: "Rp" },
+                  { value: "percent", label: "%" },
+                ]}
+                className="w-[60px] shrink-0"
+              />
+            )}
+          />
           <input
             type="number"
             step="0.01"
@@ -434,7 +432,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
 
 // ==================== MAIN FORM COMPONENT ====================
 
-export function QuotationForm({ customers, customerVehicles, items, generatedCode, quotation }: QuotationFormProps) {
+export function QuotationForm({ customers, customerVehicles, items, generatedCode, paymentMethods = [], shippingMethods = [], quotation }: QuotationFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -499,7 +497,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
     startTransition(async () => {
       try {
         const formData = new FormData()
-        let result: { success: boolean; id?: number }
+        let result: { success: boolean; id?: number; error?: string }
         if (quotation?.id) {
           formData.set("customerId", String(data.customerId))
           if (data.customerVehicleId) formData.set("customerVehicleId", String(data.customerVehicleId))
@@ -514,9 +512,11 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
           result = await createQuotation(formData)
         }
         if (result.success) {
-          showSuccess(quotation?.id ? "Quotation berhasil diperbarui" : "Quotation berhasil dibuat")
+          showSuccess(quotation?.id ? "Penawaran berhasil diperbarui" : "Penawaran berhasil dibuat")
           router.push(`/penjualan/penawaran/${result.id || quotation?.id}`)
           router.refresh()
+        } else {
+          showError(result.error || "Gagal menyimpan data")
         }
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -527,12 +527,12 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <FormCard>
-        <FormSection title="Informasi Quotation">
+        <FormSection title="Informasi Penawaran">
         {/* Document Number (read-only) */}
         <div className="flex flex-col gap-1.5">
           <Label>No. Dokumen</Label>
           <Input
-            value={String(quotation?.documentNo || generatedCode || "Auto-generated")}
+            value={String(quotation?.documentNo || generatedCode || "Dibuat otomatis")}
             readOnly
             className="bg-muted"
           />
@@ -540,34 +540,22 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
 
         {/* Customer */}
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="customerId">Pelanggan *</Label>
           <Controller
             name="customerId"
             control={control}
             render={({ field }) => (
-              <ComboBox
-                selectedKey={field.value ? String(field.value) : null}
-                onSelectionChange={(key) => {
+              <Combobox
+                id="customerId"
+                value={field.value ? String(field.value) : null}
+                onChange={(key) => {
                   field.onChange(key ? Number(key) : undefined)
                   // Reset vehicle when customer changes
                   setValue("customerVehicleId", undefined)
                 }}
-                className="w-full"
-              >
-                <Label>Customer *</Label>
-                <ComboBox.InputGroup>
-                  <Input placeholder="Cari customer..." />
-                  <ComboBox.Trigger />
-                </ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {customers.map((c) => (
-                      <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>
-                        {c.name}
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+                placeholder="Cari pelanggan..."
+                options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+              />
             )}
           />
           {errors.customerId && <span className="text-xs text-danger mt-1">{errors.customerId.message}</span>}
@@ -575,34 +563,19 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
 
         {/* Customer Vehicle */}
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="customerVehicleId">Kendaraan</Label>
           <Controller
             name="customerVehicleId"
             control={control}
             render={({ field }) => (
-              <ComboBox
-                selectedKey={field.value ? String(field.value) : null}
-                onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                className="w-full"
-                isDisabled={!selectedCustomerId}
-              >
-                <Label>Kendaraan</Label>
-                <ComboBox.InputGroup>
-                  <Input placeholder={selectedCustomerId ? "Pilih kendaraan..." : "Pilih customer dulu"} />
-                  <ComboBox.Trigger />
-                </ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {filteredVehicles.map((v) => {
-                      const label = `${v.plateNumber} - ${v.brandName} ${v.modelName}`.trim()
-                      return (
-                        <ListBox.Item key={v.id} id={String(v.id)} textValue={label}>
-                          {label}
-                        </ListBox.Item>
-                      )
-                    })}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <Combobox
+                id="customerVehicleId"
+                value={field.value ? String(field.value) : null}
+                onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                disabled={!selectedCustomerId}
+                placeholder={selectedCustomerId ? "Pilih kendaraan..." : "Pilih pelanggan dulu"}
+                options={filteredVehicles.map((v) => ({ value: String(v.id), label: `${v.plateNumber} - ${v.brandName} ${v.modelName}`.trim() }))}
+              />
             )}
           />
         </div>
@@ -629,7 +602,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
         {/* Valid Until */}
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
-            label="Valid Sampai"
+            label="Berlaku Sampai"
             name="validUntil"
             value={watch("validUntil")}
             onChange={(val) => setValue("validUntil", val)}
@@ -638,16 +611,52 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
-          <Input id="paymentMethod" {...register("paymentMethod")} placeholder="Transfer / Cash / Termin" />
+          <Controller
+            name="paymentMethod"
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                id="paymentMethod"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? "")}
+                placeholder="Pilih / ketik metode..."
+                options={(paymentMethods.length > 0
+                  ? paymentMethods
+                  : [
+                      { code: "transfer", name: "Transfer Bank" },
+                      { code: "cash", name: "Tunai" },
+                    ]
+                ).map((m) => ({ value: m.code, label: m.name }))}
+              />
+            )}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="shippingMethod">Metode Pengiriman</Label>
-          <Input id="shippingMethod" {...register("shippingMethod")} placeholder="Ambil sendiri / Kurir / Ekspedisi" />
+          <Controller
+            name="shippingMethod"
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                id="shippingMethod"
+                value={field.value || null}
+                onChange={(v) => field.onChange(v ?? "")}
+                placeholder="Pilih / ketik metode..."
+                options={(shippingMethods.length > 0
+                  ? shippingMethods
+                  : [
+                      { code: "pickup", name: "Ambil Sendiri" },
+                      { code: "courier", name: "Kurir" },
+                    ]
+                ).map((m) => ({ value: m.code, label: m.name }))}
+              />
+            )}
+          />
         </div>
         </FormSection>
 
-      <FormSection title="Item Quotation" columns={1}>
+      <FormSection title="Item Penawaran" columns={1}>
         <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Button
@@ -718,14 +727,14 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
       <FormSection title="Lainnya" columns={1}>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="notes">Catatan</Label>
-          <TextArea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk quotation ini..." />
+          <Textarea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk penawaran ini..." />
         </div>
       </FormSection>
 
       <FormActions>
         <Button type="button" onPress={() => router.back()}>Batal</Button>
         <Button type="submit" variant="primary" isDisabled={isPending}>
-          {isPending ? "Menyimpan..." : "Buat Quotation"}
+          {isPending ? "Menyimpan..." : "Buat Penawaran"}
         </Button>
       </FormActions>
       </FormCard>

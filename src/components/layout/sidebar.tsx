@@ -1,10 +1,7 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useSidebarStore } from "@/lib/stores"
-import { X } from "lucide-react"
 import {
   LayoutDashboard, ClipboardList, Users, Factory, Package, Building2,
   UserCircle, BookOpen, DollarSign, FileText, Wallet, ShoppingCart,
@@ -14,10 +11,31 @@ import {
   CircleDollarSign, Handshake, Target, Ticket, HardDrive, TrendingUp,
   Cog, ChevronRight, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
-  Globe, ListOrdered, Layers, BadgeDollarSign
+  Globe, ListOrdered, Layers, BadgeDollarSign,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import { Button } from "@/components/ui/page-header"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarRail,
+  useSidebar,
+} from "@/components/ui/shadcn/sidebar"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/shadcn/collapsible"
+import { NavUser } from "@/components/layout/nav-user"
 
 interface NavItem {
   label: string
@@ -47,9 +65,10 @@ const navigation: NavItem[] = [
       { label: "Pajak", href: "/master/pajak", icon: BadgeDollarSign },
       { label: "Grup Pajak", href: "/master/kelompok-pajak", icon: ListOrdered },
       { label: "Mata Uang", href: "/master/mata-uang", icon: Globe },
-      { label: "Daftar Harga", href: "/master/daftar-harga", icon: FileSpreadsheet },
       { label: "Barcode", href: "/master/barcode", icon: ScanBarcode },
       { label: "Termin Pembayaran", href: "/master/syarat-pembayaran", icon: CalendarDays },
+      { label: "Metode Pembayaran", href: "/master/metode-pembayaran", icon: CreditCard },
+      { label: "Metode Pengiriman", href: "/master/metode-pengiriman", icon: Truck },
       { label: "Satuan", href: "/master/satuan", icon: Scale },
     ],
   },
@@ -85,6 +104,7 @@ const navigation: NavItem[] = [
     href: "/inventaris",
     icon: Package,
     children: [
+      { label: "Scan Barang", href: "/inventaris/scan", icon: ScanBarcode },
       { label: "Pergerakan Stok", href: "/inventaris/mutasi-stok", icon: BarChart3 },
       { label: "Penyesuaian", href: "/inventaris/penyesuaian", icon: Scale },
       { label: "Transfer", href: "/inventaris/transfer", icon: ArrowLeftRight },
@@ -181,96 +201,103 @@ const navigation: NavItem[] = [
   { label: "Pengaturan", href: "/pengaturan", icon: Cog },
 ]
 
-export function Sidebar() {
+function useActive() {
   const pathname = usePathname()
-  const [expandedItems, setExpandedItems] = useState<string[]>(() => {
-    const segments = pathname.split("/").filter(Boolean)
-    return segments.length > 0 ? ["/" + segments[0]] : []
-  })
-  const { isOpen, close } = useSidebarStore()
-
-  const toggleExpand = (href: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(href) ? [] : [href]
-    )
+  return {
+    isActive: (href: string) =>
+      href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"),
+    isGroupActive: (item: NavItem) =>
+      item.children?.some((c) =>
+        c.href === "/" ? pathname === "/" : pathname === c.href || pathname.startsWith(c.href + "/")
+      ) ?? false,
+    pathname,
   }
+}
 
-  const isActive = (href: string) => {
-    if (href === "/") return pathname === "/"
-    return pathname.startsWith(href)
-  }
+export function AppSidebar() {
+  const { isActive, isGroupActive } = useActive()
+  const { setOpenMobile, isMobile } = useSidebar()
 
-  const handleNavClick = () => {
-    // Close sidebar on mobile after navigation
-    if (window.innerWidth <= 1024) {
-      close()
-    }
+  const handleNav = () => {
+    if (isMobile) setOpenMobile(false)
   }
 
   return (
-    <>
-      {/* Overlay for mobile */}
-      {isOpen && (
-        <div className="sidebar-overlay" onClick={close} />
-      )}
-
-      <aside className={`sidebar ${isOpen ? "open" : ""}`}>
-        <div className="sidebar-header">
-          <h1 className="sidebar-logo">YaraERP</h1>
-          <Button variant="ghost" size="sm" isIconOnly className="sidebar-close-btn lg:hidden" aria-label="Tutup sidebar" onPress={close}>
-            <X size={20} />
-          </Button>
+    <Sidebar collapsible="icon" className="border-sidebar-border">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex h-12 items-center gap-2 px-2">
+          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+            <Building2 className="size-4" />
+          </div>
+          <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+            <span className="truncate text-base font-bold tracking-tight">YaraERP</span>
+            <span className="truncate text-[0.7rem] text-sidebar-foreground/70">Enterprise Suite</span>
+          </div>
         </div>
+      </SidebarHeader>
 
-        <nav className="sidebar-nav">
-          {navigation.map((item) => {
-            const Icon = item.icon
-            return (
-              <div key={item.href} className="nav-group">
-                {item.children ? (
-                  <>
-                    <Button
-                      onPress={() => toggleExpand(item.href)}
-                      className={`nav-item nav-item-parent ${isActive(item.href) ? "active" : ""}`}
-                    >
-                      <Icon size={18} className="nav-icon" />
-                      <span className="nav-label">{item.label}</span>
-                      <ChevronRight size={14} className={`nav-arrow ${expandedItems.includes(item.href) ? "expanded" : ""}`} />
-                    </Button>
-                    {expandedItems.includes(item.href) && (
-                      <div className="nav-children">
-                        {item.children.map((child) => {
-                          const ChildIcon = child.icon
-                          return (
-                            <Link
-                              key={child.href}
-                              href={child.href}
-                              onClick={handleNavClick}
-                              className={`nav-item nav-item-child ${isActive(child.href) ? "active" : ""}`}
-                            >
-                              <ChildIcon size={15} className="nav-icon" />
-                              <span className="nav-label">{child.label}</span>
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <Link
-                    href={item.href}
-                    onClick={handleNavClick}
-                    className={`nav-item ${isActive(item.href) ? "active" : ""}`}
-                  >
-                    <Icon size={18} className="nav-icon" />
-                    <span className="nav-label">{item.label}</span>
-                  </Link>
-                )}
-              </div>
-            )
-          })}
-        </nav>
-      </aside>
-    </>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+          <SidebarMenu>
+            {navigation.map((item) => {
+              const Icon = item.icon
+              if (!item.children) {
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={item.label}>
+                      <Link href={item.href} onClick={handleNav}>
+                        <Icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              }
+              return (
+                <Collapsible
+                  key={item.href}
+                  asChild
+                  defaultOpen={isGroupActive(item)}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip={item.label} isActive={isGroupActive(item)}>
+                        <Icon />
+                        <span>{item.label}</span>
+                        <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {item.children.map((child) => (
+                          <SidebarMenuSubItem key={child.href}>
+                            <SidebarMenuSubButton asChild isActive={isActive(child.href)}>
+                              <Link href={child.href} onClick={handleNav}>
+                                <child.icon />
+                                <span>{child.label}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="border-t border-sidebar-border">
+        <NavUser />
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   )
 }
+
+// Backwards-compatible alias (older imports used `Sidebar`).
+export { AppSidebar as Sidebar }

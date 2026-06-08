@@ -34,14 +34,14 @@ export default async function EditPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Purchase", href: "/pembelian" },
-        { label: "Requests", href: "/pembelian/permintaan" },
+        { label: "Dasbor", href: "/" },
+        { label: "Pembelian", href: "/pembelian" },
+        { label: "Permintaan", href: "/pembelian/permintaan" },
         { label: data.documentNo },
-        { label: "Edit" },
+        { label: "Ubah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Purchase Request</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Permintaan Pembelian</h1>
       </div>
       <PurchaseRequestForm request={{
         id: data.id,

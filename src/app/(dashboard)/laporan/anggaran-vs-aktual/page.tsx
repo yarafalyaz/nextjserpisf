@@ -26,6 +26,7 @@ export default async function BudgetVsActualPage({
   const endDate = params.tanggalSelesai
     ? new Date(params.tanggalSelesai)
     : new Date(now.getFullYear(), currentQuarter * 3 + 3, 0)
+  endDate.setHours(23, 59, 59, 999)
 
   // Fetch budgets that overlap with the period
   const budgets = await prisma.budget.findMany({
@@ -57,7 +58,7 @@ export default async function BudgetVsActualPage({
     where: {
       accountId: { in: accountIds },
       journal: {
-        status: 'POSTED',
+        status: { in: ['POSTED', 'REVERSED'] },
         transactionDate: { gte: startDate, lte: endDate },
       },
       ...(costCenterIds.length > 0 ? {} : {}),
@@ -117,14 +118,14 @@ export default async function BudgetVsActualPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/laporan" },
-        { label: "Budget vs Actual" },
+        { label: "Dasbor", href: "/" },
+        { label: "Laporan", href: "/laporan" },
+        { label: "Anggaran vs Aktual" },
       ]} />
 
       <div className="flex items-center gap-2">
         <Target size={24} />
-        <h1 className="text-2xl font-bold text-foreground">Budget vs Realisasi</h1>
+        <h1 className="text-2xl font-bold text-foreground">Anggaran vs Realisasi</h1>
         <ExportButtons title="Budget_vs_Actual" />
       </div>
 
@@ -137,7 +138,7 @@ export default async function BudgetVsActualPage({
             <DollarSign size={20} className="text-primary" />
           </div>
           <div>
-            <p className="text-xs text-muted">Total Budget</p>
+            <p className="text-xs text-muted-foreground">Total Anggaran</p>
             <p className="text-sm font-semibold text-foreground">{formatCurrency(totalBudget)}</p>
           </div>
         </div>
@@ -146,7 +147,7 @@ export default async function BudgetVsActualPage({
             <BarChart3 size={20} className="text-info" />
           </div>
           <div>
-            <p className="text-xs text-muted">Total Realisasi</p>
+            <p className="text-xs text-muted-foreground">Total Realisasi</p>
             <p className="text-sm font-semibold text-foreground">{formatCurrency(totalActual)}</p>
           </div>
         </div>
@@ -155,7 +156,7 @@ export default async function BudgetVsActualPage({
             <TrendingDown size={20} className="text-success" />
           </div>
           <div>
-            <p className="text-xs text-muted">Total Selisih</p>
+            <p className="text-xs text-muted-foreground">Total Selisih</p>
             <p className="text-sm font-semibold text-foreground">{formatCurrency(totalVariance)}</p>
           </div>
         </div>
@@ -164,7 +165,7 @@ export default async function BudgetVsActualPage({
             <Percent size={20} className="text-warning" />
           </div>
           <div>
-            <p className="text-xs text-muted">Rata-rata % Terpakai</p>
+            <p className="text-xs text-muted-foreground">Rata-rata % Terpakai</p>
             <p className="text-sm font-semibold text-foreground">{avgPercentage.toFixed(1)}%</p>
           </div>
         </div>
@@ -173,25 +174,25 @@ export default async function BudgetVsActualPage({
       {/* Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail Budget vs Realisasi</h2>
-          <p className="text-xs text-muted">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail Anggaran vs Realisasi</h2>
+          <p className="text-xs text-muted-foreground">
             {startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} - {endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
         <div className="p-4 px-5">
           {rows.length === 0 ? (
             <div className="text-center py-8">
-              <Target size={48} className="mx-auto text-muted mb-3" />
-              <p className="text-muted text-sm">Tidak ada budget dalam periode ini</p>
+              <Target size={48} className="mx-auto text-muted-foreground mb-3" />
+              <p className="text-muted-foreground text-sm">Tidak ada budget dalam periode ini</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <DetailTable>
                 <DetailTableHead>
-                  <DetailTableTh>Nama Budget</DetailTableTh>
+                  <DetailTableTh>Nama Anggaran</DetailTableTh>
                   <DetailTableTh>Akun</DetailTableTh>
-                  <DetailTableTh>Cost Center</DetailTableTh>
-                  <DetailTableTh align="right">Budget</DetailTableTh>
+                  <DetailTableTh>Pusat Biaya</DetailTableTh>
+                  <DetailTableTh align="right">Anggaran</DetailTableTh>
                   <DetailTableTh align="right">Realisasi</DetailTableTh>
                   <DetailTableTh align="right">Selisih</DetailTableTh>
                   <DetailTableTh align="right">% Terpakai</DetailTableTh>

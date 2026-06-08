@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -16,7 +15,7 @@ export default async function EditItemPage({
   const { id } = await params
 
   const [item, categories, brands, vendors, warehouses, racks, rackRows] = await Promise.all([
-    prisma.item.findUnique({ where: { id: Number(id) } }),
+    prisma.item.findUnique({ where: { id: Number(id) }, include: { uomConversions: true } }),
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -27,16 +26,18 @@ export default async function EditItemPage({
 
   if (!item) notFound()
 
+  const baseUrl = process.env.NEXTAUTH_URL ?? ""
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Items", href: "/master/barang" },
-  { label: "Edit" },
+  { label: "Item", href: "/master/barang" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Item: {item.name}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Item: {item.name}</h1>
       </div>
       <ItemForm
         item={{
@@ -59,13 +60,17 @@ export default async function EditItemPage({
           costingMethod: item.costingMethod,
           purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : null,
           isProduct: item.isProduct,
+          trackBatch: item.trackBatch,
+          trackSerial: item.trackSerial,
+          uomConversions: item.uomConversions.map((u) => ({ code: u.code, factorToBase: Number(u.factorToBase) })),
         }}
         categories={categories}
-        brands={brands as any}
-        vendors={vendors as any}
-        warehouses={warehouses as any}
+        brands={brands}
+        vendors={vendors}
+        warehouses={warehouses}
         racks={racks}
         rackRows={rackRows}
+        baseUrl={baseUrl}
       />
     </div>
   )

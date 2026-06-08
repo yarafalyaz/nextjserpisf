@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 export async function updateSystemSettings(formData: FormData) {
   try {
@@ -139,6 +140,10 @@ export async function updateSystemSettings(formData: FormData) {
       enableAutoEmployeeCode: bool("enableAutoEmployeeCode"),
       vendorCodePrefix: strNull("vendorCodePrefix"),
       enableAutoVendorCode: bool("enableAutoVendorCode"),
+      paymentMethodCodePrefix: strNull("paymentMethodCodePrefix"),
+      enableAutoPaymentMethodCode: bool("enableAutoPaymentMethodCode"),
+      shippingMethodCodePrefix: strNull("shippingMethodCodePrefix"),
+      enableAutoShippingMethodCode: bool("enableAutoShippingMethodCode"),
 
       // Document Prefixes
       quotationCodePrefix: strDefault("quotationCodePrefix", "QUO"),
@@ -176,6 +181,8 @@ export async function updateSystemSettings(formData: FormData) {
       overtimeCoefficient: decimalDefault("overtimeCoefficient", 1.1),
       overtimeMealBreakStart: strDefault("overtimeMealBreakStart", "17:00"),
       overtimeMealBreakEnd: strDefault("overtimeMealBreakEnd", "19:00"),
+      restBreakStart: strDefault("restBreakStart", "12:00"),
+      restBreakEnd: strDefault("restBreakEnd", "13:00"),
 
       // Attendance
       attendanceRadiusKm: decimalDefault("attendanceRadiusKm", 1.0),
@@ -229,6 +236,7 @@ export async function updateSystemSettings(formData: FormData) {
   })
 
   revalidatePath("/pengaturan")
+  await logActivity("update", "SystemSetting", settings.id, "Memperbarui pengaturan sistem")
   redirect("/pengaturan")
 
   } catch (e: unknown) {

@@ -5,7 +5,8 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import { notFound } from "next/navigation"
 import { formatDate } from "@/lib/utils/format"
-import { Chip } from "@heroui/react"
+import { StatusChip } from "@/components/ui/status-chip"
+import { Badge } from "@/components/ui/shadcn/badge"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
@@ -79,11 +80,7 @@ export default async function AttendanceDetailPage({
           { label: "Absensi", href: "/sdm/absensi" },
           { label: "Detail" },
         ]}
-        badge={
-          <Chip size="sm" variant="soft" color={attendance.status === "present" ? "success" : "default"}>
-            {attendance.status === "present" ? "Hadir" : attendance.status}
-          </Chip>
-        }
+        badge={<StatusChip status={attendance.status} />}
         actions={<BackButton href="/sdm/absensi" />}
       />
 
@@ -116,9 +113,16 @@ export default async function AttendanceDetailPage({
           label="Lembur Disetujui"
           value={
             attendance.overtimeMinutes && attendance.overtimeMinutes > 0 ? (
-              <Chip size="sm" variant="soft" color={attendance.overtimeApproved ? "success" : "warning"}>
+              <Badge
+                variant="outline"
+                className={
+                  attendance.overtimeApproved
+                    ? "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                    : "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
+                }
+              >
                 {attendance.overtimeApproved ? "Disetujui" : "Belum Disetujui"}
-              </Chip>
+              </Badge>
             ) : "-"
           }
         />

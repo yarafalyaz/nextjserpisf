@@ -21,16 +21,16 @@ const columnHelper = createColumnHelper<DownPayment>()
 const columns = [
   columnHelper.accessor((row) => row.quotation.documentNo, {
     id: "quotationDocumentNo",
-    header: "Quotation",
+    header: "Penawaran",
     cell: (info) => (
-      <Link href={`/penjualan/uang-muka/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/uang-muka/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
   }),
   columnHelper.accessor((row) => row.quotation.customer.name, {
     id: "customerName",
-    header: "Customer",
+    header: "Pelanggan",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("amount", {
@@ -63,9 +63,11 @@ const columns = [
 
 interface DownPaymentTableProps {
   data: DownPayment[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function DownPaymentTable({ data }: DownPaymentTableProps) {
+export function DownPaymentTable({ data, toolbar, filters }: DownPaymentTableProps) {
   return (
     <DataTable
       data={data}
@@ -73,6 +75,8 @@ export function DownPaymentTable({ data }: DownPaymentTableProps) {
       ariaLabel="Daftar down payment"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("downPayment", ids)}
     />
   )

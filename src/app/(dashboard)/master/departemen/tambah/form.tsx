@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createDepartment } from "@/actions/master.actions"
-import { Input, TextArea, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 interface DepartmentCreateFormProps {
@@ -39,7 +41,7 @@ export function DepartmentCreateForm({ generatedCode }: DepartmentCreateFormProp
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <TextArea id="description" name="description" rows={3} placeholder="Deskripsi departemen" />
+          <Textarea id="description" name="description" rows={3} placeholder="Deskripsi departemen" />
         </div>
       </div>
 

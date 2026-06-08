@@ -7,6 +7,7 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { ItemTable } from "./_components/item-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/page-header"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default async function ItemsPage({
   searchParams,
@@ -53,30 +54,33 @@ export default async function ItemsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Item" }]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Item" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Barang</h1>
 <Link href="/master/barang/tambah" id="create-item-btn" className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors">
-          + Tambah Item
+          + Tambah Barang
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari SKU atau nama item..." action="/master/barang" />
+      <ItemTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari SKU atau nama item..." action="/master/barang" />}
+        filters={
           <form className="flex gap-2" action="/master/barang">
-            <select name="category" className="form-input" defaultValue={params.category}>
-              <option value="">Semua Kategori</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-            <Button type="submit" >Filter</Button>
+            <FormSelect
+              name="category"
+              defaultValue={params.category || ""}
+              placeholder="Semua Kategori"
+              className="min-w-[180px]"
+              options={[
+                { value: "", label: "Semua Kategori" },
+                ...categories.map((cat) => ({ value: String(cat.id), label: cat.name })),
+              ]}
+            />
+            <Button type="submit">Filter</Button>
           </form>
-        </div>
-
-        <ItemTable data={tableData} />
-      </div>
+        }
+      />
     </div>
   )
 }

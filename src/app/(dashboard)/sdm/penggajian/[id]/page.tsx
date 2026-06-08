@@ -52,11 +52,11 @@ export default async function PayrollDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Payroll ${payroll.documentNo}`}
+        title={`Penggajian ${payroll.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
-          { label: "Payroll", href: "/sdm/penggajian" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Penggajian", href: "/sdm/penggajian" },
           { label: payroll.documentNo },
         ]}
         badge={<StatusChip status={payroll.status} />}
@@ -76,7 +76,7 @@ export default async function PayrollDetailPage({
         }
       />
 
-      <DetailCard title="Informasi Payroll">
+      <DetailCard title="Informasi Penggajian">
         <DetailField label="No. Dokumen" value={payroll.documentNo} mono />
         <DetailField label="Karyawan" value={payroll.employee?.name ?? "-"} />
         <DetailField label="Periode" value={formatPeriod(payroll.period)} />
@@ -93,28 +93,48 @@ export default async function PayrollDetailPage({
         <DetailTable>
           <DetailTableBody>
             <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted">Gaji Pokok</DetailTableTd>
+              <DetailTableTd className="font-medium text-muted-foreground">Gaji Pokok</DetailTableTd>
               <DetailTableTd align="right">Rp {fmt(payroll.baseSalary)}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted">Tunjangan</DetailTableTd>
+              <DetailTableTd className="font-medium text-muted-foreground">Tunjangan</DetailTableTd>
               <DetailTableTd align="right">Rp {fmt(payroll.allowances)}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted">Lembur</DetailTableTd>
+              <DetailTableTd className="font-medium text-muted-foreground">Lembur</DetailTableTd>
               <DetailTableTd align="right">Rp {fmt(payroll.overtimeTotal)}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted">Apresiasi</DetailTableTd>
+              <DetailTableTd className="font-medium text-muted-foreground">Apresiasi</DetailTableTd>
               <DetailTableTd align="right">Rp {fmt(payroll.appreciationTotal)}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted">Potongan</DetailTableTd>
+              <DetailTableTd className="font-medium text-muted-foreground">Potongan</DetailTableTd>
               <DetailTableTd align="right">Rp {fmt(payroll.deductions)}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow>
-              <DetailTableTd className="font-medium text-muted">Potongan Pinjaman</DetailTableTd>
+              <DetailTableTd className="font-medium text-muted-foreground">Potongan Pinjaman</DetailTableTd>
               <DetailTableTd align="right">Rp {fmt(payroll.loanDeduction)}</DetailTableTd>
+            </DetailTableRow>
+            <DetailTableRow>
+              <DetailTableTd className="font-medium text-muted-foreground">Potongan Terlambat ({payroll.lateMinutes} mnt)</DetailTableTd>
+              <DetailTableTd align="right">Rp {fmt(payroll.lateDeduction)}</DetailTableTd>
+            </DetailTableRow>
+            <DetailTableRow>
+              <DetailTableTd className="font-medium text-muted-foreground">BPJS Kesehatan (1%)</DetailTableTd>
+              <DetailTableTd align="right">Rp {fmt(payroll.bpjsHealthEmployee)}</DetailTableTd>
+            </DetailTableRow>
+            <DetailTableRow>
+              <DetailTableTd className="font-medium text-muted-foreground">BPJS Ketenagakerjaan (JHT+JP)</DetailTableTd>
+              <DetailTableTd align="right">Rp {fmt(payroll.bpjsEmploymentEmployee)}</DetailTableTd>
+            </DetailTableRow>
+            <DetailTableRow>
+              <DetailTableTd className="font-medium text-muted-foreground">PPh21</DetailTableTd>
+              <DetailTableTd align="right">Rp {fmt(payroll.pph21)}</DetailTableTd>
+            </DetailTableRow>
+            <DetailTableRow>
+              <DetailTableTd className="font-medium text-muted-foreground">Potongan Tidak Hadir ({payroll.absentDays} hari bolos / {payroll.workingDays} hari kerja)</DetailTableTd>
+              <DetailTableTd align="right">Rp {fmt(payroll.absentDeduction)}</DetailTableTd>
             </DetailTableRow>
             <DetailTableRow className="border-t-2 border-default">
               <DetailTableTd className="font-semibold text-foreground">Gaji Bersih</DetailTableTd>

@@ -27,13 +27,13 @@ export default async function BudgetDetailPage({
       <PageHeader
         title={`Anggaran: ${budget.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/keuangan" },
-          { label: "Budgets", href: "/keuangan/anggaran" },
+          { label: "Dasbor", href: "/" },
+          { label: "Keuangan", href: "/keuangan" },
+          { label: "Anggaran", href: "/keuangan/anggaran" },
           { label: budget.name },
         ]}
         actions={<>
-          <Button href={`/keuangan/anggaran/${budget.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/anggaran/${budget.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={budget.id} action={deleteBudget} />
           <BackButton href="/keuangan/anggaran" />
         </>}

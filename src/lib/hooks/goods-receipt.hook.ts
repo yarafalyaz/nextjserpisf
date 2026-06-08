@@ -2,6 +2,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { createInLayer } from "@/lib/services/inventory-fifo";
+import { toBaseFactor } from "@/lib/services/uom.service";
 
 /**
  * Goods Receipt Hook - Observer pattern replacement.
@@ -17,6 +19,8 @@ export async function onGoodsReceiptVerified(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent calls for the same goods receipt.
+    await tx.$queryRaw`SELECT id FROM goods_receipts WHERE id = ${goodsReceiptId} FOR UPDATE`;
     const goodsReceipt = await tx.goodsReceipt.findUniqueOrThrow({
       where: { id: goodsReceiptId },
       include: {
@@ -97,13 +101,24 @@ export async function onGoodsReceiptVerified(
     for (const item of goodsReceipt.items) {
       const smDocNo = await generateDocumentNumber("SM");
 
+      // Multi-UoM: convert entered qty/cost to the item's BASE unit for stock.
+      const itemMeta = await tx.item.findUnique({
+        where: { id: item.itemId },
+        select: { unitOfMeasure: true, trackBatch: true, trackSerial: true },
+      });
+      const factor = await toBaseFactor(tx, item.itemId, item.uom);
+      const baseQty = Number(item.qty) * factor;
+      const enteredUnitCost = Number(item.unitCost ?? 0);
+      const baseUnitCost = factor > 0 ? enteredUnitCost / factor : enteredUnitCost;
+      const batchNumber = itemMeta?.trackBatch ? (item.batchNumber ?? null) : null;
+
       const sm = await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
           warehouseId: goodsReceipt.warehouseId,
-          qty: item.qty,
-          cost: item.unitCost ?? 0,
+          qty: baseQty,
+          cost: baseUnitCost,
           impact: "IN",
           status: "posted",
           referenceType: "GoodsReceipt",
@@ -113,20 +128,63 @@ export async function onGoodsReceiptVerified(
         },
       });
 
-      // Update item qtyOnHand
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
+      // Update item qtyOnHand (global total, in base units)
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${baseQty} WHERE id = ${item.itemId}`;
 
-      // Create FIFO inventory layer
-      await tx.inventoryLayer.create({
-        data: {
-          itemId: item.itemId,
-          stockMoveId: sm.id,
-          qtyIn: item.qty,
-          qtyOut: 0,
-          remaining: item.qty,
-          unitCost: item.unitCost ?? 0,
-        },
+      // Create FIFO inventory layer scoped to the receiving warehouse (+ batch)
+      await createInLayer(tx, {
+        itemId: item.itemId,
+        warehouseId: goodsReceipt.warehouseId,
+        batchNumber,
+        stockMoveId: sm.id,
+        qty: baseQty,
+        unitCost: baseUnitCost,
       });
+
+      // Batch tracking: register/accumulate the batch lot
+      if (itemMeta?.trackBatch && batchNumber) {
+        const existingBatch = await tx.itemBatch.findFirst({
+          where: { itemId: item.itemId, batchNumber, warehouseId: goodsReceipt.warehouseId },
+        });
+        if (existingBatch) {
+          await tx.itemBatch.update({
+            where: { id: existingBatch.id },
+            data: { qty: { increment: baseQty }, ...(item.expiryDate ? { expiryDate: item.expiryDate } : {}) },
+          });
+        } else {
+          await tx.itemBatch.create({
+            data: {
+              itemId: item.itemId,
+              batchNumber,
+              warehouseId: goodsReceipt.warehouseId,
+              qty: baseQty,
+              expiryDate: item.expiryDate ?? null,
+            },
+          });
+        }
+      }
+
+      // Serial tracking: register each received unit's serial number
+      if (itemMeta?.trackSerial && Array.isArray(item.serialNumbers)) {
+        const serials = (item.serialNumbers as unknown[])
+          .map((s) => String(s).trim())
+          .filter((s) => s.length > 0);
+        if (serials.length > 0 && serials.length !== Math.round(baseQty)) {
+          throw new Error(
+            `Jumlah nomor seri (${serials.length}) tidak sama dengan qty diterima (${Math.round(baseQty)}) untuk item #${item.itemId}.`
+          );
+        }
+        for (const serialNumber of serials) {
+          await tx.itemSerial.create({
+            data: {
+              itemId: item.itemId,
+              serialNumber,
+              warehouseId: goodsReceipt.warehouseId,
+              status: "available",
+            },
+          });
+        }
+      }
     }
 
     // ─── 4. Create Journal Entry ──────────────────────────────────────

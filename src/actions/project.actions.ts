@@ -2,11 +2,12 @@
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, requireAuth } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { requireId, safeNumber } from "@/lib/utils/safe-parse"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== PROJECT ACTIONS ====================
 
@@ -31,6 +32,7 @@ export async function createProject(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Project", project.id, "Membuat proyek")
   revalidatePath("/proyek")
   return { success: true, id: project.id }
 
@@ -59,6 +61,7 @@ export async function updateProject(projectId: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "Project", projectId, "Memperbarui proyek")
   revalidatePath("/proyek")
   return { success: true }
 
@@ -77,6 +80,7 @@ export async function deleteProject(id: number) {
 
   await prisma.project.delete({ where: { id } })
 
+  await logActivity("delete", "Project", id, "Menghapus proyek")
   revalidatePath("/proyek")
   return { success: true }
 
@@ -105,6 +109,7 @@ const STAGE_STATUS_LABELS: Record<string, string> = {
  */
 export async function initializeProjectStages(projectId: number) {
   try {
+  await requireAuth()
   const existingStages = await prisma.projectStage.findMany({
     where: { projectId },
   })
@@ -121,6 +126,7 @@ export async function initializeProjectStages(projectId: number) {
     ],
   })
 
+  await logActivity("initialize", "ProjectStage", projectId, "Inisialisasi tahapan proyek")
   revalidatePath("/proyek")
   return { success: true }
 
@@ -193,6 +199,7 @@ export async function updateProjectStageProgress(
   // Auto-update project + WO status
   await syncProjectStatus(projectId)
 
+  await logActivity("update", "ProjectStage", stageId, "Memperbarui progres tahapan proyek")
   revalidatePath("/proyek")
   return { success: true }
 
@@ -209,6 +216,7 @@ export async function updateProjectStageProgress(
  * Parity with Laravel: ProjectStageProgressController@updateProjectProgress
  */
 export async function syncProjectStatus(projectId: number) {
+  await requirePermission("edit_projects")
   const project = await prisma.project.findUniqueOrThrow({
     where: { id: projectId },
   })
@@ -230,16 +238,24 @@ export async function syncProjectStatus(projectId: number) {
       where: { id: projectId },
       data: { status: "completed", endDate: new Date() },
     })
-    // Sync linked WorkOrder
+    // Sync linked WorkOrder — only auto-complete it if its materials were actually
+    // issued (a completed Material Issue exists), mirroring completeWorkOrder's
+    // guard. Otherwise leave the WO open; the project can still be marked completed.
     if (project.workOrderId) {
-      await prisma.workOrder.update({
-        where: { id: project.workOrderId },
-        data: { status: "completed", endDate: new Date() },
+      const issuedMi = await prisma.materialIssue.findFirst({
+        where: { workOrderId: project.workOrderId, status: "completed" },
+        select: { id: true },
       })
-      await prisma.workOrderItem.updateMany({
-        where: { workOrderId: project.workOrderId },
-        data: { status: "completed" },
-      })
+      if (issuedMi) {
+        await prisma.workOrder.update({
+          where: { id: project.workOrderId },
+          data: { status: "completed", endDate: new Date() },
+        })
+        await prisma.workOrderItem.updateMany({
+          where: { workOrderId: project.workOrderId },
+          data: { status: "completed" },
+        })
+      }
     }
   } else if (inProgress > 0 || completed > 0) {
     // Some stages in progress or completed
@@ -344,6 +360,7 @@ export async function createTask(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Task", task.id, "Membuat tugas")
   revalidatePath("/proyek/tugas")
   return { success: true, id: task.id }
 
@@ -373,6 +390,7 @@ export async function updateTask(formData: FormData) {
     },
   })
 
+  await logActivity("update", "Task", id, "Memperbarui tugas")
   revalidatePath("/proyek/tugas")
   return { success: true }
 
@@ -389,6 +407,7 @@ export async function deleteTask(id: number) {
 
   await prisma.task.delete({ where: { id } })
 
+  await logActivity("delete", "Task", id, "Menghapus tugas")
   revalidatePath("/proyek/tugas")
   return { success: true }
 

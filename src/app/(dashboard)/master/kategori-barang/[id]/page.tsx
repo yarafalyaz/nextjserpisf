@@ -34,14 +34,14 @@ export default async function ItemCategoryDetailPage({
       <PageHeader
         title={category.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Item Categories", href: "/master/kategori-barang" },
+          { label: "Kategori Barang", href: "/master/kategori-barang" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/kategori-barang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/kategori-barang/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <DeleteButton id={category.id} action={deleteItemCategory} />
             <BackButton href="/master/kategori-barang" />
           </>
@@ -82,7 +82,7 @@ export default async function ItemCategoryDetailPage({
       {/* Items */}
       <DetailSection title="Item">
         {category.items.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada item</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada item</p>
         ) : (
           <DetailTable>
             <DetailTableHead>

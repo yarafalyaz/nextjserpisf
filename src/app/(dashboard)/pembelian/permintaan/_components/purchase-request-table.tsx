@@ -28,7 +28,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/permintaan/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/pembelian/permintaan/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -46,7 +46,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "itemCount",
-    header: "Items",
+    header: "Item",
     cell: (info) => `${info.row.original.items.length} item`,
   }),
   columnHelper.accessor("status", {
@@ -72,9 +72,11 @@ const columns = [
 
 interface PurchaseRequestTableProps {
   data: PurchaseRequest[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function PurchaseRequestTable({ data }: PurchaseRequestTableProps) {
+export function PurchaseRequestTable({ data, toolbar, filters }: PurchaseRequestTableProps) {
   return (
     <DataTable
       data={data}
@@ -82,6 +84,8 @@ export function PurchaseRequestTable({ data }: PurchaseRequestTableProps) {
       ariaLabel="Daftar purchase request"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("purchaseRequest", ids)}
     />
   )

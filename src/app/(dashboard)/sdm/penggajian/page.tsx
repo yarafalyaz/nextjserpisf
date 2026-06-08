@@ -7,8 +7,8 @@ import Link from "next/link"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PayrollTable } from "./_components/payroll-table"
-import { } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/page-header"
+import { FormSelect } from "@/components/ui/form-select"
 
 import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button"
 
@@ -84,6 +84,24 @@ export default async function PayrollPage({
   const settings = await prisma.systemSetting.findFirst()
   const cutoffDay = settings?.payrollCutoffDay ?? 25
 
+  const statusChips = ["", "draft", "approved", "paid"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] : ""
+    const qs = new URLSearchParams()
+    if (urlStatus) qs.set("status", urlStatus)
+    if (month) qs.set("bulan", String(month))
+    if (year) qs.set("tahun", String(year))
+    const qstr = qs.toString()
+    return (
+      <Link
+        key={dbStatus}
+        href={`/sdm/penggajian${qstr ? `?${qstr}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -96,55 +114,49 @@ export default async function PayrollPage({
         </div>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/penggajian" />
-          <div className="flex gap-2 flex-wrap items-center">
-            <form className="flex gap-2" action="/sdm/penggajian">
-              <select name="bulan" defaultValue={params.bulan ?? ""} className="form-input text-sm">
-                <option value="">Bulan</option>
-                {[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => (
-                  <option key={m} value={m}>{new Date(2026, m - 1).toLocaleString("id-ID", { month: "long" })}</option>
-                ))}
-              </select>
-              <select name="tahun" defaultValue={params.tahun ?? ""} className="form-input text-sm">
-                <option value="">Tahun</option>
-                {[2025,2026,2027].map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-              {params.status && <input type="hidden" name="status" value={params.status} />}
-              <Button type="submit">Filter</Button>
-            </form>
-            {month && year && (
-              <Link href={`/sdm/penggajian${params.status ? `?status=${params.status}` : ""}`} className="text-xs text-primary hover:underline">
-                Reset bulan
-              </Link>
-            )}
-          </div>
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "approved", "paid"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] : ""
-              const qs = new URLSearchParams()
-              if (urlStatus) qs.set("status", urlStatus)
-              if (month) qs.set("bulan", String(month))
-              if (year) qs.set("tahun", String(year))
-              const qstr = qs.toString()
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/sdm/penggajian${qstr ? `?${qstr}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      <PayrollTable
+        data={data}
+        toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/penggajian" />}
+        filters={
+          <>
+            <div className="flex gap-2 flex-wrap items-center">
+              <form className="flex gap-2" action="/sdm/penggajian">
+                <FormSelect
+                  name="bulan"
+                  defaultValue={params.bulan ?? ""}
+                  placeholder="Bulan"
+                  className="min-w-[140px]"
+                  options={[
+                    { value: "", label: "Semua Bulan" },
+                    ...[1,2,3,4,5,6,7,8,9,10,11,12].map((m) => ({
+                      value: String(m),
+                      label: new Date(2026, m - 1).toLocaleString("id-ID", { month: "long" }),
+                    })),
+                  ]}
+                />
+                <FormSelect
+                  name="tahun"
+                  defaultValue={params.tahun ?? ""}
+                  placeholder="Tahun"
+                  className="min-w-[110px]"
+                  options={[
+                    { value: "", label: "Semua Tahun" },
+                    ...[2025,2026,2027].map((y) => ({ value: String(y), label: String(y) })),
+                  ]}
+                />
+                {params.status && <input type="hidden" name="status" value={params.status} />}
+                <Button type="submit">Filter</Button>
+              </form>
+              {month && year && (
+                <Link href={`/sdm/penggajian${params.status ? `?status=${params.status}` : ""}`} className="text-xs text-primary hover:underline">
+                  Reset bulan
                 </Link>
-              )
-            })}
-          </div>
-        </div>
-
-        <PayrollTable data={data} />
-      </div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">{statusChips}</div>
+          </>
+        }
+      />
     </div>
   )
 }

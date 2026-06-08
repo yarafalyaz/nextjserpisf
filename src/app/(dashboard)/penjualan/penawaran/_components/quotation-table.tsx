@@ -25,7 +25,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/penawaran/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/penawaran/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -36,7 +36,7 @@ const columns = [
   }),
   columnHelper.accessor((row) => row.customer.name, {
     id: "customerName",
-    header: "Customer",
+    header: "Pelanggan",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor((row) => row.customerVehicle?.licensePlate ?? "-", {
@@ -71,9 +71,11 @@ const columns = [
 
 interface QuotationTableProps {
   data: Quotation[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function QuotationTable({ data }: QuotationTableProps) {
+export function QuotationTable({ data, toolbar, filters }: QuotationTableProps) {
   return (
     <DataTable
       data={data}
@@ -81,6 +83,8 @@ export function QuotationTable({ data }: QuotationTableProps) {
       ariaLabel="Daftar quotation"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("salesQuotation", ids)}
     />
   )

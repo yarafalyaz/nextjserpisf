@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DownPaymentForm } from "@/components/forms/down-payment-form"
+import { getActivePaymentMethods } from "@/lib/services/method.service"
 
 export default async function CreateDownPaymentPage({
   searchParams,
@@ -13,9 +13,10 @@ export default async function CreateDownPaymentPage({
   const params = await searchParams
   const quotationId = params.quotationId ? Number(params.quotationId) : undefined
 
-  const [customers, quotations] = await Promise.all([
+  const [customers, quotations, paymentMethods] = await Promise.all([
     prisma.customer.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.quotation.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" }, select: { id: true, documentNo: true, customerId: true, grandTotal: true } }),
+    getActivePaymentMethods(),
   ])
 
   // Pre-fill from quotation if provided
@@ -24,19 +25,20 @@ export default async function CreateDownPaymentPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Sales", href: "/penjualan/pesanan" },
-        { label: "Down Payments", href: "/penjualan/uang-muka" },
-        { label: "Create" },
+        { label: "Dasbor", href: "/" },
+        { label: "Penjualan", href: "/penjualan/pesanan" },
+        { label: "Uang Muka", href: "/penjualan/uang-muka" },
+        { label: "Tambah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Down Payment</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Uang Muka</h1>
       </div>
       <DownPaymentForm
-        customers={customers as any}
-        quotations={quotations as any}
+        customers={customers}
+        quotations={quotations}
         defaultQuotationId={quotationId}
         defaultCustomerId={preselectedQuotation?.customerId}
+        paymentMethods={paymentMethods}
       />
     </div>
   )

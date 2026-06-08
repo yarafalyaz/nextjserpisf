@@ -97,9 +97,9 @@ export default async function InventorySummaryPage() {
     <div className="flex flex-col gap-6">
       <PrintHeader title="Ringkasan Persediaan" period={period} />
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/laporan" },
-        { label: "Inventory Summary" },
+        { label: "Dasbor", href: "/" },
+        { label: "Laporan", href: "/laporan" },
+        { label: "Ringkasan Persediaan" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
@@ -112,19 +112,19 @@ export default async function InventorySummaryPage() {
       {/* KPI */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Total Jenis Item</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Jenis Item</div>
           <div className="text-xl font-bold">{totalItems}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Total Qty</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Qty</div>
           <div className="text-xl font-bold">{totalQty.toLocaleString('id-ID')}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Total Nilai</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Nilai</div>
           <div className="text-xl font-bold text-primary">{formatCurrency(totalValue)}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Item Kritis (Low Stock)</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Item Kritis (Stok Rendah)</div>
           <div className={`text-xl font-bold ${criticalItems.length > 0 ? 'text-danger' : 'text-success'}`}>{criticalItems.length}</div>
         </div>
       </div>
@@ -195,7 +195,7 @@ export default async function InventorySummaryPage() {
       {criticalItems.length > 0 && (
         <div className="bg-surface rounded-xl border border-danger/30 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-danger/30 bg-danger/5">
-            <h2 className="text-[0.9375rem] font-semibold text-danger">⚠️ ITEM KRITIS (Stok ≤ Minimum)</h2>
+            <h2 className="text-[0.9375rem] font-semibold text-danger">ITEM KRITIS (Stok ≤ Minimum)</h2>
           </div>
           <div className="p-4 px-5">
             <DetailTable data-report-table="Item Kritis">

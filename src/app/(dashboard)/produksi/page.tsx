@@ -5,16 +5,16 @@ import {
 } from "lucide-react"
 
 const manufacturingModules = [
-  { label: "Products (BOM)", href: "/produksi/products", icon: Package, desc: "Bill of Materials" },
-  { label: "Work Orders", href: "/produksi/perintah-kerja", icon: Wrench, desc: "Perintah kerja" },
-  { label: "Production Orders", href: "/produksi/production-orders", icon: Hammer, desc: "Perintah produksi" },
+  { label: "Produk (BOM)", href: "/produksi/products", icon: Package, desc: "Bill of Materials" },
+  { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, desc: "Perintah kerja" },
+  { label: "Perintah Produksi", href: "/produksi/production-orders", icon: Hammer, desc: "Perintah produksi" },
 ]
 
 export default function ManufacturingPage() {
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Manufacturing" }]} />
-      <h1 className="text-2xl font-bold text-foreground">Manufacturing</h1>
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Manufaktur" }]} />
+      <h1 className="text-2xl font-bold text-foreground">Manufaktur</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {manufacturingModules.map((mod) => {
           const Icon = mod.icon
@@ -25,7 +25,7 @@ export default function ManufacturingPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">{mod.label}</p>
-                <p className="text-xs text-muted">{mod.desc}</p>
+                <p className="text-xs text-muted-foreground">{mod.desc}</p>
               </div>
             </Link>
           )

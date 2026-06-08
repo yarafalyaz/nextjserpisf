@@ -26,15 +26,15 @@ export default async function EditCustomerPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Customers", href: "/master/pelanggan" },
-  { label: "Edit" },
+  { label: "Pelanggan", href: "/master/pelanggan" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Customer: {customer.name}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Pelanggan: {customer.name}</h1>
       </div>
-      <CustomerForm customer={customer} />
+      <CustomerForm customer={{ ...customer, creditLimit: customer.creditLimit != null ? Number(customer.creditLimit) : 0 }} />
     </div>
   )
 }

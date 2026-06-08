@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { Button } from "@heroui/react"
+import { Button } from "@/components/ui/page-header"
 
 export default function GlobalError({
   error,
@@ -20,7 +20,7 @@ export default function GlobalError({
         <div className="min-h-screen flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-surface rounded-xl border border-default shadow-sm p-6 text-center">
             <h2 className="text-xl font-bold mb-2">Terjadi Kesalahan</h2>
-            <p className="text-muted mb-4">Sistem mengalami gangguan. Silakan coba lagi.</p>
+            <p className="text-muted-foreground mb-4">Sistem mengalami gangguan. Silakan coba lagi.</p>
             <Button variant="primary" onPress={reset}>Coba Lagi</Button>
           </div>
         </div>

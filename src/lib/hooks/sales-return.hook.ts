@@ -1,7 +1,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
-import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { createInLayer } from "@/lib/services/inventory-fifo";
 
 /**
  * Sales Return Hook - Observer pattern replacement.
@@ -15,6 +15,8 @@ export async function onSalesReturnCompleted(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent calls for the same sales return.
+    await tx.$queryRaw`SELECT id FROM sales_returns WHERE id = ${returnId} FOR UPDATE`;
     const salesReturn = await tx.salesReturn.findUniqueOrThrow({
       where: { id: returnId },
       include: { items: true },
@@ -64,33 +66,23 @@ export async function onSalesReturnCompleted(
         },
       });
 
-      // Update item qtyOnHand
+      // Update item qtyOnHand (global total)
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
 
-      // Create FIFO inventory layer (returned stock)
-      await tx.inventoryLayer.create({
-        data: {
-          itemId: item.itemId,
-          stockMoveId: sm.id,
-          qtyIn: item.qty,
-          qtyOut: 0,
-          remaining: item.qty,
-          unitCost: item.cost ?? 0,
-        },
+      // Create FIFO inventory layer (returned stock) in the resolved warehouse
+      await createInLayer(tx, {
+        itemId: item.itemId,
+        warehouseId: resolvedWarehouseId,
+        stockMoveId: sm.id,
+        qty: Number(item.qty),
+        unitCost: Number(item.cost ?? 0),
       });
     }
 
-    // Create Journal Entry (Dr Inventory, Cr Sales Return)
-    await stockJournalService.onSalesReturn(
-      tx,
-      salesReturn.items.map((i) => ({
-        qty: Number(i.qty),
-        cost: Number(i.cost),
-      })),
-      salesReturn.documentNo ?? `SR-${returnId}`,
-      returnId,
-      userId
-    );
+    // Stock-only hook: GL for a sales return is posted exclusively by
+    // accounting.hook.onSalesReturnCompleted (single balanced journal valuing AR at
+    // selling price). Posting a journal here too would collide on referenceType
+    // "SalesReturn" and suppress the AR journal.
 
     // Update Sales Return status
     await tx.salesReturn.update({

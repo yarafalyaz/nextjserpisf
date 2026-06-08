@@ -32,7 +32,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/inventaris/pengeluaran-material/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/inventaris/pengeluaran-material/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -46,7 +46,7 @@ const columns = [
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.accessor("items", {
-    header: "Items",
+    header: "Item",
     cell: (info) => `${info.getValue().length} item`,
   }),
   columnHelper.accessor("status", {
@@ -72,16 +72,20 @@ const columns = [
 
 interface MaterialIssueTableProps {
   data: MaterialIssue[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function MaterialIssueTable({ data }: MaterialIssueTableProps) {
+export function MaterialIssueTable({ data, toolbar, filters }: MaterialIssueTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar material issue"
+      ariaLabel="Daftar pengeluaran material"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("materialIssue", ids)}
     />
   )

@@ -154,7 +154,7 @@ export function SelfAttendanceWidget() {
       await selfCheckIn(coords?.latitude, coords?.longitude)
       await loadStatus()
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Gagal check-in"))
+      setError(getErrorMessage(e, "Gagal absen masuk"))
     } finally {
       setActionLoading(null)
     }
@@ -170,7 +170,7 @@ export function SelfAttendanceWidget() {
       await selfCheckOut(coords?.latitude, coords?.longitude)
       await loadStatus()
     } catch (e: unknown) {
-      setError(getErrorMessage(e, "Gagal check-out"))
+      setError(getErrorMessage(e, "Gagal absen keluar"))
     } finally {
       setActionLoading(null)
     }
@@ -217,12 +217,12 @@ export function SelfAttendanceWidget() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-muted">{getGreeting()},</p>
+            <p className="text-sm font-medium text-muted-foreground">{getGreeting()},</p>
             <p className="text-xl font-bold text-foreground mt-0.5">Absensi Hari Ini</p>
           </div>
           <div className="text-right">
             <div className="text-3xl font-mono font-bold text-foreground tabular-nums">{jamStr}</div>
-            <div className="text-xs text-muted mt-0.5">{tanggalStr}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{tanggalStr}</div>
           </div>
         </div>
       </div>
@@ -252,9 +252,9 @@ export function SelfAttendanceWidget() {
             <div className="grid grid-cols-2 gap-3">
               {/* Check In */}
               <div className="bg-surface rounded-lg border border-default p-3">
-                <div className="flex items-center gap-1.5 text-muted text-xs mb-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1">
                   <LogIn size={12} />
-                  <span>Check In</span>
+                  <span>Absen Masuk</span>
                 </div>
                 <div className="text-lg font-mono font-bold text-foreground tabular-nums">
                   {formatJam(status.checkIn)}
@@ -274,9 +274,9 @@ export function SelfAttendanceWidget() {
  
               {/* Check Out */}
               <div className="bg-surface rounded-lg border border-default p-3">
-                <div className="flex items-center gap-1.5 text-muted text-xs mb-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground text-xs mb-1">
                   <LogOut size={12} />
-                  <span>Check Out</span>
+                  <span>Absen Keluar</span>
                 </div>
                 <div className="text-lg font-mono font-bold text-foreground tabular-nums">
                   {sudahCheckOut ? formatJam(status.checkOut) : "--:--:--"}
@@ -300,9 +300,9 @@ export function SelfAttendanceWidget() {
         {/* Belum absen */}
         {!sudahCheckIn && (
           <div className="bg-surface-secondary/30 rounded-xl border border-dashed border-default p-4 text-center">
-            <Clock size={28} className="mx-auto text-muted mb-2" />
-            <p className="text-sm text-muted">Anda belum melakukan absensi hari ini</p>
-            <p className="text-xs text-muted/70 mt-0.5">Klik tombol di bawah untuk check-in</p>
+            <Clock size={28} className="mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">Anda belum melakukan absensi hari ini</p>
+            <p className="text-xs text-muted-foreground/70 mt-0.5">Klik tombol di bawah untuk absen masuk</p>
           </div>
         )}
 
@@ -312,59 +312,43 @@ export function SelfAttendanceWidget() {
             onPress={handleCheckIn}
             isDisabled={sudahCheckIn || actionLoading !== null}
             variant="primary"
-            className="flex-1 h-12 text-base font-semibold"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              borderRadius: "0.75rem",
-              background: sudahCheckIn
-                ? "var(--bg-secondary)"
-                : "linear-gradient(135deg, hsl(142 76% 36%), hsl(142 60% 28%))",
-              color: sudahCheckIn ? "var(--text-muted)" : "#fff",
-              cursor: sudahCheckIn ? "not-allowed" : "pointer",
-            }}
+            className={`flex-1 h-12 text-base font-semibold flex items-center justify-center gap-2 rounded-xl ${
+              sudahCheckIn
+                ? "bg-[var(--bg-secondary)] text-[var(--text-muted-foreground)] cursor-not-allowed"
+                : "bg-[linear-gradient(135deg,hsl(142_76%_36%),hsl(142_60%_28%))] text-white cursor-pointer"
+            }`}
           >
             {actionLoading === "checkin" ? (
               <Loader2 size={18} className="animate-spin" />
             ) : (
               <LogIn size={18} />
             )}
-            {sudahCheckIn ? "Sudah Check-In" : "Check In"}
+            {sudahCheckIn ? "Sudah Absen Masuk" : "Absen Masuk"}
           </Button>
 
           <Button
             onPress={handleCheckOut}
             isDisabled={!sudahCheckIn || sudahCheckOut || actionLoading !== null}
             variant="secondary"
-            className="flex-1 h-12 text-base font-semibold"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              borderRadius: "0.75rem",
-              background: sudahCheckOut || !sudahCheckIn
-                ? "var(--bg-secondary)"
-                : "linear-gradient(135deg, hsl(0 84% 60%), hsl(0 70% 45%))",
-              color: sudahCheckOut || !sudahCheckIn ? "var(--text-muted)" : "#fff",
-              cursor: sudahCheckOut || !sudahCheckIn ? "not-allowed" : "pointer",
-            }}
+            className={`flex-1 h-12 text-base font-semibold flex items-center justify-center gap-2 rounded-xl ${
+              sudahCheckOut || !sudahCheckIn
+                ? "bg-[var(--bg-secondary)] text-[var(--text-muted-foreground)] cursor-not-allowed"
+                : "bg-[linear-gradient(135deg,hsl(0_84%_60%),hsl(0_70%_45%))] text-white cursor-pointer"
+            }`}
           >
             {actionLoading === "checkout" ? (
               <Loader2 size={18} className="animate-spin" />
             ) : (
               <LogOut size={18} />
             )}
-            {sudahCheckOut ? "Sudah Check-Out" : "Check Out"}
+            {sudahCheckOut ? "Sudah Absen Keluar" : "Absen Keluar"}
           </Button>
         </div>
 
         {/* GPS Status */}
         {mounted && geo && (
           <div className="flex flex-col items-center justify-center gap-1 text-center">
-            <div className="flex items-center justify-center gap-1.5 text-xs text-muted">
+            <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
               <MapPin size={10} className="text-success shrink-0" />
               <a
                 href={`https://www.google.com/maps?q=${geo.latitude},${geo.longitude}`}

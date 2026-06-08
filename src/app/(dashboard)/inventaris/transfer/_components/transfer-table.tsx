@@ -28,7 +28,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/inventaris/transfer/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/inventaris/transfer/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -68,16 +68,20 @@ const columns = [
 
 interface TransferTableProps {
   data: InventoryTransfer[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function TransferTable({ data }: TransferTableProps) {
+export function TransferTable({ data, toolbar, filters }: TransferTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar inventory transfer"
+      ariaLabel="Daftar transfer inventaris"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("stockTransfer", ids)}
     />
   )

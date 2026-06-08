@@ -24,7 +24,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/tagihan/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/pembelian/tagihan/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -65,9 +65,11 @@ const columns = [
 
 interface VendorBillTableProps {
   data: VendorBill[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function VendorBillTable({ data }: VendorBillTableProps) {
+export function VendorBillTable({ data, toolbar, filters }: VendorBillTableProps) {
   return (
     <DataTable
       data={data}
@@ -75,6 +77,8 @@ export function VendorBillTable({ data }: VendorBillTableProps) {
       ariaLabel="Daftar vendor bill"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("vendorBill", ids)}
     />
   )

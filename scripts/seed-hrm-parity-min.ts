@@ -26,15 +26,15 @@ async function main() {
 
   await prisma.workSchedule.upsert({
     where: { id: 9991 },
-    update: { startTime: "08:00", endTime: "17:00", dayOfWeek: 1, departmentId: dept.id, isActive: true },
+    update: { startTime: "08:00", endTime: "17:00", workDays: "1", departments: { set: [{ id: dept.id }] }, isActive: true },
     create: {
       id: 9991,
       name: "Parity Monday",
-      dayOfWeek: 1,
+      workDays: "1",
       startTime: "08:00",
       endTime: "17:00",
       lateToleranceMinutes: 0,
-      departmentId: dept.id,
+      departments: { connect: { id: dept.id } },
       isActive: true,
     },
   })

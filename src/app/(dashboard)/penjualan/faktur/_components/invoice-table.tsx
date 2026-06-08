@@ -29,7 +29,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/faktur/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/penjualan/faktur/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -44,7 +44,7 @@ const columns = [
   }),
   columnHelper.accessor((row) => row.customer.name, {
     id: "customerName",
-    header: "Customer",
+    header: "Pelanggan",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("totalAmount", {
@@ -82,6 +82,8 @@ export function InvoiceTable({ data }: InvoiceTableProps) {
       ariaLabel="Daftar invoice"
       pageSize={20}
       selectable={true}
+      searchColumn="documentNo"
+      searchPlaceholder="Cari no. dokumen atau pelanggan..."
       onBulkDelete={(ids) => bulkDelete("salesInvoice", ids)}
     />
   )

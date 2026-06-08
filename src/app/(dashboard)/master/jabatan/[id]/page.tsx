@@ -33,14 +33,14 @@ export default async function PositionDetailPage({
       <PageHeader
         title={position.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Positions", href: "/master/jabatan" },
+          { label: "Jabatan", href: "/master/jabatan" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/jabatan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/jabatan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <DeleteButton id={position.id} action={deletePosition} />
             <BackButton href="/master/jabatan" />
           </>
@@ -60,7 +60,7 @@ export default async function PositionDetailPage({
       {/* Employees */}
       <DetailSection title="Karyawan">
         {position.employees.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada karyawan</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada karyawan</p>
         ) : (
           <DetailTable>
             <DetailTableHead>

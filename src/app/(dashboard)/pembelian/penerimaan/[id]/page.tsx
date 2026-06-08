@@ -52,33 +52,33 @@ export default async function GoodsReceiptDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Dokumen</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Dokumen</span>
             <span className="text-[0.9375rem] text-foreground font-medium font-mono">{receipt.documentNo}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Pesanan Pembelian</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pesanan Pembelian</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               <Link href={`/pembelian/pesanan/${receipt.purchaseOrder.id}`}>{receipt.purchaseOrder.documentNo}</Link>
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Vendor</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pemasok</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               <Link href={`/master/pemasok/${receipt.purchaseOrder.vendor.id}`}>{receipt.purchaseOrder.vendor.name}</Link>
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Gudang</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Gudang</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               <Link href={`/master/gudang/${receipt.warehouse.id}`}>{receipt.warehouse.name}</Link>
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(receipt.date)}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dibuat</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(receipt.createdAt)}</span>
           </div>
         </div>
@@ -91,16 +91,16 @@ export default async function GoodsReceiptDetailPage({
         </div>
         <div className="p-4 px-5">
           {receipt.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
-                <DetailTableTh align="right">Qty Ordered</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh align="right">Qty Dipesan</DetailTableTh>
                 <DetailTableTh align="right">Qty Diterima</DetailTableTh>
                 <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
                 <DetailTableTh>Gudang</DetailTableTh>
-                <DetailTableTh>Stock Move</DetailTableTh>
+                <DetailTableTh>Mutasi Stok</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {receipt.items.map((item: any) => {
@@ -130,7 +130,7 @@ export default async function GoodsReceiptDetailPage({
       {receipt.notes && (
         <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Catatan</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{receipt.notes}</span>
           </div>
         </div>

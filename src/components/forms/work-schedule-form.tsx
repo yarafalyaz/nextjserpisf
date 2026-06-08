@@ -1,10 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createWorkSchedule, updateWorkSchedule } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label, ComboBox, ListBox, Checkbox } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
+import { MultiCombobox } from "@/components/ui/multi-combobox"
+import { AppTimePicker } from "@/components/ui/time-picker"
 import { Button } from "@/components/ui/page-header"
 
 const DAYS = [
@@ -24,32 +28,37 @@ interface WorkScheduleFormProps {
     startTime: string
     endTime: string
     workDays: string
-    departmentId?: number | null
+    departmentIds?: number[]
     lateToleranceMinutes?: number
     isActive?: boolean
+    employeeIds?: number[]
   }
   departments?: { id: number; name: string }[]
+  employees?: { id: number; name: string }[]
 }
 
-export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFormProps) {
+export function WorkScheduleForm({ schedule, departments = [], employees = [] }: WorkScheduleFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [departmentIds, setDepartmentIds] = useState<string[]>((schedule?.departmentIds ?? []).map(String))
+  const [employeeIds, setEmployeeIds] = useState<string[]>((schedule?.employeeIds ?? []).map(String))
+
+  const selectedDays = new Set(
+    (schedule?.workDays ?? "")
+      .split(",")
+      .map((d) => d.trim())
+      .filter((d) => d !== "")
+      .map((d) => Number(d))
+  )
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        if (schedule?.id) {
-
-          await updateWorkSchedule(schedule.id, formData)
-
-        } else {
-
-          await createWorkSchedule(formData)
-
-        }
-        showSuccess(schedule?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        const result = schedule?.id ? await updateWorkSchedule(schedule.id, formData) : await createWorkSchedule(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(schedule?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/sdm/jadwal-kerja")
         router.refresh()
       } catch (error) {
@@ -65,53 +74,53 @@ export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFor
           <Label htmlFor="name">Nama Jadwal *</Label>
           <Input id="name" name="name" required placeholder="Contoh: Shift Pagi" defaultValue={schedule?.name ?? ""} />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <ComboBox name="departmentId" className="w-full" defaultSelectedKey={schedule?.departmentId ? String(schedule.departmentId) : undefined}>
-            <Label>Departemen</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Cari departemen..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {departments.map((dept) => (
-                  <ListBox.Item key={dept.id} id={String(dept.id)} textValue={dept.name}>
-                    {dept.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+        <div className="flex flex-col gap-1.5 col-span-full">
+          <Label htmlFor="departmentId">Departemen (opsional)</Label>
+          <MultiCombobox
+            id="departmentId"
+            name="departmentId"
+            options={departments.map((dept) => ({ value: String(dept.id), label: dept.name }))}
+            value={departmentIds}
+            onChange={setDepartmentIds}
+            placeholder="Cari & pilih departemen (boleh lebih dari satu)..."
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 col-span-full">
+          <Label htmlFor="employeeId">Karyawan (opsional)</Label>
+          <MultiCombobox
+            id="employeeId"
+            name="employeeId"
+            options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+            value={employeeIds}
+            onChange={setEmployeeIds}
+            placeholder="Cari & pilih karyawan (boleh lebih dari satu)..."
+          />
+          <span className="text-xs text-muted-foreground">Jika diisi, jadwal berlaku untuk karyawan terpilih. Jika kosong, berlaku untuk departemen di atas (atau semua bila departemen kosong).</span>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="startTime">Jam Masuk *</Label>
-          <Input id="startTime" name="startTime" type="time" required defaultValue={schedule?.startTime ?? ""} />
+          <AppTimePicker id="startTime" name="startTime" defaultValue={schedule?.startTime ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="endTime">Jam Keluar *</Label>
-          <Input id="endTime" name="endTime" type="time" required defaultValue={schedule?.endTime ?? ""} />
+          <AppTimePicker id="endTime" name="endTime" defaultValue={schedule?.endTime ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="lateToleranceMinutes">Toleransi Keterlambatan (menit)</Label>
           <Input id="lateToleranceMinutes" name="lateToleranceMinutes" type="number" min="0" placeholder="0" defaultValue={String(schedule?.lateToleranceMinutes ?? 0)} />
         </div>
         <div className="flex flex-col gap-1.5 justify-end">
-          <Checkbox id="work-schedule-is-active" name="isActive" value="on" defaultSelected={schedule?.isActive !== false}>
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Checkbox.Content>
-              <Label htmlFor="work-schedule-is-active">Aktif</Label>
-            </Checkbox.Content>
-          </Checkbox>
+          <div className="flex items-center gap-2">
+            <Checkbox id="work-schedule-is-active" name="isActive" value="true" defaultChecked={schedule?.isActive !== false} />
+            <Label htmlFor="work-schedule-is-active">Aktif</Label>
+          </div>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label>Hari Kerja *</Label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "8px" }}>
             {DAYS.map((day) => (
-              <label key={day.value} style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
-                <input type="checkbox" name="days" value={day.value} />
+              <label key={day.value} htmlFor={`day-${day.value}`} className="flex items-center gap-2 cursor-pointer">
+                <Checkbox id={`day-${day.value}`} name="days" value={String(day.value)} defaultChecked={selectedDays.has(day.value)} />
                 {day.label}
               </label>
             ))}
@@ -120,7 +129,7 @@ export function WorkScheduleForm({ schedule, departments = [] }: WorkScheduleFor
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" variant="secondary" onPress={() => router.back()}>Batal</Button>
-        <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : schedule?.id ? "Update" : "Simpan"}</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : schedule?.id ? "Perbarui" : "Simpan"}</Button>
       </div>
     </form>
   )

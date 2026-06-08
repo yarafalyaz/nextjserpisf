@@ -10,13 +10,13 @@ export default async function CreateCostCenterPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/keuangan" },
-  { label: "Cost Centers", href: "/keuangan/pusat-biaya" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Keuangan", href: "/keuangan" },
+  { label: "Pusat Biaya", href: "/keuangan/pusat-biaya" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Cost Center</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Pusat Biaya</h1>
       </div>
       <CostCenterForm />
     </div>

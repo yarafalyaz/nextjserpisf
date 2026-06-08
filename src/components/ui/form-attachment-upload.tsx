@@ -4,7 +4,7 @@
 import { useState, useRef } from "react"
 import { Upload, X, FileText } from "lucide-react"
 import { showError } from "@/lib/utils/toast"
-import { Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 interface UploadedFile {
@@ -97,7 +97,7 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
                   {file.mimeType.startsWith("image/") ? (
                     <img src={file.fileUrl} alt={file.originalName} className="form-attachment-thumb" />
                   ) : (
-                    <FileText className="size-5 text-muted" />
+                    <FileText className="size-5 text-muted-foreground" />
                   )}
                 </div>
                 <div className="form-attachment-info">

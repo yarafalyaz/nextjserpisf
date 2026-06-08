@@ -6,7 +6,9 @@ import { formatCurrency } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
-import { Select, ListBox, Label, Button } from "@heroui/react"
+import { FormSelect } from "@/components/ui/form-select"
+import { Label } from "@/components/ui/shadcn/label"
+import { Button } from "@/components/ui/page-header"
 import { AppDatePicker } from "@/components/ui/date-picker"
 
 /**
@@ -15,11 +17,12 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 async function getTrialBalanceData(tanggalMulai?: string, tanggalSelesai?: string) {
   const start = tanggalMulai ? new Date(tanggalMulai) : new Date(new Date().getFullYear(), 0, 1) // Jan 1
   const end = tanggalSelesai ? new Date(tanggalSelesai) : new Date()
+  end.setHours(23, 59, 59, 999)
 
   const entries = await prisma.journalEntry.findMany({
     where: {
       journal: {
-        status: "POSTED",
+        status: { in: ["POSTED", "REVERSED"] },
         transactionDate: { gte: start, lte: end },
       },
     },
@@ -62,11 +65,12 @@ async function getTrialBalanceData(tanggalMulai?: string, tanggalSelesai?: strin
 async function getIncomeStatementData(tanggalMulai?: string, tanggalSelesai?: string) {
   const start = tanggalMulai ? new Date(tanggalMulai) : new Date(new Date().getFullYear(), 0, 1)
   const end = tanggalSelesai ? new Date(tanggalSelesai) : new Date()
+  end.setHours(23, 59, 59, 999)
 
   const entries = await prisma.journalEntry.findMany({
     where: {
       journal: {
-        status: "POSTED",
+        status: { in: ["POSTED", "REVERSED"] },
         transactionDate: { gte: start, lte: end },
       },
       account: { type: { in: ["REVENUE", "EXPENSE"] } },
@@ -127,34 +131,37 @@ export default async function FinancialReportsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/laporan" },
-  { label: "Financial" },
+  { label: "Dasbor", href: "/" },
+  { label: "Laporan", href: "/laporan" },
+  { label: "Keuangan" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">
-          {reportType === "trial-balance" ? "Neraca Saldo (Trial Balance)" :
-           reportType === "income-statement" ? "Laba Rugi (Income Statement)" :
-           "Reports"}
+          {reportType === "trial-balance" ? "Neraca Saldo" :
+           reportType === "income-statement" ? "Laba Rugi" :
+           "Laporan"}
         </h1>
         <ExportButtons title="Keuangan" />
       </div>
 
       {/* Report Selector */}
       <form className="bg-surface rounded-xl border border-default shadow-sm p-6 flex gap-4 flex-wrap items-end print:hidden" action="/laporan/keuangan">
-        <Select name="report" defaultSelectedKey={reportType} placeholder="Pilih Laporan" className="w-[200px]">
-          <Label>Jenis Laporan</Label>
-          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id="trial-balance" textValue="Neraca Saldo">Neraca Saldo<ListBox.ItemIndicator /></ListBox.Item>
-              <ListBox.Item id="income-statement" textValue="Laba Rugi">Laba Rugi<ListBox.ItemIndicator /></ListBox.Item>
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        <div className="flex flex-col gap-1.5 w-[200px]">
+          <Label htmlFor="report">Jenis Laporan</Label>
+          <FormSelect
+            id="report"
+            name="report"
+            defaultValue={reportType}
+            placeholder="Pilih Laporan"
+            options={[
+              { value: "trial-balance", label: "Neraca Saldo" },
+              { value: "income-statement", label: "Laba Rugi" },
+            ]}
+          />
+        </div>
         <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || `${new Date().getFullYear()}-01-01`} className="w-[180px]" />
         <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || new Date().toISOString().split("T")[0]} className="w-[180px]" />
-        <Button type="submit" variant="primary" size="sm">Generate</Button>
+        <Button type="submit" variant="primary" size="sm">Tampilkan</Button>
       </form>
 
       {/* Trial Balance */}
@@ -167,12 +174,12 @@ export default async function FinancialReportsPage({
                 <DetailTableTh>Nama Akun</DetailTableTh>
                 <DetailTableTh>Tipe</DetailTableTh>
                 <DetailTableTh align="right">Debit</DetailTableTh>
-                <DetailTableTh align="right">Credit</DetailTableTh>
+                <DetailTableTh align="right">Kredit</DetailTableTh>
                 <DetailTableTh align="right">Saldo</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {trialBalance.accounts.length === 0 ? (
-                  <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted">Belum ada data journal</DetailTableTd></DetailTableRow>
+                  <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted-foreground">Belum ada data journal</DetailTableTd></DetailTableRow>
                 ) : (
                   trialBalance.accounts.map((acc) => (
                     <DetailTableRow key={acc.code}>
@@ -193,8 +200,8 @@ export default async function FinancialReportsPage({
                   <DetailTableTd align="right">{formatCurrency(trialBalance.grandTotalCredit)}</DetailTableTd>
                   <DetailTableTd align="right">
                     {Math.abs(trialBalance.grandTotalDebit - trialBalance.grandTotalCredit) < 0.01
-                      ? "✅ BALANCED"
-                      : `❌ Selisih: ${formatCurrency(trialBalance.grandTotalDebit - trialBalance.grandTotalCredit)}`}
+                      ? "SEIMBANG"
+                      : `Selisih: ${formatCurrency(trialBalance.grandTotalDebit - trialBalance.grandTotalCredit)}`}
                   </DetailTableTd>
                 </DetailTableFootRow>
               </DetailTableFoot>
@@ -222,7 +229,7 @@ export default async function FinancialReportsPage({
                     </DetailTableRow>
                   ))}
                   {incomeStatement.revenues.length === 0 && (
-                    <DetailTableRow><DetailTableTd colSpan={3} className="text-muted text-center">Belum ada data</DetailTableTd></DetailTableRow>
+                    <DetailTableRow><DetailTableTd colSpan={3} className="text-muted-foreground text-center">Belum ada data</DetailTableTd></DetailTableRow>
                   )}
                 </DetailTableBody>
               </DetailTable>
@@ -245,7 +252,7 @@ export default async function FinancialReportsPage({
                     </DetailTableRow>
                   ))}
                   {incomeStatement.expenses.length === 0 && (
-                    <DetailTableRow><DetailTableTd colSpan={3} className="text-muted text-center">Belum ada data</DetailTableTd></DetailTableRow>
+                    <DetailTableRow><DetailTableTd colSpan={3} className="text-muted-foreground text-center">Belum ada data</DetailTableTd></DetailTableRow>
                   )}
                 </DetailTableBody>
               </DetailTable>
@@ -254,7 +261,7 @@ export default async function FinancialReportsPage({
 
           <div className="bg-surface rounded-xl p-5 px-6 flex items-center justify-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
             <div className="flex flex-col items-center">
-              <span className="text-[0.8125rem] text-muted font-medium">LABA / RUGI BERSIH</span>
+              <span className="text-[0.8125rem] text-muted-foreground font-medium">LABA / RUGI BERSIH</span>
               <span className={`kpi-value ${incomeStatement.netIncome >= 0 ? "text-success" : "text-danger"}`}>
                 {formatCurrency(incomeStatement.netIncome)}
               </span>

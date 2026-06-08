@@ -33,14 +33,14 @@ export default async function LeadDetailPage({
       <PageHeader
         title={`Lead: ${lead.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "CRM", href: "/crm" },
           { label: "Leads", href: "/crm/leads" },
           { label: lead.name },
         ]}
         badge={<StatusChip status={lead.status} />}
         actions={<>
-          <Button href={`/crm/leads/${lead.id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/crm/leads/${lead.id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={lead.id} action={deleteLead} />
           <BackButton href="/crm/leads" />
         </>}
@@ -76,7 +76,7 @@ export default async function LeadDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {lead.activities.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada aktivitas</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada aktivitas</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

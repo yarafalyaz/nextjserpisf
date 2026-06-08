@@ -1,10 +1,13 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createProductionOrder, updateProductionOrder } from "@/actions/manufacturing.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Button } from "@/components/ui/page-header"
 
@@ -16,6 +19,7 @@ interface ProductionOrderFormProps {
 export function ProductionOrderForm({ products, order }: ProductionOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [productId, setProductId] = useState(order?.productId ? String(order.productId) : "")
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -24,9 +28,11 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
         const formData = new FormData(e.currentTarget)
         const result = order?.id ? await updateProductionOrder(order.id, formData) : await createProductionOrder(formData)
         if (result.success) {
-          showSuccess(order?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+          showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/produksi/production-orders")
           router.refresh()
+        } else {
+          showError(result.error || "Gagal menyimpan data")
         }
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -38,21 +44,19 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="productId" defaultSelectedKey={order?.productId ? String(order.productId) : undefined} className="w-full" isRequired>
-            <Label>Produk *</Label>
-            <ComboBox.InputGroup><Input placeholder="Cari produk..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {products.map((p) => (
-                  <ListBox.Item key={p.id} id={String(p.id)} textValue={`${p.sku ? `${p.sku} - ` : ""}${p.name}`}>{p.sku ? `${p.sku} - ` : ""}{p.name}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="productId">Produk *</Label>
+          <Combobox
+            id="productId"
+            name="productId"
+            value={productId || null}
+            onChange={(key) => setProductId(key ?? "")}
+            placeholder="Cari produk..."
+            options={products.map((p) => ({ value: String(p.id), label: `${p.sku ? `${p.sku} - ` : ""}${p.name}` }))}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="qty">Jumlah Produksi *</Label>
-          <Input id="qty" name="qty" type="number" placeholder="Qty" min={1} required defaultValue={order?.qty ?? ""} />
+          <Input id="qty" name="qty" type="number" placeholder="Jml" min={1} required defaultValue={order?.qty ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
@@ -70,13 +74,13 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
-          <TextArea id="notes" name="notes" rows={3} placeholder="Catatan produksi..." defaultValue={order?.notes ?? ""} />
+          <Textarea id="notes" name="notes" rows={3} placeholder="Catatan produksi..." defaultValue={order?.notes ?? ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-production-order">
-          {isPending ? "Menyimpan..." : order?.id ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : order?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

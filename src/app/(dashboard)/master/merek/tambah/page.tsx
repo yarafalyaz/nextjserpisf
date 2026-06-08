@@ -5,7 +5,8 @@ import { useTransition } from "react"
 import { createBrand } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Input, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateBrandPage() {
@@ -30,19 +31,19 @@ export default function CreateBrandPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
+        { label: "Dasbor", href: "/" },
         { label: "Master Data", href: "/master" },
-        { label: "Brands", href: "/master/merek" },
-        { label: "Create" },
+        { label: "Merek", href: "/master/merek" },
+        { label: "Buat" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Brand</h1>
+        <h1 className="text-2xl font-bold text-foreground">Tambah Merek</h1>
       </div>
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Brand *</Label>
-            <Input id="name" name="name" placeholder="Nama brand" required />
+            <Label htmlFor="name">Nama Merek *</Label>
+            <Input id="name" name="name" placeholder="Nama merek" required />
           </div>
         </div>
 

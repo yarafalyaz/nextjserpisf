@@ -10,6 +10,7 @@ import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
+import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
 export default async function SalesPaymentDetailPage({
   params,
@@ -27,14 +28,16 @@ export default async function SalesPaymentDetailPage({
 
   if (!payment) notFound()
 
+  const pmMap = await getPaymentMethodMap()
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title={`Pembayaran ${payment.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/penjualan" },
-          { label: "Payments", href: "/penjualan/pembayaran" },
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Pembayaran", href: "/penjualan/pembayaran" },
           { label: "Detail" },
         ]}
         actions={
@@ -59,7 +62,7 @@ export default async function SalesPaymentDetailPage({
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />
         <DetailField label="Tanggal Bayar" value={formatDate(payment.paymentDate)} />
-        <DetailField label="Metode Pembayaran" value={payment.paymentMethod} />
+        <DetailField label="Metode Pembayaran" value={resolvePaymentMethodName(payment.paymentMethod, pmMap)} />
         <DetailField label="Dibuat" value={formatDate(payment.createdAt)} />
       </DetailCard>
 

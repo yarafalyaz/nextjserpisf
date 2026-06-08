@@ -84,6 +84,10 @@ model SystemSetting {
   enableAutoEmployeeCode   Boolean   @default(true) @map("enable_auto_employee_code")
   vendorCodePrefix         String?   @default("VEND-") @map("vendor_code_prefix")
   enableAutoVendorCode     Boolean   @default(true) @map("enable_auto_vendor_code")
+  paymentMethodCodePrefix  String?   @default("MTP-") @map("payment_method_code_prefix")
+  enableAutoPaymentMethodCode Boolean @default(true) @map("enable_auto_payment_method_code")
+  shippingMethodCodePrefix String?   @default("MTK-") @map("shipping_method_code_prefix")
+  enableAutoShippingMethodCode Boolean @default(true) @map("enable_auto_shipping_method_code")
   quotationCodePrefix      String    @default("QUO") @map("quotation_code_prefix")
   assetPrefix              String?   @default("ISF") @map("asset_prefix")
   salesOrderPrefix         String    @default("SO") @map("sales_order_prefix")
@@ -116,6 +120,8 @@ model SystemSetting {
   overtimeMultiplier       Decimal   @default(0.00578035) @map("overtime_multiplier") @db.Decimal(10, 8)
   overtimeMealBreakStart   String    @default("17:00") @map("overtime_meal_break_start")
   overtimeMealBreakEnd     String    @default("19:00") @map("overtime_meal_break_end")
+  restBreakStart           String    @default("12:00") @map("rest_break_start")
+  restBreakEnd             String    @default("13:00") @map("rest_break_end")
   overtimeCoefficient      Decimal   @default(1.10) @map("overtime_coefficient") @db.Decimal(5, 2)
   attendanceRadiusKm       Decimal   @default(1.00) @map("attendance_radius_km") @db.Decimal(8, 2)
   latePenaltyPerMinute     Decimal   @default(5000.00) @map("late_penalty_per_minute") @db.Decimal(15, 2)
@@ -198,6 +204,7 @@ model Customer {
   npwp             String?
   gender           String?           @map("gender")
   code             String?           @map("code")
+  creditLimit      Decimal           @default(0.00) @map("credit_limit") @db.Decimal(15, 2)
   contactPerson    String?           @map("contact_person")
   isActive         Boolean           @default(true) @map("is_active")
   deletedAt        DateTime?         @map("deleted_at")
@@ -294,6 +301,8 @@ model Item {
   costingMethod      String              @default("average") @map("costing_method")
   purchasePrice      Decimal             @default(0.00) @map("purchase_price") @db.Decimal(15, 2)
   isProduct          Boolean             @default(false) @map("is_product")
+  trackBatch         Boolean             @default(false) @map("track_batch")
+  trackSerial        Boolean             @default(false) @map("track_serial")
   isActive           Boolean             @default(true) @map("is_active")
   deletedAt          DateTime?           @map("deleted_at")
   createdAt          DateTime            @default(now()) @map("created_at")
@@ -309,8 +318,8 @@ model Item {
   rackRow            RackRow?            @relation(fields: [defaultRackRowId], references: [id])
   warehouse          Warehouse?          @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id])
   vendor             Vendor?             @relation(fields: [vendorId], references: [id])
-  priceListItems     PriceListItem[]
   stockMoves         StockMove[]
+  uomConversions     UomConversion[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -384,6 +393,7 @@ model Department {
   holidays    DepartmentHoliday[]
   employees   Employee[]
   positions   Position[]
+  workSchedules WorkSchedule[]    @relation("DepartmentWorkSchedules")
 
   @@map("departments")
 }
@@ -445,6 +455,7 @@ model Employee {
   payrolls            Payroll[]
   tasks               Task[]
   timesheets          Timesheet[]
+  workSchedules       WorkSchedule[]    @relation("EmployeeWorkSchedules")
 
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
@@ -482,6 +493,28 @@ model PaymentTerm {
   vendors   Vendor[]
 
   @@map("payment_terms")
+}
+
+model PaymentMethod {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_methods")
+}
+
+model ShippingMethod {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("shipping_methods")
 }
 
 model Quotation {
@@ -681,6 +714,8 @@ model SalesInvoiceItem {
   itemId         Int?         @map("item_id")
   description    String?
   qty            Decimal      @default(1.00) @db.Decimal(15, 2)
+  uom            String?
+  serialNumbers  Json?        @map("serial_numbers")
   unitPrice      Decimal      @default(0.00) @map("unit_price") @db.Decimal(15, 2)
   discount       Decimal      @default(0.00) @db.Decimal(15, 2)
   total          Decimal      @default(0.00) @db.Decimal(15, 2)
@@ -732,6 +767,7 @@ model SalesReturnItem {
   itemId        Int         @map("item_id")
   qty           Decimal     @db.Decimal(15, 2)
   cost          Decimal     @default(0.00) @db.Decimal(15, 2)
+  price         Decimal     @default(0.00) @db.Decimal(15, 2)
   salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
 
   @@index([salesReturnId], map: "sales_return_items_sales_return_id_fkey")
@@ -850,6 +886,10 @@ model GoodsReceiptItem {
   warehouseId    Int?         @map("warehouse_id")
   qtyOrdered     Decimal      @default(0.00) @map("qty_ordered") @db.Decimal(15, 2)
   qty            Decimal      @db.Decimal(15, 2)
+  uom            String?
+  batchNumber    String?      @map("batch_number")
+  expiryDate     DateTime?    @map("expiry_date")
+  serialNumbers  Json?        @map("serial_numbers")
   unitCost       Decimal      @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
   stockMoveId    Int?         @map("stock_move_id")
   goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
@@ -1047,6 +1087,8 @@ model StockMove {
 model InventoryLayer {
   id          Int       @id @default(autoincrement())
   itemId      Int       @map("item_id")
+  warehouseId Int?      @map("warehouse_id")
+  batchNumber String?   @map("batch_number")
   stockMoveId Int       @map("stock_move_id")
   qtyIn       Decimal   @map("qty_in") @db.Decimal(15, 2)
   qtyOut      Decimal   @default(0.00) @map("qty_out") @db.Decimal(15, 2)
@@ -1059,6 +1101,7 @@ model InventoryLayer {
 
   @@index([itemId], map: "inventory_layers_item_id_fkey")
   @@index([stockMoveId], map: "inventory_layers_stock_move_id_fkey")
+  @@index([itemId, warehouseId], map: "inventory_layers_item_warehouse_idx")
   @@map("inventory_layers")
 }
 
@@ -1292,7 +1335,9 @@ model Attendance {
   updatedAt         DateTime  @updatedAt @map("updated_at")
   employee          Employee  @relation(fields: [employeeId], references: [id])
 
+  @@unique([employeeId, date], map: "attendances_employee_date_unique")
   @@index([employeeId], map: "attendances_employee_id_fkey")
+  @@index([date], map: "attendances_date_idx")
   @@map("attendances")
 }
 
@@ -1355,7 +1400,15 @@ model Payroll {
   appreciationTotal Decimal   @default(0.00) @map("appreciation_total") @db.Decimal(15, 2)
   loanDeduction     Decimal   @default(0.00) @map("loan_deduction") @db.Decimal(15, 2)
   lateDeduction     Decimal   @default(0.00) @map("late_deduction") @db.Decimal(15, 2)
+  grossSalary       Decimal   @default(0.00) @map("gross_salary") @db.Decimal(15, 2)
+  bpjsHealthEmployee      Decimal @default(0.00) @map("bpjs_health_employee") @db.Decimal(15, 2)
+  bpjsEmploymentEmployee  Decimal @default(0.00) @map("bpjs_employment_employee") @db.Decimal(15, 2)
+  pph21             Decimal   @default(0.00) @map("pph21") @db.Decimal(15, 2)
   lateMinutes       Int       @default(0) @map("late_minutes")
+  workingDays       Int       @default(0) @map("working_days")
+  presentDays       Int       @default(0) @map("present_days")
+  absentDays        Int       @default(0) @map("absent_days")
+  absentDeduction   Decimal   @default(0.00) @map("absent_deduction") @db.Decimal(15, 2)
   netSalary         Decimal   @default(0.00) @map("net_salary") @db.Decimal(15, 2)
   totalAmount       Decimal   @default(0.00) @map("total_amount") @db.Decimal(15, 2)
   paymentDate       DateTime? @map("payment_date")
@@ -1373,14 +1426,15 @@ model Payroll {
 model WorkSchedule {
   id                   Int      @id @default(autoincrement())
   name                 String
-  departmentId         Int?     @map("department_id")
-  dayOfWeek            Int      @map("day_of_week")
+  workDays             String   @default("") @map("work_days")
   startTime            String   @map("start_time")
   endTime              String   @map("end_time")
   lateToleranceMinutes Int      @default(0) @map("late_tolerance_minutes")
   isActive             Boolean  @default(true) @map("is_active")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
+  employees            Employee[]   @relation("EmployeeWorkSchedules")
+  departments          Department[] @relation("DepartmentWorkSchedules")
 
   @@map("work_schedules")
 }
@@ -1442,6 +1496,7 @@ model Journal {
   entries         JournalEntry[]
   creator         User?          @relation(fields: [createdBy], references: [id])
 
+  @@unique([referenceType, referenceId], map: "journals_reference_unique")
   @@index([createdBy], map: "journals_created_by_fkey")
   @@index([status], map: "idx_journals_status")
   @@index([transactionDate], map: "idx_journals_transaction_date")
@@ -1485,6 +1540,10 @@ model Expense {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
+  @@index([accountId], map: "expenses_account_id_idx")
+  @@index([projectId], map: "expenses_project_id_idx")
+  @@index([employeeId], map: "expenses_employee_id_idx")
+  @@index([status], map: "expenses_status_idx")
   @@map("expenses")
 }
 
@@ -1506,6 +1565,7 @@ model PettyCash {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
+  @@index([accountId], map: "petty_cash_account_id_idx")
   @@map("petty_cash")
 }
 
@@ -1521,6 +1581,8 @@ model Budget {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  @@index([accountId], map: "budgets_account_id_idx")
+  @@index([costCenterId], map: "budgets_cost_center_id_idx")
   @@map("budgets")
 }
 
@@ -1572,6 +1634,8 @@ model BankStatement {
   updatedAt      DateTime            @updatedAt @map("updated_at")
   lines          BankStatementLine[]
 
+  @@index([accountId], map: "bank_statements_account_id_idx")
+  @@index([bankId], map: "bank_statements_bank_id_idx")
   @@map("bank_statements")
 }
 
@@ -1789,6 +1853,7 @@ model Asset {
   serialNumber      String?         @map("serial_number")
   description       String?         @map("description") @db.Text
   residualValue     Decimal         @default(0.00) @map("residual_value") @db.Decimal(15, 2)
+  depreciationMethod String         @default("straight_line") @map("depreciation_method")
   condition         String          @default("good") @map("condition")
   employeeId        Int?            @map("employee_id")
   assetBrandModelId Int?            @map("asset_brand_model_id")
@@ -1869,6 +1934,7 @@ model VehicleModel {
   brand                VehicleBrand          @relation(fields: [vehicleBrandId], references: [id])
   variants             VehicleVariant[]
 
+  @@unique([vehicleBrandId, name], map: "vehicle_models_brand_name_unique")
   @@index([vehicleBrandId], map: "vehicle_models_vehicle_brand_id_fkey")
   @@map("vehicle_models")
 }
@@ -1877,6 +1943,8 @@ model VehicleVariant {
   id             Int          @id @default(autoincrement())
   vehicleModelId Int          @map("vehicle_model_id")
   name           String
+  drivetrain     String?      @map("drivetrain")
+  transmission   String?      @map("transmission")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
   model          VehicleModel @relation(fields: [vehicleModelId], references: [id])
@@ -2132,27 +2200,6 @@ model Holiday {
   @@map("holidays")
 }
 
-model PriceList {
-  id              Int             @id @default(autoincrement())
-  name            String
-  code            String?
-  type            String?
-  description     String?         @db.Text
-  currencyId      Int?            @map("currency_id")
-  isDefault       Boolean         @default(false) @map("is_default")
-  validFrom       DateTime?       @map("valid_from")
-  validTo         DateTime?       @map("valid_to")
-  discountPercent Decimal         @default(0.00) @map("discount_percent") @db.Decimal(5, 2)
-  markupPercent   Decimal         @default(0.00) @map("markup_percent") @db.Decimal(5, 2)
-  isActive        Boolean         @default(true) @map("is_active")
-  deletedAt       DateTime?       @map("deleted_at")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  priceListItems  PriceListItem[]
-
-  @@map("price_lists")
-}
-
 model Currency {
   id                 Int            @id @default(autoincrement())
   code               String         @unique
@@ -2319,6 +2366,20 @@ model ItemSerial {
   @@map("item_serials")
 }
 
+model UomConversion {
+  id           Int      @id @default(autoincrement())
+  itemId       Int      @map("item_id")
+  code         String
+  factorToBase Decimal  @map("factor_to_base") @db.Decimal(15, 6)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  item         Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, code])
+  @@index([itemId], map: "uom_conversions_item_id_fkey")
+  @@map("uom_conversions")
+}
+
 model ExchangeRate {
   id             Int      @id @default(autoincrement())
   fromCurrencyId Int      @map("from_currency_id")
@@ -2394,24 +2455,6 @@ model SkfValue {
   @@index([profitCenterId], map: "skf_values_profit_center_id_fkey")
   @@index([statisticalKeyFigureId], map: "skf_values_statistical_key_figure_id_fkey")
   @@map("skf_values")
-}
-
-model PriceListItem {
-  id          Int       @id @default(autoincrement())
-  priceListId Int       @map("price_list_id")
-  itemId      Int       @map("item_id")
-  price       Decimal   @db.Decimal(15, 2)
-  minQty      Decimal   @default(1.00) @map("min_qty") @db.Decimal(15, 2)
-  validFrom   DateTime? @map("valid_from")
-  validTo     DateTime? @map("valid_to")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  item        Item      @relation(fields: [itemId], references: [id])
-  priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
-
-  @@index([itemId], map: "price_list_items_item_id_fkey")
-  @@index([priceListId], map: "price_list_items_price_list_id_fkey")
-  @@map("price_list_items")
 }
 
 model UnitOfMeasure {

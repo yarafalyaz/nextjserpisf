@@ -2,7 +2,7 @@ import { prisma } from "../src/lib/db/prisma";
 import { generateDocumentNumber } from "../src/lib/utils/document-number";
 
 async function main() {
-  console.log("=== FINAL E2E SEED: PettyCash, Expense, Payroll, Journal, Currency, PriceList, Batch/Serial, Loan ===\n");
+  console.log("=== FINAL E2E SEED: PettyCash, Expense, Payroll, Journal, Currency, Batch/Serial, Loan ===\n");
 
   // ─── CLEANUP ───────────────────────────────────────────────────
   console.log("Cleaning up...");
@@ -13,8 +13,6 @@ async function main() {
   await prisma.journal.deleteMany({});
   await prisma.exchangeRate.deleteMany({});
   await prisma.currency.deleteMany({});
-  await prisma.priceListItem.deleteMany({});
-  await prisma.priceList.deleteMany({});
   await prisma.itemBatch.deleteMany({});
   await prisma.itemSerial.deleteMany({});
   await prisma.employeeLoan.deleteMany({});
@@ -226,46 +224,6 @@ async function main() {
   });
   console.log("   Exchange rates: 3 records");
   console.log("   ✓ Currency complete\n");
-
-  // ─── 6. PRICE LIST ────────────────────────────────────────────
-  console.log("6. PRICE LIST");
-
-  const plRetail = await prisma.priceList.create({
-    data: {
-      name: "Harga Retail",
-      code: "PL-RETAIL",
-      type: "retail",
-      isDefault: true,
-      isActive: true,
-      discountPercent: 0,
-      markupPercent: 30,
-    },
-  });
-
-  const plWholesale = await prisma.priceList.create({
-    data: {
-      name: "Harga Grosir",
-      code: "PL-GROSIR",
-      type: "wholesale",
-      isDefault: false,
-      isActive: true,
-      discountPercent: 15,
-      markupPercent: 10,
-    },
-  });
-
-  if (item && item2) {
-    await prisma.priceListItem.createMany({
-      data: [
-        { priceListId: plRetail.id, itemId: item.id, price: 130000, minQty: 1, validFrom: new Date("2026-01-01") },
-        { priceListId: plRetail.id, itemId: item2.id, price: 85000, minQty: 1, validFrom: new Date("2026-01-01") },
-        { priceListId: plWholesale.id, itemId: item.id, price: 105000, minQty: 10, validFrom: new Date("2026-01-01") },
-        { priceListId: plWholesale.id, itemId: item2.id, price: 70000, minQty: 10, validFrom: new Date("2026-01-01") },
-      ],
-    });
-  }
-  console.log("   PriceList: Retail + Grosir, 4 items");
-  console.log("   ✓ Price List complete\n");
 
   // ─── 7. ITEM BATCH & SERIAL ───────────────────────────────────
   console.log("7. ITEM BATCH & SERIAL");

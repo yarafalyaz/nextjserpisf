@@ -2,9 +2,13 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition, useEffect, useMemo } from "react"
-import { createProduct } from "@/actions/manufacturing.actions"
+import { createProduct, updateProduct } from "@/actions/manufacturing.actions"
 import { Plus, Trash2 } from "lucide-react"
-import { Input, TextArea, Label, ComboBox, ListBox } from "@heroui/react"
+import { showSuccess, showError } from "@/lib/utils/toast"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/page-header"
 
@@ -24,18 +28,43 @@ interface VehicleModel {
   vehicleBrandId: number
 }
 
+interface ItemOption {
+  id: number
+  sku: string
+  name: string
+  unitOfMeasure: string
+}
+
+interface ProductEdit {
+  id: number
+  name: string
+  code: string | null
+  description: string | null
+  vehicleBrandId: number | null
+  vehicleModelId: number | null
+  materials: { itemId: number; qty: number }[]
+}
+
 export function ProductForm({
   generatedCode,
+  product,
+  items,
 }: {
   generatedCode: string
+  product?: ProductEdit
+  items: ItemOption[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [materials, setMaterials] = useState<MaterialRow[]>([{ itemId: "", qty: "" }])
+  const [materials, setMaterials] = useState<MaterialRow[]>(
+    product && product.materials.length > 0
+      ? product.materials.map((m) => ({ itemId: String(m.itemId), qty: String(m.qty) }))
+      : [{ itemId: "", qty: "" }]
+  )
   const [vehicleBrands, setVehicleBrands] = useState<VehicleBrand[]>([])
   const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([])
-  const [selectedBrandId, setSelectedBrandId] = useState<number | null>(null)
-  const [selectedModelId, setSelectedModelId] = useState<number | null>(null)
+  const [selectedBrandId, setSelectedBrandId] = useState<number | null>(product?.vehicleBrandId ?? null)
+  const [selectedModelId, setSelectedModelId] = useState<number | null>(product?.vehicleModelId ?? null)
 
   useEffect(() => {
     fetch("/api/vehicle-brands").then(r => r.json()).then(setVehicleBrands).catch(() => {})
@@ -46,6 +75,17 @@ export function ProductForm({
     if (!selectedBrandId) return []
     return vehicleModels.filter(m => m.vehicleBrandId === selectedBrandId)
   }, [vehicleModels, selectedBrandId])
+
+  const itemOptions = useMemo(
+    () => items.map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name}` })),
+    [items]
+  )
+
+  const uomById = useMemo(() => {
+    const map = new Map<string, string>()
+    items.forEach((it) => map.set(String(it.id), it.unitOfMeasure))
+    return map
+  }, [items])
 
   function addMaterialRow() {
     setMaterials([...materials, { itemId: "", qty: "" }])
@@ -78,7 +118,9 @@ export function ProductForm({
     })
 
     startTransition(async () => {
-      await createProduct(formData)
+      const result = product?.id ? await updateProduct(product.id, formData) : await createProduct(formData)
+      if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+      showSuccess(product?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
       router.push("/produksi/products")
       router.refresh()
     })
@@ -89,75 +131,44 @@ export function ProductForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Produk *</Label>
-          <Input id="name" name="name" placeholder="Nama produk" required />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="sku">SKU</Label>
-          <Input id="sku" name="sku" placeholder="SKU produk" />
+          <Input id="name" name="name" placeholder="Nama produk" required defaultValue={product?.name ?? ""} />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="code">Kode Produk</Label>
-          <Input id="code" name="code" value={generatedCode} readOnly className="bg-default-soft font-mono" />
+          <Input id="code" name="code" value={product?.code ?? generatedCode} readOnly className="bg-default-soft font-mono" />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <ComboBox
-            selectedKey={selectedBrandId ? String(selectedBrandId) : null}
-            onSelectionChange={(key) => {
+          <Label htmlFor="vehicle-brand">Merek Kendaraan</Label>
+          <Combobox
+            id="vehicle-brand"
+            value={selectedBrandId ? String(selectedBrandId) : null}
+            onChange={(key) => {
               const val = key ? Number(key) : null
               setSelectedBrandId(val)
               setSelectedModelId(null)
             }}
-            className="w-full"
-          >
-            <Label>Vehicle Brand</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Cari brand kendaraan..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {vehicleBrands.map((b) => (
-                  <ListBox.Item key={b.id} id={String(b.id)} textValue={b.name}>
-                    {b.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+            placeholder="Cari merek kendaraan..."
+            options={vehicleBrands.map((b) => ({ value: String(b.id), label: b.name }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <ComboBox
-            selectedKey={selectedModelId ? String(selectedModelId) : null}
-            onSelectionChange={(key) => setSelectedModelId(key ? Number(key) : null)}
-            className="w-full"
-            isDisabled={!selectedBrandId}
-          >
-            <Label>Vehicle Model</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Cari model kendaraan..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {filteredModels.map((m) => (
-                  <ListBox.Item key={m.id} id={String(m.id)} textValue={m.name}>
-                    {m.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="vehicle-model">Model Kendaraan</Label>
+          <Combobox
+            id="vehicle-model"
+            value={selectedModelId ? String(selectedModelId) : null}
+            onChange={(key) => setSelectedModelId(key ? Number(key) : null)}
+            placeholder="Cari model kendaraan..."
+            disabled={!selectedBrandId}
+            options={filteredModels.map((m) => ({ value: String(m.id), label: m.name }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <TextArea id="description" name="description" rows={3} placeholder="Deskripsi produk (opsional)" />
+          <Textarea id="description" name="description" rows={3} placeholder="Deskripsi produk (opsional)" defaultValue={product?.description ?? ""} />
         </div>
       </div>
 
@@ -172,29 +183,34 @@ export function ProductForm({
         <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
-              <DetailTableTh>Item ID</DetailTableTh>
-              <DetailTableTh>Qty</DetailTableTh>
+              <DetailTableTh>Barang</DetailTableTh>
+              <DetailTableTh>Jml</DetailTableTh>
               <DetailTableTh>Aksi</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {materials.map((m, index) => (
                 <DetailTableRow key={index}>
                   <DetailTableTd>
-                    <Input
-                      type="number"
-                      value={m.itemId}
-                      onChange={(e) => updateMaterial(index, "itemId", e.target.value)}
-                      placeholder="Item ID"
+                    <Combobox
+                      value={m.itemId || null}
+                      onChange={(key) => updateMaterial(index, "itemId", key ?? "")}
+                      placeholder="Cari barang..."
+                      options={itemOptions}
                     />
                   </DetailTableTd>
                   <DetailTableTd>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={m.qty}
-                      onChange={(e) => updateMaterial(index, "qty", e.target.value)}
-                      placeholder="Qty"
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={m.qty}
+                        onChange={(e) => updateMaterial(index, "qty", e.target.value)}
+                        placeholder="Jml"
+                      />
+                      <span className="shrink-0 text-sm font-medium text-muted-foreground min-w-[2.5rem]">
+                        {m.itemId ? (uomById.get(m.itemId) ?? "") : ""}
+                      </span>
+                    </div>
                   </DetailTableTd>
                   <DetailTableTd>
                     <Button onPress={() => removeMaterialRow(index)} aria-label="Hapus material" type="button" isDisabled={materials.length === 1}>

@@ -25,7 +25,7 @@ export default async function EditDepartmentHolidayPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Hari Libur Departemen</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Hari Libur Departemen</h1>
       </div>
       <DepartmentHolidayForm
         holiday={{

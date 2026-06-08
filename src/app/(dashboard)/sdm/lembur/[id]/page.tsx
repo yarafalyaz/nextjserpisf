@@ -35,8 +35,8 @@ export default async function OvertimeRequestDetailPage({
       <PageHeader
         title="Pengajuan Lembur"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Lembur", href: "/sdm/lembur" },
           { label: "Detail" },
         ]}

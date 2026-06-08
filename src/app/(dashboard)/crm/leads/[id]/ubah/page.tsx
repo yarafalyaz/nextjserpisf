@@ -21,13 +21,13 @@ export default async function EditLeadPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "CRM", href: "/crm" },
   { label: "Leads", href: "/crm/leads" },
-  { label: "Edit" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Lead: {lead.name}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Lead: {lead.name}</h1>
       </div>
       <LeadForm lead={{
         ...lead,

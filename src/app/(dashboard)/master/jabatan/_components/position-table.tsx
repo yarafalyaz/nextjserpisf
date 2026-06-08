@@ -19,7 +19,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/jabatan/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/jabatan/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -55,6 +55,8 @@ export function PositionTable({ data }: PositionTableProps) {
       ariaLabel="Daftar jabatan"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama jabatan..."
       onBulkDelete={(ids) => bulkDelete("position", ids)}
     />
   )

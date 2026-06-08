@@ -24,7 +24,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/keuangan/kas-kecil/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/keuangan/kas-kecil/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -65,9 +65,11 @@ const columns = [
 
 interface PettyCashTableProps {
   data: PettyCashData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function PettyCashTable({ data }: PettyCashTableProps) {
+export function PettyCashTable({ data, toolbar, filters }: PettyCashTableProps) {
   return (
     <DataTable
       data={data}
@@ -75,6 +77,8 @@ export function PettyCashTable({ data }: PettyCashTableProps) {
       ariaLabel="Daftar petty cash"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("pettyCash", ids)}
     />
   )

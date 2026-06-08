@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { safeId } from "@/lib/utils/safe-parse"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== CRM TICKET ACTIONS ====================
 
@@ -33,6 +34,7 @@ export async function createTicket(formData: FormData) {
   })
 
   revalidatePath("/crm/tickets")
+  await logActivity("create", "Ticket", ticket.id, "Membuat tiket")
   return { success: true, id: ticket.id }
 
   } catch (e: unknown) {
@@ -68,6 +70,7 @@ export async function updateTicket(id: number, formData: FormData) {
   })
 
   revalidatePath("/crm/tickets")
+  await logActivity("update", "Ticket", ticket.id, "Memperbarui tiket")
   return { success: true, id: ticket.id }
 
   } catch (e: unknown) {
@@ -84,6 +87,7 @@ export async function deleteTicket(id: number) {
   await requirePermission("delete_tickets")
   await prisma.crmTicket.delete({ where: { id } })
   revalidatePath("/crm/tickets")
+  await logActivity("delete", "Ticket", id, "Menghapus tiket")
   return { success: true }
 
   } catch (e: unknown) {
@@ -101,6 +105,7 @@ export async function deleteLead(id: number) {
   await requirePermission("delete_leads")
   await prisma.lead.delete({ where: { id } })
   revalidatePath("/crm/leads")
+  await logActivity("delete", "Lead", id, "Menghapus lead")
   return { success: true }
 
   } catch (e: unknown) {

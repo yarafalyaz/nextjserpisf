@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
@@ -7,8 +6,7 @@ import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { requireId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
-import { onWorkOrderCompleted as onWorkOrderStock } from "@/lib/hooks/work-order.hook"
-import { onWorkOrderCompleted } from "@/lib/hooks/accounting.hook"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
 
@@ -17,7 +15,6 @@ export async function createProduct(formData: FormData) {
   await requirePermission("create_products")
 
   const name = formData.get("name") as string
-  const sku = formData.get("sku") as string | null
   let code = (formData.get("code") as string) || null
   const description = formData.get("description") as string | null
   const vehicleBrandId = safeNumber(formData.get("vehicleBrandId")) ?? undefined
@@ -34,7 +31,6 @@ export async function createProduct(formData: FormData) {
   const product = await prisma.product.create({
     data: {
       name,
-      sku,
       code,
       description,
       vehicleBrandId,
@@ -50,6 +46,7 @@ export async function createProduct(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Product", product.id, `Membuat produk #${product.id}`)
   revalidatePath("/produksi/products")
   return { success: true, id: product.id }
 
@@ -65,7 +62,6 @@ export async function updateProduct(id: number, formData: FormData) {
   await requirePermission("edit_products")
 
   const name = formData.get("name") as string
-  const sku = formData.get("sku") as string | null
   const code = (formData.get("code") as string) || null
   const description = formData.get("description") as string | null
   const vehicleBrandId = safeNumber(formData.get("vehicleBrandId")) ?? undefined
@@ -79,7 +75,6 @@ export async function updateProduct(id: number, formData: FormData) {
     where: { id },
     data: {
       name,
-      sku,
       code,
       description,
       vehicleBrandId,
@@ -96,6 +91,7 @@ export async function updateProduct(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "Product", id, `Memperbarui produk #${id}`)
   revalidatePath("/produksi/products")
   return { success: true }
 
@@ -145,6 +141,7 @@ export async function createProductionOrder(formData: FormData) {
     },
   })
 
+  await logActivity("create", "ProductionOrder", productionOrder.id, `Membuat perintah produksi #${productionOrder.id}`)
   revalidatePath("/produksi/production-orders")
   return { success: true, id: productionOrder.id }
 
@@ -193,6 +190,7 @@ export async function startWorkOrder(workOrderId: number) {
     data: { status: "in_progress" },
   })
 
+  await logActivity("start", "WorkOrder", workOrderId, `Memulai perintah kerja #${workOrderId}`)
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 
@@ -237,8 +235,11 @@ export async function completeWorkOrder(workOrderId: number) {
     throw new Error("Material Issue belum diselesaikan untuk Work Order ini. Selesaikan Material Issue terlebih dahulu.")
   }
 
-  // Stock Move OUT per item (material consumption)
-  await onWorkOrderStock(workOrderId, Number(user.id))
+  // NOTE: Material consumption (stock-out + Dr Material Expense / Cr Inventory) is
+  // performed exclusively by the mandatory Material Issue above. The Work Order
+  // completion must NOT consume stock or credit inventory again, otherwise the
+  // same materials would leave inventory twice and Inventory would be credited
+  // twice. WO completion here is a status/fulfilment milestone only.
 
   await prisma.workOrder.update({
     where: { id: workOrderId },
@@ -254,9 +255,6 @@ export async function completeWorkOrder(workOrderId: number) {
     data: { status: "completed" },
   })
 
-  // Accounting journal (Dr. WIP, Cr. Inventory)
-  await onWorkOrderCompleted(workOrderId, Number(user.id))
-
   // Auto-create DeliveryOrder for parts if applicable
   await autoCreateDeliveryOrder(workOrderId, Number(user.id))
 
@@ -265,6 +263,7 @@ export async function completeWorkOrder(workOrderId: number) {
     await syncProjectStatus(wo.projectId)
   }
 
+  await logActivity("complete", "WorkOrder", workOrderId, `Menyelesaikan perintah kerja #${workOrderId}`)
   revalidatePath("/produksi/perintah-kerja")
   revalidatePath("/inventaris/mutasi-stok")
   revalidatePath("/pengiriman")
@@ -402,6 +401,7 @@ export async function createMaterialIssueFromWorkOrder(workOrderId: number, ware
       })),
   })
 
+  await logActivity("create", "MaterialIssue", issue.id, `Membuat pengeluaran material #${issue.id} dari perintah kerja #${workOrderId}`)
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
 
@@ -429,6 +429,13 @@ export async function getWorkOrderWithCustomerInfo(workOrderId: number) {
     },
   })
 
+  // WorkOrderItem has no `item` relation; fetch names by itemId for display.
+  const woItemIds = wo.items.map((i) => i.itemId).filter((id): id is number => id != null)
+  const itemNameRows = woItemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: woItemIds } }, select: { id: true, name: true } })
+    : []
+  const itemNameMap = new Map(itemNameRows.map((r) => [r.id, r.name]))
+
   return {
     success: true,
     data: {
@@ -448,7 +455,7 @@ export async function getWorkOrderWithCustomerInfo(workOrderId: number) {
       items: wo.items.map((i) => ({
         id: i.id,
         itemId: i.itemId,
-        itemName: (i as any).item?.name ?? null,
+        itemName: i.itemId != null ? (itemNameMap.get(i.itemId) ?? null) : null,
         qty: i.qty,
         cost: i.cost,
         description: i.description,
@@ -472,6 +479,7 @@ export async function deleteProduct(id: number) {
 
   await prisma.product.delete({ where: { id } })
 
+  await logActivity("delete", "Product", id, `Menghapus produk #${id}`)
   revalidatePath("/produksi/products")
   return { success: true }
 
@@ -493,6 +501,7 @@ export async function deleteWorkOrder(id: number) {
 
   await prisma.workOrder.delete({ where: { id } })
 
+  await logActivity("delete", "WorkOrder", id, `Menghapus perintah kerja #${id}`)
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 
@@ -514,6 +523,7 @@ export async function deleteProductionOrder(id: number) {
 
   await prisma.productionOrder.delete({ where: { id } })
 
+  await logActivity("delete", "ProductionOrder", id, `Menghapus perintah produksi #${id}`)
   revalidatePath("/produksi/production-orders")
   return { success: true }
 
@@ -577,6 +587,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
     return po
   })
 
+  await logActivity("update", "ProductionOrder", productionOrder.id, `Memperbarui perintah produksi #${productionOrder.id}`)
   revalidatePath("/produksi/production-orders")
   return { success: true, id: productionOrder.id }
 

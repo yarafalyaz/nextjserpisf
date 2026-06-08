@@ -33,12 +33,12 @@ export default async function BankStatementsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/keuangan" },
-  { label: "Bank Statements" },
+  { label: "Dasbor", href: "/" },
+  { label: "Keuangan", href: "/keuangan" },
+  { label: "Laporan Bank" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Bank Statements</h1>
+        <h1 className="text-2xl font-bold text-foreground">Laporan Bank</h1>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -53,7 +53,7 @@ export default async function BankStatementsPage({
             </DetailTableHead>
             <DetailTableBody>
               {statements.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 px-4 text-muted">Tidak ada data bank statement</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 px-4 text-muted-foreground">Tidak ada data bank statement</DetailTableTd></DetailTableRow>
               ) : (
                 statements.map((stmt) => (
                   <DetailTableRow key={stmt.id}>
@@ -73,7 +73,7 @@ export default async function BankStatementsPage({
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between p-3 px-5 border-t border-default">
-            <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
+            <span className="text-[0.8125rem] text-muted-foreground">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
               {page > 1 && <Link href={`/keuangan/laporan-bank?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
               {page < totalPages && <Link href={`/keuangan/laporan-bank?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}

@@ -4,9 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { Clock } from "lucide-react"
-import { AppSearchField } from "@/components/ui/search-field"
 import { WorkScheduleTable } from "./_components/work-schedule-table"
-import { } from "@/components/ui/breadcrumbs"
 
 export default async function WorkSchedulesPage({
   searchParams,
@@ -25,23 +23,26 @@ export default async function WorkSchedulesPage({
 
   const schedules = await prisma.workSchedule.findMany({
     where,
-    orderBy: [{ name: "asc" }, { dayOfWeek: "asc" }],
+    orderBy: [{ name: "asc" }],
+    include: { employees: { select: { id: true } }, departments: { select: { name: true } } },
   })
 
-  // Fetch department names for schedules that have departmentId
-  const departmentIds = [...new Set(schedules.map((s) => s.departmentId).filter(Boolean))] as number[]
-  const departments = departmentIds.length > 0
-    ? await prisma.department.findMany({ where: { id: { in: departmentIds } }, select: { id: true, name: true } })
-    : []
-  const deptMap = new Map(departments.map((d) => [d.id, d.name]))
+  const DAY_NAMES: Record<number, string> = { 0: "Min", 1: "Sen", 2: "Sel", 3: "Rab", 4: "Kam", 5: "Jum", 6: "Sab" }
+  const formatDays = (workDays: string) =>
+    workDays.split(",").map((d) => d.trim()).filter(Boolean).map((d) => DAY_NAMES[Number(d)] ?? d).join(", ")
 
   const data = schedules.map((s) => ({
     id: s.id,
     name: s.name,
-    dayOfWeek: s.dayOfWeek,
+    days: formatDays(s.workDays),
     startTime: s.startTime,
     endTime: s.endTime,
-    departmentName: s.departmentId ? deptMap.get(s.departmentId) ?? "-" : "-",
+    assignment:
+      s.employees.length > 0
+        ? `${s.employees.length} karyawan`
+        : s.departments.length > 0
+          ? s.departments.map((d) => d.name).join(", ")
+          : "Semua",
     isActive: s.isActive,
   }))
 
@@ -54,13 +55,7 @@ export default async function WorkSchedulesPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama jadwal..." action="/sdm/jadwal-kerja" />
-        </div>
-
-        <WorkScheduleTable data={data} />
-      </div>
+      <WorkScheduleTable data={data} />
     </div>
   )
 }

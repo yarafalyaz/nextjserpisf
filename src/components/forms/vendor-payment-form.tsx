@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition, useRef } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { Upload, X, FileText } from "lucide-react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -23,6 +26,7 @@ interface VendorPaymentFormProps {
   vendors: { id: number; name: string }[]
   payment?: { id: number; vendorId: number; amount: number; date: string; accountId?: number | null; notes?: string | null; referenceNumber?: string | null; bankAccount?: string | null }
   bills: { id: number; documentNo: string; vendorId: number; grandTotal: number }[]
+  paymentMethods?: { code: string; name: string }[]
 }
 
 function formatFileSize(bytes: number): string {
@@ -31,11 +35,12 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentFormProps) {
+export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = [] }: VendorPaymentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split("T")[0])
-  const [vendorId, setVendorId] = useState("")
+  const [paymentDate, setPaymentDate] = useState(payment?.date || new Date().toISOString().split("T")[0])
+  const [vendorId, setVendorId] = useState(payment?.vendorId ? String(payment.vendorId) : "")
+  const [paymentMethod, setPaymentMethod] = useState("")
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -74,10 +79,10 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
           mimeType: data.mimeType,
           fileSize: data.fileSize}])
       } else {
-        showError(data.error || "Upload gagal")
+        showError(data.error || "Unggahan gagal")
       }
     } catch (err) {
-      showError("Upload gagal: " + (err as Error).message)
+      showError("Unggahan gagal: " + (err as Error).message)
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -98,16 +103,9 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
           formData.set("attachmentIds", JSON.stringify(uploadedFiles.map((f) => f.id)))
         }
         const { createVendorPayment, updateVendorPayment } = await import("@/actions/purchase.actions")
-        if (payment?.id) {
-
-          await updateVendorPayment(payment.id, formData)
-
-        } else {
-
-          await createVendorPayment(formData)
-
-        }
-        showSuccess(payment?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        const result = payment?.id ? await updateVendorPayment(payment.id, formData) : await createVendorPayment(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(payment?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/pembelian/pembayaran-vendor")
         router.refresh()
       } catch (error) {
@@ -121,34 +119,32 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <ComboBox name="vendorId" selectedKey={vendorId || null} onSelectionChange={(key) => setVendorId(key ? String(key) : "")} className="w-full" isRequired>
-              <Label>Vendor *</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari vendor..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {vendors.map((v) => (
-                    <ListBox.Item key={v.id} id={String(v.id)} textValue={v.name}>{v.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label htmlFor="vendorId">Pemasok *</Label>
+            <Combobox
+              id="vendorId"
+              name="vendorId"
+              options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+              value={vendorId || null}
+              onChange={(key) => setVendorId(key ?? "")}
+              placeholder="Cari pemasok..."
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker label="Tanggal Bayar *" name="paymentDate" value={paymentDate} onChange={setPaymentDate} required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Select name="paymentMethod" className="w-full" isRequired>
-              <Label>Metode Pembayaran *</Label>
-              <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Metode"}</Select.Value><Select.Indicator /></Select.Trigger>
-              <Select.Popover>
-                <ListBox>
-                  <ListBox.Item id="transfer" textValue="Transfer Bank">Transfer Bank<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item id="cash" textValue="Tunai">Tunai<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item id="giro" textValue="Giro">Giro<ListBox.ItemIndicator /></ListBox.Item>
-                  <ListBox.Item id="cek" textValue="Cek">Cek<ListBox.ItemIndicator /></ListBox.Item>
-                </ListBox>
-              </Select.Popover>
-            </Select>
+            <Label htmlFor="paymentMethod">Metode Pembayaran *</Label>
+            <Combobox
+              id="paymentMethod"
+              name="paymentMethod"
+              value={paymentMethod || null}
+              onChange={(v) => setPaymentMethod(v ?? "")}
+              placeholder="Pilih / ketik metode..."
+              options={(paymentMethods.length > 0
+                ? paymentMethods
+                : [{ code: "transfer", name: "Transfer Bank" }, { code: "cash", name: "Tunai" }]
+              ).map((m) => ({ value: m.code, label: m.name }))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="referenceNumber">No. Referensi</Label>
@@ -171,7 +167,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
         <FormSection title="Lainnya" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
-            <TextArea id="notes" name="notes" rows={2} placeholder="Catatan pembayaran..." defaultValue={payment?.notes ?? ""} />
+            <Textarea id="notes" name="notes" rows={2} placeholder="Catatan pembayaran..." defaultValue={payment?.notes ?? ""} />
           </div>
 
           {/* Attachment Upload */}
@@ -193,7 +189,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
                             unoptimized
                           />
                         ) : (
-                          <FileText className="size-5 text-muted" />
+                          <FileText className="size-5 text-muted-foreground" />
                         )}
                       </div>
                       <div className="form-attachment-info">
@@ -214,7 +210,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
                 isDisabled={uploading}
               >
                 <Upload className="size-4" />
-                {uploading ? "Mengupload..." : "Upload Bukti (JPG, PDF)"}
+                {uploading ? "Mengunggah..." : "Unggah Bukti (JPG, PDF)"}
               </Button>
               <input
                 ref={fileInputRef}
@@ -228,7 +224,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
         </FormSection>
 
         {vendorId && vendorBills.length > 0 && (
-          <FormSection title="Bill Belum Lunas" columns={1}>
+          <FormSection title="Tagihan Belum Lunas" columns={1}>
             <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
               <thead><tr><th>No. Dokumen</th><th>Total Keseluruhan</th></tr></thead>
               <tbody>
@@ -246,7 +242,7 @@ export function VendorPaymentForm({ vendors, bills, payment }: VendorPaymentForm
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending || uploading}>
-            {isPending ? "Menyimpan..." : payment?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : payment?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

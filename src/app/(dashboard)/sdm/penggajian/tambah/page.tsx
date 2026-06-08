@@ -16,7 +16,7 @@ export default async function CreatePayrollPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Proses Payroll Karyawan</h1>
+        <h1 className="text-2xl font-bold text-foreground">Proses Penggajian Karyawan</h1>
       </div>
       <PayrollForm employees={employees} />
     </div>

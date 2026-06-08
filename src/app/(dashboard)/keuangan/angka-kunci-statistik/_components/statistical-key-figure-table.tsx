@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/keuangan/angka-kunci-statistik/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/keuangan/angka-kunci-statistik/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -59,6 +59,8 @@ export function StatisticalKeyFigureTable({ data }: StatisticalKeyFigureTablePro
       ariaLabel="Daftar angka kunci statistik"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama..."
       onBulkDelete={(ids) => bulkDelete("statisticalKeyFigure", ids)}
     />
   )

@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -17,16 +18,9 @@ export function AssetCategoryForm({ category }: { category?: { id: number; name:
       try {
         const formData = new FormData(e.currentTarget)
         const { createAssetCategory, updateAssetCategory } = await import("@/actions/asset.actions")
-        if (category?.id) {
-
-          await updateAssetCategory(category.id, formData)
-
-        } else {
-
-          await createAssetCategory(formData)
-
-        }
-        showSuccess(category?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        const result = category?.id ? await updateAssetCategory(category.id, formData) : await createAssetCategory(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(category?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -58,7 +52,7 @@ export function AssetCategoryForm({ category }: { category?: { id: number; name:
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : category?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : category?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

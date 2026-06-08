@@ -5,7 +5,10 @@ import { useState, useTransition } from "react"
 import { createDepartmentHoliday, updateDepartmentHoliday } from "@/actions/hrm.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label, ComboBox, ListBox, Checkbox } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 interface Department {
@@ -29,7 +32,10 @@ interface DepartmentHolidayFormProps {
 export function DepartmentHolidayForm({ departments, holiday }: DepartmentHolidayFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(holiday?.date ?? "")
+  const [date, setDate] = useState(holiday?.date ?? new Date().toISOString().split("T")[0])
+  const [departmentId, setDepartmentId] = useState<string | null>(
+    holiday?.departmentId ? String(holiday.departmentId) : null
+  )
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -44,7 +50,7 @@ export function DepartmentHolidayForm({ departments, holiday }: DepartmentHolida
         } else {
           await createDepartmentHoliday(formData)
         }
-        showSuccess(holiday?.id ? "Hari libur departemen berhasil diupdate" : "Hari libur departemen berhasil ditambahkan")
+        showSuccess(holiday?.id ? "Hari libur departemen berhasil diperbarui" : "Hari libur departemen berhasil ditambahkan")
         router.push("/sdm/hari-libur-departemen")
         router.refresh()
       } catch (error) {
@@ -57,23 +63,15 @@ export function DepartmentHolidayForm({ departments, holiday }: DepartmentHolida
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="departmentId" className="w-full" isRequired defaultSelectedKey={holiday?.departmentId ? String(holiday.departmentId) : undefined}>
-            <Label>Departemen *</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Cari departemen..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {departments.map((d) => (
-                  <ListBox.Item key={d.id} id={String(d.id)} textValue={d.name}>
-                    {d.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="departmentId">Departemen *</Label>
+          <Combobox
+            id="departmentId"
+            name="departmentId"
+            placeholder="Cari departemen..."
+            value={departmentId}
+            onChange={setDepartmentId}
+            options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -86,14 +84,10 @@ export function DepartmentHolidayForm({ departments, holiday }: DepartmentHolida
         </div>
 
         <div className="flex flex-col gap-1.5 justify-end">
-          <Checkbox id="department-holiday-is-recurring" name="isRecurring" value="on" defaultSelected={holiday?.isRecurring ?? false}>
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Checkbox.Content>
-              <Label htmlFor="department-holiday-is-recurring">Berulang setiap tahun</Label>
-            </Checkbox.Content>
-          </Checkbox>
+          <div className="flex items-center gap-2">
+            <Checkbox id="department-holiday-is-recurring" name="isRecurring" value="on" defaultChecked={holiday?.isRecurring ?? false} />
+            <Label htmlFor="department-holiday-is-recurring">Berulang setiap tahun</Label>
+          </div>
         </div>
       </div>
 

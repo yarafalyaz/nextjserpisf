@@ -34,7 +34,7 @@ const columns = [
   columnHelper.accessor("employee", {
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/apresiasi/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/apresiasi/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue().name}
       </Link>
     ),
@@ -72,9 +72,11 @@ const columns = [
 
 interface AppreciationTableProps {
   data: AppreciationData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function AppreciationTable({ data }: AppreciationTableProps) {
+export function AppreciationTable({ data, toolbar, filters }: AppreciationTableProps) {
   return (
     <DataTable
       data={data}
@@ -82,6 +84,8 @@ export function AppreciationTable({ data }: AppreciationTableProps) {
       ariaLabel="Daftar apresiasi karyawan"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("appreciation", ids)}
     />
   )

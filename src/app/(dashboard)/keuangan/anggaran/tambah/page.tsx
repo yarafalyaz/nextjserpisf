@@ -23,13 +23,13 @@ export default async function CreateBudgetPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Finance", href: "/keuangan" },
-  { label: "Budgets", href: "/keuangan/anggaran" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Keuangan", href: "/keuangan" },
+  { label: "Anggaran", href: "/keuangan/anggaran" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Budget</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Anggaran</h1>
       </div>
       <BudgetForm accounts={accounts} costCenters={costCenters} />
     </div>

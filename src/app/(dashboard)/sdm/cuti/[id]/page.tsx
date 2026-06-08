@@ -31,8 +31,8 @@ export default async function LeaveRequestDetailPage({
       <PageHeader
         title="Pengajuan Cuti"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Cuti", href: "/sdm/cuti" },
           { label: "Detail" },
         ]}

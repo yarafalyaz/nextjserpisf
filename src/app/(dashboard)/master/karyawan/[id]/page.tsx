@@ -43,14 +43,14 @@ export default async function EmployeeDetailPage({
       <PageHeader
         title={employee.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Employees", href: "/master/karyawan" },
+          { label: "Karyawan", href: "/master/karyawan" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/karyawan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/karyawan/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <DeleteButton id={employee.id} action={deleteEmployee} />
             <BackButton href="/master/karyawan" />
           </>
@@ -113,17 +113,17 @@ export default async function EmployeeDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Kehadiran</h2>
-                  <Link href={`/sdm/absensis?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/sdm/absensi?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {employee.attendances.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada data absensi</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data absensi</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
                         <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Check In</DetailTableTh>
-                        <DetailTableTh>Check Out</DetailTableTh>
+                        <DetailTableTh>Jam Masuk</DetailTableTh>
+                        <DetailTableTh>Jam Keluar</DetailTableTh>
                         <DetailTableTh>Status</DetailTableTh>
                       </DetailTableHead>
                       <DetailTableBody>
@@ -149,11 +149,11 @@ export default async function EmployeeDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Cuti</h2>
-                  <Link href={`/sdm/permintaan-cuti?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                  <Link href={`/sdm/cuti?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {employee.leaveRequests.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada data cuti</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data cuti</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -191,7 +191,7 @@ export default async function EmployeeDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {employee.overtimeRequests.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada data lembur</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data lembur</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

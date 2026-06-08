@@ -45,8 +45,8 @@ export default async function VehicleDetailPage({
       <PageHeader
         title={`Kendaraan ${vehicle.plateNumber || `#${vehicle.id}`}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Vehicles", href: "/kendaraan" },
+          { label: "Dasbor", href: "/" },
+          { label: "Kendaraan", href: "/kendaraan" },
           { label: "Detail" },
         ]}
         actions={
@@ -75,11 +75,11 @@ export default async function VehicleDetailPage({
         </div>
         <div className="p-4 px-5">
           {vehicle.customerVehicles.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada pemilik terdaftar</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pemilik terdaftar</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Customer</DetailTableTh>
+                <DetailTableTh>Pelanggan</DetailTableTh>
                 <DetailTableTh>Terdaftar</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>

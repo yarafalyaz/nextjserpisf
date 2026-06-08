@@ -32,14 +32,14 @@ export default async function CrmTicketDetailPage({
       <PageHeader
         title={`Tiket: ${ticket.subject}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "CRM", href: "/crm" },
-          { label: "Tickets", href: "/crm/tickets" },
+          { label: "Tiket", href: "/crm/tickets" },
           { label: ticket.subject },
         ]}
         badge={<><StatusChip status={ticket.status} /><StatusChip status={ticket.priority} /></>}
         actions={<>
-          <Button href={`/crm/tickets/${ticket.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/crm/tickets/${ticket.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={ticket.id} action={deleteTicket} />
           <BackButton href="/crm/tickets" />
         </>}
@@ -49,7 +49,7 @@ export default async function CrmTicketDetailPage({
         <DetailField label="Subjek" value={ticket.subject} />
         <DetailField label="Prioritas" value={<StatusChip status={ticket.priority} />} />
         <DetailField label="Status" value={<StatusChip status={ticket.status} />} />
-        {ticket.customerId && <DetailField label="Customer ID" value={ticket.customerId} />}
+        {ticket.customerId && <DetailField label="ID Pelanggan" value={ticket.customerId} />}
         {ticket.assignedTo && <DetailField label="Ditugaskan ke" value={`User #${ticket.assignedTo}`} />}
         <DetailField label="Dibuat" value={formatDate(ticket.createdAt)} />
         {ticket.description && <DetailField label="Deskripsi" value={ticket.description} colSpan="full" />}
@@ -62,11 +62,11 @@ export default async function CrmTicketDetailPage({
         </div>
         <div className="p-4 px-5">
           {ticket.comments.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada komentar</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada komentar</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>User</DetailTableTh>
+                <DetailTableTh>Pengguna</DetailTableTh>
                 <DetailTableTh>Komentar</DetailTableTh>
                 <DetailTableTh>Tanggal</DetailTableTh>
               </DetailTableHead>

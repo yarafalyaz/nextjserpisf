@@ -19,21 +19,25 @@ export default async function WorkScheduleDetailPage({
 
   const schedule = await prisma.workSchedule.findUnique({
     where: { id: Number(id) },
+    include: { employees: { select: { id: true, name: true } }, departments: { select: { id: true, name: true } } },
   })
 
   if (!schedule) notFound()
 
-  const department = schedule.departmentId
-    ? await prisma.department.findUnique({ where: { id: schedule.departmentId } })
-    : null
+  const dayLabels = schedule.workDays
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean)
+    .map((d) => dayNames[Number(d)] ?? d)
+    .join(", ")
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Jadwal Kerja"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Jadwal Kerja", href: "/sdm/jadwal-kerja" },
           { label: "Detail" },
         ]}
@@ -53,11 +57,12 @@ export default async function WorkScheduleDetailPage({
 
       <DetailCard>
         <DetailField label="Nama" value={schedule.name} />
-        <DetailField label="Departemen" value={department?.name ?? "-"} />
-        <DetailField label="Hari" value={dayNames[schedule.dayOfWeek] || String(schedule.dayOfWeek)} />
+        <DetailField label="Departemen" value={schedule.departments.length > 0 ? schedule.departments.map((d) => d.name).join(", ") : "-"} />
+        <DetailField label="Hari Kerja" value={dayLabels || "-"} />
         <DetailField label="Jam Masuk" value={schedule.startTime} />
         <DetailField label="Jam Keluar" value={schedule.endTime} />
         <DetailField label="Toleransi Keterlambatan" value={`${schedule.lateToleranceMinutes} menit`} />
+        <DetailField label="Karyawan" value={schedule.employees.length > 0 ? schedule.employees.map((e) => e.name).join(", ") : "Semua (sesuai departemen)"} colSpan="full" />
         <DetailField label="Dibuat" value={formatDate(schedule.createdAt)} />
       </DetailCard>
     </div>

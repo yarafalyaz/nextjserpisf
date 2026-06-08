@@ -9,11 +9,13 @@ import { z } from "zod"
 import { createSalesInvoice, updateSalesInvoice } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 const salesInvoiceSchema = z.object({
-  customerId: z.number({ error: "Customer wajib dipilih" }).min(1, "Customer wajib dipilih"),
+  customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
   salesOrderId: z.number().optional(),
   date: z.string().min(1, "Tanggal wajib diisi"),
   dueDate: z.string().optional(),
@@ -36,9 +38,11 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesInvoiceInput>({
     resolver: zodResolver(salesInvoiceSchema),
     defaultValues: {
-      date: new Date().toISOString().split("T")[0],
-      dueDate: "",
-      notes: "",
+      customerId: invoice?.customerId,
+      salesOrderId: invoice?.salesOrderId ?? undefined,
+      date: invoice?.date ?? new Date().toISOString().split("T")[0],
+      dueDate: invoice?.dueDate ?? "",
+      notes: invoice?.notes ?? "",
     },
   })
 
@@ -51,9 +55,11 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
         })
         const result = invoice?.id ? await updateSalesInvoice(invoice.id, formData) : await createSalesInvoice(formData)
         if (result.success) {
-          showSuccess(invoice?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+          showSuccess(invoice?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push(`/penjualan/faktur/${result.id}`)
           router.refresh()
+        } else {
+          showError(result.error || "Gagal menyimpan data")
         }
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -65,42 +71,36 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
     <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="customerId">Pelanggan *</Label>
           <Controller
             name="customerId"
             control={control}
             render={({ field }) => (
-              <ComboBox selectedKey={field.value ? String(field.value) : null} onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)} className="w-full">
-                <Label>Customer *</Label>
-                <ComboBox.InputGroup><Input placeholder="Cari customer..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {customers.map((c) => (
-                      <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>{c.name}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <Combobox
+                id="customerId"
+                value={field.value ? String(field.value) : null}
+                onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                placeholder="Cari pelanggan..."
+                options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+              />
             )}
           />
           {errors.customerId && <span className="text-xs text-danger mt-1">{errors.customerId.message}</span>}
         </div>
 
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="salesOrderId">Pesanan Penjualan (Opsional)</Label>
           <Controller
             name="salesOrderId"
             control={control}
             render={({ field }) => (
-              <ComboBox selectedKey={field.value ? String(field.value) : null} onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)} className="w-full">
-                <Label>Pesanan Penjualan (Opsional)</Label>
-                <ComboBox.InputGroup><Input placeholder="Cari sales order..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {salesOrders.map((so) => (
-                      <ListBox.Item key={so.id} id={String(so.id)} textValue={so.documentNo}>{so.documentNo}</ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <Combobox
+                id="salesOrderId"
+                value={field.value ? String(field.value) : null}
+                onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                placeholder="Cari pesanan penjualan..."
+                options={salesOrders.map((so) => ({ value: String(so.id), label: so.documentNo }))}
+              />
             )}
           />
         </div>
@@ -127,19 +127,19 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
-          <TextArea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk invoice ini..." />
+          <Textarea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk faktur ini..." />
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-sales-invoice">
-          {isPending ? "Menyimpan..." : invoice?.id ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : invoice?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
 
-      <p className="text-muted" style={{ marginTop: "12px", fontSize: "0.8125rem" }}>
-        Setelah invoice dibuat, Anda bisa menambahkan item di halaman detail.
+      <p className="text-muted-foreground" style={{ marginTop: "12px", fontSize: "0.8125rem" }}>
+        Setelah faktur dibuat, Anda bisa menambahkan item di halaman detail.
       </p>
     </form>
   )

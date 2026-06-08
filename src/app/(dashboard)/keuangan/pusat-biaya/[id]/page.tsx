@@ -25,15 +25,15 @@ export default async function CostCenterDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Cost Center: ${costCenter.name}`}
+        title={`Pusat Biaya: ${costCenter.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/keuangan" },
-          { label: "Cost Centers", href: "/keuangan/pusat-biaya" },
+          { label: "Dasbor", href: "/" },
+          { label: "Keuangan", href: "/keuangan" },
+          { label: "Pusat Biaya", href: "/keuangan/pusat-biaya" },
           { label: costCenter.name },
         ]}
         actions={<>
-          <Button href={`/keuangan/pusat-biaya/${costCenter.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/pusat-biaya/${costCenter.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={costCenter.id} action={deleteCostCenter} />
           <BackButton href="/keuangan/pusat-biaya" />
         </>}

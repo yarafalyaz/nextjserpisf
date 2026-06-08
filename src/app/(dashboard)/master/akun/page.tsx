@@ -50,12 +50,12 @@ export default async function AccountsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Accounts" },
+  { label: "Akun" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
+        <h1 className="text-2xl font-bold text-foreground">Bagan Akun</h1>
         <Link href="/master/akun/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-account-btn">
           + Tambah Akun
         </Link>
@@ -69,13 +69,13 @@ export default async function AccountsPage({
         <div key={type} className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">{label}</h2>
-            <span className="text-muted text-[0.8125rem]">
+            <span className="text-muted-foreground text-[0.8125rem]">
               {grouped[type]?.length || 0} akun
             </span>
           </div>
           <div className="p-4 px-5">
             {!grouped[type] || grouped[type].length === 0 ? (
-              <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada akun {label.toLowerCase()}</p>
+              <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada akun {label.toLowerCase()}</p>
             ) : (
               <DetailTable>
                 <DetailTableHead>

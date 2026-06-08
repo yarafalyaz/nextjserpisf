@@ -46,10 +46,14 @@ test.describe("Aset Kategori CRUD", () => {
     await page.locator("#code").fill(`KAT-${ts}`)
     await page.locator("#depreciationRate").fill("10")
     await page.locator("#usefulLife").fill("5")
-    await page.getByRole("button", { name: /(Simpan|Update)/ }).click()
+    await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await page.waitForURL("**/aset/kategori", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
+    // Search-first: list paginates client-side (20/page), so filter by name to
+    // keep the freshly created row on page 1 regardless of accumulated data.
+    await page.goto(`/aset/kategori?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
     // ─── DETAIL ───────────────────────────────────────────────
@@ -64,7 +68,7 @@ test.describe("Aset Kategori CRUD", () => {
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
-    await page.goto("/aset/kategori", { waitUntil: "domcontentloaded" })
+    await page.goto(`/aset/kategori?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
@@ -72,16 +76,18 @@ test.describe("Aset Kategori CRUD", () => {
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).click()
-    await page.getByRole("menuitem", { name: "Edit" }).first().click()
+    await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/aset\/kategori\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await waitForHydration(page)
-    await page.getByRole("button", { name: /(Simpan|Update)/ }).click()
+    await page.getByRole("button", { name: /(Simpan|Perbarui|Update)/ }).click()
     await page.waitForURL("**/aset/kategori", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
+    await page.goto(`/aset/kategori?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────

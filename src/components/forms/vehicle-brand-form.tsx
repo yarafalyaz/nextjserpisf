@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createVehicleBrand, updateVehicleBrand } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/page-header"
 
 export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string } } = {}) {
@@ -16,16 +17,10 @@ export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        if (brand?.id) {
-
-          await updateVehicleBrand(brand.id, formData)
-
-        } else {
-
-          await createVehicleBrand(formData)
-
-        }
-        showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        const result = brand?.id ? await updateVehicleBrand(brand.id, formData) : await createVehicleBrand(formData)
+        if (result && !result.success) { showError("Gagal menyimpan data"); return }
+        showSuccess(brand?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
+        router.push("/kendaraan/merek")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -43,7 +38,7 @@ export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : brand?.id ? "Update" : "Simpan"}</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : brand?.id ? "Perbarui" : "Simpan"}</Button>
       </div>
     </form>
   )

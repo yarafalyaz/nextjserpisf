@@ -6,7 +6,8 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteAssetTransfer } from "@/actions/asset.actions"
+import { DisposeAssetButton } from "./_components/dispose-asset-button"
+import { deleteAsset } from "@/actions/asset.actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
@@ -39,14 +40,17 @@ export default async function AssetDetailPage({
       <PageHeader
         title={asset.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/aset" },
+          { label: "Dasbor", href: "/" },
+          { label: "Aset", href: "/aset" },
           { label: asset.name },
         ]}
         badge={<StatusChip status={asset.status} />}
         actions={<>
-          <Button href={`/aset/${asset.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
-          <DeleteButton id={asset.id} action={deleteAssetTransfer} />
+          <Button href={`/aset/${asset.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
+          {asset.status !== "disposed" && (
+            <DisposeAssetButton assetId={asset.id} bookValue={Number(asset.currentValue)} />
+          )}
+          <DeleteButton id={asset.id} action={deleteAsset} />
           <BackButton href="/aset" />
         </>}
       />
@@ -69,7 +73,7 @@ export default async function AssetDetailPage({
         </div>
         <div className="p-4 px-5">
           {asset.histories.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada riwayat</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada riwayat</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

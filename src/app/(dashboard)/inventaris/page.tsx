@@ -5,17 +5,17 @@ import {
 } from "lucide-react"
 
 const inventoryModules = [
-  { label: "Stock Moves", href: "/inventaris/mutasi-stok", icon: BarChart3, desc: "Pergerakan stok" },
-  { label: "Adjustments", href: "/inventaris/penyesuaian", icon: Scale, desc: "Penyesuaian stok" },
-  { label: "Transfers", href: "/inventaris/transfer", icon: ArrowLeftRight, desc: "Transfer antar gudang" },
-  { label: "Material Issues", href: "/inventaris/pengeluaran-material", icon: Wrench, desc: "Pengeluaran material" },
-  { label: "Racks", href: "/inventaris/rak", icon: Grid3X3, desc: "Kelola rak gudang" },
+  { label: "Mutasi Stok", href: "/inventaris/mutasi-stok", icon: BarChart3, desc: "Pergerakan stok" },
+  { label: "Penyesuaian", href: "/inventaris/penyesuaian", icon: Scale, desc: "Penyesuaian stok" },
+  { label: "Transfer", href: "/inventaris/transfer", icon: ArrowLeftRight, desc: "Transfer antar gudang" },
+  { label: "Pengeluaran Material", href: "/inventaris/pengeluaran-material", icon: Wrench, desc: "Pengeluaran material" },
+  { label: "Rak", href: "/inventaris/rak", icon: Grid3X3, desc: "Kelola rak gudang" },
 ]
 
 export default function InventoryPage() {
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Inventory" }]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Inventaris" }]} />
       <h1 className="text-2xl font-bold text-foreground">Inventaris</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {inventoryModules.map((mod) => {
@@ -27,7 +27,7 @@ export default function InventoryPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">{mod.label}</p>
-                <p className="text-xs text-muted">{mod.desc}</p>
+                <p className="text-xs text-muted-foreground">{mod.desc}</p>
               </div>
             </Link>
           )

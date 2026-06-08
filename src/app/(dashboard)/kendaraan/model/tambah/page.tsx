@@ -16,10 +16,10 @@ export default async function CreateVehicleModelPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Vehicles", href: "/kendaraan" },
-  { label: "Models", href: "/kendaraan/model" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Kendaraan", href: "/kendaraan" },
+  { label: "Model", href: "/kendaraan/model" },
+  { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Model Kendaraan</h1>

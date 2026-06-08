@@ -22,7 +22,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/sdm/hari-libur-departemen/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/hari-libur-departemen/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -38,7 +38,7 @@ const columns = [
   columnHelper.accessor("isRecurring", {
     header: "Berulang",
     cell: (info) => (
-      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${info.getValue() ? "bg-success/10 text-success" : "bg-default/10 text-muted"}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${info.getValue() ? "bg-success/10 text-success" : "bg-default/10 text-muted-foreground"}`}>
         {info.getValue() ? "Ya" : "Tidak"}
       </span>
     ),
@@ -70,6 +70,8 @@ export function DepartmentHolidayTable({ data }: DepartmentHolidayTableProps) {
       ariaLabel="Daftar hari libur departemen"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama hari libur..."
       onBulkDelete={(ids) => bulkDelete("departmentHoliday", ids)}
     />
   )

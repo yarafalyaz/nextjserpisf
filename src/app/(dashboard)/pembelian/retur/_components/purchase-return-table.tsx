@@ -30,7 +30,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/retur/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/pembelian/retur/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -65,9 +65,11 @@ const columns = [
 
 interface PurchaseReturnTableProps {
   data: PurchaseReturn[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function PurchaseReturnTable({ data }: PurchaseReturnTableProps) {
+export function PurchaseReturnTable({ data, toolbar, filters }: PurchaseReturnTableProps) {
   return (
     <DataTable
       data={data}
@@ -75,6 +77,8 @@ export function PurchaseReturnTable({ data }: PurchaseReturnTableProps) {
       ariaLabel="Daftar retur pembelian"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("purchaseReturn", ids)}
     />
   )

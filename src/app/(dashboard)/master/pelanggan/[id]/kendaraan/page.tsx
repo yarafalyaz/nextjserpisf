@@ -49,9 +49,9 @@ export default async function CustomerVehiclesPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
+        { label: "Dasbor", href: "/" },
         { label: "Master Data", href: "/master" },
-        { label: "Customers", href: "/master/pelanggan" },
+        { label: "Pelanggan", href: "/master/pelanggan" },
         { label: customer.name, href: `/master/pelanggan/${id}` },
         { label: "Kendaraan" },
       ]} />
@@ -69,12 +69,12 @@ export default async function CustomerVehiclesPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="p-4 px-5">
           {vehicles.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada kendaraan terdaftar</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada kendaraan terdaftar</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Plat Nomor</DetailTableTh>
-                <DetailTableTh>Brand</DetailTableTh>
+                <DetailTableTh>Merek</DetailTableTh>
                 <DetailTableTh>Model</DetailTableTh>
                 <DetailTableTh>Tahun</DetailTableTh>
                 <DetailTableTh>Warna</DetailTableTh>
@@ -95,7 +95,7 @@ export default async function CustomerVehiclesPage({
                         <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
                           <Eye size={14} />
                         </Link>
-                        <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Edit">
+                        <Link href={`/master/pelanggan/${id}/kendaraan/${cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Ubah">
                           <Pencil size={14} />
                         </Link>
                         <DeleteButton id={cv.id} action={deleteCustomerVehicle} />

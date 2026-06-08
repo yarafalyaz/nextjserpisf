@@ -8,6 +8,9 @@ import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/lib/utils/safe-parse"
+import { logActivity } from "@/lib/services/activity-log.service"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 
 // ==================== BANK STATEMENT ACTIONS ====================
 
@@ -32,6 +35,7 @@ export async function createBankStatement(formData: FormData) {
     },
   })
 
+  await logActivity("create", "BankStatement", bankStatement.id, "Membuat rekening koran bank")
   revalidatePath("/keuangan/laporan-bank")
   return { success: true, id: bankStatement.id }
 
@@ -49,6 +53,10 @@ export async function createJournal(formData: FormData) {
   const user = await requirePermission("create_journals")
 
   const documentNo = await generateDocumentNumber("JRN")
+
+  // Block posting/creating into a closed accounting period
+  const txDate = new Date(formData.get("transactionDate") as string)
+  await assertPeriodOpen(txDate)
 
   // Laravel parity: parse and validate entries before creating journal
   const entriesJson = formData.get("entries") as string | null
@@ -105,6 +113,7 @@ export async function createJournal(formData: FormData) {
     }
   }
 
+  await logActivity("create", "Journal", journal.id, "Membuat jurnal")
   revalidatePath("/keuangan/jurnal")
   return { success: true, id: journal.id }
 
@@ -128,6 +137,9 @@ export async function postJournal(journalId: number) {
     throw new Error("Journal hanya bisa di-post dari status DRAFT")
   }
 
+  // Block posting into a closed accounting period
+  await assertPeriodOpen(journal.transactionDate)
+
   // Validate double-entry balance
   const totalDebit = journal.entries.reduce((sum, e) => sum + Number(e.debit), 0)
   const totalCredit = journal.entries.reduce((sum, e) => sum + Number(e.credit), 0)
@@ -145,6 +157,7 @@ export async function postJournal(journalId: number) {
     },
   })
 
+  await logActivity("post", "Journal", journalId, "Posting jurnal")
   revalidatePath("/keuangan/jurnal")
   return { success: true }
 
@@ -194,6 +207,9 @@ export async function createExpense(formData: FormData) {
     }
   }
 
+  await logActivity("create", "Expense", expense.id, "Membuat pengeluaran")
+  // Route through approval workflow if one is configured for Expense.
+  await requestApprovalIfConfigured("Expense", expense.id, Number(user.id))
   revalidatePath("/keuangan/pengeluaran")
   return { success: true, id: expense.id }
 
@@ -216,6 +232,9 @@ export async function approveExpense(expenseId: number) {
     throw new Error("Expense hanya bisa di-approve dari status draft")
   }
 
+  // Workflow approval must be complete (no-op if no workflow configured).
+  await assertApproved("Expense", expenseId)
+
   await prisma.expense.update({
     where: { id: expenseId },
     data: { status: "approved", approvedBy: Number(user.id) },
@@ -224,6 +243,7 @@ export async function approveExpense(expenseId: number) {
   // Sync to PettyCash if paid from petty cash account
   await onExpenseApprovedSyncPettyCash(expenseId)
 
+  await logActivity("approve", "Expense", expenseId, "Menyetujui pengeluaran")
   revalidatePath("/keuangan/pengeluaran")
   revalidatePath("/keuangan/kas-kecil")
   return { success: true }
@@ -256,6 +276,7 @@ export async function markExpensePaid(expenseId: number) {
   // Accounting journal (Laravel parity: created when status becomes paid)
   await onExpenseApproved(expenseId)
 
+  await logActivity("mark", "Expense", expenseId, "Menandai pengeluaran sebagai dibayar")
   revalidatePath("/keuangan/pengeluaran")
   return { success: true }
 
@@ -267,6 +288,41 @@ export async function markExpensePaid(expenseId: number) {
 }
 
 // ==================== PETTY CASH ACTIONS ====================
+
+type PettyCashTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+
+/**
+ * Recompute the petty-cash running balance chain (balanceBefore/balanceAfter)
+ * for every record in chronological order. Call inside a transaction after any
+ * insert/update/delete that changes amounts so subsequent balances stay correct.
+ */
+async function recalcPettyCashChain(tx: PettyCashTx): Promise<void> {
+  const all = await tx.pettyCash.findMany({ orderBy: [{ date: "asc" }, { id: "asc" }] })
+  let running = 0
+  for (const rec of all) {
+    const before = running
+    const after = rec.type === "IN" ? before + Number(rec.amount) : before - Number(rec.amount)
+    if (Number(rec.balanceBefore) !== before || Number(rec.balanceAfter) !== after) {
+      await tx.pettyCash.update({
+        where: { id: rec.id },
+        data: { balanceBefore: before, balanceAfter: after },
+      })
+    }
+    running = after
+  }
+}
+
+/** Remove the accounting journal (and its entries) tied to a petty-cash record. */
+async function deletePettyCashJournal(tx: PettyCashTx, pettyCashId: number): Promise<void> {
+  const journals = await tx.journal.findMany({
+    where: { referenceType: "PettyCash", referenceId: pettyCashId },
+    select: { id: true },
+  })
+  if (journals.length === 0) return
+  const journalIds = journals.map((j) => j.id)
+  await tx.journalEntry.deleteMany({ where: { journalId: { in: journalIds } } })
+  await tx.journal.deleteMany({ where: { id: { in: journalIds } } })
+}
 
 export async function createPettyCash(formData: FormData) {
   try {
@@ -290,18 +346,23 @@ export async function createPettyCash(formData: FormData) {
 
   const balanceAfter = type === "IN" ? balanceBefore + amount : balanceBefore - amount
 
-  const pettyCash = await prisma.pettyCash.create({
-    data: {
-      documentNo,
-      type,
-      amount,
-      balanceBefore,
-      balanceAfter,
-      date: new Date(formData.get("date") as string),
-      accountId: safeId(formData.get("accountId")),
-      description: formData.get("description") as string | null,
-      createdBy: Number(user.id),
-    },
+  const pettyCash = await prisma.$transaction(async (tx) => {
+    const created = await tx.pettyCash.create({
+      data: {
+        documentNo,
+        type,
+        amount,
+        balanceBefore,
+        balanceAfter,
+        date: new Date(formData.get("date") as string),
+        accountId: safeId(formData.get("accountId")),
+        description: formData.get("description") as string | null,
+        createdBy: Number(user.id),
+      },
+    })
+    // Keep the running-balance chain correct regardless of insertion order.
+    await recalcPettyCashChain(tx)
+    return created
   })
 
   // Accounting journal
@@ -319,6 +380,7 @@ export async function createPettyCash(formData: FormData) {
     }
   }
 
+  await logActivity("create", "PettyCash", pettyCash.id, "Membuat transaksi kas kecil")
   revalidatePath("/keuangan/kas-kecil")
   return { success: true, id: pettyCash.id }
 
@@ -352,6 +414,7 @@ export async function createBankReconciliation(formData: FormData) {
     },
   })
 
+  await logActivity("create", "BankReconciliation", reconciliation.id, "Membuat rekonsiliasi bank")
   revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true, id: reconciliation.id }
 
@@ -366,15 +429,38 @@ export async function matchReconciliationLine(reconciliationId: number, lineId: 
   try {
   await requirePermission("edit_journals")
 
-  await prisma.bankReconciliationItem.create({
-    data: {
-      bankReconciliationId: reconciliationId,
-      bankStatementLineId: lineId,
-      journalEntryId,
-      matched: true,
-    },
+  // Only draft reconciliations may be matched.
+  const recon = await prisma.bankReconciliation.findUniqueOrThrow({
+    where: { id: reconciliationId },
+    select: { status: true },
   })
+  if (recon.status !== "draft") {
+    throw new Error("Hanya rekonsiliasi dengan status draft yang dapat dicocokkan")
+  }
 
+  // Dedupe: a statement line already matched in this reconciliation is updated in
+  // place instead of inserting a duplicate match row.
+  const existing = await prisma.bankReconciliationItem.findFirst({
+    where: { bankReconciliationId: reconciliationId, bankStatementLineId: lineId },
+    select: { id: true },
+  })
+  if (existing) {
+    await prisma.bankReconciliationItem.update({
+      where: { id: existing.id },
+      data: { journalEntryId, matched: true },
+    })
+  } else {
+    await prisma.bankReconciliationItem.create({
+      data: {
+        bankReconciliationId: reconciliationId,
+        bankStatementLineId: lineId,
+        journalEntryId,
+        matched: true,
+      },
+    })
+  }
+
+  await logActivity("match", "BankReconciliation", reconciliationId, "Mencocokkan baris rekonsiliasi bank")
   revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true }
 
@@ -413,6 +499,7 @@ export async function completeReconciliation(reconciliationId: number) {
     },
   })
 
+  await logActivity("complete", "BankReconciliation", reconciliationId, "Menyelesaikan rekonsiliasi bank")
   revalidatePath("/keuangan/rekonsiliasi-bank")
   return { success: true }
 
@@ -441,6 +528,7 @@ export async function createBudget(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Budget", budget.id, "Membuat anggaran")
   revalidatePath("/keuangan/anggaran")
   return { success: true, id: budget.id }
 
@@ -466,6 +554,7 @@ export async function createCostCenter(formData: FormData) {
     },
   })
 
+  await logActivity("create", "CostCenter", costCenter.id, "Membuat pusat biaya")
   revalidatePath("/keuangan/pusat-biaya")
   return { success: true, id: costCenter.id }
 
@@ -490,6 +579,7 @@ export async function updateCostCenter(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "CostCenter", id, "Memperbarui pusat biaya")
   revalidatePath("/keuangan/pusat-biaya")
   return { success: true }
 
@@ -514,9 +604,11 @@ export async function deleteJournal(id: number) {
   // Laravel parity: cascade delete entries then journal
   await prisma.$transaction(async (tx) => {
     await tx.journalEntry.deleteMany({ where: { journalId: id } })
+    await tx.transactionAttachment.deleteMany({ where: { referenceType: "Journal", referenceId: id } })
     await tx.journal.delete({ where: { id } })
   })
 
+  await logActivity("delete", "Journal", id, "Menghapus jurnal")
   revalidatePath("/keuangan/jurnal")
   return { success: true }
 
@@ -537,8 +629,10 @@ export async function deleteExpense(id: number) {
     throw new Error("Tidak bisa menghapus expense yang sudah approved atau paid")
   }
 
+  await prisma.transactionAttachment.deleteMany({ where: { referenceType: "Expense", referenceId: id } })
   await prisma.expense.delete({ where: { id } })
 
+  await logActivity("delete", "Expense", id, "Menghapus pengeluaran")
   revalidatePath("/keuangan/pengeluaran")
   return { success: true }
 
@@ -553,8 +647,16 @@ export async function deletePettyCash(id: number) {
   try {
   await requirePermission("delete_petty_cash")
 
-  await prisma.pettyCash.delete({ where: { id } })
+  await prisma.$transaction(async (tx) => {
+    // Remove the linked journal (avoid orphaned GL entries), delete the record,
+    // then recompute the running balance for all remaining records.
+    await deletePettyCashJournal(tx, id)
+    await tx.transactionAttachment.deleteMany({ where: { referenceType: "PettyCash", referenceId: id } })
+    await tx.pettyCash.delete({ where: { id } })
+    await recalcPettyCashChain(tx)
+  })
 
+  await logActivity("delete", "PettyCash", id, "Menghapus transaksi kas kecil")
   revalidatePath("/keuangan/kas-kecil")
   return { success: true }
 
@@ -571,6 +673,7 @@ export async function deleteBudget(id: number) {
 
   await prisma.budget.delete({ where: { id } })
 
+  await logActivity("delete", "Budget", id, "Menghapus anggaran")
   revalidatePath("/keuangan/anggaran")
   return { success: true }
 
@@ -587,6 +690,7 @@ export async function deleteCostCenter(id: number) {
 
   await prisma.costCenter.delete({ where: { id } })
 
+  await logActivity("delete", "CostCenter", id, "Menghapus pusat biaya")
   revalidatePath("/keuangan/pusat-biaya")
   return { success: true }
 
@@ -603,6 +707,7 @@ export async function deleteStatisticalKeyFigure(id: number) {
 
   await prisma.statisticalKeyFigure.delete({ where: { id } })
 
+  await logActivity("delete", "StatisticalKeyFigure", id, "Menghapus angka kunci statistik")
   revalidatePath("/keuangan/angka-kunci-statistik")
   return { success: true }
 
@@ -627,6 +732,10 @@ export async function updateJournal(id: number, formData: FormData) {
     throw new Error("Journal yang sudah diposting tidak dapat diubah")
   }
 
+  // Block editing into a closed accounting period (both old and new dates)
+  await assertPeriodOpen(existing.transactionDate)
+  await assertPeriodOpen(new Date(formData.get("transactionDate") as string))
+
   // Fix #14: Jangan generate documentNo baru dan jangan reset totals ke 0
   const journal = await prisma.journal.update({
     where: { id },
@@ -649,6 +758,7 @@ export async function updateJournal(id: number, formData: FormData) {
     }
   }
 
+  await logActivity("update", "Journal", journal.id, "Memperbarui jurnal")
   revalidatePath("/keuangan/jurnal")
   return { success: true, id: journal.id }
 
@@ -672,6 +782,9 @@ export async function reverseJournal(journalId: number) {
   if (journal.status !== "POSTED") {
     throw new Error("Hanya journal yang sudah POSTED yang bisa di-reverse")
   }
+
+  // Cannot reverse a journal that belongs to a closed period
+  await assertPeriodOpen(journal.transactionDate)
 
   const documentNo = await generateDocumentNumber("JRN-RV")
 
@@ -711,6 +824,7 @@ export async function reverseJournal(journalId: number) {
     })
   })
 
+  await logActivity("reverse", "Journal", journalId, "Membalik jurnal")
   revalidatePath("/keuangan/jurnal")
   return { success: true }
 
@@ -768,6 +882,7 @@ export async function updateExpense(id: number, formData: FormData) {
     }
   }
 
+  await logActivity("update", "Expense", expense.id, "Memperbarui pengeluaran")
   revalidatePath("/keuangan/pengeluaran")
   return { success: true, id: expense.id }
 
@@ -788,32 +903,28 @@ export async function updatePettyCash(id: number, formData: FormData) {
   const type = formData.get("type") as string // IN or OUT
   const amount = requireNumber(formData.get("amount"), "amount")
 
-  // Recalculate balance: find the record just before this one
-  const currentRecord = await prisma.pettyCash.findUniqueOrThrow({ where: { id } })
-  const balanceBefore = Number(currentRecord.balanceBefore)
+  const pettyCash = await prisma.$transaction(async (tx) => {
+    // Remove the stale journal so it can be rebuilt with the new amount/type
+    // (the create-hook is idempotent and would otherwise skip the update).
+    await deletePettyCashJournal(tx, id)
 
-  // Laravel parity: OUT can't exceed current balance
-  if (type === "OUT" && amount > balanceBefore) {
-    throw new Error(`Saldo kas kecil tidak cukup: tersedia ${balanceBefore}, dibutuhkan ${amount}`)
-  }
+    const updated = await tx.pettyCash.update({
+      where: { id },
+      data: {
+        type,
+        amount,
+        date: new Date(formData.get("date") as string),
+        accountId: safeId(formData.get("accountId")),
+        description: formData.get("description") as string | null,
+      },
+    })
 
-  const balanceAfter = type === "IN" ? balanceBefore + amount : balanceBefore - amount
-
-  const pettyCash = await prisma.pettyCash.update({
-    where: { id },
-    data: {
-      type,
-      amount,
-      balanceBefore,
-      balanceAfter,
-      date: new Date(formData.get("date") as string),
-      accountId: safeId(formData.get("accountId")),
-      description: formData.get("description") as string | null,
-      createdBy: Number(user.id),
-    },
+    // Recompute running balances for the whole chain (this + subsequent records).
+    await recalcPettyCashChain(tx)
+    return updated
   })
 
-  // Accounting journal
+  // Rebuild the accounting journal to reflect the edited values.
   await onPettyCashCreated(pettyCash.id, Number(user.id))
 
   // Associate uploaded attachments with the new petty cash record
@@ -828,6 +939,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
     }
   }
 
+  await logActivity("update", "PettyCash", pettyCash.id, "Memperbarui transaksi kas kecil")
   revalidatePath("/keuangan/kas-kecil")
   return { success: true, id: pettyCash.id }
 
@@ -858,6 +970,7 @@ export async function updateBudget(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "Budget", budget.id, "Memperbarui anggaran")
   revalidatePath("/keuangan/anggaran")
   return { success: true, id: budget.id }
 

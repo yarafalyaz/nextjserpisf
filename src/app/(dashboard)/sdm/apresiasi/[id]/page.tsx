@@ -35,8 +35,8 @@ export default async function AppreciationDetailPage({
       <PageHeader
         title="Detail Apresiasi"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Apresiasi", href: "/sdm/apresiasi" },
           { label: "Detail" },
         ]}

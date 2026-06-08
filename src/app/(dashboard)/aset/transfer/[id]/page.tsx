@@ -31,13 +31,13 @@ export default async function AssetTransferDetailPage({
       <PageHeader
         title="Transfer Aset"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/aset" },
-          { label: "Transfers", href: "/aset/transfer" },
+          { label: "Dasbor", href: "/" },
+          { label: "Aset", href: "/aset" },
+          { label: "Transfer", href: "/aset/transfer" },
           { label: "Detail" },
         ]}
         actions={<>
-          <Button href={`/aset/transfer/${transfer.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/transfer/${transfer.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={transfer.id} action={deleteAssetTransfer} />
           <BackButton href="/aset/transfer" />
         </>}

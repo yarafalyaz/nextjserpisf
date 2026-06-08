@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -12,15 +14,17 @@ import { Button } from "@/components/ui/page-header"
 interface BudgetFormProps {
   accounts: { id: number; code: string; name: string
 }[]
-  budget?: { id: number; name: string; year: number; departmentId?: number | null; totalAmount: number; amount?: number; notes?: string | null }
+  budget?: { id: number; name: string; year: number; departmentId?: number | null; totalAmount: number; amount?: number; notes?: string | null; accountId?: number | null; costCenterId?: number | null; startDate?: string | null; endDate?: string | null }
   costCenters: { id: number; code: string; name: string }[]
 }
 
 export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  const [startDate, setStartDate] = useState(budget?.startDate ?? "")
+  const [endDate, setEndDate] = useState(budget?.endDate ?? "")
+  const [accountId, setAccountId] = useState(budget?.accountId ? String(budget.accountId) : "")
+  const [costCenterId, setCostCenterId] = useState(budget?.costCenterId ? String(budget.costCenterId) : "")
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -37,7 +41,7 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
           await createBudget(formData)
 
         }
-        showSuccess(budget?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(budget?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/keuangan/anggaran")
         router.refresh()
       } catch (error) {
@@ -51,34 +55,28 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Budget *</Label>
-            <Input id="name" name="name" placeholder="Nama budget" required defaultValue={budget?.name ?? ""} />
+            <Label htmlFor="name">Nama Anggaran *</Label>
+            <Input id="name" name="name" placeholder="Nama anggaran" required defaultValue={budget?.name ?? ""} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <ComboBox name="accountId" className="w-full" isRequired>
-              <Label>Akun *</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari akun..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {accounts.map((a) => (
-                    <ListBox.Item key={a.id} id={String(a.id)} textValue={`${a.code} - ${a.name}`}>{a.code} - {a.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label>Akun *</Label>
+            <Combobox
+              name="accountId"
+              value={accountId || null}
+              onChange={(key) => setAccountId(key ?? "")}
+              placeholder="Cari akun..."
+              options={accounts.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
-            <ComboBox name="costCenterId" className="w-full">
-              <Label>Cost Center</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari cost center..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {costCenters.map((cc) => (
-                    <ListBox.Item key={cc.id} id={String(cc.id)} textValue={`${cc.code} - ${cc.name}`}>{cc.code} - {cc.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label>Pusat Biaya</Label>
+            <Combobox
+              name="costCenterId"
+              value={costCenterId || null}
+              onChange={(key) => setCostCenterId(key ?? "")}
+              placeholder="Cari pusat biaya..."
+              options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} - ${cc.name}` }))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker label="Tanggal Mulai *" name="startDate" value={startDate} onChange={setStartDate} required />
@@ -96,7 +94,7 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : budget?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : budget?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

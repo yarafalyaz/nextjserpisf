@@ -74,18 +74,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token;
       }
 
-      // Fetch avatar only on sign-in or every 5 minutes (not every request)
+      // Re-sync profile, roles & permissions on sign-in or every 5 minutes
+      // so role/permission revocations (and deactivation) take effect without
+      // requiring the user to log out.
       const now = Date.now();
       const lastFetch = (token as any)._avatarFetchedAt as number | undefined;
       if (token.id && (!lastFetch || now - lastFetch > 5 * 60 * 1000)) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: Number(token.id) },
-            select: { name: true, avatar: true },
+            select: {
+              name: true,
+              avatar: true,
+              isActive: true,
+              roles: { include: { permissions: { select: { name: true } } } },
+            },
           });
-          if (dbUser) {
+          if (dbUser && dbUser.isActive) {
             token.name = dbUser.name;
             token.avatar = dbUser.avatar;
+            token.roles = dbUser.roles.map((r) => r.name);
+            token.permissions = [
+              ...new Set(dbUser.roles.flatMap((r) => r.permissions.map((p) => p.name))),
+            ];
+          } else {
+            // User deleted or deactivated → strip all access.
+            token.roles = [];
+            token.permissions = [];
           }
           (token as any)._avatarFetchedAt = now;
         } catch {

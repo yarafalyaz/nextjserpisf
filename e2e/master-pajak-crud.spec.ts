@@ -71,14 +71,14 @@ test.describe("Master Pajak CRUD", () => {
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).click()
-    await page.getByRole("menuitem", { name: "Edit" }).first().click()
+    await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/pajak\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
 
     // Edit form has no explicit id, use name attribute
     await page.locator('input[name="name"]').fill(updated)
-    await page.getByRole("button", { name: "Update" }).click()
+    await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
     await page.waitForURL("**/master/pajak", { timeout: 15000 })
     await page.waitForLoadState("networkidle")

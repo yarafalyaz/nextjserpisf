@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -20,7 +19,7 @@ export default async function EditQuotationPage({
 
   if (!data) notFound()
 
-  const [customers, customerVehicles, items] = await Promise.all([
+  const [customers, customerVehicles, items, paymentMethods, shippingMethods] = await Promise.all([
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -46,6 +45,8 @@ export default async function EditQuotationPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true, price: true, unitOfMeasure: true },
     }),
+    prisma.paymentMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } }),
+    prisma.shippingMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } }),
   ])
 
   const quotation = {
@@ -95,17 +96,19 @@ export default async function EditQuotationPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/penjualan/penawaran" },
-  { label: "Quotation", href: "/penjualan/penawaran" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Penjualan", href: "/penjualan/penawaran" },
+  { label: "Penawaran", href: "/penjualan/penawaran" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Quotation</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Penawaran</h1>
       </div>
-      <QuotationForm quotation={quotation as any} customers={customers as any}
-        customerVehicles={customerVehicleOptions as any}
-        items={itemOptions as any} />
+      <QuotationForm quotation={quotation} customers={customers}
+        customerVehicles={customerVehicleOptions}
+        items={itemOptions}
+        paymentMethods={paymentMethods}
+        shippingMethods={shippingMethods} />
     </div>
   )
 }

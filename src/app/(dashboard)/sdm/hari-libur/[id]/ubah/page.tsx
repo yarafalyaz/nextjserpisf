@@ -1,0 +1,39 @@
+export const dynamic = "force-dynamic"
+
+import { prisma } from "@/lib/db/prisma"
+import { notFound } from "next/navigation"
+import { requirePermission } from "@/lib/auth/permissions"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { HolidayEditForm } from "./form"
+
+export default async function EditHolidayPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  await requirePermission("create_holidays")
+  const { id } = await params
+
+  const data = await prisma.holiday.findUnique({ where: { id: Number(id) } })
+  if (!data) notFound()
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[
+        { label: "Dasbor", href: "/" },
+        { label: "SDM", href: "/sdm" },
+        { label: "Hari Libur", href: "/sdm/hari-libur" },
+        { label: "Ubah" },
+      ]} />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h1 className="text-2xl font-bold text-foreground">Ubah Hari Libur</h1>
+      </div>
+      <HolidayEditForm
+        id={data.id}
+        name={data.name}
+        date={data.date.toISOString().split("T")[0]}
+        description={data.description}
+      />
+    </div>
+  )
+}

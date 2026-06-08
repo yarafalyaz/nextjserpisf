@@ -32,7 +32,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/penerimaan/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/pembelian/penerimaan/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -58,7 +58,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "itemCount",
-    header: "Items",
+    header: "Item",
     cell: (info) => `${info.row.original.items.length} item`,
   }),
   columnHelper.accessor("status", {
@@ -84,9 +84,11 @@ const columns = [
 
 interface GoodsReceiptTableProps {
   data: GoodsReceipt[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function GoodsReceiptTable({ data }: GoodsReceiptTableProps) {
+export function GoodsReceiptTable({ data, toolbar, filters }: GoodsReceiptTableProps) {
   return (
     <DataTable
       data={data}
@@ -94,6 +96,8 @@ export function GoodsReceiptTable({ data }: GoodsReceiptTableProps) {
       ariaLabel="Daftar goods receipt"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("goodsReceipt", ids)}
     />
   )

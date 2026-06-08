@@ -25,7 +25,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/gudang/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/gudang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -64,6 +64,8 @@ export function WarehouseTable({ data }: WarehouseTableProps) {
       ariaLabel="Daftar gudang"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama atau kode..."
       onBulkDelete={(ids) => bulkDelete("warehouse", ids)}
     />
   )

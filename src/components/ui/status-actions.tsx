@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/page-header"
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { CheckCircle, XCircle, Clock } from "lucide-react"
 
 interface StatusActionsProps {
@@ -54,13 +55,13 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
   return (
     <div className="flex items-center justify-between p-4 bg-surface rounded-xl border border-default shadow-sm">
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-muted">Status:</span>
+        <span className="text-sm font-medium text-muted-foreground">Status:</span>
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${colorClass}`}>
           {status === "draft" && <Clock size={12} />}
           {status === "pending" && <Clock size={12} />}
           {status === "approved" && <CheckCircle size={12} />}
           {status === "rejected" && <XCircle size={12} />}
-          {status}
+          {statusLabel(status)}
         </span>
       </div>
       {(canApprove || canReject) && (

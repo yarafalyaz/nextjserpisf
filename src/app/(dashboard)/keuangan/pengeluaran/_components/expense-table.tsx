@@ -25,7 +25,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/keuangan/pengeluaran/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/keuangan/pengeluaran/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -69,9 +69,11 @@ const columns = [
 
 interface ExpenseTableProps {
   data: ExpenseData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function ExpenseTable({ data }: ExpenseTableProps) {
+export function ExpenseTable({ data, toolbar, filters }: ExpenseTableProps) {
   return (
     <DataTable
       data={data}
@@ -79,6 +81,8 @@ export function ExpenseTable({ data }: ExpenseTableProps) {
       ariaLabel="Daftar expense"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("expense", ids)}
     />
   )

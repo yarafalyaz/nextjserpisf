@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { AppSearchField } from "@/components/ui/search-field"
 import { AssetTable } from "./_components/asset-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
@@ -50,13 +49,7 @@ export default async function AssetsPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama, kode, atau lokasi..." action="/aset" />
-        </div>
-
-        <AssetTable data={tableData} />
-      </div>
+      <AssetTable data={tableData} />
     </div>
   )
 }

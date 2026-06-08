@@ -25,7 +25,7 @@ const columns = [
     header: "Nama",
     cell: (info) => (
       <div>
-        <Link href={`/master/barang/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+        <Link href={`/master/barang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
           {info.getValue()}
         </Link>
         <p className="text-xs text-muted-foreground mt-0.5">
@@ -76,9 +76,11 @@ const columns = [
 
 interface ItemTableProps {
   data: Item[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function ItemTable({ data }: ItemTableProps) {
+export function ItemTable({ data, toolbar, filters }: ItemTableProps) {
   return (
     <DataTable
       data={data}
@@ -86,6 +88,8 @@ export function ItemTable({ data }: ItemTableProps) {
       ariaLabel="Daftar item"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("item", ids)}
     />
   )

@@ -10,10 +10,10 @@ export default async function CreateDepartmentPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Departments", href: "/master/departemen" },
-  { label: "Create" },
+  { label: "Departemen", href: "/master/departemen" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Departemen</h1>

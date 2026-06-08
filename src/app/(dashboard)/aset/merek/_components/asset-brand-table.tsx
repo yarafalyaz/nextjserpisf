@@ -19,7 +19,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/aset/merek/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/aset/merek/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -56,6 +56,8 @@ export function AssetBrandTable({ data }: AssetBrandTableProps) {
       ariaLabel="Daftar brand aset"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama merek..."
       onBulkDelete={(ids) => bulkDelete("assetBrand", ids)}
     />
   )

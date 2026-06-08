@@ -57,16 +57,17 @@ export default async function SalesOrdersPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen atau customer..." action="/penjualan/pesanan" />
+      <OrderTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen atau pelanggan..." action="/penjualan/pesanan" />}
+        filters={
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "confirmed", "completed", "cancelled"].map((dbStatus) => {
               const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
               return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/penjualan/pesanan${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                <Link
+                  key={dbStatus}
+                  href={`/penjualan/pesanan${urlStatus ? `?status=${urlStatus}` : ""}`}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -74,10 +75,8 @@ export default async function SalesOrdersPage({
               )
             })}
           </div>
-        </div>
-
-        <OrderTable data={tableData} />
-      </div>
+        }
+      />
     </div>
   )
 }

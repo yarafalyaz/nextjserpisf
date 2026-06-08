@@ -24,13 +24,13 @@ export default async function CreatePurchaseReturnPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Purchase", href: "/pembelian" },
-  { label: "Returns", href: "/pembelian/retur" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Pembelian", href: "/pembelian" },
+  { label: "Retur", href: "/pembelian/retur" },
+  { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Purchase Return</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Retur Pembelian</h1>
       </div>
       <PurchaseReturnForm purchaseOrders={purchaseOrders} items={items} />
     </div>

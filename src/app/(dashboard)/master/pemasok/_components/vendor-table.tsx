@@ -22,7 +22,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/pemasok/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/pemasok/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -68,6 +68,8 @@ export function VendorTable({ data }: VendorTableProps) {
       ariaLabel="Daftar vendor"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama atau telepon pemasok..."
       onBulkDelete={(ids) => bulkDelete("vendor", ids)}
     />
   )

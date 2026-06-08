@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
-import { AppSearchField } from "@/components/ui/search-field"
 import { RackRowTable } from "./_components/rack-row-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
@@ -37,8 +36,8 @@ export default async function RackRowsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Inventory", href: "/inventaris" },
+        { label: "Dasbor", href: "/" },
+        { label: "Inventaris", href: "/inventaris" },
         { label: "Baris Rak" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -48,13 +47,7 @@ export default async function RackRowsPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama atau kode baris rak..." action="/inventaris/baris-rak" />
-        </div>
-
-        <RackRowTable data={tableData} />
-      </div>
+      <RackRowTable data={tableData} />
     </div>
   )
 }

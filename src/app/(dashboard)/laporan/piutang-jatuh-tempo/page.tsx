@@ -59,12 +59,12 @@ export default async function AgingReceivablesPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/laporan" },
-  { label: "Aging Receivables" },
+  { label: "Dasbor", href: "/" },
+  { label: "Laporan", href: "/laporan" },
+  { label: "Umur Piutang" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground"><FileText size={20} /> Aging Piutang (Receivables)</h1>
+        <h1 className="text-2xl font-bold text-foreground"><FileText size={20} /> Umur Piutang</h1>
         <ExportButtons title="Aging_Receivables" />
       </div>
 
@@ -72,14 +72,14 @@ export default async function AgingReceivablesPage() {
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex flex-col">
-            <span className="text-[0.8125rem] text-muted font-medium">Total Outstanding</span>
+            <span className="text-[0.8125rem] text-muted-foreground font-medium">Total Belum Lunas</span>
             <span className="text-xl font-bold text-foreground">{formatCurrency(totalOutstanding)}</span>
           </div>
         </div>
         {Object.entries(summary).map(([group, amount]) => (
           <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md" key={group}>
             <div className="flex flex-col">
-              <span className="text-[0.8125rem] text-muted font-medium">{group}</span>
+              <span className="text-[0.8125rem] text-muted-foreground font-medium">{group}</span>
               <span className="text-xl font-bold text-foreground">{formatCurrency(amount)}</span>
             </div>
           </div>
@@ -92,7 +92,7 @@ export default async function AgingReceivablesPage() {
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Pelanggan</DetailTableTh>
-              <DetailTableTh>No. Invoice</DetailTableTh>
+              <DetailTableTh>No. Faktur</DetailTableTh>
               <DetailTableTh>Jatuh Tempo</DetailTableTh>
               <DetailTableTh align="right">Sisa Tagihan</DetailTableTh>
               <DetailTableTh align="right">Umur (Hari)</DetailTableTh>
@@ -100,7 +100,7 @@ export default async function AgingReceivablesPage() {
             </DetailTableHead>
             <DetailTableBody>
               {data.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted">Tidak ada piutang jatuh tempo</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted-foreground">Tidak ada piutang jatuh tempo</DetailTableTd></DetailTableRow>
               ) : (
                 data.map((row) => (
                   <DetailTableRow key={row.id}>

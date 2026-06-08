@@ -44,69 +44,69 @@ export default async function DeliveryOrderDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Dokumen</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Dokumen</span>
             <span className="text-[0.9375rem] text-foreground font-medium font-mono">{deliveryOrder.documentNo}</span>
           </div>
           {deliveryOrder.doNumber && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">No. DO</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. DO</span>
               <span className="text-[0.9375rem] text-foreground font-medium font-mono">{deliveryOrder.doNumber}</span>
             </div>
           )}
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Pesanan Penjualan</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pesanan Penjualan</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               <Link href={`/penjualan/pesanan/${deliveryOrder.salesOrder.id}`}>{deliveryOrder.salesOrder.documentNo}</Link>
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Customer</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pelanggan</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               <Link href={`/master/pelanggan/${deliveryOrder.salesOrder.customer.id}`}>{deliveryOrder.salesOrder.customer.name}</Link>
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(deliveryOrder.date)}</span>
           </div>
           {deliveryOrder.deliveryDate && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal Pengiriman</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal Pengiriman</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(deliveryOrder.deliveryDate)}</span>
             </div>
           )}
           {deliveryOrder.shippingPhone && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Telepon Penerima</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Telepon Penerima</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{deliveryOrder.shippingPhone}</span>
             </div>
           )}
           {deliveryOrder.vehicleNumber && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Kendaraan</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Kendaraan</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{deliveryOrder.vehicleNumber}</span>
             </div>
           )}
           {deliveryOrder.confirmedBy && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Dikonfirmasi Oleh</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dikonfirmasi Oleh</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{deliveryOrder.confirmedBy}</span>
             </div>
           )}
           {deliveryOrder.confirmedAt && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Dikonfirmasi Pada</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dikonfirmasi Pada</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(deliveryOrder.confirmedAt)}</span>
             </div>
           )}
           {deliveryOrder.deliveredAt && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Dikirim Pada</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dikirim Pada</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(deliveryOrder.deliveredAt)}</span>
             </div>
           )}
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dibuat</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(deliveryOrder.createdAt)}</span>
           </div>
         </div>
@@ -116,7 +116,7 @@ export default async function DeliveryOrderDetailPage({
       {deliveryOrder.notes && (
         <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Catatan</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{deliveryOrder.notes}</span>
           </div>
         </div>

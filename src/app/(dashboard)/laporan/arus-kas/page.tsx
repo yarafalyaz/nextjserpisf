@@ -22,6 +22,7 @@ export default async function CashFlowPage({
     ? new Date(params.tanggalMulai)
     : new Date(now.getFullYear(), now.getMonth(), 1)
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
+  endDate.setHours(23, 59, 59, 999)
 
   // Get all cash/bank accounts
   const cashAccounts = await prisma.account.findMany({
@@ -43,7 +44,7 @@ export default async function CashFlowPage({
     where: {
       accountId: { in: cashAccountIds },
       journal: {
-        status: 'POSTED',
+        status: { in: ['POSTED', 'REVERSED'] },
         transactionDate: { gte: startDate, lte: endDate },
       },
     },
@@ -82,9 +83,9 @@ export default async function CashFlowPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/laporan" },
-  { label: "Cash Flow" },
+  { label: "Dasbor", href: "/" },
+  { label: "Laporan", href: "/laporan" },
+  { label: "Arus Kas" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
@@ -105,19 +106,19 @@ export default async function CashFlowPage({
           <div className="text-xl font-bold text-success">
             {formatCurrency(totalInflow)}
           </div>
-          <div className="text-[0.8125rem] text-muted font-medium">Total Penerimaan Kas</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Penerimaan Kas</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-xl font-bold text-danger">
             {formatCurrency(totalOutflow)}
           </div>
-          <div className="text-[0.8125rem] text-muted font-medium">Total Pengeluaran Kas</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Pengeluaran Kas</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className={`text-xl font-bold ${netCashFlow >= 0 ? "text-success" : "text-danger"}`}>
             {formatCurrency(netCashFlow)}
           </div>
-          <div className="text-[0.8125rem] text-muted font-medium">Arus Kas Bersih</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Arus Kas Bersih</div>
         </div>
       </div>
 

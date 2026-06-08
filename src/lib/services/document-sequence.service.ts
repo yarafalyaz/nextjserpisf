@@ -10,14 +10,22 @@ export class DocumentSequenceService {
   /**
    * Get the next sequence number for a given key.
    * Atomically increments the counter using MySQL's ON DUPLICATE KEY UPDATE.
+   *
+   * @param key    sequence key (e.g. "INV-2026-06")
+   * @param floor  optional minimum: the returned value is guaranteed to be
+   *               at least `floor + 1`. Used to keep the atomic counter in
+   *               sync with the highest document number already present in the
+   *               data table, preventing collisions with legacy/manual numbers.
    */
-  static async next(key: string): Promise<number> {
+  static async next(key: string, floor = 0): Promise<number> {
+    const floorPlusOne = Math.max(1, Math.floor(floor) + 1)
     return await prisma.$transaction(async (tx) => {
-      // Atomic upsert — INSERT if not exists, INCREMENT if exists
+      // Atomic upsert — never returns a value below floor+1, and always
+      // strictly increases (GREATEST(current_value + 1, floor + 1)).
       await tx.$executeRaw`
         INSERT INTO document_sequences (\`key\`, current_value, created_at, updated_at)
-        VALUES (${key}, 1, NOW(), NOW())
-        ON DUPLICATE KEY UPDATE current_value = current_value + 1, updated_at = NOW()
+        VALUES (${key}, ${floorPlusOne}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE current_value = GREATEST(current_value + 1, ${floorPlusOne}), updated_at = NOW()
       `
 
       // Read back the current value with lock to ensure consistency

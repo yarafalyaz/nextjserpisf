@@ -29,7 +29,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama Tugas",
     cell: (info) => (
-      <Link href={`/proyek/tugas/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/proyek/tugas/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -78,15 +78,17 @@ const columns = [
 
 interface TaskTableProps {
   data: TaskData[]
+  toolbar?: React.ReactNode
 }
 
-export function TaskTable({ data }: TaskTableProps) {
+export function TaskTable({ data, toolbar }: TaskTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar tugas proyek"
       pageSize={20}
+      toolbar={toolbar}
     />
   )
 }

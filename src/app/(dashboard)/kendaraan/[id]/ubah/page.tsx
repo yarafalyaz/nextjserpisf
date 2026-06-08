@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { requirePermission } from "@/lib/auth/permissions"
@@ -18,15 +17,35 @@ export default async function EditPage({
 
   const data = await prisma.vehicle.findUnique({
     where: { id: Number(id) },
+    include: {
+      variant: { include: { model: true } },
+      customerVehicles: { take: 1 },
+    },
   })
 
   if (!data) notFound()
 
-  const [brands, models, customers] = await Promise.all([
-    prisma.vehicleBrand.findMany({ orderBy: { name: "asc" } }),
-    prisma.vehicleModel.findMany({ orderBy: { name: "asc" } }),
-    prisma.customer.findMany({ orderBy: { name: "asc" } }),
+  const [brands, models, variants, customers] = await Promise.all([
+    prisma.vehicleBrand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.vehicleModel.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, vehicleBrandId: true } }),
+    prisma.vehicleVariant.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, vehicleModelId: true, drivetrain: true, transmission: true },
+    }),
+    prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ])
+
+  const vehicle = {
+    id: data.id,
+    plateNumber: data.plateNumber ?? "",
+    plateNo: data.plateNumber ?? "",
+    brandId: data.variant?.model?.vehicleBrandId ?? null,
+    modelId: data.variant?.vehicleModelId ?? null,
+    variantId: data.vehicleVariantId ?? null,
+    year: data.year ?? null,
+    color: data.color ?? null,
+    customerId: data.customerVehicles[0]?.customerId ?? null,
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,7 +59,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah Kendaraan</h1>
       </div>
-      <VehicleForm vehicle={data as any} brands={brands as any} models={models as any} customers={customers as any} />
+      <VehicleForm vehicle={vehicle} brands={brands} models={models} variants={variants} customers={customers} />
     </div>
   )
 }

@@ -31,7 +31,7 @@ export default async function MaterialIssueDetailPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Inventaris",href:"/inventaris"},{label:"Pengeluaran Material",href:"/inventaris/pengeluaran-material"},{label:"Detail"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Material Issue {issue.documentNo}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Pengeluaran Material {issue.documentNo}</h1>
         <div className="flex gap-2 items-center">
           <StatusChip status={issue.status} />
   <div className="flex gap-2">
@@ -45,36 +45,36 @@ export default async function MaterialIssueDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">No. Dokumen</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Dokumen</span>
             <span className="text-[0.9375rem] text-foreground font-medium font-mono">{issue.documentNo}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Gudang</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Gudang</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{issue.warehouse.name}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(issue.date)}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Status</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</span>
             <span className="text-[0.9375rem] text-foreground font-medium"><StatusChip status={issue.status} /></span>
           </div>
           {issue.projectId && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Project ID</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">ID Proyek</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{issue.projectId}</span>
             </div>
           )}
           {issue.workOrderId && (
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Work Order ID</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">ID Perintah Kerja</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{issue.workOrderId}</span>
             </div>
           )}
           {issue.notes && (
             <div className="flex flex-col gap-1 col-span-full">
-              <span className="text-xs font-medium text-muted uppercase tracking-wide">Catatan</span>
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Catatan</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{issue.notes}</span>
             </div>
           )}
@@ -88,12 +88,12 @@ export default async function MaterialIssueDetailPage({
         </div>
         <div className="p-4 px-5">
           {issue.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
-                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh align="right">Jml</DetailTableTh>
                 <DetailTableTh align="right">Biaya</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>

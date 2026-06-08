@@ -3,14 +3,14 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
-import { onStockAdjustmentProcessed, onWorkOrderCompleted, onMaterialIssueCompleted } from "@/lib/hooks/accounting.hook"
+import { onStockAdjustmentProcessed, onMaterialIssueCompleted } from "@/lib/hooks/accounting.hook"
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook"
 import { onTransferProcessed as onInventoryTransferProcessed, onTransferReceived as onInventoryTransferReceived } from "@/lib/hooks/inventory-transfer.hook"
 import { onMaterialIssueCompleted as onMaterialIssueStock } from "@/lib/hooks/material-issue.hook"
-import { onWorkOrderCompleted as onWorkOrderStock } from "@/lib/hooks/work-order.hook"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, safeJsonParse } from "@/lib/utils/safe-parse"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
 
@@ -19,6 +19,10 @@ export async function createStockAdjustment(formData: FormData) {
   const user = await requirePermission("create_stock_adjustments")
 
   const documentNo = await generateDocumentNumber("ADJ")
+
+  const adjItems = (safeJsonParse<{ itemId: number; currentQty: number; newQty: number; unitCost: number; reason?: string }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0)
 
   const adjustment = await prisma.stockAdjustment.create({
     data: {
@@ -30,9 +34,26 @@ export async function createStockAdjustment(formData: FormData) {
       notes: formData.get("notes") as string | null,
       status: "draft",
       createdBy: Number(user.id),
+      items: {
+        create: adjItems.map((it) => {
+          const systemQty = Number(it.currentQty || 0)
+          const actualQty = Number(it.newQty || 0)
+          const difference = actualQty - systemQty
+          return {
+            itemId: Number(it.itemId),
+            systemQty,
+            actualQty,
+            difference,
+            unitCost: Number(it.unitCost || 0),
+            totalCost: difference * Number(it.unitCost || 0),
+            notes: it.reason || null,
+          }
+        }),
+      },
     },
   })
 
+  await logActivity("create", "StockAdjustment", adjustment.id, `Membuat penyesuaian stok #${adjustment.id}`)
   revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
 
@@ -68,6 +89,7 @@ export async function processStockAdjustment(adjustmentId: number) {
   // Accounting journal
   await onStockAdjustmentProcessed(adjustmentId, Number(user.id))
 
+  await logActivity("process", "StockAdjustment", adjustmentId, `Memproses penyesuaian stok #${adjustmentId}`)
   revalidatePath("/inventaris/penyesuaian")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
@@ -87,6 +109,10 @@ export async function createInventoryTransfer(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("TRF")
 
+  const transferItems = (safeJsonParse<{ itemId: number; qty: number }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
+
   const transfer = await prisma.inventoryTransfer.create({
     data: {
       documentNo,
@@ -96,9 +122,16 @@ export async function createInventoryTransfer(formData: FormData) {
       notes: formData.get("notes") as string | null,
       status: "draft",
       createdBy: Number(user.id),
+      items: {
+        create: transferItems.map((it) => ({
+          itemId: Number(it.itemId),
+          qty: Number(it.qty),
+        })),
+      },
     },
   })
 
+  await logActivity("create", "InventoryTransfer", transfer.id, `Membuat transfer inventaris #${transfer.id}`)
   revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
 
@@ -129,6 +162,7 @@ export async function processInventoryTransfer(transferId: number) {
     data: { status: "processed" },
   })
 
+  await logActivity("process", "InventoryTransfer", transferId, `Memproses transfer inventaris #${transferId}`)
   revalidatePath("/inventaris/transfer")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
@@ -160,6 +194,7 @@ export async function receiveInventoryTransfer(transferId: number) {
     data: { status: "received" },
   })
 
+  await logActivity("receive", "InventoryTransfer", transferId, `Menerima transfer inventaris #${transferId}`)
   revalidatePath("/inventaris/transfer")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
@@ -179,6 +214,10 @@ export async function createMaterialIssue(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("MI")
 
+  const miItems = (safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
+
   const issue = await prisma.materialIssue.create({
     data: {
       documentNo,
@@ -189,9 +228,17 @@ export async function createMaterialIssue(formData: FormData) {
       notes: formData.get("notes") as string | null,
       status: "draft",
       createdBy: Number(user.id),
+      items: {
+        create: miItems.map((it) => ({
+          itemId: Number(it.itemId),
+          qty: Number(it.qty),
+          cost: Number(it.unitCost || 0),
+        })),
+      },
     },
   })
 
+  await logActivity("create", "MaterialIssue", issue.id, `Membuat pengeluaran material #${issue.id}`)
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
 
@@ -220,6 +267,7 @@ export async function completeMaterialIssue(issueId: number) {
   // Accounting journal
   await onMaterialIssueCompleted(issueId, Number(user.id))
 
+  await logActivity("complete", "MaterialIssue", issueId, `Menyelesaikan pengeluaran material #${issueId}`)
   revalidatePath("/inventaris/pengeluaran-material")
   revalidatePath("/inventaris/mutasi-stok")
   return { success: true }
@@ -265,6 +313,7 @@ export async function createWorkOrder(formData: FormData) {
     },
   })
 
+  await logActivity("create", "WorkOrder", wo.id, `Membuat perintah kerja #${wo.id}`)
   revalidatePath("/produksi/perintah-kerja")
   return { success: true, id: wo.id }
 
@@ -312,6 +361,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
     }
   })
 
+  await logActivity("update", "WorkOrder", id, `Memperbarui perintah kerja #${id}`)
   revalidatePath("/produksi/perintah-kerja")
   return { success: true }
 
@@ -322,47 +372,48 @@ export async function updateWorkOrder(id: number, formData: FormData) {
   }
 }
 
-export async function completeWorkOrder(workOrderId: number) {
-  try {
-  const user = await requirePermission("edit_work_orders")
-
-  const wo = await prisma.workOrder.findUniqueOrThrow({
-    where: { id: workOrderId },
-  })
-
-  if (wo.status === "done") {
-    throw new Error("Work Order sudah selesai")
-  }
-
-  // Stock Move OUT per item (material consumption)
-  await onWorkOrderStock(workOrderId, Number(user.id))
-
-  await prisma.workOrder.update({
-    where: { id: workOrderId },
-    data: { status: "done" },
-  })
-
-  // Accounting journal (Dr. WIP, Cr. Inventory)
-  await onWorkOrderCompleted(workOrderId, Number(user.id))
-
-  revalidatePath("/produksi/perintah-kerja")
-  revalidatePath("/inventaris/mutasi-stok")
-  return { success: true }
-
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e
-    console.error("[completeWorkOrder]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
 // ==================== RACK ACTIONS ====================
 
 export async function createRack(formData: FormData) {
   try {
   await requirePermission("create_warehouses")
 
+  const settings = await prisma.systemSetting.findFirst()
+  const enableAutoCode = settings?.enableAutoRackCode !== false
+  const prefix = settings?.rackCodePrefix || "RCK-"
+
+  let code = formData.get("code") as string | null
+  if (enableAutoCode || !code) {
+    const maxId = await prisma.rack.aggregate({ _max: { id: true } })
+    const nextId = (maxId._max.id ?? 0) + 1
+    code = prefix + String(nextId).padStart(4, "0")
+  }
+
   const rack = await prisma.rack.create({
+    data: {
+      code,
+      name: formData.get("name") as string,
+      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+    },
+  })
+
+  await logActivity("create", "Rack", rack.id, `Membuat rak #${rack.id}`)
+  revalidatePath("/inventaris/rak")
+  return { success: true, id: rack.id }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createRack]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function updateRack(id: number, formData: FormData) {
+  try {
+  await requirePermission("create_warehouses")
+
+  await prisma.rack.update({
+    where: { id },
     data: {
       code: formData.get("code") as string,
       name: formData.get("name") as string,
@@ -370,12 +421,13 @@ export async function createRack(formData: FormData) {
     },
   })
 
+  await logActivity("update", "Rack", id, `Memperbarui rak #${id}`)
   revalidatePath("/inventaris/rak")
-  return { success: true, id: rack.id }
+  return { success: true, id }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
-    console.error("[createRack]", getErrorMessage(e) || e)
+    console.error("[updateRack]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
@@ -395,6 +447,7 @@ export async function deleteStockAdjustment(id: number) {
 
   await prisma.stockAdjustment.delete({ where: { id } })
 
+  await logActivity("delete", "StockAdjustment", id, `Menghapus penyesuaian stok #${id}`)
   revalidatePath("/inventaris/penyesuaian")
   return { success: true }
 
@@ -416,6 +469,7 @@ export async function deleteInventoryTransfer(id: number) {
 
   await prisma.inventoryTransfer.delete({ where: { id } })
 
+  await logActivity("delete", "InventoryTransfer", id, `Menghapus transfer inventaris #${id}`)
   revalidatePath("/inventaris/transfer")
   return { success: true }
 
@@ -437,6 +491,7 @@ export async function deleteMaterialIssue(id: number) {
 
   await prisma.materialIssue.delete({ where: { id } })
 
+  await logActivity("delete", "MaterialIssue", id, `Menghapus pengeluaran material #${id}`)
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true }
 
@@ -453,6 +508,7 @@ export async function deleteRack(id: number) {
 
   await prisma.rack.delete({ where: { id } })
 
+  await logActivity("delete", "Rack", id, `Menghapus rak #${id}`)
   revalidatePath("/inventaris/rak")
   return { success: true }
 
@@ -477,17 +533,41 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
   }
 
   // Fix #2: Jangan generate documentNo baru saat update
-  const adjustment = await prisma.stockAdjustment.update({
-    where: { id },
-    data: {
-      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-      date: new Date(formData.get("date") as string),
-      reason: formData.get("reason") as string | null,
-      type: formData.get("type") as string || "increase",
-      notes: formData.get("notes") as string | null,
-    },
+  const adjItems = (safeJsonParse<{ itemId: number; currentQty: number; newQty: number; unitCost: number; reason?: string }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0)
+
+  const adjustment = await prisma.$transaction(async (tx) => {
+    await tx.stockAdjustmentItem.deleteMany({ where: { stockAdjustmentId: id } })
+    return tx.stockAdjustment.update({
+      where: { id },
+      data: {
+        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+        date: new Date(formData.get("date") as string),
+        reason: formData.get("reason") as string | null,
+        type: formData.get("type") as string || "increase",
+        notes: formData.get("notes") as string | null,
+        items: {
+          create: adjItems.map((it) => {
+            const systemQty = Number(it.currentQty || 0)
+            const actualQty = Number(it.newQty || 0)
+            const difference = actualQty - systemQty
+            return {
+              itemId: Number(it.itemId),
+              systemQty,
+              actualQty,
+              difference,
+              unitCost: Number(it.unitCost || 0),
+              totalCost: difference * Number(it.unitCost || 0),
+              notes: it.reason || null,
+            }
+          }),
+        },
+      },
+    })
   })
 
+  await logActivity("update", "StockAdjustment", adjustment.id, `Memperbarui penyesuaian stok #${adjustment.id}`)
   revalidatePath("/inventaris/penyesuaian")
   return { success: true, id: adjustment.id }
 
@@ -511,17 +591,32 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
   }
 
   // Fix #2: Jangan generate documentNo baru saat update
-  const issue = await prisma.materialIssue.update({
-    where: { id },
-    data: {
-      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-      projectId: safeId(formData.get("projectId")),
-      workOrderId: safeId(formData.get("workOrderId")),
-      date: new Date(formData.get("date") as string),
-      notes: formData.get("notes") as string | null,
-    },
+  const miItems = (safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
+
+  const issue = await prisma.$transaction(async (tx) => {
+    await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } })
+    return tx.materialIssue.update({
+      where: { id },
+      data: {
+        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+        projectId: safeId(formData.get("projectId")),
+        workOrderId: safeId(formData.get("workOrderId")),
+        date: new Date(formData.get("date") as string),
+        notes: formData.get("notes") as string | null,
+        items: {
+          create: miItems.map((it) => ({
+            itemId: Number(it.itemId),
+            qty: Number(it.qty),
+            cost: Number(it.unitCost || 0),
+          })),
+        },
+      },
+    })
   })
 
+  await logActivity("update", "MaterialIssue", issue.id, `Memperbarui pengeluaran material #${issue.id}`)
   revalidatePath("/inventaris/pengeluaran-material")
   return { success: true, id: issue.id }
 
@@ -545,16 +640,30 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
   }
 
   // Fix #2: Jangan generate documentNo baru saat update
-  const transfer = await prisma.inventoryTransfer.update({
-    where: { id },
-    data: {
-      sourceWarehouseId: requireId(formData.get("sourceWarehouseId"), "sourceWarehouseId"),
-      destinationWarehouseId: requireId(formData.get("destinationWarehouseId"), "destinationWarehouseId"),
-      date: new Date(formData.get("date") as string),
-      notes: formData.get("notes") as string | null,
-    },
+  const transferItems = (safeJsonParse<{ itemId: number; qty: number }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
+
+  const transfer = await prisma.$transaction(async (tx) => {
+    await tx.inventoryTransferItem.deleteMany({ where: { inventoryTransferId: id } })
+    return tx.inventoryTransfer.update({
+      where: { id },
+      data: {
+        sourceWarehouseId: requireId(formData.get("sourceWarehouseId"), "sourceWarehouseId"),
+        destinationWarehouseId: requireId(formData.get("destinationWarehouseId"), "destinationWarehouseId"),
+        date: new Date(formData.get("date") as string),
+        notes: formData.get("notes") as string | null,
+        items: {
+          create: transferItems.map((it) => ({
+            itemId: Number(it.itemId),
+            qty: Number(it.qty),
+          })),
+        },
+      },
+    })
   })
 
+  await logActivity("update", "InventoryTransfer", transfer.id, `Memperbarui transfer inventaris #${transfer.id}`)
   revalidatePath("/inventaris/transfer")
   return { success: true, id: transfer.id }
 
@@ -591,6 +700,7 @@ export async function createRackRow(formData: FormData) {
     },
   })
 
+  await logActivity("create", "RackRow", rackRow.id, `Membuat baris rak #${rackRow.id}`)
   revalidatePath("/inventaris/baris-rak")
   return { success: true, id: rackRow.id }
 
@@ -614,6 +724,7 @@ export async function updateRackRow(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "RackRow", id, `Memperbarui baris rak #${id}`)
   revalidatePath("/inventaris/baris-rak")
   return { success: true }
 
@@ -630,6 +741,7 @@ export async function deleteRackRow(id: number) {
 
   await prisma.rackRow.delete({ where: { id } })
 
+  await logActivity("delete", "RackRow", id, `Menghapus baris rak #${id}`)
   revalidatePath("/inventaris/baris-rak")
   return { success: true }
 

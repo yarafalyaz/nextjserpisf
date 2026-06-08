@@ -22,25 +22,25 @@ export default async function DetailPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
+        { label: "Dasbor", href: "/" },
         { label: "Master Data", href: "/master/kelompok-pajak" },
-        { label: "Tax Group", href: "/master/kelompok-pajak" },
+        { label: "Kelompok Pajak", href: "/master/kelompok-pajak" },
         { label: "Detail" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Detail Tax Group</h1>
+        <h1 className="text-2xl font-bold text-foreground">Detail Kelompok Pajak</h1>
         <Link href={`/master/kelompok-pajak/${data.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
-          Edit
+          Ubah
         </Link>
       </div>
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">name</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nama</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).name ?? "-")}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">description</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deskripsi</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).description ?? "-")}</span>
           </div>
         </div>

@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/page-header"
 
 export function UomForm({ uom }: { uom?: { id?: number; name?: string | null; symbol?: string | null } } = {}) {
@@ -25,7 +26,7 @@ export function UomForm({ uom }: { uom?: { id?: number; name?: string | null; sy
           }),
         })
         if (!res.ok) throw new Error("Gagal menyimpan")
-        showSuccess(uom?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(uom?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/master/satuan")
         router.refresh()
       } catch (error) {
@@ -48,7 +49,7 @@ export function UomForm({ uom }: { uom?: { id?: number; name?: string | null; sy
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : uom?.id ? "Update" : "Simpan"}</Button>
+        <Button type="submit" variant="primary" isDisabled={isPending}>{isPending ? "Menyimpan..." : uom?.id ? "Perbarui" : "Simpan"}</Button>
       </div>
     </form>
   )

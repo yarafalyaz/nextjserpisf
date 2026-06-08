@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama Model",
     cell: (info) => (
-      <Link href={`/kendaraan/model/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/kendaraan/model/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -60,6 +60,8 @@ export function VehicleModelTable({ data }: VehicleModelTableProps) {
       ariaLabel="Daftar model kendaraan"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari model..."
       onBulkDelete={(ids) => bulkDelete("vehicleModel", ids)}
     />
   )

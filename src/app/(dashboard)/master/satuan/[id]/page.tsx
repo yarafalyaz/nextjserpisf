@@ -22,11 +22,11 @@ export default async function UomDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Detail UoM`}
+        title={`Detail Satuan`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data" },
-          { label: "UoM", href: "/master/satuan" },
+          { label: "Satuan", href: "/master/satuan" },
           { label: "Detail" },
         ]}
         actions={

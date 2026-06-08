@@ -1,4 +1,3 @@
-import { } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -32,9 +31,9 @@ export default async function ApprovalsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Settings", href: "/pengaturan" },
-  { label: "Approvals" },
+  { label: "Dasbor", href: "/" },
+  { label: "Pengaturan", href: "/pengaturan" },
+  { label: "Persetujuan" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Alur Persetujuan</h1>
@@ -61,26 +60,26 @@ export default async function ApprovalsPage({
         <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
-              <DetailTableTh>Workflow</DetailTableTh>
-              <DetailTableTh>Reference</DetailTableTh>
-              <DetailTableTh>Step</DetailTableTh>
+              <DetailTableTh>Alur Kerja</DetailTableTh>
+              <DetailTableTh>Referensi</DetailTableTh>
+              <DetailTableTh>Langkah</DetailTableTh>
               <DetailTableTh>Status</DetailTableTh>
               <DetailTableTh>Dibuat</DetailTableTh>
               <DetailTableTh>Aksi</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {approvals.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted">Tidak ada approval pending</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted-foreground">Tidak ada persetujuan tertunda</DetailTableTd></DetailTableRow>
               ) : (
                 approvals.map((a) => (
                   <DetailTableRow key={a.id}>
                     <DetailTableTd className="font-medium">{a.workflow.name}</DetailTableTd>
                     <DetailTableTd className="font-mono">{a.referenceType} #{a.referenceId}</DetailTableTd>
-                    <DetailTableTd>Step {a.currentStep}</DetailTableTd>
+                    <DetailTableTd>Langkah {a.currentStep}</DetailTableTd>
                     <DetailTableTd><span className={`status-badge status-${a.status}`}>{a.status}</span></DetailTableTd>
                     <DetailTableTd>{formatDate(a.createdAt)}</DetailTableTd>
                     <DetailTableTd>
-                      <Link href={`/pengaturan/persetujuan/${a.id}`} className="button button--ghost button--sm">Eye</Link>
+                      <Link href={`/pengaturan/persetujuan/${a.id}`} className="button button--ghost button--sm">Lihat</Link>
                     </DetailTableTd>
                   </DetailTableRow>
                 ))

@@ -35,13 +35,13 @@ export default async function AssetCategoryDetailPage({
       <PageHeader
         title={`Kategori Aset: ${category.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Assets", href: "/aset" },
-          { label: "Categories", href: "/aset/kategori" },
+          { label: "Dasbor", href: "/" },
+          { label: "Aset", href: "/aset" },
+          { label: "Kategori", href: "/aset/kategori" },
           { label: category.name },
         ]}
         actions={<>
-          <Button href={`/aset/kategori/${category.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/aset/kategori/${category.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={category.id} action={deleteAssetCategory} />
           <BackButton href="/aset/kategori" />
         </>}
@@ -61,7 +61,7 @@ export default async function AssetCategoryDetailPage({
         </div>
         <div className="p-4 px-5">
           {category.assets.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada aset</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada aset</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

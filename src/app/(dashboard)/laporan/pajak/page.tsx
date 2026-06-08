@@ -73,9 +73,9 @@ export default async function TaxReportPage({
     <div className="flex flex-col gap-6">
       <PrintHeader title="Laporan Pajak (PPN)" period={period} />
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/laporan" },
-        { label: "Tax Report" },
+        { label: "Dasbor", href: "/" },
+        { label: "Laporan", href: "/laporan" },
+        { label: "Laporan Pajak" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
@@ -90,33 +90,33 @@ export default async function TaxReportPage({
       {/* KPI */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">PPN Keluaran</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">PPN Keluaran</div>
           <div className="text-xl font-bold">{formatCurrency(totalOutputTax)}</div>
-          <div className="text-xs text-muted">{outputTaxRows.length} faktur</div>
+          <div className="text-xs text-muted-foreground">{outputTaxRows.length} faktur</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">PPN Masukan</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">PPN Masukan</div>
           <div className="text-xl font-bold">{formatCurrency(totalInputTax)}</div>
-          <div className="text-xs text-muted">{inputTaxRows.length} faktur</div>
+          <div className="text-xs text-muted-foreground">{inputTaxRows.length} faktur</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">PPN Kurang (Lebih) Bayar</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">PPN Kurang (Lebih) Bayar</div>
           <div className={`text-xl font-bold ${netTax >= 0 ? 'text-danger' : 'text-success'}`}>{formatCurrency(Math.abs(netTax))}</div>
-          <div className="text-xs text-muted">{netTax >= 0 ? 'Kurang Bayar' : 'Lebih Bayar'}</div>
+          <div className="text-xs text-muted-foreground">{netTax >= 0 ? 'Kurang Bayar' : 'Lebih Bayar'}</div>
         </div>
       </div>
 
       {/* PPN Keluaran */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">PPN KELUARAN (Output Tax)</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">PPN KELUARAN</h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable data-report-table="PPN Keluaran">
             <DetailTableHead>
               <DetailTableTh>Tanggal</DetailTableTh>
               <DetailTableTh>No. Faktur</DetailTableTh>
-              <DetailTableTh>Customer</DetailTableTh>
+              <DetailTableTh>Pelanggan</DetailTableTh>
               <DetailTableTh align="right">DPP</DetailTableTh>
               <DetailTableTh align="right">PPN</DetailTableTh>
             </DetailTableHead>
@@ -131,7 +131,7 @@ export default async function TaxReportPage({
                 </DetailTableRow>
               ))}
               {outputTaxRows.length === 0 && (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted py-6">Tidak ada PPN Keluaran</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada PPN Keluaran</DetailTableTd></DetailTableRow>
               )}
               {outputTaxRows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">
@@ -148,14 +148,14 @@ export default async function TaxReportPage({
       {/* PPN Masukan */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">PPN MASUKAN (Input Tax)</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">PPN MASUKAN</h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable data-report-table="PPN Masukan">
             <DetailTableHead>
               <DetailTableTh>Tanggal</DetailTableTh>
               <DetailTableTh>No. Faktur</DetailTableTh>
-              <DetailTableTh>Vendor</DetailTableTh>
+              <DetailTableTh>Pemasok</DetailTableTh>
               <DetailTableTh align="right">DPP</DetailTableTh>
               <DetailTableTh align="right">PPN</DetailTableTh>
             </DetailTableHead>
@@ -170,7 +170,7 @@ export default async function TaxReportPage({
                 </DetailTableRow>
               ))}
               {inputTaxRows.length === 0 && (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted py-6">Tidak ada PPN Masukan</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada PPN Masukan</DetailTableTd></DetailTableRow>
               )}
               {inputTaxRows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">

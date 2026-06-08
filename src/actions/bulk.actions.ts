@@ -63,6 +63,8 @@ type ModelName =
   | "vehicle"
   | "appreciation"
   | "departmentHoliday"
+  | "paymentMethod"
+  | "shippingMethod"
 
 const modelPermissionMap: Record<ModelName, string> = {
   purchaseRequest: "delete_purchase_requests",
@@ -121,6 +123,8 @@ const modelPermissionMap: Record<ModelName, string> = {
   vehicle: "delete_vehicles",
   appreciation: "delete_appreciations",
   departmentHoliday: "delete_holidays",
+  paymentMethod: "delete_payment_methods",
+  shippingMethod: "delete_shipping_methods",
 }
 
 const modelRevalidateMap: Record<ModelName, string> = {
@@ -180,6 +184,8 @@ const modelRevalidateMap: Record<ModelName, string> = {
   vehicle: "/kendaraan",
   appreciation: "/sdm/apresiasi",
   departmentHoliday: "/sdm/hari-libur-departemen",
+  paymentMethod: "/master/metode-pembayaran",
+  shippingMethod: "/master/metode-pengiriman",
 }
 
 const dmmfModelMap = new Map(
@@ -198,10 +204,16 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
     return { success: false, message: `Maksimal ${BULK_DELETE_MAX} data per sekali hapus` }
   }
 
+  // Authorization allowlist: the model MUST be a known key with a delete
+  // permission. A server action is a network endpoint, so the compile-time
+  // `ModelName` union is NOT enforced at runtime — without this guard a caller
+  // could pass an unmapped model (e.g. "user", "role") and skip the permission
+  // check entirely. Reject anything not explicitly mapped.
   const permission = modelPermissionMap[model]
-  if (permission) {
-    await requirePermission(permission)
+  if (!permission) {
+    return { success: false, message: "Operasi hapus tidak diizinkan untuk model ini" }
   }
+  await requirePermission(permission)
 
   try {
      

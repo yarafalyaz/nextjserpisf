@@ -36,18 +36,21 @@ async function crudMaster(
   await createSubmit.click()
   await page.waitForURL(`**${opts.listUrl}`, { timeout: 15000 })
   await page.waitForLoadState("networkidle")
-  await expect(page.locator("body")).toContainText(opts.fields[0].value)
 
-  if (!(await page.locator("body").filter({ hasText: opts.fields[0].value }).isVisible().catch(() => false))) {
-    await page.goto(`${opts.listUrl}?cari=${encodeURIComponent(opts.fields[0].value)}`, { waitUntil: "domcontentloaded" })
-    await page.waitForLoadState("networkidle")
-  }
+  // Search-first verification: lists paginate client-side (20/page), so a freshly
+  // created row can land on page 2 when test data accumulates. Filtering by name
+  // via the `cari` query param makes the assertion pagination-independent. If the
+  // create genuinely failed, the filtered list stays empty and this still fails.
+  const primaryField = opts.fields.find((f) => f.id === "name") ?? opts.fields[0]
+  await page.goto(`${opts.listUrl}?cari=${encodeURIComponent(primaryField.value)}`, { waitUntil: "domcontentloaded" })
+  await page.waitForLoadState("networkidle")
+  await expect(page.locator("body")).toContainText(primaryField.value)
 
   // ─── READ detail/edit via ActionDropdown ─────────────────────
   const rowCreate = page.locator("tr").filter({ hasText: opts.fields[0].value })
   await expect(rowCreate).toBeVisible({ timeout: 15000 })
   await rowCreate.locator("button[aria-label='Menu']").click()
-  await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+  await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
   await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/\\d+\\/ubah`), { timeout: 15000 })
   const currentUrl = page.url()
   const idMatch = currentUrl.match(/\/(\d+)\/ubah/)
@@ -261,9 +264,9 @@ test.describe("Master Akun Mutation", () => {
     await page.goto("/master/akun/tambah", { waitUntil: "domcontentloaded" })
     await page.locator("#name").fill(name)
 
-    // select required type
-    await page.locator("button").filter({ hasText: "Pilih Tipe" }).first().click()
-    await page.locator("[role='option'], [role='menuitem']").filter({ hasText: "ASSET" }).first().click()
+    // select required type (combobox)
+    await page.locator("#type").click()
+    await page.locator("[role='option']").filter({ hasText: "Aset" }).first().click()
 
     await page.locator("#submit-account").click()
     await page.waitForURL("**/master/akun", { timeout: 15000 })
@@ -284,10 +287,9 @@ test.describe("Master Akun Mutation", () => {
 
     // On edit form: fill name + re-select type (required)
     await page.locator("#name").fill(updated)
-    // Type select doesn't have defaultValue on edit, click to open and re-select
-    const typeButton = page.locator("button").filter({ hasText: /ASSET|LIABILITY|EQUITY|REVENUE|EXPENSE|Pilih Tipe/ }).first()
-    await typeButton.click()
-    await page.locator("[role='option'], [role='menuitem']").filter({ hasText: "ASSET" }).first().click()
+    // Type combobox has no value on edit, so it shows the "Pilih Tipe" placeholder.
+    await page.locator("#type").click()
+    await page.locator("[role='option']").filter({ hasText: "Aset" }).first().click()
 
     // Submit and wait for navigation
     await page.locator("#submit-account").click()

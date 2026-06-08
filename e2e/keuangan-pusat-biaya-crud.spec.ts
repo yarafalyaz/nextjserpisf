@@ -37,7 +37,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/keuangan/pusat-biaya/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Buat Cost Center" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Buat Pusat Biaya" })).toBeVisible({ timeout: 15000 })
 
     await waitForHydration(page)
 
@@ -81,13 +81,13 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).first().click()
     await page.waitForTimeout(2000)
-    await page.getByRole("menuitem", { name: "Edit" }).first().click()
+    await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/keuangan\/pusat-biaya\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").fill(updated)
-    await page.getByRole("button", { name: "Update" }).click()
+    await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
     await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 15000 })
     await page.waitForLoadState("networkidle")

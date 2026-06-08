@@ -5,7 +5,9 @@ import { useState, useTransition } from "react"
 import { createPurchaseReturn, updatePurchaseReturn } from "@/actions/purchase.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 interface PurchaseReturnFormProps {
@@ -24,6 +26,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [purchaseOrderId, setPurchaseOrderId] = useState(returnData?.purchaseOrderId ? String(returnData.purchaseOrderId) : "")
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([{ itemId: 0, qty: 1 }])
 
   function addItem() {
@@ -49,9 +52,11 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
         formData.append("items", JSON.stringify(returnItems))
         const result = returnData?.id ? await updatePurchaseReturn(returnData.id, formData) : await createPurchaseReturn(formData)
         if (result.success) {
-          showSuccess(returnData?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+          showSuccess(returnData?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push("/pembelian/retur")
           router.refresh()
+        } else {
+          showError(result.error || "Gagal menyimpan data")
         }
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -63,17 +68,15 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="purchaseOrderId" className="w-full" isRequired>
-            <Label>Pesanan Pembelian *</Label>
-            <ComboBox.InputGroup><Input placeholder="Cari purchase order..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {purchaseOrders.map((po) => (
-                  <ListBox.Item key={po.id} id={String(po.id)} textValue={po.documentNo}>{po.documentNo}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="purchaseOrderId">Pesanan Pembelian *</Label>
+          <Combobox
+            id="purchaseOrderId"
+            name="purchaseOrderId"
+            value={purchaseOrderId || null}
+            onChange={(key) => setPurchaseOrderId(key ?? "")}
+            placeholder="Cari pesanan pembelian..."
+            options={purchaseOrders.map((po) => ({ value: String(po.id), label: po.documentNo }))}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -88,7 +91,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="reason">Alasan Retur</Label>
-          <TextArea id="reason" name="reason" rows={3} placeholder="Alasan pengembalian barang ke vendor..." defaultValue={returnData?.reason ?? ""} />
+          <Textarea id="reason" name="reason" rows={3} placeholder="Alasan pengembalian barang ke pemasok..." defaultValue={returnData?.reason ?? ""} />
         </div>
       </div>
 
@@ -103,7 +106,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
           <thead>
             <tr>
               <th>Item</th>
-              <th style={{ width: "100px" }}>Qty</th>
+              <th style={{ width: "100px" }}>Jml</th>
               <th style={{ width: "40px" }}></th>
             </tr>
           </thead>
@@ -111,17 +114,13 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
             {returnItems.map((ri, index) => (
               <tr key={index}>
                 <td>
-                  <select
-                    value={ri.itemId}
-                    onChange={(e) => updateItem(index, "itemId", Number(e.target.value))}
-                    className="form-input"
-                    style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
-                  >
-                    <option value={0}>Pilih Item</option>
-                    {items.map((item) => (
-                      <option key={item.id} value={item.id}>{item.sku} - {item.name}</option>
-                    ))}
-                  </select>
+                  <Combobox
+                    options={items.map((item) => ({ value: String(item.id), label: `${item.sku} - ${item.name}` }))}
+                    value={ri.itemId ? String(ri.itemId) : null}
+                    onChange={(key) => updateItem(index, "itemId", key ? Number(key) : 0)}
+                    placeholder="Cari item..."
+                    className="w-full"
+                  />
                 </td>
                 <td>
                   <input
@@ -147,7 +146,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-purchase-return">
-          {isPending ? "Menyimpan..." : returnData?.id ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : returnData?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

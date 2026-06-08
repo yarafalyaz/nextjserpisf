@@ -47,26 +47,23 @@ async function main() {
   }
   console.log("Employee:", emp.name, "(dept:", dept.name, ") ✓");
 
-  // Create WorkSchedule for Monday (dayOfWeek=1) with tolerance 15 min
+  // Create WorkSchedule for Mon-Wed with tolerance 15 min
   // Clean up old test schedules first
   await prisma.workSchedule.deleteMany({
-    where: { departmentId: dept.id, dayOfWeek: { in: [1, 2, 3] } },
+    where: { departments: { some: { id: dept.id } } },
   });
 
-  const dayNames = ["Senin", "Selasa", "Rabu"];
-  for (let i = 0; i < 3; i++) {
-    await prisma.workSchedule.create({
-      data: {
-        name: `Shift Pagi ${dayNames[i]}`,
-        departmentId: dept.id,
-        dayOfWeek: i + 1,
-        startTime: "08:00",
-        endTime: "17:00",
-        lateToleranceMinutes: 15,
-        isActive: true,
-      },
-    });
-  }
+  await prisma.workSchedule.create({
+    data: {
+      name: "Shift Pagi Senin-Rabu",
+      departments: { connect: { id: dept.id } },
+      workDays: "1,2,3",
+      startTime: "08:00",
+      endTime: "17:00",
+      lateToleranceMinutes: 15,
+      isActive: true,
+    },
+  });
   console.log("WorkSchedule: Mon-Wed 08:00-17:00, tolerance 15 min ✓");
 
   // Create attendance records

@@ -10,10 +10,18 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { itemSchema, type ItemInput } from "@/lib/validators"
 import { createItem, updateItem } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, Select, ComboBox, ListBox, InputGroup, Switch, Input, TextArea } from "@heroui/react"
-import { Upload, X } from "lucide-react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Switch } from "@/components/ui/shadcn/switch"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
+import { Upload, X, AlertCircle } from "lucide-react"
 import { CurrencyInput } from "@/components/ui/currency-input"
+import { QrCodeDisplay } from "@/components/ui/qr-code-display"
+import { formatCurrency } from "@/lib/utils/format"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { Button } from "@/components/ui/page-header"
 
 interface ItemFormProps {
@@ -37,6 +45,9 @@ interface ItemFormProps {
     costingMethod: string | null
     purchasePrice: number | null
     isProduct: boolean
+    trackBatch?: boolean
+    trackSerial?: boolean
+    uomConversions?: { code: string; factorToBase: number | string }[]
   }
   categories: { id: number; name: string }[]
   brands: { id: number; name: string }[]
@@ -45,21 +56,42 @@ interface ItemFormProps {
   racks: { id: number; name: string; warehouseId: number }[]
   rackRows: { id: number; name: string; rackId: number }[]
   generatedCode?: string
+  enableAutoCode?: boolean
+  baseUrl?: string
 }
 
-export function ItemForm({ item, categories, brands, vendors, warehouses, racks, rackRows, generatedCode }: ItemFormProps) {
+export function ItemForm({ item, categories, brands, vendors, warehouses, racks, rackRows, generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(item?.image || null)
   const [isProduct, setIsProduct] = useState(item?.isProduct ?? false)
+  const [trackBatch, setTrackBatch] = useState(item?.trackBatch ?? false)
+  const [trackSerial, setTrackSerial] = useState(item?.trackSerial ?? false)
+  const [uomConversions, setUomConversions] = useState<{ code: string; factorToBase: string }[]>(
+    item?.uomConversions?.map((u) => ({ code: u.code, factorToBase: String(u.factorToBase) })) ?? []
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isEdit = !!item
+
+  function addUom() {
+    setUomConversions([...uomConversions, { code: "", factorToBase: "" }])
+  }
+
+  function removeUom(index: number) {
+    setUomConversions(uomConversions.filter((_, i) => i !== index))
+  }
+
+  function updateUom(index: number, field: "code" | "factorToBase", value: string) {
+    const updated = [...uomConversions]
+    updated[index] = { ...updated[index], [field]: value }
+    setUomConversions(updated)
+  }
 
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<ItemInput>({
     resolver: zodResolver(itemSchema) as any,
     defaultValues: {
-      sku: item?.sku || generatedCode || "",
+      sku: item?.sku || (enableAutoCode ? generatedCode : "") || "",
       name: item?.name || "",
       description: item?.description || "",
       image: item?.image || "",
@@ -79,6 +111,16 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
 
   const selectedWarehouseId = watch("defaultWarehouseId")
   const selectedRackId = watch("defaultRackId")
+
+  const watchedCost = Number(watch("cost")) || 0
+  const watchedPrice = Number(watch("price")) || 0
+  const priceBelowCost = watchedPrice < watchedCost
+  const profit = watchedPrice - watchedCost
+  const marginPct = watchedCost > 0 ? (profit / watchedCost) * 100 : 0
+  const formatPct = (n: number) => {
+    const r = Math.round(n * 10) / 10
+    return Number.isInteger(r) ? String(r) : r.toFixed(1).replace(".", ",")
+  }
 
   const filteredRacks = useMemo(() => {
     if (!selectedWarehouseId) return []
@@ -116,10 +158,10 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
         setValue("image", data.url)
         setImagePreview(data.url)
       } else {
-        showError(data.error || "Upload gagal")
+        showError(data.error || "Unggah gagal")
       }
     } catch (err) {
-      showError("Upload gagal: " + (err as Error).message)
+      showError("Unggah gagal: " + (err as Error).message)
     } finally {
       setUploading(false)
     }
@@ -139,11 +181,14 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
         formData.set("isProduct", String(isProduct))
-        if (isEdit) {
-          await updateItem(item!.id, formData)
-        } else {
-          await createItem(formData)
-        }
+        formData.set("trackBatch", String(trackBatch))
+        formData.set("trackSerial", String(trackSerial))
+        const cleanedUom = uomConversions
+          .filter((u) => u.code.trim() !== "" && u.factorToBase !== "")
+          .map((u) => ({ code: u.code.trim(), factorToBase: Number(u.factorToBase) }))
+        formData.set("uomConversions", JSON.stringify(cleanedUom))
+        const result = isEdit ? await updateItem(item!.id, formData) : await createItem(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/master/barang")
         router.refresh()
@@ -162,7 +207,8 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
             <Input id="name" {...register("name")} placeholder="Nama item" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
-          <div className="flex flex-col gap-1.5 col-span-full">
+          <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
+            <div className="flex flex-col gap-1.5">
             <Label>Gambar Item</Label>
             <input type="hidden" {...register("image")} />
             <div className="image-upload-area">
@@ -185,12 +231,12 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                   className="image-upload-dropzone"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload className="size-8 text-muted" />
-                  <span className="text-sm text-secondary">Klik untuk upload gambar</span>
-                  <span className="text-xs text-muted">JPG, PNG, WebP, GIF (maks 5MB)</span>
+                  <Upload className="size-8 text-muted-foreground" />
+                  <span className="text-sm text-secondary">Klik untuk unggah gambar</span>
+                  <span className="text-xs text-muted-foreground">JPG, PNG, WebP, GIF (maks 5MB)</span>
                 </div>
               )}
-              {uploading && <div className="image-upload-loading">Mengupload...</div>}
+              {uploading && <div className="image-upload-loading">Mengunggah...</div>}
             </div>
             <input
               ref={fileInputRef}
@@ -199,10 +245,18 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               onChange={handleImageUpload}
               className="hidden"
             />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="qr">QR Code</Label>
+              {watch("sku")
+                ? <QrCodeDisplay value={`${baseUrl}/inventaris/scan?code=${encodeURIComponent(watch("sku") || "")}`} />
+                : <span className="text-xs text-muted-foreground">QR Code dibuat dari SKU barang.</span>}
+              <span className="text-xs text-muted-foreground">Scan untuk buka data barang (sesuai hak akses).</span>
+            </div>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="sku">SKU</Label>
-            <Input id="sku" {...register("sku")} readOnly className="bg-muted" />
+            <Input id="sku" {...register("sku")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan SKU manual"} />
             {errors.sku && <span className="text-xs text-danger mt-1">{errors.sku.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -210,27 +264,16 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               name="brandId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
-                  <Label>Brand</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari brand..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {brands.map((b) => (
-                        <ListBox.Item key={b.id} id={String(b.id)} textValue={b.name}>
-                          {b.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="brandId">Merek</Label>
+                  <Combobox
+                    id="brandId"
+                    options={brands.map((b) => ({ value: String(b.id), label: b.name }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Cari merek..."
+                  />
+                </>
               )}
             />
           </div>
@@ -239,27 +282,16 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               name="categoryId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
-                  <Label>Kategori *</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari kategori..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {categories.map((c) => (
-                        <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>
-                          {c.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="categoryId">Kategori *</Label>
+                  <Combobox
+                    id="categoryId"
+                    options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Cari kategori..."
+                  />
+                </>
               )}
             />
           </div>
@@ -268,27 +300,16 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               name="vendorId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                >
-                  <Label>Vendor</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari vendor..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {vendors.map((v) => (
-                        <ListBox.Item key={v.id} id={String(v.id)} textValue={v.name}>
-                          {v.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="vendorId">Pemasok</Label>
+                  <Combobox
+                    id="vendorId"
+                    options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Cari pemasok..."
+                  />
+                </>
               )}
             />
           </div>
@@ -297,20 +318,22 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               name="unitOfMeasure"
               control={control}
               render={({ field }) => (
-                <Select selectedKey={field.value || "PCS"} onSelectionChange={(key) => field.onChange(String(key))} className="w-full">
-                  <Label>Satuan</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item key="PCS" id="PCS" textValue="PCS">PCS<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="SET" id="SET" textValue="SET">SET<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="KG" id="KG" textValue="KG">KG<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="LTR" id="LTR" textValue="LTR">LTR<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="MTR" id="MTR" textValue="MTR">MTR<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="BOX" id="BOX" textValue="BOX">BOX<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                <>
+                  <Label htmlFor="unitOfMeasure">Satuan</Label>
+                  <FormSelect
+                    id="unitOfMeasure"
+                    value={field.value || "PCS"}
+                    onValueChange={field.onChange}
+                    options={[
+                      { value: "PCS", label: "PCS" },
+                      { value: "SET", label: "SET" },
+                      { value: "KG", label: "KG" },
+                      { value: "LTR", label: "LTR" },
+                      { value: "MTR", label: "MTR" },
+                      { value: "BOX", label: "BOX" },
+                    ]}
+                  />
+                </>
               )}
             />
           </div>
@@ -323,51 +346,27 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cost">Harga Beli (Rp)</Label>
-            <InputGroup>
-              <InputGroup.Prefix>Rp</InputGroup.Prefix>
-              <Controller name="cost" control={control} render={({ field: f }) => <CurrencyInput id="cost" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" />} />
-            </InputGroup>
+            <Controller name="cost" control={control} render={({ field: f }) => <CurrencyInput id="cost" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="price">Harga Jual (Rp)</Label>
-            <InputGroup>
-              <InputGroup.Prefix>Rp</InputGroup.Prefix>
-              <Controller name="price" control={control} render={({ field: f }) => <CurrencyInput id="price" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" />} />
-            </InputGroup>
+            <Controller name="price" control={control} render={({ field: f }) => <CurrencyInput id="price" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
+            {!priceBelowCost && watchedPrice > 0 && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
+                Untung {formatCurrency(profit)}{watchedCost > 0 ? ` (${formatPct(marginPct)}% dari modal)` : ""}
+              </span>
+            )}
+            {errors.price && <span className="text-xs text-danger mt-1">{errors.price.message}</span>}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="standardCost">Standard Cost (Rp)</Label>
-            <InputGroup>
-              <InputGroup.Prefix>Rp</InputGroup.Prefix>
-              <Controller name="standardCost" control={control} render={({ field: f }) => <CurrencyInput id="standardCost" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" />} />
-            </InputGroup>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Controller
-              name="costingMethod"
-              control={control}
-              render={({ field }) => (
-                <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : undefined)} className="w-full">
-                  <Label>Metode Costing</Label>
-                  <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih metode"}</Select.Value><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item key="average" id="average" textValue="Average">Average<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="fifo" id="fifo" textValue="FIFO">FIFO<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="standard" id="standard" textValue="Standard">Standard<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              )}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="purchasePrice">Purchase Price (Rp)</Label>
-            <InputGroup>
-              <InputGroup.Prefix>Rp</InputGroup.Prefix>
-              <Controller name="purchasePrice" control={control} render={({ field: f }) => <CurrencyInput id="purchasePrice" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" />} />
-            </InputGroup>
-          </div>
+          {priceBelowCost && (
+            <Alert variant="destructive" className="sm:col-span-2">
+              <AlertCircle />
+              <AlertTitle>Harga jual di bawah modal</AlertTitle>
+              <AlertDescription>
+                Harga jual ({formatCurrency(watchedPrice)}) lebih rendah dari harga beli ({formatCurrency(watchedCost)}). Item tidak dapat disimpan. Diskon diterapkan saat penawaran/penjualan, bukan di master.
+              </AlertDescription>
+            </Alert>
+          )}
         </FormSection>
 
         <FormSection title="Lokasi Penyimpanan">
@@ -376,31 +375,20 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               name="defaultWarehouseId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => {
-                    field.onChange(key ? Number(key) : undefined)
-                    setValue("defaultRackId", undefined)
-                    setValue("defaultRackRowId", undefined)
-                  }}
-                  className="w-full"
-                >
-                  <Label>Gudang Default</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari gudang..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {warehouses.map((w) => (
-                        <ListBox.Item key={w.id} id={String(w.id)} textValue={w.name}>
-                          {w.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="defaultWarehouseId">Gudang Bawaan</Label>
+                  <Combobox
+                    id="defaultWarehouseId"
+                    options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => {
+                      field.onChange(key ? Number(key) : undefined)
+                      setValue("defaultRackId", undefined)
+                      setValue("defaultRackRowId", undefined)
+                    }}
+                    placeholder="Cari gudang..."
+                  />
+                </>
               )}
             />
           </div>
@@ -409,31 +397,20 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               name="defaultRackId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => {
-                    field.onChange(key ? Number(key) : undefined)
-                    setValue("defaultRackRowId", undefined)
-                  }}
-                  className="w-full"
-                  isDisabled={!selectedWarehouseId}
-                >
-                  <Label>Rak</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari rak..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {filteredRacks.map((r) => (
-                        <ListBox.Item key={r.id} id={String(r.id)} textValue={r.name}>
-                          {r.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="defaultRackId">Rak</Label>
+                  <Combobox
+                    id="defaultRackId"
+                    options={filteredRacks.map((r) => ({ value: String(r.id), label: r.name }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => {
+                      field.onChange(key ? Number(key) : undefined)
+                      setValue("defaultRackRowId", undefined)
+                    }}
+                    disabled={!selectedWarehouseId}
+                    placeholder="Cari rak..."
+                  />
+                </>
               )}
             />
           </div>
@@ -442,28 +419,17 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               name="defaultRackRowId"
               control={control}
               render={({ field }) => (
-                <ComboBox
-                  selectedKey={field.value ? String(field.value) : null}
-                  onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  className="w-full"
-                  isDisabled={!selectedRackId}
-                >
-                  <Label>Row</Label>
-                  <ComboBox.InputGroup>
-                    <Input placeholder="Cari row..." />
-                    <ComboBox.Trigger />
-                  </ComboBox.InputGroup>
-                  <ComboBox.Popover>
-                    <ListBox>
-                      {filteredRackRows.map((r) => (
-                        <ListBox.Item key={r.id} id={String(r.id)} textValue={r.name}>
-                          {r.name}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </ComboBox.Popover>
-                </ComboBox>
+                <>
+                  <Label htmlFor="defaultRackRowId">Baris</Label>
+                  <Combobox
+                    id="defaultRackRowId"
+                    options={filteredRackRows.map((r) => ({ value: String(r.id), label: r.name }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    disabled={!selectedRackId}
+                    placeholder="Cari baris..."
+                  />
+                </>
               )}
             />
           </div>
@@ -472,26 +438,104 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
         <FormSection title="Lainnya" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="description">Deskripsi</Label>
-            <TextArea id="description" {...register("description")} rows={2} placeholder="Deskripsi item" />
+            <Textarea id="description" {...register("description")} rows={2} placeholder="Deskripsi item" />
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">
               <Switch
-                isSelected={isProduct}
-                onChange={setIsProduct}
+                checked={isProduct}
+                onCheckedChange={setIsProduct}
                 id="isProduct"
-              >
-                Tandai sebagai Produk
-              </Switch>
+              />
+              <Label htmlFor="isProduct">Tandai sebagai Produk</Label>
             </div>
-            <span className="text-xs text-muted">Aktifkan jika item ini merupakan produk jadi</span>
+            <span className="text-xs text-muted-foreground">Aktifkan jika item ini merupakan produk jadi</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={trackBatch}
+                onCheckedChange={setTrackBatch}
+                id="trackBatch"
+              />
+              <Label htmlFor="trackBatch">Lacak Batch/Lot</Label>
+            </div>
+            <span className="text-xs text-muted-foreground">Aktifkan untuk melacak nomor batch/lot dan tanggal kedaluwarsa</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={trackSerial}
+                onCheckedChange={setTrackSerial}
+                id="trackSerial"
+              />
+              <Label htmlFor="trackSerial">Lacak Nomor Seri</Label>
+            </div>
+            <span className="text-xs text-muted-foreground">Aktifkan untuk melacak nomor seri tiap unit</span>
+          </div>
+        </FormSection>
+
+        <FormSection title="Satuan Alternatif (Multi-UoM)" columns={1}>
+          <div>
+            <div className="flex justify-between items-center mb-3">
+              <span className="text-xs text-muted-foreground">Satuan dasar: <strong>{watch("unitOfMeasure") || "PCS"}</strong>. Tentukan satuan alternatif beserta faktor konversi ke satuan dasar.</span>
+              <Button type="button" onPress={addUom} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Satuan</Button>
+            </div>
+            {uomConversions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">Belum ada satuan alternatif.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-default">
+                      <th className="text-left py-2 px-2 font-medium text-secondary">Kode Satuan</th>
+                      <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "220px" }}>Faktor ke Satuan Dasar</th>
+                      <th style={{ width: "40px" }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {uomConversions.map((u, i) => (
+                      <tr key={i} className="border-b border-default/50">
+                        <td className="py-2 px-2">
+                          <input
+                            type="text"
+                            value={u.code}
+                            onChange={(e) => updateUom(i, "code", e.target.value)}
+                            className="form-input"
+                            style={{ fontSize: "0.8125rem", padding: "6px" }}
+                            placeholder="cth. BOX"
+                          />
+                        </td>
+                        <td className="py-2 px-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              step="any"
+                              value={u.factorToBase}
+                              onChange={(e) => updateUom(i, "factorToBase", e.target.value)}
+                              className="form-input"
+                              style={{ fontSize: "0.8125rem", padding: "6px", width: "120px" }}
+                              placeholder="cth. 12"
+                            />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">{watch("unitOfMeasure") || "PCS"}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <Button type="button" onPress={() => removeUom(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </FormSection>
 
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending || uploading}>
-            {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

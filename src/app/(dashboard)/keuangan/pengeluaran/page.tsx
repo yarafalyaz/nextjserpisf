@@ -5,7 +5,6 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
-import { } from "@/components/ui/breadcrumbs"
 import { ExpenseTable } from "./_components/expense-table"
 
 export default async function ExpensesPage({
@@ -37,46 +36,43 @@ export default async function ExpensesPage({
   const totalPages = Math.ceil(total / perPage)
   const data = JSON.parse(JSON.stringify(expenses))
 
+  const statusChips = ["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    return (
+      <Link
+        key={dbStatus}
+        href={`/keuangan/pengeluaran${urlStatus ? `?status=${urlStatus}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Expenses</h1>
+        <h1 className="text-2xl font-bold text-foreground">Pengeluaran</h1>
 <Link href="/keuangan/pengeluaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-expense-btn">
-          + Buat Expense
+          + Buat Pengeluaran
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari expense..." action="/keuangan/pengeluaran" />
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/keuangan/pengeluaran${urlStatus ? `?status=${urlStatus}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
+      <ExpenseTable
+        data={data}
+        toolbar={<AppSearchField placeholder="Cari pengeluaran..." action="/keuangan/pengeluaran" />}
+        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+      />
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+          <span className="text-[0.8125rem] text-muted-foreground">Hal {page} dari {totalPages} ({total} data)</span>
+          <div className="flex gap-1">
+            {page > 1 && <Link href={`/keuangan/pengeluaran?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
+            {page < totalPages && <Link href={`/keuangan/pengeluaran?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
           </div>
         </div>
-
-        <ExpenseTable data={data} />
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
-            <span className="text-[0.8125rem] text-muted">Hal {page} dari {totalPages} ({total} data)</span>
-            <div className="flex gap-1">
-              {page > 1 && <Link href={`/keuangan/pengeluaran?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}
-              {page < totalPages && <Link href={`/keuangan/pengeluaran?halaman=${page + 1}`} className="button button--ghost button--sm">Berikutnya →</Link>}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }

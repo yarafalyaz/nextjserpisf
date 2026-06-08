@@ -24,7 +24,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/departemen/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/departemen/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -60,6 +60,8 @@ export function DepartmentTable({ data }: DepartmentTableProps) {
       ariaLabel="Daftar departemen"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama atau kode..."
       onBulkDelete={(ids) => bulkDelete("department", ids)}
     />
   )

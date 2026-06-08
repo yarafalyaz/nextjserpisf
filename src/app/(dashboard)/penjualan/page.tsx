@@ -5,19 +5,19 @@ import {
 } from "lucide-react"
 
 const salesModules = [
-  { label: "Quotations", href: "/penjualan/penawaran", icon: FileText, desc: "Penawaran harga" },
-  { label: "Down Payments", href: "/penjualan/uang-muka", icon: Wallet, desc: "Uang muka penjualan" },
+  { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, desc: "Penawaran harga" },
+  { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, desc: "Uang muka penjualan" },
   { label: "Pesanan Penjualan", href: "/penjualan/pesanan", icon: ShoppingCart, desc: "Pesanan penjualan" },
-  { label: "Delivery Orders", href: "/penjualan/surat-jalan", icon: Truck, desc: "Surat jalan" },
-  { label: "Invoices", href: "/penjualan/faktur", icon: Receipt, desc: "Faktur penjualan" },
-  { label: "Payments", href: "/penjualan/pembayaran", icon: CreditCard, desc: "Pembayaran masuk" },
-  { label: "Returns", href: "/penjualan/retur", icon: RotateCcw, desc: "Retur penjualan" },
+  { label: "Surat Jalan", href: "/penjualan/surat-jalan", icon: Truck, desc: "Surat jalan" },
+  { label: "Faktur", href: "/penjualan/faktur", icon: Receipt, desc: "Faktur penjualan" },
+  { label: "Pembayaran", href: "/penjualan/pembayaran", icon: CreditCard, desc: "Pembayaran masuk" },
+  { label: "Retur", href: "/penjualan/retur", icon: RotateCcw, desc: "Retur penjualan" },
 ]
 
 export default function SalesPage() {
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "Sales" }]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Penjualan" }]} />
       <h1 className="text-2xl font-bold text-foreground">Penjualan</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {salesModules.map((mod) => {
@@ -29,7 +29,7 @@ export default function SalesPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">{mod.label}</p>
-                <p className="text-xs text-muted">{mod.desc}</p>
+                <p className="text-xs text-muted-foreground">{mod.desc}</p>
               </div>
             </Link>
           )

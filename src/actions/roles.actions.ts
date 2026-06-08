@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 export async function createRole(formData: FormData) {
   try {
@@ -15,7 +16,7 @@ export async function createRole(formData: FormData) {
 
   const permissionIds = formData.getAll("permissions").map((id) => Number(id)).filter(Boolean)
 
-  await prisma.role.create({
+  const role = await prisma.role.create({
     data: {
       name: name.trim(),
       guardName: "web",
@@ -26,6 +27,7 @@ export async function createRole(formData: FormData) {
   })
 
   revalidatePath("/pengaturan/peran")
+  await logActivity("create", "Role", role.id, "Membuat peran")
   redirect("/pengaturan/peran")
 
   } catch (e: unknown) {
@@ -54,6 +56,7 @@ export async function updateRole(id: number, formData: FormData) {
   })
 
   revalidatePath("/pengaturan/peran")
+  await logActivity("update", "Role", id, "Memperbarui peran")
   redirect("/pengaturan/peran")
 
   } catch (e: unknown) {
@@ -79,6 +82,7 @@ export async function deleteRole(id: number) {
   await prisma.role.delete({ where: { id } })
 
   revalidatePath("/pengaturan/peran")
+  await logActivity("delete", "Role", id, "Menghapus peran")
   redirect("/pengaturan/peran")
 
   } catch (e: unknown) {

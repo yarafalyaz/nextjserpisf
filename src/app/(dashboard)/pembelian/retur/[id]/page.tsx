@@ -34,9 +34,9 @@ export default async function PurchaseReturnDetailPage({
       <PageHeader
         title={`Retur Pembelian ${purchaseReturn.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/pembelian" },
-          { label: "Returns", href: "/pembelian/retur" },
+          { label: "Dasbor", href: "/" },
+          { label: "Pembelian", href: "/pembelian" },
+          { label: "Retur", href: "/pembelian/retur" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={purchaseReturn.status} />}
@@ -72,12 +72,12 @@ export default async function PurchaseReturnDetailPage({
         </div>
         <div className="p-4 px-5">
           {purchaseReturn.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
-                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh align="right">Jml</DetailTableTh>
                 <DetailTableTh align="right">Biaya</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>

@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createStatisticalKeyFigure } from "@/actions/master.actions"
-import { } from "@/components/ui/breadcrumbs"
-import { Input, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateStatisticalKeyFigurePage() {

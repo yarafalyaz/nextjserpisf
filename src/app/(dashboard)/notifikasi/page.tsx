@@ -20,18 +20,18 @@ export default async function NotificationsPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Notifications" },
+  { label: "Dasbor", href: "/" },
+  { label: "Notifikasi" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
-        <span className="text-muted">{unread.length} belum dibaca</span>
+        <h1 className="text-2xl font-bold text-foreground">Notifikasi</h1>
+        <span className="text-muted-foreground">{unread.length} belum dibaca</span>
       </div>
 
       <div className="grid grid-cols-1 gap-5">
         {notifications.length === 0 ? (
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada notifikasi</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada notifikasi</p>
           </div>
         ) : (
           notifications.map((n) => (
@@ -47,7 +47,7 @@ export default async function NotificationsPage() {
                   </div>
                   <p className="text-[0.8125rem] text-secondary m-0">{n.body}</p>
                 </div>
-                <span className="text-muted text-xs whitespace-nowrap">
+                <span className="text-muted-foreground text-xs whitespace-nowrap">
                   {formatDate(n.createdAt)}
                 </span>
               </div>

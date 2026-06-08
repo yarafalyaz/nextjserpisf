@@ -1,10 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createLead, updateLead } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ListBox, Label, ComboBox, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
@@ -35,17 +39,16 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!lead
+  const [source, setSource] = useState(lead?.source ?? "")
+  const [assignedTo, setAssignedTo] = useState<string | null>(lead?.assignedTo ? String(lead.assignedTo) : null)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        if (isEdit) {
-          await updateLead(lead!.id, formData)
-        } else {
-          await createLead(formData)
-        }
+        const result = isEdit ? await updateLead(lead!.id, formData) : await createLead(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.refresh()
       } catch (error) {
@@ -97,54 +100,54 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         </div>
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
-            label="Estimasi Tanggal Closing"
+            label="Estimasi Tanggal Penutupan"
             name="expectedCloseDate"
             defaultValue={lead?.expectedCloseDate ? lead.expectedCloseDate.substring(0, 10) : undefined}
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Select name="source" defaultSelectedKey={lead?.source || undefined} className="w-full">
-            <Label>Sumber</Label>
-            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Sumber"}</Select.Value><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="website" textValue="Website">Website<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="referral" textValue="Referral">Referral<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="social_media" textValue="Social Media">Social Media<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="cold_call" textValue="Cold Call">Cold Call<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="exhibition" textValue="Exhibition">Exhibition<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="other" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <Label htmlFor="source">Sumber</Label>
+          <FormSelect
+            id="source"
+            name="source"
+            value={source}
+            onValueChange={setSource}
+            placeholder="Pilih Sumber"
+            options={[
+              { value: "website", label: "Website" },
+              { value: "referral", label: "Rujukan" },
+              { value: "social_media", label: "Media Sosial" },
+              { value: "cold_call", label: "Cold Call" },
+              { value: "exhibition", label: "Pameran" },
+              { value: "other", label: "Lainnya" },
+            ]}
+          />
         </div>
         {users.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <ComboBox name="assignedTo" defaultSelectedKey={lead?.assignedTo ? String(lead.assignedTo) : undefined} className="w-full">
-              <Label>Ditugaskan Ke</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari user..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {users.map((u) => (
-                    <ListBox.Item key={u.id} id={String(u.id)} textValue={u.name}>{u.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label htmlFor="assignedTo">Ditugaskan Ke</Label>
+            <Combobox
+              id="assignedTo"
+              name="assignedTo"
+              options={users.map((u) => ({ value: String(u.id), label: u.name }))}
+              value={assignedTo}
+              onChange={setAssignedTo}
+              placeholder="Cari user..."
+            />
           </div>
         )}
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="address">Alamat</Label>
-          <TextArea id="address" name="address" rows={2} placeholder="Alamat lengkap..." defaultValue={lead?.address || ""} />
+          <Textarea id="address" name="address" rows={2} placeholder="Alamat lengkap..." defaultValue={lead?.address || ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
-          <TextArea id="notes" name="notes" rows={3} placeholder="Catatan tentang lead..." defaultValue={lead?.notes || ""} />
+          <Textarea id="notes" name="notes" rows={3} placeholder="Catatan tentang lead..." defaultValue={lead?.notes || ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Lead"}</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Lead"}</Button>
       </div>
     </form>
   )

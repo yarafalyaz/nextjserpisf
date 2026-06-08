@@ -32,9 +32,9 @@ export default async function SalesReturnDetailPage({
       <PageHeader
         title={`Retur Penjualan ${salesReturn.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/penjualan" },
-          { label: "Returns", href: "/penjualan/retur" },
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Retur", href: "/penjualan/retur" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={salesReturn.status} />}
@@ -62,12 +62,12 @@ export default async function SalesReturnDetailPage({
         </div>
         <div className="p-4 px-5">
           {salesReturn.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
-                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh align="right">Jml</DetailTableTh>
                 <DetailTableTh align="right">Biaya</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>

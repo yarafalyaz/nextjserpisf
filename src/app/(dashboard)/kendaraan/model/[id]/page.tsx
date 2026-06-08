@@ -32,9 +32,9 @@ export default async function VehicleModelDetailPage({
       <PageHeader
         title={`Model Kendaraan: ${model.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Vehicles", href: "/kendaraan" },
-          { label: "Models", href: "/kendaraan/model" },
+          { label: "Dasbor", href: "/" },
+          { label: "Kendaraan", href: "/kendaraan" },
+          { label: "Model", href: "/kendaraan/model" },
           { label: "Detail" },
         ]}
         actions={
@@ -62,7 +62,7 @@ export default async function VehicleModelDetailPage({
         </div>
         <div className="p-4 px-5">
           {model.variants.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada varian</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada varian</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

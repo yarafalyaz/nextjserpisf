@@ -37,7 +37,7 @@ test.describe("Master Merek CRUD", () => {
     await page.goto("/master/merek/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Brand" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Merek" })).toBeVisible({ timeout: 15000 })
 
     await page.locator("#name").fill(name)
     await waitForHydration(page)
@@ -69,14 +69,14 @@ test.describe("Master Merek CRUD", () => {
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).click()
-    await page.getByRole("menuitem", { name: "Edit" }).first().click()
+    await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/merek\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").fill(updated)
     await waitForHydration(page)
-    await page.getByRole("button", { name: "Update" }).click()
+    await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
     await page.waitForURL("**/master/merek", { timeout: 15000 })
     await page.waitForLoadState("networkidle")

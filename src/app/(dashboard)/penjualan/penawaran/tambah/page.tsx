@@ -9,7 +9,7 @@ import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 export default async function CreateQuotationPage() {
   await requirePermission("create_quotations")
 
-  const [customers, customerVehicles, itemsList, generatedCode] = await Promise.all([
+  const [customers, customerVehicles, itemsList, generatedCode, paymentMethods, shippingMethods] = await Promise.all([
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -36,6 +36,8 @@ export default async function CreateQuotationPage() {
       select: { id: true, name: true, price: true, unitOfMeasure: true },
     }),
     peekNextDocumentNumber("QUO"),
+    prisma.paymentMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } }),
+    prisma.shippingMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } }),
   ])
 
   // Transform customerVehicles to a simpler shape for the form
@@ -58,19 +60,21 @@ export default async function CreateQuotationPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/penjualan" },
-  { label: "Quotations", href: "/penjualan/penawaran" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Penjualan", href: "/penjualan" },
+  { label: "Penawaran", href: "/penjualan/penawaran" },
+  { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Quotation</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Penawaran</h1>
       </div>
       <QuotationForm
         customers={customers}
         customerVehicles={vehicles}
         items={items}
         generatedCode={generatedCode}
+        paymentMethods={paymentMethods}
+        shippingMethods={shippingMethods}
       />
     </div>
   )

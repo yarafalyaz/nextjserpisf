@@ -37,6 +37,19 @@ export default async function TasksPage({
 
   const tableData = JSON.parse(JSON.stringify(tasks))
 
+  const statusChips = ["", "pending", "in_progress", "completed", "cancelled"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    return (
+      <Link
+        key={dbStatus}
+        href={`/proyek/tugas${urlStatus ? `?status=${urlStatus}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Proyek",href:"/proyek"},{label:"Tugas"}]} />
@@ -47,27 +60,15 @@ export default async function TasksPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "pending", "in_progress", "completed", "cancelled"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/proyek/tugas${urlStatus ? `?status=${urlStatus}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
-          </div>
-          <AppSearchField placeholder="Cari tugas..." action="/proyek/tugas" />
-        </div>
-
-        <TaskTable data={tableData} />
-      </div>
+      <TaskTable
+        data={tableData}
+        toolbar={
+          <>
+            <AppSearchField placeholder="Cari tugas..." action="/proyek/tugas" />
+            <div className="flex gap-1.5 flex-wrap">{statusChips}</div>
+          </>
+        }
+      />
     </div>
   )
 }

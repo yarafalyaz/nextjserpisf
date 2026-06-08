@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { VehicleModelForm } from "@/components/forms/vehicle-model-form"
+import { VehicleVariantManager } from "@/components/forms/vehicle-variant-manager"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 export default async function EditPage({
@@ -14,6 +15,7 @@ export default async function EditPage({
 
   const data = await prisma.vehicleModel.findUnique({
     where: { id: Number(id) },
+    include: { variants: { orderBy: { name: "asc" } } },
   })
 
   if (!data) notFound()
@@ -23,14 +25,15 @@ export default async function EditPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "vehicles", href: "/kendaraan/model" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Kendaraan", href: "/kendaraan/model" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Model Kendaraan</h1>
       </div>
       <VehicleModelForm model={{ id: data.id, name: data.name, vehicleBrandId: data.vehicleBrandId ?? undefined }} brands={brands}/>
+      <VehicleVariantManager modelId={data.id} variants={data.variants.map((v) => ({ id: v.id, name: v.name, drivetrain: v.drivetrain, transmission: v.transmission }))} />
     </div>
   )
 }

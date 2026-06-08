@@ -23,7 +23,7 @@ const columns = [
     id: "assetName",
     header: "Aset",
     cell: (info) => (
-      <Link href={`/aset/transfer/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/aset/transfer/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -66,6 +66,8 @@ export function AssetTransferTable({ data }: AssetTransferTableProps) {
       ariaLabel="Daftar transfer aset"
       pageSize={20}
       selectable={true}
+      searchColumn="assetName"
+      searchPlaceholder="Cari nama aset..."
       onBulkDelete={(ids) => bulkDelete("assetTransfer", ids)}
     />
   )

@@ -70,7 +70,7 @@ test.describe("Master Jabatan CRUD", () => {
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.getByRole("button", { name: "Menu" }).click()
-    await page.getByRole("menuitem", { name: "Edit" }).first().click()
+    await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/jabatan\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)

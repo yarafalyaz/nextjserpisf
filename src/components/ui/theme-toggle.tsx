@@ -1,12 +1,25 @@
 "use client"
 
-import { Button } from "@/components/ui/page-header"
-import { useTheme } from "@/components/providers/theme-provider"
+import { Sun, Moon, Monitor, Check } from "lucide-react"
 import { useSyncExternalStore } from "react"
+import { Button } from "@/components/ui/shadcn/button"
+import { useTheme } from "@/components/providers/theme-provider"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/shadcn/dropdown-menu"
 
 const subscribe = () => () => undefined
 const getClientSnapshot = () => true
 const getServerSnapshot = () => false
+
+const OPTIONS = [
+  { value: "light", label: "Terang", icon: Sun },
+  { value: "dark", label: "Gelap", icon: Moon },
+  { value: "system", label: "Sistem", icon: Monitor },
+] as const
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
@@ -14,50 +27,30 @@ export function ThemeToggle() {
   const activeTheme = mounted ? theme : "system"
 
   return (
-    <div className="theme-toggle">
-      <Button
-        type="button"
-        onPress={() => setTheme("light")}
-        className={`theme-toggle-btn ${activeTheme === "light" ? "active" : ""}`}
-        title="Light"
-        aria-label="Light theme"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="5"/>
-          <line x1="12" y1="1" x2="12" y2="3"/>
-          <line x1="12" y1="21" x2="12" y2="23"/>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-          <line x1="1" y1="12" x2="3" y2="12"/>
-          <line x1="21" y1="12" x2="23" y2="12"/>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-        </svg>
-      </Button>
-      <Button
-        type="button"
-        onPress={() => setTheme("dark")}
-        className={`theme-toggle-btn ${activeTheme === "dark" ? "active" : ""}`}
-        title="Dark"
-        aria-label="Dark theme"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-      </Button>
-      <Button
-        type="button"
-        onPress={() => setTheme("system")}
-        className={`theme-toggle-btn ${activeTheme === "system" ? "active" : ""}`}
-        title="System"
-        aria-label="System theme"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-          <line x1="8" y1="21" x2="16" y2="21"/>
-          <line x1="12" y1="17" x2="12" y2="21"/>
-        </svg>
-      </Button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Ganti tema" className="relative">
+          <Sun className="size-5 rotate-0 scale-100 transition-all duration-300 dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute size-5 rotate-90 scale-0 transition-all duration-300 dark:rotate-0 dark:scale-100" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-40">
+        {OPTIONS.map((opt) => {
+          const Icon = opt.icon
+          const isActive = activeTheme === opt.value
+          return (
+            <DropdownMenuItem
+              key={opt.value}
+              onSelect={() => setTheme(opt.value)}
+              className="gap-2"
+            >
+              <Icon className="size-4" />
+              <span className="flex-1">{opt.label}</span>
+              {isActive && <Check className="size-4 text-primary" />}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label, TextArea, Checkbox } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/page-header"
 
 export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code: string; name: string; description?: string | null; isActive?: boolean } } = {}) {
@@ -16,16 +19,9 @@ export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code
       try {
         const formData = new FormData(e.currentTarget)
         const { createCostCenter, updateCostCenter } = await import("@/actions/finance.actions")
-        if (costCenter?.id) {
-
-          await updateCostCenter(costCenter.id, formData)
-
-        } else {
-
-          await createCostCenter(formData)
-
-        }
-        showSuccess(costCenter?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        const result = costCenter?.id ? await updateCostCenter(costCenter.id, formData) : await createCostCenter(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(costCenter?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/keuangan/pusat-biaya")
         router.refresh()
       } catch (error) {
@@ -43,26 +39,22 @@ export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama *</Label>
-          <Input id="name" name="name" placeholder="Nama cost center" required defaultValue={costCenter?.name ?? ""} />
+          <Input id="name" name="name" placeholder="Nama pusat biaya" required defaultValue={costCenter?.name ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <TextArea id="description" name="description" rows={2} placeholder="Deskripsi cost center" defaultValue={costCenter?.description ?? ""} />
+          <Textarea id="description" name="description" rows={2} placeholder="Deskripsi pusat biaya" defaultValue={costCenter?.description ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
-          <Checkbox id="cost-center-is-active" name="isActive" value="on" defaultSelected={costCenter?.isActive !== false}>
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Checkbox.Content>
-              <Label htmlFor="cost-center-is-active">Aktif</Label>
-            </Checkbox.Content>
-          </Checkbox>
+          <div className="flex items-center gap-2">
+            <Checkbox id="cost-center-is-active" name="isActive" value="on" defaultChecked={costCenter?.isActive !== false} />
+            <Label htmlFor="cost-center-is-active">Aktif</Label>
+          </div>
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : costCenter?.id ? "Update" : "Simpan"}</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : costCenter?.id ? "Perbarui" : "Simpan"}</Button>
       </div>
     </form>
   )

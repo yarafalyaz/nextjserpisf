@@ -11,6 +11,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
 export default async function DownPaymentDetailPage({
   params,
@@ -29,14 +30,16 @@ export default async function DownPaymentDetailPage({
 
   if (!dp) notFound()
 
+  const pmMap = await getPaymentMethodMap()
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Down Payment ${dp.documentNo}`}
+        title={`Uang Muka ${dp.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Sales", href: "/penjualan" },
-          { label: "Down Payments", href: "/penjualan/uang-muka" },
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Uang Muka", href: "/penjualan/uang-muka" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={dp.status} />}
@@ -44,7 +47,7 @@ export default async function DownPaymentDetailPage({
           <>
             <Button href={`/penjualan/uang-muka/${dp.id}/ubah`} variant="primary">Ubah</Button>
             {dp.status === "paid" && (
-              <Button href={`/produksi/perintah-kerja/tambah?penawaranId=${dp.quotationId}`} variant="primary">+ Work Order</Button>
+              <Button href={`/produksi/perintah-kerja/tambah?penawaranId=${dp.quotationId}`} variant="primary">+ Perintah Kerja</Button>
             )}
             <PrintButton />
             <DeleteButton id={dp.id} action={deleteDownPayment} />
@@ -65,7 +68,7 @@ export default async function DownPaymentDetailPage({
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(dp.amount))}</span>} />
         <DetailField label="Tanggal Bayar" value={formatDate(dp.paymentDate)} />
-        <DetailField label="Metode Pembayaran" value={dp.paymentMethod || "-"} />
+        <DetailField label="Metode Pembayaran" value={resolvePaymentMethodName(dp.paymentMethod, pmMap)} />
         <DetailField label="Dibuat" value={formatDate(dp.createdAt)} />
       </DetailCard>
 

@@ -39,27 +39,28 @@ export default async function PurchaseReturnsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Purchase", href: "/pembelian" },
-  { label: "Returns" },
+  { label: "Dasbor", href: "/" },
+  { label: "Pembelian", href: "/pembelian" },
+  { label: "Retur" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Retur Pembelian</h1>
         <Link href="/pembelian/retur/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-pr-return-btn">
-          + Buat Return
+          + Buat Retur
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/retur" />
+      <PurchaseReturnTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/retur" />}
+        filters={
           <div className="flex gap-1.5 flex-wrap">
             {["", "draft", "returned"].map((dbStatus) => {
               const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
               return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/pembelian/retur${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                <Link
+                  key={dbStatus}
+                  href={`/pembelian/retur${urlStatus ? `?status=${urlStatus}` : ""}`}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -67,10 +68,8 @@ export default async function PurchaseReturnsPage({
               )
             })}
           </div>
-        </div>
-
-        <PurchaseReturnTable data={tableData} />
-      </div>
+        }
+      />
     </div>
   )
 }

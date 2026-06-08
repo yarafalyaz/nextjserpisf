@@ -5,13 +5,14 @@ import { useTransition } from "react"
 import { createMaterialIssue, updateMaterialIssue } from "@/actions/inventory.actions"
 import { useState } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 interface MaterialIssueFormProps {
   warehouses: { id: number; name: string
 }[]
-  issue?: { id: number; workOrderId: number; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; warehouseId?: number }> }
+  issue?: { id: number; workOrderId: number; warehouseId?: number; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; warehouseId?: number }> }
   items: { id: number; sku: string; name: string; qtyOnHand: string; cost: string }[]
 }
 
@@ -20,7 +21,7 @@ interface MIItem { itemId: number; qty: number; unitCost: number }
 export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [warehouseId, setWarehouseId] = useState("")
+  const [warehouseId, setWarehouseId] = useState(issue?.warehouseId ? String(issue.warehouseId) : "")
   const [miItems, setMiItems] = useState<MIItem[]>([{ itemId: 0, qty: 1, unitCost: 0 }])
 
   function addItem() { setMiItems([...miItems, { itemId: 0, qty: 1, unitCost: 0 }]) }
@@ -42,16 +43,9 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
         formData.append("warehouseId", warehouseId)
         formData.append("date", new Date().toISOString().split("T")[0])
         formData.append("items", JSON.stringify(miItems))
-        if (issue?.id) {
-
-          await updateMaterialIssue(issue.id, formData)
-
-        } else {
-
-          await createMaterialIssue(formData)
-
-        }
-        showSuccess(issue?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        const result = issue?.id ? await updateMaterialIssue(issue.id, formData) : await createMaterialIssue(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(issue?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/inventaris/pengeluaran-material")
         router.refresh()
       } catch (error) {
@@ -64,35 +58,35 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <ComboBox selectedKey={warehouseId || null} onSelectionChange={(key) => setWarehouseId(key ? String(key) : "")} className="w-full" isRequired>
-            <Label>Gudang *</Label>
-            <ComboBox.InputGroup><Input placeholder="Cari gudang..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {warehouses.map((w) => (
-                  <ListBox.Item key={w.id} id={String(w.id)} textValue={w.name}>{w.name}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="warehouseId">Gudang *</Label>
+          <Combobox
+            id="warehouseId"
+            options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+            value={warehouseId || null}
+            onChange={(key) => setWarehouseId(key ? String(key) : "")}
+            placeholder="Cari gudang..."
+          />
         </div>
       </div>
 
       <div style={{ marginTop: "24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Materials</h3>
+          <h3 style={{ margin: 0, fontSize: "1rem" }}>Material</h3>
           <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah</Button>
         </div>
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-          <thead><tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Total</th><th></th></tr></thead>
+          <thead><tr><th>Item</th><th>Jml</th><th>Harga Satuan</th><th>Total</th><th></th></tr></thead>
           <tbody>
             {miItems.map((item, i) => (
               <tr key={i}>
                 <td>
-                  <select value={item.itemId} onChange={(e) => updateItem(i, "itemId", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }}>
-                    <option value={0}>Pilih Item</option>
-                    {items.map((it) => <option key={it.id} value={it.id}>{it.sku} - {it.name}</option>)}
-                  </select>
+                  <Combobox
+                    options={items.map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name}` }))}
+                    value={item.itemId ? String(item.itemId) : null}
+                    onChange={(key) => updateItem(i, "itemId", key ? Number(key) : 0)}
+                    placeholder="Cari item..."
+                    className="w-full"
+                  />
                 </td>
                 <td><input type="number" min={1} value={item.qty} onChange={(e) => updateItem(i, "qty", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "80px" }} /></td>
                 <td className="text-right">Rp {item.unitCost.toLocaleString("id-ID")}</td>
@@ -106,7 +100,7 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Material Issue"}</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Pengeluaran Material"}</Button>
       </div>
     </form>
   )

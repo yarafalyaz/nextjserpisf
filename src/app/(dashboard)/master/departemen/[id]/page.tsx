@@ -33,14 +33,14 @@ export default async function DepartmentDetailPage({
       <PageHeader
         title={department.name}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Departments", href: "/master/departemen" },
+          { label: "Departemen", href: "/master/departemen" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/departemen/${id}/ubah`} variant="secondary"><Pencil size={14} /> Edit</Button>
+            <Button href={`/master/departemen/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
             <DeleteButton id={department.id} action={deleteDepartment} />
             <BackButton href="/master/departemen" />
           </>
@@ -57,7 +57,7 @@ export default async function DepartmentDetailPage({
       {/* Positions */}
       <DetailSection title="Posisi">
         {department.positions.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada posisi</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada posisi</p>
         ) : (
           <DetailTable>
             <DetailTableHead>
@@ -77,7 +77,7 @@ export default async function DepartmentDetailPage({
       {/* Employees */}
       <DetailSection title="Karyawan">
         {department.employees.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada karyawan</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada karyawan</p>
         ) : (
           <DetailTable>
             <DetailTableHead>

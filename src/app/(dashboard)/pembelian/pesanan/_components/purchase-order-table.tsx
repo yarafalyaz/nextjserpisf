@@ -24,7 +24,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/pesanan/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/pembelian/pesanan/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -65,9 +65,11 @@ const columns = [
 
 interface PurchaseOrderTableProps {
   data: PurchaseOrder[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function PurchaseOrderTable({ data }: PurchaseOrderTableProps) {
+export function PurchaseOrderTable({ data, toolbar, filters }: PurchaseOrderTableProps) {
   return (
     <DataTable
       data={data}
@@ -75,6 +77,8 @@ export function PurchaseOrderTable({ data }: PurchaseOrderTableProps) {
       ariaLabel="Daftar purchase order"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("purchaseOrder", ids)}
     />
   )

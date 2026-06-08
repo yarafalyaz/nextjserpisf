@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateBank } from "@/actions/master.actions"
-import { Input, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 interface EditBankFormProps {
@@ -51,7 +52,7 @@ export function EditBankForm({ bank }: EditBankFormProps) {
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" variant="primary" isDisabled={isPending} id="submit-bank">
-          {isPending ? "Menyimpan..." : "Update"}
+          {isPending ? "Menyimpan..." : "Perbarui"}
         </Button>
       </div>
     </form>

@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -15,6 +17,7 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [customerId, setCustomerId] = useState<string | null>(workOrder?.customerId ? String(workOrder.customerId) : null)
   const [woItems, setWoItems] = useState([{ itemId: 0, qty: 1, cost: 0, description: "", status: "pending" }])
 
   function addItem() { setWoItems([...woItems, { itemId: 0, qty: 1, cost: 0, description: "", status: "pending" }]) }
@@ -41,7 +44,7 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
           await createWorkOrder(formData)
 
         }
-        showSuccess(workOrder?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(workOrder?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/produksi/perintah-kerja")
         router.refresh()
       } catch (error) {
@@ -55,17 +58,15 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <ComboBox name="customerId" className="w-full" isRequired>
-              <Label>Customer *</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari customer..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {customers.map((c) => (
-                    <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>{c.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+            <Label htmlFor="customerId">Pelanggan *</Label>
+            <Combobox
+              id="customerId"
+              name="customerId"
+              options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+              value={customerId}
+              onChange={setCustomerId}
+              placeholder="Cari pelanggan..."
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker
@@ -97,14 +98,14 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
         <FormSection title="Catatan" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
-            <TextArea id="notes" name="notes" rows={2} placeholder="Catatan work order..." defaultValue={workOrder?.notes ?? ""} />
+            <Textarea id="notes" name="notes" rows={2} placeholder="Catatan perintah kerja..." defaultValue={workOrder?.notes ?? ""} />
           </div>
         </FormSection>
 
         <FormSection title="Item" columns={1}>
           <div>
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-base font-semibold text-foreground">Materials</h3>
+              <h3 className="text-base font-semibold text-foreground">Bahan</h3>
               <Button type="button" onPress={addItem} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah</Button>
             </div>
             <div className="overflow-x-auto">
@@ -112,8 +113,8 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
                 <thead>
                   <tr className="border-b border-default">
                     <th className="text-left py-2 px-2 font-medium text-secondary" style={{ minWidth: "200px" }}>Item</th>
-                    <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "80px" }}>Qty</th>
-                    <th className="text-right py-2 px-2 font-medium text-secondary" style={{ width: "100px" }}>Cost</th>
+                    <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "80px" }}>Jml</th>
+                    <th className="text-right py-2 px-2 font-medium text-secondary" style={{ width: "100px" }}>Biaya</th>
                     <th className="text-right py-2 px-2 font-medium text-secondary" style={{ width: "120px" }}>Total</th>
                     <th className="text-left py-2 px-2 font-medium text-secondary">Deskripsi</th>
                     <th className="text-left py-2 px-2 font-medium text-secondary" style={{ width: "110px" }}>Status</th>
@@ -124,10 +125,13 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
                   {woItems.map((item, i) => (
                     <tr key={i} className="border-b border-default/50">
                       <td className="py-2 px-2">
-                        <select value={item.itemId} onChange={(e) => updateItem(i, "itemId", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }}>
-                          <option value={0}>Pilih</option>
-                          {items.map((it) => <option key={it.id} value={it.id}>{it.sku} - {it.name}</option>)}
-                        </select>
+                        <Combobox
+                          value={item.itemId ? String(item.itemId) : null}
+                          onChange={(key) => updateItem(i, "itemId", key ? Number(key) : 0)}
+                          placeholder="Pilih"
+                          className="w-full"
+                          options={items.map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name}` }))}
+                        />
                       </td>
                       <td className="py-2 px-2">
                         <input type="number" min={1} value={item.qty} onChange={(e) => updateItem(i, "qty", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "80px" }} />
@@ -138,11 +142,17 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
                         <input type="text" value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Deskripsi..." />
                       </td>
                       <td className="py-2 px-2">
-                        <select value={item.status} onChange={(e) => updateItem(i, "status", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }}>
-                          <option value="pending">Pending</option>
-                          <option value="in_progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                        </select>
+                        <Combobox
+                          value={item.status}
+                          onChange={(key) => updateItem(i, "status", key ?? "")}
+                          placeholder="Cari status..."
+                          className="w-full"
+                          options={[
+                            { value: "pending", label: "Menunggu" },
+                            { value: "in_progress", label: "Dikerjakan" },
+                            { value: "completed", label: "Selesai" },
+                          ]}
+                        />
                       </td>
                       <td className="py-2 px-2 text-center">
                         {woItems.length > 1 && (
@@ -160,7 +170,7 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : workOrder?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : workOrder?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

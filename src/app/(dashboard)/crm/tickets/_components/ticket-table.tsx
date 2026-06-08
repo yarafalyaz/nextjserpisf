@@ -19,15 +19,15 @@ const columnHelper = createColumnHelper<TicketData>()
 
 const columns = [
   columnHelper.accessor("subject", {
-    header: "Subject",
+    header: "Subjek",
     cell: (info) => (
-      <Link href={`/crm/tickets/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/crm/tickets/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
   }),
   columnHelper.accessor("priority", {
-    header: "Priority",
+    header: "Prioritas",
     cell: (info) => {
       const val = info.getValue()
       return <StatusChip status={val} />
@@ -58,16 +58,20 @@ const columns = [
 
 interface TicketTableProps {
   data: TicketData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function TicketTable({ data }: TicketTableProps) {
+export function TicketTable({ data, toolbar, filters }: TicketTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar support ticket"
+      ariaLabel="Daftar tiket dukungan"
       pageSize={20}
       selectable={false}
+      toolbar={toolbar}
+      filters={filters}
     />
   )
 }

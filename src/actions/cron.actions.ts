@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 
 export async function runCronTask(task: string) {
-  await requirePermission("pengaturan.view")
+  await requirePermission("manage_settings")
 
   const CRON_SECRET = process.env.CRON_SECRET
   if (!CRON_SECRET) {
@@ -27,7 +27,7 @@ export async function runCronTask(task: string) {
 }
 
 export async function getCronLogs() {
-  await requirePermission("pengaturan.view")
+  await requirePermission("manage_settings")
 
   const logs = await prisma.cronLog.findMany({
     orderBy: { ranAt: "desc" },

@@ -5,20 +5,20 @@ import {
 } from "lucide-react"
 
 const hrmModules = [
-  { label: "Attendance", href: "/sdm/absensi", icon: Clock, desc: "Absensi karyawan" },
-  { label: "Leave", href: "/sdm/cuti", icon: Palmtree, desc: "Cuti karyawan" },
-  { label: "Overtime", href: "/sdm/lembur", icon: Timer, desc: "Lembur" },
-  { label: "Payroll", href: "/sdm/penggajian", icon: Banknote, desc: "Penggajian" },
-  { label: "Work Schedules", href: "/sdm/jadwal-kerja", icon: CalendarDays, desc: "Jadwal kerja" },
-  { label: "Timesheets", href: "/sdm/lembar-waktu", icon: Clock, desc: "Timesheet" },
-  { label: "Loans", href: "/sdm/pinjaman", icon: PiggyBank, desc: "Pinjaman karyawan" },
-  { label: "Holidays", href: "/sdm/hari-libur", icon: Palmtree, desc: "Hari libur" },
+  { label: "Absensi", href: "/sdm/absensi", icon: Clock, desc: "Absensi karyawan" },
+  { label: "Cuti", href: "/sdm/cuti", icon: Palmtree, desc: "Cuti karyawan" },
+  { label: "Lembur", href: "/sdm/lembur", icon: Timer, desc: "Lembur" },
+  { label: "Penggajian", href: "/sdm/penggajian", icon: Banknote, desc: "Penggajian" },
+  { label: "Jadwal Kerja", href: "/sdm/jadwal-kerja", icon: CalendarDays, desc: "Jadwal kerja" },
+  { label: "Lembar Waktu", href: "/sdm/lembar-waktu", icon: Clock, desc: "Lembar waktu" },
+  { label: "Pinjaman", href: "/sdm/pinjaman", icon: PiggyBank, desc: "Pinjaman karyawan" },
+  { label: "Hari Libur", href: "/sdm/hari-libur", icon: Palmtree, desc: "Hari libur" },
 ]
 
 export default function HrmPage() {
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dashboard", href: "/" }, { label: "HRM" }]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "SDM" }]} />
       <h1 className="text-2xl font-bold text-foreground">SDM</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {hrmModules.map((mod) => {
@@ -30,7 +30,7 @@ export default function HrmPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">{mod.label}</p>
-                <p className="text-xs text-muted">{mod.desc}</p>
+                <p className="text-xs text-muted-foreground">{mod.desc}</p>
               </div>
             </Link>
           )

@@ -44,19 +44,27 @@ describe('FIFO layer handling parity', () => {
   for (const hookFile of inboundHooks) {
     it(`${hookFile} creates inventory layer on IN moves`, () => {
       const code = loadHook(hookFile)
-      expect(code).toContain('inventoryLayer.create')
-      expect(code).toMatch(/qtyIn/)
-      expect(code).toMatch(/remaining/)
+      // Either inline layer creation OR delegation to the per-warehouse FIFO helper.
+      const usesHelper = code.includes('createInLayer')
+      expect(usesHelper || code.includes('inventoryLayer.create')).toBe(true)
+      if (!usesHelper) {
+        expect(code).toMatch(/qtyIn/)
+        expect(code).toMatch(/remaining/)
+      }
     })
   }
 
   for (const hookFile of outboundHooks) {
     it(`${hookFile} consumes FIFO layers on OUT moves`, () => {
       const code = loadHook(hookFile)
-      expect(code).toContain('inventoryLayer.findMany')
-      expect(code).toContain('remaining')
-      expect(code).toContain('qtyOut')
-      expect(code).toMatch(/orderBy:\s*\{\s*createdAt:\s*["']asc["']/)
+      // Either inline FIFO consumption OR delegation to the per-warehouse FIFO helper.
+      const usesHelper = code.includes('consumeFifoLayers')
+      expect(usesHelper || code.includes('inventoryLayer.findMany')).toBe(true)
+      if (!usesHelper) {
+        expect(code).toContain('remaining')
+        expect(code).toContain('qtyOut')
+        expect(code).toMatch(/orderBy:\s*\{\s*createdAt:\s*["']asc["']/)
+      }
     })
   }
 })

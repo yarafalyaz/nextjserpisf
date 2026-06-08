@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -19,19 +18,26 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const [invoices, customers, items] = await Promise.all([prisma.salesInvoice.findMany({ orderBy: { createdAt: "desc" } }), prisma.customer.findMany({ orderBy: { name: "asc" } }), prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, qtyOnHand: true, cost: true } }).then(items => items.map(i => ({ ...i, qtyOnHand: String(i.qtyOnHand), cost: String(i.cost) })))])
+  const returnData = {
+    id: data.id,
+    salesInvoiceId: data.salesInvoiceId ?? 0,
+    date: data.date.toISOString().split("T")[0],
+    reason: data.reason,
+  }
+
+  const [invoices, customers, items] = await Promise.all([prisma.salesInvoice.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, documentNo: true } }), prisma.customer.findMany({ orderBy: { name: "asc" } }), prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true } })])
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "sales", href: "/penjualan/retur" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Penjualan", href: "/penjualan/retur" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <SalesReturnForm returnData={data as any} invoices={invoices as any} customers={customers as any} items={items as any}/>
+      <SalesReturnForm returnData={returnData} invoices={invoices} customers={customers} items={items}/>
     </div>
   )
 }

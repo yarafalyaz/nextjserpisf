@@ -23,7 +23,7 @@ export default async function DetailPage({
       <PageHeader
         title="Detail Akun"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
+          { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master/akun" },
           { label: "Akun", href: "/master/akun" },
           { label: "Detail" },

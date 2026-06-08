@@ -18,9 +18,9 @@ export default async function UomPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "UoM" },
+  { label: "Satuan" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Satuan (Unit of Measure)</h1>
@@ -41,7 +41,7 @@ export default async function UomPage() {
           <DetailTableBody>
             {uomList.length === 0 ? (
               <DetailTableRow>
-                <DetailTableTd colSpan={3} className="text-center py-10 px-4 text-muted">Belum ada satuan yang digunakan</DetailTableTd>
+                <DetailTableTd colSpan={3} className="text-center py-10 px-4 text-muted-foreground">Belum ada satuan yang digunakan</DetailTableTd>
               </DetailTableRow>
             ) : (
               uomList.map((uom, idx) => (

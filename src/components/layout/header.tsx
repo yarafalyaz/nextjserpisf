@@ -1,20 +1,19 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
 import { useState, useRef, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { getInitials } from "@/lib/utils/format"
-import { Menu, Search, LogOut, User, Settings, ChevronDown } from "lucide-react"
-import { useSidebarStore } from "@/lib/stores"
+import { Search, LogOut, User, Settings } from "lucide-react"
 import Link from "next/link"
-import { Avatar } from "@heroui/react"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/shadcn/avatar"
+import { SidebarTrigger } from "@/components/ui/shadcn/sidebar"
+import { Separator } from "@/components/ui/shadcn/separator"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { NotificationDropdown } from "@/components/layout/notification-dropdown"
 import { Button } from "@/components/ui/page-header"
 
 export function Header() {
   const { data: session } = useSession()
-  const { toggle } = useSidebarStore()
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -32,9 +31,8 @@ export function Header() {
   return (
     <header className="header">
       <div className="header-left">
-        <Button variant="ghost" size="sm" isIconOnly className="header-menu-btn" aria-label="Toggle sidebar" id="sidebar-toggle" onPress={toggle}>
-          <Menu size={22} />
-        </Button>
+        <SidebarTrigger className="-ml-1" id="sidebar-toggle" />
+        <Separator orientation="vertical" className="mr-1 h-5" />
         <div className="header-search">
           <Search size={16} />
           <input
@@ -56,8 +54,8 @@ export function Header() {
 
         <NotificationDropdown />
 
-        {/* Avatar with dropdown */}
-        <div className="header-user-dropdown" ref={dropdownRef}>
+        {/* Avatar dropdown — hidden on desktop (md+) since user menu lives in the sidebar footer */}
+        <div className="header-user-dropdown md:hidden" ref={dropdownRef}>
           <Button
             variant="ghost" className="header-avatar-btn" aria-haspopup="menu"
             aria-expanded={showDropdown}
@@ -65,24 +63,17 @@ export function Header() {
             id="user-avatar-btn"
           >
             <Avatar size="sm">
-              <Avatar.Image src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
-              <Avatar.Fallback>{getInitials(session?.user?.name)}</Avatar.Fallback>
+              <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
+              <AvatarFallback>{getInitials(session?.user?.name)}</AvatarFallback>
             </Avatar>
-            <div className="header-user-info">
-              <span className="header-user-name">{session?.user?.name || "User"}</span>
-              <span className="header-user-role">
-                {((session?.user as any)?.roles?.[0] || "staff").replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())}
-              </span>
-            </div>
-            <ChevronDown size={14} className={`header-chevron ${showDropdown ? "open" : ""}`} />
           </Button>
 
           {showDropdown && (
             <div className="header-dropdown">
               <div className="header-dropdown-info">
                 <Avatar size="sm">
-                  <Avatar.Image src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
-                  <Avatar.Fallback>{getInitials(session?.user?.name)}</Avatar.Fallback>
+                  <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
+                  <AvatarFallback>{getInitials(session?.user?.name)}</AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="header-dropdown-name">{session?.user?.name}</p>

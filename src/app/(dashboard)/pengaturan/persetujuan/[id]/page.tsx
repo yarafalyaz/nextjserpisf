@@ -28,9 +28,9 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Settings", href: "/pengaturan" },
-        { label: "Approvals", href: "/pengaturan/persetujuan" },
+        { label: "Dasbor", href: "/" },
+        { label: "Pengaturan", href: "/pengaturan" },
+        { label: "Persetujuan", href: "/pengaturan/persetujuan" },
         { label: `#${approval.id}` },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -42,19 +42,19 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Workflow</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alur Kerja</span>
             <p className="text-sm font-medium text-foreground mt-1">{approval.workflow.name}</p>
           </div>
           <div>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Reference</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Referensi</span>
             <p className="text-sm font-mono text-foreground mt-1">{approval.referenceType} #{approval.referenceId}</p>
           </div>
           <div>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Current Step</span>
-            <p className="text-sm text-foreground mt-1">Step {approval.currentStep} / {approval.workflow.steps.length}</p>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Langkah Saat Ini</span>
+            <p className="text-sm text-foreground mt-1">Langkah {approval.currentStep} / {approval.workflow.steps.length}</p>
           </div>
           <div>
-            <span className="text-xs font-medium text-muted uppercase tracking-wider">Tanggal Request</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tanggal Permintaan</span>
             <p className="text-sm text-foreground mt-1">{approval.requestedAt ? formatDate(approval.requestedAt) : formatDate(approval.createdAt)}</p>
           </div>
         </div>
@@ -62,22 +62,22 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
 
       {/* Workflow Steps */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden p-6">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground mb-4">Workflow Steps</h2>
+        <h2 className="text-[0.9375rem] font-semibold text-foreground mb-4">Langkah Alur Kerja</h2>
         <div className="flex flex-col gap-2">
           {approval.workflow.steps.map((step) => {
             const isActive = step.stepOrder === approval.currentStep && approval.status === "pending"
             const isDone = step.stepOrder < approval.currentStep || approval.status === "approved"
             return (
               <div key={step.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${isActive ? "border-primary bg-primary/5" : isDone ? "border-success/30 bg-success/5" : "border-default"}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isActive ? "bg-primary text-white" : isDone ? "bg-success text-white" : "bg-default text-muted"}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isActive ? "bg-primary text-white" : isDone ? "bg-success text-white" : "bg-default text-muted-foreground"}`}>
                   {step.stepOrder}
                 </div>
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-foreground">{step.name || `Step ${step.stepOrder}`}</span>
-                  {step.approverType && <span className="text-xs text-muted ml-2">({step.approverType})</span>}
+                  <span className="text-sm font-medium text-foreground">{step.name || `Langkah ${step.stepOrder}`}</span>
+                  {step.approverType && <span className="text-xs text-muted-foreground ml-2">({step.approverType})</span>}
                 </div>
-                {isActive && <span className="text-xs font-medium text-primary">Current</span>}
-                {isDone && <span className="text-xs font-medium text-success">✓</span>}
+                {isActive && <span className="text-xs font-medium text-primary">Saat Ini</span>}
+                {isDone && <span className="text-xs font-medium text-success">Selesai</span>}
               </div>
             )
           })}
@@ -104,13 +104,13 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
               <form id="approve-form" action={approveWithId}>
                 <input type="hidden" name="notes" value="" />
                 <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-success text-white hover:bg-success/90 hover:-translate-y-px hover:shadow-md transition-all">
-                  ✓ Approve
+                  Setujui
                 </button>
               </form>
               <form action={rejectWithId}>
                 <input type="hidden" name="notes" value="" />
                 <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-danger text-white hover:bg-danger/90 hover:-translate-y-px hover:shadow-md transition-all">
-                  ✕ Reject
+                  Tolak
                 </button>
               </form>
             </div>
@@ -121,25 +121,25 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Approval</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Persetujuan</h2>
         </div>
         <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
-              <DetailTableTh>Step</DetailTableTh>
-              <DetailTableTh>Action</DetailTableTh>
-              <DetailTableTh>Notes</DetailTableTh>
+              <DetailTableTh>Langkah</DetailTableTh>
+              <DetailTableTh>Aksi</DetailTableTh>
+              <DetailTableTh>Catatan</DetailTableTh>
               <DetailTableTh>Waktu</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {approval.histories.length === 0 ? (
                 <DetailTableRow>
-                  <DetailTableTd colSpan={4} className="text-center py-10 text-muted">Belum ada riwayat</DetailTableTd>
+                  <DetailTableTd colSpan={4} className="text-center py-10 text-muted-foreground">Belum ada riwayat</DetailTableTd>
                 </DetailTableRow>
               ) : (
                 approval.histories.map((h) => (
                   <DetailTableRow key={h.id}>
-                    <DetailTableTd>Step {h.step}</DetailTableTd>
+                    <DetailTableTd>Langkah {h.step}</DetailTableTd>
                     <DetailTableTd>
                       <span className={`status-badge ${h.action === "approve" ? "status-approved" : "status-rejected"}`}>
                         {h.action}

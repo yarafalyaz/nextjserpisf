@@ -21,7 +21,7 @@ export default async function BalanceSheetPage({
   const entries = await prisma.journalEntry.findMany({
     where: {
       journal: {
-        status: 'POSTED',
+        status: { in: ['POSTED', 'REVERSED'] },
         transactionDate: { lte: asOfDate },
       },
     },
@@ -49,12 +49,24 @@ export default async function BalanceSheetPage({
   const liabilities: { name: string; code: string; balance: number }[] = []
   const equity: { name: string; code: string; balance: number }[] = []
 
+  // Revenue and Expense balances contribute to Retained Earnings (current net income).
+  let revenueTotal = 0
+  let expenseTotal = 0
+
   for (const [, acc] of accountBalances) {
     if (acc.balance === 0) continue
     const item = { name: acc.name, code: acc.code, balance: acc.balance }
     if (acc.type === 'ASSET') assets.push(item)
     else if (acc.type === 'LIABILITY') liabilities.push(item)
     else if (acc.type === 'EQUITY') equity.push(item)
+    else if (acc.type === 'REVENUE') revenueTotal += acc.balance
+    else if (acc.type === 'EXPENSE') expenseTotal += acc.balance
+  }
+
+  // Net income = Revenue - Expense (both stored as credit-normal/debit-normal respectively)
+  const netIncome = revenueTotal - expenseTotal
+  if (Math.abs(netIncome) >= 0.01) {
+    equity.push({ name: 'Laba/Rugi Berjalan', code: 'NI', balance: netIncome })
   }
 
   assets.sort((a, b) => a.code.localeCompare(b.code))
@@ -69,14 +81,14 @@ export default async function BalanceSheetPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/laporan" },
-  { label: "Balance Sheet" },
+  { label: "Dasbor", href: "/" },
+  { label: "Laporan", href: "/laporan" },
+  { label: "Neraca" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
           <BarChart3 size={24} />
-          <h1>Neraca (Balance Sheet)</h1>
+          <h1>Neraca</h1>
         <ExportButtons title="Balance_Sheet" />
         </div>
         <p>Per tanggal: {asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
@@ -176,7 +188,7 @@ export default async function BalanceSheetPage({
         <div className={`text-xl font-bold ${isBalanced ? "text-success" : "text-danger"}`}>
           {isBalanced ? 'SEIMBANG' : 'TIDAK SEIMBANG'}
         </div>
-        <div className="text-[0.8125rem] text-muted font-medium">
+        <div className="text-[0.8125rem] text-muted-foreground font-medium">
           Aset: {formatCurrency(totalAssets)} | Kewajiban + Ekuitas: {formatCurrency(totalLiabilities + totalEquity)}
         </div>
       </div>

@@ -8,7 +8,9 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { PrintHeader } from "@/components/reports/print-header"
-import { Select, ListBox, Label, Button } from "@heroui/react"
+import { FormSelect } from "@/components/ui/form-select"
+import { Label } from "@/components/ui/shadcn/label"
+import { Button } from "@/components/ui/page-header"
 import { AppDatePicker } from "@/components/ui/date-picker"
 
 export default async function StockMovementPage({
@@ -22,6 +24,7 @@ export default async function StockMovementPage({
   const now = new Date()
   const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), now.getMonth(), 1)
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
+  endDate.setHours(23, 59, 59, 999)
   const warehouseId = params.warehouseId ? parseInt(params.warehouseId) : null
 
   const warehouses = await prisma.warehouse.findMany({
@@ -68,9 +71,9 @@ export default async function StockMovementPage({
     <div className="flex flex-col gap-6">
       <PrintHeader title="Laporan Mutasi Stok" period={period} />
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/laporan" },
-        { label: "Stock Movement" },
+        { label: "Dasbor", href: "/" },
+        { label: "Laporan", href: "/laporan" },
+        { label: "Mutasi Stok" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
@@ -81,41 +84,39 @@ export default async function StockMovementPage({
       </div>
 
       <form className="mb-6 flex items-center gap-4 flex-wrap print:hidden">
-        <Select name="warehouseId" defaultSelectedKey={params.warehouseId || ""} placeholder="Semua Gudang" className="w-[220px]">
-          <Label>Gudang</Label>
-          <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-          <Select.Popover>
-            <ListBox>
-              <ListBox.Item id="" textValue="Semua Gudang">Semua Gudang<ListBox.ItemIndicator /></ListBox.Item>
-              {warehouses.map(w => (
-                <ListBox.Item key={String(w.id)} id={String(w.id)} textValue={`${w.code} - ${w.name}`}>{w.code} - {w.name}<ListBox.ItemIndicator /></ListBox.Item>
-              ))}
-            </ListBox>
-          </Select.Popover>
-        </Select>
+        <div className="flex flex-col gap-1.5 w-[220px]">
+          <Label htmlFor="warehouseId">Gudang</Label>
+          <FormSelect
+            id="warehouseId"
+            name="warehouseId"
+            defaultValue={params.warehouseId || undefined}
+            placeholder="Semua Gudang"
+            options={warehouses.map(w => ({ value: String(w.id), label: `${w.code} - ${w.name}` }))}
+          />
+        </div>
         <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || startDate.toISOString().split('T')[0]} className="w-[180px]" />
         <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || endDate.toISOString().split('T')[0]} className="w-[180px]" />
-        <Button type="submit" variant="primary" size="sm">Generate</Button>
+        <Button type="submit" variant="primary" size="sm">Tampilkan</Button>
       </form>
 
       {/* KPI */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Total Transaksi</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Transaksi</div>
           <div className="text-xl font-bold">{rows.length}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Qty Masuk</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Qty Masuk</div>
           <div className="text-xl font-bold text-success">{totalIn.toLocaleString('id-ID')}</div>
-          <div className="text-xs text-muted">{formatCurrency(totalValueIn)}</div>
+          <div className="text-xs text-muted-foreground">{formatCurrency(totalValueIn)}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Qty Keluar</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Qty Keluar</div>
           <div className="text-xl font-bold text-danger">{totalOut.toLocaleString('id-ID')}</div>
-          <div className="text-xs text-muted">{formatCurrency(totalValueOut)}</div>
+          <div className="text-xs text-muted-foreground">{formatCurrency(totalValueOut)}</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Net Movement</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Mutasi Bersih</div>
           <div className={`text-xl font-bold ${totalIn - totalOut >= 0 ? 'text-success' : 'text-danger'}`}>{(totalIn - totalOut).toLocaleString('id-ID')}</div>
         </div>
       </div>
@@ -124,7 +125,7 @@ export default async function StockMovementPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail Mutasi</h2>
-          <span className="text-sm text-muted">{rows.length} transaksi</span>
+          <span className="text-sm text-muted-foreground">{rows.length} transaksi</span>
         </div>
         <div className="p-4 px-5 overflow-x-auto">
           <DetailTable data-report-table="Stock Movement">
@@ -156,11 +157,11 @@ export default async function StockMovementPage({
                   <DetailTableTd align="right" className="text-success">{row.impact === 'IN' ? row.qty.toLocaleString('id-ID') : '-'}</DetailTableTd>
                   <DetailTableTd align="right" className="text-danger">{row.impact === 'OUT' ? row.qty.toLocaleString('id-ID') : '-'}</DetailTableTd>
                   <DetailTableTd align="right">{formatCurrency(row.value)}</DetailTableTd>
-                  <DetailTableTd className="text-sm text-muted">{row.reference}</DetailTableTd>
+                  <DetailTableTd className="text-sm text-muted-foreground">{row.reference}</DetailTableTd>
                 </DetailTableRow>
               ))}
               {rows.length === 0 && (
-                <DetailTableRow><DetailTableTd colSpan={10} className="text-center text-muted py-8">Tidak ada mutasi dalam periode ini</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={10} className="text-center text-muted-foreground py-8">Tidak ada mutasi dalam periode ini</DetailTableTd></DetailTableRow>
               )}
               {rows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">

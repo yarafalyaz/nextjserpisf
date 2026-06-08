@@ -4,7 +4,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
-import { onPurchaseOrderReceived, onPurchaseReturnProcessed, onVendorBillPosted, onVendorPaymentCreated } from "@/lib/hooks/accounting.hook"
+import { onPurchaseReturnProcessed, onVendorBillPosted, onVendorPaymentCreated, deleteJournalByReference, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook"
 import { onPurchaseOrderCreated } from "@/lib/hooks/purchase-order.hook"
 import { onPurchaseReturnProcessed as onPurchaseReturnStock } from "@/lib/hooks/purchase-return.hook"
@@ -12,6 +12,55 @@ import { notificationService } from "@/lib/services/notification.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/lib/utils/safe-parse"
+import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
+
+/**
+ * 3-way match guard (PO ↔ Goods Receipt ↔ Vendor Bill).
+ * When a vendor bill is linked to a PO, ensure: (1) goods were actually received
+ * (a verified GR exists), and (2) the cumulative billed amount does not exceed
+ * the value of goods received. Prevents paying for undelivered/over-billed goods.
+ */
+async function assertThreeWayMatch(
+  purchaseOrderId: number | null | undefined,
+  billGrandTotal: number,
+  excludeBillId?: number
+): Promise<void> {
+  if (!purchaseOrderId) return // bills without a PO link are not matched
+
+  const grs = await prisma.goodsReceipt.findMany({
+    where: { purchaseOrderId, status: { in: ["verified", "completed"] } },
+    include: { items: true },
+  })
+  if (grs.length === 0) {
+    throw new Error("3-way match gagal: belum ada penerimaan barang (GR terverifikasi) untuk PO ini.")
+  }
+
+  const receivedValue = grs.reduce(
+    (sum, gr) => sum + gr.items.reduce((s, it) => s + Number(it.qty) * Number(it.unitCost ?? 0), 0),
+    0
+  )
+
+  const otherBills = await prisma.vendorBill.aggregate({
+    where: {
+      purchaseOrderId,
+      status: { in: ["posted", "paid"] },
+      ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
+    },
+    _sum: { grandTotal: true },
+  })
+  const alreadyBilled = Number(otherBills._sum.grandTotal ?? 0)
+
+  // Allow a small tolerance for rounding/freight differences.
+  const tolerance = Math.max(1000, receivedValue * 0.01)
+  if (alreadyBilled + billGrandTotal > receivedValue + tolerance) {
+    throw new Error(
+      `3-way match gagal: total tagihan (${(alreadyBilled + billGrandTotal).toLocaleString("id-ID")}) ` +
+        `melebihi nilai barang diterima (${receivedValue.toLocaleString("id-ID")}).`
+    )
+  }
+}
+
+import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== PURCHASE REQUEST ACTIONS ====================
 
@@ -50,6 +99,7 @@ export async function createPurchaseRequest(formData: FormData) {
     },
   })
 
+  await logActivity("create", "PurchaseRequest", pr.id, `Membuat permintaan pembelian #${pr.id}`)
   revalidatePath("/pembelian/permintaan")
   return { success: true, id: pr.id }
 
@@ -77,6 +127,7 @@ export async function approvePurchaseRequest(prId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
+  await logActivity("approve", "PurchaseRequest", prId, `Menyetujui permintaan pembelian #${prId}`)
   revalidatePath("/pembelian/permintaan")
   return { success: true }
 
@@ -95,6 +146,14 @@ export async function createPurchaseOrder(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("PO")
 
+  const poItems = (safeJsonParse<{ itemId: number; qty: number; unitPrice: number; discount: number }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
+
+  const subtotal = poItems.reduce((s, it) => s + Number(it.qty) * Number(it.unitPrice), 0)
+  const discountTotal = poItems.reduce((s, it) => s + Number(it.discount || 0), 0)
+  const grandTotal = subtotal - discountTotal
+
   const po = await prisma.purchaseOrder.create({
     data: {
       documentNo,
@@ -103,12 +162,21 @@ export async function createPurchaseOrder(formData: FormData) {
       date: new Date(formData.get("date") as string),
       expectedDate: formData.get("expectedDate") ? new Date(formData.get("expectedDate") as string) : null,
       notes: formData.get("notes") as string | null,
-      subtotal: 0,
-      discount: 0,
+      subtotal,
+      discount: discountTotal,
       tax: 0,
-      grandTotal: 0,
+      grandTotal,
       status: "draft",
       createdBy: Number(user.id),
+      items: {
+        create: poItems.map((it) => ({
+          itemId: Number(it.itemId),
+          qty: Number(it.qty),
+          unitPrice: Number(it.unitPrice),
+          discount: Number(it.discount || 0),
+          total: Number(it.qty) * Number(it.unitPrice) - Number(it.discount || 0),
+        })),
+      },
     },
   })
 
@@ -120,6 +188,10 @@ export async function createPurchaseOrder(formData: FormData) {
   // Notify admins
   await notificationService.notifyAdmins('Pesanan Pembelian baru dibuat', `/pembelian/pesanan/${po.id}`)
 
+  // Route through approval workflow if one is configured for PurchaseOrder.
+  await requestApprovalIfConfigured("PurchaseOrder", po.id, Number(user.id))
+
+  await logActivity("create", "PurchaseOrder", po.id, `Membuat pesanan pembelian #${po.id}`)
   revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }
 
@@ -147,6 +219,7 @@ export async function approvePurchaseOrder(poId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
+  await logActivity("approve", "PurchaseOrder", poId, `Menyetujui pesanan pembelian #${poId}`)
   revalidatePath("/pembelian/pesanan")
   return { success: true }
 
@@ -169,47 +242,22 @@ export async function markPurchaseOrderOrdered(poId: number) {
     throw new Error("PO hanya bisa ditandai ordered dari status approved")
   }
 
+  // If a PurchaseOrder approval workflow is configured, it must be fully
+  // approved before the PO can be sent to the vendor (no-op if not configured).
+  await assertApproved("PurchaseOrder", poId)
+
   await prisma.purchaseOrder.update({
     where: { id: poId },
     data: { status: "ordered" },
   })
 
+  await logActivity("mark", "PurchaseOrder", poId, `Menandai pesanan pembelian #${poId} ordered`)
   revalidatePath("/pembelian/pesanan")
   return { success: true }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[markPurchaseOrderOrdered]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
-export async function markPurchaseOrderReceived(poId: number) {
-  try {
-  const user = await requirePermission("edit_purchase_orders")
-
-  const po = await prisma.purchaseOrder.findUniqueOrThrow({
-    where: { id: poId },
-  })
-
-  if (po.status !== "ordered") {
-    throw new Error("PO hanya bisa ditandai received dari status ordered")
-  }
-
-  await prisma.purchaseOrder.update({
-    where: { id: poId },
-    data: { status: "received" },
-  })
-
-  // Trigger accounting hook
-  await onPurchaseOrderReceived(poId, Number(user.id))
-
-  revalidatePath("/pembelian/pesanan")
-  return { success: true }
-
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e
-    console.error("[markPurchaseOrderReceived]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
@@ -231,6 +279,7 @@ export async function cancelPurchaseOrder(poId: number) {
     data: { status: "cancelled" },
   })
 
+  await logActivity("cancel", "PurchaseOrder", poId, `Membatalkan pesanan pembelian #${poId}`)
   revalidatePath("/pembelian/pesanan")
   return { success: true }
 
@@ -249,7 +298,7 @@ export async function createGoodsReceipt(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("GR")
   const itemsJson = formData.get("items") as string | null
-  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null }[]>(itemsJson) ?? []
+  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(itemsJson) ?? []
 
   const gr = await prisma.$transaction(async (tx) => {
     const createdGr = await tx.goodsReceipt.create({
@@ -269,6 +318,10 @@ export async function createGoodsReceipt(formData: FormData) {
               qty: i.qty,
               unitCost: i.unitCost || 0,
               warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
+              uom: i.uom || null,
+              batchNumber: i.batchNumber || null,
+              expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
+              serialNumbers: i.serialNumbers && i.serialNumbers.length > 0 ? i.serialNumbers : undefined,
             })),
         },
       },
@@ -283,6 +336,7 @@ export async function createGoodsReceipt(formData: FormData) {
     return createdGr
   })
 
+  await logActivity("create", "GoodsReceipt", gr.id, `Membuat penerimaan barang #${gr.id}`)
   revalidatePath("/pembelian/penerimaan")
   return { success: true, id: gr.id }
 
@@ -311,6 +365,7 @@ export async function verifyGoodsReceipt(grId: number) {
   // Notify admins
   await notificationService.notifyAdmins('Penerimaan Barang diterima', `/pembelian/penerimaan/${grId}`)
 
+  await logActivity("verify", "GoodsReceipt", grId, `Verifikasi penerimaan barang #${grId}`)
   revalidatePath("/pembelian/penerimaan")
   revalidatePath("/pembelian/pesanan")
   return { success: true }
@@ -329,6 +384,12 @@ export async function createVendorBill(formData: FormData) {
   const user = await requirePermission("create_vendor_bills")
 
   const documentNo = await generateDocumentNumber("BILL")
+
+  // 3-way match before posting the bill
+  await assertThreeWayMatch(
+    safeId(formData.get("purchaseOrderId")),
+    safeNumber(formData.get("grandTotal")) ?? 0
+  )
 
   const bill = await prisma.vendorBill.create({
     data: {
@@ -361,6 +422,7 @@ export async function createVendorBill(formData: FormData) {
   }
 
   await onVendorBillPosted(bill.id, Number(user.id))
+  await logActivity("create", "VendorBill", bill.id, `Membuat tagihan vendor #${bill.id}`)
   revalidatePath("/pembelian/tagihan")
   return { success: true, id: bill.id }
 
@@ -406,6 +468,7 @@ export async function createVendorPayment(formData: FormData) {
 
   await onVendorPaymentCreated(payment.id, Number(user.id))
 
+  await logActivity("create", "VendorPayment", payment.id, `Membuat pembayaran vendor #${payment.id}`)
   revalidatePath("/pembelian/pembayaran")
   return { success: true, id: payment.id }
 
@@ -428,6 +491,9 @@ export async function confirmVendorBill(billId: number) {
     throw new Error("Tagihan hanya bisa diposting dari status draft")
   }
 
+  // 3-way match (PO ↔ GR ↔ Bill) before posting
+  await assertThreeWayMatch(bill.purchaseOrderId, Number(bill.grandTotal), bill.id)
+
   await prisma.vendorBill.update({
     where: { id: billId },
     data: {
@@ -440,6 +506,7 @@ export async function confirmVendorBill(billId: number) {
 
   await onVendorBillPosted(billId, Number(user.id))
 
+  await logActivity("confirm", "VendorBill", billId, `Posting tagihan vendor #${billId}`)
   revalidatePath("/pembelian/tagihan")
   return { success: true }
 
@@ -497,6 +564,7 @@ export async function confirmVendorPayment(paymentId: number) {
 
   await onVendorPaymentCreated(paymentId, Number(user.id))
 
+  await logActivity("confirm", "VendorPayment", paymentId, `Konfirmasi pembayaran vendor #${paymentId}`)
   revalidatePath("/pembelian/pembayaran")
   revalidatePath("/pembelian/tagihan")
   return { success: true }
@@ -518,6 +586,12 @@ export async function createPurchaseReturn(formData: FormData) {
 
   const itemsJson = formData.get("items") as string
   const items = safeJsonParse<any[]>(itemsJson) ?? []
+  const validPrItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
+  const prItemIds = validPrItems.map((it: any) => Number(it.itemId))
+  const prCostRows = prItemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: prItemIds } }, select: { id: true, cost: true } })
+    : []
+  const prCostMap = new Map(prCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
 
   const purchaseReturn = await prisma.purchaseReturn.create({
     data: {
@@ -528,17 +602,16 @@ export async function createPurchaseReturn(formData: FormData) {
       status: "draft",
       createdBy: Number(user.id),
       items: {
-        create: items
-          .filter((item: any) => item.itemId > 0 && item.qty > 0)
-          .map((item: any) => ({
-            itemId: item.itemId,
-            qty: item.qty,
-            cost: 0,
-          })),
+        create: validPrItems.map((item: any) => ({
+          itemId: Number(item.itemId),
+          qty: item.qty,
+          cost: prCostMap.get(Number(item.itemId)) ?? 0,
+        })),
       },
     },
   })
 
+  await logActivity("create", "PurchaseReturn", purchaseReturn.id, `Membuat retur pembelian #${purchaseReturn.id}`)
   revalidatePath("/pembelian/retur")
   return { success: true, id: purchaseReturn.id }
 
@@ -567,6 +640,7 @@ export async function processPurchaseReturn(returnId: number) {
   // Accounting journal
   await onPurchaseReturnProcessed(returnId, Number(user.id))
 
+  await logActivity("process", "PurchaseReturn", returnId, `Memproses retur pembelian #${returnId}`)
   revalidatePath("/pembelian/retur")
   return { success: true }
 
@@ -590,6 +664,7 @@ export async function deletePurchaseRequest(id: number) {
 
   await prisma.purchaseRequest.delete({ where: { id } })
 
+  await logActivity("delete", "PurchaseRequest", id, `Menghapus permintaan pembelian #${id}`)
   revalidatePath("/pembelian/permintaan")
   return { success: true }
 
@@ -635,6 +710,8 @@ export async function deletePurchaseOrder(id: number) {
       await tx.goodsReceiptItem.deleteMany({
         where: { goodsReceiptId: gr.id },
       })
+      // Reverse the GR posting journal (Dr Inventory / Cr clearing) to avoid orphaned GL.
+      await deleteJournalByReferenceTx(tx, "GoodsReceipt", gr.id)
       // Delete the GR
       await tx.goodsReceipt.delete({ where: { id: gr.id } })
     }
@@ -656,6 +733,7 @@ export async function deletePurchaseOrder(id: number) {
     await tx.purchaseOrder.delete({ where: { id } })
   })
 
+  await logActivity("delete", "PurchaseOrder", id, `Menghapus pesanan pembelian #${id}`)
   revalidatePath("/pembelian/pesanan")
   revalidatePath("/pembelian/penerimaan")
   return { success: true }
@@ -705,10 +783,13 @@ export async function deleteGoodsReceipt(id: number) {
       where: { goodsReceiptId: id },
     })
 
-    // 3. Delete the GR
+    // 3. Reverse the GR posting journal (Dr Inventory / Cr clearing) to avoid orphaned GL.
+    await deleteJournalByReferenceTx(tx, "GoodsReceipt", id)
+
+    // 4. Delete the GR
     await tx.goodsReceipt.delete({ where: { id } })
 
-    // 4. Parity GoodsReceiptObserver(deleting): revert PO status to ordered if this was last GR
+    // 5. Parity GoodsReceiptObserver(deleting): revert PO status to ordered if this was last GR
     if (gr.purchaseOrderId) {
       const remainingCount = await tx.goodsReceipt.count({
         where: { purchaseOrderId: gr.purchaseOrderId },
@@ -723,6 +804,7 @@ export async function deleteGoodsReceipt(id: number) {
     }
   })
 
+  await logActivity("delete", "GoodsReceipt", id, `Menghapus penerimaan barang #${id}`)
   revalidatePath("/pembelian/penerimaan")
   revalidatePath("/pembelian/pesanan")
   return { success: true }
@@ -743,8 +825,11 @@ export async function deleteVendorBill(id: number) {
     throw new Error("Hanya tagihan draft yang dapat dihapus")
   }
 
+  // Reverse any journal posted at draft creation before removing the record.
+  await deleteJournalByReference("VendorBill", id)
   await prisma.vendorBill.delete({ where: { id } })
 
+  await logActivity("delete", "VendorBill", id, `Menghapus tagihan vendor #${id}`)
   revalidatePath("/pembelian/tagihan")
   return { success: true }
 
@@ -764,8 +849,11 @@ export async function deleteVendorPayment(id: number) {
     throw new Error("Hanya pembayaran draft yang dapat dihapus")
   }
 
+  // Reverse any journal posted at draft creation before removing the record.
+  await deleteJournalByReference("VendorPayment", id)
   await prisma.vendorPayment.delete({ where: { id } })
 
+  await logActivity("delete", "VendorPayment", id, `Menghapus pembayaran vendor #${id}`)
   revalidatePath("/pembelian/pembayaran")
   return { success: true }
 
@@ -820,6 +908,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "PurchaseRequest", pr.id, `Memperbarui permintaan pembelian #${pr.id}`)
   revalidatePath("/pembelian/permintaan")
   return { success: true, id: pr.id }
 
@@ -835,31 +924,47 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   "use server"
 
   try {
-  const user = await requirePermission("create_purchase_orders")
+  await requirePermission("create_purchase_orders")
 
   const existingPo = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
   if (existingPo.status !== "draft") {
     throw new Error("Hanya PO draft yang dapat diedit")
   }
 
-  const documentNo = await generateDocumentNumber("PO")
+  const poItems = (safeJsonParse<{ itemId: number; qty: number; unitPrice: number; discount: number }[]>(
+    formData.get("items") as string | null
+  ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
-  const po = await prisma.purchaseOrder.update({
-    where: { id },
-    data: {
-      documentNo,
-      vendorId: requireId(formData.get("vendorId"), "vendorId"),
-      purchaseRequestId: safeId(formData.get("purchaseRequestId")),
-      date: new Date(formData.get("date") as string),
-      expectedDate: formData.get("expectedDate") ? new Date(formData.get("expectedDate") as string) : null,
-      notes: formData.get("notes") as string | null,
-      subtotal: 0,
-      discount: 0,
-      tax: 0,
-      grandTotal: 0,
-      status: "draft",
-      createdBy: Number(user.id),
-    },
+  const subtotal = poItems.reduce((s, it) => s + Number(it.qty) * Number(it.unitPrice), 0)
+  const discountTotal = poItems.reduce((s, it) => s + Number(it.discount || 0), 0)
+  const grandTotal = subtotal - discountTotal
+
+  // Keep existing documentNo (do not regenerate on edit)
+  const po = await prisma.$transaction(async (tx) => {
+    await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } })
+    return tx.purchaseOrder.update({
+      where: { id },
+      data: {
+        vendorId: requireId(formData.get("vendorId"), "vendorId"),
+        purchaseRequestId: safeId(formData.get("purchaseRequestId")),
+        date: new Date(formData.get("date") as string),
+        expectedDate: formData.get("expectedDate") ? new Date(formData.get("expectedDate") as string) : null,
+        notes: formData.get("notes") as string | null,
+        subtotal,
+        discount: discountTotal,
+        tax: 0,
+        grandTotal,
+        items: {
+          create: poItems.map((it) => ({
+            itemId: Number(it.itemId),
+            qty: Number(it.qty),
+            unitPrice: Number(it.unitPrice),
+            discount: Number(it.discount || 0),
+            total: Number(it.qty) * Number(it.unitPrice) - Number(it.discount || 0),
+          })),
+        },
+      },
+    })
   })
 
   // Update PR status if linked
@@ -870,6 +975,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   // Notify admins
   await notificationService.notifyAdmins('Pesanan Pembelian baru dibuat', `/pembelian/pesanan/${po.id}`)
 
+  await logActivity("update", "PurchaseOrder", po.id, `Memperbarui pesanan pembelian #${po.id}`)
   revalidatePath("/pembelian/pesanan")
   return { success: true, id: po.id }
 
@@ -892,12 +998,9 @@ export async function updateVendorBill(id: number, formData: FormData) {
     throw new Error("Hanya tagihan draft yang dapat diedit")
   }
 
-  const documentNo = await generateDocumentNumber("BILL")
-
   const bill = await prisma.vendorBill.update({
     where: { id },
     data: {
-      documentNo,
       vendorId: requireId(formData.get("vendorId"), "vendorId"),
       purchaseOrderId: safeId(formData.get("purchaseOrderId")),
       date: new Date(formData.get("date") as string),
@@ -922,6 +1025,12 @@ export async function updateVendorBill(id: number, formData: FormData) {
     }
   }
 
+  // The bill journal is posted at creation; reverse + repost so the edited
+  // amount/tax/PO-link (which can flip the goods-based clearing branch) is reflected.
+  await deleteJournalByReference("VendorBill", id)
+  await onVendorBillPosted(bill.id, Number(user.id))
+
+  await logActivity("update", "VendorBill", bill.id, `Memperbarui tagihan vendor #${bill.id}`)
   revalidatePath("/pembelian/tagihan")
   return { success: true, id: bill.id }
 
@@ -945,7 +1054,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
   }
 
   const itemsJson = formData.get("items") as string | null
-  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null }[]>(itemsJson) ?? []
+  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(itemsJson) ?? []
 
   const gr = await prisma.$transaction(async (tx) => {
     const updated = await tx.goodsReceipt.update({
@@ -970,6 +1079,10 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
             qty: i.qty,
             unitCost: i.unitCost || 0,
             warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
+            uom: i.uom || null,
+            batchNumber: i.batchNumber || null,
+            expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
+            serialNumbers: i.serialNumbers && i.serialNumbers.length > 0 ? i.serialNumbers : undefined,
           })),
       })
     }
@@ -977,6 +1090,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
     return updated
   })
 
+  await logActivity("update", "GoodsReceipt", gr.id, `Memperbarui penerimaan barang #${gr.id}`)
   revalidatePath("/pembelian/penerimaan")
   return { success: true, id: gr.id }
 
@@ -992,39 +1106,43 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
   "use server"
 
   try {
-  const user = await requirePermission("create_purchase_returns")
+  await requirePermission("create_purchase_returns")
 
   const ret = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
   if (ret.status !== "draft") {
     throw new Error("Hanya retur draft yang dapat diedit")
   }
 
-  const documentNo = await generateDocumentNumber("PRET")
-
   const itemsJson = formData.get("items") as string
   const items = safeJsonParse<any[]>(itemsJson) ?? []
+  const validPrItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
+  const updPrIds = validPrItems.map((it: any) => Number(it.itemId))
+  const updPrCostRows = updPrIds.length
+    ? await prisma.item.findMany({ where: { id: { in: updPrIds } }, select: { id: true, cost: true } })
+    : []
+  const updPrCostMap = new Map(updPrCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
 
-  const purchaseReturn = await prisma.purchaseReturn.update({
-    where: { id },
-    data: {
-      documentNo,
-      purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
-      date: new Date(formData.get("date") as string),
-      reason: formData.get("reason") as string | null,
-      status: "draft",
-      createdBy: Number(user.id),
-      items: {
-        create: items
-          .filter((item: any) => item.itemId > 0 && item.qty > 0)
-          .map((item: any) => ({
-            itemId: item.itemId,
+  // Keep existing documentNo (do not regenerate), and replace items atomically.
+  const purchaseReturn = await prisma.$transaction(async (tx) => {
+    await tx.purchaseReturnItem.deleteMany({ where: { purchaseReturnId: id } })
+    return tx.purchaseReturn.update({
+      where: { id },
+      data: {
+        purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
+        date: new Date(formData.get("date") as string),
+        reason: formData.get("reason") as string | null,
+        items: {
+          create: validPrItems.map((item: any) => ({
+            itemId: Number(item.itemId),
             qty: item.qty,
-            cost: 0,
+            cost: updPrCostMap.get(Number(item.itemId)) ?? 0,
           })),
+        },
       },
-    },
+    })
   })
 
+  await logActivity("update", "PurchaseReturn", purchaseReturn.id, `Memperbarui retur pembelian #${purchaseReturn.id}`)
   revalidatePath("/pembelian/retur")
   return { success: true, id: purchaseReturn.id }
 
@@ -1047,12 +1165,9 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     throw new Error("Hanya pembayaran draft yang dapat diedit")
   }
 
-  const documentNo = await generateDocumentNumber("VPAY")
-
   const payment = await prisma.vendorPayment.update({
     where: { id },
     data: {
-      documentNo,
       vendorId: requireId(formData.get("vendorId"), "vendorId"),
       amount: requireNumber(formData.get("amount"), "amount"),
       paymentDate: new Date(formData.get("paymentDate") as string),
@@ -1075,7 +1190,11 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     }
   }
 
+  // Keep the GL in sync with the edited amount/account: reverse the old journal
+  // (no-op if none) then repost from the updated payment.
+  await deleteJournalByReference("VendorPayment", id)
   await onVendorPaymentCreated(payment.id, Number(user.id))
+  await logActivity("update", "VendorPayment", payment.id, `Memperbarui pembayaran vendor #${payment.id}`)
   revalidatePath("/pembelian/pembayaran-vendor")
   return { success: true, id: payment.id }
 
@@ -1085,6 +1204,45 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
+/**
+ * Void (cancel) a posted vendor bill while keeping the record for audit.
+ * Reverses the bill journal (re-opening the GR/IR clearing balance) and marks the
+ * bill "cancelled". A bill that already has payments applied must have those
+ * payments removed first.
+ */
+export async function voidVendorBill(id: number) {
+  "use server"
+
+  try {
+  await requirePermission("create_vendor_bills")
+  const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } })
+  if (bill.status === "draft") {
+    throw new Error("Tagihan draft tidak perlu dibatalkan. Gunakan hapus.")
+  }
+  if (bill.status === "cancelled") {
+    throw new Error("Tagihan sudah dibatalkan.")
+  }
+  if (Number(bill.paidAmount ?? 0) > 0) {
+    throw new Error("Hapus pembayaran tagihan ini terlebih dahulu sebelum membatalkan.")
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await deleteJournalByReferenceTx(tx, "VendorBill", id)
+    await tx.vendorBill.update({ where: { id }, data: { status: "cancelled" } })
+  })
+
+  await logActivity("void", "VendorBill", id, `Membatalkan tagihan vendor #${id}`)
+  revalidatePath("/pembelian/tagihan")
+  revalidatePath(`/pembelian/tagihan/${id}`)
+  return { success: true }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[voidVendorBill]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
 export async function deletePurchaseReturn(id: number) {
   "use server"
 
@@ -1095,6 +1253,7 @@ export async function deletePurchaseReturn(id: number) {
   }
 
   await prisma.purchaseReturn.delete({ where: { id } })
+  await logActivity("delete", "PurchaseReturn", id, `Menghapus retur pembelian #${id}`)
   revalidatePath("/pembelian/retur")
   return { success: true }
 

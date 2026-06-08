@@ -61,9 +61,9 @@ export default async function ArApSummaryPage() {
     <div className="flex flex-col gap-6">
       <PrintHeader title="Ringkasan Piutang & Hutang" period={period} />
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
-        { label: "Reports", href: "/laporan" },
-        { label: "AR/AP Summary" },
+        { label: "Dasbor", href: "/" },
+        { label: "Laporan", href: "/laporan" },
+        { label: "Ringkasan AR/AP" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
@@ -76,17 +76,17 @@ export default async function ArApSummaryPage() {
       {/* KPI */}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Total Piutang (AR)</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Piutang (AR)</div>
           <div className="text-xl font-bold text-primary">{formatCurrency(totalAR)}</div>
-          <div className="text-xs text-muted">{arRows.length} customer</div>
+          <div className="text-xs text-muted-foreground">{arRows.length} pelanggan</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Total Hutang (AP)</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Hutang (AP)</div>
           <div className="text-xl font-bold text-danger">{formatCurrency(totalAP)}</div>
-          <div className="text-xs text-muted">{apRows.length} vendor</div>
+          <div className="text-xs text-muted-foreground">{apRows.length} pemasok</div>
         </div>
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted font-medium">Net Position</div>
+          <div className="text-[0.8125rem] text-muted-foreground font-medium">Posisi Bersih</div>
           <div className={`text-xl font-bold ${totalAR - totalAP >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(totalAR - totalAP)}</div>
         </div>
       </div>
@@ -94,16 +94,16 @@ export default async function ArApSummaryPage() {
       {/* AR Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">PIUTANG USAHA (Accounts Receivable)</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">PIUTANG USAHA</h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable data-report-table="Accounts Receivable">
             <DetailTableHead>
-              <DetailTableTh>Customer</DetailTableTh>
-              <DetailTableTh align="right">Jumlah Invoice</DetailTableTh>
+              <DetailTableTh>Pelanggan</DetailTableTh>
+              <DetailTableTh align="right">Jumlah Faktur</DetailTableTh>
               <DetailTableTh align="right">Total Tagihan</DetailTableTh>
               <DetailTableTh align="right">Sudah Dibayar</DetailTableTh>
-              <DetailTableTh align="right">Outstanding</DetailTableTh>
+              <DetailTableTh align="right">Belum Lunas</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {arRows.map((row, i) => (
@@ -116,7 +116,7 @@ export default async function ArApSummaryPage() {
                 </DetailTableRow>
               ))}
               {arRows.length === 0 && (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted py-6">Tidak ada piutang outstanding</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada piutang belum lunas</DetailTableTd></DetailTableRow>
               )}
               {arRows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">
@@ -135,16 +135,16 @@ export default async function ArApSummaryPage() {
       {/* AP Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">HUTANG USAHA (Accounts Payable)</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">HUTANG USAHA</h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable data-report-table="Accounts Payable">
             <DetailTableHead>
-              <DetailTableTh>Vendor</DetailTableTh>
-              <DetailTableTh align="right">Jumlah Bill</DetailTableTh>
+              <DetailTableTh>Pemasok</DetailTableTh>
+              <DetailTableTh align="right">Jumlah Tagihan</DetailTableTh>
               <DetailTableTh align="right">Total Tagihan</DetailTableTh>
               <DetailTableTh align="right">Sudah Dibayar</DetailTableTh>
-              <DetailTableTh align="right">Outstanding</DetailTableTh>
+              <DetailTableTh align="right">Belum Lunas</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {apRows.map((row, i) => (
@@ -157,7 +157,7 @@ export default async function ArApSummaryPage() {
                 </DetailTableRow>
               ))}
               {apRows.length === 0 && (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted py-6">Tidak ada hutang outstanding</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada hutang belum lunas</DetailTableTd></DetailTableRow>
               )}
               {apRows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">

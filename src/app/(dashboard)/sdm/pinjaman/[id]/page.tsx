@@ -30,8 +30,8 @@ export default async function EmployeeLoanDetailPage({
       <PageHeader
         title="Pinjaman Karyawan"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
           { label: "Pinjaman", href: "/sdm/pinjaman" },
           { label: "Detail" },
         ]}

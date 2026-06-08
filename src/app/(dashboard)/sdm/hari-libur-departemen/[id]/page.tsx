@@ -35,25 +35,25 @@ export default async function DepartmentHolidayDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Nama</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nama</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{holiday.name}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Departemen</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Departemen</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{holiday.department.name}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Tanggal</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(holiday.date)}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Berulang</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-fit ${holiday.isRecurring ? "bg-success/10 text-success" : "bg-default/10 text-muted"}`}>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Berulang</span>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-fit ${holiday.isRecurring ? "bg-success/10 text-success" : "bg-default/10 text-muted-foreground"}`}>
               {holiday.isRecurring ? "Ya" : "Tidak"}
             </span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted uppercase tracking-wide">Dibuat</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dibuat</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(holiday.createdAt)}</span>
           </div>
         </div>

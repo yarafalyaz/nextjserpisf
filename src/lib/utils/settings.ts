@@ -38,6 +38,10 @@ export const getSystemSettings = cache(async () => {
         enableAutoEmployeeCode: true,
         vendorCodePrefix: 'VEND-',
         enableAutoVendorCode: true,
+        paymentMethodCodePrefix: 'MTP-',
+        enableAutoPaymentMethodCode: true,
+        shippingMethodCodePrefix: 'MTK-',
+        enableAutoShippingMethodCode: true,
         // Document prefixes
         quotationCodePrefix: 'QUO',
         assetPrefix: 'ISF',

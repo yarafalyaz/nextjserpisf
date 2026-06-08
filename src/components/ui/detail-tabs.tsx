@@ -1,6 +1,6 @@
 'use client'
 
-import { Tabs } from '@heroui/react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs'
 import { ReactNode } from 'react'
 
 interface TabItem {
@@ -11,21 +11,18 @@ interface TabItem {
 
 export function DetailTabs({ tabs, ariaLabel }: { tabs: TabItem[]; ariaLabel: string }) {
   return (
-    <Tabs defaultSelectedKey={tabs[0]?.id} className="w-full">
-      <Tabs.ListContainer>
-        <Tabs.List aria-label={ariaLabel} className="w-full justify-center">
-          {tabs.map((tab) => (
-            <Tabs.Tab key={tab.id} id={tab.id}>
-              {tab.label}
-              <Tabs.Indicator />
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
-      </Tabs.ListContainer>
+    <Tabs defaultValue={tabs[0]?.id} className="w-full">
+      <TabsList aria-label={ariaLabel} className="w-full justify-center">
+        {tabs.map((tab) => (
+          <TabsTrigger key={tab.id} value={tab.id}>
+            {tab.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
       {tabs.map((tab) => (
-        <Tabs.Panel key={tab.id} id={tab.id} className="pt-4">
+        <TabsContent key={tab.id} value={tab.id} className="pt-4">
           {tab.content}
-        </Tabs.Panel>
+        </TabsContent>
       ))}
     </Tabs>
   )

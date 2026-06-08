@@ -19,14 +19,14 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/produksi/products/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/produksi/products/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
   }),
   columnHelper.accessor((row) => row.materials.length, {
     id: "materialsCount",
-    header: "Materials",
+    header: "Material",
     cell: (info) => `${info.getValue()} material`,
   }),
   columnHelper.display({
@@ -56,6 +56,8 @@ export function ProductTable({ data }: ProductTableProps) {
       ariaLabel="Daftar produk"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama produk..."
       onBulkDelete={(ids) => bulkDelete("product", ids)}
     />
   )

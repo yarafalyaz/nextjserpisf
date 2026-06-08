@@ -10,21 +10,11 @@ import { bulkDelete } from "@/actions/bulk.actions"
 interface WorkScheduleData {
   id: number
   name: string
-  dayOfWeek: number
+  days: string
   startTime: string
   endTime: string
-  departmentName: string
+  assignment: string
   isActive: boolean
-}
-
-const DAY_NAMES: Record<number, string> = {
-  0: "Minggu",
-  1: "Senin",
-  2: "Selasa",
-  3: "Rabu",
-  4: "Kamis",
-  5: "Jumat",
-  6: "Sabtu",
 }
 
 const columnHelper = createColumnHelper<WorkScheduleData>()
@@ -33,18 +23,18 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/sdm/jadwal-kerja/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/jadwal-kerja/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
   }),
-  columnHelper.accessor("departmentName", {
-    header: "Departemen",
+  columnHelper.accessor("assignment", {
+    header: "Berlaku Untuk",
     cell: (info) => info.getValue(),
   }),
-  columnHelper.accessor("dayOfWeek", {
-    header: "Hari",
-    cell: (info) => DAY_NAMES[info.getValue()] || String(info.getValue()),
+  columnHelper.accessor("days", {
+    header: "Hari Kerja",
+    cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("startTime", {
     header: "Jam Masuk",
@@ -87,6 +77,8 @@ export function WorkScheduleTable({ data }: WorkScheduleTableProps) {
       ariaLabel="Daftar jadwal kerja"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama jadwal..."
       onBulkDelete={(ids) => bulkDelete("workSchedule", ids)}
     />
   )

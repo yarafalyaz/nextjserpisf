@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -19,19 +18,28 @@ export default async function EditPage({
 
   if (!data) notFound()
 
+  const invoice = {
+    id: data.id,
+    customerId: data.customerId,
+    salesOrderId: data.salesOrderId ?? null,
+    date: data.date.toISOString().split("T")[0],
+    dueDate: data.dueDate?.toISOString().split("T")[0] ?? null,
+    notes: data.notes ?? null,
+  }
+
   const [customers, salesOrders] = await Promise.all([prisma.customer.findMany({ orderBy: { name: "asc" } }), prisma.salesOrder.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" } })])
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "sales", href: "/penjualan/faktur" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Penjualan", href: "/penjualan/faktur" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <SalesInvoiceForm invoice={data as any} customers={customers as any} salesOrders={salesOrders as any}/>
+      <SalesInvoiceForm invoice={invoice} customers={customers} salesOrders={salesOrders}/>
     </div>
   )
 }

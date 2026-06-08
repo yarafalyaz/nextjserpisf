@@ -33,6 +33,7 @@ export const customerSchema = z.object({
   district: z.string().optional(),
   village: z.string().optional(),
   postalCode: z.string().optional(),
+  creditLimit: z.number().min(0).optional(),
 })
 
 export const vendorSchema = z.object({
@@ -73,6 +74,9 @@ export const itemSchema = z.object({
   standardCost: z.number().min(0).optional(),
   purchasePrice: z.number().min(0).optional(),
   costingMethod: z.string().optional(),
+}).refine((data) => data.price >= data.cost, {
+  message: "Harga jual tidak boleh lebih rendah dari harga beli (modal). Diskon diterapkan saat penawaran/penjualan, bukan di master.",
+  path: ["price"],
 })
 
 export const warehouseSchema = z.object({

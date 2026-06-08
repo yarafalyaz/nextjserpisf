@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createBank } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Input, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateBankPage() {
@@ -25,10 +26,10 @@ export default function CreateBankPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Banks", href: "/master/bank" },
-  { label: "Create" },
+  { label: "Bank", href: "/master/bank" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Bank</h1>

@@ -23,13 +23,13 @@ export default async function EditPositionPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Positions", href: "/master/jabatan" },
-  { label: "Edit" },
+  { label: "Jabatan", href: "/master/jabatan" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Jabatan: {position.name}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Jabatan: {position.name}</h1>
       </div>
       <PositionCreateForm departments={departments} position={position} />
     </div>

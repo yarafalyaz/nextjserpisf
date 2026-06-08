@@ -18,7 +18,7 @@ test.describe("Master Karyawan CRUD", () => {
     // CREATE
     await page.goto("/master/karyawan/tambah", { waitUntil: "domcontentloaded" })
 
-    const deptInput = page.locator("input[placeholder='Cari department...']").first()
+    const deptInput = page.locator("input[placeholder='Cari departemen...']").first()
     await deptInput.click()
     await deptInput.press("ArrowDown")
     await deptInput.press("Enter")
@@ -47,7 +47,7 @@ test.describe("Master Karyawan CRUD", () => {
     const row = page.locator("tr").filter({ hasText: name }).first()
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+    await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/karyawan\/\d+\/ubah/, { timeout: 20000 })
 

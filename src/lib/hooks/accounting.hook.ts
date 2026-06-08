@@ -1,5 +1,8 @@
 
 import { prisma, TxClient } from "@/lib/db/prisma";
+import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { toBaseFactor } from "@/lib/services/uom.service";
 
 /**
  * Accounting Hook - Observer pattern replacement for all accounting journal entries.
@@ -23,6 +26,45 @@ async function generateJournalNumber(
 ): Promise<string> {
   const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
   return `${prefix}/${referenceId}/${timestamp}`;
+}
+
+/**
+ * Delete the journal(s) and their entries linked to a source document.
+ * Use when a DRAFT document (vendor bill/payment, down payment, etc.) whose
+ * journal was already posted gets deleted/edited, to avoid orphaned GL entries.
+ */
+export async function deleteJournalByReference(
+  referenceType: string,
+  referenceId: number
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await deleteJournalByReferenceTx(tx, referenceType, referenceId);
+  });
+}
+
+/**
+ * Same as deleteJournalByReference but runs inside an existing transaction.
+ * Use this from delete/cancel actions that already manage their own $transaction
+ * to avoid nested transactions. `referenceType` accepts one or many types so a
+ * single document (e.g. a posted sales invoice with separate revenue + COGS
+ * journals) can have all of its GL entries reversed atomically.
+ */
+export async function deleteJournalByReferenceTx(
+  tx: TxClient,
+  referenceType: string | string[],
+  referenceId: number | number[]
+): Promise<void> {
+  const journals = await tx.journal.findMany({
+    where: {
+      referenceType: Array.isArray(referenceType) ? { in: referenceType } : referenceType,
+      referenceId: Array.isArray(referenceId) ? { in: referenceId } : referenceId,
+    },
+    select: { id: true },
+  });
+  if (journals.length === 0) return;
+  const journalIds = journals.map((j) => j.id);
+  await tx.journalEntry.deleteMany({ where: { journalId: { in: journalIds } } });
+  await tx.journal.deleteMany({ where: { id: { in: journalIds } } });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -50,7 +92,18 @@ export async function onSalesInvoicePosted(
   });
   if (existing) return;
 
+  await assertPeriodOpen(invoice.date);
+
   await prisma.$transaction(async (tx) => {
+    // Serialize concurrent postings of the same invoice and re-check idempotency
+    // under the row lock so two parallel postInvoice calls cannot both create a
+    // journal + double the stock-out.
+    await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`;
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "SalesInvoice", referenceId: invoiceId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "INV", invoiceId);
 
     const journal = await tx.journal.create({
@@ -69,7 +122,12 @@ export async function onSalesInvoicePosted(
     });
 
     const taxAmount = Number(invoice.taxAmount ?? 0);
-    const subtotal = Number(invoice.totalAmount) - taxAmount;
+    const hasTaxAccount = taxAmount > 0 && !!settings.salesTaxAccountId;
+    // Keep the journal balanced: only split out tax when a tax account exists,
+    // otherwise revenue absorbs the full amount (credit total == debit total).
+    const revenueCredit = hasTaxAccount
+      ? Number(invoice.totalAmount) - taxAmount
+      : Number(invoice.totalAmount);
 
     // Dr. Piutang Usaha
     await tx.journalEntry.create({
@@ -88,17 +146,17 @@ export async function onSalesInvoicePosted(
         journalId: journal.id,
         accountId: settings.salesRevenueAccountId!,
         debit: 0,
-        credit: subtotal,
+        credit: revenueCredit,
         memo: "Pendapatan Penjualan",
       },
     });
 
-    // Cr. PPN Keluaran (if any)
-    if (taxAmount > 0 && settings.salesTaxAccountId) {
+    // Cr. PPN Keluaran (only when a tax account is configured)
+    if (hasTaxAccount) {
       await tx.journalEntry.create({
         data: {
           journalId: journal.id,
-          accountId: settings.salesTaxAccountId,
+          accountId: settings.salesTaxAccountId!,
           debit: 0,
           credit: taxAmount,
           memo: "PPN Keluaran",
@@ -106,11 +164,70 @@ export async function onSalesInvoicePosted(
       });
     }
 
-    // Dr. HPP / Cr. Persediaan (if inventory cost can be derived)
-    const cogsAmount = invoice.items.reduce(
-      (sum, item) => sum + Number(item.qty) * Math.max(0, Number(item.total ?? 0) - Number(item.discount ?? 0)),
-      0
-    );
+    // Dr. HPP / Cr. Persediaan + physical stock-out for PRODUCT items.
+    // Previously the COGS journal was posted but stock (qtyOnHand + FIFO layers)
+    // was never reduced, diverging the GL inventory from the stock subledger.
+    // Here we also create StockMove OUT and consume FIFO for stockable products.
+    const productItems = invoice.items.filter(
+      (it): it is typeof it & { itemId: number } => typeof it.itemId === "number" && Number(it.qty) > 0
+    )
+    const itemIds = productItems.map((it) => it.itemId)
+    const itemRows = itemIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, cost: true, isProduct: true, defaultWarehouseId: true },
+        })
+      : [];
+    const itemInfo = new Map(itemRows.map((r) => [r.id, r]));
+
+    let cogsAmount = 0;
+    for (const line of productItems) {
+      const info = itemInfo.get(line.itemId);
+      if (!info || !info.isProduct) continue; // services / non-stock items: no stock-out, no COGS
+      // Multi-UoM: convert sold qty to base units for stock-out / COGS.
+      const factor = await toBaseFactor(tx, line.itemId, (line as { uom?: string | null }).uom);
+      const qty = Number(line.qty) * factor;
+      const fallbackUnitCost = factor > 0 ? Number(info.cost ?? 0) / factor : Number(info.cost ?? 0);
+
+      // Lock the item row to serialize concurrent stock-out for the same item,
+      // preventing two parallel sales from racing the FIFO layers into negative
+      // (oversell/negative-remaining). Mirrors material-issue/work-order hooks.
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${line.itemId} FOR UPDATE`;
+
+      // Decrement on-hand (reflects the sale even if overselling) and consume
+      // FIFO layers from the item's default warehouse up to what is available
+      // (allowShortfall — a sale is never blocked by stock).
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${line.itemId}`;
+      const lineSerials = Array.isArray((line as { serialNumbers?: unknown }).serialNumbers)
+        ? ((line as { serialNumbers?: unknown[] }).serialNumbers as unknown[]).map((s) => String(s))
+        : null;
+      const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
+        itemId: line.itemId,
+        warehouseId: info.defaultWarehouseId,
+        qty,
+        allowShortfall: true,
+        serialNumbers: lineSerials,
+      });
+      const lineCogs = consumedCost + shortfall * fallbackUnitCost;
+      cogsAmount += lineCogs;
+      const moveUnitCost = qty > 0 ? lineCogs / qty : fallbackUnitCost;
+
+      await tx.stockMove.create({
+        data: {
+          documentNo: `SM-INV-${invoice.documentNo}-${line.itemId}`,
+          itemId: line.itemId,
+          warehouseId: info.defaultWarehouseId ?? null,
+          qty,
+          cost: moveUnitCost,
+          impact: "OUT",
+          status: "posted",
+          referenceType: "SalesInvoice",
+          referenceId: invoice.id,
+          notes: `Penjualan ${invoice.documentNo}`,
+          createdBy: userId ?? null,
+        },
+      });
+    }
 
     if (cogsAmount > 0 && settings.cogsAccountId && settings.inventoryAccountId) {
       const cogsJournalNumber = await generateJournalNumber(tx, "INV-COGS", invoiceId);
@@ -175,6 +292,8 @@ export async function onSalesPaymentCreated(
     where: { referenceType: "SalesPayment", referenceId: paymentId },
   });
   if (existing) return;
+
+  await assertPeriodOpen(payment.paymentDate ?? new Date());
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PAY", paymentId);
@@ -247,11 +366,17 @@ export async function onPurchaseOrderReceived(
   });
   if (existing) return;
 
+  await assertPeriodOpen(new Date());
+
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PO-RCV", orderId);
 
     const taxAmount = Number(order.tax ?? 0);
-    const subtotal = Number(order.totalAmount) - taxAmount;
+    const hasTaxAccount = taxAmount > 0 && !!settings.purchaseTaxAccountId;
+    // Keep balanced: inventory absorbs tax when no input-tax account is set.
+    const inventoryDebit = hasTaxAccount
+      ? Number(order.totalAmount) - taxAmount
+      : Number(order.totalAmount);
 
     const journal = await tx.journal.create({
       data: {
@@ -273,18 +398,18 @@ export async function onPurchaseOrderReceived(
       data: {
         journalId: journal.id,
         accountId: settings.inventoryAccountId!,
-        debit: subtotal,
+        debit: inventoryDebit,
         credit: 0,
         memo: "Persediaan Masuk",
       },
     });
 
-    // Dr. PPN Masukan (if any)
-    if (taxAmount > 0 && settings.purchaseTaxAccountId) {
+    // Dr. PPN Masukan (only when an input-tax account is configured)
+    if (hasTaxAccount) {
       await tx.journalEntry.create({
         data: {
           journalId: journal.id,
-          accountId: settings.purchaseTaxAccountId,
+          accountId: settings.purchaseTaxAccountId!,
           debit: taxAmount,
           credit: 0,
           memo: "PPN Masukan",
@@ -339,6 +464,8 @@ export async function onStockAdjustmentProcessed(
     if (diff > 0) totalPositive += value;
     else if (diff < 0) totalNegative += value;
   }
+
+  await assertPeriodOpen(new Date());
 
   await prisma.$transaction(async (tx) => {
     // Journal for positive adjustments (stock increase)
@@ -459,6 +586,8 @@ export async function onWorkOrderCompleted(
 
   if (totalCost <= 0) return;
 
+  await assertPeriodOpen(new Date());
+
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "WO", workOrderId);
 
@@ -522,6 +651,8 @@ export async function onExpenseApproved(
     where: { referenceType: "Expense", referenceId: expenseId },
   });
   if (existing) return;
+
+  await assertPeriodOpen(expense.date ?? new Date());
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "EXP", expenseId);
@@ -587,6 +718,8 @@ export async function onPettyCashCreated(
     where: { referenceType: "PettyCash", referenceId: pettyCashId },
   });
   if (existing) return;
+
+  await assertPeriodOpen(pettyCash.transactionDate ?? new Date());
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PC", pettyCashId);
@@ -675,7 +808,7 @@ export async function onSalesReturnCompleted(
   userId?: number
 ): Promise<void> {
   const settings = await getSystemSettings();
-  if (!settings.salesReturnAccountId || !settings.salesReceivableAccountId) return;
+  if (!settings.salesReturnAccountId || !settings.salesReceivableAccountId || !settings.inventoryAccountId) return;
 
   const salesReturn = await prisma.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
@@ -688,12 +821,15 @@ export async function onSalesReturnCompleted(
   });
   if (existing) return;
 
-  // Compute total from items (SalesReturn has no totalAmount field)
-  const totalAmount = salesReturn.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.cost),
-    0
-  );
-  if (totalAmount <= 0) return;
+  // Revenue side valued at the selling price (reduces A/R by what was invoiced);
+  // goods come back into inventory at cost. The margin nets into the Sales Return
+  // contra-revenue account. This single journal owns all GL for a sales return
+  // (the stock hook only moves stock now).
+  const priceTotal = salesReturn.items.reduce((sum, item) => sum + Number(item.qty) * Number(item.price ?? 0), 0);
+  const costTotal = salesReturn.items.reduce((sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0), 0);
+  if (priceTotal <= 0 && costTotal <= 0) return;
+
+  await assertPeriodOpen(new Date());
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "SR", returnId);
@@ -707,32 +843,27 @@ export async function onSalesReturnCompleted(
         description: `Retur Penjualan ${salesReturn.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: totalAmount,
-        totalCredit: totalAmount,
+        totalDebit: priceTotal + costTotal,
+        totalCredit: priceTotal + costTotal,
         createdBy: userId ?? null,
       },
     });
 
-    // Dr. Retur Penjualan
+    // Dr. Retur Penjualan (harga jual) — contra-revenue
     await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.salesReturnAccountId!,
-        debit: totalAmount,
-        credit: 0,
-        memo: "Retur Penjualan",
-      },
+      data: { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: priceTotal, credit: 0, memo: "Retur Penjualan" },
     });
-
-    // Cr. Piutang Usaha
+    // Cr. Piutang Usaha (harga jual)
     await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.salesReceivableAccountId!,
-        debit: 0,
-        credit: totalAmount,
-        memo: "Pengurangan Piutang (Retur)",
-      },
+      data: { journalId: journal.id, accountId: settings.salesReceivableAccountId!, debit: 0, credit: priceTotal, memo: "Pengurangan Piutang (Retur)" },
+    });
+    // Dr. Persediaan (cost) — barang masuk kembali
+    await tx.journalEntry.create({
+      data: { journalId: journal.id, accountId: settings.inventoryAccountId!, debit: costTotal, credit: 0, memo: "Persediaan Masuk (Retur)" },
+    });
+    // Cr. Retur Penjualan (cost) — offset HPP keluar dari contra-revenue
+    await tx.journalEntry.create({
+      data: { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: 0, credit: costTotal, memo: "HPP Retur Masuk Kembali" },
     });
   });
 }
@@ -767,6 +898,8 @@ export async function onPurchaseReturnProcessed(
     0
   );
   if (totalAmount <= 0) return;
+
+  await assertPeriodOpen(new Date());
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PR", returnId);
@@ -842,6 +975,8 @@ export async function onMaterialIssueCompleted(
 
   if (totalCost <= 0) return;
 
+  await assertPeriodOpen(new Date());
+
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "MI", issueId);
 
@@ -907,6 +1042,8 @@ export async function onDownPaymentReceived(
   });
   if (existing) return;
 
+  await assertPeriodOpen(dp.paymentDate || new Date());
+
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
@@ -957,6 +1094,32 @@ export async function onVendorBillPosted(
   });
   if (existing) return;
 
+  await assertPeriodOpen(bill.date);
+
+  // A bill linked to a PO that already had goods received is "goods-based": the
+  // goods already hit Inventory at GR (Dr Inventory / Cr clearing). The bill must
+  // therefore DEBIT the clearing account (purchaseInventory) to clear it — not an
+  // expense account — otherwise the same goods are counted twice (Inventory + Expense)
+  // and the clearing account is never relieved. Service/expense bills (no GR) keep
+  // debiting the expense account.
+  const grandTotal = Number(bill.grandTotal);
+  const goodsBased =
+    bill.purchaseOrderId != null &&
+    settings.purchaseInventoryAccountId != null &&
+    (await prisma.goodsReceipt.count({ where: { purchaseOrderId: bill.purchaseOrderId } })) > 0;
+
+  const debitEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [];
+  if (goodsBased) {
+    const taxAmount = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
+    const clearingAmount = grandTotal - taxAmount;
+    debitEntries.push({ accountId: settings.purchaseInventoryAccountId!, debit: clearingAmount, credit: 0, memo: "Clearing penerimaan barang" });
+    if (taxAmount > 0) {
+      debitEntries.push({ accountId: settings.purchaseTaxAccountId!, debit: taxAmount, credit: 0, memo: "PPN Masukan" });
+    }
+  } else {
+    debitEntries.push({ accountId: settings.purchaseExpenseAccountId || settings.purchasePayableAccountId!, debit: grandTotal, credit: 0, memo: "Purchase expense" });
+  }
+
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "BILL", billId);
 
@@ -974,8 +1137,8 @@ export async function onVendorBillPosted(
         createdBy: userId,
         entries: {
           create: [
-            { accountId: settings.purchaseExpenseAccountId || settings.purchasePayableAccountId!, debit: bill.grandTotal, credit: 0, memo: "Purchase expense" },
-            { accountId: settings.purchasePayableAccountId!, debit: 0, credit: bill.grandTotal, memo: "Accounts Payable" },
+            ...debitEntries,
+            { accountId: settings.purchasePayableAccountId!, debit: 0, credit: grandTotal, memo: "Accounts Payable" },
           ],
         },
       },
@@ -1005,6 +1168,8 @@ export async function onVendorPaymentCreated(
     where: { referenceType: "VendorPayment", referenceId: paymentId },
   });
   if (existing) return;
+
+  await assertPeriodOpen(payment.paymentDate || new Date());
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "VP", paymentId);

@@ -1,6 +1,10 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
+import { cn } from "@/lib/utils"
+
+const INPUT_BASE_CLASS =
+  "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30"
 
 interface CurrencyInputProps {
   name?: string
@@ -115,7 +119,7 @@ export function CurrencyInput({
   return (
     <div className="relative">
       {prefix && (
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
           {prefix}
         </span>
       )}
@@ -128,7 +132,7 @@ export function CurrencyInput({
         onBlur={handleBlur}
         onFocus={handleFocus}
         placeholder={placeholder}
-        className={`${className} ${prefix ? "pl-10" : ""}`}
+        className={cn(INPUT_BASE_CLASS, prefix ? "pl-10" : "", className)}
         style={style}
         required={required}
         disabled={disabled}

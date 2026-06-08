@@ -52,16 +52,17 @@ export default async function DownPaymentsPage({
         <h1 className="text-2xl font-bold text-foreground">Uang Muka</h1>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari customer atau quotation..." action="/penjualan/uang-muka" />
+      <DownPaymentTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari pelanggan atau penawaran..." action="/penjualan/uang-muka" />}
+        filters={
           <div className="flex gap-1.5 flex-wrap">
             {["", "pending", "confirmed", "cancelled"].map((dbStatus) => {
               const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
               return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/penjualan/uang-muka${urlStatus ? `?status=${urlStatus}` : ""}`} 
+                <Link
+                  key={dbStatus}
+                  href={`/penjualan/uang-muka${urlStatus ? `?status=${urlStatus}` : ""}`}
                   className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -69,10 +70,8 @@ export default async function DownPaymentsPage({
               )
             })}
           </div>
-        </div>
-
-        <DownPaymentTable data={tableData} />
-      </div>
+        }
+      />
     </div>
   )
 }

@@ -6,7 +6,10 @@ import { createPurchaseRequest, updatePurchaseRequest } from "@/actions/purchase
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Plus, Trash2 } from "lucide-react"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { Input, ComboBox, ListBox, Label, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -62,7 +65,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
           await createPurchaseRequest(formData)
 
         }
-        showSuccess(request?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(request?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/pembelian/permintaan")
         router.refresh()
       } catch (error) {
@@ -81,27 +84,19 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Judul purchase request (opsional)"
+              placeholder="Judul permintaan pembelian (opsional)"
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <ComboBox
+            <Label htmlFor="requestedBy">Pemohon</Label>
+            <Combobox
+              id="requestedBy"
               name="requestedBy"
-              selectedKey={requestedBy || null}
-              onSelectionChange={(key) => setRequestedBy(key ? String(key) : "")}
-              className="w-full"
-              isRequired
-            >
-              <Label>Pemohon</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari pemohon..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {employees.map((emp) => (
-                    <ListBox.Item key={emp.id} id={String(emp.id)} textValue={emp.name}>{emp.name}</ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+              value={requestedBy || null}
+              onChange={(key) => setRequestedBy(key ?? "")}
+              placeholder="Cari pemohon..."
+              options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker label="Tanggal" name="date" value={date} onChange={setDate} required />
@@ -114,7 +109,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
         <FormSection title="Detail" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="description">Deskripsi</Label>
-            <TextArea
+            <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -124,7 +119,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
-            <TextArea
+            <Textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -137,7 +132,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
         <FormSection title="Item" columns={1}>
           <div>
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-base font-semibold text-foreground">Items yang Dibutuhkan</h3>
+              <h3 className="text-base font-semibold text-foreground">Item yang Dibutuhkan</h3>
               <Button
                 type="button"
                 onPress={addItem}
@@ -160,23 +155,12 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
                   {prItems.map((item, i) => (
                     <tr key={i} className="border-b border-default/50">
                       <td className="py-2 px-2">
-                        <ComboBox
-                          selectedKey={item.itemId ? String(item.itemId) : null}
-                          onSelectionChange={(key) => updateItem(i, "itemId", key ? Number(key) : 0)}
-                          className="w-full"
-                          isRequired
-                        >
-                          <ComboBox.InputGroup><Input placeholder="Cari item..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-                          <ComboBox.Popover>
-                            <ListBox>
-                              {items.map((it) => (
-                                <ListBox.Item key={it.id} id={String(it.id)} textValue={`${it.sku} - ${it.name}`}>
-                                  {it.sku} - {it.name} ({it.unitOfMeasure})
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </ComboBox.Popover>
-                        </ComboBox>
+                        <Combobox
+                          value={item.itemId ? String(item.itemId) : null}
+                          onChange={(key) => updateItem(i, "itemId", key ? Number(key) : 0)}
+                          placeholder="Cari item..."
+                          options={items.map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name} (${it.unitOfMeasure})` }))}
+                        />
                       </td>
                       <td className="py-2 px-2">
                         <Input
@@ -219,7 +203,7 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : request?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : request?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
@@ -26,7 +27,7 @@ export function AssetBrandForm({ brand }: { brand?: { id: number; name: string }
           await createAssetBrand(formData)
 
         }
-        showSuccess(brand?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        showSuccess(brand?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -39,14 +40,14 @@ export function AssetBrandForm({ brand }: { brand?: { id: number; name: string }
       <FormCard>
         <FormSection title="Informasi Umum" columns={1}>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Brand *</Label>
-            <Input id="name" name="name" placeholder="Nama brand aset" required defaultValue={brand?.name ?? ""} />
+            <Label htmlFor="name">Nama Merek *</Label>
+            <Input id="name" name="name" placeholder="Nama merek aset" required defaultValue={brand?.name ?? ""} />
           </div>
         </FormSection>
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : brand?.id ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : brand?.id ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

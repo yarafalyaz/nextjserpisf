@@ -33,9 +33,9 @@ export default async function VehicleBrandDetailPage({
       <PageHeader
         title={`Merek Kendaraan: ${brand.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Vehicles", href: "/kendaraan" },
-          { label: "Brands", href: "/kendaraan/merek" },
+          { label: "Dasbor", href: "/" },
+          { label: "Kendaraan", href: "/kendaraan" },
+          { label: "Merek", href: "/kendaraan/merek" },
           { label: "Detail" },
         ]}
         actions={
@@ -59,7 +59,7 @@ export default async function VehicleBrandDetailPage({
         </div>
         <div className="p-4 px-5">
           {brand.models.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Belum ada model</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada model</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

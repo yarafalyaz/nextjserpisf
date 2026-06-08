@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { EmployeeForm } from "@/components/forms/employee-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
+import { getSystemSettings } from "@/lib/utils/settings"
 
 export default async function CreateEmployeePage() {
   await requirePermission("create_employees")
@@ -14,19 +15,21 @@ export default async function CreateEmployeePage() {
     prisma.position.findMany({ orderBy: { name: "asc" } }),
     peekNextDocumentNumber("EMP", "simple"),
   ])
+  const settings = await getSystemSettings()
+  const enableAutoCode = settings.enableAutoEmployeeCode !== false
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Employees", href: "/master/karyawan" },
-  { label: "Create" },
+  { label: "Karyawan", href: "/master/karyawan" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Karyawan</h1>
       </div>
-      <EmployeeForm departments={departments} positions={positions} generatedCode={generatedCode} />
+      <EmployeeForm departments={departments} positions={positions} generatedCode={generatedCode} enableAutoCode={enableAutoCode} />
     </div>
   )
 }

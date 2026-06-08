@@ -1,8 +1,16 @@
 'use client'
 
-import { Drawer, Button } from '@heroui/react'
 import { Filter } from 'lucide-react'
-import { useState } from 'react'
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+} from '@/components/ui/shadcn/sheet'
+import { Button } from '@/components/ui/shadcn/button'
 
 interface FilterDrawerProps {
   children: React.ReactNode
@@ -10,38 +18,25 @@ interface FilterDrawerProps {
 }
 
 export function FilterDrawer({ children, title = "Filter" }: FilterDrawerProps) {
-  const [isOpen, setIsOpen] = useState(false)
-
   return (
-    <>
-      <Button
-        variant="secondary"
-        size="sm"
-        className="lg:hidden"
-        onPress={() => setIsOpen(true)}
-      >
-        <Filter className="size-4" />
-        {title}
-      </Button>
-
-      <Drawer.Backdrop isOpen={isOpen} onOpenChange={setIsOpen}>
-        <Drawer.Content placement="right">
-          <Drawer.Dialog>
-            <Drawer.CloseTrigger />
-            <Drawer.Header>
-              <Drawer.Heading>{title}</Drawer.Heading>
-            </Drawer.Header>
-            <Drawer.Body>
-              {children}
-            </Drawer.Body>
-            <Drawer.Footer>
-              <Button slot="close" variant="secondary">
-                Tutup
-              </Button>
-            </Drawer.Footer>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </>
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="secondary" size="sm" className="lg:hidden">
+          <Filter className="size-4" />
+          {title}
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="flex flex-col gap-0">
+        <SheetHeader>
+          <SheetTitle>{title}</SheetTitle>
+        </SheetHeader>
+        <div className="flex-1 overflow-y-auto px-4 py-2">{children}</div>
+        <SheetFooter>
+          <SheetClose asChild>
+            <Button variant="secondary">Tutup</Button>
+          </SheetClose>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   )
 }

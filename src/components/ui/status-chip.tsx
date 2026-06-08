@@ -1,9 +1,12 @@
 'use client'
 
-import { Chip } from '@heroui/react'
+import { Badge } from '@/components/ui/shadcn/badge'
 import { statusLabel } from '@/lib/utils/status-labels'
+import { cn } from '@/lib/utils'
 
-const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'accent'> = {
+type Tone = 'success' | 'warning' | 'danger' | 'default' | 'accent'
+
+const statusColors: Record<string, Tone> = {
   active: 'success',
   draft: 'default',
   posted: 'success',
@@ -36,13 +39,23 @@ const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'default' 
   running: 'accent',
   done: 'success',
   planned: 'default',
+  in: 'success',
+  out: 'warning',
+}
+
+const toneClasses: Record<Tone, string> = {
+  success: 'border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+  warning: 'border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+  danger: 'border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
+  accent: 'border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+  default: 'border-transparent bg-muted text-muted-foreground',
 }
 
 export function StatusChip({ status }: { status: string }) {
-  const color = statusColors[status.toLowerCase().replace(/\s+/g, '_')] || 'default'
+  const tone = statusColors[status.toLowerCase().replace(/\s+/g, '_')] || 'default'
   return (
-    <Chip color={color} size="sm" variant="soft">
+    <Badge variant="outline" className={cn('font-medium', toneClasses[tone])}>
       {statusLabel(status)}
-    </Chip>
+    </Badge>
   )
 }

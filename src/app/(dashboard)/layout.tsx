@@ -1,10 +1,10 @@
 import { auth } from "@/lib/auth/auth"
 import { redirect } from "next/navigation"
 import { SessionProvider } from "next-auth/react"
-import { Sidebar } from "@/components/layout/sidebar"
+import { AppSidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { CommandPalette } from "@/components/layout/command-palette"
-import { AppMain } from "@/components/layout/app-main"
+import { SidebarInset, SidebarProvider } from "@/components/ui/shadcn/sidebar"
 
 export default async function DashboardLayout({
   children,
@@ -19,15 +19,13 @@ export default async function DashboardLayout({
 
   return (
     <SessionProvider session={session}>
-      <div className="app-layout">
-        <Sidebar />
-        <AppMain>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
           <Header />
-          <main className="app-content">
-            {children}
-          </main>
-        </AppMain>
-      </div>
+          <main className="app-content">{children}</main>
+        </SidebarInset>
+      </SidebarProvider>
       <CommandPalette />
     </SessionProvider>
   )

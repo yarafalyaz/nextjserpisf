@@ -79,28 +79,34 @@ export async function GET(request: Request) {
 
       const purchaseCost = Number(asset.purchaseCost)
       const currentValue = Number(asset.currentValue)
+      const residualValue = Number(asset.residualValue)
 
-      // Skip if already fully depreciated
-      if (currentValue <= 0) continue
+      // Skip if already at/below residual value (fully depreciated)
+      const depreciableFloor = Math.max(0, residualValue)
+      if (currentValue <= depreciableFloor) { skipped++; continue }
 
-      // Calculate monthly depreciation (straight-line method)
+      // Calculate monthly depreciation (residual-aware, method-dependent)
       let monthlyDepreciation = 0
+      const isDeclining = asset.depreciationMethod === "declining_balance"
 
-      if (category.usefulLife && category.usefulLife > 0) {
-        // Straight-line: (cost - residual) / useful_life_months
-        // Assuming residual value = 0 for simplicity (no residual field in schema)
-        monthlyDepreciation = purchaseCost / (category.usefulLife * 12)
-      } else if (category.depreciationRate) {
-        // Rate-based: cost * rate / 12
+      if (isDeclining && category.depreciationRate) {
+        // Declining balance: currentValue * annualRate / 12 (book value method)
         const rate = Number(category.depreciationRate) / 100
-        monthlyDepreciation = purchaseCost * rate / 12
+        monthlyDepreciation = currentValue * rate / 12
+      } else if (category.usefulLife && category.usefulLife > 0) {
+        // Straight-line on depreciable base: (cost - residual) / months
+        monthlyDepreciation = (purchaseCost - depreciableFloor) / (category.usefulLife * 12)
+      } else if (category.depreciationRate) {
+        // Rate-based straight-line on depreciable base
+        const rate = Number(category.depreciationRate) / 100
+        monthlyDepreciation = (purchaseCost - depreciableFloor) * rate / 12
       }
 
-      if (monthlyDepreciation <= 0) continue
+      if (monthlyDepreciation <= 0) { skipped++; continue }
 
-      // Don't depreciate more than current value
-      if (monthlyDepreciation > currentValue) {
-        monthlyDepreciation = currentValue
+      // Never depreciate below the residual value
+      if (currentValue - monthlyDepreciation < depreciableFloor) {
+        monthlyDepreciation = currentValue - depreciableFloor
       }
 
       const newValue = currentValue - monthlyDepreciation
@@ -136,7 +142,12 @@ export async function GET(request: Request) {
           data: {
             journalNumber,
             transactionDate: new Date(year, month - 1, 1),
-            referenceType: "ASSET_DEPRECIATION",
+            // Period-specific referenceType: journals are unique on
+            // (referenceType, referenceId). Using a bare "ASSET_DEPRECIATION" with
+            // referenceId=asset.id collides from the 2nd month onward (same pair),
+            // which silently stopped depreciation after month 1. Encoding the period
+            // makes each asset+month unique AND gives idempotency against double runs.
+            referenceType: `ASSET_DEPRECIATION_${year}${String(month).padStart(2, "0")}`,
             referenceId: asset.id,
             description: `Penyusutan aset: ${asset.name} (${asset.code}) - ${month}/${year}`,
             type: "DEPRECIATION",

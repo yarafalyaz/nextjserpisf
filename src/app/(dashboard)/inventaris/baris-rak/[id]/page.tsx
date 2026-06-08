@@ -38,8 +38,8 @@ export default async function RackRowDetailPage({
       <PageHeader
         title={`Baris Rak: ${rackRow.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Inventory", href: "/inventaris" },
+          { label: "Dasbor", href: "/" },
+          { label: "Inventaris", href: "/inventaris" },
           { label: "Baris Rak", href: "/inventaris/baris-rak" },
           { label: "Detail" },
         ]}

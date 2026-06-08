@@ -31,13 +31,13 @@ export default async function CreateWorkOrderPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Manufacturing", href: "/produksi" },
-  { label: "Work Orders", href: "/produksi/perintah-kerja" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Manufaktur", href: "/produksi" },
+  { label: "Perintah Kerja", href: "/produksi/perintah-kerja" },
+  { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Work Order</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Perintah Kerja</h1>
       </div>
       <WorkOrderForm
         customers={customers}

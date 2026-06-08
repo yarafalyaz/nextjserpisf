@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { expenseSchema, type ExpenseInput } from "@/lib/validators"
@@ -10,7 +10,11 @@ import { createExpense, updateExpense } from "@/actions/finance.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Select, ComboBox, ListBox, Label, InputGroup, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
 
@@ -27,6 +31,7 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
 
   const expenseAccounts = accounts.filter((a) => a.type === "EXPENSE")
   const assetAccounts = accounts.filter((a) => a.type === "ASSET")
+  const [costCenterId, setCostCenterId] = useState<string | null>(expense?.costCenterId ? String(expense.costCenterId) : null)
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ExpenseInput>({
     resolver: zodResolver(expenseSchema),
@@ -49,16 +54,12 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
         const nativeFormData = new FormData(event?.target)
         const attachmentIdsValue = nativeFormData.get("attachmentIds")
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
-        if (expense?.id) {
-
-          await updateExpense(expense.id, formData)
-
-        } else {
-
-          await createExpense(formData)
-
-        }
-        showSuccess(expense?.id ? "Data berhasil diupdate" : "Data berhasil ditambahkan")
+        // costCenterId is held in local state (not part of the RHF schema), so it
+        // must be appended explicitly or the selected cost center is lost.
+        if (costCenterId) formData.append("costCenterId", costCenterId)
+        const result = expense?.id ? await updateExpense(expense.id, formData) : await createExpense(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(expense?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/keuangan/pengeluaran")
         router.refresh()
       } catch (error) {
@@ -75,27 +76,16 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
             name="accountId"
             control={control}
             render={({ field }) => (
-              <ComboBox
-                selectedKey={field.value ? String(field.value) : null}
-                onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                className="w-full"
-              >
-                <Label>Akun Beban *</Label>
-                <ComboBox.InputGroup>
-                  <Input placeholder="Cari akun beban..." />
-                  <ComboBox.Trigger />
-                </ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {expenseAccounts.map((acc) => (
-                      <ListBox.Item key={acc.id} id={String(acc.id)} textValue={`${acc.code} - ${acc.name}`}>
-                        {acc.code} - {acc.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <>
+                <Label htmlFor="accountId">Akun Beban *</Label>
+                <Combobox
+                  id="accountId"
+                  options={expenseAccounts.map((acc) => ({ value: String(acc.id), label: `${acc.code} - ${acc.name}` }))}
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                  placeholder="Cari akun beban..."
+                />
+              </>
             )}
           />
           {errors.accountId && <span className="text-xs text-danger mt-1">{errors.accountId.message}</span>}
@@ -106,37 +96,23 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
             name="paidFromAccountId"
             control={control}
             render={({ field }) => (
-              <ComboBox
-                selectedKey={field.value ? String(field.value) : null}
-                onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                className="w-full"
-              >
-                <Label>Dibayar Dari</Label>
-                <ComboBox.InputGroup>
-                  <Input placeholder="Cari akun kas/bank..." />
-                  <ComboBox.Trigger />
-                </ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {assetAccounts.map((acc) => (
-                      <ListBox.Item key={acc.id} id={String(acc.id)} textValue={`${acc.code} - ${acc.name}`}>
-                        {acc.code} - {acc.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <>
+                <Label htmlFor="paidFromAccountId">Dibayar Dari</Label>
+                <Combobox
+                  id="paidFromAccountId"
+                  options={assetAccounts.map((acc) => ({ value: String(acc.id), label: `${acc.code} - ${acc.name}` }))}
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                  placeholder="Cari akun kas/bank..."
+                />
+              </>
             )}
           />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Jumlah (Rp) *</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" />} />
-          </InputGroup>
+          <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" prefix="Rp" />} />
           {errors.amount && <span className="text-xs text-danger mt-1">{errors.amount.message}</span>}
         </div>
 
@@ -156,45 +132,39 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
             name="category"
             control={control}
             render={({ field }) => (
-              <Select selectedKey={field.value || null} onSelectionChange={(key) => field.onChange(key ? String(key) : "")} className="w-full">
-                <Label>Kategori</Label>
-                <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih Kategori"}</Select.Value><Select.Indicator /></Select.Trigger>
-                <Select.Popover>
-                  <ListBox>
-                    <ListBox.Item id="operasional" textValue="Operasional">Operasional<ListBox.ItemIndicator /></ListBox.Item>
-                    <ListBox.Item id="transportasi" textValue="Transportasi">Transportasi<ListBox.ItemIndicator /></ListBox.Item>
-                    <ListBox.Item id="makan" textValue="Makan & Minum">Makan & Minum<ListBox.ItemIndicator /></ListBox.Item>
-                    <ListBox.Item id="utilitas" textValue="Utilitas">Utilitas<ListBox.ItemIndicator /></ListBox.Item>
-                    <ListBox.Item id="marketing" textValue="Marketing">Marketing<ListBox.ItemIndicator /></ListBox.Item>
-                    <ListBox.Item id="maintenance" textValue="Maintenance">Maintenance<ListBox.ItemIndicator /></ListBox.Item>
-                    <ListBox.Item id="lainnya" textValue="Lainnya">Lainnya<ListBox.ItemIndicator /></ListBox.Item>
-                  </ListBox>
-                </Select.Popover>
-              </Select>
+              <>
+                <Label htmlFor="category">Kategori</Label>
+                <FormSelect
+                  id="category"
+                  value={field.value || ""}
+                  onValueChange={field.onChange}
+                  placeholder="Pilih Kategori"
+                  options={[
+                    { value: "operasional", label: "Operasional" },
+                    { value: "transportasi", label: "Transportasi" },
+                    { value: "makan", label: "Makan & Minum" },
+                    { value: "utilitas", label: "Utilitas" },
+                    { value: "marketing", label: "Pemasaran" },
+                    { value: "maintenance", label: "Pemeliharaan" },
+                    { value: "lainnya", label: "Lainnya" },
+                  ]}
+                />
+              </>
             )}
           />
         </div>
 
         {costCenters.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            <ComboBox
+            <Label htmlFor="costCenterId">Pusat Biaya</Label>
+            <Combobox
+              id="costCenterId"
               name="costCenterId"
-              defaultSelectedKey={expense?.costCenterId ? String(expense.costCenterId) : undefined}
-              className="w-full"
-            >
-              <Label>Cost Center</Label>
-              <ComboBox.InputGroup><Input placeholder="Cari cost center..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-              <ComboBox.Popover>
-                <ListBox>
-                  {costCenters.map((cc) => (
-                    <ListBox.Item key={cc.id} id={String(cc.id)} textValue={`${cc.code} - ${cc.name}`}>
-                      {cc.code} - {cc.name}
-                      <ListBox.ItemIndicator />
-                    </ListBox.Item>
-                  ))}
-                </ListBox>
-              </ComboBox.Popover>
-            </ComboBox>
+              options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} - ${cc.name}` }))}
+              value={costCenterId}
+              onChange={setCostCenterId}
+              placeholder="Cari pusat biaya..."
+            />
           </div>
         )}
 
@@ -203,27 +173,16 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
             name="projectId"
             control={control}
             render={({ field }) => (
-              <ComboBox
-                selectedKey={field.value ? String(field.value) : null}
-                onSelectionChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                className="w-full"
-              >
-                <Label>Proyek</Label>
-                <ComboBox.InputGroup>
-                  <Input placeholder="Cari proyek..." />
-                  <ComboBox.Trigger />
-                </ComboBox.InputGroup>
-                <ComboBox.Popover>
-                  <ListBox>
-                    {projects.map((p) => (
-                      <ListBox.Item key={p.id} id={String(p.id)} textValue={`${p.documentNo || ''} - ${p.name}`}>
-                        {p.documentNo ? `${p.documentNo} - ` : ""}{p.name}
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    ))}
-                  </ListBox>
-                </ComboBox.Popover>
-              </ComboBox>
+              <>
+                <Label htmlFor="projectId">Proyek</Label>
+                <Combobox
+                  id="projectId"
+                  options={projects.map((p) => ({ value: String(p.id), label: `${p.documentNo ? `${p.documentNo} - ` : ""}${p.name}` }))}
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                  placeholder="Cari proyek..."
+                />
+              </>
             )}
           />
         </div>
@@ -240,7 +199,7 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <TextArea id="description" {...register("description")} rows={3} placeholder="Deskripsi pengeluaran..." />
+          <Textarea id="description" {...register("description")} rows={3} placeholder="Deskripsi pengeluaran..." />
         </div>
       </div>
 
@@ -248,7 +207,7 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-expense">
-          {isPending ? "Menyimpan..." : expense?.id ? "Update" : "Simpan"}
+          {isPending ? "Menyimpan..." : expense?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
     </form>

@@ -33,11 +33,11 @@ export default async function PurchaseRequestDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Purchase Request ${request.documentNo}`}
+        title={`Permintaan Pembelian ${request.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/pembelian" },
-          { label: "Requests", href: "/pembelian/permintaan" },
+          { label: "Dasbor", href: "/" },
+          { label: "Pembelian", href: "/pembelian" },
+          { label: "Permintaan", href: "/pembelian/permintaan" },
           { label: "Detail" },
         ]}
         badge={<StatusChip status={request.status} />}
@@ -77,12 +77,12 @@ export default async function PurchaseRequestDetailPage({
         </div>
         <div className="p-4 px-5">
           {request.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item ID</DetailTableTh>
-                <DetailTableTh align="right">Qty</DetailTableTh>
+                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh align="right">Jml</DetailTableTh>
                 <DetailTableTh>Catatan</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>

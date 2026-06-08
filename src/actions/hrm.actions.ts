@@ -2,11 +2,16 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { computeBpjsEmployee, computePph21Monthly } from "@/lib/services/payroll-statutory.service"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
+import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service"
+import { syncNationalHolidays as syncNationalHolidaysService } from "@/lib/services/holiday-sync.service"
+import { logActivity } from "@/lib/services/activity-log.service"
+import { getSystemSettings } from "@/lib/utils/settings"
 
 function getWibNow(now = new Date()) {
   const wibOffset = 7 * 60 * 60 * 1000
@@ -23,19 +28,27 @@ function toMinutes(hhmm: string) {
   return h * 60 + m
 }
 
-async function resolveWorkSchedule(departmentId: number | null | undefined, dayOfWeek: number) {
-  const schedules = await prisma.workSchedule.findMany({
-    where: {
-      isActive: true,
-      dayOfWeek,
-      OR: [{ departmentId: departmentId ?? undefined }, { departmentId: null }],
-    },
-    orderBy: { departmentId: "desc" },
-  })
+/** Menit irisan antara periode kerja [inMin,outMin] dengan jam istirahat (ISOMA). */
+function breakOverlapMinutes(inMin: number, outMin: number, breakStart?: string | null, breakEnd?: string | null): number {
+  if (!breakStart || !breakEnd) return 0
+  const bs = toMinutes(breakStart)
+  const be = toMinutes(breakEnd)
+  if (be <= bs || outMin <= inMin) return 0
+  return Math.max(0, Math.min(outMin, be) - Math.max(inMin, bs))
+}
 
+async function resolveWorkSchedule(employeeId: number | null | undefined, departmentId: number | null | undefined, dayOfWeek: number) {
+  const schedules = await prisma.workSchedule.findMany({
+    where: { isActive: true },
+    include: { employees: { select: { id: true } }, departments: { select: { id: true } } },
+  })
+  const onDay = schedules.filter((s) =>
+    s.workDays.split(",").map((d) => Number(d.trim())).includes(dayOfWeek)
+  )
   return (
-    schedules.find((s) => s.departmentId === (departmentId ?? null)) ??
-    schedules.find((s) => s.departmentId === null) ??
+    onDay.find((s) => employeeId != null && s.employees.some((e) => e.id === employeeId)) ??
+    onDay.find((s) => s.employees.length === 0 && departmentId != null && s.departments.some((d) => d.id === departmentId)) ??
+    onDay.find((s) => s.employees.length === 0 && s.departments.length === 0) ??
     null
   )
 }
@@ -64,15 +77,14 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
   })
   if (!employee) throw new Error("Karyawan tidak ditemukan")
 
-  // Guard: holiday check (global + department)
+  // Hari libur (Minggu / libur nasional / libur departemen) → kerja dicatat
+  // sebagai lembur dan otomatis jadi pengajuan lembur saat check-out.
   const dayOfWeek = wibNow.getUTCDay()
   const holiday = await prisma.holiday.findFirst({ where: { date: today } })
   const deptHoliday = await prisma.departmentHoliday.findFirst({
     where: { departmentId: employee.departmentId ?? undefined, date: today },
   })
-  if (holiday || deptHoliday) {
-    throw new Error("Hari ini adalah hari libur. Tidak dapat check-in.")
-  }
+  const isOvertimeDay = dayOfWeek === 0 || !!holiday || !!deptHoliday
 
   // Guard: approved leave check
   const approvedLeave = await prisma.leaveRequest.findFirst({
@@ -87,27 +99,28 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
     throw new Error("Anda sedang dalam masa cuti. Tidak dapat check-in.")
   }
 
-  const schedule = await resolveWorkSchedule(employee.departmentId, dayOfWeek)
+  const schedule = await resolveWorkSchedule(employeeId, employee.departmentId, dayOfWeek)
   const startTime = schedule?.startTime ?? "08:00"
   const tolerance = schedule?.lateToleranceMinutes ?? 0
   const nowMinutes = wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes()
   const startMinutes = toMinutes(startTime)
   const deadlineMinutes = startMinutes + tolerance
-  const isLate = nowMinutes > deadlineMinutes
-  const lateMinutes = isLate ? nowMinutes - startMinutes : 0
+  const isLate = !isOvertimeDay && nowMinutes > deadlineMinutes
+  const lateMinutes = isLate ? nowMinutes - deadlineMinutes : 0
 
   const attendance = await prisma.attendance.create({
     data: {
       employeeId,
       date: today,
       checkIn: now,
-      status: isLate ? "late" : "present",
+      status: isOvertimeDay ? "overtime" : isLate ? "late" : "present",
       lateMinutes,
       checkInLatitude: latitude ?? null,
       checkInLongitude: longitude ?? null,
     },
   })
 
+  await logActivity("checkin", "Attendance", attendance.id, "Check-in absensi")
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 
@@ -124,13 +137,15 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
 
   const now = new Date()
   const wibNow = getWibNow(now)
-  const today = getWibDateOnly(now)
 
+  // Find the most recent open attendance for this employee regardless of date
+  // (handles overnight shifts that cross midnight).
   const attendance = await prisma.attendance.findFirst({
-    where: { employeeId, date: today, checkOut: null },
+    where: { employeeId, checkOut: null },
+    orderBy: { date: "desc" },
   })
   if (!attendance) {
-    throw new Error("Belum check-in atau sudah check-out hari ini")
+    throw new Error("Belum check-in atau sudah check-out")
   }
 
   const employee = await prisma.employee.findUnique({
@@ -138,11 +153,37 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
     select: { departmentId: true },
   })
   const dayOfWeek = wibNow.getUTCDay()
-  const schedule = await resolveWorkSchedule(employee?.departmentId, dayOfWeek)
+  const schedule = await resolveWorkSchedule(employeeId, employee?.departmentId, dayOfWeek)
   const endTime = schedule?.endTime ?? "17:00"
   const endMinutes = toMinutes(endTime)
   const nowMinutes = wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes()
-  const isHalfDay = nowMinutes < endMinutes
+  const isOvertimeDay = attendance.status === "overtime"
+  const isHalfDay = !isOvertimeDay && nowMinutes < endMinutes
+
+  // Jam kerja di hari libur → otomatis jadi pengajuan lembur (menunggu persetujuan).
+  let overtimeMinutes: number | null = null
+  if (isOvertimeDay && attendance.checkIn) {
+    const grossMinutes = Math.max(0, Math.round((now.getTime() - attendance.checkIn.getTime()) / 60000))
+    // Potong jam istirahat (ISOMA) yang beririsan dengan jam kerja.
+    const settings = await getSystemSettings()
+    const inWib = getWibNow(attendance.checkIn)
+    const inMin = inWib.getUTCHours() * 60 + inWib.getUTCMinutes()
+    const overlap = breakOverlapMinutes(inMin, nowMinutes, settings.restBreakStart, settings.restBreakEnd)
+    overtimeMinutes = Math.max(0, grossMinutes - overlap)
+    const hours = Math.round((overtimeMinutes / 60) * 100) / 100
+    if (hours > 0) {
+      await prisma.overtimeRequest.create({
+        data: {
+          employeeId,
+          date: attendance.date,
+          hours,
+          totalHours: hours,
+          reason: "Otomatis dari absensi hari libur",
+          status: "pending",
+        },
+      })
+    }
+  }
 
   await prisma.attendance.update({
     where: { id: attendance.id },
@@ -150,10 +191,12 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
       checkOut: now,
       checkOutLatitude: latitude ?? null,
       checkOutLongitude: longitude ?? null,
+      overtimeMinutes: overtimeMinutes ?? attendance.overtimeMinutes,
       status: isHalfDay ? "half_day" : attendance.status,
     },
   })
 
+  await logActivity("checkout", "Attendance", attendance.id, "Check-out absensi")
   revalidatePath("/sdm/absensi")
   return { success: true }
 
@@ -184,6 +227,7 @@ export async function createAttendance(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Attendance", attendance.id, "Membuat absensi")
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 
@@ -215,6 +259,7 @@ export async function updateAttendance(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "Attendance", attendance.id, "Memperbarui absensi")
   revalidatePath("/sdm/absensi")
   return { success: true, id: attendance.id }
 
@@ -231,17 +276,36 @@ export async function createLeaveRequest(formData: FormData) {
   try {
   await requirePermission("create_leave_requests")
 
+  const employeeId = requireId(formData.get("employeeId"), "employeeId")
+  const startDate = new Date(formData.get("startDate") as string)
+  const endDate = new Date(formData.get("endDate") as string)
+
+  // Guard: overlap — no pending/approved leave can overlap [startDate, endDate].
+  const overlap = await prisma.leaveRequest.findFirst({
+    where: {
+      employeeId,
+      status: { in: ["pending", "approved"] },
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+    },
+    select: { id: true },
+  })
+  if (overlap) {
+    throw new Error("Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.")
+  }
+
   const leave = await prisma.leaveRequest.create({
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
+      employeeId,
       type: formData.get("type") as string,
-      startDate: new Date(formData.get("startDate") as string),
-      endDate: new Date(formData.get("endDate") as string),
+      startDate,
+      endDate,
       reason: formData.get("reason") as string | null,
       status: "pending",
     },
   })
 
+  await logActivity("create", "LeaveRequest", leave.id, "Membuat pengajuan cuti")
   revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
 
@@ -269,6 +333,7 @@ export async function approveLeave(leaveId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
+  await logActivity("approve", "LeaveRequest", leaveId, "Menyetujui pengajuan cuti")
   revalidatePath("/sdm/cuti")
   return { success: true }
 
@@ -283,6 +348,11 @@ export async function rejectLeave(leaveId: number, reason?: string) {
   try {
   const user = await requirePermission("edit_leave_requests")
 
+  const leave = await prisma.leaveRequest.findUniqueOrThrow({ where: { id: leaveId }, select: { status: true } })
+  if (leave.status !== "pending") {
+    throw new Error("Hanya pengajuan cuti berstatus menunggu yang dapat ditolak")
+  }
+
   await prisma.leaveRequest.update({
     where: { id: leaveId },
     data: {
@@ -292,6 +362,7 @@ export async function rejectLeave(leaveId: number, reason?: string) {
     },
   })
 
+  await logActivity("reject", "LeaveRequest", leaveId, "Menolak pengajuan cuti")
   revalidatePath("/sdm/cuti")
   return { success: true }
 
@@ -322,6 +393,7 @@ export async function createOvertimeRequest(formData: FormData) {
     },
   })
 
+  await logActivity("create", "OvertimeRequest", overtime.id, "Membuat pengajuan lembur")
   revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
 
@@ -336,11 +408,31 @@ export async function approveOvertime(overtimeId: number) {
   try {
   const user = await requirePermission("edit_overtime_requests")
 
+  const ot = await prisma.overtimeRequest.findUniqueOrThrow({
+    where: { id: overtimeId },
+    include: { employee: { select: { baseSalary: true } } },
+  })
+  if (ot.status !== "pending") {
+    throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat disetujui")
+  }
+
+  // Compute overtime value: hours * baseSalary * multiplier * coefficient.
+  // Default: multiplier ≈ 1/173 (monthly-to-hourly), coefficient 1.10 (first-hour rate).
+  const settings = await prisma.systemSetting.findFirst({
+    select: { overtimeMultiplier: true, overtimeCoefficient: true },
+  })
+  const multiplier = Number(settings?.overtimeMultiplier ?? 0.00578035)
+  const coefficient = Number(settings?.overtimeCoefficient ?? 1.10)
+  const baseSalary = Number(ot.employee?.baseSalary ?? 0)
+  const hours = Number(ot.hours)
+  const calculatedValue = Math.round(hours * baseSalary * multiplier * coefficient)
+
   await prisma.overtimeRequest.update({
     where: { id: overtimeId },
-    data: { status: "approved", approvedBy: Number(user.id) },
+    data: { status: "approved", approvedBy: Number(user.id), calculatedValue },
   })
 
+  await logActivity("approve", "OvertimeRequest", overtimeId, "Menyetujui pengajuan lembur")
   revalidatePath("/sdm/lembur")
   return { success: true }
 
@@ -355,6 +447,7 @@ export async function approveOvertime(overtimeId: number) {
 
 export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string) {
   try {
+  await requirePermission("view_payroll")
   const startDate = new Date(startDateStr)
   const endDate = new Date(endDateStr)
 
@@ -363,6 +456,7 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     where: { id: employeeId },
     select: {
       baseSalary: true,
+      maritalStatus: true,
       employeeLoans: {
         where: { status: "active" }
       }
@@ -372,7 +466,12 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
   if (!employee) throw new Error("Employee not found")
 
   const baseSalary = Number(employee.baseSalary)
-  const loanDeduction = employee.employeeLoans.reduce((sum, loan) => sum + Number(loan.monthlyInstallment), 0)
+  // Loan deduction capped to what each loan actually still owes (remaining), so the
+  // final-installment scenario doesn't over-deduct the employee.
+  const loanDeduction = employee.employeeLoans.reduce(
+    (sum, loan) => sum + Math.min(Number(loan.monthlyInstallment), Number(loan.remainingAmount)),
+    0
+  )
 
   // 2. Overtime Total
   const overtimes = await prisma.overtimeRequest.findMany({
@@ -396,6 +495,14 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
   // 4. Late Deduction
   const latePenalty = await calculateLatePenalty(employeeId, startDate, endDate)
 
+  // 5. Attendance summary (working days, absent/bolos deduction, holidays excluded)
+  const attendance = await calculateAttendanceSummary(employeeId, startDate, endDate)
+
+  // 6. Statutory: BPJS (employee portion) + PPh21
+  const grossSalary = baseSalary + overtimeTotal + appreciationTotal
+  const bpjs = computeBpjsEmployee(baseSalary)
+  const pph21 = computePph21Monthly(grossSalary, employee.maritalStatus, bpjs.total)
+
   return {
     baseSalary,
     overtimeTotal,
@@ -403,6 +510,17 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     loanDeduction,
     lateDeduction: latePenalty.totalPenalty,
     lateMinutes: latePenalty.totalLateMinutes,
+    workingDays: attendance.workingDays,
+    presentDays: attendance.presentDays,
+    leaveDays: attendance.leaveDays,
+    holidayDays: attendance.holidayDays,
+    absentDays: attendance.absentDays,
+    dailyRate: attendance.dailyRate,
+    absentDeduction: attendance.absentDeduction,
+    grossSalary,
+    bpjsHealthEmployee: bpjs.health,
+    bpjsEmploymentEmployee: bpjs.employment,
+    pph21,
   }
 
   } catch (e: unknown) {
@@ -432,7 +550,12 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
       if (!est || 'success' in est) { continue } // skip failed estimation
       const documentNo = await generateDocumentNumber("PAYROLL")
       
-      const netSalary = (est.baseSalary ?? 0) + (est.overtimeTotal ?? 0) + (est.appreciationTotal ?? 0) - (est.loanDeduction ?? 0) - (est.lateDeduction ?? 0)
+      const statutory = (est.bpjsHealthEmployee ?? 0) + (est.bpjsEmploymentEmployee ?? 0) + (est.pph21 ?? 0)
+      // Allowances/deductions are manual per-payslip fields (not part of auto-estimation);
+      // they default to 0 and can be edited before approval. Formula mirrors processPayroll.
+      const allowances = 0
+      const deductions = 0
+      const netSalary = (est.baseSalary ?? 0) + allowances + (est.overtimeTotal ?? 0) + (est.appreciationTotal ?? 0) - deductions - (est.loanDeduction ?? 0) - (est.lateDeduction ?? 0) - (est.absentDeduction ?? 0) - statutory
       
       await prisma.payroll.create({
         data: {
@@ -442,11 +565,21 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
           startDate: new Date(startDateStr),
           endDate: new Date(endDateStr),
           baseSalary: est.baseSalary ?? 0,
+          allowances,
+          deductions,
           overtimeTotal: est.overtimeTotal ?? 0,
           appreciationTotal: est.appreciationTotal ?? 0,
           loanDeduction: est.loanDeduction ?? 0,
           lateDeduction: est.lateDeduction,
           lateMinutes: est.lateMinutes,
+          workingDays: est.workingDays ?? 0,
+          presentDays: est.presentDays ?? 0,
+          absentDays: est.absentDays ?? 0,
+          absentDeduction: est.absentDeduction ?? 0,
+          grossSalary: est.grossSalary ?? 0,
+          bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
+          bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
+          pph21: est.pph21 ?? 0,
           netSalary: netSalary,
           totalAmount: netSalary,
           status: "draft",
@@ -457,6 +590,7 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
     }
   }
 
+  await logActivity("generate", "Payroll", 0, `Generate massal penggajian periode ${period} (${count} karyawan)`)
   revalidatePath("/sdm/penggajian")
   return { success: true, count }
 
@@ -473,8 +607,20 @@ export async function processPayroll(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("PAYROLL")
   const employeeId = safeId(formData.get("employeeId"))
+  const period = formData.get("period") as string
   const startDate = new Date(formData.get("startDate") as string)
   const endDate = new Date(formData.get("endDate") as string)
+
+  // Idempotency: prevent duplicate payroll for same employee+period.
+  if (employeeId && period) {
+    const exists = await prisma.payroll.findFirst({
+      where: { employeeId, period },
+      select: { id: true },
+    })
+    if (exists) {
+      throw new Error(`Penggajian untuk karyawan ini pada periode ${period} sudah ada.`)
+    }
+  }
 
   // Auto-calculate late penalty
   let lateDeduction = safeNumber(formData.get("lateDeduction")) ?? 0
@@ -486,13 +632,34 @@ export async function processPayroll(formData: FormData) {
     lateMinutes = latePenalty.totalLateMinutes
   }
 
+  // Attendance summary (working days + bolos deduction; holidays excluded)
+  let workingDays = safeNumber(formData.get("workingDays")) ?? 0
+  let presentDays = safeNumber(formData.get("presentDays")) ?? 0
+  let absentDays = safeNumber(formData.get("absentDays")) ?? 0
+  let absentDeduction = safeNumber(formData.get("absentDeduction")) ?? 0
+  if (employeeId && absentDeduction === 0 && workingDays === 0) {
+    const att = await calculateAttendanceSummary(employeeId, startDate, endDate)
+    workingDays = att.workingDays
+    presentDays = att.presentDays
+    absentDays = att.absentDays
+    absentDeduction = att.absentDeduction
+  }
+
   const baseSalary = safeNumber(formData.get("baseSalary")) ?? 0
   const allowances = safeNumber(formData.get("allowances")) ?? 0
   const deductions = safeNumber(formData.get("deductions")) ?? 0
   const overtimeTotal = safeNumber(formData.get("overtimeTotal")) ?? 0
   const appreciationTotal = safeNumber(formData.get("appreciationTotal")) ?? 0
   const loanDeduction = safeNumber(formData.get("loanDeduction")) ?? 0
-  const netSalary = safeNumber(formData.get("netSalary")) ?? (baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction)
+
+  // Statutory: BPJS (employee) + PPh21, computed server-side from base salary.
+  const empForTax = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, select: { maritalStatus: true } }) : null
+  const grossSalary = baseSalary + allowances + overtimeTotal + appreciationTotal
+  const bpjs = computeBpjsEmployee(baseSalary)
+  const pph21 = computePph21Monthly(grossSalary, empForTax?.maritalStatus, bpjs.total)
+  const statutory = bpjs.total + pph21
+
+  const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction - absentDeduction - statutory
   const totalAmount = safeNumber(formData.get("totalAmount")) ?? netSalary
   const paymentDateRaw = formData.get("paymentDate") as string | null
 
@@ -500,7 +667,7 @@ export async function processPayroll(formData: FormData) {
     data: {
       documentNo,
       employeeId,
-      period: formData.get("period") as string,
+      period,
       startDate,
       endDate,
       baseSalary,
@@ -511,6 +678,14 @@ export async function processPayroll(formData: FormData) {
       loanDeduction,
       lateDeduction,
       lateMinutes,
+      workingDays,
+      presentDays,
+      absentDays,
+      absentDeduction,
+      grossSalary,
+      bpjsHealthEmployee: bpjs.health,
+      bpjsEmploymentEmployee: bpjs.employment,
+      pph21,
       netSalary,
       totalAmount,
       paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
@@ -519,6 +694,7 @@ export async function processPayroll(formData: FormData) {
     },
   })
 
+  await logActivity("process", "Payroll", payroll.id, "Memproses penggajian")
   revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
 
@@ -554,6 +730,19 @@ export async function updatePayroll(id: number, formData: FormData) {
     lateMinutes = latePenalty.totalLateMinutes
   }
 
+  // Attendance summary (working days + bolos deduction; holidays excluded)
+  let workingDays = safeNumber(formData.get("workingDays")) ?? 0
+  let presentDays = safeNumber(formData.get("presentDays")) ?? 0
+  let absentDays = safeNumber(formData.get("absentDays")) ?? 0
+  let absentDeduction = safeNumber(formData.get("absentDeduction")) ?? 0
+  if (employeeId && (recalcLate || (absentDeduction === 0 && workingDays === 0))) {
+    const att = await calculateAttendanceSummary(employeeId, startDate, endDate)
+    workingDays = att.workingDays
+    presentDays = att.presentDays
+    absentDays = att.absentDays
+    absentDeduction = att.absentDeduction
+  }
+
   const baseSalary = safeNumber(formData.get("baseSalary")) ?? 0
   const allowances = safeNumber(formData.get("allowances")) ?? 0
   const deductions = safeNumber(formData.get("deductions")) ?? 0
@@ -561,8 +750,15 @@ export async function updatePayroll(id: number, formData: FormData) {
   const appreciationTotal = safeNumber(formData.get("appreciationTotal")) ?? 0
   const loanDeduction = safeNumber(formData.get("loanDeduction")) ?? 0
 
+  // Statutory: BPJS (employee) + PPh21, computed server-side.
+  const empForTaxUpd = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, select: { maritalStatus: true } }) : null
+  const grossSalary = baseSalary + allowances + overtimeTotal + appreciationTotal
+  const bpjs = computeBpjsEmployee(baseSalary)
+  const pph21 = computePph21Monthly(grossSalary, empForTaxUpd?.maritalStatus, bpjs.total)
+  const statutory = bpjs.total + pph21
+
   // Recalculate net_salary auto
-  const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction
+  const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction - absentDeduction - statutory
   const totalAmount = safeNumber(formData.get("totalAmount")) ?? netSalary
   const paymentDateRaw = formData.get("paymentDate") as string | null
 
@@ -581,12 +777,21 @@ export async function updatePayroll(id: number, formData: FormData) {
       loanDeduction,
       lateDeduction,
       lateMinutes,
+      workingDays,
+      presentDays,
+      absentDays,
+      absentDeduction,
+      grossSalary,
+      bpjsHealthEmployee: bpjs.health,
+      bpjsEmploymentEmployee: bpjs.employment,
+      pph21,
       netSalary,
       totalAmount,
       paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
     },
   })
 
+  await logActivity("update", "Payroll", payroll.id, "Memperbarui penggajian")
   revalidatePath("/sdm/penggajian")
   return { success: true, id: payroll.id }
 
@@ -614,6 +819,7 @@ export async function approvePayroll(payrollId: number) {
     data: { status: "approved", approvedBy: Number(user.id) },
   })
 
+  await logActivity("approve", "Payroll", payrollId, "Menyetujui penggajian")
   revalidatePath("/sdm/penggajian")
   return { success: true }
 
@@ -636,11 +842,44 @@ export async function markPayrollPaid(payrollId: number) {
     throw new Error("Payroll hanya bisa ditandai dibayar dari status approved")
   }
 
-  await prisma.payroll.update({
-    where: { id: payrollId },
-    data: { status: "paid", paymentDate: new Date() },
+  await prisma.$transaction(async (tx) => {
+    await tx.payroll.update({
+      where: { id: payrollId },
+      data: { status: "paid", paymentDate: new Date() },
+    })
+
+    // Amortize active employee loans using the amount actually withheld this
+    // payroll (payroll.loanDeduction). Distribute oldest-first, capping each loan
+    // by its installment and remaining balance, and stop once the withheld budget
+    // is exhausted — previously every active loan was reduced by its full
+    // installment regardless of how much was actually deducted (over-amortization).
+    if (payroll.employeeId && Number(payroll.loanDeduction) > 0) {
+      const activeLoans = await tx.employeeLoan.findMany({
+        where: { employeeId: payroll.employeeId, status: "active" },
+        orderBy: { loanDate: "asc" },
+      })
+      let budget = Number(payroll.loanDeduction)
+      for (const loan of activeLoans) {
+        if (budget <= 0) break
+        const installment = Number(loan.monthlyInstallment)
+        const remaining = Number(loan.remainingAmount)
+        if (remaining <= 0) continue
+        const applied = Math.min(installment, remaining, budget)
+        if (applied <= 0) continue
+        const newRemaining = remaining - applied
+        budget -= applied
+        await tx.employeeLoan.update({
+          where: { id: loan.id },
+          data: {
+            remainingAmount: newRemaining,
+            status: newRemaining <= 0 ? "paid_off" : "active",
+          },
+        })
+      }
+    }
   })
 
+  await logActivity("mark", "Payroll", payrollId, "Menandai penggajian sebagai dibayar")
   revalidatePath("/sdm/penggajian")
   revalidatePath(`/sdm/penggajian/${payrollId}`)
   return { success: true }
@@ -672,6 +911,7 @@ export async function createEmployeeLoan(formData: FormData) {
     },
   })
 
+  await logActivity("create", "EmployeeLoan", loan.id, "Membuat pinjaman karyawan")
   revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
 
@@ -701,6 +941,7 @@ export async function createTimesheet(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Timesheet", timesheet.id, "Membuat lembar waktu")
   revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
 
@@ -721,22 +962,29 @@ export async function createWorkSchedule(formData: FormData) {
   const days = formData.getAll("days") as string[]
   const startTime = formData.get("startTime") as string
   const endTime = formData.get("endTime") as string
-  const departmentId = safeNumber(formData.get("departmentId"))
+  const departmentIds = (formData.getAll("departmentId") as string[])
+    .map((d) => safeNumber(d))
+    .filter((n): n is number => n != null)
+  const employeeIds = (formData.getAll("employeeId") as string[])
+    .map((d) => safeNumber(d))
+    .filter((n): n is number => n != null)
   const lateToleranceMinutes = safeNumber(formData.get("lateToleranceMinutes")) ?? 0
   const isActive = formData.get("isActive") === "true"
 
-  const schedules = days.map((day) => ({
-    name,
-    dayOfWeek: Number(day),
-    startTime,
-    endTime,
-    departmentId,
-    lateToleranceMinutes,
-    isActive,
-  }))
+  await prisma.workSchedule.create({
+    data: {
+      name,
+      workDays: days.join(","),
+      startTime,
+      endTime,
+      lateToleranceMinutes,
+      isActive,
+      departments: departmentIds.length > 0 ? { connect: departmentIds.map((id) => ({ id })) } : undefined,
+      employees: employeeIds.length > 0 ? { connect: employeeIds.map((id) => ({ id })) } : undefined,
+    },
+  })
 
-  await prisma.workSchedule.createMany({ data: schedules })
-
+  await logActivity("create", "WorkSchedule", 0, "Membuat jadwal kerja")
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 
@@ -761,12 +1009,37 @@ export async function createHoliday(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Holiday", holiday.id, "Membuat hari libur")
   revalidatePath("/sdm/hari-libur")
   return { success: true, id: holiday.id }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createHoliday]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function updateHoliday(id: number, formData: FormData) {
+  try {
+  await requirePermission("create_holidays")
+
+  await prisma.holiday.update({
+    where: { id },
+    data: {
+      name: formData.get("name") as string,
+      date: new Date(formData.get("date") as string),
+      description: formData.get("description") as string | null,
+    },
+  })
+
+  await logActivity("update", "Holiday", id, "Memperbarui hari libur")
+  revalidatePath("/sdm/hari-libur")
+  return { success: true, id }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateHoliday]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
@@ -779,6 +1052,7 @@ export async function deleteLeaveRequest(id: number) {
 
   await prisma.leaveRequest.delete({ where: { id } })
 
+  await logActivity("delete", "LeaveRequest", id, "Menghapus pengajuan cuti")
   revalidatePath("/sdm/cuti")
   return { success: true }
 
@@ -795,6 +1069,7 @@ export async function deleteOvertimeRequest(id: number) {
 
   await prisma.overtimeRequest.delete({ where: { id } })
 
+  await logActivity("delete", "OvertimeRequest", id, "Menghapus pengajuan lembur")
   revalidatePath("/sdm/lembur")
   return { success: true }
 
@@ -811,6 +1086,7 @@ export async function deleteTimesheet(id: number) {
 
   await prisma.timesheet.delete({ where: { id } })
 
+  await logActivity("delete", "Timesheet", id, "Menghapus lembar waktu")
   revalidatePath("/sdm/lembar-waktu")
   return { success: true }
 
@@ -827,6 +1103,7 @@ export async function deleteEmployeeLoan(id: number) {
 
   await prisma.employeeLoan.delete({ where: { id } })
 
+  await logActivity("delete", "EmployeeLoan", id, "Menghapus pinjaman karyawan")
   revalidatePath("/sdm/pinjaman")
   return { success: true }
 
@@ -843,6 +1120,7 @@ export async function deleteWorkSchedule(id: number) {
 
   await prisma.workSchedule.delete({ where: { id } })
 
+  await logActivity("delete", "WorkSchedule", id, "Menghapus jadwal kerja")
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 
@@ -859,6 +1137,7 @@ export async function deleteHoliday(id: number) {
 
   await prisma.holiday.delete({ where: { id } })
 
+  await logActivity("delete", "Holiday", id, "Menghapus hari libur")
   revalidatePath("/sdm/hari-libur")
   return { success: true }
 
@@ -866,6 +1145,25 @@ export async function deleteHoliday(id: number) {
     if (isNextRedirectError(e)) throw e
     console.error("[deleteHoliday]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * Sync Indonesian national holidays for a given year from a public calendar API.
+ * Idempotent — safe to run repeatedly.
+ */
+export async function syncNationalHolidays(year?: number) {
+  try {
+    await requirePermission("create_holidays")
+    const targetYear = year && year > 2000 ? year : new Date().getFullYear()
+    const result = await syncNationalHolidaysService(targetYear)
+    await logActivity("sync", "Holiday", 0, `Sinkronisasi libur nasional tahun ${targetYear}`)
+    revalidatePath("/sdm/hari-libur")
+    return { success: true, ...result }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[syncNationalHolidays]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Gagal sinkronisasi libur nasional") }
   }
 }
 
@@ -877,6 +1175,12 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
 
   await requirePermission("create_leave_requests")
 
+  // Only pending requests can be edited. Approved/rejected leave must not be re-opened.
+  const existing = await prisma.leaveRequest.findUniqueOrThrow({ where: { id }, select: { status: true } })
+  if (existing.status !== "pending") {
+    throw new Error("Hanya pengajuan cuti berstatus menunggu yang dapat diedit")
+  }
+
   const leave = await prisma.leaveRequest.update({
     where: { id },
     data: {
@@ -885,10 +1189,10 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       startDate: new Date(formData.get("startDate") as string),
       endDate: new Date(formData.get("endDate") as string),
       reason: formData.get("reason") as string | null,
-      status: "pending",
     },
   })
 
+  await logActivity("update", "LeaveRequest", leave.id, "Memperbarui pengajuan cuti")
   revalidatePath("/sdm/cuti")
   return { success: true, id: leave.id }
 
@@ -921,6 +1225,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "OvertimeRequest", overtime.id, "Memperbarui pengajuan lembur")
   revalidatePath("/sdm/lembur")
   return { success: true, id: overtime.id }
 
@@ -940,6 +1245,16 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
 
   const totalAmount = requireNumber(formData.get("totalAmount"), "totalAmount")
 
+  // Only adjust remainingAmount if totalAmount was actually changed. This prevents
+  // wiping amortization progress when editing other fields (notes, installment).
+  // Status is NOT accepted from client — it's managed only by markPayrollPaid.
+  const existing = await prisma.employeeLoan.findUniqueOrThrow({ where: { id }, select: { totalAmount: true, remainingAmount: true, status: true } })
+  const oldTotal = Number(existing.totalAmount)
+  const oldRemaining = Number(existing.remainingAmount)
+  const delta = totalAmount - oldTotal
+  // If totalAmount changed, shift remaining by the same delta (can't go below 0).
+  const newRemaining = delta !== 0 ? Math.max(0, oldRemaining + delta) : oldRemaining
+
   const loan = await prisma.employeeLoan.update({
     where: { id },
     data: {
@@ -947,12 +1262,13 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
       loanDate: new Date(formData.get("loanDate") as string),
       totalAmount,
       monthlyInstallment: requireNumber(formData.get("monthlyInstallment"), "monthlyInstallment"),
-      remainingAmount: totalAmount,
-      status: formData.get("status") as string || "active",
+      remainingAmount: newRemaining,
+      // Status stays unchanged (managed by markPayrollPaid / system only).
       notes: formData.get("notes") as string | null,
     },
   })
 
+  await logActivity("update", "EmployeeLoan", loan.id, "Memperbarui pinjaman karyawan")
   revalidatePath("/sdm/pinjaman")
   return { success: true, id: loan.id }
 
@@ -984,6 +1300,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
     },
   })
 
+  await logActivity("update", "Timesheet", timesheet.id, "Memperbarui lembar waktu")
   revalidatePath("/sdm/lembar-waktu")
   return { success: true, id: timesheet.id }
 
@@ -1005,25 +1322,30 @@ export async function updateWorkSchedule(id: number, formData: FormData) {
   const days = formData.getAll("days") as string[]
   const startTime = formData.get("startTime") as string
   const endTime = formData.get("endTime") as string
-  const departmentId = safeNumber(formData.get("departmentId"))
+  const departmentIds = (formData.getAll("departmentId") as string[])
+    .map((d) => safeNumber(d))
+    .filter((n): n is number => n != null)
+  const employeeIds = (formData.getAll("employeeId") as string[])
+    .map((d) => safeNumber(d))
+    .filter((n): n is number => n != null)
   const lateToleranceMinutes = safeNumber(formData.get("lateToleranceMinutes")) ?? 0
   const isActive = formData.get("isActive") === "true"
 
-  // Delete old record and create new ones for each day
-  await prisma.workSchedule.delete({ where: { id } })
+  await prisma.workSchedule.update({
+    where: { id },
+    data: {
+      name,
+      workDays: days.join(","),
+      startTime,
+      endTime,
+      lateToleranceMinutes,
+      isActive,
+      departments: { set: departmentIds.map((did) => ({ id: did })) },
+      employees: { set: employeeIds.map((eid) => ({ id: eid })) },
+    },
+  })
 
-  const schedules = days.map((day) => ({
-    name,
-    dayOfWeek: Number(day),
-    startTime,
-    endTime,
-    departmentId,
-    lateToleranceMinutes,
-    isActive,
-  }))
-
-  await prisma.workSchedule.createMany({ data: schedules })
-
+  await logActivity("update", "WorkSchedule", id, "Memperbarui jadwal kerja")
   revalidatePath("/sdm/jadwal-kerja")
   return { success: true }
 
@@ -1049,6 +1371,7 @@ export async function createDepartmentHoliday(formData: FormData) {
     },
   })
 
+  await logActivity("create", "DepartmentHoliday", holiday.id, "Membuat hari libur departemen")
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
 
@@ -1075,6 +1398,7 @@ export async function updateDepartmentHoliday(formData: FormData) {
     },
   })
 
+  await logActivity("update", "DepartmentHoliday", holiday.id, "Memperbarui hari libur departemen")
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true, id: holiday.id }
 
@@ -1091,6 +1415,7 @@ export async function deleteDepartmentHoliday(id: number) {
 
   await prisma.departmentHoliday.delete({ where: { id } })
 
+  await logActivity("delete", "DepartmentHoliday", id, "Menghapus hari libur departemen")
   revalidatePath("/sdm/hari-libur-departemen")
   return { success: true }
 
@@ -1117,6 +1442,7 @@ export async function createAppreciation(formData: FormData) {
     },
   })
 
+  await logActivity("create", "Appreciation", appreciation.id, "Membuat apresiasi")
   revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
 
@@ -1144,6 +1470,7 @@ export async function updateAppreciation(formData: FormData) {
     },
   })
 
+  await logActivity("update", "Appreciation", appreciation.id, "Memperbarui apresiasi")
   revalidatePath("/sdm/apresiasi")
   return { success: true, id: appreciation.id }
 
@@ -1160,6 +1487,7 @@ export async function deleteAppreciation(id: number) {
 
   await prisma.appreciation.delete({ where: { id } })
 
+  await logActivity("delete", "Appreciation", id, "Menghapus apresiasi")
   revalidatePath("/sdm/apresiasi")
   return { success: true }
 

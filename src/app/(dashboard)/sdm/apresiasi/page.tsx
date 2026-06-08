@@ -40,6 +40,12 @@ export default async function AppreciationsPage({
     notes: a.notes,
   }))
 
+  const statusChips = ["", "bonus", "reward", "incentive"].map((s) => (
+    <Link key={s} href={`/sdm/apresiasi?tipe=${s}`} className={`filter-chip ${params.tipe === s || (!params.tipe && !s) ? "active" : ""}`}>
+      {s === "bonus" ? "Bonus" : s === "reward" ? "Reward" : s === "incentive" ? "Insentif" : "Semua"}
+    </Link>
+  ))
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -49,20 +55,11 @@ export default async function AppreciationsPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/apresiasi" />
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "bonus", "reward", "incentive"].map((s) => (
-              <Link key={s} href={`/sdm/apresiasi?tipe=${s}`} className={`filter-chip ${params.tipe === s || (!params.tipe && !s) ? "active" : ""}`}>
-                {s === "bonus" ? "Bonus" : s === "reward" ? "Reward" : s === "incentive" ? "Insentif" : "Semua"}
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        <AppreciationTable data={data} />
-      </div>
+      <AppreciationTable
+        data={data}
+        toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/apresiasi" />}
+        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+      />
     </div>
   )
 }

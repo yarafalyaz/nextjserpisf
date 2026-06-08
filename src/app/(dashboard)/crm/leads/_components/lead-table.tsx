@@ -23,7 +23,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/crm/leads/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/crm/leads/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -66,9 +66,11 @@ const columns = [
 
 interface LeadTableProps {
   data: LeadData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function LeadTable({ data }: LeadTableProps) {
+export function LeadTable({ data, toolbar, filters }: LeadTableProps) {
   return (
     <DataTable
       data={data}
@@ -76,6 +78,8 @@ export function LeadTable({ data }: LeadTableProps) {
       ariaLabel="Daftar leads"
       pageSize={20}
       selectable={false}
+      toolbar={toolbar}
+      filters={filters}
     />
   )
 }

@@ -7,7 +7,6 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { Banknote } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { LoanTable } from "./_components/loan-table"
-import { } from "@/components/ui/breadcrumbs"
 
 export default async function EmployeeLoansPage({
   searchParams,
@@ -44,6 +43,19 @@ export default async function EmployeeLoansPage({
     status: l.status,
   }))
 
+  const statusChips = ["", "active", "paid"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    return (
+      <Link
+        key={dbStatus}
+        href={`/sdm/pinjaman${urlStatus ? `?status=${urlStatus}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -53,27 +65,11 @@ export default async function EmployeeLoansPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari nama karyawan..." action="/sdm/pinjaman" />
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "active", "paid"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/sdm/pinjaman${urlStatus ? `?status=${urlStatus}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-
-        <LoanTable data={data} />
-      </div>
+      <LoanTable
+        data={data}
+        toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/pinjaman" />}
+        filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
+      />
     </div>
   )
 }

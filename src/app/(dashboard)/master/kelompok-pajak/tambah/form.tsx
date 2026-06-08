@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTaxGroup } from "@/actions/master.actions"
-import { Input, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/page-header"
 
 interface Props {
@@ -35,8 +37,8 @@ export function TaxGroupForm({ taxes }: Props) {
           <label className="text-sm font-medium text-foreground">Pajak</label>
           <div className="flex flex-col gap-2">
             {taxes.map((tax) => (
-              <label key={tax.id} className="flex items-center gap-2">
-                <input type="checkbox" name="taxIds" value={tax.id} />
+              <label key={tax.id} htmlFor={`tax-${tax.id}`} className="flex items-center gap-2 cursor-pointer">
+                <Checkbox id={`tax-${tax.id}`} name="taxIds" value={String(tax.id)} />
                 {tax.name} ({tax.rate}%)
               </label>
             ))}

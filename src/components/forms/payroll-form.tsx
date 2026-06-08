@@ -6,7 +6,9 @@ import { useTransition, useState, useEffect, useRef } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { processPayroll, getPayrollEstimation } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, ComboBox, ListBox, Label, InputGroup } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/page-header"
 import { CheckCircle, Loader2 } from "lucide-react"
@@ -35,6 +37,14 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
   const [deductions, setDeductions] = useState(Number(initialData?.deductions) || 0)
   const [loan, setLoan] = useState(Number(initialData?.loanDeduction) || 0)
   const [late, setLate] = useState(Number(initialData?.lateDeduction) || 0)
+  const [absentDeduction, setAbsentDeduction] = useState(Number(initialData?.absentDeduction) || 0)
+  const [attendance, setAttendance] = useState({
+    workingDays: Number(initialData?.workingDays) || 0,
+    presentDays: Number(initialData?.presentDays) || 0,
+    leaveDays: 0,
+    holidayDays: 0,
+    absentDays: Number(initialData?.absentDays) || 0,
+  })
 
   // Auto-fetch data gaji & absensi
   const shouldSkipInitialEstimate = useRef(Boolean(initialData))
@@ -56,6 +66,14 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
           setAppreciation(data.appreciationTotal ?? 0)
           setLoan(data.loanDeduction ?? 0)
           setLate(data.lateDeduction ?? 0)
+          setAbsentDeduction(data.absentDeduction ?? 0)
+          setAttendance({
+            workingDays: data.workingDays ?? 0,
+            presentDays: data.presentDays ?? 0,
+            leaveDays: data.leaveDays ?? 0,
+            holidayDays: data.holidayDays ?? 0,
+            absentDays: data.absentDays ?? 0,
+          })
         })
         .catch((e) => {
           if (cancelled) return
@@ -74,8 +92,8 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
 
   // Gross = Base + Allowances + Overtime + Appreciation
   const grossSalary = baseSalary + allowances + overtime + appreciation
-  // Total Deductions = Deductions + Loan + Late
-  const totalDeductions = deductions + loan + late
+  // Total Deductions = Deductions + Loan + Late + Absent (bolos)
+  const totalDeductions = deductions + loan + late + absentDeduction
   const netSalaryEst = grossSalary - totalDeductions
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -83,16 +101,13 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        if (initialData?.id) {
-          await updatePayroll(initialData.id, formData)
-        } else {
-          await processPayroll(formData)
-        }
-        showSuccess("Payroll berhasil diproses")
+        const result = initialData?.id ? await updatePayroll(initialData.id, formData) : await processPayroll(formData)
+        if (result && !result.success) { showError(result.error || "Gagal memproses penggajian"); return }
+        showSuccess("Penggajian berhasil diproses")
         router.push("/sdm/penggajian")
         router.refresh()
       } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal memproses payroll")
+        showError(error instanceof Error ? error.message : "Gagal memproses penggajian")
       }
     })
   }
@@ -113,23 +128,15 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
 
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="employeeId" className="w-full" isRequired defaultSelectedKey={initialData?.employeeId ? String(initialData.employeeId) : undefined} onSelectionChange={(key) => setEmployeeId(key ? Number(key) : null)}>
-            <Label>Karyawan *</Label>
-            <ComboBox.InputGroup>
-              <Input placeholder="Pilih karyawan..." />
-              <ComboBox.Trigger />
-            </ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {employees.map((e) => (
-                  <ListBox.Item key={e.id} id={String(e.id)} textValue={e.name}>
-                    {e.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="employeeId">Karyawan *</Label>
+          <Combobox
+            id="employeeId"
+            name="employeeId"
+            options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+            value={employeeId ? String(employeeId) : null}
+            onChange={(key) => setEmployeeId(key ? Number(key) : null)}
+            placeholder="Pilih karyawan..."
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -142,7 +149,7 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
             onChange={() => {}}
             className="opacity-70"
           />
-          <p className="text-xs text-muted">Otomatis diisi berdasarkan bulan pada Tanggal Selesai.</p>
+          <p className="text-xs text-muted-foreground">Otomatis diisi berdasarkan bulan pada Tanggal Selesai.</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -160,66 +167,77 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
 
       <div className="p-6 border-y border-default bg-surface-secondary/30">
         <h2 className="text-lg font-semibold text-foreground">Komponen Pendapatan</h2>
-        <p className="text-sm text-muted">Akan ditarik otomatis sesuai data master karyawan.</p>
+        <p className="text-sm text-muted-foreground">Akan ditarik otomatis sesuai data master karyawan.</p>
       </div>
 
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="baseSalary">Gaji Pokok *</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="baseSalary" name="baseSalary" placeholder="0" required value={baseSalary} onChange={(v) => setBaseSalary(Number(v) || 0)} />
-          </InputGroup>
+          <CurrencyInput id="baseSalary" name="baseSalary" placeholder="0" required value={baseSalary} onChange={(v) => setBaseSalary(Number(v) || 0)} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="allowances">Tunjangan</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="allowances" name="allowances" placeholder="0" value={allowances} onChange={(v) => setAllowances(Number(v) || 0)} />
-          </InputGroup>
+          <CurrencyInput id="allowances" name="allowances" placeholder="0" value={allowances} onChange={(v) => setAllowances(Number(v) || 0)} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="overtimeTotal">Total Lembur</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="overtimeTotal" name="overtimeTotal" placeholder="0" value={overtime} onChange={(v) => setOvertime(Number(v) || 0)} />
-          </InputGroup>
+          <CurrencyInput id="overtimeTotal" name="overtimeTotal" placeholder="0" value={overtime} onChange={(v) => setOvertime(Number(v) || 0)} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="appreciationTotal">Total Apresiasi / Bonus</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="appreciationTotal" name="appreciationTotal" placeholder="0" value={appreciation} onChange={(v) => setAppreciation(Number(v) || 0)} />
-          </InputGroup>
+          <CurrencyInput id="appreciationTotal" name="appreciationTotal" placeholder="0" value={appreciation} onChange={(v) => setAppreciation(Number(v) || 0)} prefix="Rp" />
         </div>
       </div>
 
       <div className="p-6 border-y border-default bg-surface-secondary/30">
         <h2 className="text-lg font-semibold text-foreground">Komponen Potongan</h2>
-        <p className="text-sm text-muted">Akan ditarik otomatis dari pinjaman aktif dan absensi keterlambatan.</p>
+        <p className="text-sm text-muted-foreground">Akan ditarik otomatis dari pinjaman aktif dan absensi keterlambatan.</p>
       </div>
 
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="deductions">Potongan Lainnya</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="deductions" name="deductions" placeholder="0" value={deductions} onChange={(v) => setDeductions(Number(v) || 0)} />
-          </InputGroup>
+          <CurrencyInput id="deductions" name="deductions" placeholder="0" value={deductions} onChange={(v) => setDeductions(Number(v) || 0)} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="loanDeduction">Potongan Pinjaman</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="loanDeduction" name="loanDeduction" placeholder="0" value={loan} onChange={(v) => setLoan(Number(v) || 0)} />
-          </InputGroup>
+          <CurrencyInput id="loanDeduction" name="loanDeduction" placeholder="0" value={loan} onChange={(v) => setLoan(Number(v) || 0)} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5 md:col-span-2">
           <Label htmlFor="lateDeduction">Potongan Terlambat</Label>
-          <InputGroup>
-            <InputGroup.Prefix>Rp</InputGroup.Prefix>
-            <CurrencyInput id="lateDeduction" name="lateDeduction" placeholder="0" value={late} onChange={(v) => setLate(Number(v) || 0)} />
-          </InputGroup>
+          <CurrencyInput id="lateDeduction" name="lateDeduction" placeholder="0" value={late} onChange={(v) => setLate(Number(v) || 0)} prefix="Rp" />
+        </div>
+        <div className="flex flex-col gap-1.5 md:col-span-2">
+          <Label htmlFor="absentDeduction">Potongan Tidak Hadir (Bolos)</Label>
+          <CurrencyInput id="absentDeduction" name="absentDeduction" placeholder="0" value={absentDeduction} onChange={(v) => setAbsentDeduction(Number(v) || 0)} prefix="Rp" />
+          <p className="text-xs text-muted-foreground">Otomatis dari hari kerja tanpa absen &amp; tanpa cuti. Tanggal merah/libur tidak dihitung bolos.</p>
+        </div>
+      </div>
+
+      {/* Hidden inputs to persist attendance summary */}
+      <input type="hidden" name="workingDays" value={attendance.workingDays} />
+      <input type="hidden" name="presentDays" value={attendance.presentDays} />
+      <input type="hidden" name="absentDays" value={attendance.absentDays} />
+
+      {/* Attendance summary panel */}
+      <div className="px-6 pb-2">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-default bg-surface-secondary/40 p-3 text-center">
+            <div className="text-lg font-bold tabular-nums text-foreground">{attendance.workingDays}</div>
+            <div className="text-xs text-muted-foreground">Hari Kerja</div>
+          </div>
+          <div className="rounded-lg border border-default bg-emerald-500/5 p-3 text-center">
+            <div className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{attendance.presentDays}</div>
+            <div className="text-xs text-muted-foreground">Hadir</div>
+          </div>
+          <div className="rounded-lg border border-default bg-blue-500/5 p-3 text-center">
+            <div className="text-lg font-bold tabular-nums text-blue-600 dark:text-blue-400">{attendance.holidayDays + attendance.leaveDays}</div>
+            <div className="text-xs text-muted-foreground">Libur / Cuti</div>
+          </div>
+          <div className="rounded-lg border border-default bg-red-500/5 p-3 text-center">
+            <div className="text-lg font-bold tabular-nums text-red-600 dark:text-red-400">{attendance.absentDays}</div>
+            <div className="text-xs text-muted-foreground">Bolos</div>
+          </div>
         </div>
       </div>
 
@@ -227,7 +245,7 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
       <div className="p-6 m-6 mt-0 bg-primary/5 rounded-xl border border-primary/20 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h3 className="font-semibold text-primary">Estimasi Gaji Bersih</h3>
-          <p className="text-sm text-muted">Total otomatis terhitung dari data di atas</p>
+          <p className="text-sm text-muted-foreground">Total otomatis terhitung dari data di atas</p>
         </div>
         <div className="text-2xl font-bold text-primary font-mono tabular-nums">
           Rp {netSalaryEst.toLocaleString("id-ID")}
@@ -237,7 +255,7 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
       <div className="flex justify-end gap-3 p-6 border-t border-default bg-surface">
         <Button type="button" onPress={() => router.back()} variant="secondary">Batal</Button>
         <Button type="submit" isDisabled={isPending || isEstimating} variant="primary">
-          {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Payroll"}
+          {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Penggajian"}
         </Button>
       </div>
     </form>

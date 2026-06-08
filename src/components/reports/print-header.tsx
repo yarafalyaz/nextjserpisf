@@ -13,8 +13,8 @@ export function PrintHeader({ title, period, companyName }: { title: string; per
         </div>
         <div className="text-right">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <p className="text-sm text-muted">{period}</p>
-          <p className="text-xs text-muted">Dicetak: {printedAt}</p>
+          <p className="text-sm text-muted-foreground">{period}</p>
+          <p className="text-xs text-muted-foreground">Dicetak: {printedAt}</p>
         </div>
       </div>
     </div>

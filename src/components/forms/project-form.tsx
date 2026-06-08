@@ -1,11 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { createProject, updateProject } from "@/actions/project.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, TextArea, ComboBox, ListBox, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/page-header"
 
 interface CustomerVehicleOption {
@@ -39,6 +42,9 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
   const [isPending, startTransition] = useTransition()
   const isEdit = !!project
 
+  const [customerId, setCustomerId] = useState(project?.customerId ? String(project.customerId) : "")
+  const [customerVehicleId, setCustomerVehicleId] = useState(project?.customerVehicleId ? String(project.customerVehicleId) : "")
+
   // Filter vehicles by selected customer (use project's customerId as initial)
   const filteredVehicles = project?.customerId
     ? customerVehicles.filter((v) => v.customerId === project.customerId)
@@ -49,13 +55,9 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
-        if (isEdit) {
-          await updateProject(project!.id, formData)
-          showSuccess("Data berhasil diperbarui")
-        } else {
-          await createProject(formData)
-          showSuccess("Data berhasil ditambahkan")
-        }
+        const result = isEdit ? await updateProject(project!.id, formData) : await createProject(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/proyek")
         router.refresh()
       } catch (error) {
@@ -76,32 +78,26 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
           <Input id="name" name="name" required placeholder="Nama proyek" defaultValue={project?.name || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="customerId" defaultSelectedKey={project?.customerId ? String(project.customerId) : undefined} className="w-full" isRequired>
-            <Label>Customer *</Label>
-            <ComboBox.InputGroup><Input placeholder="Cari customer..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {customers.map((c) => (
-                  <ListBox.Item key={c.id} id={String(c.id)} textValue={c.name}>{c.name}</ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="customerId">Pelanggan *</Label>
+          <Combobox
+            id="customerId"
+            name="customerId"
+            value={customerId || null}
+            onChange={(key) => setCustomerId(key ?? "")}
+            placeholder="Cari pelanggan..."
+            options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
-          <ComboBox name="customerVehicleId" defaultSelectedKey={project?.customerVehicleId ? String(project.customerVehicleId) : undefined} className="w-full">
-            <Label>Kendaraan Customer</Label>
-            <ComboBox.InputGroup><Input placeholder="Pilih kendaraan..." /><ComboBox.Trigger /></ComboBox.InputGroup>
-            <ComboBox.Popover>
-              <ListBox>
-                {filteredVehicles.map((v) => (
-                  <ListBox.Item key={v.id} id={String(v.id)} textValue={`${v.licensePlate || "-"} - ${v.vehicleName}`}>
-                    {v.licensePlate || "-"} - {v.vehicleName}
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </ComboBox.Popover>
-          </ComboBox>
+          <Label htmlFor="customerVehicleId">Kendaraan Pelanggan</Label>
+          <Combobox
+            id="customerVehicleId"
+            name="customerVehicleId"
+            value={customerVehicleId || null}
+            onChange={(key) => setCustomerVehicleId(key ?? "")}
+            placeholder="Pilih kendaraan..."
+            options={filteredVehicles.map((v) => ({ value: String(v.id), label: `${v.licensePlate || "-"} - ${v.vehicleName}` }))}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
@@ -121,16 +117,16 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
-          <TextArea id="description" name="description" rows={3} placeholder="Deskripsi proyek..." defaultValue={project?.description || ""} />
+          <Textarea id="description" name="description" rows={3} placeholder="Deskripsi proyek..." defaultValue={project?.description || ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>
-          <TextArea id="notes" name="notes" rows={3} placeholder="Catatan proyek..." defaultValue={project?.notes || ""} />
+          <Textarea id="notes" name="notes" rows={3} placeholder="Catatan proyek..." defaultValue={project?.notes || ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan Proyek"}</Button>
+        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Proyek"}</Button>
       </div>
     </form>
   )

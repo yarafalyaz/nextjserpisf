@@ -29,13 +29,13 @@ export default async function CreateSalesReturnPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Sales", href: "/penjualan" },
-  { label: "Returns", href: "/penjualan/retur" },
-  { label: "Create" },
+  { label: "Dasbor", href: "/" },
+  { label: "Penjualan", href: "/penjualan" },
+  { label: "Retur", href: "/penjualan/retur" },
+  { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Sales Return</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Retur Penjualan</h1>
       </div>
       <SalesReturnForm invoices={invoices} customers={customers} items={items} />
     </div>

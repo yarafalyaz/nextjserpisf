@@ -60,7 +60,7 @@ export async function GET(request: Request) {
       .join("\n")
 
     await notificationService.notifyAdmins(
-      `⚠️ ${count} Barang Stok Menipis`,
+      `${count} Barang Stok Menipis`,
       itemList + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
       "warning"
     )
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
     )
 
     await notificationService.notifyAdmins(
-      `🔴 ${count} Invoice Jatuh Tempo`,
+      `${count} Invoice Jatuh Tempo`,
       `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}`,
       "danger"
     )
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
   if (stalePOs.length > 0) {
     const count = stalePOs.length
     await notificationService.notifyAdmins(
-      `📦 ${count} PO Belum Diterima (>7 hari)`,
+      `${count} PO Belum Diterima (>7 hari)`,
       `Ada ${count} pesanan pembelian yang sudah lebih dari 7 hari belum diterima barangnya.`,
       "warning"
     )
@@ -134,7 +134,7 @@ export async function GET(request: Request) {
       .join("\n")
 
     await notificationService.notifyAdmins(
-      `⏰ ${count} Karyawan Telat Hari Ini`,
+      `${count} Karyawan Telat Hari Ini`,
       names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
       "warning"
     )
@@ -173,7 +173,7 @@ export async function GET(request: Request) {
           .join("\n")
 
         await notificationService.notifyAdmins(
-          `🚫 ${count} Karyawan Belum Absen`,
+          `${count} Karyawan Belum Absen`,
           names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
           "danger"
         )

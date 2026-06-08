@@ -27,11 +27,11 @@ export default async function TimesheetDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Timesheet"
+        title="Lembar Waktu"
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "HRM", href: "/sdm" },
-          { label: "Timesheet", href: "/sdm/lembar-waktu" },
+          { label: "Dasbor", href: "/" },
+          { label: "SDM", href: "/sdm" },
+          { label: "Lembar Waktu", href: "/sdm/lembar-waktu" },
           { label: "Detail" },
         ]}
         actions={
@@ -49,10 +49,10 @@ export default async function TimesheetDetailPage({
         <DetailField label="Tanggal" value={formatDate(timesheet.date)} />
         <DetailField label="Jam Kerja" value={`${Number(timesheet.hours)} jam`} />
         {timesheet.projectId && (
-          <DetailField label="Project ID" value={timesheet.projectId} />
+          <DetailField label="ID Proyek" value={timesheet.projectId} />
         )}
         {timesheet.taskId && (
-          <DetailField label="Task ID" value={timesheet.taskId} />
+          <DetailField label="ID Tugas" value={timesheet.taskId} />
         )}
         {timesheet.description && (
           <DetailField label="Deskripsi" value={timesheet.description} colSpan="full" />

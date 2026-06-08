@@ -22,7 +22,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/pelanggan/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/pelanggan/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -68,6 +68,8 @@ export function CustomerTable({ data }: CustomerTableProps) {
       ariaLabel="Daftar customer"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama, kode, atau telepon..."
       onBulkDelete={(ids) => bulkDelete("customer", ids)}
     />
   )

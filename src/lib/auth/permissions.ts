@@ -43,3 +43,15 @@ export async function requireRole(role: string) {
 
   return user;
 }
+
+/**
+ * Non-throwing permission check for API routes (which should return 403, not 500).
+ * Returns false when unauthenticated or lacking the permission. Super admin bypasses.
+ */
+export async function hasPermission(permission: string): Promise<boolean> {
+  const session = await auth();
+  const user = session?.user;
+  if (!user) return false;
+  if (user.roles?.includes("super_admin")) return true;
+  return user.permissions?.includes(permission) ?? false;
+}

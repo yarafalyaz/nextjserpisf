@@ -89,10 +89,10 @@ async function runTask(task: Task): Promise<string> {
 async function taskLockPeriod(): Promise<string> {
   const now = new Date()
 
-  // Only lock on the 1st of the month at ~00:00 (previous month end)
-  // Or allow manual trigger any time
-  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 0) // last day of prev month
-  const periodEnd = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0, 23, 59, 59)
+  // Lock through the end of the PREVIOUS month relative to now (the just-closed
+  // period). Running on the 1st of June → locks through 31 May. `new Date(year,
+  // monthIndex, 0)` gives the last day of the month BEFORE monthIndex.
+  const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
 
   // Check if there are any transactions in the current (next) month
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -175,7 +175,7 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
 
   const invoiceList = overdueInvoices
     .slice(0, 5)
-    .map((i) => `${i.documentNo} (${i.customer.name})`)
+    .map((i) => `${i.documentNo} (${i.customer?.name ?? "-"})`)
     .join(", ")
   const suffix = overdueInvoices.length > 5 ? ` dan ${overdueInvoices.length - 5} lainnya` : ""
   const totalOverdue = overdueInvoices.reduce(
@@ -184,7 +184,7 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
   )
 
   await notificationService.notifyAdmins(
-    `🔴 ${overdueInvoices.length} Invoice Jatuh Tempo`,
+    `${overdueInvoices.length} Invoice Jatuh Tempo`,
     `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}. Invoice: ${invoiceList}${suffix}`,
     "danger"
   )

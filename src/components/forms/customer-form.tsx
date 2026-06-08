@@ -7,7 +7,10 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { customerSchema, type CustomerInput } from "@/lib/validators"
 import { createCustomer, updateCustomer } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Label, Select, ListBox, Input, TextArea } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
@@ -28,11 +31,13 @@ interface CustomerFormProps {
     contactPerson: string | null
     gender: string | null
     code: string | null
+    creditLimit?: number | string | null
   }
   generatedCode?: string
+  enableAutoCode?: boolean
 }
 
-export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
+export function CustomerForm({ customer, generatedCode, enableAutoCode = true }: CustomerFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!customer
@@ -48,7 +53,8 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
       npwp: customer?.npwp || "",
       contactPerson: customer?.contactPerson || "",
       gender: customer?.gender || "",
-      code: customer?.code || generatedCode || "",
+      code: customer?.code || (enableAutoCode ? generatedCode : "") || "",
+      creditLimit: customer?.creditLimit != null ? Number(customer.creditLimit) : 0,
     },
   })
 
@@ -70,8 +76,8 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
             }
           })
         }
-        if (isEdit) { await updateCustomer(customer!.id, formData) }
-        else { await createCustomer(formData) }
+        const result = isEdit ? await updateCustomer(customer!.id, formData) : await createCustomer(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/master/pelanggan")
         router.refresh()
@@ -86,11 +92,11 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="code">Kode Customer</Label>
-            <Input id="code" {...register("code")} readOnly className="bg-muted" />
+            <Label htmlFor="code">Kode Pelanggan</Label>
+            <Input id="code" {...register("code")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Customer *</Label>
+            <Label htmlFor="name">Nama Pelanggan *</Label>
             <Input id="name" {...register("name")} placeholder="Nama lengkap" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
@@ -109,20 +115,25 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
             <Input id="npwp" {...register("npwp")} placeholder="XX.XXX.XXX.X-XXX.XXX" />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="creditLimit">Batas Kredit (Rp)</Label>
+            <Input id="creditLimit" type="number" min={0} step="any" {...register("creditLimit", { valueAsNumber: true })} placeholder="0 = tanpa batas" />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Controller
               name="gender"
               control={control}
               render={({ field }) => (
-                <Select selectedKey={field.value ? String(field.value) : null} onSelectionChange={(key) => field.onChange(key)} placeholder="-- Pilih --" className="w-full">
-                  <Label>Gender</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item key="male" id="male" textValue="Laki-laki">Laki-laki<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item key="female" id="female" textValue="Perempuan">Perempuan<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                <>
+                  <Label>Jenis Kelamin</Label>
+                  <RadioGroup value={field.value ? String(field.value) : ""} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="male" /> Laki-laki
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <RadioGroupItem value="female" /> Perempuan
+                    </label>
+                  </RadioGroup>
+                </>
               )}
             />
           </div>
@@ -130,7 +141,7 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
         <FormSection title="Alamat" columns={1}>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="street">Alamat Jalan</Label>
-            <TextArea id="street" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
+            <Textarea id="street" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <AddressPicker defaultValues={{ province: customer?.province ?? undefined, city: customer?.city ?? undefined, district: customer?.district ?? undefined, village: customer?.village ?? undefined, postalCode: customer?.postalCode ?? undefined }} />
@@ -139,7 +150,7 @@ export function CustomerForm({ customer, generatedCode }: CustomerFormProps) {
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
           <Button type="submit" variant="primary" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : isEdit ? "Update" : "Simpan"}
+            {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>
       </FormCard>

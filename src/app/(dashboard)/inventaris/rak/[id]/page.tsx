@@ -31,8 +31,8 @@ export default async function RackDetailPage({
       <PageHeader
         title={`Rak ${rack.name}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Inventory", href: "/inventaris" },
+          { label: "Dasbor", href: "/" },
+          { label: "Inventaris", href: "/inventaris" },
           { label: "Rak", href: "/inventaris/rak" },
           { label: "Detail" },
         ]}
@@ -59,7 +59,7 @@ export default async function RackDetailPage({
         </div>
         <div className="p-4 px-5">
           {rack.rows.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada baris</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada baris</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

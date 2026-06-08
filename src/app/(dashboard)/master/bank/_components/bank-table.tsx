@@ -19,7 +19,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/bank/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/master/bank/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -54,6 +54,8 @@ export function BankTable({ data }: BankTableProps) {
       ariaLabel="Daftar bank"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari nama atau kode bank..."
       onBulkDelete={(ids) => bulkDelete("bank", ids)}
     />
   )

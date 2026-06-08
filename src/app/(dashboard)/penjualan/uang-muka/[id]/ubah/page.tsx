@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { DownPaymentForm } from "@/components/forms/down-payment-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { getActivePaymentMethods } from "@/lib/services/method.service"
 
 export default async function EditPage({
   params,
@@ -19,19 +19,29 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const [customers, quotations] = await Promise.all([prisma.customer.findMany({ orderBy: { name: "asc" } }), prisma.quotation.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" } })])
+  const downPayment = {
+    id: data.id,
+    customerId: data.customerId,
+    quotationId: data.quotationId,
+    amount: Number(data.amount),
+    date: data.paymentDate.toISOString().split("T")[0],
+    notes: data.notes,
+  }
+
+  const [customers, quotations] = await Promise.all([prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }), prisma.quotation.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" }, select: { id: true, documentNo: true, customerId: true } })])
+  const paymentMethods = await getActivePaymentMethods()
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "sales", href: "/penjualan/uang-muka" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Penjualan", href: "/penjualan/uang-muka" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <DownPaymentForm downPayment={data as any} customers={customers as any} quotations={quotations as any}/>
+      <DownPaymentForm downPayment={downPayment} customers={customers} quotations={quotations} paymentMethods={paymentMethods}/>
     </div>
   )
 }

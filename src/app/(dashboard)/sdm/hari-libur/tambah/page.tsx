@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { createHoliday } from "@/actions/hrm.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
-import { } from "@/components/ui/breadcrumbs"
-import { Input, TextArea, Label } from "@heroui/react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateHolidayPage() {
@@ -41,7 +42,7 @@ export default function CreateHolidayPage() {
 
           <div className="flex flex-col gap-1.5 col-span-full">
             <Label htmlFor="description">Deskripsi</Label>
-            <TextArea id="description" name="description" rows={3} placeholder="Deskripsi hari libur (opsional)" />
+            <Textarea id="description" name="description" rows={3} placeholder="Deskripsi hari libur (opsional)" />
           </div>
         </div>
 

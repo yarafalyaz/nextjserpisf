@@ -35,13 +35,25 @@ export default async function InventoryTransfersPage({
 
   const tableData = JSON.parse(JSON.stringify(transfers))
 
+  const statusChips = ["", "draft", "in_transit", "completed"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    return (
+      <Link
+        key={dbStatus}
+        href={`/inventaris/transfer${urlStatus ? `?status=${urlStatus}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Inventory", href: "/inventaris" },
-  { label: "Transfers" },
+  { label: "Dasbor", href: "/" },
+  { label: "Inventaris", href: "/inventaris" },
+  { label: "Transfer" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Transfer Inventaris</h1>
@@ -50,27 +62,11 @@ export default async function InventoryTransfersPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/transfer" />
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "draft", "in_transit", "completed"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/inventaris/transfer${urlStatus ? `?status=${urlStatus}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-
-        <TransferTable data={tableData} />
-      </div>
+      <TransferTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/transfer" />}
+        filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
+      />
     </div>
   )
 }

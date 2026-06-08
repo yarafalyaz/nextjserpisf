@@ -1,9 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import type { ComponentProps, ReactNode } from "react"
+import type { ReactNode, MouseEventHandler } from "react"
+import { Loader2 } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Button as HeroButton } from "@heroui/react"
+import { Button as ShadButton } from "@/components/ui/shadcn/button"
+import { cn } from "@/lib/utils"
 
 interface BreadcrumbItem {
   label: string
@@ -42,60 +44,103 @@ export function PageHeader({ title, subtitle, breadcrumbs, actions, badge }: Pag
   )
 }
 
-type HeroButtonProps = ComponentProps<typeof HeroButton>
-type ButtonVariant = NonNullable<HeroButtonProps["variant"]>
+// HeroUI-era variant names kept for backwards compatibility across the app.
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "tertiary"
+  | "outline"
+  | "ghost"
+  | "danger"
+  | "danger-soft"
 
-// Reusable button wrapper that exposes HeroUI v3 props across the app.
-interface ButtonProps extends Omit<HeroButtonProps, "children" | "type" | "variant"> {
+type ShadVariant = React.ComponentProps<typeof ShadButton>["variant"]
+
+const variantMap: Record<ButtonVariant, ShadVariant> = {
+  primary: "default",
+  secondary: "secondary",
+  tertiary: "ghost",
+  outline: "outline",
+  ghost: "ghost",
+  danger: "destructive",
+  "danger-soft": "outline",
+}
+
+const sizeMap: Record<"sm" | "md" | "lg", React.ComponentProps<typeof ShadButton>["size"]> = {
+  sm: "sm",
+  md: "default",
+  lg: "lg",
+}
+
+interface ButtonProps {
   href?: string
   children: ReactNode
   title?: string
   variant?: ButtonVariant
   size?: "sm" | "md" | "lg"
   type?: "button" | "submit" | "reset"
+  className?: string
+  id?: string
+  /** HeroUI-compatible handlers/flags */
+  onPress?: () => void
+  onClick?: MouseEventHandler<HTMLButtonElement>
+  isDisabled?: boolean
+  isPending?: boolean
+  isIconOnly?: boolean
+  "aria-label"?: string
+  slot?: string
 }
 
-const variantMap: Record<ButtonVariant, ButtonVariant> = {
-  primary: "primary",
-  secondary: "secondary",
-  tertiary: "tertiary",
-  outline: "outline",
-  ghost: "ghost",
-  danger: "danger",
-  "danger-soft": "danger-soft",
-}
-
-export function Button({ href, children, variant = "secondary", size = "md", type = "button", className = "", id, ...rest }: ButtonProps) {
-  const heroVariant = variantMap[variant] || "secondary"
+export function Button({
+  href,
+  children,
+  variant = "secondary",
+  size = "md",
+  type = "button",
+  className,
+  id,
+  onPress,
+  onClick,
+  isDisabled,
+  isPending,
+  isIconOnly,
+  ...rest
+}: ButtonProps) {
+  const shadVariant = variantMap[variant] ?? "secondary"
+  const shadSize = isIconOnly ? "icon" : (sizeMap[size] ?? "default")
 
   if (href) {
     return (
-      <HeroButton
-        variant={heroVariant}
-        size={size}
+      <ShadButton
+        asChild
+        variant={shadVariant}
+        size={shadSize}
         className={className}
         id={id}
-        render={(props) => (
-          <Link {...(props as unknown as Omit<ComponentProps<typeof Link>, "href">)} href={href} />
-        )}
         {...rest}
       >
-        {children}
-      </HeroButton>
+        <Link href={href}>{children}</Link>
+      </ShadButton>
     )
   }
 
   return (
-    <HeroButton
+    <ShadButton
       type={type}
-      variant={heroVariant}
-      size={size}
-      className={className}
+      variant={shadVariant}
+      size={shadSize}
+      className={cn(className)}
       id={id}
+      disabled={isDisabled || isPending}
+      onClick={(e) => {
+        onClick?.(e)
+        onPress?.()
+      }}
       {...rest}
     >
+      {isPending && <Loader2 className="size-4 animate-spin" />}
       {children}
-    </HeroButton>
+    </ShadButton>
   )
 }
 

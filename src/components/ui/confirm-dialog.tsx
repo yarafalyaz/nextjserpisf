@@ -1,7 +1,17 @@
 "use client"
 
-import { AlertDialog, Button } from "@heroui/react"
 import type { ReactNode } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/shadcn/alert-dialog"
+import { cn } from "@/lib/utils"
 
 export type ConfirmVariant = "danger" | "warning" | "accent" | "success"
 
@@ -12,23 +22,16 @@ interface ConfirmDialogProps {
   body?: ReactNode
   confirmLabel?: string
   cancelLabel?: string
-  /** Visual variant for icon & confirm button. Default: "danger" */
+  /** Visual variant for the confirm button. Default: "danger" */
   variant?: ConfirmVariant
-  /** Shows spinner on confirm button */
+  /** Shows pending state on confirm button */
   isPending?: boolean
   /** Fired when user clicks confirm */
   onConfirm: () => void
-  /** Custom classNames for the dialog */
+  /** Custom classNames for the dialog content */
   className?: string
-  /** Custom children rendered inside AlertDialog.Body (overrides body prop) */
+  /** Custom children rendered inside the body (overrides body prop) */
   children?: ReactNode
-}
-
-const variantButtonMap: Record<ConfirmVariant, "danger" | "primary"> = {
-  danger: "danger",
-  warning: "primary",
-  accent: "primary",
-  success: "primary",
 }
 
 export function ConfirmDialog({
@@ -44,32 +47,36 @@ export function ConfirmDialog({
   className,
   children,
 }: ConfirmDialogProps) {
+  const danger = variant === "danger"
+
   return (
-    <AlertDialog.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialog.Container>
-        <AlertDialog.Dialog className={className ?? "sm:max-w-[400px]"}>
-          <AlertDialog.CloseTrigger />
-          <AlertDialog.Header>
-            <AlertDialog.Icon status={variant} />
-            <AlertDialog.Heading>{title}</AlertDialog.Heading>
-          </AlertDialog.Header>
-          <AlertDialog.Body>
-            {children ?? (body ? <p>{body}</p> : null)}
-          </AlertDialog.Body>
-          <AlertDialog.Footer>
-            <Button slot="close" variant="tertiary">
-              {cancelLabel}
-            </Button>
-            <Button
-              variant={variantButtonMap[variant]}
-              isPending={isPending}
-              onPress={onConfirm}
-            >
-              {confirmLabel}
-            </Button>
-          </AlertDialog.Footer>
-        </AlertDialog.Dialog>
-      </AlertDialog.Container>
-    </AlertDialog.Backdrop>
+    <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
+      <AlertDialogContent className={className ?? "sm:max-w-[400px]"}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          {(children || body) && (
+            <AlertDialogDescription asChild>
+              <div>{children ?? body}</div>
+            </AlertDialogDescription>
+          )}
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={isPending}
+            onClick={(e) => {
+              e.preventDefault()
+              onConfirm()
+            }}
+            className={cn(
+              danger &&
+                "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
+            )}
+          >
+            {confirmLabel}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }

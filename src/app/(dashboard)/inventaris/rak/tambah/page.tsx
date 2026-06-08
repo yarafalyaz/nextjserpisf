@@ -1,62 +1,42 @@
-"use client"
+export const dynamic = "force-dynamic"
 
-import { useRouter } from "next/navigation"
-import { useTransition } from "react"
-import { createRack } from "@/actions/inventory.actions"
+import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
+import { getSystemSettings } from "@/lib/utils/settings"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Input, Label } from "@heroui/react"
-import { Button } from "@/components/ui/page-header"
+import { RackCreateForm } from "../_components/rack-create-form"
 
-export default function CreateRackPage() {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+export default async function CreateRackPage() {
+  await requirePermission("create_warehouses")
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    startTransition(async () => {
-      await createRack(formData)
-      router.push("/inventaris/rak")
-      router.refresh()
-    })
-  }
+  const [warehouses, settings] = await Promise.all([
+    prisma.warehouse.findMany({
+      where: { deletedAt: null, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    getSystemSettings(),
+  ])
+  const enableAutoCode = settings.enableAutoRackCode !== false
+
+  const rackPrefix = settings.rackCodePrefix || "RCK-"
+  const maxRack = await prisma.rack.aggregate({ _max: { id: true } })
+  const generatedCode = enableAutoCode
+    ? rackPrefix + String((maxRack._max.id ?? 0) + 1).padStart(4, "0")
+    : ""
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Inventory", href: "/inventaris" },
-  { label: "Racks", href: "/inventaris/rak" },
-  { label: "Create" },
-]} />
+        { label: "Dasbor", href: "/" },
+        { label: "Inventaris", href: "/inventaris" },
+        { label: "Rak", href: "/inventaris/rak" },
+        { label: "Tambah" },
+      ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Rak</h1>
       </div>
-      <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="code">Kode Rak *</Label>
-            <Input id="code" name="code" placeholder="Contoh: R-001" required />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Rak *</Label>
-            <Input id="name" name="name" placeholder="Nama rak" required />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="warehouseId">Warehouse ID *</Label>
-            <Input id="warehouseId" name="warehouseId" type="number" placeholder="ID gudang" required />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button type="button" onPress={() => router.back()} >Batal</Button>
-          <Button type="submit" variant="primary" isDisabled={isPending} id="submit-rack">
-            {isPending ? "Menyimpan..." : "Simpan"}
-          </Button>
-        </div>
-      </form>
+      <RackCreateForm enableAutoCode={enableAutoCode} warehouses={warehouses} generatedCode={generatedCode} />
     </div>
   )
 }

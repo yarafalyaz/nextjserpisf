@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { updateBrand } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Input, Label } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/page-header"
 
 interface BrandEditFormProps {
@@ -34,15 +35,15 @@ export function BrandEditForm({ brand }: BrandEditFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama Brand *</Label>
-          <Input id="name" name="name" placeholder="Nama brand" defaultValue={brand.name} required />
+          <Label htmlFor="name">Nama Merek *</Label>
+          <Input id="name" name="name" placeholder="Nama merek" defaultValue={brand.name} required />
         </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" variant="primary" isDisabled={isPending}>
-          {isPending ? "Menyimpan..." : "Update"}
+          {isPending ? "Menyimpan..." : "Perbarui"}
         </Button>
       </div>
     </form>

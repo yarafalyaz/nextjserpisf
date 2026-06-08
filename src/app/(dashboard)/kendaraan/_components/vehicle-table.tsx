@@ -29,7 +29,7 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
       accessorKey: "plateNumber",
       header: "Plat Nomor",
       cell: ({ row }) => (
-        <Link href={`/kendaraan/${row.original.id}`} className="font-medium text-primary hover:underline">
+        <Link href={`/kendaraan/${row.original.id}`} className="font-medium text-foreground hover:underline">
           {row.original.plateNumber ?? "-"}
         </Link>
       ),
@@ -74,7 +74,7 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
             <span className="size-3 rounded-full border border-default shrink-0" style={{ backgroundColor: c }} />
             <span className="text-sm">{c}</span>
           </div>
-        ) : <span className="text-muted">-</span>
+        ) : <span className="text-muted-foreground">-</span>
       },
       size: 110,
     },
@@ -85,7 +85,7 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
         <div className="flex items-center gap-1 justify-end">
           <Link
             href={`/kendaraan/${row.original.id}`}
-            className="inline-flex items-center justify-center size-8 rounded-lg text-muted hover:text-foreground hover:bg-surface-secondary transition-all"
+            className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >
             <Pencil size={15} />
@@ -104,6 +104,8 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
         ariaLabel="Daftar kendaraan"
         pageSize={20}
         selectable={true}
+        searchColumn="plateNumber"
+        searchPlaceholder="Cari plat nomor, warna, atau varian..."
         onBulkDelete={(ids) => bulkDelete("vehicle", ids)}
       />
   )

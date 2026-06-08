@@ -35,14 +35,14 @@ export default async function ExpenseDetailPage({
       <PageHeader
         title={`Pengeluaran ${expense.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/keuangan" },
-          { label: "Expenses", href: "/keuangan/pengeluaran" },
+          { label: "Dasbor", href: "/" },
+          { label: "Keuangan", href: "/keuangan" },
+          { label: "Pengeluaran", href: "/keuangan/pengeluaran" },
           { label: expense.documentNo },
         ]}
         badge={<StatusChip status={expense.status} />}
         actions={<>
-          <Button href={`/keuangan/pengeluaran/${expense.id}/ubah`} variant="primary"><Pencil size={14} /> Edit</Button>
+          <Button href={`/keuangan/pengeluaran/${expense.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
           <PrintButton />
           <DeleteButton id={expense.id} action={deleteExpense} />
           <BackButton href="/keuangan/pengeluaran" />

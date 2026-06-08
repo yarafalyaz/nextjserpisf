@@ -24,7 +24,7 @@ export default async function TrialBalancePage({
       journalEntries: {
         where: {
           journal: {
-            status: 'POSTED',
+            status: { in: ['POSTED', 'REVERSED'] },
             transactionDate: { lte: asOfDate },
           },
         },
@@ -34,14 +34,24 @@ export default async function TrialBalancePage({
   })
 
   const data = accounts
-    .map((acc) => ({
-      id: acc.id,
-      code: acc.code,
-      name: acc.name,
-      type: acc.type,
-      totalDebit: acc.journalEntries.reduce((sum, e) => sum + Number(e.debit), 0),
-      totalCredit: acc.journalEntries.reduce((sum, e) => sum + Number(e.credit), 0),
-    }))
+    .map((acc) => {
+      const totalDebit = acc.journalEntries.reduce((sum, e) => sum + Number(e.debit), 0)
+      const totalCredit = acc.journalEntries.reduce((sum, e) => sum + Number(e.credit), 0)
+      const netBalance = totalDebit - totalCredit
+      // Proper trial balance: net debit balance for debit-normal accounts (ASSET, EXPENSE),
+      // net credit balance for credit-normal accounts (LIABILITY, EQUITY, REVENUE).
+      const isDebitNormal = acc.type === 'ASSET' || acc.type === 'EXPENSE'
+      const debitBalance = isDebitNormal ? Math.max(0, netBalance) : Math.max(0, -netBalance)
+      const creditBalance = isDebitNormal ? Math.max(0, -netBalance) : Math.max(0, netBalance)
+      return {
+        id: acc.id,
+        code: acc.code,
+        name: acc.name,
+        type: acc.type,
+        totalDebit: debitBalance,
+        totalCredit: creditBalance,
+      }
+    })
     .filter((a) => a.totalDebit > 0 || a.totalCredit > 0)
 
   const grandTotalDebit = data.reduce((sum, a) => sum + a.totalDebit, 0)
@@ -51,14 +61,14 @@ export default async function TrialBalancePage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Reports", href: "/laporan" },
-  { label: "Trial Balance" },
+  { label: "Dasbor", href: "/" },
+  { label: "Laporan", href: "/laporan" },
+  { label: "Neraca Saldo" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
           <Scale size={24} />
-          <h1>Neraca Saldo (Trial Balance)</h1>
+          <h1>Neraca Saldo</h1>
         <ExportButtons title="Trial_Balance" />
         </div>
         <p>Per tanggal: {asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
@@ -117,7 +127,7 @@ export default async function TrialBalancePage({
         <div className={`text-xl font-bold ${isBalanced ? "text-success" : "text-danger"}`}>
           {isBalanced ? 'SEIMBANG' : 'TIDAK SEIMBANG'}
         </div>
-        <div className="text-[0.8125rem] text-muted font-medium">
+        <div className="text-[0.8125rem] text-muted-foreground font-medium">
           Total Debit: {formatCurrency(grandTotalDebit)} | Total Kredit: {formatCurrency(grandTotalCredit)}
         </div>
       </div>

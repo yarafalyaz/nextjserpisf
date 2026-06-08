@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/page-header"
 
 import { useState, useRef, useEffect } from "react"
 import { Bell } from "lucide-react"
-import { Badge } from "@heroui/react"
 import Link from "next/link"
 
 interface Notification {
@@ -82,10 +81,12 @@ export function NotificationDropdown() {
         aria-expanded={isOpen}
         id="notification-btn"
       >
-        <Badge.Anchor>
+        <span className="relative inline-flex">
           <Bell size={20} />
-          {unreadCount > 0 && <Badge color="danger" size="sm" />}
-        </Badge.Anchor>
+          {unreadCount > 0 && (
+            <span className="notification-badge absolute -top-1 -right-1 size-2.5 rounded-full bg-destructive ring-2 ring-background" />
+          )}
+        </span>
       </Button>
 
       {isOpen && (
@@ -103,7 +104,7 @@ export function NotificationDropdown() {
                 <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
             ) : notifications.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-muted">
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <Bell size={24} className="mb-2 opacity-40" />
                 <p className="text-sm">Tidak ada notifikasi</p>
               </div>
@@ -115,11 +116,11 @@ export function NotificationDropdown() {
                   onClick={() => !notif.readAt && markAsRead(notif.id)}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm truncate ${!notif.readAt ? "font-semibold text-foreground" : "text-muted"}`}>
+                    <p className={`text-sm truncate ${!notif.readAt ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
                       {notif.title}
                     </p>
-                    <p className="text-xs text-muted truncate mt-0.5">{notif.body}</p>
-                    <p className="text-[10px] text-muted mt-1">{timeAgo(notif.createdAt)}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.body}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{timeAgo(notif.createdAt)}</p>
                   </div>
                   {!notif.readAt && (
                     <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-primary" />

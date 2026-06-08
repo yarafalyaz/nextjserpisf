@@ -25,7 +25,7 @@ const columns = [
   columnHelper.accessor("employee", {
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/pinjaman/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/pinjaman/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue().name}
       </Link>
     ),
@@ -69,9 +69,11 @@ const columns = [
 
 interface LoanTableProps {
   data: LoanData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function LoanTable({ data }: LoanTableProps) {
+export function LoanTable({ data, toolbar, filters }: LoanTableProps) {
   return (
     <DataTable
       data={data}
@@ -79,6 +81,8 @@ export function LoanTable({ data }: LoanTableProps) {
       ariaLabel="Daftar pinjaman karyawan"
       pageSize={20}
       selectable={true}
+      toolbar={toolbar}
+      filters={filters}
       onBulkDelete={(ids) => bulkDelete("loan", ids)}
     />
   )

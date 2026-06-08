@@ -37,6 +37,19 @@ export default async function ProjectsPage({
 
   const tableData = JSON.parse(JSON.stringify(projects))
 
+  const statusChips = ["", "active", "completed", "cancelled"].map((dbStatus) => {
+    const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+    return (
+      <Link
+        key={dbStatus}
+        href={`/proyek${urlStatus ? `?status=${urlStatus}` : ""}`}
+        className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+      >
+        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+      </Link>
+    )
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Proyek"}]} />
@@ -47,27 +60,11 @@ export default async function ProjectsPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <div className="flex gap-1.5 flex-wrap">
-            {["", "active", "completed", "cancelled"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
-              return (
-                <Link 
-                  key={dbStatus} 
-                  href={`/proyek${urlStatus ? `?status=${urlStatus}` : ""}`} 
-                  className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
-                >
-                  {dbStatus ? statusLabel(dbStatus) : "Semua"}
-                </Link>
-              )
-            })}
-          </div>
-          <AppSearchField placeholder="Cari proyek..." action="/proyek" />
-        </div>
-
-        <ProjectTable data={tableData} />
-      </div>
+      <ProjectTable
+        data={tableData}
+        toolbar={<AppSearchField placeholder="Cari proyek..." action="/proyek" />}
+        filters={statusChips}
+      />
     </div>
   )
 }

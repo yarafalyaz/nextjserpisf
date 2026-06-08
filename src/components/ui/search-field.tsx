@@ -1,19 +1,25 @@
 "use client"
 
-import { Button } from "@/components/ui/page-header"
-
-
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import { Search, X } from "lucide-react"
+import { Input } from "@/components/ui/shadcn/input"
+import { Button } from "@/components/ui/shadcn/button"
+import { cn } from "@/lib/utils"
 
 interface AppSearchFieldProps {
   placeholder?: string
   action: string
   paramName?: string
+  className?: string
 }
 
-export function AppSearchField({ placeholder = "Cari...", action, paramName = "cari" }: AppSearchFieldProps) {
+export function AppSearchField({
+  placeholder = "Cari...",
+  action,
+  paramName = "cari",
+  className,
+}: AppSearchFieldProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [value, setValue] = useState(searchParams.get(paramName) || "")
@@ -39,53 +45,26 @@ export function AppSearchField({ placeholder = "Cari...", action, paramName = "c
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        padding: "8px 12px",
-        background: "var(--bg-secondary)",
-        border: "1px solid var(--border-color)",
-        borderRadius: "10px",
-        transition: "border-color 0.2s ease",
-      }}
-    >
-      <Search size={16} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-      <input
+    <form onSubmit={handleSubmit} className={cn("relative min-w-0 flex-1 max-w-sm", className)}>
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
         type="text"
         name={paramName}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
-        style={{
-          flex: 1,
-          border: "none",
-          outline: "none",
-          background: "transparent",
-          fontSize: "0.875rem",
-          color: "var(--text-primary)",
-        }}
+        className="pl-9 pr-9"
       />
       {value && (
         <Button
           type="button"
-          onPress={handleClear}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "20px",
-            height: "20px",
-            borderRadius: "50%",
-            border: "none",
-            background: "var(--bg-tertiary)",
-            color: "var(--text-muted)",
-            cursor: "pointer",
-          }}
+          variant="ghost"
+          size="icon"
+          onClick={handleClear}
+          aria-label="Bersihkan pencarian"
+          className="absolute right-1 top-1/2 size-7 -translate-y-1/2 text-muted-foreground"
         >
-          <X size={14} />
+          <X className="size-4" />
         </Button>
       )}
     </form>

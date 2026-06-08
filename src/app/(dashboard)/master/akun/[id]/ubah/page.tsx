@@ -23,13 +23,13 @@ export default async function EditAccountPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master/akun" },
   { label: "Akun", href: "/master/akun" },
-  { label: "Edit" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Akun</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Akun</h1>
       </div>
       <AccountForm account={{ id: data.id, code: data.code, name: data.name, type: data.type, parentId: data.parentId, description: data.description }} accounts={parentAccounts} />
     </div>

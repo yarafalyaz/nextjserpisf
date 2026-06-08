@@ -20,7 +20,7 @@ const columns = [
   columnHelper.accessor("code", {
     header: "Kode",
     cell: (info) => (
-      <Link href={`/master/mata-uang/${info.row.original.id}`} className="text-primary hover:underline font-mono">
+      <Link href={`/master/mata-uang/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -30,7 +30,7 @@ const columns = [
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("rate", {
-    header: "Rate",
+    header: "Kurs",
     cell: (info) => Number(info.getValue()).toLocaleString("id-ID", { minimumFractionDigits: 4 }),
   }),
   columnHelper.display({
@@ -59,6 +59,8 @@ export function CurrencyTable({ data }: CurrencyTableProps) {
       ariaLabel="Daftar mata uang"
       pageSize={20}
       selectable={true}
+      searchColumn="code"
+      searchPlaceholder="Cari mata uang..."
       onBulkDelete={(ids) => bulkDelete("currency", ids)}
     />
   )

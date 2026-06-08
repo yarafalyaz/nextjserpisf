@@ -27,7 +27,7 @@ export default async function CreateDeliveryOrderPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Surat Jalan",href:"/penjualan/surat-jalan"},{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Delivery Order</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Surat Jalan</h1>
       </div>
       <DeliveryOrderForm salesOrders={formData} />
     </div>

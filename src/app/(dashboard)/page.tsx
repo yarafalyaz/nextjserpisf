@@ -4,266 +4,415 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
-import { DollarSign, Receipt, Users, Package, AlertTriangle } from "lucide-react"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { RevenueChart, SalesStatusChart, TopCustomersChart } from "@/components/dashboard/charts"
+import {
+  DollarSign,
+  Car,
+  CheckCircle2,
+  AlertTriangle,
+  ArrowUpRight,
+  TrendingUp,
+  Wallet,
+  Clock,
+  type LucideIcon,
+} from "lucide-react"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/shadcn/card"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/shadcn/table"
+import { Badge } from "@/components/ui/shadcn/badge"
+import { Button } from "@/components/ui/shadcn/button"
+import {
+  RevenueChart,
+  SalesStatusChart,
+  ProjectPipelineChart,
+} from "@/components/dashboard/charts"
 import { NotificationsWidget } from "@/components/dashboard/notifications-widget"
 
-async function getChartData() {
+const DONE_STATES = ["completed", "cancelled", "done", "closed"]
+const STAGE_DONE = ["completed", "skipped"]
+
+async function getCharts() {
   const sixMonthsAgo = new Date()
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
   sixMonthsAgo.setDate(1)
   sixMonthsAgo.setHours(0, 0, 0, 0)
 
-  // Revenue trend - last 6 months
   const revenueRaw = await prisma.$queryRaw<{ month: string; revenue: number }[]>`
     SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COALESCE(SUM(paid_amount), 0) as revenue
     FROM sales_invoices
-    WHERE created_at >= ${sixMonthsAgo} AND status IN ('posted', 'partial', 'paid')
+    WHERE created_at >= ${sixMonthsAgo} AND status IN ('posted', 'partial', 'paid') AND deleted_at IS NULL
     GROUP BY DATE_FORMAT(created_at, '%Y-%m')
     ORDER BY month ASC
   `
+  const revenueData = revenueRaw.map((r) => ({ month: r.month, revenue: Number(r.revenue) }))
 
-  const revenueData = revenueRaw.map((r) => ({
-    month: r.month,
-    revenue: Number(r.revenue),
-  }))
-
-  // Sales by status
   const statusRaw = await prisma.$queryRaw<{ status: string; count: bigint }[]>`
-    SELECT status, COUNT(*) as count FROM sales_invoices GROUP BY status
+    SELECT status, COUNT(*) as count FROM sales_invoices WHERE deleted_at IS NULL GROUP BY status
   `
-  const salesByStatus = statusRaw.map((s) => ({
-    name: s.status,
-    value: Number(s.count),
-  }))
+  const salesByStatus = statusRaw.map((s) => ({ name: s.status, value: Number(s.count) }))
 
-  // Top 5 customers by revenue
-  const topCustomersRaw = await prisma.$queryRaw<{ name: string; revenue: number }[]>`
-    SELECT c.name, COALESCE(SUM(si.paid_amount), 0) as revenue
-    FROM sales_invoices si
-    JOIN customers c ON si.customer_id = c.id
-    WHERE si.status IN ('posted', 'partial', 'paid')
-    GROUP BY c.id, c.name
-    ORDER BY revenue DESC
-    LIMIT 5
+  // Active projects grouped by their currently in-progress stage
+  const pipelineRaw = await prisma.$queryRaw<{ stage: string; count: bigint }[]>`
+    SELECT ps.name as stage, COUNT(DISTINCT ps.project_id) as count
+    FROM project_stages ps
+    JOIN projects p ON ps.project_id = p.id
+    WHERE p.status NOT IN ('completed', 'cancelled')
+      AND ps.status = 'in_progress'
+    GROUP BY ps.name
+    ORDER BY MIN(ps.sort_order) ASC
   `
-  const topCustomers = topCustomersRaw.map((c) => ({
-    name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
-    revenue: Number(c.revenue),
-  }))
+  const pipeline = pipelineRaw.map((r) => ({ stage: r.stage, count: Number(r.count) }))
 
-  return { revenueData, salesByStatus, topCustomers }
+  return { revenueData, salesByStatus, pipeline }
 }
 
-async function getDashboardData() {
+type ActiveProject = {
+  id: number
+  name: string
+  endDate: Date | null
+  customer: { name: string }
+  customerVehicle: { licensePlate: string | null; vehicleType: string | null } | null
+  stages: { name: string; sortOrder: number; status: string }[]
+}
+
+async function getWorkshop() {
+  const startOfMonth = new Date()
+  startOfMonth.setDate(1)
+  startOfMonth.setHours(0, 0, 0, 0)
+  const now = new Date()
+
   const [
-    totalCustomers,
-    totalItems,
-    totalInvoices,
-    pendingInvoices,
-    recentInvoices,
-    lowStockItems,
+    activeProjects,
+    completedThisMonth,
+    overdueProjects,
+    workshopList,
+    receivablesAgg,
+    revenueAgg,
     recentPayments,
-    totalRevenue,
+    lowStockItems,
   ] = await Promise.all([
-    prisma.customer.count({ where: { deletedAt: null } }),
-    prisma.item.count({ where: { isActive: true } }),
-    prisma.salesInvoice.count(),
-    prisma.salesInvoice.count({ where: { status: { in: ["posted", "partial"] } } }),
-    prisma.salesInvoice.findMany({
-      take: 5,
+    prisma.project.count({ where: { status: { notIn: DONE_STATES } } }),
+    prisma.project.count({ where: { status: { in: ["completed", "done"] }, updatedAt: { gte: startOfMonth } } }),
+    prisma.project.count({ where: { status: { notIn: DONE_STATES }, endDate: { lt: now } } }),
+    prisma.project.findMany({
+      where: { status: { notIn: DONE_STATES } },
+      orderBy: [{ endDate: "asc" }, { createdAt: "desc" }],
+      take: 8,
+      select: {
+        id: true,
+        name: true,
+        endDate: true,
+        customer: { select: { name: true } },
+        customerVehicle: { select: { licensePlate: true, vehicleType: true } },
+        stages: { select: { name: true, sortOrder: true, status: true }, orderBy: { sortOrder: "asc" } },
+      },
+    }) as Promise<ActiveProject[]>,
+    prisma.$queryRaw<{ total: number }[]>`
+      SELECT COALESCE(SUM(grand_total - paid_amount), 0) as total
+      FROM sales_invoices WHERE status IN ('posted', 'partial') AND deleted_at IS NULL
+    `,
+    prisma.salesInvoice.aggregate({
+      _sum: { paidAmount: true },
+      where: { status: { in: ["posted", "partial", "paid"] } },
+    }),
+    prisma.salesPayment.findMany({
+      take: 6,
       orderBy: { createdAt: "desc" },
-      include: { customer: true },
+      include: { salesInvoice: { include: { customer: true } } },
     }),
     prisma.$queryRaw`
       SELECT id, name, qty_on_hand as qtyOnHand, min_stock as minStock
       FROM items
       WHERE is_active = true AND min_stock > 0 AND qty_on_hand <= min_stock AND deleted_at IS NULL
-      ORDER BY qty_on_hand ASC
-      LIMIT 5
+      ORDER BY qty_on_hand ASC LIMIT 6
     ` as Promise<{ id: number; name: string; qtyOnHand: number; minStock: number }[]>,
-    prisma.salesPayment.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      include: { salesInvoice: { include: { customer: true } } },
-    }),
-    prisma.salesInvoice.aggregate({
-      _sum: { paidAmount: true },
-      where: { status: { in: ["posted", "partial", "paid"] } },
-    }),
   ])
 
+  const cars = workshopList.map((p) => {
+    const total = p.stages.length
+    const done = p.stages.filter((s) => STAGE_DONE.includes(s.status)).length
+    const progress = total > 0 ? Math.round((done / total) * 100) : 0
+    const current = p.stages.find((s) => !STAGE_DONE.includes(s.status))?.name ?? "Selesai"
+    const overdue = !!p.endDate && new Date(p.endDate) < now
+    return {
+      id: p.id,
+      name: p.name,
+      plate: p.customerVehicle?.licensePlate || "—",
+      customer: p.customer?.name || "—",
+      currentStage: current,
+      progress,
+      endDate: p.endDate,
+      overdue,
+    }
+  })
+
   return {
-    totalCustomers,
-    totalItems,
-    totalInvoices,
-    pendingInvoices,
-    recentInvoices,
-    lowStockItems,
+    activeProjects,
+    completedThisMonth,
+    overdueProjects,
+    cars,
+    receivables: Number(receivablesAgg[0]?.total || 0),
+    totalRevenue: Number(revenueAgg._sum.paidAmount || 0),
     recentPayments,
-    totalRevenue: Number(totalRevenue._sum.paidAmount || 0),
+    lowStockItems,
   }
+}
+
+function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  hint,
+  tone = "default",
+}: {
+  label: string
+  value: string | number
+  icon: LucideIcon
+  hint?: string
+  tone?: "default" | "primary" | "success" | "warning" | "danger"
+}) {
+  const toneRing: Record<string, string> = {
+    default: "bg-muted text-foreground",
+    primary: "bg-primary/10 text-primary",
+    success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+    danger: "bg-red-500/10 text-red-600 dark:text-red-400",
+  }
+  return (
+    <Card className="gap-0">
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl font-bold tabular-nums">{value}</CardTitle>
+        <CardAction>
+          <span className={`flex size-10 items-center justify-center rounded-xl ${toneRing[tone]}`}>
+            <Icon className="size-5" />
+          </span>
+        </CardAction>
+      </CardHeader>
+      {hint && (
+        <CardFooter className="pt-2">
+          <span className="text-xs text-muted-foreground">{hint}</span>
+        </CardFooter>
+      )}
+    </Card>
+  )
 }
 
 export default async function DashboardPage() {
   await requirePermission("view_dashboard")
 
-  const [data, chartData] = await Promise.all([
-    getDashboardData(),
-    getChartData(),
-  ])
+  const [w, charts] = await Promise.all([getWorkshop(), getCharts()])
+  const today = new Date().toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  })
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dashboard" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Dasbor</h1>
-        <p className="text-[0.9375rem] text-muted mt-1">Selamat datang di YaraERP</p>
+      {/* Page header */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Dasbor Bengkel</h1>
+          <p className="text-sm text-muted-foreground">{today}</p>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/proyek">
+            <TrendingUp className="size-4" /> Kelola Proyek
+          </Link>
+        </Button>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md kpi-revenue">
-          <div className="text-2xl w-12 h-12 flex items-center justify-center rounded-lg bg-surface-secondary"><DollarSign size={24} /></div>
-          <div className="flex flex-col">
-            <span className="text-[0.8125rem] text-muted font-medium">Total Revenue</span>
-            <span className="text-xl font-bold text-foreground">{formatCurrency(data.totalRevenue)}</span>
-          </div>
-        </div>
-
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md kpi-invoices">
-          <div className="text-2xl w-12 h-12 flex items-center justify-center rounded-lg bg-surface-secondary"><Receipt size={24} /></div>
-          <div className="flex flex-col">
-            <span className="text-[0.8125rem] text-muted font-medium">Invoice Pending</span>
-            <span className="text-xl font-bold text-foreground">{data.pendingInvoices}</span>
-          </div>
-        </div>
-
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md kpi-customers">
-          <div className="text-2xl w-12 h-12 flex items-center justify-center rounded-lg bg-surface-secondary"><Users size={24} /></div>
-          <div className="flex flex-col">
-            <span className="text-[0.8125rem] text-muted font-medium">Total Customers</span>
-            <span className="text-xl font-bold text-foreground">{data.totalCustomers}</span>
-          </div>
-        </div>
-
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md kpi-items">
-          <div className="text-2xl w-12 h-12 flex items-center justify-center rounded-lg bg-surface-secondary"><Package size={24} /></div>
-          <div className="flex flex-col">
-            <span className="text-[0.8125rem] text-muted font-medium">Total Items</span>
-            <span className="text-xl font-bold text-foreground">{data.totalItems}</span>
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <KpiCard label="Mobil Dikerjakan" value={w.activeProjects} icon={Car} tone="primary" hint="Proyek aktif berjalan" />
+        <KpiCard label="Selesai Bln Ini" value={w.completedThisMonth} icon={CheckCircle2} tone="success" hint="Proyek rampung" />
+        <KpiCard label="Proyek Telat" value={w.overdueProjects} icon={Clock} tone="danger" hint="Melewati target tanggal" />
+        <KpiCard label="Pendapatan" value={formatCurrency(w.totalRevenue)} icon={DollarSign} tone="default" hint="Pembayaran terkonfirmasi" />
+        <KpiCard label="Piutang Berjalan" value={formatCurrency(w.receivables)} icon={Wallet} tone="warning" hint="Sisa tagihan belum lunas" />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <RevenueChart data={chartData.revenueData} />
-        <SalesStatusChart data={chartData.salesByStatus} />
-      </div>
-      <div className="grid grid-cols-1">
-        <TopCustomersChart data={chartData.topCustomers} />
+      {/* Pipeline + Sales status */}
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
+        <div className="h-full lg:col-span-2">
+          <ProjectPipelineChart data={charts.pipeline} />
+        </div>
+        <SalesStatusChart data={charts.salesByStatus} />
       </div>
 
-      {/* Notifications Widget */}
+      {/* Mobil di Bengkel */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Car className="size-4 text-primary" /> Mobil di Bengkel
+          </CardTitle>
+          <CardDescription>Proyek aktif &amp; tahap pengerjaannya</CardDescription>
+          <CardAction>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/proyek">
+                Semua <ArrowUpRight className="size-3.5" />
+              </Link>
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Plat</TableHead>
+                <TableHead>Pelanggan</TableHead>
+                <TableHead>Pekerjaan</TableHead>
+                <TableHead>Tahap</TableHead>
+                <TableHead className="w-[160px]">Progress</TableHead>
+                <TableHead>Target</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {w.cars.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    Belum ada mobil yang sedang dikerjakan
+                  </TableCell>
+                </TableRow>
+              ) : (
+                w.cars.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="font-mono text-xs font-medium">{c.plate}</TableCell>
+                    <TableCell className="max-w-[140px] truncate">{c.customer}</TableCell>
+                    <TableCell className="max-w-[180px] truncate text-muted-foreground">{c.name}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{c.currentStage}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div className="h-full rounded-full bg-primary" style={{ width: `${c.progress}%` }} />
+                        </div>
+                        <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                          {c.progress}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {c.endDate ? (
+                        c.overdue ? (
+                          <Badge variant="outline" className="border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400">
+                            {formatDate(c.endDate)}
+                          </Badge>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">{formatDate(c.endDate)}</span>
+                        )
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Revenue trend + Low stock */}
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
+        <div className="h-full lg:col-span-2">
+          <RevenueChart data={charts.revenueData} />
+        </div>
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-amber-500" /> Stok Menipis
+            </CardTitle>
+            <CardDescription>Sparepart perlu dibeli</CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/master/barang">Semua</Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {w.lowStockItems.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">Semua stok aman</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-border">
+                {w.lowStockItems.map((item) => (
+                  <li key={item.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="truncate text-sm">{item.name}</span>
+                    <span className="shrink-0 text-xs font-medium text-destructive tabular-nums">
+                      {Number(item.qtyOnHand)} / {Number(item.minStock)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Notifications */}
       <NotificationsWidget />
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-5">
-        {/* Recent Invoices */}
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Invoice Terbaru</h2>
-            <Link href="/penjualan/faktur" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
-          </div>
-          <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Dokumen</DetailTableTh>
-                <DetailTableTh>Customer</DetailTableTh>
-                <DetailTableTh>Total</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {data.recentInvoices.map((inv) => (
-                  <DetailTableRow key={inv.id}>
-                    <DetailTableTd className="font-mono">{inv.documentNo}</DetailTableTd>
-                    <DetailTableTd>{inv.customer.name}</DetailTableTd>
-                    <DetailTableTd>{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
-                    <DetailTableTd>
-                      <span className={`status-badge status-${inv.status}`}>
-                        {inv.status}
-                      </span>
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
-          </div>
-        </div>
-
-        {/* Low Stock Alert */}
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground"><AlertTriangle size={16} className="inline mr-1.5" />Stok Menipis</h2>
-            <Link href="/master/barang" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
-          </div>
-          <div className="p-4 px-5">
-            {data.lowStockItems.length === 0 ? (
-              <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Semua stok aman</p>
-            ) : (
-              <DetailTable>
-                <DetailTableHead>
-                  <DetailTableTh>Item</DetailTableTh>
-                  <DetailTableTh>Stok</DetailTableTh>
-                  <DetailTableTh>Min</DetailTableTh>
-                </DetailTableHead>
-                <DetailTableBody>
-                  {data.lowStockItems.map((item) => (
-                    <DetailTableRow key={item.id}>
-                      <DetailTableTd>{item.name}</DetailTableTd>
-                      <DetailTableTd className="text-danger">{Number(item.qtyOnHand)}</DetailTableTd>
-                      <DetailTableTd>{Number(item.minStock)}</DetailTableTd>
-                    </DetailTableRow>
-                  ))}
-                </DetailTableBody>
-              </DetailTable>
-            )}
-          </div>
-        </div>
-
-        {/* Recent Payments */}
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Pembayaran Terbaru</h2>
-            <Link href="/penjualan/pembayaran" className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
-          </div>
-          <div className="p-4 px-5">
-            <DetailTable>
-              <DetailTableHead>
-                <DetailTableTh>No. Dokumen</DetailTableTh>
-                <DetailTableTh>Customer</DetailTableTh>
-                <DetailTableTh>Jumlah</DetailTableTh>
-                <DetailTableTh>Tanggal</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {data.recentPayments.map((pay) => (
-                  <DetailTableRow key={pay.id}>
-                    <DetailTableTd className="font-mono">{pay.documentNo}</DetailTableTd>
-                    <DetailTableTd>{pay.salesInvoice?.customer?.name || "-"}</DetailTableTd>
-                    <DetailTableTd>{formatCurrency(Number(pay.amount))}</DetailTableTd>
-                    <DetailTableTd>{formatDate(pay.paymentDate)}</DetailTableTd>
-                  </DetailTableRow>
-                ))}
-              </DetailTableBody>
-            </DetailTable>
-          </div>
-        </div>
-      </div>
+      {/* Recent payments */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pembayaran Terbaru</CardTitle>
+          <CardDescription>6 pembayaran terakhir diterima</CardDescription>
+          <CardAction>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/penjualan/pembayaran">
+                Semua <ArrowUpRight className="size-3.5" />
+              </Link>
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>No. Dokumen</TableHead>
+                <TableHead>Pelanggan</TableHead>
+                <TableHead className="text-right">Jumlah</TableHead>
+                <TableHead>Tanggal</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {w.recentPayments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                    Belum ada pembayaran
+                  </TableCell>
+                </TableRow>
+              ) : (
+                w.recentPayments.map((pay) => (
+                  <TableRow key={pay.id}>
+                    <TableCell className="font-mono text-xs">{pay.documentNo}</TableCell>
+                    <TableCell className="max-w-[160px] truncate">
+                      {pay.salesInvoice?.customer?.name || "-"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrency(Number(pay.amount))}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatDate(pay.paymentDate)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   )
 }

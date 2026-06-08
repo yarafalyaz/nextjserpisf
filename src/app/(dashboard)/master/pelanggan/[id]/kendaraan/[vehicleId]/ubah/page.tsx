@@ -82,16 +82,16 @@ export default async function EditCustomerVehiclePage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
+        { label: "Dasbor", href: "/" },
         { label: "Master Data", href: "/master" },
-        { label: "Customers", href: "/master/pelanggan" },
+        { label: "Pelanggan", href: "/master/pelanggan" },
         { label: customer.name, href: `/master/pelanggan/${id}` },
         { label: "Kendaraan", href: `/master/pelanggan/${id}/kendaraan` },
-        { label: "Edit" },
+        { label: "Ubah" },
       ]} />
 
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Edit Kendaraan</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Kendaraan</h1>
       </div>
 
       <CustomerVehicleForm customerId={customerId} brands={brands} vehicle={existingData} />

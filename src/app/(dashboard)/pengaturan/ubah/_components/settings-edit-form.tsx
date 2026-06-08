@@ -2,10 +2,17 @@
 
 import { useRouter } from "next/navigation"
 import { useTransition, useState, useRef } from "react"
-import { Tabs, Input, Label, Switch, Select, ComboBox, ListBox, TextArea } from "@heroui/react"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/shadcn/tabs"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
+import { Switch } from "@/components/ui/shadcn/switch"
+import { FormSelect } from "@/components/ui/form-select"
+import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { AppDatePicker } from "@/components/ui/date-picker"
+import { AppTimePicker } from "@/components/ui/time-picker"
 import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/page-header"
@@ -59,6 +66,10 @@ interface SettingsFormValues {
   enableAutoRowCode?: boolean | null
   enableAutoVendorCode?: boolean | null
   enableAutoWarehouseCode?: boolean | null
+  enableAutoPaymentMethodCode?: boolean | null
+  enableAutoShippingMethodCode?: boolean | null
+  paymentMethodCodePrefix?: string | null
+  shippingMethodCodePrefix?: string | null
   expensePrefix?: string | null
   fiscalYearStartMonth?: number | null
   generalExpenseAccountId?: number | null
@@ -79,6 +90,8 @@ interface SettingsFormValues {
   overtimeCoefficient?: number | null
   overtimeMealBreakEnd?: string | null
   overtimeMealBreakStart?: string | null
+  restBreakStart?: string | null
+  restBreakEnd?: string | null
   overtimeMultiplier?: number | null
   payrollBankAccountId?: number | null
   payrollJournalTypeId?: number | null
@@ -143,29 +156,21 @@ interface AccountMappingSection {
 }
 
 function AccountComboBox({ name, label, accounts, value, onChange }: { name: string; label: string; accounts: Account[]; value?: string; onChange?: (key: string) => void }) {
+  const options = [
+    { value: "", label: "-- Tidak diset --" },
+    ...accounts.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` })),
+  ]
   return (
     <div className="flex flex-col gap-1.5">
-      <ComboBox name={name} selectedKey={value || undefined} onSelectionChange={(k) => onChange?.(k ? String(k) : "")} className="w-full">
-        <Label>{label}</Label>
-        <ComboBox.InputGroup>
-          <Input placeholder="Cari akun..." />
-          <ComboBox.Trigger />
-        </ComboBox.InputGroup>
-        <ComboBox.Popover>
-          <ListBox>
-            <ListBox.Item key="" id="" textValue="-- Tidak diset --">
-              -- Tidak diset --
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
-            {accounts.map((a) => (
-              <ListBox.Item key={String(a.id)} id={String(a.id)} textValue={`${a.code} - ${a.name}`}>
-                {a.code} - {a.name}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
-          </ListBox>
-        </ComboBox.Popover>
-      </ComboBox>
+      <Label htmlFor={name}>{label}</Label>
+      <Combobox
+        id={name}
+        name={name}
+        value={value || null}
+        onChange={(v) => onChange?.(v ?? "")}
+        placeholder="Cari akun..."
+        options={options}
+      />
     </div>
   )
 }
@@ -177,7 +182,7 @@ function MappingSectionCard({ title, items, accounts }: { title: string; items: 
     <section className="rounded-xl border border-default bg-surface-secondary/40 p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <span className="inline-flex rounded-full border border-default bg-surface px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted">
+        <span className="inline-flex rounded-full border border-default bg-surface px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
           {mappedCount}/{items.length} terisi
         </span>
       </div>
@@ -203,16 +208,12 @@ function SettingSwitch({ name, label, defaultSelected }: { name: string; label: 
   return (
     <>
       <input type="hidden" name={name} value="0" />
-      <Switch id={id} name={name} value="on" defaultSelected={defaultSelected}>
-        <Switch.Control>
-          <Switch.Thumb />
-        </Switch.Control>
-        <Switch.Content>
-          <Label htmlFor={id} className="text-sm font-medium text-foreground">
-            {label}
-          </Label>
-        </Switch.Content>
-      </Switch>
+      <div className="flex items-center gap-2">
+        <Switch id={id} name={name} value="on" defaultChecked={defaultSelected} />
+        <Label htmlFor={id} className="text-sm font-medium text-foreground">
+          {label}
+        </Label>
+      </div>
     </>
   )
 }
@@ -290,7 +291,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
       items: [
         { name: "inventoryAccountId", label: "Persediaan", value: inventoryAcc, onChange: setInventoryAcc },
         { name: "inventoryAdjustmentAccountId", label: "Penyesuaian Persediaan", value: inventoryAdjustment, onChange: setInventoryAdjustment },
-        { name: "stockAdjustmentAccountId", label: "Stock Adjustment", value: stockAdjustmentAcc, onChange: setStockAdjustmentAcc },
+        { name: "stockAdjustmentAccountId", label: "Penyesuaian Stok", value: stockAdjustmentAcc, onChange: setStockAdjustmentAcc },
         { name: "cogsAccountId", label: "HPP (COGS)", value: cogsAcc, onChange: setCogsAcc },
         { name: "wipAccountId", label: "WIP", value: wipAcc, onChange: setWipAcc },
         { name: "materialExpenseAccountId", label: "Beban Material", value: materialExpense, onChange: setMaterialExpense },
@@ -307,13 +308,13 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
       ],
     },
     {
-      title: "Payroll",
+      title: "Penggajian",
       items: [
         { name: "salaryExpenseAccountId", label: "Beban Gaji", value: salaryExpense, onChange: setSalaryExpense },
         { name: "salariesPayableAccountId", label: "Hutang Gaji", value: salariesPayable, onChange: setSalariesPayable },
-        { name: "payrollBankAccountId", label: "Bank Payroll", value: payrollBank, onChange: setPayrollBank },
+        { name: "payrollBankAccountId", label: "Bank Penggajian", value: payrollBank, onChange: setPayrollBank },
         { name: "employeeReceivableAccountId", label: "Piutang Karyawan", value: employeeReceivable, onChange: setEmployeeReceivable },
-        { name: "payrollJournalTypeId", label: "Tipe Jurnal Payroll", value: payrollJournalType, onChange: setPayrollJournalType },
+        { name: "payrollJournalTypeId", label: "Tipe Jurnal Penggajian", value: payrollJournalType, onChange: setPayrollJournalType },
       ],
     },
   ]
@@ -453,33 +454,31 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         if (logoPreview) formData.set("companyLogo", logoPreview)
         if (signaturePreview) formData.set("quotationSignatureImage", signaturePreview)
         await updateSystemSettings(formData)
-        showSuccess("Settings berhasil disimpan")
+        showSuccess("Pengaturan berhasil disimpan")
       } catch (error: unknown) {
         // Next.js redirect throws NEXT_REDIRECT — let it propagate
         if (isRedirectError(error)) throw error
-        showError(error instanceof Error ? error.message : "Gagal menyimpan settings")
+        showError(error instanceof Error ? error.message : "Gagal menyimpan pengaturan")
       }
     })
   }
 
-  const inputClass = "w-full rounded-lg border border-default bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+  const inputClass = "w-full rounded-lg border border-default bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
 
   return (
     <form onSubmit={onSubmit}>
-      <Tabs selectedKey={selectedTab} onSelectionChange={(key) => setSelectedTab(String(key))}>
-        <Tabs.ListContainer>
-          <Tabs.List aria-label="Tab Pengaturan">
-            <Tabs.Tab id="company">Perusahaan<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="general">Umum<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="prefixes">Prefix Kode Otomatis<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="overtime">Lembur & Kehadiran<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="quotation">Penawaran<Tabs.Indicator /></Tabs.Tab>
-            <Tabs.Tab id="accounts">Mapping Akun<Tabs.Indicator /></Tabs.Tab>
-          </Tabs.List>
-        </Tabs.ListContainer>
+      <Tabs value={selectedTab} onValueChange={(key) => setSelectedTab(String(key))}>
+        <TabsList aria-label="Tab Pengaturan">
+          <TabsTrigger value="company">Perusahaan</TabsTrigger>
+          <TabsTrigger value="general">Umum</TabsTrigger>
+          <TabsTrigger value="prefixes">Prefix Kode Otomatis</TabsTrigger>
+          <TabsTrigger value="overtime">Lembur & Kehadiran</TabsTrigger>
+          <TabsTrigger value="quotation">Penawaran</TabsTrigger>
+          <TabsTrigger value="accounts">Mapping Akun</TabsTrigger>
+        </TabsList>
 
         {/* Tab 1: Perusahaan */}
-        <Tabs.Panel id="company">
+        <TabsContent value="company">
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6 mt-4">
           {/* Hidden inputs to pass data */}
             <input type="hidden" name="salesReceivableAccountId" value={salesReceivable} />
@@ -538,7 +537,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="companyAddress">Alamat</Label>
-                <TextArea id="companyAddress" name="companyAddress" placeholder="Alamat lengkap" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full" />
+                <Textarea id="companyAddress" name="companyAddress" placeholder="Alamat lengkap" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full" />
               </div>
               <div className="col-span-full">
                 <AddressPicker prefix="company"
@@ -577,41 +576,34 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
             </div>
           </div>
-        </Tabs.Panel>
+        </TabsContent>
 
         {/* Tab 2: Umum */}
-        <Tabs.Panel id="general">
+        <TabsContent value="general">
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6 mt-4">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Umum</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5">
-                <Select name="costingMethod" defaultSelectedKey={settings.costingMethod || "FIFO"} className="w-full">
-                  <Label>Metode Costing</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="FIFO" textValue="FIFO">FIFO<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item id="LIFO" textValue="LIFO">LIFO<ListBox.ItemIndicator /></ListBox.Item>
-                      <ListBox.Item id="Average" textValue="Average">Average<ListBox.ItemIndicator /></ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                <Label htmlFor="costingMethod">Metode Costing</Label>
+                <FormSelect
+                  id="costingMethod"
+                  name="costingMethod"
+                  defaultValue={settings.costingMethod || "FIFO"}
+                  options={[
+                    { value: "FIFO", label: "FIFO" },
+                    { value: "LIFO", label: "LIFO" },
+                    { value: "Average", label: "Average" },
+                  ]}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Select name="fiscalYearStartMonth" defaultSelectedKey={String(settings.fiscalYearStartMonth || 1)} className="w-full">
-                  <Label>Awal Tahun Fiskal (Bulan)</Label>
-                  <Select.Trigger><Select.Value /><Select.Indicator /></Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {Array.from({ length: 12 }, (_, i) => (
-                        <ListBox.Item key={String(i + 1)} id={String(i + 1)} textValue={String(i + 1)}>
-                          {i + 1}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
+                <Label htmlFor="fiscalYearStartMonth">Awal Tahun Fiskal (Bulan)</Label>
+                <FormSelect
+                  id="fiscalYearStartMonth"
+                  name="fiscalYearStartMonth"
+                  defaultValue={String(settings.fiscalYearStartMonth || 1)}
+                  options={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="currencyCode">Kode Mata Uang</Label>
@@ -642,15 +634,15 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
             </div>
           </div>
-        </Tabs.Panel>
+        </TabsContent>
 
         {/* Tab 3: Prefix Kode Otomatis */}
-        <Tabs.Panel id="prefixes">
+        <TabsContent value="prefixes">
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6 mt-4">
             <h2 className="text-base font-semibold text-foreground mb-4">Prefix Kode Entitas</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="itemCodePrefix">Prefix Item</Label>
+                <Label htmlFor="itemCodePrefix">Prefix Barang</Label>
                 <Input id="itemCodePrefix" name="itemCodePrefix" defaultValue={settings.itemCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoItemCode" label="Kode Otomatis Barang" defaultSelected={settings.enableAutoItemCode !== false} />
               </div>
@@ -670,7 +662,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <SettingSwitch name="enableAutoRowCode" label="Kode Otomatis Baris" defaultSelected={settings.enableAutoRowCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="customerCodePrefix">Prefix Customer</Label>
+                <Label htmlFor="customerCodePrefix">Prefix Pelanggan</Label>
                 <Input id="customerCodePrefix" name="customerCodePrefix" defaultValue={settings.customerCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoCustomerCode" label="Kode Otomatis Pelanggan" defaultSelected={settings.enableAutoCustomerCode !== false} />
               </div>
@@ -680,9 +672,19 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <SettingSwitch name="enableAutoEmployeeCode" label="Kode Otomatis Karyawan" defaultSelected={settings.enableAutoEmployeeCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorCodePrefix">Prefix Vendor</Label>
+                <Label htmlFor="vendorCodePrefix">Prefix Pemasok</Label>
                 <Input id="vendorCodePrefix" name="vendorCodePrefix" defaultValue={settings.vendorCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoVendorCode" label="Kode Otomatis Pemasok" defaultSelected={settings.enableAutoVendorCode !== false} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="paymentMethodCodePrefix">Prefix Metode Pembayaran</Label>
+                <Input id="paymentMethodCodePrefix" name="paymentMethodCodePrefix" defaultValue={settings.paymentMethodCodePrefix || ""} className="w-full" />
+                <SettingSwitch name="enableAutoPaymentMethodCode" label="Kode Otomatis Metode Pembayaran" defaultSelected={settings.enableAutoPaymentMethodCode !== false} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="shippingMethodCodePrefix">Prefix Metode Pengiriman</Label>
+                <Input id="shippingMethodCodePrefix" name="shippingMethodCodePrefix" defaultValue={settings.shippingMethodCodePrefix || ""} className="w-full" />
+                <SettingSwitch name="enableAutoShippingMethodCode" label="Kode Otomatis Metode Pengiriman" defaultSelected={settings.enableAutoShippingMethodCode !== false} />
               </div>
             </div>
 
@@ -725,7 +727,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="inventoryTransferPrefix" name="inventoryTransferPrefix" defaultValue={settings.inventoryTransferPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="stockAdjustmentPrefix">Adjustment</Label>
+                <Label htmlFor="stockAdjustmentPrefix">Penyesuaian</Label>
                 <Input id="stockAdjustmentPrefix" name="stockAdjustmentPrefix" defaultValue={settings.stockAdjustmentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -733,7 +735,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="workOrderPrefix" name="workOrderPrefix" defaultValue={settings.workOrderPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="timesheetPrefix">Timesheet</Label>
+                <Label htmlFor="timesheetPrefix">Lembar Waktu</Label>
                 <Input id="timesheetPrefix" name="timesheetPrefix" defaultValue={settings.timesheetPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -773,11 +775,11 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="goodsReceiptPrefix" name="goodsReceiptPrefix" defaultValue={settings.goodsReceiptPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorBillPrefix">Tagihan Vendor</Label>
+                <Label htmlFor="vendorBillPrefix">Tagihan Pemasok</Label>
                 <Input id="vendorBillPrefix" name="vendorBillPrefix" defaultValue={settings.vendorBillPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorPaymentPrefix">Pembayaran Vendor</Label>
+                <Label htmlFor="vendorPaymentPrefix">Pembayaran Pemasok</Label>
                 <Input id="vendorPaymentPrefix" name="vendorPaymentPrefix" defaultValue={settings.vendorPaymentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -785,7 +787,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="purchaseReturnPrefix" name="purchaseReturnPrefix" defaultValue={settings.purchaseReturnPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ticketPrefix">Ticket / CRM</Label>
+                <Label htmlFor="ticketPrefix">Tiket / CRM</Label>
                 <Input id="ticketPrefix" name="ticketPrefix" defaultValue={settings.ticketPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -806,10 +808,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
             </div>
           </div>
-        </Tabs.Panel>
+        </TabsContent>
 
         {/* Tab 4: Lembur & Kehadiran */}
-        <Tabs.Panel id="overtime">
+        <TabsContent value="overtime">
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6 mt-4">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Lembur</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -822,12 +824,20 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
                 <Input id="overtimeCoefficient" name="overtimeCoefficient" type="number" step="any" defaultValue={String(settings.overtimeCoefficient)} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="overtimeMealBreakStart">Jam Mulai Istirahat Makan</Label>
-                <Input id="overtimeMealBreakStart" name="overtimeMealBreakStart" type="time" defaultValue={settings.overtimeMealBreakStart || "17:00"} className="w-full" />
+                <Label htmlFor="overtimeMealBreakStart">Jam Mulai Istirahat Lembur</Label>
+                <AppTimePicker id="overtimeMealBreakStart" name="overtimeMealBreakStart" defaultValue={settings.overtimeMealBreakStart || "17:00"} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="overtimeMealBreakEnd">Jam Selesai Istirahat Makan</Label>
-                <Input id="overtimeMealBreakEnd" name="overtimeMealBreakEnd" type="time" defaultValue={settings.overtimeMealBreakEnd || "19:00"} className="w-full" />
+                <Label htmlFor="overtimeMealBreakEnd">Jam Selesai Istirahat Lembur</Label>
+                <AppTimePicker id="overtimeMealBreakEnd" name="overtimeMealBreakEnd" defaultValue={settings.overtimeMealBreakEnd || "19:00"} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="restBreakStart">Jam Mulai ISOMA (Istirahat Kerja)</Label>
+                <AppTimePicker id="restBreakStart" name="restBreakStart" defaultValue={settings.restBreakStart || "12:00"} className="w-full" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="restBreakEnd">Jam Selesai ISOMA (Istirahat Kerja)</Label>
+                <AppTimePicker id="restBreakEnd" name="restBreakEnd" defaultValue={settings.restBreakEnd || "13:00"} className="w-full" />
               </div>
             </div>
 
@@ -848,20 +858,20 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               <div className="flex flex-col gap-1.5 md:col-span-2">
                 <Label htmlFor="payrollCutoffDay">Tanggal Cut-off Penggajian (Tgl akhir siklus per bulan)</Label>
                 <Input id="payrollCutoffDay" name="payrollCutoffDay" type="number" min={1} max={31} defaultValue={String(settings.payrollCutoffDay ?? 25)} className="w-full" />
-                <p className="text-xs text-muted">Contoh: Jika 25, maka siklus penggajian adalah tanggal 26 bulan lalu s/d tanggal 25 bulan ini.</p>
+                <p className="text-xs text-muted-foreground">Contoh: Jika 25, maka siklus penggajian adalah tanggal 26 bulan lalu s/d tanggal 25 bulan ini.</p>
               </div>
             </div>
           </div>
-        </Tabs.Panel>
+        </TabsContent>
 
         {/* Tab 5: Quotation */}
-        <Tabs.Panel id="quotation">
+        <TabsContent value="quotation">
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6 mt-4">
-            <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Quotation</h2>
+            <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Penawaran</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label htmlFor="quotationFooterNotes">Catatan Footer</Label>
-                <TextArea id="quotationFooterNotes" name="quotationFooterNotes" placeholder="Catatan footer quotation..." defaultValue={settings.quotationFooterNotes || ""} className="w-full" />
+                <Textarea id="quotationFooterNotes" name="quotationFooterNotes" placeholder="Catatan footer penawaran..." defaultValue={settings.quotationFooterNotes || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="quotationSignatureName">Nama Tanda Tangan</Label>
@@ -879,19 +889,19 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               </div>
             </div>
           </div>
-        </Tabs.Panel>
+        </TabsContent>
 
         {/* Tab 6: Mapping Akun */}
-        <Tabs.Panel id="accounts">
+        <TabsContent value="accounts">
           <div className="bg-surface rounded-xl border border-default shadow-sm p-6 mt-4">
             <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
-                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted">Kualitas Mapping</p>
+                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Kualitas Mapping</p>
                   <p className="mt-1 text-lg font-semibold text-foreground">
                     {mappedCount}/{totalCount} akun terisi
                   </p>
-                  <p className="mt-1 text-sm text-muted">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {unmappedCount === 0
                       ? "Semua mapping akun sudah lengkap."
                       : `${unmappedCount} akun belum dipilih. Lengkapi supaya posting jurnal lebih aman.`}
@@ -917,7 +927,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
               ))}
             </div>
           </div>
-        </Tabs.Panel>
+        </TabsContent>
       </Tabs>
 
       {/* Submit */}
@@ -927,7 +937,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
           isDisabled={isPending}
           className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-all"
         >
-          {isPending ? "Menyimpan..." : "Simpan Settings"}
+          {isPending ? "Menyimpan..." : "Simpan Pengaturan"}
         </Button>
         <Button
           type="button"

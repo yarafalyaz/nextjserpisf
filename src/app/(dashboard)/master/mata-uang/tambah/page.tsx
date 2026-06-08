@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createCurrency } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ListBox, Checkbox, Select, Label, Input } from "@heroui/react"
+import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
+import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/page-header"
 
 export default function CreateCurrencyPage() {
@@ -24,10 +27,10 @@ export default function CreateCurrencyPage() {
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
+  { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Currencies", href: "/master/mata-uang" },
-  { label: "Create" },
+  { label: "Mata Uang", href: "/master/mata-uang" },
+  { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Mata Uang</h1>
@@ -35,17 +38,17 @@ export default function CreateCurrencyPage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="currency-code" isRequired>Kode</Label>
+            <Label htmlFor="currency-code">Kode</Label>
             <Input id="currency-code" name="code" placeholder="Contoh: USD" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="currency-name" isRequired>Nama</Label>
+            <Label htmlFor="currency-name">Nama</Label>
             <Input id="currency-name" name="name" placeholder="Contoh: US Dollar" required />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="currency-rate" isRequired>Rate</Label>
+            <Label htmlFor="currency-rate">Rate</Label>
             <Input id="currency-rate" name="rate" type="number" placeholder="Contoh: 15800.0000" step="0.0001" required />
           </div>
 
@@ -54,16 +57,18 @@ export default function CreateCurrencyPage() {
             <Input id="currency-symbol" name="symbol" placeholder="e.g. Rp, $, €" />
           </div>
 
-          <Select name="symbolPosition" className="w-full">
-            <Label>Posisi Simbol</Label>
-            <Select.Trigger><Select.Value>{({ selectedText }) => selectedText || "Pilih posisi"}</Select.Value><Select.Indicator /></Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="before" textValue="Before">Before<ListBox.ItemIndicator /></ListBox.Item>
-                <ListBox.Item id="after" textValue="After">After<ListBox.ItemIndicator /></ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currency-symbol-position">Posisi Simbol</Label>
+            <FormSelect
+              id="currency-symbol-position"
+              name="symbolPosition"
+              placeholder="Pilih posisi"
+              options={[
+                { value: "before", label: "Sebelum" },
+                { value: "after", label: "Sesudah" },
+              ]}
+            />
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="currency-decimal-separator">Pemisah Desimal</Label>
@@ -80,15 +85,9 @@ export default function CreateCurrencyPage() {
             <Input id="currency-decimal-places" name="decimalPlaces" type="number" placeholder="e.g. 2" />
           </div>
 
-          <div className="flex items-center sm:col-span-2">
-            <Checkbox id="currency-is-base" name="isBase" value="on">
-              <Checkbox.Control>
-                <Checkbox.Indicator />
-              </Checkbox.Control>
-              <Checkbox.Content>
-                <Label htmlFor="currency-is-base">Mata Uang Dasar</Label>
-              </Checkbox.Content>
-            </Checkbox>
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <Checkbox id="currency-is-base" name="isBase" value="on" />
+            <Label htmlFor="currency-is-base">Mata Uang Dasar</Label>
           </div>
         </div>
 

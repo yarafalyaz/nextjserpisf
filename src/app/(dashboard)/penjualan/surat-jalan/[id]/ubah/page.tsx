@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -19,19 +18,42 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const salesOrders = await prisma.salesOrder.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" } })
+  const deliveryOrder = {
+    id: data.id,
+    salesOrderId: data.salesOrderId,
+    date: data.date.toISOString().split("T")[0],
+    doNumber: data.doNumber,
+    deliveryDate: data.deliveryDate?.toISOString().split("T")[0] ?? null,
+    notes: data.notes,
+    shippingAddress: data.shippingAddress,
+    shippingProvince: data.shippingProvince,
+    shippingCity: data.shippingCity,
+    shippingDistrict: data.shippingDistrict,
+    shippingVillage: data.shippingVillage,
+    shippingPostalCode: data.shippingPostalCode,
+    shippingPhone: data.shippingPhone,
+    vehicleNumber: data.vehicleNumber,
+  }
+
+  const salesOrders = await prisma.salesOrder.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" }, include: { customer: { select: { name: true } } } })
+
+  const salesOrderOptions = salesOrders.map((so) => ({
+    id: so.id,
+    documentNo: so.documentNo,
+    customer: { name: so.customer.name },
+  }))
 
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "sales", href: "/penjualan/surat-jalan" },
-  { label: "Edit" },
+  { label: "Dasbor", href: "/" },
+  { label: "Penjualan", href: "/penjualan/surat-jalan" },
+  { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <DeliveryOrderForm deliveryOrder={data as any} salesOrders={salesOrders as any}/>
+      <DeliveryOrderForm deliveryOrder={deliveryOrder} salesOrders={salesOrderOptions}/>
     </div>
   )
 }

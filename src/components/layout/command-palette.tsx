@@ -1,8 +1,10 @@
 "use client"
 
-import { Command } from "cmdk"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import {
+  CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
+} from "@/components/ui/shadcn/command"
 import {
   Home, Users, Factory, Package, Building2, UserCircle, BookOpen,
   FileText, ShoppingCart, Receipt, CreditCard, Wallet, RotateCcw,
@@ -13,7 +15,7 @@ import {
   Target, Ticket, Monitor,
   TrendingUp, PieChart,
   Cog, Shield, ScrollText, CheckCircle2, Bell,
-  Plus, Search, Truck, FileSpreadsheet, Car, FolderKanban,
+  Plus, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   Globe, ListOrdered, Layers, BadgeDollarSign, Hammer
 } from "lucide-react"
@@ -34,7 +36,6 @@ const menuItems = [
   { label: "Pajak", href: "/master/pajak", icon: BadgeDollarSign, group: "Master Data" },
   { label: "Grup Pajak", href: "/master/kelompok-pajak", icon: ListOrdered, group: "Master Data" },
   { label: "Mata Uang", href: "/master/mata-uang", icon: Globe, group: "Master Data" },
-  { label: "Daftar Harga", href: "/master/daftar-harga", icon: FileSpreadsheet, group: "Master Data" },
   { label: "Barcode", href: "/master/barcode", icon: ScanBarcode, group: "Master Data" },
   { label: "Satuan", href: "/master/satuan", icon: Scale, group: "Master Data" },
   // Penjualan
@@ -141,50 +142,41 @@ export function CommandPalette() {
     router.push(href)
   }
 
-  if (!open) return null
+  const groupOrder = ["Aksi Cepat", "Navigasi", "Master Data", "Penjualan", "Pembelian", "Inventaris", "Manufaktur", "SDM", "Keuangan", "CRM", "Kendaraan", "Proyek", "Aset", "Laporan", "Sistem"]
 
   return (
-    <div className="cmdk-overlay" onClick={() => setOpen(false)}>
-      <div className="cmdk-container" onClick={(e) => e.stopPropagation()}>
-        <Command className="cmdk-root" loop>
-          <div className="cmdk-input-wrapper">
-            <Search size={18} className="cmdk-search-icon" />
-            <Command.Input
-              className="cmdk-input"
-              placeholder="Cari menu, halaman, atau aksi..."
-              autoFocus
-            />
-          </div>
-          <Command.List className="cmdk-list">
-            <Command.Empty className="cmdk-empty">
-              Tidak ditemukan. Coba kata kunci lain.
-            </Command.Empty>
-
-            {["Aksi Cepat", "Navigasi", "Master Data", "Penjualan", "Pembelian", "Inventaris", "Manufaktur", "SDM", "Keuangan", "CRM", "Kendaraan", "Proyek", "Aset", "Laporan", "Sistem"].map((group) => {
-              const items = menuItems.filter((i) => i.group === group)
-              if (items.length === 0) return null
-              return (
-                <Command.Group key={group} heading={group} className="cmdk-group">
-                  {items.map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <Command.Item
-                        key={item.href}
-                        value={`${item.label} ${item.group}`}
-                        onSelect={() => handleSelect(item.href)}
-                        className="cmdk-item"
-                      >
-                        <Icon size={16} className="cmdk-item-icon" />
-                        <span className="cmdk-item-label">{item.label}</span>
-                      </Command.Item>
-                    )
-                  })}
-                </Command.Group>
-              )
-            })}
-          </Command.List>
-        </Command>
-      </div>
-    </div>
+    <CommandDialog
+      open={open}
+      onOpenChange={setOpen}
+      title="Pencarian Cepat"
+      description="Cari menu, halaman, atau aksi"
+      className="sm:max-w-2xl"
+    >
+      <CommandInput placeholder="Cari menu, halaman, atau aksi..." />
+      <CommandList className="max-h-[60vh]">
+        <CommandEmpty>Tidak ditemukan. Coba kata kunci lain.</CommandEmpty>
+        {groupOrder.map((group) => {
+          const items = menuItems.filter((i) => i.group === group)
+          if (items.length === 0) return null
+          return (
+            <CommandGroup key={group} heading={group}>
+              {items.map((item) => {
+                const Icon = item.icon
+                return (
+                  <CommandItem
+                    key={item.href}
+                    value={`${item.label} ${item.group}`}
+                    onSelect={() => handleSelect(item.href)}
+                  >
+                    <Icon size={16} />
+                    <span>{item.label}</span>
+                  </CommandItem>
+                )
+              })}
+            </CommandGroup>
+          )
+        })}
+      </CommandList>
+    </CommandDialog>
   )
 }

@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { Car } from "lucide-react"
-import { AppSearchField } from "@/components/ui/search-field"
 import { VehicleModelTable } from "./_components/vehicle-model-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
@@ -38,9 +37,9 @@ export default async function VehicleModelsPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-  { label: "Dashboard", href: "/" },
-  { label: "Vehicles", href: "/kendaraan" },
-  { label: "Models" },
+  { label: "Dasbor", href: "/" },
+  { label: "Kendaraan", href: "/kendaraan" },
+  { label: "Model" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Model Kendaraan</h1>
@@ -49,13 +48,7 @@ export default async function VehicleModelsPage({
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="p-3 px-4 flex flex-col gap-3">
-          <AppSearchField placeholder="Cari model..." action="/kendaraan/model" />
-        </div>
-
-        <VehicleModelTable data={tableData} />
-      </div>
+      <VehicleModelTable data={tableData} />
     </div>
   )
 }

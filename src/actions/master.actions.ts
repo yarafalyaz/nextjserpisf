@@ -4,10 +4,42 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
+import { Prisma } from "@prisma/client"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
+import { getSystemSettings } from "@/lib/utils/settings"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { safeId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
+import { safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
+import { logActivity } from "@/lib/services/activity-log.service"
+
+/**
+ * Smart delete for master records that carry a `deletedAt` soft-delete column.
+ * Attempts a HARD delete first; if the row is still referenced by other records
+ * the database raises a foreign-key violation (P2003), in which case we fall
+ * back to a SOFT delete to preserve those historical references.
+ *
+ * This keeps the table free of cruft for never-used masters (so generated codes
+ * reflect reality and an empty list yields PREFIX-0001) while protecting
+ * referential integrity for masters tied to transactions.
+ *
+ * Safe by schema design: no transaction->master relation uses onDelete: Cascade,
+ * so a hard delete can never wipe transactional data — it is always Restricted
+ * (or SetNull for nullable, non-historical links such as Task.assignedTo).
+ */
+async function hardDeleteOrSoftDelete(
+  hardDelete: () => Promise<unknown>,
+  softDelete: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await hardDelete()
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") {
+      await softDelete()
+      return
+    }
+    throw e
+  }
+}
 
 // ==================== CUSTOMER ACTIONS ====================
 
@@ -15,8 +47,9 @@ export async function createCustomer(formData: FormData) {
   try {
   await requirePermission("create_customers")
 
+  const settings = await getSystemSettings()
   let code = (formData.get("code") as string) || null
-  if (!code) {
+  if (settings.enableAutoCustomerCode !== false || !code) {
     code = await generateDocumentNumber("CUST", "simple")
   }
 
@@ -36,11 +69,13 @@ export async function createCustomer(formData: FormData) {
       district: formData.get("district") as string | null,
       village: formData.get("village") as string | null,
       postalCode: formData.get("postalCode") as string | null,
+      creditLimit: safeNumber(formData.get("creditLimit")) ?? 0,
       isActive: true,
     },
   })
 
   revalidatePath("/master/pelanggan")
+  await logActivity("create", "Customer", customer.id, "Membuat pelanggan")
   return { success: true, id: customer.id }
 
   } catch (e: unknown) {
@@ -71,10 +106,12 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       district: formData.get("district") as string | null,
       village: formData.get("village") as string | null,
       postalCode: formData.get("postalCode") as string | null,
+      creditLimit: safeNumber(formData.get("creditLimit")) ?? 0,
     },
   })
 
   revalidatePath("/master/pelanggan")
+  await logActivity("update", "Customer", customerId, "Memperbarui pelanggan")
   return { success: true }
 
   } catch (e: unknown) {
@@ -88,12 +125,13 @@ export async function deleteCustomer(customerId: number) {
   try {
   await requirePermission("delete_customers")
 
-  await prisma.customer.update({
-    where: { id: customerId },
-    data: { deletedAt: new Date() },
-  })
+  await hardDeleteOrSoftDelete(
+    () => prisma.customer.delete({ where: { id: customerId } }),
+    () => prisma.customer.update({ where: { id: customerId }, data: { deletedAt: new Date() } }),
+  )
 
   revalidatePath("/master/pelanggan")
+  await logActivity("delete", "Customer", customerId, "Menghapus pelanggan")
   return { success: true }
 
   } catch (e: unknown) {
@@ -109,8 +147,11 @@ export async function createVendor(formData: FormData) {
   try {
   await requirePermission("create_vendors")
 
+  await requirePermission("create_vendors")
+
+  const settings = await getSystemSettings()
   let code = (formData.get("code") as string) || null
-  if (!code) {
+  if (settings.enableAutoVendorCode !== false || !code) {
     code = await generateDocumentNumber("VND", "simple")
   }
 
@@ -138,6 +179,7 @@ export async function createVendor(formData: FormData) {
   })
 
   revalidatePath("/master/pemasok")
+  await logActivity("create", "Vendor", vendor.id, "Membuat pemasok")
   return { success: true, id: vendor.id }
 
   } catch (e: unknown) {
@@ -174,6 +216,7 @@ export async function updateVendor(vendorId: number, formData: FormData) {
   })
 
   revalidatePath("/master/pemasok")
+  await logActivity("update", "Vendor", vendorId, "Memperbarui pemasok")
   return { success: true }
 
   } catch (e: unknown) {
@@ -189,9 +232,16 @@ export async function createItem(formData: FormData) {
   try {
   await requirePermission("create_items")
 
+  const itemSettings = await getSystemSettings()
   let sku = (formData.get("sku") as string) || null
-  if (!sku) {
+  if (itemSettings.enableAutoItemCode !== false || !sku) {
     sku = await generateDocumentNumber("ITM", "simple")
+  }
+
+  const itemCost = safeNumber(formData.get("cost")) ?? 0
+  const itemPrice = safeNumber(formData.get("price")) ?? 0
+  if (itemPrice < itemCost) {
+    return { success: false, error: "Harga jual tidak boleh lebih rendah dari harga beli (modal)." }
   }
 
   const item = await prisma.item.create({
@@ -209,17 +259,31 @@ export async function createItem(formData: FormData) {
       unitOfMeasure: formData.get("unitOfMeasure") as string || "PCS",
       qtyOnHand: 0,
       minStock: (safeNumber(formData.get("minStock")) ?? 0),
-      cost: (safeNumber(formData.get("cost")) ?? 0),
-      price: (safeNumber(formData.get("price")) ?? 0),
+      cost: itemCost,
+      price: itemPrice,
       standardCost: safeNumber(formData.get("standardCost")) ?? undefined,
       costingMethod: (formData.get("costingMethod") as string) || undefined,
       purchasePrice: safeNumber(formData.get("purchasePrice")) ?? undefined,
       isProduct: formData.get("isProduct") === "true",
+      trackBatch: formData.get("trackBatch") === "true",
+      trackSerial: formData.get("trackSerial") === "true",
       isActive: true,
     },
   })
 
+  // Multi-UoM alternate unit conversions (JSON: [{ code, factorToBase }])
+  const convJson = formData.get("uomConversions") as string | null
+  const conversions = (safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? [])
+    .filter((c) => c.code?.trim() && Number(c.factorToBase) > 0)
+  if (conversions.length > 0) {
+    await prisma.uomConversion.createMany({
+      data: conversions.map((c) => ({ itemId: item.id, code: c.code.trim(), factorToBase: Number(c.factorToBase) })),
+      skipDuplicates: true,
+    })
+  }
+
   revalidatePath("/master/barang")
+  await logActivity("create", "Item", item.id, "Membuat barang")
   return { success: true, id: item.id }
 
   } catch (e: unknown) {
@@ -232,6 +296,12 @@ export async function createItem(formData: FormData) {
 export async function updateItem(itemId: number, formData: FormData) {
   try {
   await requirePermission("edit_items")
+
+  const updItemCost = safeNumber(formData.get("cost")) ?? 0
+  const updItemPrice = safeNumber(formData.get("price")) ?? 0
+  if (updItemPrice < updItemCost) {
+    return { success: false, error: "Harga jual tidak boleh lebih rendah dari harga beli (modal)." }
+  }
 
   await prisma.item.update({
     where: { id: itemId },
@@ -248,16 +318,33 @@ export async function updateItem(itemId: number, formData: FormData) {
       defaultRackRowId: safeId(formData.get("defaultRackRowId")),
       unitOfMeasure: formData.get("unitOfMeasure") as string,
       minStock: (safeNumber(formData.get("minStock")) ?? 0),
-      cost: (safeNumber(formData.get("cost")) ?? 0),
-      price: (safeNumber(formData.get("price")) ?? 0),
+      cost: updItemCost,
+      price: updItemPrice,
       standardCost: safeNumber(formData.get("standardCost")) ?? undefined,
       costingMethod: (formData.get("costingMethod") as string) || undefined,
       purchasePrice: safeNumber(formData.get("purchasePrice")) ?? undefined,
       isProduct: formData.get("isProduct") === "true",
+      trackBatch: formData.get("trackBatch") === "true",
+      trackSerial: formData.get("trackSerial") === "true",
     },
   })
 
+  // Replace alternate-unit conversions
+  const convJson = formData.get("uomConversions") as string | null
+  if (convJson !== null) {
+    const conversions = (safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? [])
+      .filter((c) => c.code?.trim() && Number(c.factorToBase) > 0)
+    await prisma.uomConversion.deleteMany({ where: { itemId } })
+    if (conversions.length > 0) {
+      await prisma.uomConversion.createMany({
+        data: conversions.map((c) => ({ itemId, code: c.code.trim(), factorToBase: Number(c.factorToBase) })),
+        skipDuplicates: true,
+      })
+    }
+  }
+
   revalidatePath("/master/barang")
+  await logActivity("update", "Item", itemId, "Memperbarui barang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -273,8 +360,9 @@ export async function createWarehouse(formData: FormData) {
   try {
   await requirePermission("create_warehouses")
 
+  const settings = await getSystemSettings()
   let code = (formData.get("code") as string) || null
-  if (!code) {
+  if (settings.enableAutoWarehouseCode !== false || !code) {
     code = await generateDocumentNumber("WH", "simple")
   }
 
@@ -288,6 +376,7 @@ export async function createWarehouse(formData: FormData) {
   })
 
   revalidatePath("/master/gudang")
+  await logActivity("create", "Warehouse", warehouse.id, "Membuat gudang")
   return { success: true, id: warehouse.id }
 
   } catch (e: unknown) {
@@ -311,6 +400,7 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
   })
 
   revalidatePath("/master/gudang")
+  await logActivity("update", "Warehouse", warehouseId, "Memperbarui gudang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -326,8 +416,9 @@ export async function createEmployee(formData: FormData) {
   try {
   await requirePermission("create_employees")
 
+  const settings = await getSystemSettings()
   let employeeNo = (formData.get("employeeNo") as string) || null
-  if (!employeeNo) {
+  if (settings.enableAutoEmployeeCode !== false || !employeeNo) {
     employeeNo = await generateDocumentNumber("EMP", "simple")
   }
 
@@ -363,6 +454,7 @@ export async function createEmployee(formData: FormData) {
   })
 
   revalidatePath("/master/karyawan")
+  await logActivity("create", "Employee", employee.id, "Membuat karyawan")
   return { success: true, id: employee.id }
 
   } catch (e: unknown) {
@@ -406,6 +498,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
   })
 
   revalidatePath("/master/karyawan")
+  await logActivity("update", "Employee", employeeId, "Memperbarui karyawan")
   return { success: true }
 
   } catch (e: unknown) {
@@ -437,6 +530,7 @@ export async function createAccount(formData: FormData) {
   })
 
   revalidatePath("/master/akun")
+  await logActivity("create", "Account", account.id, "Membuat akun")
   return { success: true, id: account.id }
 
   } catch (e: unknown) {
@@ -461,6 +555,7 @@ export async function createItemCategory(formData: FormData) {
   })
 
   revalidatePath("/master/barang")
+  await logActivity("create", "ItemCategory", category.id, "Membuat kategori barang")
   return { success: true, id: category.id }
 
   } catch (e: unknown) {
@@ -484,6 +579,7 @@ export async function updateItemCategory(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/kategori-barang")
+  await logActivity("update", "ItemCategory", id, "Memperbarui kategori barang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -513,6 +609,7 @@ export async function createDepartment(formData: FormData) {
   })
 
   revalidatePath("/master/karyawan")
+  await logActivity("create", "Department", department.id, "Membuat departemen")
   return { success: true, id: department.id }
 
   } catch (e: unknown) {
@@ -536,6 +633,7 @@ export async function updateDepartment(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/departemen")
+  await logActivity("update", "Department", id, "Memperbarui departemen")
   return { success: true }
 
   } catch (e: unknown) {
@@ -569,6 +667,7 @@ export async function createPosition(formData: FormData) {
       })
 
       revalidatePath("/master/karyawan")
+      await logActivity("create", "Position", position.id, "Membuat jabatan")
       return { success: true, id: position.id }
     } catch (createErr: any) {
       const isUniqueCodeConflict = createErr?.code === "P2002" && (
@@ -602,6 +701,7 @@ export async function updatePosition(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/jabatan")
+  await logActivity("update", "Position", id, "Memperbarui jabatan")
   return { success: true }
 
   } catch (e: unknown) {
@@ -635,8 +735,9 @@ export async function createLead(formData: FormData) {
     status: "new",
   }
 
-  await prisma.lead.create({ data })
+  const lead = await prisma.lead.create({ data })
   revalidatePath("/crm/leads")
+  await logActivity("create", "Lead", lead.id, "Membuat lead")
   redirect("/crm/leads")
 
   } catch (e: unknown) {
@@ -670,6 +771,7 @@ export async function updateLead(id: number, formData: FormData) {
   })
 
   revalidatePath("/crm/leads")
+  await logActivity("update", "Lead", id, "Memperbarui lead")
   redirect("/crm/leads")
 
   } catch (e: unknown) {
@@ -695,6 +797,7 @@ export async function createBank(formData: FormData) {
   })
 
   revalidatePath("/master/bank")
+  await logActivity("create", "Bank", bank.id, "Membuat bank")
   return { success: true, id: bank.id }
 
   } catch (e: unknown) {
@@ -718,6 +821,7 @@ export async function updateBank(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/bank")
+  await logActivity("update", "Bank", id, "Memperbarui bank")
   return { success: true }
 
   } catch (e: unknown) {
@@ -733,7 +837,7 @@ export async function createTax(formData: FormData) {
   try {
   await requirePermission("create_taxes")
 
-  await prisma.tax.create({
+  const tax = await prisma.tax.create({
     data: {
       name: formData.get("name") as string,
       rate: (safeNumber(formData.get("rate")) ?? 0),
@@ -750,6 +854,7 @@ export async function createTax(formData: FormData) {
   })
 
   revalidatePath("/master/pajak")
+  await logActivity("create", "Tax", tax.id, "Membuat pajak")
   redirect("/master/pajak")
 
   } catch (e: unknown) {
@@ -780,6 +885,7 @@ export async function updateTax(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/pajak")
+  await logActivity("update", "Tax", id, "Memperbarui pajak")
   redirect("/master/pajak")
 
   } catch (e: unknown) {
@@ -789,35 +895,11 @@ export async function updateTax(id: number, formData: FormData) {
   }
 }
 
-// ==================== PRICE LIST ACTIONS ====================
-
-export async function createPriceList(formData: FormData) {
-  try {
-  await requirePermission("create_items")
-
-  const priceList = await prisma.priceList.create({
-    data: {
-      name: formData.get("name") as string,
-      description: (formData.get("description") as string) || undefined,
-      isActive: true,
-    },
-  })
-
-  revalidatePath("/master/daftar-harga")
-  return { success: true, id: priceList.id }
-
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e
-    console.error("[createPriceList]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
 // ==================== CURRENCY ACTIONS ====================
 
 export async function createCurrency(formData: FormData) {
   try {
-  await requirePermission("create_items")
+  await requirePermission("create_currencies")
 
   const currency = await prisma.currency.create({
     data: {
@@ -835,6 +917,7 @@ export async function createCurrency(formData: FormData) {
   })
 
   revalidatePath("/master/mata-uang")
+  await logActivity("create", "Currency", currency.id, "Membuat mata uang")
   return { success: true, id: currency.id }
 
   } catch (e: unknown) {
@@ -846,7 +929,7 @@ export async function createCurrency(formData: FormData) {
 
 export async function updateCurrency(id: number, formData: FormData) {
   try {
-  await requirePermission("edit_items")
+  await requirePermission("edit_currencies")
 
   await prisma.currency.update({
     where: { id },
@@ -864,6 +947,7 @@ export async function updateCurrency(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/mata-uang")
+  await logActivity("update", "Currency", id, "Memperbarui mata uang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -875,9 +959,36 @@ export async function updateCurrency(id: number, formData: FormData) {
 
 // ==================== BARCODE ACTIONS ====================
 
+/**
+ * Resolve a scanned/typed code (barcode OR SKU) to an item id.
+ * Used by the scan page to jump straight to the item's tracking detail.
+ */
+export async function lookupItemByScan(rawCode: string): Promise<{ success: boolean; id?: number; error?: string }> {
+  try {
+    await requirePermission("view_items")
+    const code = (rawCode || "").trim()
+    if (!code) return { success: false, error: "Kode kosong" }
+
+    const byBarcode = await prisma.barcode.findUnique({ where: { barcode: code }, select: { itemId: true } })
+    if (byBarcode) return { success: true, id: byBarcode.itemId }
+
+    const bySku = await prisma.item.findFirst({
+      where: { sku: code, deletedAt: null },
+      select: { id: true },
+    })
+    if (bySku) return { success: true, id: bySku.id }
+
+    return { success: false, error: `Barang dengan kode "${code}" tidak ditemukan` }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[lookupItemByScan]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
 export async function createBarcode(formData: FormData) {
   try {
-  await requirePermission("create_items")
+  await requirePermission("create_barcodes")
 
   const barcodeEntry = await prisma.barcode.create({
     data: {
@@ -888,11 +999,33 @@ export async function createBarcode(formData: FormData) {
   })
 
   revalidatePath("/master/barcode")
+  await logActivity("create", "Barcode", barcodeEntry.id, "Membuat barcode")
   return { success: true, id: barcodeEntry.id }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createBarcode]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function updateBarcode(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_barcodes")
+    await prisma.barcode.update({
+      where: { id },
+      data: {
+        barcode: formData.get("barcode") as string,
+        itemId: requireNumber(formData.get("itemId"), "itemId"),
+        type: (formData.get("type") as string) || "EAN13",
+      },
+    })
+    revalidatePath("/master/barcode")
+    await logActivity("update", "Barcode", id, "Memperbarui barcode")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateBarcode]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
@@ -916,11 +1049,37 @@ export async function createTaxGroup(formData: FormData) {
   })
 
   revalidatePath("/master/kelompok-pajak")
+  await logActivity("create", "TaxGroup", taxGroup.id, "Membuat kelompok pajak")
   return { success: true, id: taxGroup.id }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createTaxGroup]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function updateTaxGroup(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_taxes")
+    const name = formData.get("name") as string
+    const taxIds = formData.getAll("taxIds").map((t) => Number(t))
+    await prisma.$transaction([
+      prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),
+      prisma.taxGroup.update({
+        where: { id },
+        data: {
+          name,
+          taxes: { create: taxIds.map((taxId) => ({ taxId })) },
+        },
+      }),
+    ])
+    revalidatePath("/master/kelompok-pajak")
+    await logActivity("update", "TaxGroup", id, "Memperbarui kelompok pajak")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateTaxGroup]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
@@ -940,6 +1099,7 @@ export async function createStatisticalKeyFigure(formData: FormData) {
   })
 
   revalidatePath("/keuangan/angka-kunci-statistik")
+  await logActivity("create", "StatisticalKeyFigure", figure.id, "Membuat angka kunci statistik")
   return { success: true, id: figure.id }
 
   } catch (e: unknown) {
@@ -949,11 +1109,32 @@ export async function createStatisticalKeyFigure(formData: FormData) {
   }
 }
 
+export async function updateStatisticalKeyFigure(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_accounts")
+    await prisma.statisticalKeyFigure.update({
+      where: { id },
+      data: {
+        name: formData.get("name") as string,
+        unit: formData.get("unit") as string,
+        value: (safeNumber(formData.get("value")) ?? 0),
+      },
+    })
+    revalidatePath("/keuangan/angka-kunci-statistik")
+    await logActivity("update", "StatisticalKeyFigure", id, "Memperbarui angka kunci statistik")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateStatisticalKeyFigure]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
 // ==================== PAYMENT TERM ACTIONS ====================
 
 export async function createPaymentTerm(formData: FormData) {
   try {
-  await requirePermission("create_items")
+  await requirePermission("create_payment_terms")
 
   const paymentTerm = await prisma.paymentTerm.create({
     data: {
@@ -965,6 +1146,7 @@ export async function createPaymentTerm(formData: FormData) {
   })
 
   revalidatePath("/master/syarat-pembayaran")
+  await logActivity("create", "PaymentTerm", paymentTerm.id, "Membuat syarat pembayaran")
   return { success: true, id: paymentTerm.id }
 
   } catch (e: unknown) {
@@ -976,7 +1158,7 @@ export async function createPaymentTerm(formData: FormData) {
 
 export async function updatePaymentTerm(id: number, formData: FormData) {
   try {
-  await requirePermission("edit_items")
+  await requirePermission("edit_payment_terms")
 
   await prisma.paymentTerm.update({
     where: { id },
@@ -988,6 +1170,7 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/syarat-pembayaran")
+  await logActivity("update", "PaymentTerm", id, "Memperbarui syarat pembayaran")
   return { success: true }
 
   } catch (e: unknown) {
@@ -999,11 +1182,12 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
 
 export async function deletePaymentTerm(id: number) {
   try {
-  await requirePermission("delete_items")
+  await requirePermission("delete_payment_terms")
 
   await prisma.paymentTerm.delete({ where: { id } })
 
   revalidatePath("/master/syarat-pembayaran")
+  await logActivity("delete", "PaymentTerm", id, "Menghapus syarat pembayaran")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1019,12 +1203,13 @@ export async function deleteVendor(id: number) {
   try {
   await requirePermission("delete_vendors")
 
-  await prisma.vendor.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  })
+  await hardDeleteOrSoftDelete(
+    () => prisma.vendor.delete({ where: { id } }),
+    () => prisma.vendor.update({ where: { id }, data: { deletedAt: new Date() } }),
+  )
 
   revalidatePath("/master/pemasok")
+  await logActivity("delete", "Vendor", id, "Menghapus pemasok")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1038,12 +1223,13 @@ export async function deleteItem(id: number) {
   try {
   await requirePermission("delete_items")
 
-  await prisma.item.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  })
+  await hardDeleteOrSoftDelete(
+    () => prisma.item.delete({ where: { id } }),
+    () => prisma.item.update({ where: { id }, data: { deletedAt: new Date() } }),
+  )
 
   revalidatePath("/master/barang")
+  await logActivity("delete", "Item", id, "Menghapus barang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1057,12 +1243,13 @@ export async function deleteWarehouse(id: number) {
   try {
   await requirePermission("delete_warehouses")
 
-  await prisma.warehouse.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  })
+  await hardDeleteOrSoftDelete(
+    () => prisma.warehouse.delete({ where: { id } }),
+    () => prisma.warehouse.update({ where: { id }, data: { deletedAt: new Date() } }),
+  )
 
   revalidatePath("/master/gudang")
+  await logActivity("delete", "Warehouse", id, "Menghapus gudang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1076,12 +1263,13 @@ export async function deleteEmployee(id: number) {
   try {
   await requirePermission("delete_employees")
 
-  await prisma.employee.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  })
+  await hardDeleteOrSoftDelete(
+    () => prisma.employee.delete({ where: { id } }),
+    () => prisma.employee.update({ where: { id }, data: { deletedAt: new Date() } }),
+  )
 
   revalidatePath("/master/karyawan")
+  await logActivity("delete", "Employee", id, "Menghapus karyawan")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1098,6 +1286,7 @@ export async function deleteDepartment(id: number) {
   await prisma.department.delete({ where: { id } })
 
   revalidatePath("/master/karyawan")
+  await logActivity("delete", "Department", id, "Menghapus departemen")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1114,6 +1303,7 @@ export async function deletePosition(id: number) {
   await prisma.position.delete({ where: { id } })
 
   revalidatePath("/master/karyawan")
+  await logActivity("delete", "Position", id, "Menghapus jabatan")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1130,6 +1320,7 @@ export async function deleteBank(id: number) {
   await prisma.bank.delete({ where: { id } })
 
   revalidatePath("/master/bank")
+  await logActivity("delete", "Bank", id, "Menghapus bank")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1146,6 +1337,7 @@ export async function deleteTax(id: number) {
   await prisma.tax.delete({ where: { id } })
 
   revalidatePath("/master/pajak")
+  await logActivity("delete", "Tax", id, "Menghapus pajak")
   redirect("/master/pajak")
 
   } catch (e: unknown) {
@@ -1162,6 +1354,7 @@ export async function deleteTaxGroup(id: number) {
   await prisma.taxGroup.delete({ where: { id } })
 
   revalidatePath("/master/kelompok-pajak")
+  await logActivity("delete", "TaxGroup", id, "Menghapus kelompok pajak")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1173,11 +1366,12 @@ export async function deleteTaxGroup(id: number) {
 
 export async function deleteCurrency(id: number) {
   try {
-  await requirePermission("delete_items")
+  await requirePermission("delete_currencies")
 
   await prisma.currency.delete({ where: { id } })
 
   revalidatePath("/master/mata-uang")
+  await logActivity("delete", "Currency", id, "Menghapus mata uang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1187,29 +1381,14 @@ export async function deleteCurrency(id: number) {
   }
 }
 
-export async function deletePriceList(id: number) {
-  try {
-  await requirePermission("delete_items")
-
-  await prisma.priceList.delete({ where: { id } })
-
-  revalidatePath("/master/daftar-harga")
-  return { success: true }
-
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e
-    console.error("[deletePriceList]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
 export async function deleteBarcode(id: number) {
   try {
-  await requirePermission("delete_items")
+  await requirePermission("delete_barcodes")
 
   await prisma.barcode.delete({ where: { id } })
 
   revalidatePath("/master/barcode")
+  await logActivity("delete", "Barcode", id, "Menghapus barcode")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1226,6 +1405,7 @@ export async function deleteItemCategory(id: number) {
   await prisma.itemCategory.delete({ where: { id } })
 
   revalidatePath("/master/barang")
+  await logActivity("delete", "ItemCategory", id, "Menghapus kategori barang")
   return { success: true }
 
   } catch (e: unknown) {
@@ -1260,6 +1440,7 @@ export async function updateAccount(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/akun")
+  await logActivity("update", "Account", account.id, "Memperbarui akun")
   return { success: true, id: account.id }
 
   } catch (e: unknown) {
@@ -1273,15 +1454,16 @@ export async function updateAccount(id: number, formData: FormData) {
 
 export async function createBrand(formData: FormData) {
   try {
-  await requirePermission("create_items")
+  await requirePermission("create_brands")
 
-  await prisma.brand.create({
+  const brand = await prisma.brand.create({
     data: {
       name: formData.get("name") as string,
     },
   })
 
   revalidatePath("/master/merek")
+  await logActivity("create", "Brand", brand.id, "Membuat merek")
   redirect("/master/merek")
 
   } catch (e: unknown) {
@@ -1293,7 +1475,7 @@ export async function createBrand(formData: FormData) {
 
 export async function updateBrand(id: number, formData: FormData) {
   try {
-  await requirePermission("edit_items")
+  await requirePermission("edit_brands")
 
   await prisma.brand.update({
     where: { id },
@@ -1303,6 +1485,7 @@ export async function updateBrand(id: number, formData: FormData) {
   })
 
   revalidatePath("/master/merek")
+  await logActivity("update", "Brand", id, "Memperbarui merek")
   redirect("/master/merek")
 
   } catch (e: unknown) {
@@ -1314,11 +1497,12 @@ export async function updateBrand(id: number, formData: FormData) {
 
 export async function deleteBrand(id: number) {
   try {
-  await requirePermission("delete_items")
+  await requirePermission("delete_brands")
 
   await prisma.brand.delete({ where: { id } })
 
   revalidatePath("/master/merek")
+  await logActivity("delete", "Brand", id, "Menghapus merek")
   redirect("/master/merek")
 
   } catch (e: unknown) {

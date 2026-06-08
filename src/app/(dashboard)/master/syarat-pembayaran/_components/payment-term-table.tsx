@@ -21,7 +21,7 @@ const columns = [
   columnHelper.accessor("code", {
     header: "Kode",
     cell: (info) => (
-      <Link href={`/master/syarat-pembayaran/${info.row.original.id}`} className="text-primary hover:underline font-medium font-mono">
+      <Link href={`/master/syarat-pembayaran/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -68,6 +68,8 @@ export function PaymentTermTable({ data }: PaymentTermTableProps) {
       ariaLabel="Daftar termin pembayaran"
       pageSize={20}
       selectable={true}
+      searchColumn="code"
+      searchPlaceholder="Cari nama atau kode termin..."
       onBulkDelete={(ids) => bulkDelete("paymentTerm", ids)}
     />
   )

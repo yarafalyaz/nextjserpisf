@@ -37,7 +37,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     await page.goto("/pengaturan/peran/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Role" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Peran" })).toBeVisible({ timeout: 15000 })
     await page.locator("#name").first().fill(name)
     await waitForHydration(page)
     await page.locator("button[type='submit']").click()
@@ -57,7 +57,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible({ timeout: 15000 })
 
     // ─── UPDATE ───────────────────────────────────────────────
-    await page.getByRole("link", { name: "Edit Role" }).click({ force: true })
+    await page.getByRole("link", { name: "Ubah Peran" }).click({ force: true })
     await page.waitForURL(/\/pengaturan\/peran\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").first().fill(updated)

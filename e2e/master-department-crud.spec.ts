@@ -48,6 +48,8 @@ test.describe("Master Departemen CRUD", () => {
     await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
+    await page.goto(`/master/departemen?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
     // ─── DETAIL ───────────────────────────────────────────────
@@ -65,14 +67,15 @@ test.describe("Master Departemen CRUD", () => {
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
-    await page.goto("/master/departemen", { waitUntil: "domcontentloaded" })
+    await page.goto(`/master/departemen?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
-    const rowForEdit = page.locator("tr").filter({ hasText: name })
+    const rowForEdit = page.locator("tr").filter({ hasText: name }).first()
     await expect(rowForEdit).toBeVisible({ timeout: 15000 })
 
     await rowForEdit.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+    await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/departemen\/\d+\/ubah$/, { timeout: 15000 })
     await closeMobileSidebarIfOpen(page)
@@ -83,10 +86,12 @@ test.describe("Master Departemen CRUD", () => {
     await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
+    await page.goto(`/master/departemen?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
-    const updatedRow = page.locator("tr").filter({ hasText: updated })
+    const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(updatedRow).toBeVisible({ timeout: 15000 })
 
     await updatedRow.locator("button[aria-label='Menu']").click()

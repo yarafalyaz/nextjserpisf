@@ -30,7 +30,7 @@ const columns = [
   columnHelper.accessor("period", {
     header: "Periode",
     cell: (info) => (
-      <Link href={`/sdm/penggajian/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/sdm/penggajian/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {formatPeriod(info.getValue())}
       </Link>
     ),
@@ -77,16 +77,20 @@ const columns = [
 
 interface PayrollTableProps {
   data: PayrollData[]
+  toolbar?: React.ReactNode
+  filters?: React.ReactNode
 }
 
-export function PayrollTable({ data }: PayrollTableProps) {
+export function PayrollTable({ data, toolbar, filters }: PayrollTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar payroll"
+      ariaLabel="Daftar penggajian"
       pageSize={20}
       selectable={false}
+      toolbar={toolbar}
+      filters={filters}
     />
   )
 }

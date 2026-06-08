@@ -23,7 +23,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/keuangan/pusat-biaya/${info.row.original.id}`} className="text-primary hover:underline font-medium">
+      <Link href={`/keuangan/pusat-biaya/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -55,6 +55,8 @@ export function CostCenterTable({ data }: CostCenterTableProps) {
       ariaLabel="Daftar cost center"
       pageSize={20}
       selectable={true}
+      searchColumn="name"
+      searchPlaceholder="Cari kode atau nama..."
       onBulkDelete={(ids) => bulkDelete("costCenter", ids)}
     />
   )

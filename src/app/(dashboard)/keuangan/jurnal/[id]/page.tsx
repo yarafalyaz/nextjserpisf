@@ -33,8 +33,8 @@ export default async function JournalDetailPage({
       <PageHeader
         title={`Jurnal ${journal.journalNumber}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Finance", href: "/keuangan" },
+          { label: "Dasbor", href: "/" },
+          { label: "Keuangan", href: "/keuangan" },
           { label: "Jurnal", href: "/keuangan/jurnal" },
           { label: journal.journalNumber },
         ]}
@@ -61,7 +61,7 @@ export default async function JournalDetailPage({
         </div>
         <div className="p-4 px-5">
           {journal.entries.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted">Tidak ada entri</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada entri</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

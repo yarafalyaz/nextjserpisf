@@ -11,6 +11,7 @@ import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
 export default async function VendorPaymentDetailPage({
   params,
@@ -29,14 +30,16 @@ export default async function VendorPaymentDetailPage({
 
   if (!payment) notFound()
 
+  const pmMap = await getPaymentMethodMap()
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title={`Pembayaran Vendor ${payment.documentNo}`}
         breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Purchase", href: "/pembelian" },
-          { label: "Vendor Payments", href: "/pembelian/pembayaran-vendor" },
+          { label: "Dasbor", href: "/" },
+          { label: "Pembelian", href: "/pembelian" },
+          { label: "Pembayaran Vendor", href: "/pembelian/pembayaran-vendor" },
           { label: "Detail" },
         ]}
         actions={
@@ -57,7 +60,7 @@ export default async function VendorPaymentDetailPage({
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />
         <DetailField label="Tanggal Bayar" value={formatDate(payment.paymentDate)} />
-        <DetailField label="Metode Pembayaran" value={payment.paymentMethod} />
+        <DetailField label="Metode Pembayaran" value={resolvePaymentMethodName(payment.paymentMethod, pmMap)} />
         <DetailField label="Dibuat" value={formatDate(payment.createdAt)} />
       </DetailCard>
 
@@ -70,13 +73,13 @@ export default async function VendorPaymentDetailPage({
           <div className="p-4 px-5">
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Bill ID</DetailTableTh>
+                <DetailTableTh>ID Tagihan</DetailTableTh>
                 <DetailTableTh align="right">Jumlah</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {payment.allocations.map((alloc) => (
                   <DetailTableRow key={alloc.id}>
-                    <DetailTableTd><Link href={`/pembelian/tagihan/${alloc.vendorBillId}`}>Bill #{alloc.vendorBillId}</Link></DetailTableTd>
+                    <DetailTableTd><Link href={`/pembelian/tagihan/${alloc.vendorBillId}`}>Tagihan #{alloc.vendorBillId}</Link></DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(alloc.amount))}</DetailTableTd>
                   </DetailTableRow>
                 ))}

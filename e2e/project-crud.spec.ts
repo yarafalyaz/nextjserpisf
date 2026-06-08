@@ -56,7 +56,7 @@ test.describe("Proyek CRUD", () => {
     await page.goto("/proyek/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
 
-    const selected = await selectFirstComboBoxOption(page, "Cari customer...")
+    const selected = await selectFirstComboBoxOption(page, "Cari pelanggan...")
     if (!selected) {
       test.skip(true, "No customers available in database — seeding issue")
       return
@@ -73,14 +73,14 @@ test.describe("Proyek CRUD", () => {
     const row = page.locator("tr").filter({ hasText: name })
     await expect(row).toBeVisible({ timeout: 15000 })
     await row.locator("button[aria-label='Menu']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Edit" }).first().click()
+    await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/proyek\/\d+\/ubah/, { timeout: 20000 })
     await page.waitForLoadState("networkidle")
 
     await page.locator("#name").fill(updated)
     await page.locator("#description").fill(updatedDesc)
-    await page.getByRole("button", { name: "Update" }).first().click()
+    await page.getByRole("button", { name: /Update|Perbarui/ }).first().click()
     await page.waitForURL("**/proyek", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)

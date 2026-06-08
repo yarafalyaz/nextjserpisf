@@ -38,9 +38,9 @@ export default async function CreateCustomerVehiclePage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
-        { label: "Dashboard", href: "/" },
+        { label: "Dasbor", href: "/" },
         { label: "Master Data", href: "/master" },
-        { label: "Customers", href: "/master/pelanggan" },
+        { label: "Pelanggan", href: "/master/pelanggan" },
         { label: customer.name, href: `/master/pelanggan/${id}` },
         { label: "Kendaraan", href: `/master/pelanggan/${id}/kendaraan` },
         { label: "Tambah" },

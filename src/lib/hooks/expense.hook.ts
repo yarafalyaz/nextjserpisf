@@ -33,27 +33,39 @@ export async function onExpenseApprovedSyncPettyCash(
 
   const documentNo = await generateDocumentNumber("PC");
 
-  // Calculate current petty cash balance (parity with Laravel ExpenseObserver)
-  const lastPettyCash = await prisma.pettyCash.findFirst({
-    orderBy: { id: "desc" },
-    select: { balanceAfter: true },
-  });
-  const balanceBefore = Number(lastPettyCash?.balanceAfter ?? 0);
-  const balanceAfter = balanceBefore - Number(expense.amount);
+  await prisma.$transaction(async (tx) => {
+    // Re-check inside the transaction to avoid a duplicate under concurrency.
+    const dup = await tx.pettyCash.findFirst({ where: { referenceNo: expense.documentNo }, select: { id: true } });
+    if (dup) return;
 
-  await prisma.pettyCash.create({
-    data: {
-      documentNo,
-      type: "OUT",
-      amount: expense.amount,
-      description: `Expense: ${expense.description ?? expense.documentNo}`,
-      accountId: expense.paidFromAccountId,
-      date: expense.date ?? new Date(),
-      transactionDate: expense.date ?? new Date(),
-      referenceNo: expense.documentNo,
-      balanceBefore,
-      balanceAfter,
-      createdBy: expense.approvedBy ?? null,
-    },
+    await tx.pettyCash.create({
+      data: {
+        documentNo,
+        type: "OUT",
+        amount: expense.amount,
+        description: `Expense: ${expense.description ?? expense.documentNo}`,
+        accountId: expense.paidFromAccountId!,
+        date: expense.date ?? new Date(),
+        transactionDate: expense.date ?? new Date(),
+        referenceNo: expense.documentNo,
+        balanceBefore: 0,
+        balanceAfter: 0,
+        createdBy: expense.approvedBy ?? null,
+      },
+    });
+
+    // Recompute the whole running-balance chain in chronological (date,id) order so
+    // a back-dated expense does not corrupt subsequent balances (matches the petty
+    // cash recompute used elsewhere; previously this used a fragile id-desc lookup).
+    const all = await tx.pettyCash.findMany({ orderBy: [{ date: "asc" }, { id: "asc" }] });
+    let running = 0;
+    for (const rec of all) {
+      const before = running;
+      const after = rec.type === "IN" ? before + Number(rec.amount) : before - Number(rec.amount);
+      if (Number(rec.balanceBefore) !== before || Number(rec.balanceAfter) !== after) {
+        await tx.pettyCash.update({ where: { id: rec.id }, data: { balanceBefore: before, balanceAfter: after } });
+      }
+      running = after;
+    }
   });
 }
