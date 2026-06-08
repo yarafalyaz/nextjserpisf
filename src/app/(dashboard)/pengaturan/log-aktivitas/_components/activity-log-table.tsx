@@ -25,16 +25,24 @@ interface LogRow {
 }
 
 const actionBadge: Record<string, string> = {
+  create: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
   CREATE: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+  update: "border-transparent bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400",
   UPDATE: "border-transparent bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400",
+  delete: "border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
   DELETE: "border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
+  login: "border-transparent bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
   LOGIN: "border-transparent bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
 }
 
 const actionLabel: Record<string, string> = {
+  create: "Buat",
   CREATE: "Buat",
+  update: "Ubah",
   UPDATE: "Ubah",
+  delete: "Hapus",
   DELETE: "Hapus",
+  login: "Login",
   LOGIN: "Login",
 }
 
