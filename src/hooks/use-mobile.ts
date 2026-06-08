@@ -3,6 +3,10 @@ import * as React from "react"
 const MOBILE_BREAKPOINT = 768
 const QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`
 
+export function useIsMobile() {
+  return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+}
+
 function subscribe(callback: () => void) {
   const mql = window.matchMedia(QUERY)
   mql.addEventListener("change", callback)
@@ -15,12 +19,4 @@ function getSnapshot() {
 
 function getServerSnapshot() {
   return false
-}
-
-/**
- * Returns true when the viewport is below the mobile breakpoint.
- * Uses useSyncExternalStore to avoid set-state-in-effect (React 19 compiler safe).
- */
-export function useIsMobile() {
-  return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }

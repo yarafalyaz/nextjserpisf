@@ -1,101 +1,170 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { useSession } from "next-auth/react"
+import { signOut, useSession } from "next-auth/react"
+import { usePathname } from "next/navigation"
 import { getInitials } from "@/lib/utils/format"
-import { Search, LogOut, User, Settings } from "lucide-react"
+import {
+  Bell,
+  LogOut,
+  Search,
+  Settings,
+  User,
+} from "lucide-react"
 import Link from "next/link"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/shadcn/avatar"
 import { SidebarTrigger } from "@/components/ui/shadcn/sidebar"
 import { Separator } from "@/components/ui/shadcn/separator"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { NotificationDropdown } from "@/components/layout/notification-dropdown"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/shadcn/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/shadcn/dropdown-menu"
+
+const titleMap: Record<string, string> = {
+  "/": "Dasbor",
+  "/master": "Master Data",
+  "/penjualan": "Penjualan",
+  "/pembelian": "Pembelian",
+  "/inventaris": "Inventaris",
+  "/produksi": "Manufaktur",
+  "/sdm": "SDM",
+  "/keuangan": "Keuangan",
+  "/crm": "CRM",
+  "/kendaraan": "Kendaraan",
+  "/proyek": "Proyek",
+  "/aset": "Aset",
+  "/laporan": "Laporan",
+  "/pengaturan": "Pengaturan",
+  "/profil": "Profil",
+  "/notifikasi": "Notifikasi",
+}
+
+function pageTitle(pathname: string) {
+  const exact = titleMap[pathname]
+  if (exact) return exact
+
+  const [section, leaf] = pathname.split("/").filter(Boolean)
+  const base = titleMap[`/${section}`]
+
+  if (!leaf) return base ?? "Silengkap"
+
+  return leaf
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
 
 export function Header() {
   const { data: session } = useSession()
-  const [showDropdown, setShowDropdown] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
+  const pathname = usePathname()
 
   return (
-    <header className="header">
-      <div className="header-left">
+    <header className="group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 flex h-12 shrink-0 items-center gap-2 border-b bg-background transition-[width,height] ease-linear">
+      <div className="flex w-full items-center gap-2 px-4 lg:px-6">
         <SidebarTrigger className="-ml-1" id="sidebar-toggle" />
-        <Separator orientation="vertical" className="mr-1 h-5" />
-        <div className="header-search">
-          <Search size={16} />
-          <input
-            type="text"
-            placeholder="Tekan ⌘K untuk cari..."
-            className="header-search-input"
+        <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-4" />
+        <h1 className="min-w-0 truncate text-base font-medium">{pageTitle(pathname)}</h1>
+
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="hidden h-8 w-[220px] justify-start gap-2 rounded-lg px-3 text-muted-foreground md:inline-flex lg:w-[280px]"
             id="global-search"
-            readOnly
             onClick={() => {
               const event = new KeyboardEvent("keydown", { key: "k", metaKey: true })
               document.dispatchEvent(event)
             }}
-          />
-        </div>
-      </div>
-
-      <div className="header-right">
-        <ThemeToggle />
-
-        <NotificationDropdown />
-
-        {/* Avatar dropdown — hidden on desktop (md+) since user menu lives in the sidebar footer */}
-        <div className="header-user-dropdown md:hidden" ref={dropdownRef}>
-          <Button
-            variant="ghost" className="header-avatar-btn" aria-haspopup="menu"
-            aria-expanded={showDropdown}
-            onPress={() => setShowDropdown(!showDropdown)}
-            id="user-avatar-btn"
           >
-            <Avatar size="sm">
-              <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
-              <AvatarFallback>{getInitials(session?.user?.name)}</AvatarFallback>
-            </Avatar>
+            <Search className="size-4" />
+            <span className="truncate text-xs">Tekan Cmd K untuk cari</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="md:hidden"
+            aria-label="Cari"
+            onClick={() => {
+              const event = new KeyboardEvent("keydown", { key: "k", metaKey: true })
+              document.dispatchEvent(event)
+            }}
+          >
+            <Search className="size-4" />
           </Button>
 
-          {showDropdown && (
-            <div className="header-dropdown">
-              <div className="header-dropdown-info">
-                <Avatar size="sm">
+          <ThemeToggle />
+
+          <NotificationDropdown />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Menu pengguna">
+                <Avatar className="size-7 rounded-lg">
                   <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
-                  <AvatarFallback>{getInitials(session?.user?.name)}</AvatarFallback>
+                  <AvatarFallback className="rounded-lg text-xs">
+                    {getInitials(session?.user?.name)}
+                  </AvatarFallback>
                 </Avatar>
-                <div>
-                  <p className="header-dropdown-name">{session?.user?.name}</p>
-                  <p className="header-dropdown-email">{session?.user?.email}</p>
-                </div>
-              </div>
-              <div className="header-dropdown-divider" />
-              <Link href="/profil" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
-                <User size={16} />
-                <span>Ubah Profil</span>
-              </Link>
-              <Link href="/pengaturan" className="header-dropdown-item" onClick={() => setShowDropdown(false)}>
-                <Settings size={16} />
-                <span>Pengaturan</span>
-              </Link>
-              <div className="header-dropdown-divider" />
-              <Button onPress={() => { import("next-auth/react").then(m => m.signOut({ callbackUrl: "/login" })) }} className="header-dropdown-item header-dropdown-danger">
-                  <LogOut size={16} />
-                  <span>Keluar</span>
               </Button>
-            </div>
-          )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64 rounded-lg" align="end">
+              <DropdownMenuLabel className="p-0 font-normal">
+                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                  <Avatar className="size-8 rounded-lg">
+                    <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
+                    <AvatarFallback className="rounded-lg">
+                      {getInitials(session?.user?.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid min-w-0 flex-1 leading-tight">
+                    <span className="truncate font-medium">{session?.user?.name}</span>
+                    <span className="truncate text-xs text-muted-foreground">{session?.user?.email}</span>
+                  </div>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                  <Link href="/profil">
+                    <User />
+                    Profil
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/notifikasi">
+                    <Bell />
+                    Notifikasi
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/pengaturan">
+                    <Settings />
+                    Pengaturan
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={(event) => {
+                  event.preventDefault()
+                  void signOut({ callbackUrl: "/login" })
+                }}
+              >
+                <LogOut />
+                Keluar
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

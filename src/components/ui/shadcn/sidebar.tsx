@@ -606,7 +606,6 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Deterministic width to avoid impure Math.random() during render.
   const width = "70%"
 
   return (
