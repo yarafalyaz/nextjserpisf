@@ -176,35 +176,42 @@ function KpiCard({
   value,
   icon: Icon,
   hint,
-  tone = "default",
+  badge,
+  badgeTone = "default",
 }: {
   label: string
   value: string | number
   icon: LucideIcon
   hint?: string
-  tone?: "default" | "primary" | "success" | "warning" | "danger"
+  badge?: string
+  badgeTone?: "default" | "success" | "warning" | "danger"
 }) {
-  const toneRing: Record<string, string> = {
-    default: "bg-muted text-foreground",
-    primary: "bg-primary/10 text-primary",
-    success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-    danger: "bg-red-500/10 text-red-600 dark:text-red-400",
+  const badgeClass: Record<string, string> = {
+    default: "",
+    success: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+    warning: "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+    danger: "border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
   }
   return (
-    <Card className="gap-0">
+    <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl font-bold tabular-nums">{value}</CardTitle>
+        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+          {value}
+        </CardTitle>
         <CardAction>
-          <span className={`flex size-10 items-center justify-center rounded-xl ${toneRing[tone]}`}>
-            <Icon className="size-5" />
-          </span>
+          <Badge variant="outline" className={badgeClass[badgeTone]}>
+            <Icon className="size-3.5" />
+            {badge}
+          </Badge>
         </CardAction>
       </CardHeader>
       {hint && (
-        <CardFooter className="pt-2">
-          <span className="text-xs text-muted-foreground">{hint}</span>
+        <CardFooter className="flex-col items-start gap-1 text-sm">
+          <span className="line-clamp-1 flex items-center gap-1.5 font-medium">
+            <Icon className="size-4" /> {label}
+          </span>
+          <span className="text-muted-foreground">{hint}</span>
         </CardFooter>
       )}
     </Card>
@@ -238,12 +245,12 @@ export default async function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <KpiCard label="Mobil Dikerjakan" value={w.activeProjects} icon={Car} tone="primary" hint="Proyek aktif berjalan" />
-        <KpiCard label="Selesai Bln Ini" value={w.completedThisMonth} icon={CheckCircle2} tone="success" hint="Proyek rampung" />
-        <KpiCard label="Proyek Telat" value={w.overdueProjects} icon={Clock} tone="danger" hint="Melewati target tanggal" />
-        <KpiCard label="Pendapatan" value={formatCurrency(w.totalRevenue)} icon={DollarSign} tone="default" hint="Pembayaran terkonfirmasi" />
-        <KpiCard label="Piutang Berjalan" value={formatCurrency(w.receivables)} icon={Wallet} tone="warning" hint="Sisa tagihan belum lunas" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <KpiCard label="Mobil Dikerjakan" value={w.activeProjects} icon={Car} badge="Aktif" badgeTone="default" hint="Proyek aktif berjalan" />
+        <KpiCard label="Selesai Bln Ini" value={w.completedThisMonth} icon={CheckCircle2} badge="Rampung" badgeTone="success" hint="Proyek selesai bulan ini" />
+        <KpiCard label="Proyek Telat" value={w.overdueProjects} icon={Clock} badge="Telat" badgeTone="danger" hint="Melewati target tanggal" />
+        <KpiCard label="Pendapatan" value={formatCurrency(w.totalRevenue)} icon={DollarSign} badge="Diterima" badgeTone="success" hint="Pembayaran terkonfirmasi" />
+        <KpiCard label="Piutang Berjalan" value={formatCurrency(w.receivables)} icon={Wallet} badge="Belum lunas" badgeTone="warning" hint="Sisa tagihan berjalan" />
       </div>
 
       {/* Pipeline + Sales status */}
