@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Timer,
   Cloud,
+  DatabaseBackup,
 } from "lucide-react"
 
 const settingsNav = [
@@ -60,6 +61,7 @@ const settingsNav = [
     heading: "Sistem",
     items: [
       { href: "/pengaturan/penyimpanan", label: "Penyimpanan & CDN", desc: "Storage lokal / Cloudflare R2", icon: Cloud },
+      { href: "/pengaturan/database", label: "Backup & Restore", desc: "Cadangkan & pulihkan database", icon: DatabaseBackup },
     ],
   },
 ]
