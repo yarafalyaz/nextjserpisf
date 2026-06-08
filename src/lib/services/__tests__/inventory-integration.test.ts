@@ -6,12 +6,13 @@ import { consumeFifoLayers, createInLayer, availableQty } from "../inventory-fif
 
 /**
  * DB integration tests for the per-warehouse FIFO + Multi-UoM + Batch/Serial
- * engine. Each test creates and cleans up its own data. If the database is not
- * reachable (e.g. local run without DB), the whole suite is skipped gracefully
- * so it never breaks the unit-test stage.
+ * engine. This is intentionally opt-in: CI unit jobs and local no-DB runs must
+ * not spend 10s waiting for an unreachable database. Run with
+ * RUN_DB_INTEGRATION=1 when a test database is available.
  */
 let dbUp = false
 beforeAll(async () => {
+  if (process.env.RUN_DB_INTEGRATION !== "1") return
   try {
     await prisma.$queryRaw`SELECT 1`
     dbUp = true
@@ -25,6 +26,7 @@ afterAll(async () => {
 
 describe("Inventory engine (DB integration)", () => {
   it("enforces per-warehouse FIFO isolation, multi-UoM, batch & serial", async () => {
+    if (process.env.RUN_DB_INTEGRATION !== "1") { console.warn("RUN_DB_INTEGRATION not enabled — skipping DB integration test"); return }
     if (!dbUp) { console.warn("DB not reachable — skipping integration test"); return }
 
     const stamp = Date.now()
