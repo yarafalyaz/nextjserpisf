@@ -308,18 +308,34 @@ function SectionItemRow({
               />
             )}
           />
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            {...register(`${prefix}.discount`, { valueAsNumber: true })}
-            className="form-input"
-            style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", flex: 1 }}
-            onChange={(e) => {
-              setValue(`${prefix}.discount`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
-              setTimeout(() => onRecalc(itemIndex), 0)
-            }}
-          />
+          {(watchedItem?.discountType ?? "fixed") === "percent" ? (
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              {...register(`${prefix}.discount`, { valueAsNumber: true })}
+              className="form-input"
+              style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", flex: 1 }}
+              onChange={(e) => {
+                const raw = Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0
+                const clamped = Math.min(100, Math.max(0, raw))
+                setValue(`${prefix}.discount`, clamped)
+                setTimeout(() => onRecalc(itemIndex), 0)
+              }}
+            />
+          ) : (
+            <CurrencyInput
+              value={watchedItem?.discount ?? 0}
+              onChange={(v) => {
+                setValue(`${prefix}.discount`, v)
+                setTimeout(() => onRecalc(itemIndex), 0)
+              }}
+              min={0}
+              className="text-right"
+              style={{ flex: 1 }}
+            />
+          )}
         </div>
       </td>
       <td>
