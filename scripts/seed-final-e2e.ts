@@ -24,7 +24,6 @@ async function main() {
   const expAccount = await prisma.account.findFirst({ where: { type: "EXPENSE" } });
   const employee = await prisma.employee.findFirst();
   const item = await prisma.item.findFirst();
-  const item2 = await prisma.item.findFirst({ where: { id: { not: item?.id || 0 } } });
   const warehouse = await prisma.warehouse.findFirst();
   const costCenter = await prisma.costCenter.findFirst();
 

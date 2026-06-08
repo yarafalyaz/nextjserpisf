@@ -37,7 +37,7 @@ test.describe("CRM Leads CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/crm/leads/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Lead" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Prospek" })).toBeVisible({ timeout: 15000 })
     await waitForHydration(page)
 
     const nameInput = page.locator("#name")
