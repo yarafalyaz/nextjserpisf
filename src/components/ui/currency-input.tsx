@@ -69,11 +69,23 @@ export function CurrencyInput({
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value
-      // Allow only digits, dots, commas
-      const sanitized = raw.replace(/[^\d.,]/g, "")
-      setDisplayValue(sanitized)
+      // Keep only digits and a single comma (decimal separator, id-ID)
+      let sanitized = raw.replace(/[^\d,]/g, "")
+      const firstComma = sanitized.indexOf(",")
+      if (firstComma !== -1) {
+        sanitized =
+          sanitized.slice(0, firstComma + 1) + sanitized.slice(firstComma + 1).replace(/,/g, "")
+      }
 
-      const numericValue = parseInput(sanitized)
+      // Format integer part with thousand separators live while typing
+      const [intPart, decPart] = sanitized.split(",")
+      const intNum = intPart ? parseInt(intPart, 10) : NaN
+      const formattedInt = isNaN(intNum) ? "" : new Intl.NumberFormat("id-ID").format(intNum)
+      const display = decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt
+
+      setDisplayValue(display)
+
+      const numericValue = parseInput(display)
       if (hiddenRef.current) {
         hiddenRef.current.value = String(numericValue)
       }
@@ -103,15 +115,10 @@ export function CurrencyInput({
 
   const handleFocus = useCallback(
     (e: React.FocusEvent<HTMLInputElement>) => {
-      // On focus, show raw number for easy editing
-      const numericValue = parseInput(displayValue)
-      if (numericValue !== 0) {
-        setDisplayValue(String(numericValue))
-      }
-      // Select all for easy replacement
+      // Keep the formatted value; just select all for easy replacement
       setTimeout(() => e.target.select(), 0)
     },
-    [displayValue]
+    []
   )
 
   const numericValue = parseInput(visibleValue)
