@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import {
   Area,
   AreaChart,
@@ -15,6 +16,7 @@ import {
 } from "recharts"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -26,9 +28,20 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/shadcn/chart"
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/shadcn/toggle-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/shadcn/select"
 import { statusLabel } from "@/lib/utils/status-labels"
 
-type RevenueData = { month: string; revenue: number }
+type RevenueData = { date: string; lunas: number; tagihan: number }
 type StatusData = { name: string; value: number }
 type CustomerData = { name: string; revenue: number }
 
@@ -41,11 +54,11 @@ const PIE_COLORS = [
   "var(--chart-6)",
 ]
 
-function formatMonth(ym: string) {
-  // "2026-06" -> "Jun"
-  const [y, m] = ym.split("-")
-  const d = new Date(Number(y), Number(m) - 1, 1)
-  return d.toLocaleDateString("id-ID", { month: "short" })
+function formatDayLabel(date: string) {
+  return new Date(date).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+  })
 }
 
 function rupiahShort(v: number) {
@@ -55,47 +68,147 @@ function rupiahShort(v: number) {
   return String(v)
 }
 
+const revenueConfig = {
+  tagihan: { label: "Tagihan", color: "var(--chart-1)" },
+  lunas: { label: "Lunas", color: "var(--chart-2)" },
+} satisfies ChartConfig
+
 export function RevenueChart({ data }: { data: RevenueData[] }) {
-  const chartData = data.map((d) => ({ ...d, label: formatMonth(d.month) }))
-  const config = {
-    revenue: { label: "Pendapatan", color: "var(--chart-1)" },
-  } satisfies ChartConfig
+  const [timeRange, setTimeRange] = React.useState("90d")
+
+  const filteredData = React.useMemo(() => {
+    if (data.length === 0) return []
+    const referenceDate = new Date(data[data.length - 1].date)
+    let days = 90
+    if (timeRange === "30d") days = 30
+    else if (timeRange === "7d") days = 7
+    const startDate = new Date(referenceDate)
+    startDate.setDate(startDate.getDate() - days)
+    return data.filter((item) => new Date(item.date) >= startDate)
+  }, [data, timeRange])
 
   return (
-    <Card className="h-full">
+    <Card className="h-full @container/chart">
       <CardHeader>
         <CardTitle>Tren Pendapatan</CardTitle>
-        <CardDescription>6 bulan terakhir</CardDescription>
+        <CardDescription>
+          <span className="hidden @[540px]/chart:block">
+            Tagihan diterbitkan vs pembayaran lunas
+          </span>
+          <span className="@[540px]/chart:hidden">Tagihan vs lunas</span>
+        </CardDescription>
+        <CardAction>
+          <ToggleGroup
+            type="single"
+            value={timeRange}
+            onValueChange={(v) => v && setTimeRange(v)}
+            variant="outline"
+            className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/chart:flex"
+          >
+            <ToggleGroupItem value="90d">3 bulan</ToggleGroupItem>
+            <ToggleGroupItem value="30d">30 hari</ToggleGroupItem>
+            <ToggleGroupItem value="7d">7 hari</ToggleGroupItem>
+          </ToggleGroup>
+          <Select value={timeRange} onValueChange={setTimeRange}>
+            <SelectTrigger
+              className="flex w-40 @[767px]/chart:hidden"
+              size="sm"
+              aria-label="Pilih rentang waktu"
+            >
+              <SelectValue placeholder="3 bulan terakhir" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="90d" className="rounded-lg">
+                3 bulan terakhir
+              </SelectItem>
+              <SelectItem value="30d" className="rounded-lg">
+                30 hari terakhir
+              </SelectItem>
+              <SelectItem value="7d" className="rounded-lg">
+                7 hari terakhir
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </CardAction>
       </CardHeader>
-      <CardContent>
-        <ChartContainer config={config} className="h-[280px] w-full">
-          <AreaChart data={chartData} margin={{ left: 4, right: 12, top: 8 }}>
-            <defs>
-              <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-revenue)" stopOpacity={0.35} />
-                <stop offset="95%" stopColor="var(--color-revenue)" stopOpacity={0.03} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
-            <YAxis tickLine={false} axisLine={false} width={42} fontSize={12} tickFormatter={rupiahShort} />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  formatter={(value) => `Rp ${Number(value).toLocaleString("id-ID")}`}
-                />
-              }
-            />
-            <Area
-              dataKey="revenue"
-              type="monotone"
-              fill="url(#fillRevenue)"
-              stroke="var(--color-revenue)"
-              strokeWidth={2.5}
-            />
-          </AreaChart>
-        </ChartContainer>
+      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        {filteredData.length === 0 ? (
+          <p className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+            Belum ada data pendapatan
+          </p>
+        ) : (
+          <ChartContainer config={revenueConfig} className="aspect-auto h-[280px] w-full">
+            <AreaChart data={filteredData}>
+              <defs>
+                <linearGradient id="fillTagihan" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-tagihan)" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="var(--color-tagihan)" stopOpacity={0.1} />
+                </linearGradient>
+                <linearGradient id="fillLunas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--color-lunas)" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="var(--color-lunas)" stopOpacity={0.1} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
+                fontSize={12}
+                tickFormatter={formatDayLabel}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                width={42}
+                fontSize={12}
+                tickFormatter={rupiahShort}
+              />
+              <ChartTooltip
+                cursor={false}
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(value) =>
+                      new Date(value).toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "long",
+                      })
+                    }
+                    formatter={(value, name) => (
+                      <>
+                        <div
+                          className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                          style={{ backgroundColor: `var(--color-${name})` }}
+                        />
+                        {revenueConfig[name as keyof typeof revenueConfig]?.label || name}
+                        <div className="ml-auto font-mono font-medium tabular-nums text-foreground">
+                          Rp {Number(value).toLocaleString("id-ID")}
+                        </div>
+                      </>
+                    )}
+                    indicator="dot"
+                  />
+                }
+              />
+              <Area
+                dataKey="lunas"
+                type="natural"
+                fill="url(#fillLunas)"
+                stroke="var(--color-lunas)"
+                stackId="a"
+              />
+              <Area
+                dataKey="tagihan"
+                type="natural"
+                fill="url(#fillTagihan)"
+                stroke="var(--color-tagihan)"
+                stackId="a"
+              />
+            </AreaChart>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )

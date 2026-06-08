@@ -45,19 +45,28 @@ const DONE_STATES = ["completed", "cancelled", "done", "closed"]
 const STAGE_DONE = ["completed", "skipped"]
 
 async function getCharts() {
-  const sixMonthsAgo = new Date()
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-  sixMonthsAgo.setDate(1)
-  sixMonthsAgo.setHours(0, 0, 0, 0)
+  const ninetyDaysAgo = new Date()
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+  ninetyDaysAgo.setHours(0, 0, 0, 0)
 
-  const revenueRaw = await prisma.$queryRaw<{ month: string; revenue: number }[]>`
-    SELECT DATE_FORMAT(created_at, '%Y-%m') as month, COALESCE(SUM(paid_amount), 0) as revenue
+  // Daily revenue for the interactive area chart (last 90 days):
+  // lunas = pembayaran diterima, tagihan = nilai faktur diterbitkan
+  const revenueRaw = await prisma.$queryRaw<
+    { date: string; lunas: number; tagihan: number }[]
+  >`
+    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date,
+           COALESCE(SUM(paid_amount), 0) as lunas,
+           COALESCE(SUM(grand_total), 0) as tagihan
     FROM sales_invoices
-    WHERE created_at >= ${sixMonthsAgo} AND status IN ('posted', 'partial', 'paid') AND deleted_at IS NULL
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-    ORDER BY month ASC
+    WHERE created_at >= ${ninetyDaysAgo} AND status IN ('posted', 'partial', 'paid') AND deleted_at IS NULL
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+    ORDER BY date ASC
   `
-  const revenueData = revenueRaw.map((r) => ({ month: r.month, revenue: Number(r.revenue) }))
+  const revenueData = revenueRaw.map((r) => ({
+    date: r.date,
+    lunas: Number(r.lunas),
+    tagihan: Number(r.tagihan),
+  }))
 
   const statusRaw = await prisma.$queryRaw<{ status: string; count: bigint }[]>`
     SELECT status, COUNT(*) as count FROM sales_invoices WHERE deleted_at IS NULL GROUP BY status
@@ -253,6 +262,9 @@ export default async function DashboardPage() {
         <KpiCard label="Piutang Berjalan" value={formatCurrency(w.receivables)} icon={Wallet} badge="Belum lunas" badgeTone="warning" hint="Sisa tagihan berjalan" />
       </div>
 
+      {/* Chart Area Interactive - Full width, shadcn dashboard-01 style */}
+      <RevenueChart data={charts.revenueData} />
+
       {/* Pipeline + Sales status */}
       <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
         <div className="h-full lg:col-span-2">
@@ -335,11 +347,8 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Revenue trend + Low stock */}
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
-        <div className="h-full lg:col-span-2">
-          <RevenueChart data={charts.revenueData} />
-        </div>
+      {/* Low stock + Recent payments side by side */}
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
         <Card className="h-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -369,57 +378,57 @@ export default async function DashboardPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Recent payments */}
+        <Card className="h-full">
+          <CardHeader>
+            <CardTitle>Pembayaran Terbaru</CardTitle>
+            <CardDescription>6 pembayaran terakhir diterima</CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/penjualan/pembayaran">
+                  Semua <ArrowUpRight className="size-3.5" />
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>No. Dokumen</TableHead>
+                  <TableHead>Pelanggan</TableHead>
+                  <TableHead className="text-right">Jumlah</TableHead>
+                  <TableHead>Tanggal</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {w.recentPayments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                      Belum ada pembayaran
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  w.recentPayments.map((pay) => (
+                    <TableRow key={pay.id}>
+                      <TableCell className="font-mono text-xs">{pay.documentNo}</TableCell>
+                      <TableCell className="max-w-[160px] truncate">
+                        {pay.salesInvoice?.customer?.name || "-"}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrency(Number(pay.amount))}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(pay.paymentDate)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Notifications */}
       <NotificationsWidget />
-
-      {/* Recent payments */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Pembayaran Terbaru</CardTitle>
-          <CardDescription>6 pembayaran terakhir diterima</CardDescription>
-          <CardAction>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/penjualan/pembayaran">
-                Semua <ArrowUpRight className="size-3.5" />
-              </Link>
-            </Button>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>No. Dokumen</TableHead>
-                <TableHead>Pelanggan</TableHead>
-                <TableHead className="text-right">Jumlah</TableHead>
-                <TableHead>Tanggal</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {w.recentPayments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    Belum ada pembayaran
-                  </TableCell>
-                </TableRow>
-              ) : (
-                w.recentPayments.map((pay) => (
-                  <TableRow key={pay.id}>
-                    <TableCell className="font-mono text-xs">{pay.documentNo}</TableCell>
-                    <TableCell className="max-w-[160px] truncate">
-                      {pay.salesInvoice?.customer?.name || "-"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatCurrency(Number(pay.amount))}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDate(pay.paymentDate)}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   )
 }
