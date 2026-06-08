@@ -144,9 +144,26 @@ async function uploadToLocal(key: string, buffer: Buffer): Promise<void> {
   await writeFile(fullPath, buffer)
 }
 
+/** Build an R2 (S3-compatible) client from config. Throws if incomplete. */
+async function r2Client(config: StorageConfig) {
+  const { r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2Bucket } = config
+  if (!r2AccountId || !r2AccessKeyId || !r2SecretAccessKey || !r2Bucket) {
+    throw new Error("Cloudflare R2 belum dikonfigurasi lengkap. Lengkapi di Pengaturan > Penyimpanan.")
+  }
+  // Computed specifier avoids a compile-time dependency until @aws-sdk/client-s3 is installed.
+  const sdkName = "@aws-sdk/client-s3"
+  const sdk = await import(/* @vite-ignore */ sdkName)
+  const client = new sdk.S3Client({
+    region: "auto",
+    endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
+    credentials: { accessKeyId: r2AccessKeyId, secretAccessKey: r2SecretAccessKey },
+  })
+  return { client, sdk, bucket: r2Bucket }
+}
+
 /**
- * Cloudflare R2 upload (S3-compatible). Reads credentials from StorageConfig
- * (DB-driven with env fallback). Install @aws-sdk/client-s3 before using R2.
+ * Cloudflare R2 upload (S3-compatible). Reads credentials from StorageConfig.
+ * Install @aws-sdk/client-s3 before using R2.
  */
 async function uploadToR2(
   key: string,
@@ -154,28 +171,47 @@ async function uploadToR2(
   contentType: string,
   config: StorageConfig
 ): Promise<void> {
-  const { r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2Bucket } = config
-  if (!r2AccountId || !r2AccessKeyId || !r2SecretAccessKey || !r2Bucket) {
-    throw new Error("Cloudflare R2 belum dikonfigurasi lengkap. Lengkapi di Pengaturan > Penyimpanan.")
-  }
-  // Lazy import so the SDK is only required when the R2 driver is active.
-  // Computed specifier avoids a compile-time dependency until @aws-sdk/client-s3 is installed.
-  const sdkName = "@aws-sdk/client-s3"
-  const { S3Client, PutObjectCommand } = await import(/* @vite-ignore */ sdkName)
-  const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: r2AccessKeyId,
-      secretAccessKey: r2SecretAccessKey,
-    },
-  })
+  const { client, sdk, bucket } = await r2Client(config)
   await client.send(
-    new PutObjectCommand({
-      Bucket: r2Bucket,
-      Key: key,
-      Body: buffer,
-      ContentType: contentType,
-    })
+    new sdk.PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: contentType })
   )
+}
+
+/** Upload an arbitrary buffer to R2 if the active driver is "r2". No-op otherwise.
+ *  Used for offsite copies (e.g. database backups). Returns true if uploaded. */
+export async function uploadToCloudIfEnabled(
+  key: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<boolean> {
+  const config = await getStorageConfig()
+  if (config.driver !== "r2") return false
+  await uploadToR2(key, buffer, contentType, config)
+  return true
+}
+
+/** List object keys under a prefix in R2 (empty when driver != r2). */
+export async function listCloudKeys(prefix: string): Promise<string[]> {
+  const config = await getStorageConfig()
+  if (config.driver !== "r2") return []
+  const { client, sdk, bucket } = await r2Client(config)
+  const res = await client.send(new sdk.ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }))
+  return (res.Contents || []).map((o: { Key?: string }) => o.Key || "").filter(Boolean)
+}
+
+/** Download an object from R2 as a Buffer. */
+export async function downloadFromCloud(key: string): Promise<Buffer> {
+  const config = await getStorageConfig()
+  const { client, sdk, bucket } = await r2Client(config)
+  const res = await client.send(new sdk.GetObjectCommand({ Bucket: bucket, Key: key }))
+  const bytes = await res.Body.transformToByteArray()
+  return Buffer.from(bytes)
+}
+
+/** Delete an object from R2 (no-op when driver != r2). */
+export async function deleteFromCloud(key: string): Promise<void> {
+  const config = await getStorageConfig()
+  if (config.driver !== "r2") return
+  const { client, sdk, bucket } = await r2Client(config)
+  await client.send(new sdk.DeleteObjectCommand({ Bucket: bucket, Key: key }))
 }

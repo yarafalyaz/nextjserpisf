@@ -1,8 +1,16 @@
 import "server-only"
 import { spawn } from "child_process"
-import { mkdir, readdir, stat, unlink } from "fs/promises"
+import { mkdir, readdir, stat, unlink, readFile, writeFile } from "fs/promises"
 import { createWriteStream, createReadStream, existsSync } from "fs"
 import path from "path"
+import {
+  uploadToCloudIfEnabled,
+  listCloudKeys,
+  downloadFromCloud,
+  deleteFromCloud,
+} from "@/lib/storage/storage"
+
+const CLOUD_PREFIX = "backups/"
 
 /**
  * Database backup/restore via mysqldump / mysql CLI.
@@ -37,6 +45,10 @@ export interface BackupFile {
   filename: string
   size: number
   createdAt: string
+  /** true if a copy exists on cloud storage (R2) */
+  cloud?: boolean
+  /** true if a local copy exists on the server */
+  local?: boolean
 }
 
 function isValidBackupName(name: string): boolean {
@@ -45,15 +57,36 @@ function isValidBackupName(name: string): boolean {
 }
 
 export async function listBackups(): Promise<BackupFile[]> {
-  if (!existsSync(BACKUP_DIR)) return []
-  const files = await readdir(BACKUP_DIR)
-  const result: BackupFile[] = []
-  for (const f of files) {
-    if (!f.endsWith(".sql")) continue
-    const st = await stat(path.join(BACKUP_DIR, f))
-    result.push({ filename: f, size: st.size, createdAt: st.mtime.toISOString() })
+  const map = new Map<string, BackupFile>()
+
+  // Local backups
+  if (existsSync(BACKUP_DIR)) {
+    const files = await readdir(BACKUP_DIR)
+    for (const f of files) {
+      if (!f.endsWith(".sql")) continue
+      const st = await stat(path.join(BACKUP_DIR, f))
+      map.set(f, { filename: f, size: st.size, createdAt: st.mtime.toISOString(), local: true, cloud: false })
+    }
   }
-  return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+
+  // Cloud backups (R2) — merge by filename
+  try {
+    const keys = await listCloudKeys(CLOUD_PREFIX)
+    for (const key of keys) {
+      const f = key.slice(CLOUD_PREFIX.length)
+      if (!f.endsWith(".sql")) continue
+      const existing = map.get(f)
+      if (existing) {
+        existing.cloud = true
+      } else {
+        map.set(f, { filename: f, size: 0, createdAt: new Date(0).toISOString(), local: false, cloud: true })
+      }
+    }
+  } catch {
+    // R2 not configured / unreachable — local list still returned
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
 /** Run mysqldump and stream output to a .sql file. Returns the created filename.
@@ -105,7 +138,14 @@ export function createBackup(label?: string): Promise<BackupFile> {
           return
         }
         const st = await stat(filepath)
-        resolve({ filename, size: st.size, createdAt: st.mtime.toISOString() })
+        let cloud = false
+        try {
+          const buffer = await readFile(filepath)
+          cloud = await uploadToCloudIfEnabled(`${CLOUD_PREFIX}${filename}`, buffer, "application/sql")
+        } catch (err) {
+          console.warn("[backup] Upload ke cloud gagal:", err instanceof Error ? err.message : err)
+        }
+        resolve({ filename, size: st.size, createdAt: st.mtime.toISOString(), local: true, cloud })
       })
     } catch (e) {
       reject(e instanceof Error ? e : new Error(String(e)))
@@ -113,19 +153,26 @@ export function createBackup(label?: string): Promise<BackupFile> {
   })
 }
 
-/** Restore the DB from a backup file (DESTRUCTIVE — replaces current data). */
-export function restoreBackup(filename: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!isValidBackupName(filename)) {
-      reject(new Error("Nama file backup tidak valid"))
-      return
-    }
-    const filepath = path.join(BACKUP_DIR, filename)
-    if (!existsSync(filepath)) {
-      reject(new Error("File backup tidak ditemukan"))
-      return
-    }
+/** Restore the DB from a backup file (DESTRUCTIVE — replaces current data).
+ *  If the local copy is missing, it is downloaded from cloud first. */
+export async function restoreBackup(filename: string): Promise<void> {
+  if (!isValidBackupName(filename)) {
+    throw new Error("Nama file backup tidak valid")
+  }
+  const filepath = path.join(BACKUP_DIR, filename)
 
+  // Ensure a local copy exists (download from cloud if needed for restore)
+  if (!existsSync(filepath)) {
+    try {
+      const buffer = await downloadFromCloud(`${CLOUD_PREFIX}${filename}`)
+      await mkdir(BACKUP_DIR, { recursive: true })
+      await writeFile(filepath, buffer)
+    } catch {
+      throw new Error("File backup tidak ditemukan (lokal maupun cloud)")
+    }
+  }
+
+  return new Promise((resolve, reject) => {
     const conn = parseDbUrl()
     const args = [
       `-h${conn.host}`,
@@ -157,23 +204,46 @@ export async function deleteBackup(filename: string): Promise<void> {
   if (!isValidBackupName(filename)) throw new Error("Nama file backup tidak valid")
   const filepath = path.join(BACKUP_DIR, filename)
   if (existsSync(filepath)) await unlink(filepath)
+  // Remove cloud copy too (no-op if driver != r2)
+  try {
+    await deleteFromCloud(`${CLOUD_PREFIX}${filename}`)
+  } catch {
+    /* ignore cloud delete errors */
+  }
 }
 
 /** Delete all existing auto-snapshot backups (keeps the manual ones). */
 export async function pruneAutoSnapshots(): Promise<void> {
-  if (!existsSync(BACKUP_DIR)) return
-  const files = await readdir(BACKUP_DIR)
-  await Promise.all(
-    files
-      .filter((f) => f.startsWith("backup-autosnap-") && f.endsWith(".sql"))
-      .map((f) => unlink(path.join(BACKUP_DIR, f)).catch(() => {}))
-  )
+  if (existsSync(BACKUP_DIR)) {
+    const files = await readdir(BACKUP_DIR)
+    await Promise.all(
+      files
+        .filter((f) => f.startsWith("backup-autosnap-") && f.endsWith(".sql"))
+        .map((f) => unlink(path.join(BACKUP_DIR, f)).catch(() => {}))
+    )
+  }
+  // Prune cloud auto-snapshots too
+  try {
+    const keys = await listCloudKeys(`${CLOUD_PREFIX}backup-autosnap-`)
+    await Promise.all(keys.map((k) => deleteFromCloud(k).catch(() => {})))
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function readBackupFile(filename: string): Promise<{ path: string; size: number }> {
   if (!isValidBackupName(filename)) throw new Error("Nama file backup tidak valid")
   const filepath = path.join(BACKUP_DIR, filename)
-  if (!existsSync(filepath)) throw new Error("File backup tidak ditemukan")
+  if (!existsSync(filepath)) {
+    // Pull from cloud on demand so download works for cloud-only backups
+    try {
+      const buffer = await downloadFromCloud(`${CLOUD_PREFIX}${filename}`)
+      await mkdir(BACKUP_DIR, { recursive: true })
+      await writeFile(filepath, buffer)
+    } catch {
+      throw new Error("File backup tidak ditemukan")
+    }
+  }
   const st = await stat(filepath)
   return { path: filepath, size: st.size }
 }

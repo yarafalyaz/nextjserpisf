@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/shadcn/table"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
-import { Database, Download, RotateCcw, Trash2, Loader2, DatabaseBackup } from "lucide-react"
+import { Badge } from "@/components/ui/shadcn/badge"
+import { Database, Download, RotateCcw, Trash2, Loader2, DatabaseBackup, Cloud, HardDrive } from "lucide-react"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import {
   createDatabaseBackup,
@@ -27,6 +28,8 @@ interface BackupFile {
   filename: string
   size: number
   createdAt: string
+  cloud?: boolean
+  local?: boolean
 }
 
 function formatSize(bytes: number): string {
@@ -105,6 +108,7 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
                 <TableRow>
                   <TableHead className="px-4 lg:px-6">Nama File</TableHead>
                   <TableHead className="px-4 lg:px-6">Ukuran</TableHead>
+                  <TableHead className="px-4 lg:px-6">Lokasi</TableHead>
                   <TableHead className="px-4 lg:px-6">Dibuat</TableHead>
                   <TableHead className="px-4 text-right lg:px-6">Aksi</TableHead>
                 </TableRow>
@@ -112,7 +116,7 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
               <TableBody>
                 {initialBackups.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                       Belum ada backup. Klik &quot;Buat Backup&quot; untuk membuat cadangan pertama.
                     </TableCell>
                   </TableRow>
@@ -121,6 +125,20 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
                     <TableRow key={b.filename}>
                       <TableCell className="px-4 font-mono text-xs lg:px-6">{b.filename}</TableCell>
                       <TableCell className="px-4 tabular-nums lg:px-6">{formatSize(b.size)}</TableCell>
+                      <TableCell className="px-4 lg:px-6">
+                        <div className="flex flex-wrap gap-1">
+                          {b.local && (
+                            <Badge variant="outline" className="gap-1">
+                              <HardDrive className="size-3" /> Lokal
+                            </Badge>
+                          )}
+                          {b.cloud && (
+                            <Badge variant="outline" className="gap-1 border-transparent bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400">
+                              <Cloud className="size-3" /> Cloud
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="px-4 text-muted-foreground lg:px-6">{formatDateTime(b.createdAt)}</TableCell>
                       <TableCell className="px-4 lg:px-6">
                         <div className="flex items-center justify-end gap-1">
