@@ -150,9 +150,10 @@ async function r2Client(config: StorageConfig) {
   if (!r2AccountId || !r2AccessKeyId || !r2SecretAccessKey || !r2Bucket) {
     throw new Error("Cloudflare R2 belum dikonfigurasi lengkap. Lengkapi di Pengaturan > Penyimpanan.")
   }
-  // Computed specifier avoids a compile-time dependency until @aws-sdk/client-s3 is installed.
+  // Lazy, bundler-ignored import so @aws-sdk/client-s3 stays an OPTIONAL dependency.
+  // Install it only when you actually enable the R2 driver.
   const sdkName = "@aws-sdk/client-s3"
-  const sdk = await import(/* @vite-ignore */ sdkName)
+  const sdk = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ sdkName)
   const client = new sdk.S3Client({
     region: "auto",
     endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
