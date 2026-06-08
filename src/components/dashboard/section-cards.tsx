@@ -25,7 +25,6 @@ interface SectionCardsProps {
   overdueProjects: number
   receivables: string
   totalCustomers: number
-  totalItems: number
 }
 
 export function SectionCards({
@@ -35,7 +34,6 @@ export function SectionCards({
   overdueProjects,
   receivables,
   totalCustomers,
-  totalItems,
 }: SectionCardsProps) {
   return (
     <div className="*:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card lg:px-6">
@@ -124,12 +122,10 @@ export function SectionCards({
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1 text-sm">
           <div className="line-clamp-1 flex items-center gap-2 font-medium">
-            Pelanggan terdaftar di sistem
+            Pelanggan terdaftar
             <Users className="size-4 text-sky-500" />
           </div>
-          <div className="text-muted-foreground">
-            {totalItems} barang aktif di master data
-          </div>
+          <div className="text-muted-foreground">Total pelanggan aktif di sistem</div>
         </CardFooter>
       </Card>
     </div>

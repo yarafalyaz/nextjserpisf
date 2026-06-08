@@ -119,7 +119,6 @@ async function getDashboardData() {
     recentPayments,
     lowStockItems,
     totalCustomers,
-    totalItems,
     recentInvoices,
   ] = await Promise.all([
     prisma.project.count({ where: { status: { notIn: DONE_STATES } } }),
@@ -177,7 +176,6 @@ async function getDashboardData() {
       LIMIT 6
     `,
     prisma.customer.count({ where: { deletedAt: null } }),
-    prisma.item.count({ where: { isActive: true, deletedAt: null } }),
     prisma.salesInvoice.findMany({
       take: 10,
       orderBy: { createdAt: "desc" },
@@ -232,7 +230,6 @@ async function getDashboardData() {
     recentPayments,
     lowStockItems,
     totalCustomers,
-    totalItems,
     invoiceRows,
   }
 }
@@ -264,7 +261,6 @@ export default async function DashboardPage() {
             overdueProjects={data.overdueProjects}
             receivables={formatCurrency(data.receivables)}
             totalCustomers={data.totalCustomers}
-            totalItems={data.totalItems}
           />
 
           <div className="px-4 lg:px-6">
