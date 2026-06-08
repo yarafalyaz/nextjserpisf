@@ -55,6 +55,12 @@ import {
 } from "@/components/ui/shadcn/dropdown-menu"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showError } from "@/lib/utils/toast"
+import { useIsMobile } from "@/hooks/use-mobile"
+
+/** Heuristic: is this an actions/buttons column (kept visible on mobile)? */
+function isActionsColumn(id: string): boolean {
+  return /aksi|action|opsi|menu/i.test(id)
+}
 
 interface DataTableProps<TData> {
   data: TData[]
@@ -76,6 +82,10 @@ interface DataTableProps<TData> {
   toolbar?: React.ReactNode
   /** Filter controls (e.g. status chips) rendered on their own row below the search row. */
   filters?: React.ReactNode
+  /** Max number of columns to show on mobile (<768px). Default 3. The actions
+   *  column is always kept; the leading columns fill the rest. Set per-column
+   *  meta.mobile=true to force-show or meta.mobile=false to force-hide. */
+  mobileColumns?: number
 }
 
 /** Resolve a human-friendly label for a column (used in the visibility menu). */
@@ -98,6 +108,7 @@ export function DataTable<TData extends { id: number | string }>({
   enableColumnToggle = true,
   toolbar,
   filters,
+  mobileColumns = 3,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -133,6 +144,32 @@ export function DataTable<TData extends { id: number | string }>({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowSelection])
+
+  // Mobile: collapse to the most important columns. Actions column always kept;
+  // leading columns fill up to `mobileColumns`. Per-column meta.mobile overrides.
+  const isMobile = useIsMobile()
+  useEffect(() => {
+    if (isMobile) {
+      const leaf = table.getAllLeafColumns()
+      const vis: VisibilityState = {}
+      let budget = Math.max(1, mobileColumns)
+      const hasActions = leaf.some((c) => isActionsColumn(c.id))
+      if (hasActions) budget -= 1 // reserve a slot for the actions column
+      let shown = 0
+      for (const col of leaf) {
+        const meta = col.columnDef.meta as { mobile?: boolean } | undefined
+        if (isActionsColumn(col.id)) { vis[col.id] = true; continue }
+        if (meta?.mobile === true) { vis[col.id] = true; continue }
+        if (meta?.mobile === false) { vis[col.id] = false; continue }
+        if (shown < budget) { vis[col.id] = true; shown++ }
+        else { vis[col.id] = false }
+      }
+      setColumnVisibility(vis)
+    } else {
+      setColumnVisibility({})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, mobileColumns])
 
   const currentPageSize = table.getState().pagination.pageSize
   const pageIndex = table.getState().pagination.pageIndex
