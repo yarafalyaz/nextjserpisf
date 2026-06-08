@@ -275,7 +275,7 @@ export function generateTransactionPDF(
 }
 
 function formatPdfCurrency(value: number, showSymbol = true) {
-  const formatted = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Number(value || 0))
+  const formatted = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Number(value || 0))
   return showSymbol ? `Rp ${formatted}` : formatted
 }
 
