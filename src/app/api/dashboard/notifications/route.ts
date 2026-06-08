@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
-import { requireAuth } from "@/lib/auth/permissions"
+import { hasPermission, requireAuth } from "@/lib/auth/permissions"
 
 export async function GET() {
   try {
     const user = await requireAuth()
     const userId = Number(user.id)
+    const [canViewItems, canViewInvoices, canViewAttendance, canViewActivity] = await Promise.all([
+      hasPermission("view_items"),
+      hasPermission("view_sales_invoices"),
+      hasPermission("view_attendance"),
+      Promise.resolve(user.roles.includes("super_admin") || user.roles.includes("admin")),
+    ])
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today.getTime() + 86400000)
@@ -19,25 +25,25 @@ export async function GET() {
       recentActivities,
       latestNotifications,
     ] = await Promise.all([
-      prisma.$queryRaw<[{ count: bigint }]>`
+      canViewItems ? prisma.$queryRaw<[{ count: bigint }]>`
         SELECT COUNT(*) as count FROM items
         WHERE is_active = true AND deleted_at IS NULL
           AND min_stock > 0 AND qty_on_hand <= min_stock
-      `,
-      prisma.salesInvoice.count({
+      ` : Promise.resolve([{ count: BigInt(0) }] as [{ count: bigint }]),
+      canViewInvoices ? prisma.salesInvoice.count({
         where: {
           dueDate: { lt: new Date() },
           paymentStatus: { not: "paid" },
           deletedAt: null,
         },
-      }),
+      }) : Promise.resolve(0),
       Promise.resolve(0),
-      prisma.$queryRaw<[{ count: bigint }]>`
+      canViewAttendance ? prisma.$queryRaw<[{ count: bigint }]>`
         SELECT COUNT(*) as count FROM attendances
         WHERE date >= CURDATE() AND date < CURDATE() + INTERVAL 1 DAY
           AND (status = 'late' OR late_minutes > 0)
-      `,
-      (async () => {
+      ` : Promise.resolve([{ count: BigInt(0) }] as [{ count: bigint }]),
+      canViewAttendance ? (async () => {
         if (new Date().getHours() < 10) return 0
         const [active, present, onLeave, holiday] = await Promise.all([
           prisma.employee.count({ where: { isActive: true, deletedAt: null } }),
@@ -47,8 +53,8 @@ export async function GET() {
         ])
         if (holiday) return 0
         return Math.max(0, active - present - onLeave)
-      })(),
-      prisma.activityLog.findMany({
+      })() : Promise.resolve(0),
+      canViewActivity ? prisma.activityLog.findMany({
         orderBy: { createdAt: "desc" },
         take: 5,
         select: {
@@ -58,7 +64,7 @@ export async function GET() {
           description: true,
           createdAt: true,
         },
-      }),
+      }) : Promise.resolve([]),
       prisma.notification.findMany({
         where: { userId },
         orderBy: { createdAt: "desc" },

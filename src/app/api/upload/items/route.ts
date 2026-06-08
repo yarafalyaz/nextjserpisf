@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth/auth"
+import { hasPermission } from "@/lib/auth/permissions"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+  const canUpload = (await hasPermission("create_items")) || (await hasPermission("edit_items"))
+  if (!canUpload) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   const formData = await req.formData()
