@@ -412,11 +412,12 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     );
   };
 
-  async function uploadFile(file: File, endpoint: string): Promise<string | null> {
+  async function uploadFile(file: File, category: string): Promise<string | null> {
     const formData = new FormData()
     formData.append("file", file)
+    formData.append("category", category)
     try {
-      const res = await fetch(endpoint, { method: "POST", body: formData })
+      const res = await fetch("/api/upload", { method: "POST", body: formData })
       if (!res.ok) return null
       const data = await res.json()
       return data.url || data.path || null
@@ -428,14 +429,14 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const url = await uploadFile(file, "/api/upload/avatar")
+    const url = await uploadFile(file, "logos")
     if (url) setLogoPreview(url)
   }
 
   async function handleSignatureChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const url = await uploadFile(file, "/api/upload/avatar")
+    const url = await uploadFile(file, "signatures")
     if (url) setSignaturePreview(url)
   }
 

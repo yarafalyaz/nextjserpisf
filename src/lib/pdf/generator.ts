@@ -287,25 +287,39 @@ function formatPdfDate(value: string) {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }).replace(/ /g, "-")
 }
 
-/** Load a same-origin image URL into a base64 dataURL + intrinsic size (for jsPDF addImage). */
+/** Derive jsPDF image format from a dataURL mime type. */
+function imgFormat(dataUrl: string): string {
+  const m = /^data:image\/(\w+)/.exec(dataUrl)
+  const t = (m?.[1] || "png").toUpperCase()
+  if (t === "JPG" || t === "JPEG") return "JPEG"
+  if (t === "WEBP") return "WEBP"
+  return "PNG"
+}
+
+/** Load an image URL into a base64 dataURL + intrinsic size (for jsPDF addImage).
+ * Uses fetch -> blob -> dataURL so it works with CORS-enabled CDN assets
+ * (e.g. Cloudflare) without tainting a canvas. The base64 is transient — only
+ * used to embed the image into the generated PDF, never persisted. */
 async function loadImageData(
   url: string
 ): Promise<{ dataUrl: string; width: number; height: number } | null> {
   try {
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve()
-      img.onerror = reject
-      img.src = url
+    const res = await fetch(url, { mode: "cors" })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
     })
-    const canvas = document.createElement("canvas")
-    canvas.width = img.naturalWidth
-    canvas.height = img.naturalHeight
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return null
-    ctx.drawImage(img, 0, 0)
-    return { dataUrl: canvas.toDataURL("image/png"), width: img.naturalWidth, height: img.naturalHeight }
+    const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight })
+      img.onerror = reject
+      img.src = dataUrl
+    })
+    return { dataUrl, ...size }
   } catch {
     return null
   }
@@ -336,7 +350,7 @@ export async function generateQuotationPDF(
         h = maxH
         w = h * ratio
       }
-      doc.addImage(logo.dataUrl, "PNG", ml, 10, w, h)
+      doc.addImage(logo.dataUrl, imgFormat(logo.dataUrl), ml, 10, w, h)
       metaTop = Math.max(metaTop, 10 + h + 6)
     }
   }
@@ -445,7 +459,7 @@ export async function generateQuotationPDF(
         h = maxH
         w = h * ratio
       }
-      doc.addImage(sig.dataUrl, "PNG", sigCenterX - w / 2, 224, w, h)
+      doc.addImage(sig.dataUrl, imgFormat(sig.dataUrl), sigCenterX - w / 2, 224, w, h)
       sigNameY = 224 + h + 5
     }
   }

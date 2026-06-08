@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/auth/permissions"
-import { writeFile, mkdir } from "fs/promises"
-import path from "path"
+import { uploadToStorage } from "@/lib/storage/storage"
 
 export async function POST(req: NextRequest) {
   const canUpload = (await hasPermission("create_items")) || (await hasPermission("edit_items"))
@@ -10,39 +9,21 @@ export async function POST(req: NextRequest) {
   }
 
   const formData = await req.formData()
-  const file = formData.get("image") as File | null
+  const file = (formData.get("image") || formData.get("file")) as File | null
 
   if (!file) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 })
+    return NextResponse.json({ error: "Tidak ada file diunggah" }, { status: 400 })
   }
 
-  // Validate file type
-  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"]
-  if (!allowedTypes.includes(file.type)) {
-    return NextResponse.json({ error: "Format file tidak didukung. Gunakan JPG, PNG, WebP, atau GIF." }, { status: 400 })
+  try {
+    const { url } = await uploadToStorage(file, {
+      category: "items",
+      prefix: "item",
+      maxBytes: 5 * 1024 * 1024,
+    })
+    return NextResponse.json({ url })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Upload gagal"
+    return NextResponse.json({ error: message }, { status: 400 })
   }
-
-  // Validate file size (max 5MB)
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: "Ukuran file maksimal 5MB" }, { status: 400 })
-  }
-
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-
-  // Save to public/uploads/items
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "items")
-  await mkdir(uploadDir, { recursive: true })
-
-  // Sanitize extension
-  const rawExt = (file.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-  const ext = rawExt.slice(0, 10) || "jpg"
-  const filename = `item-${Date.now()}.${ext}`
-  const filepath = path.join(uploadDir, filename)
-
-  await writeFile(filepath, buffer)
-
-  const imageUrl = `/uploads/items/${filename}`
-
-  return NextResponse.json({ url: imageUrl })
 }
