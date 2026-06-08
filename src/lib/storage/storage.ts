@@ -25,6 +25,7 @@ const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif
 
 export interface StorageConfig {
   driver: string
+  fallbackLocal: boolean
   assetBaseUrl: string
   r2AccountId: string
   r2AccessKeyId: string
@@ -51,6 +52,7 @@ export interface UploadOptions {
 export async function getStorageConfig(): Promise<StorageConfig> {
   let s: {
     storageDriver: string
+    storageFallbackLocal: boolean
     assetBaseUrl: string | null
     r2AccountId: string | null
     r2AccessKeyId: string | null
@@ -61,6 +63,7 @@ export async function getStorageConfig(): Promise<StorageConfig> {
     s = await prisma.systemSetting.findFirst({
       select: {
         storageDriver: true,
+        storageFallbackLocal: true,
         assetBaseUrl: true,
         r2AccountId: true,
         r2AccessKeyId: true,
@@ -73,6 +76,7 @@ export async function getStorageConfig(): Promise<StorageConfig> {
   }
   return {
     driver: s?.storageDriver || process.env.STORAGE_DRIVER || "local",
+    fallbackLocal: s?.storageFallbackLocal ?? true,
     assetBaseUrl: s?.assetBaseUrl || process.env.NEXT_PUBLIC_ASSET_BASE_URL || "",
     r2AccountId: s?.r2AccountId || process.env.R2_ACCOUNT_ID || "",
     r2AccessKeyId: s?.r2AccessKeyId || process.env.R2_ACCESS_KEY_ID || "",
@@ -115,11 +119,22 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
   const buffer = Buffer.from(bytes)
 
   if (config.driver === "r2") {
-    await uploadToR2(key, buffer, file.type, config)
-  } else {
-    await uploadToLocal(key, buffer)
+    try {
+      await uploadToR2(key, buffer, file.type, config)
+      return { url: publicUrl(key, config.assetBaseUrl), key }
+    } catch (err) {
+      if (!config.fallbackLocal) throw err
+      // Hybrid fallback: R2/CDN unreachable -> store locally so upload still succeeds.
+      console.warn("[storage] R2 upload gagal, fallback ke lokal:", err instanceof Error ? err.message : err)
+      await uploadToLocal(key, buffer)
+      // Local files are served same-origin, not via the R2/CDN base URL.
+      return { url: publicUrl(key), key }
+    }
   }
 
+  await uploadToLocal(key, buffer)
+  // For pure-local driver, an assetBaseUrl that proxies the app (e.g. Cloudflare
+  // CDN in front of Next) still resolves /uploads, so honor it when set.
   return { url: publicUrl(key, config.assetBaseUrl), key }
 }
 

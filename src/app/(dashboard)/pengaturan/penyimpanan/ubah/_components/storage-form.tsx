@@ -6,12 +6,14 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/shadcn/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/shadcn/card"
+import { Switch } from "@/components/ui/shadcn/switch"
 import { Cloud, HardDrive, Loader2 } from "lucide-react"
 import { updateStorageSettings } from "@/actions/settings.actions"
 import { showError } from "@/lib/utils/toast"
 
 interface StorageFormProps {
   driver: string
+  fallbackLocal: boolean
   assetBaseUrl: string
   r2AccountId: string
   r2AccessKeyId: string
@@ -27,10 +29,11 @@ function isRedirectError(error: unknown): error is { digest: string } {
   )
 }
 
-export function StorageForm({ driver, assetBaseUrl, r2AccountId, r2AccessKeyId, r2Bucket, hasSecret }: StorageFormProps) {
+export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, r2AccessKeyId, r2Bucket, hasSecret }: StorageFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [selectedDriver, setSelectedDriver] = useState(driver || "local")
+  const [fallback, setFallback] = useState(fallbackLocal)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -52,6 +55,7 @@ export function StorageForm({ driver, assetBaseUrl, r2AccountId, r2AccessKeyId, 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
       <input type="hidden" name="storageDriver" value={selectedDriver} />
+      {fallback && <input type="hidden" name="storageFallbackLocal" value="on" />}
 
       {/* Driver picker */}
       <Card>
@@ -140,6 +144,30 @@ export function StorageForm({ driver, assetBaseUrl, r2AccountId, r2AccessKeyId, 
                   {hasSecret ? "Sudah tersimpan. Isi hanya jika ingin mengganti." : "Belum diset."}
                 </p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Hybrid fallback — only relevant when driver is r2 */}
+      {selectedDriver === "r2" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Mode Hybrid (Fallback Lokal)</CardTitle>
+            <CardDescription>
+              Kalau upload ke Cloudflare R2 gagal atau tidak bisa diakses, file otomatis disimpan ke server lokal
+              supaya proses upload tetap berhasil.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">Simpan ke lokal jika R2 gagal</p>
+                <p className="text-xs text-muted-foreground">
+                  Disarankan aktif. File fallback diakses lewat path lokal (/uploads/...).
+                </p>
+              </div>
+              <Switch checked={fallback} onCheckedChange={setFallback} />
             </div>
           </CardContent>
         </Card>

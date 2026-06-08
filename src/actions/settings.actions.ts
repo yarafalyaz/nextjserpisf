@@ -265,6 +265,7 @@ export async function updateStorageSettings(formData: FormData) {
     }
 
     const driver = get("storageDriver") || "local"
+    const fallbackLocal = formData.get("storageFallbackLocal") !== null
     const assetBaseUrl = get("assetBaseUrl").replace(/\/$/, "") || null
     const r2AccountId = get("r2AccountId") || null
     const r2AccessKeyId = get("r2AccessKeyId") || null
@@ -275,6 +276,7 @@ export async function updateStorageSettings(formData: FormData) {
       where: { id: settings.id },
       data: {
         storageDriver: driver,
+        storageFallbackLocal: fallbackLocal,
         assetBaseUrl,
         r2AccountId,
         r2AccessKeyId,

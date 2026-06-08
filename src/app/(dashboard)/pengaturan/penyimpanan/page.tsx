@@ -90,6 +90,18 @@ export default async function StorageSettingsPage() {
           {isR2 && (
             <>
               <Separator />
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Mode Hybrid (Fallback Lokal)</p>
+                  <p className="text-xs text-muted-foreground">Simpan ke lokal jika upload R2 gagal</p>
+                </div>
+                {settings?.storageFallbackLocal ? (
+                  <Badge variant="outline" className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">Aktif</Badge>
+                ) : (
+                  <Badge variant="outline">Nonaktif</Badge>
+                )}
+              </div>
+              <Separator />
               <h4 className="text-sm font-semibold text-foreground">Kredensial Cloudflare R2</h4>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Account ID" value={settings?.r2AccountId} mono />

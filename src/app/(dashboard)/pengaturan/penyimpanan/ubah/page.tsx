@@ -20,6 +20,7 @@ export default async function EditStoragePage() {
       <h1 className="text-2xl font-bold text-foreground">Konfigurasi Penyimpanan & CDN</h1>
       <StorageForm
         driver={settings?.storageDriver || "local"}
+        fallbackLocal={settings?.storageFallbackLocal ?? true}
         assetBaseUrl={settings?.assetBaseUrl || ""}
         r2AccountId={settings?.r2AccountId || ""}
         r2AccessKeyId={settings?.r2AccessKeyId || ""}

@@ -162,6 +162,7 @@ model SystemSetting {
 
   // Storage / CDN configuration
   storageDriver                 String   @default("local") @map("storage_driver")
+  storageFallbackLocal          Boolean  @default(true) @map("storage_fallback_local")
   assetBaseUrl                  String?  @map("asset_base_url")
   r2AccountId                   String?  @map("r2_account_id")
   r2AccessKeyId                 String?  @map("r2_access_key_id")
