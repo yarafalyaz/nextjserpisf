@@ -464,8 +464,6 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     })
   }
 
-  const inputClass = "w-full rounded-lg border border-default bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
-
   return (
     <form onSubmit={onSubmit}>
         <div className="flex flex-col gap-6">
@@ -816,7 +814,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Denda Keterlambatan per Menit</Label>
-                <CurrencyInput name="latePenaltyPerMinute" defaultValue={settings.latePenaltyPerMinute} prefix="Rp" className={inputClass} />
+                <CurrencyInput name="latePenaltyPerMinute" defaultValue={settings.latePenaltyPerMinute} prefix="Rp" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="maxLatePenaltyMinutes">Maks Menit Denda Terlambat</Label>
