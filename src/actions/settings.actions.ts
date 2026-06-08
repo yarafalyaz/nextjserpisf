@@ -245,3 +245,57 @@ export async function updateSystemSettings(formData: FormData) {
     throw e
   }
 }
+
+
+/**
+ * Update storage / CDN configuration. The R2 secret access key is only
+ * overwritten when a new non-empty value is submitted (so the masked field
+ * in the UI doesn't wipe the stored secret on save).
+ */
+export async function updateStorageSettings(formData: FormData) {
+  try {
+    await requirePermission("manage_settings")
+
+    const settings = await prisma.systemSetting.findFirst()
+    if (!settings) throw new Error("System settings not found")
+
+    const get = (key: string) => {
+      const v = formData.get(key)
+      return v !== null ? String(v).trim() : ""
+    }
+
+    const driver = get("storageDriver") || "local"
+    const assetBaseUrl = get("assetBaseUrl").replace(/\/$/, "") || null
+    const r2AccountId = get("r2AccountId") || null
+    const r2AccessKeyId = get("r2AccessKeyId") || null
+    const r2Bucket = get("r2Bucket") || null
+    const newSecret = get("r2SecretAccessKey")
+
+    await prisma.systemSetting.update({
+      where: { id: settings.id },
+      data: {
+        storageDriver: driver,
+        assetBaseUrl,
+        r2AccountId,
+        r2AccessKeyId,
+        r2Bucket,
+        // Only overwrite the secret when a new value is provided
+        ...(newSecret ? { r2SecretAccessKey: newSecret } : {}),
+      },
+    })
+
+    revalidatePath("/pengaturan/penyimpanan")
+    await logActivity("update", "SystemSetting", settings.id, "Memperbarui konfigurasi penyimpanan/CDN")
+    redirect("/pengaturan/penyimpanan")
+  } catch (e: unknown) {
+    if (
+      typeof e === "object" && e !== null && "digest" in e &&
+      typeof (e as { digest?: unknown }).digest === "string" &&
+      (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+    ) {
+      throw e
+    }
+    console.error("[updateStorageSettings]", getErrorMessage(e) || e)
+    throw e
+  }
+}

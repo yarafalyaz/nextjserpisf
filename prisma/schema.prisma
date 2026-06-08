@@ -159,6 +159,15 @@ model SystemSetting {
   payrollBankAccountId          Int?     @map("payroll_bank_account_id")
   employeeReceivableAccountId   Int?     @map("employee_receivable_account_id")
   payrollJournalTypeId          Int?     @map("payroll_journal_type_id")
+
+  // Storage / CDN configuration
+  storageDriver                 String   @default("local") @map("storage_driver")
+  assetBaseUrl                  String?  @map("asset_base_url")
+  r2AccountId                   String?  @map("r2_account_id")
+  r2AccessKeyId                 String?  @map("r2_access_key_id")
+  r2SecretAccessKey             String?  @map("r2_secret_access_key")
+  r2Bucket                      String?  @map("r2_bucket")
+
   createdAt                     DateTime @default(now()) @map("created_at")
   updatedAt                     DateTime @updatedAt @map("updated_at")
 

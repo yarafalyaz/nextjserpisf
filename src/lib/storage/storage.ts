@@ -1,13 +1,14 @@
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import { prisma } from "@/lib/db/prisma"
 
 /**
- * Storage abstraction. Swappable backend via STORAGE_DRIVER env:
- *   - "local" (default): writes to public/uploads/<category>/
- *   - "r2": Cloudflare R2 (S3-compatible) — wired via env, see uploadToR2
+ * Storage abstraction. Config is DB-driven (SystemSetting) with env fallback.
+ *   Driver: "local" (default) writes to public/uploads/<category>/
+ *           "r2" uploads to Cloudflare R2 (S3-compatible)
  *
  * Public URL resolution:
- *   - If NEXT_PUBLIC_ASSET_BASE_URL is set (e.g. https://cdn.yaraerp.com),
+ *   - If an asset base URL is configured (DB assetBaseUrl or NEXT_PUBLIC_ASSET_BASE_URL),
  *     returned URLs are absolute CDN URLs. Otherwise relative same-origin paths.
  *
  * No base64 is ever persisted — files are stored as binary and referenced by URL.
@@ -21,6 +22,15 @@ export type UploadCategory =
   | "attachments"
 
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"]
+
+export interface StorageConfig {
+  driver: string
+  assetBaseUrl: string
+  r2AccountId: string
+  r2AccessKeyId: string
+  r2SecretAccessKey: string
+  r2Bucket: string
+}
 
 export interface UploadResult {
   url: string
@@ -37,13 +47,43 @@ export interface UploadOptions {
   allowedTypes?: string[]
 }
 
-function assetBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_ASSET_BASE_URL || "").replace(/\/$/, "")
+/** Read storage config: DB SystemSetting first, env as fallback. */
+export async function getStorageConfig(): Promise<StorageConfig> {
+  let s: {
+    storageDriver: string
+    assetBaseUrl: string | null
+    r2AccountId: string | null
+    r2AccessKeyId: string | null
+    r2SecretAccessKey: string | null
+    r2Bucket: string | null
+  } | null = null
+  try {
+    s = await prisma.systemSetting.findFirst({
+      select: {
+        storageDriver: true,
+        assetBaseUrl: true,
+        r2AccountId: true,
+        r2AccessKeyId: true,
+        r2SecretAccessKey: true,
+        r2Bucket: true,
+      },
+    })
+  } catch {
+    s = null
+  }
+  return {
+    driver: s?.storageDriver || process.env.STORAGE_DRIVER || "local",
+    assetBaseUrl: s?.assetBaseUrl || process.env.NEXT_PUBLIC_ASSET_BASE_URL || "",
+    r2AccountId: s?.r2AccountId || process.env.R2_ACCOUNT_ID || "",
+    r2AccessKeyId: s?.r2AccessKeyId || process.env.R2_ACCESS_KEY_ID || "",
+    r2SecretAccessKey: s?.r2SecretAccessKey || process.env.R2_SECRET_ACCESS_KEY || "",
+    r2Bucket: s?.r2Bucket || process.env.R2_BUCKET || "",
+  }
 }
 
 /** Resolve a stored key (e.g. "logos/logo-123.png") to a public URL. */
-export function publicUrl(key: string): string {
-  const base = assetBaseUrl()
+export function publicUrl(key: string, assetBaseUrl?: string): string {
+  const base = (assetBaseUrl ?? process.env.NEXT_PUBLIC_ASSET_BASE_URL ?? "").replace(/\/$/, "")
   const clean = key.replace(/^\/+/, "")
   return base ? `${base}/${clean}` : `/uploads/${clean}`
 }
@@ -64,6 +104,8 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
     throw new Error(`Ukuran file maksimal ${Math.round(maxBytes / (1024 * 1024))}MB`)
   }
 
+  const config = await getStorageConfig()
+
   const ext = sanitizedExt(file.name)
   const prefix = (opts.prefix || opts.category).replace(/[^a-zA-Z0-9_-]/g, "")
   const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
@@ -72,14 +114,13 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
-  const driver = process.env.STORAGE_DRIVER || "local"
-  if (driver === "r2") {
-    await uploadToR2(key, buffer, file.type)
+  if (config.driver === "r2") {
+    await uploadToR2(key, buffer, file.type, config)
   } else {
     await uploadToLocal(key, buffer)
   }
 
-  return { url: publicUrl(key), key }
+  return { url: publicUrl(key, config.assetBaseUrl), key }
 }
 
 async function uploadToLocal(key: string, buffer: Buffer): Promise<void> {
@@ -89,16 +130,18 @@ async function uploadToLocal(key: string, buffer: Buffer): Promise<void> {
 }
 
 /**
- * Cloudflare R2 upload (S3-compatible). Requires env:
- *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET
- * and NEXT_PUBLIC_ASSET_BASE_URL pointing to the R2 public/custom domain.
- *
- * Install @aws-sdk/client-s3 before enabling STORAGE_DRIVER=r2.
+ * Cloudflare R2 upload (S3-compatible). Reads credentials from StorageConfig
+ * (DB-driven with env fallback). Install @aws-sdk/client-s3 before using R2.
  */
-async function uploadToR2(key: string, buffer: Buffer, contentType: string): Promise<void> {
-  const { R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET } = process.env
-  if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET) {
-    throw new Error("R2 storage belum dikonfigurasi (cek env R2_*).")
+async function uploadToR2(
+  key: string,
+  buffer: Buffer,
+  contentType: string,
+  config: StorageConfig
+): Promise<void> {
+  const { r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2Bucket } = config
+  if (!r2AccountId || !r2AccessKeyId || !r2SecretAccessKey || !r2Bucket) {
+    throw new Error("Cloudflare R2 belum dikonfigurasi lengkap. Lengkapi di Pengaturan > Penyimpanan.")
   }
   // Lazy import so the SDK is only required when the R2 driver is active.
   // Computed specifier avoids a compile-time dependency until @aws-sdk/client-s3 is installed.
@@ -106,15 +149,15 @@ async function uploadToR2(key: string, buffer: Buffer, contentType: string): Pro
   const { S3Client, PutObjectCommand } = await import(/* @vite-ignore */ sdkName)
   const client = new S3Client({
     region: "auto",
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
     credentials: {
-      accessKeyId: R2_ACCESS_KEY_ID,
-      secretAccessKey: R2_SECRET_ACCESS_KEY,
+      accessKeyId: r2AccessKeyId,
+      secretAccessKey: r2SecretAccessKey,
     },
   })
   await client.send(
     new PutObjectCommand({
-      Bucket: R2_BUCKET,
+      Bucket: r2Bucket,
       Key: key,
       Body: buffer,
       ContentType: contentType,

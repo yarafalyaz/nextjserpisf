@@ -16,6 +16,7 @@ import {
   Activity,
   ChevronRight,
   Timer,
+  Cloud,
 } from "lucide-react"
 
 const settingsNav = [
@@ -53,6 +54,12 @@ const settingsNav = [
     items: [
       { href: "/pengaturan/workflow", label: "Alur Persetujuan", desc: "Workflow approval dokumen", icon: Workflow },
       { href: "/pengaturan/cron", label: "Jadwal Tugas", desc: "Cron job otomatisasi sistem", icon: Timer },
+    ],
+  },
+  {
+    heading: "Sistem",
+    items: [
+      { href: "/pengaturan/penyimpanan", label: "Penyimpanan & CDN", desc: "Storage lokal / Cloudflare R2", icon: Cloud },
     ],
   },
 ]
