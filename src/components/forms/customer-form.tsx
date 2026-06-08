@@ -10,6 +10,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -116,7 +117,13 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="creditLimit">Batas Kredit (Rp)</Label>
-            <Input id="creditLimit" type="number" min={0} step="any" {...register("creditLimit", { valueAsNumber: true })} placeholder="0 = tanpa batas" />
+            <Controller
+              name="creditLimit"
+              control={control}
+              render={({ field }) => (
+                <CurrencyInput id="creditLimit" value={field.value} onChange={field.onChange} onBlur={field.onBlur} min={0} prefix="Rp" placeholder="0 = tanpa batas" />
+              )}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Controller
