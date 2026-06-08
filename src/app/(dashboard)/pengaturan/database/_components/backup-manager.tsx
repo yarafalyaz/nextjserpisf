@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/shadcn/table"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Database, Download, RotateCcw, Trash2, Loader2, DatabaseBackup } from "lucide-react"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import {
@@ -48,6 +49,7 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
   const [actionPending, startAction] = useTransition()
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [withSnapshot, setWithSnapshot] = useState(true)
 
   const handleResult = (r: BackupResult) => {
     if (r.success) showSuccess(r.message)
@@ -65,7 +67,7 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
     if (!restoreTarget) return
     const file = restoreTarget
     startAction(async () => {
-      const r = await restoreDatabaseBackup(file)
+      const r = await restoreDatabaseBackup(file, withSnapshot)
       setRestoreTarget(null)
       handleResult(r)
     })
@@ -167,8 +169,14 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
         body={
           <span>
             Tindakan ini akan <strong>menimpa SELURUH data database saat ini</strong> dengan isi dari{" "}
-            <code className="font-mono">{restoreTarget}</code>. Snapshot otomatis akan dibuat sebelum restore sebagai
-            jaring pengaman, tapi pastikan kamu yakin. Tindakan ini tidak bisa dibatalkan dengan mudah.
+            <code className="font-mono">{restoreTarget}</code>. Tindakan ini tidak bisa dibatalkan dengan mudah.
+            <label className="mt-3 flex items-center gap-2 text-sm font-normal text-foreground">
+              <Checkbox
+                checked={withSnapshot}
+                onCheckedChange={(v) => setWithSnapshot(v === true)}
+              />
+              Buat snapshot otomatis dulu (cuma simpan 1 yang terbaru)
+            </label>
           </span>
         }
       />

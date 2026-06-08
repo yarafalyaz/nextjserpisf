@@ -56,15 +56,17 @@ export async function listBackups(): Promise<BackupFile[]> {
   return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-/** Run mysqldump and stream output to a .sql file. Returns the created filename. */
-export function createBackup(): Promise<BackupFile> {
+/** Run mysqldump and stream output to a .sql file. Returns the created filename.
+ *  Optional label is inserted into the filename (e.g. "autosnap"). */
+export function createBackup(label?: string): Promise<BackupFile> {
   return new Promise(async (resolve, reject) => {
     try {
       const conn = parseDbUrl()
       await mkdir(BACKUP_DIR, { recursive: true })
 
       const ts = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "-").slice(0, 19)
-      const filename = `backup-${ts}.sql`
+      const safeLabel = label ? `${label.replace(/[^a-zA-Z0-9]/g, "")}-` : ""
+      const filename = `backup-${safeLabel}${ts}.sql`
       const filepath = path.join(BACKUP_DIR, filename)
 
       const args = [
@@ -155,6 +157,17 @@ export async function deleteBackup(filename: string): Promise<void> {
   if (!isValidBackupName(filename)) throw new Error("Nama file backup tidak valid")
   const filepath = path.join(BACKUP_DIR, filename)
   if (existsSync(filepath)) await unlink(filepath)
+}
+
+/** Delete all existing auto-snapshot backups (keeps the manual ones). */
+export async function pruneAutoSnapshots(): Promise<void> {
+  if (!existsSync(BACKUP_DIR)) return
+  const files = await readdir(BACKUP_DIR)
+  await Promise.all(
+    files
+      .filter((f) => f.startsWith("backup-autosnap-") && f.endsWith(".sql"))
+      .map((f) => unlink(path.join(BACKUP_DIR, f)).catch(() => {}))
+  )
 }
 
 export async function readBackupFile(filename: string): Promise<{ path: string; size: number }> {

@@ -9,6 +9,7 @@ import {
   restoreBackup,
   deleteBackup,
   listBackups,
+  pruneAutoSnapshots,
   type BackupFile,
 } from "@/lib/db/backup"
 
@@ -31,16 +32,22 @@ export async function createDatabaseBackup(): Promise<BackupResult> {
   }
 }
 
-export async function restoreDatabaseBackup(filename: string): Promise<BackupResult> {
+export async function restoreDatabaseBackup(
+  filename: string,
+  withSnapshot: boolean = true
+): Promise<BackupResult> {
   try {
     await requirePermission("manage_settings")
-    // Snapshot current state before destructive restore (best-effort safety net)
     let safetyNet = ""
-    try {
-      const snap = await createBackup()
-      safetyNet = ` Snapshot otomatis sebelum restore: ${snap.filename}.`
-    } catch {
-      safetyNet = " (Snapshot otomatis gagal dibuat.)"
+    if (withSnapshot) {
+      try {
+        // Keep only the latest auto-snapshot so the list doesn't pile up.
+        await pruneAutoSnapshots()
+        const snap = await createBackup("autosnap")
+        safetyNet = ` Snapshot otomatis: ${snap.filename}.`
+      } catch {
+        safetyNet = " (Snapshot otomatis gagal dibuat.)"
+      }
     }
     await restoreBackup(filename)
     await logActivity("update", "DatabaseBackup", 0, `Restore database dari: ${filename}`)
