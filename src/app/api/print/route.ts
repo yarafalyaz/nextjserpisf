@@ -46,6 +46,7 @@ export async function GET(request: Request) {
       phone: settings.companyPhone || "",
       email: settings.companyEmail || "",
       website: settings.companyWebsite || "",
+      logo: settings.companyLogo || "",
     }
 
     if (type === "invoice") {
@@ -132,6 +133,7 @@ export async function GET(request: Request) {
           shippingMethod: shippingMethodText,
           footerNotes: settings.quotationFooterNotes || "",
           signatureName: settings.quotationSignatureName || "",
+          signatureImage: settings.quotationSignatureImage || "",
           notes: doc.notes || "",
         },
         items: allItems.map((it, idx) => ({

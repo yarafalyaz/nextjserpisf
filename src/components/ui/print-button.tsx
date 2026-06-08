@@ -32,7 +32,7 @@ export function PrintButton({ title = "Cetak", documentType, documentId, disable
       }
 
       if (documentType === "quotation") {
-        generateQuotationPDF(data.company, data.docInfo, data.items, data.summary)
+        await generateQuotationPDF(data.company, data.docInfo, data.items, data.summary)
       } else {
         generateTransactionPDF(data.company, data.docInfo, data.items, data.summary)
       }

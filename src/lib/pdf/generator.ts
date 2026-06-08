@@ -9,6 +9,7 @@ export interface CompanyInfo {
   phone?: string | null
   email?: string | null
   website?: string | null
+  logo?: string | null
 }
 
 export interface DocumentInfo {
@@ -45,6 +46,7 @@ export interface QuotationPDFInfo extends DocumentInfo {
   shippingMethod?: string | null
   footerNotes?: string | null
   signatureName?: string | null
+  signatureImage?: string | null
 }
 
 export interface QuotationPDFItem extends DocumentItem {
@@ -285,7 +287,31 @@ function formatPdfDate(value: string) {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }).replace(/ /g, "-")
 }
 
-export function generateQuotationPDF(
+/** Load a same-origin image URL into a base64 dataURL + intrinsic size (for jsPDF addImage). */
+async function loadImageData(
+  url: string
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = reject
+      img.src = url
+    })
+    const canvas = document.createElement("canvas")
+    canvas.width = img.naturalWidth
+    canvas.height = img.naturalHeight
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return null
+    ctx.drawImage(img, 0, 0)
+    return { dataUrl: canvas.toDataURL("image/png"), width: img.naturalWidth, height: img.naturalHeight }
+  } catch {
+    return null
+  }
+}
+
+export async function generateQuotationPDF(
   company: CompanyInfo,
   docInfo: QuotationPDFInfo,
   items: QuotationPDFItem[],
@@ -295,6 +321,25 @@ export function generateQuotationPDF(
   const ml = 14
   const pageW = 210
   const black = "#111827"
+
+  // 1. Logo banner (top-left) — constrained to 55mm wide / 20mm tall, keep aspect ratio
+  let metaTop = 23
+  if (company.logo) {
+    const logo = await loadImageData(company.logo)
+    if (logo) {
+      const maxW = 55
+      const maxH = 20
+      const ratio = logo.width / logo.height
+      let w = maxW
+      let h = w / ratio
+      if (h > maxH) {
+        h = maxH
+        w = h * ratio
+      }
+      doc.addImage(logo.dataUrl, "PNG", ml, 10, w, h)
+      metaTop = Math.max(metaTop, 10 + h + 6)
+    }
+  }
 
   doc.setTextColor(black)
   doc.setFont("Helvetica", "bold")
@@ -313,7 +358,7 @@ export function generateQuotationPDF(
     doc.text(text || "-", x, y)
   }
 
-  let y = 23
+  let y = metaTop
   label("No", ml, y); value(docInfo.documentNo, ml + 34, y)
   label("Tanggal", 120, y); value(formatPdfDate(docInfo.date), 154, y)
   y += 6
@@ -329,7 +374,7 @@ export function generateQuotationPDF(
   label("Email", ml, y); value("-", ml + 34, y)
   label("Metode Pengiriman", 120, y); value(docInfo.shippingMethod || "", 154, y)
 
-  const tableStart = 57
+  const tableStart = y + 6
   autoTable(doc, {
     startY: tableStart,
     margin: { left: ml, right: ml },
@@ -385,8 +430,28 @@ export function generateQuotationPDF(
   doc.setFont("Helvetica", "bold")
   doc.text(formatPdfCurrency(summary.total), 195, footerY, { align: "right" })
 
+  // Signature image (above the name) + signature name (bottom-right)
+  const sigCenterX = 172
+  let sigNameY = 248
+  if (docInfo.signatureImage) {
+    const sig = await loadImageData(docInfo.signatureImage)
+    if (sig) {
+      const maxW = 38
+      const maxH = 22
+      const ratio = sig.width / sig.height
+      let w = maxW
+      let h = w / ratio
+      if (h > maxH) {
+        h = maxH
+        w = h * ratio
+      }
+      doc.addImage(sig.dataUrl, "PNG", sigCenterX - w / 2, 224, w, h)
+      sigNameY = 224 + h + 5
+    }
+  }
   doc.setFont("Helvetica", "normal")
-  doc.text(docInfo.signatureName || "Wahid Achmad Fauzi", 155, 260)
+  doc.setFontSize(8)
+  doc.text(docInfo.signatureName || "Wahid Achmad Fauzi", sigCenterX, sigNameY, { align: "center" })
 
   const pdfData = doc.output("bloburl")
   window.open(pdfData, "_blank")
