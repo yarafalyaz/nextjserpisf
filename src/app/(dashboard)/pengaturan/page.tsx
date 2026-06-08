@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Button } from "@/components/ui/shadcn/button"
 import {
   Building2,
   SlidersHorizontal,
@@ -15,7 +14,6 @@ import {
   Workflow,
   Shield,
   Activity,
-  Pencil,
   ChevronRight,
   Timer,
 } from "lucide-react"
@@ -71,11 +69,6 @@ export default async function SettingsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Pengaturan</h1>
           <p className="text-sm text-muted-foreground">Kelola konfigurasi sistem, pengguna, dan keamanan.</p>
         </div>
-        <Button asChild>
-          <Link href="/pengaturan/ubah">
-            <Pencil className="size-4" /> Ubah Konfigurasi
-          </Link>
-        </Button>
       </div>
 
       <div className="space-y-8">

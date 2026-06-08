@@ -120,7 +120,7 @@ export default async function AccountMappingPage() {
           <CardDescription>Pemetaan akun buku besar untuk posting jurnal otomatis.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/ubah"><Pencil className="size-3.5" /> Ubah Mapping</Link>
+              <Link href="/pengaturan/mapping-akun/ubah"><Pencil className="size-3.5" /> Ubah Mapping</Link>
             </Button>
           </CardAction>
         </CardHeader>

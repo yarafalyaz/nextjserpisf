@@ -26,6 +26,8 @@ interface Account {
 interface SettingsEditFormProps {
   settings: SettingsFormValues
   accounts: Account[]
+  section?: "company" | "general" | "prefixes" | "overtime" | "quotation" | "accounts"
+  redirectTo?: string
 }
 
 interface SettingsFormValues {
@@ -217,7 +219,8 @@ function SettingSwitch({ name, label, defaultSelected }: { name: string; label: 
   )
 }
 
-export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) {
+export function SettingsEditForm({ settings, accounts, section, redirectTo }: SettingsEditFormProps) {
+  const show = (s: string) => section === undefined || section === s
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [logoPreview, setLogoPreview] = useState<string | null>(settings.companyLogo || null)
@@ -468,41 +471,9 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         <div className="flex flex-col gap-6">
 
         {/* Section: Perusahaan */}
+        {show("company") && (
         <div>
           <div className="rounded-xl border bg-card p-6">
-          {/* Hidden inputs to pass data */}
-            <input type="hidden" name="salesReceivableAccountId" value={salesReceivable} />
-            <input type="hidden" name="salesRevenueAccountId" value={salesRevenue} />
-            <input type="hidden" name="salesTaxAccountId" value={salesTax} />
-            <input type="hidden" name="salesReturnAccountId" value={salesReturn} />
-            <input type="hidden" name="salesAccountId" value={salesAcc} />
-            
-            <input type="hidden" name="purchasePayableAccountId" value={purchasePayable} />
-            <input type="hidden" name="purchaseInventoryAccountId" value={purchaseInventory} />
-            <input type="hidden" name="purchaseTaxAccountId" value={purchaseTax} />
-            <input type="hidden" name="purchaseExpenseAccountId" value={purchaseExpense} />
-            <input type="hidden" name="purchaseDiscountAccountId" value={purchaseDiscount} />
-            <input type="hidden" name="purchaseShippingAccountId" value={purchaseShipping} />
-            <input type="hidden" name="purchaseReturnAccountId" value={purchaseReturn} />
-            
-            <input type="hidden" name="inventoryAccountId" value={inventoryAcc} />
-            <input type="hidden" name="inventoryAdjustmentAccountId" value={inventoryAdjustment} />
-            <input type="hidden" name="stockAdjustmentAccountId" value={stockAdjustmentAcc} />
-            <input type="hidden" name="cogsAccountId" value={cogsAcc} />
-            <input type="hidden" name="wipAccountId" value={wipAcc} />
-            <input type="hidden" name="materialExpenseAccountId" value={materialExpense} />
-            <input type="hidden" name="materialIssueExpenseAccountId" value={materialIssueExpense} />
-            
-            <input type="hidden" name="pettyCashAccountId" value={pettyCashAcc} />
-            <input type="hidden" name="cashBankAccountId" value={cashBankAcc} />
-            <input type="hidden" name="generalExpenseAccountId" value={generalExpense} />
-            <input type="hidden" name="defaultCashAccountId" value={defaultCash} />
-            
-            <input type="hidden" name="salaryExpenseAccountId" value={salaryExpense} />
-            <input type="hidden" name="salariesPayableAccountId" value={salariesPayable} />
-            <input type="hidden" name="payrollBankAccountId" value={payrollBank} />
-            <input type="hidden" name="employeeReceivableAccountId" value={employeeReceivable} />
-            <input type="hidden" name="payrollJournalTypeId" value={payrollJournalType} />
             <h2 className="text-base font-semibold text-foreground mb-4">Informasi Perusahaan</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5">
@@ -567,8 +538,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             </div>
           </div>
         </div>
+        )}
 
-        {/* Tab 2: Umum */}
+        {/* Section: Umum */}
+        {show("general") && (
         <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Umum</h2>
@@ -625,8 +598,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             </div>
           </div>
         </div>
+        )}
 
-        {/* Tab 3: Prefix Kode Otomatis */}
+        {/* Section: Prefix Kode Otomatis */}
+        {show("prefixes") && (
         <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Prefix Kode Entitas</h2>
@@ -799,8 +774,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             </div>
           </div>
         </div>
+        )}
 
-        {/* Tab 4: Lembur & Kehadiran */}
+        {/* Section: Lembur & Kehadiran */}
+        {show("overtime") && (
         <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Lembur</h2>
@@ -853,8 +830,10 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             </div>
           </div>
         </div>
+        )}
 
-        {/* Tab 5: Quotation */}
+        {/* Section: Quotation */}
+        {show("quotation") && (
         <div>
           <div className="rounded-xl border bg-card p-6">
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Penawaran</h2>
@@ -880,10 +859,41 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             </div>
           </div>
         </div>
+        )}
 
-        {/* Tab 6: Mapping Akun */}
+        {/* Section: Mapping Akun */}
+        {show("accounts") && (
         <div>
           <div className="rounded-xl border bg-card p-6">
+            {/* Hidden inputs to pass account mapping data */}
+            <input type="hidden" name="salesReceivableAccountId" value={salesReceivable} />
+            <input type="hidden" name="salesRevenueAccountId" value={salesRevenue} />
+            <input type="hidden" name="salesTaxAccountId" value={salesTax} />
+            <input type="hidden" name="salesReturnAccountId" value={salesReturn} />
+            <input type="hidden" name="salesAccountId" value={salesAcc} />
+            <input type="hidden" name="purchasePayableAccountId" value={purchasePayable} />
+            <input type="hidden" name="purchaseInventoryAccountId" value={purchaseInventory} />
+            <input type="hidden" name="purchaseTaxAccountId" value={purchaseTax} />
+            <input type="hidden" name="purchaseExpenseAccountId" value={purchaseExpense} />
+            <input type="hidden" name="purchaseDiscountAccountId" value={purchaseDiscount} />
+            <input type="hidden" name="purchaseShippingAccountId" value={purchaseShipping} />
+            <input type="hidden" name="purchaseReturnAccountId" value={purchaseReturn} />
+            <input type="hidden" name="inventoryAccountId" value={inventoryAcc} />
+            <input type="hidden" name="inventoryAdjustmentAccountId" value={inventoryAdjustment} />
+            <input type="hidden" name="stockAdjustmentAccountId" value={stockAdjustmentAcc} />
+            <input type="hidden" name="cogsAccountId" value={cogsAcc} />
+            <input type="hidden" name="wipAccountId" value={wipAcc} />
+            <input type="hidden" name="materialExpenseAccountId" value={materialExpense} />
+            <input type="hidden" name="materialIssueExpenseAccountId" value={materialIssueExpense} />
+            <input type="hidden" name="pettyCashAccountId" value={pettyCashAcc} />
+            <input type="hidden" name="cashBankAccountId" value={cashBankAcc} />
+            <input type="hidden" name="generalExpenseAccountId" value={generalExpense} />
+            <input type="hidden" name="defaultCashAccountId" value={defaultCash} />
+            <input type="hidden" name="salaryExpenseAccountId" value={salaryExpense} />
+            <input type="hidden" name="salariesPayableAccountId" value={salariesPayable} />
+            <input type="hidden" name="payrollBankAccountId" value={payrollBank} />
+            <input type="hidden" name="employeeReceivableAccountId" value={employeeReceivable} />
+            <input type="hidden" name="payrollJournalTypeId" value={payrollJournalType} />
             <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
@@ -912,13 +922,16 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
             </div>
 
             <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-              {mappingSections.map((section) => (
-                <MappingSectionCard key={section.title} title={section.title} items={section.items} accounts={accounts} />
+              {mappingSections.map((mapSection) => (
+                <MappingSectionCard key={mapSection.title} title={mapSection.title} items={mapSection.items} accounts={accounts} />
               ))}
             </div>
           </div>
         </div>
+        )}
       </div>{/* end sections */}
+
+      <input type="hidden" name="_redirectTo" value={redirectTo || "/pengaturan"} />
 
       {/* Submit */}
       <div className="flex items-center gap-3 mt-6">
@@ -931,7 +944,7 @@ export function SettingsEditForm({ settings, accounts }: SettingsEditFormProps) 
         </Button>
         <Button
           type="button"
-          onPress={() => router.push("/pengaturan")}
+          onPress={() => router.push(redirectTo || "/pengaturan")}
           className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"
         >
           Batal

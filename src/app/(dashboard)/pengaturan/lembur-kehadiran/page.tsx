@@ -31,7 +31,7 @@ export default async function OvertimeAttendancePage() {
           <CardDescription>Parameter perhitungan lembur dan aturan presensi karyawan.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/ubah"><Pencil className="size-3.5" /> Ubah</Link>
+              <Link href="/pengaturan/lembur-kehadiran/ubah"><Pencil className="size-3.5" /> Ubah</Link>
             </Button>
           </CardAction>
         </CardHeader>

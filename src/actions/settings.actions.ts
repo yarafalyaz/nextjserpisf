@@ -237,7 +237,8 @@ export async function updateSystemSettings(formData: FormData) {
 
   revalidatePath("/pengaturan")
   await logActivity("update", "SystemSetting", settings.id, "Memperbarui pengaturan sistem")
-  redirect("/pengaturan")
+  const redirectTo = str("_redirectTo") || "/pengaturan"
+  redirect(redirectTo)
 
   } catch (e: unknown) {
     console.error("[updateSystemSettings]", getErrorMessage(e) || e)

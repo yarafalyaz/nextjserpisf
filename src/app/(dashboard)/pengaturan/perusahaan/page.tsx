@@ -33,7 +33,7 @@ export default async function CompanySettingsPage() {
           <CardDescription>Identitas dan alamat resmi untuk dokumen dan faktur.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
-              <Link href="/pengaturan/ubah"><Pencil className="size-3.5" /> Ubah</Link>
+              <Link href="/pengaturan/perusahaan/ubah"><Pencil className="size-3.5" /> Ubah</Link>
             </Button>
           </CardAction>
         </CardHeader>
