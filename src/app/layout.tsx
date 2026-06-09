@@ -18,7 +18,10 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "YaraERP - Enterprise Resource Planning",
+  title: {
+    default: "YaraERP - Enterprise Resource Planning",
+    template: "%s | YaraERP",
+  },
   description: "Sistem ERP terintegrasi untuk manajemen bisnis - Sales, Purchase, Inventory, HRM, Finance",
 }
 
