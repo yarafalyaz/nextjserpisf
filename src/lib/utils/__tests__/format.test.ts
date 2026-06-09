@@ -264,4 +264,13 @@ describe("formatDate edge cases", () => {
     expect(result).toContain("03")
     expect(result).toContain("2024")
   })
+
+  it("accepts Date object (not just string)", () => {
+    const result = formatDate(new Date("2024-06-01T10:00:00Z"))
+    expect(result).toContain("2024")
+  })
+
+  it("returns - for invalid Date object", () => {
+    expect(formatDate(new Date("invalid"))).toBe("-")
+  })
 })
