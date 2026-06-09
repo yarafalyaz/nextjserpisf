@@ -3,9 +3,16 @@
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
-import { requireId, safeId, safeNumber } from "@/lib/utils/safe-parse"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+import { parseFormData } from "@/lib/validations/parse-form"
+import {
+  vehicleBrandSchema,
+  vehicleModelSchema,
+  vehicleVariantSchema,
+  vehicleSchema,
+  customerVehicleSchema,
+} from "@/lib/validations/vehicle.schemas"
 
 // ==================== VEHICLE BRAND ACTIONS ====================
 
@@ -13,9 +20,12 @@ export async function createVehicleBrand(formData: FormData) {
   try {
     await requirePermission("create_vehicle_brands")
 
+    const parsed = parseFormData(vehicleBrandSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
     const vehicleBrand = await prisma.vehicleBrand.create({
       data: {
-        name: formData.get("name") as string,
+        name: parsed.data.name,
       },
     })
 
@@ -35,12 +45,11 @@ export async function createVehicleModel(formData: FormData) {
   try {
     await requirePermission("create_vehicle_models")
 
-    const brandId = Number(formData.get("brandId"))
-    if (!brandId) {
-      return { success: false, error: "Merek kendaraan wajib dipilih." }
-    }
+    const parsed = parseFormData(vehicleModelSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
 
-    const name = ((formData.get("name") as string) || "").trim()
+    const { name, brandId } = parsed.data
+
     const duplicate = await prisma.vehicleModel.findFirst({
       where: { vehicleBrandId: brandId, name },
     })
@@ -71,17 +80,18 @@ export async function createVehicle(formData: FormData) {
   try {
     await requirePermission("create_vehicles")
 
-    const variantIdRaw = formData.get("variantId")
-    const modelIdRaw = formData.get("modelId")
+    const parsed = parseFormData(vehicleSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
+    const { variantId, modelId, plateNo, year, color, customerId } = parsed.data
 
     let vehicleVariantId: number | null = null
 
     // Prefer explicit variantId from form
-    if (variantIdRaw) {
-      vehicleVariantId = Number(variantIdRaw)
-    } else if (modelIdRaw) {
+    if (variantId) {
+      vehicleVariantId = variantId
+    } else if (modelId) {
       // Fallback: pick first variant of selected model (or create "Standard")
-      const modelId = Number(modelIdRaw)
       const variant = await prisma.vehicleVariant.findFirst({
         where: { vehicleModelId: modelId },
       })
@@ -108,15 +118,14 @@ export async function createVehicle(formData: FormData) {
     const vehicle = await prisma.vehicle.create({
       data: {
         id: reusableVehicleId,
-        plateNumber: formData.get("plateNo") as string,
+        plateNumber: plateNo,
         vehicleVariantId,
-        year: formData.get("year") ? Number(formData.get("year")) : null,
-        color: formData.get("color") as string | null,
+        year: year ?? null,
+        color: color ?? null,
       },
     })
 
     // Link to customer if provided
-    const customerId = formData.get("customerId") ? Number(formData.get("customerId")) : null
     if (customerId) {
       await prisma.customerVehicle.create({
         data: { customerId, vehicleId: vehicle.id },
@@ -173,16 +182,10 @@ export async function createVehicleVariant(formData: FormData) {
   try {
     await requirePermission("edit_vehicle_models")
 
-    const modelId = Number(formData.get("modelId"))
-    if (!modelId) {
-      return { success: false, error: "Model kendaraan tidak valid." }
-    }
-    const name = ((formData.get("name") as string) || "").trim()
-    if (!name) {
-      return { success: false, error: "Nama varian wajib diisi." }
-    }
-    const drivetrain = ((formData.get("drivetrain") as string) || "").trim() || null
-    const transmission = ((formData.get("transmission") as string) || "").trim() || null
+    const parsed = parseFormData(vehicleVariantSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
+    const { name, modelId, drivetrain, transmission } = parsed.data
 
     const duplicate = await prisma.vehicleVariant.findFirst({
       where: { vehicleModelId: modelId, name },
@@ -192,7 +195,12 @@ export async function createVehicleVariant(formData: FormData) {
     }
 
     const variant = await prisma.vehicleVariant.create({
-      data: { vehicleModelId: modelId, name, drivetrain, transmission },
+      data: {
+        vehicleModelId: modelId,
+        name,
+        drivetrain: drivetrain ?? null,
+        transmission: transmission ?? null,
+      },
     })
 
     revalidatePath(`/kendaraan/model/${modelId}/ubah`)
@@ -228,10 +236,13 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
   try {
     await requirePermission("edit_vehicle_brands")
 
+    const parsed = parseFormData(vehicleBrandSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
     await prisma.vehicleBrand.update({
       where: { id },
       data: {
-        name: formData.get("name") as string,
+        name: parsed.data.name,
       },
     })
 
@@ -246,17 +257,14 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
 }
 
 export async function updateVehicleModel(id: number, formData: FormData) {
-  "use server"
-
   try {
     await requirePermission("edit_vehicle_models")
 
-    const brandId = Number(formData.get("brandId"))
-    if (!brandId) {
-      return { success: false, error: "Merek kendaraan wajib dipilih." }
-    }
+    const parsed = parseFormData(vehicleModelSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
 
-    const name = ((formData.get("name") as string) || "").trim()
+    const { name, brandId } = parsed.data
+
     const duplicate = await prisma.vehicleModel.findFirst({
       where: { vehicleBrandId: brandId, name, NOT: { id } },
     })
@@ -281,20 +289,22 @@ export async function updateVehicleModel(id: number, formData: FormData) {
     return { success: false, error: getErrorMessage(e, "Gagal memperbarui model kendaraan") }
   }
 }
+
 export async function updateVehicle(id: number, formData: FormData) {
-  "use server"
   try {
     await requirePermission("edit_vehicles")
 
-    const variantIdRaw = formData.get("variantId")
-    const modelIdRaw = formData.get("modelId")
+    const parsed = parseFormData(vehicleSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
+    const { variantId, modelId, plateNo, year, color } = parsed.data
 
     let vehicleVariantId: number | null = null
-    if (variantIdRaw) {
-      vehicleVariantId = Number(variantIdRaw)
-    } else if (modelIdRaw) {
+    if (variantId) {
+      vehicleVariantId = variantId
+    } else if (modelId) {
       const variant = await prisma.vehicleVariant.findFirst({
-        where: { vehicleModelId: Number(modelIdRaw) },
+        where: { vehicleModelId: modelId },
       })
       if (variant) vehicleVariantId = variant.id
     }
@@ -302,10 +312,10 @@ export async function updateVehicle(id: number, formData: FormData) {
     await prisma.vehicle.update({
       where: { id },
       data: {
-        plateNumber: formData.get("plateNo") as string,
+        plateNumber: plateNo,
         vehicleVariantId,
-        year: formData.get("year") ? Number(formData.get("year")) : null,
-        color: formData.get("color") as string | null,
+        year: year ?? null,
+        color: color ?? null,
       },
     })
 
@@ -318,10 +328,10 @@ export async function updateVehicle(id: number, formData: FormData) {
     return { success: false, error: getErrorMessage(e, "Gagal memperbarui kendaraan") }
   }
 }
+
 // Vehicle delete
 
 export async function deleteVehicle(id: number) {
-  "use server"
   await requirePermission("delete_vehicles")
   await prisma.vehicle.delete({ where: { id } })
   revalidatePath("/kendaraan")
@@ -334,10 +344,26 @@ export async function deleteVehicle(id: number) {
 export async function createCustomerVehicle(formData: FormData) {
   await requirePermission("create_customers")
 
-  const customerId = requireId(formData.get("customerId"), "customerId")
+  const parsed = parseFormData(customerVehicleSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+
+  const {
+    customerId,
+    variantId,
+    vehicleId: formVehicleId,
+    kendaraanId,
+    licensePlate,
+    year,
+    color,
+    vehicleType,
+    transmission,
+    chassisNumber,
+    engineNumber,
+    isActive,
+    notes,
+  } = parsed.data
 
   // Find or create Vehicle from variantId
-  const variantId = safeId(formData.get("variantId"))
   let vehicleId: number
 
   if (variantId) {
@@ -345,29 +371,33 @@ export async function createCustomerVehicle(formData: FormData) {
     const vehicle = await prisma.vehicle.create({
       data: {
         vehicleVariantId: variantId,
-        plateNumber: formData.get("licensePlate") as string | null,
-        year: safeNumber(formData.get("year")),
-        color: formData.get("color") as string | null,
+        plateNumber: licensePlate ?? null,
+        year: year ?? null,
+        color: color ?? null,
       },
     })
     vehicleId = vehicle.id
   } else {
-    vehicleId = requireId(formData.get("vehicleId") ?? formData.get("kendaraanId"), "vehicleId")
+    const rawVehicleId = formVehicleId ?? kendaraanId
+    if (!rawVehicleId) {
+      return { success: false, error: "vehicleId wajib diisi" }
+    }
+    vehicleId = rawVehicleId
   }
 
   const customerVehicle = await prisma.customerVehicle.create({
     data: {
       customerId,
       vehicleId,
-      licensePlate: formData.get("licensePlate") as string | null,
-      year: safeNumber(formData.get("year")),
-      color: formData.get("color") as string | null,
-      vehicleType: formData.get("vehicleType") as string | null,
-      transmission: formData.get("transmission") as string | null,
-      chassisNumber: formData.get("chassisNumber") as string | null,
-      engineNumber: formData.get("engineNumber") as string | null,
-      isActive: formData.get("isActive") === "true" || formData.get("isActive") === "on",
-      notes: formData.get("notes") as string | null,
+      licensePlate: licensePlate ?? null,
+      year: year ?? null,
+      color: color ?? null,
+      vehicleType: vehicleType ?? null,
+      transmission: transmission ?? null,
+      chassisNumber: chassisNumber ?? null,
+      engineNumber: engineNumber ?? null,
+      isActive: isActive ?? true,
+      notes: notes ?? null,
     },
   })
 
@@ -379,10 +409,26 @@ export async function createCustomerVehicle(formData: FormData) {
 export async function updateCustomerVehicle(id: number, formData: FormData) {
   await requirePermission("edit_customers")
 
-  const customerId = requireId(formData.get("customerId"), "customerId")
+  const parsed = parseFormData(customerVehicleSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+
+  const {
+    customerId,
+    variantId,
+    vehicleId: formVehicleId,
+    kendaraanId,
+    licensePlate,
+    year,
+    color,
+    vehicleType,
+    transmission,
+    chassisNumber,
+    engineNumber,
+    isActive,
+    notes,
+  } = parsed.data
 
   // Find or create Vehicle from variantId
-  const variantId = safeId(formData.get("variantId"))
   let vehicleId: number
 
   const existing = await prisma.customerVehicle.findUniqueOrThrow({ where: { id } })
@@ -393,29 +439,33 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
       where: { id: existing.vehicleId },
       data: {
         vehicleVariantId: variantId,
-        plateNumber: formData.get("licensePlate") as string | null,
-        year: safeNumber(formData.get("year")),
-        color: formData.get("color") as string | null,
+        plateNumber: licensePlate ?? null,
+        year: year ?? null,
+        color: color ?? null,
       },
     })
     vehicleId = updatedVehicle.id
   } else {
-    vehicleId = requireId(formData.get("vehicleId") ?? formData.get("kendaraanId"), "vehicleId")
+    const rawVehicleId = formVehicleId ?? kendaraanId
+    if (!rawVehicleId) {
+      return { success: false, error: "vehicleId wajib diisi" }
+    }
+    vehicleId = rawVehicleId
   }
 
   await prisma.customerVehicle.update({
     where: { id },
     data: {
       vehicleId,
-      licensePlate: formData.get("licensePlate") as string | null,
-      year: safeNumber(formData.get("year")),
-      color: formData.get("color") as string | null,
-      vehicleType: formData.get("vehicleType") as string | null,
-      transmission: formData.get("transmission") as string | null,
-      chassisNumber: formData.get("chassisNumber") as string | null,
-      engineNumber: formData.get("engineNumber") as string | null,
-      isActive: formData.get("isActive") === "true" || formData.get("isActive") === "on",
-      notes: formData.get("notes") as string | null,
+      licensePlate: licensePlate ?? null,
+      year: year ?? null,
+      color: color ?? null,
+      vehicleType: vehicleType ?? null,
+      transmission: transmission ?? null,
+      chassisNumber: chassisNumber ?? null,
+      engineNumber: engineNumber ?? null,
+      isActive: isActive ?? true,
+      notes: notes ?? null,
     },
   })
 

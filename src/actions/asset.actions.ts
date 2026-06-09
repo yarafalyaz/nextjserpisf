@@ -5,9 +5,16 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { requireId, safeId, safeNumber } from "@/lib/utils/safe-parse"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import {
+  assetCategorySchema,
+  assetBrandSchema,
+  assetTransferSchema,
+  assetSchema,
+  assetDisposalSchema,
+} from "@/lib/validations/asset.schemas"
 
 // ==================== ASSET CATEGORY ACTIONS ====================
 
@@ -15,12 +22,16 @@ export async function createAssetCategory(formData: FormData) {
   try {
   await requirePermission("create_asset_categories")
 
+  const parsed = parseFormData(assetCategorySchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   const category = await prisma.assetCategory.create({
     data: {
-      name: formData.get("name") as string,
-      code: formData.get("code") as string | null,
-      depreciationRate: safeNumber(formData.get("depreciationRate")),
-      usefulLife: safeNumber(formData.get("usefulLife")),
+      name: data.name,
+      code: data.code ?? null,
+      depreciationRate: data.depreciationRate ?? null,
+      usefulLife: data.usefulLife ?? null,
     },
   })
 
@@ -41,9 +52,13 @@ export async function createAssetBrand(formData: FormData) {
   try {
   await requirePermission("create_asset_brands")
 
+  const parsed = parseFormData(assetBrandSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   const brand = await prisma.assetBrand.create({
     data: {
-      name: formData.get("name") as string,
+      name: data.name,
     },
   })
 
@@ -64,26 +79,27 @@ export async function createAssetTransfer(formData: FormData) {
   try {
   const user = await requirePermission("create_asset_transfers")
 
-  const assetId = requireId(formData.get("assetId"), "assetId")
-  const toLocation = formData.get("toLocation") as string
+  const parsed = parseFormData(assetTransferSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
 
   const transfer = await prisma.assetTransfer.create({
     data: {
-      assetId,
-      fromLocation: formData.get("fromLocation") as string | null,
-      toLocation,
-      fromEmployeeId: safeId(formData.get("fromEmployeeId")),
-      toEmployeeId: safeId(formData.get("toEmployeeId")),
-      transferDate: new Date(formData.get("transferDate") as string),
-      notes: formData.get("notes") as string | null,
+      assetId: data.assetId,
+      fromLocation: data.fromLocation ?? null,
+      toLocation: data.toLocation,
+      fromEmployeeId: data.fromEmployeeId ?? null,
+      toEmployeeId: data.toEmployeeId ?? null,
+      transferDate: new Date(data.transferDate),
+      notes: data.notes ?? null,
       createdBy: Number(user.id),
     },
   })
 
   // Update asset location
   await prisma.asset.update({
-    where: { id: assetId },
-    data: { location: toLocation },
+    where: { id: data.assetId },
+    data: { location: data.toLocation },
   })
 
   await logActivity("create", "AssetTransfer", transfer.id, "Membuat transfer aset")
@@ -200,10 +216,14 @@ export async function updateAssetBrand(id: number, formData: FormData) {
 
   await requirePermission("create_asset_brands")
 
+  const parsed = parseFormData(assetBrandSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   await prisma.assetBrand.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
+      name: data.name,
     },
   })
 
@@ -225,13 +245,17 @@ export async function updateAssetCategory(id: number, formData: FormData) {
 
   await requirePermission("create_asset_categories")
 
+  const parsed = parseFormData(assetCategorySchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   await prisma.assetCategory.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
-      code: formData.get("code") as string | null,
-      depreciationRate: safeNumber(formData.get("depreciationRate")),
-      usefulLife: safeNumber(formData.get("usefulLife")),
+      name: data.name,
+      code: data.code ?? null,
+      depreciationRate: data.depreciationRate ?? null,
+      usefulLife: data.usefulLife ?? null,
     },
   })
 
@@ -253,8 +277,9 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
 
   const user = await requirePermission("create_asset_transfers")
 
-  const assetId = requireId(formData.get("assetId"), "assetId")
-  const toLocation = formData.get("toLocation") as string
+  const parsed = parseFormData(assetTransferSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
 
   // Fix #38: Get old transfer to revert asset location if asset changed
   const oldTransfer = await prisma.assetTransfer.findUniqueOrThrow({
@@ -263,7 +288,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
 
   const transfer = await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
     // If asset changed, revert old asset location first
-    if (oldTransfer.assetId !== assetId && oldTransfer.fromLocation) {
+    if (oldTransfer.assetId !== data.assetId && oldTransfer.fromLocation) {
       await tx.asset.update({
         where: { id: oldTransfer.assetId },
         data: { location: oldTransfer.fromLocation },
@@ -273,21 +298,21 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
     const updated = await tx.assetTransfer.update({
       where: { id },
       data: {
-        assetId,
-        fromLocation: formData.get("fromLocation") as string | null,
-        toLocation,
-        fromEmployeeId: safeId(formData.get("fromEmployeeId")),
-        toEmployeeId: safeId(formData.get("toEmployeeId")),
-        transferDate: new Date(formData.get("transferDate") as string),
-        notes: formData.get("notes") as string | null,
+        assetId: data.assetId,
+        fromLocation: data.fromLocation ?? null,
+        toLocation: data.toLocation,
+        fromEmployeeId: data.fromEmployeeId ?? null,
+        toEmployeeId: data.toEmployeeId ?? null,
+        transferDate: new Date(data.transferDate),
+        notes: data.notes ?? null,
         createdBy: Number(user.id),
       },
     })
 
     // Update asset location to new destination
     await tx.asset.update({
-      where: { id: assetId },
-      data: { location: toLocation },
+      where: { id: data.assetId },
+      data: { location: data.toLocation },
     })
 
     return updated
@@ -309,27 +334,30 @@ export async function createAsset(formData: FormData) {
   try {
   await requirePermission("create_assets")
 
-  let code = (formData.get("code") as string) || ""
+  const parsed = parseFormData(assetSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
+  let code = data.code || ""
   if (!code) {
     code = await generateDocumentNumber("AST", "simple")
   }
 
-  const purchaseCost = safeNumber(formData.get("purchasePrice")) ?? 0
+  const purchaseCost = data.purchasePrice ?? 0
   const asset = await prisma.asset.create({
     data: {
-      name: formData.get("name") as string,
+      name: data.name,
       code: code,
-      categoryId: safeId(formData.get("categoryId")),
-      
-      purchaseDate: formData.get("purchaseDate") ? new Date(formData.get("purchaseDate") as string) : null,
+      categoryId: data.categoryId ?? null,
+      purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
       purchaseCost,
       // Book value starts at acquisition cost so depreciation can run.
       currentValue: purchaseCost,
-      residualValue: safeNumber(formData.get("residualValue")) ?? 0,
-      depreciationMethod: (formData.get("depreciationMethod") as string) || "straight_line",
-      location: (formData.get("location") as string) || null,
-      status: formData.get("status") as string || "active",
-      notes: (formData.get("description") as string) || null,
+      residualValue: data.residualValue ?? 0,
+      depreciationMethod: data.depreciationMethod || "straight_line",
+      location: data.location || null,
+      status: data.status || "active",
+      notes: data.description || null,
     },
   })
 
@@ -349,19 +377,23 @@ export async function updateAsset(id: number, formData: FormData) {
   try {
     await requirePermission("edit_assets")
 
-    const purchaseCost = safeNumber(formData.get("purchasePrice")) ?? 0
+    const parsed = parseFormData(assetSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const { data } = parsed
+
+    const purchaseCost = data.purchasePrice ?? 0
     await prisma.asset.update({
       where: { id },
       data: {
-        name: formData.get("name") as string,
-        categoryId: safeId(formData.get("categoryId")),
-        purchaseDate: formData.get("purchaseDate") ? new Date(formData.get("purchaseDate") as string) : null,
+        name: data.name,
+        categoryId: data.categoryId ?? null,
+        purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
         purchaseCost,
-        residualValue: safeNumber(formData.get("residualValue")) ?? 0,
-        depreciationMethod: (formData.get("depreciationMethod") as string) || "straight_line",
-        location: (formData.get("location") as string) || null,
-        status: (formData.get("status") as string) || "active",
-        notes: (formData.get("description") as string) || null,
+        residualValue: data.residualValue ?? 0,
+        depreciationMethod: data.depreciationMethod || "straight_line",
+        location: data.location || null,
+        status: data.status || "active",
+        notes: data.description || null,
       },
     })
 
@@ -386,14 +418,17 @@ export async function disposeAsset(formData: FormData) {
   try {
   await requirePermission("manage_assets")
 
-  const assetId = requireId(formData.get("assetId"), "assetId")
-  const proceeds = safeNumber(formData.get("proceeds")) ?? 0
-  const disposalDate = formData.get("disposalDate")
-    ? new Date(formData.get("disposalDate") as string)
-    : new Date()
-  const reason = (formData.get("reason") as string) || null
+  const parsed = parseFormData(assetDisposalSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
 
-  const asset = await prisma.asset.findUniqueOrThrow({ where: { id: assetId } })
+  const proceeds = data.proceeds ?? 0
+  const disposalDate = data.disposalDate
+    ? new Date(data.disposalDate)
+    : new Date()
+  const reason = data.reason || null
+
+  const asset = await prisma.asset.findUniqueOrThrow({ where: { id: data.assetId } })
   if (asset.status === "disposed") {
     throw new Error("Aset sudah dilepas (disposed)")
   }
@@ -403,12 +438,12 @@ export async function disposeAsset(formData: FormData) {
 
   await prisma.$transaction(async (tx) => {
     await tx.asset.update({
-      where: { id: assetId },
+      where: { id: data.assetId },
       data: { status: "disposed", currentValue: 0 },
     })
     await tx.assetHistory.create({
       data: {
-        assetId,
+        assetId: data.assetId,
         type: "disposal",
         description:
           `Pelepasan aset ${asset.code}. Nilai buku: ${bookValue.toLocaleString("id-ID")}, ` +
@@ -421,9 +456,9 @@ export async function disposeAsset(formData: FormData) {
     })
   })
 
-  await logActivity("dispose", "Asset", assetId, `Melepas aset ${asset.code} (${gainLoss >= 0 ? "laba" : "rugi"} ${Math.abs(gainLoss)})`)
+  await logActivity("dispose", "Asset", data.assetId, `Melepas aset ${asset.code} (${gainLoss >= 0 ? "laba" : "rugi"} ${Math.abs(gainLoss)})`)
   revalidatePath("/aset")
-  revalidatePath(`/aset/${assetId}`)
+  revalidatePath(`/aset/${data.assetId}`)
   return { success: true, gainLoss }
 
   } catch (e: unknown) {

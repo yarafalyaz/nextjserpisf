@@ -11,6 +11,8 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, safeJsonParse } from "@/lib/utils/safe-parse"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { stockAdjustmentSchema, inventoryTransferSchema, materialIssueSchema } from "@/lib/validations/inventory.schemas"
 
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
 
@@ -18,20 +20,24 @@ export async function createStockAdjustment(formData: FormData) {
   try {
   const user = await requirePermission("create_stock_adjustments")
 
+  const parsed = parseFormData(stockAdjustmentSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("ADJ")
 
   const adjItems = (safeJsonParse<{ itemId: number; currentQty: number; newQty: number; unitCost: number; reason?: string }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0)
 
   const adjustment = await prisma.stockAdjustment.create({
     data: {
       documentNo,
-      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-      date: new Date(formData.get("date") as string),
-      reason: formData.get("reason") as string | null,
-      type: formData.get("type") as string || "increase",
-      notes: formData.get("notes") as string | null,
+      warehouseId: v.warehouseId,
+      date: new Date(v.date),
+      reason: v.reason ?? null,
+      type: v.type || "increase",
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
       items: {
@@ -107,19 +113,23 @@ export async function createInventoryTransfer(formData: FormData) {
   try {
   const user = await requirePermission("create_inventory_transfers")
 
+  const parsed = parseFormData(inventoryTransferSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("TRF")
 
   const transferItems = (safeJsonParse<{ itemId: number; qty: number }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
   const transfer = await prisma.inventoryTransfer.create({
     data: {
       documentNo,
-      sourceWarehouseId: requireId(formData.get("sourceWarehouseId"), "sourceWarehouseId"),
-      destinationWarehouseId: requireId(formData.get("destinationWarehouseId"), "destinationWarehouseId"),
-      date: new Date(formData.get("date") as string),
-      notes: formData.get("notes") as string | null,
+      sourceWarehouseId: v.sourceWarehouseId,
+      destinationWarehouseId: v.destinationWarehouseId,
+      date: new Date(v.date),
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
       items: {
@@ -212,10 +222,14 @@ export async function createMaterialIssue(formData: FormData) {
   try {
   const user = await requirePermission("create_material_issues")
 
+  const parsed = parseFormData(materialIssueSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("MI")
 
   const miItems = (safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
   if (miItems.length === 0) {
@@ -225,11 +239,11 @@ export async function createMaterialIssue(formData: FormData) {
   const issue = await prisma.materialIssue.create({
     data: {
       documentNo,
-      warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-      projectId: safeId(formData.get("projectId")),
-      workOrderId: safeId(formData.get("workOrderId")),
-      date: new Date(formData.get("date") as string),
-      notes: formData.get("notes") as string | null,
+      warehouseId: v.warehouseId,
+      projectId: v.projectId ?? null,
+      workOrderId: v.workOrderId ?? null,
+      date: new Date(v.date),
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
       items: {
