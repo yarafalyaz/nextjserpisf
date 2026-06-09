@@ -30,6 +30,13 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("tipe")
   const parentCode = searchParams.get("kodeInduk")
 
+  // Region codes are always numeric (BPS codes). Reject anything else so a
+  // user-supplied kodeInduk can never influence the CSV file path (the village
+  // lookup derives a filename from it). Defense-in-depth against path traversal.
+  if (parentCode !== null && !/^\d+$/.test(parentCode)) {
+    return NextResponse.json({ error: "Kode induk tidak valid" }, { status: 400 })
+  }
+
   try {
     if (type === "provinces") {
       const rows = await loadCSV(join(DATA_DIR, "provinces.csv"))
