@@ -123,6 +123,14 @@ export async function sendQuotation(quotationId: number) {
     throw new Error("Quotation hanya bisa dikirim dari status draft")
   }
 
+  // Guard: quotation must have at least one item
+  const itemCount = await prisma.quotationItem.count({
+    where: { section: { quotationId } },
+  })
+  if (itemCount === 0) {
+    throw new Error("Quotation harus memiliki minimal 1 item sebelum dikirim")
+  }
+
   await prisma.quotation.update({
     where: { id: quotationId },
     data: { status: "sent" },
