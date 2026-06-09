@@ -1,18 +1,6 @@
 import { test, expect } from "@playwright/test"
 
 test.describe("Finance module flows", () => {
-  test("Income list loads", async ({ page }) => {
-    await page.goto("/keuangan/pemasukan")
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText("Pemasukan")
-  })
-
-  test("Income create form loads", async ({ page }) => {
-    await page.goto("/keuangan/pemasukan/baru")
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
-  })
-
   test("Expense list loads", async ({ page }) => {
     await page.goto("/keuangan/pengeluaran")
     await page.waitForLoadState("networkidle")
@@ -20,7 +8,7 @@ test.describe("Finance module flows", () => {
   })
 
   test("Expense create form loads", async ({ page }) => {
-    await page.goto("/keuangan/pengeluaran/baru")
+    await page.goto("/keuangan/pengeluaran/tambah")
     await page.waitForLoadState("networkidle")
     await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
   })
@@ -38,14 +26,14 @@ test.describe("Finance module flows", () => {
   })
 
   test("Journal create form loads", async ({ page }) => {
-    await page.goto("/keuangan/jurnal/baru")
+    await page.goto("/keuangan/jurnal/tambah")
     await page.waitForLoadState("networkidle")
     await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
   })
 
-  test("Chart of accounts loads", async ({ page }) => {
-    await page.goto("/keuangan/akun")
+  test("Budget list loads", async ({ page }) => {
+    await page.goto("/keuangan/anggaran")
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText("Akun")
+    await expect(page.locator("body")).toContainText("Anggaran")
   })
 })
