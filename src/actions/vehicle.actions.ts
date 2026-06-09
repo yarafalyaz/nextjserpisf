@@ -332,16 +332,23 @@ export async function updateVehicle(id: number, formData: FormData) {
 // Vehicle delete
 
 export async function deleteVehicle(id: number) {
-  await requirePermission("delete_vehicles")
-  await prisma.vehicle.delete({ where: { id } })
-  revalidatePath("/kendaraan")
-  await logActivity("delete", "Vehicle", id, "Menghapus kendaraan")
-  return { success: true }
+  try {
+    await requirePermission("delete_vehicles")
+    await prisma.vehicle.delete({ where: { id } })
+    revalidatePath("/kendaraan")
+    await logActivity("delete", "Vehicle", id, "Menghapus kendaraan")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteVehicle]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Gagal menghapus kendaraan") }
+  }
 }
 
 // ==================== CUSTOMER VEHICLE ACTIONS ====================
 
 export async function createCustomerVehicle(formData: FormData) {
+  try {
   await requirePermission("create_customers")
 
   const parsed = parseFormData(customerVehicleSchema, formData)
@@ -404,9 +411,15 @@ export async function createCustomerVehicle(formData: FormData) {
   revalidatePath(`/master/pelanggan/${customerId}/kendaraan`)
   await logActivity("create", "CustomerVehicle", customerVehicle.id, "Membuat kendaraan pelanggan")
   return { success: true, id: customerVehicle.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createCustomerVehicle]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Gagal membuat kendaraan pelanggan") }
+  }
 }
 
 export async function updateCustomerVehicle(id: number, formData: FormData) {
+  try {
   await requirePermission("edit_customers")
 
   const parsed = parseFormData(customerVehicleSchema, formData)
@@ -472,20 +485,31 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
   revalidatePath(`/master/pelanggan/${customerId}/kendaraan`)
   await logActivity("update", "CustomerVehicle", id, "Memperbarui kendaraan pelanggan")
   return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateCustomerVehicle]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Gagal memperbarui kendaraan pelanggan") }
+  }
 }
 
 export async function deleteCustomerVehicle(id: number) {
-  await requirePermission("delete_customers")
+  try {
+    await requirePermission("delete_customers")
 
-  const vehicle = await prisma.customerVehicle.findUniqueOrThrow({
-    where: { id },
-  })
+    const vehicle = await prisma.customerVehicle.findUniqueOrThrow({
+      where: { id },
+    })
 
-  await prisma.customerVehicle.delete({
-    where: { id },
-  })
+    await prisma.customerVehicle.delete({
+      where: { id },
+    })
 
-  revalidatePath(`/master/pelanggan/${vehicle.customerId}/kendaraan`)
-  await logActivity("delete", "CustomerVehicle", id, "Menghapus kendaraan pelanggan")
-  return { success: true }
+    revalidatePath(`/master/pelanggan/${vehicle.customerId}/kendaraan`)
+    await logActivity("delete", "CustomerVehicle", id, "Menghapus kendaraan pelanggan")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteCustomerVehicle]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Gagal menghapus kendaraan pelanggan") }
+  }
 }
