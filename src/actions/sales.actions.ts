@@ -387,9 +387,24 @@ export async function createDownPayment(formData: FormData) {
   }
 
   const quotationId = requireId(formData.get("quotationId"), "quotationId")
+  const amount = requireNumber(formData.get("amount"), "amount")
+  if (amount <= 0) {
+    throw new Error("Jumlah uang muka harus lebih dari 0")
+  }
+
   const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
   if (!["accepted", "converted"].includes(quotation.status)) {
     throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
+  }
+
+  // Cumulative cap: sum existing non-cancelled DPs must not exceed grandTotal
+  const existingDPs = await prisma.downPayment.aggregate({
+    where: { quotationId, status: { not: "cancelled" } },
+    _sum: { amount: true },
+  })
+  const totalExisting = Number(existingDPs._sum.amount ?? 0)
+  if (totalExisting + amount > Number(quotation.grandTotal)) {
+    throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalExisting})`)
   }
 
   const dp = await prisma.downPayment.create({
@@ -397,7 +412,7 @@ export async function createDownPayment(formData: FormData) {
       documentNo,
       quotationId,
       customerId: quotation.customerId,
-      amount: requireNumber(formData.get("amount"), "amount"),
+      amount,
       paymentDate: new Date(formData.get("paymentDate") as string),
       paymentMethod: formData.get("paymentMethod") as string | null,
       proofImage,
@@ -630,17 +645,24 @@ export async function createSalesPayment(formData: FormData) {
   const documentNo = await generateDocumentNumber("PAY")
   const salesInvoiceId = requireId(formData.get("salesInvoiceId"), "salesInvoiceId")
   const amount = requireNumber(formData.get("amount"), "amount")
-  const invoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } })
-  if (!["posted", "partial"].includes(invoice.status)) {
-    throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
-  }
-  const remaining = Number(invoice.grandTotal) - Number(invoice.paidAmount)
-  if (amount > remaining) {
-    throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
+  if (amount <= 0) {
+    throw new Error("Jumlah pembayaran harus lebih dari 0")
   }
 
-  // Atomic: create payment + recalc invoice state in one transaction.
+  // Atomic: lock invoice, validate remaining, create payment + recalc in one transaction.
   const payment = await prisma.$transaction(async (tx) => {
+    // Lock invoice row to prevent concurrent overpay
+    await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${salesInvoiceId} FOR UPDATE`
+
+    const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } })
+    if (!["posted", "partial"].includes(invoice.status)) {
+      throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
+    }
+    const remaining = Number(invoice.grandTotal) - Number(invoice.paidAmount)
+    if (amount > remaining) {
+      throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
+    }
+
     const created = await tx.salesPayment.create({
       data: {
         documentNo,
