@@ -30,7 +30,7 @@ const columns = [
     ),
   }),
   columnHelper.accessor("date", {
-    header: "Tgl. Order",
+    header: "Tgl. Pesanan",
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.display({
@@ -74,7 +74,7 @@ export function PurchaseOrderTable({ data, toolbar, filters }: PurchaseOrderTabl
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar purchase order"
+      ariaLabel="Daftar pesanan pembelian"
       pageSize={20}
       selectable={true}
       toolbar={toolbar}

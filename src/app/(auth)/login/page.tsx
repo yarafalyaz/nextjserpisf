@@ -124,7 +124,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="login-footer">
-          <p>© 2026 YaraERP. All rights reserved.</p>
+          <p>© 2026 YaraERP. Hak cipta dilindungi.</p>
         </div>
       </div>
     </div>
