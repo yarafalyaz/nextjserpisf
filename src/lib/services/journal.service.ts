@@ -20,8 +20,10 @@ interface CreateJournalInput {
   entries: JournalEntryInput[]
 }
 
+type PrismaLike = PrismaClient | Prisma.TransactionClient
+
 export class JournalService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaLike) {}
 
   /**
    * Create a journal with double-entry validation.

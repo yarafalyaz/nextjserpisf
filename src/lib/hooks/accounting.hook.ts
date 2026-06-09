@@ -20,7 +20,7 @@ async function getSystemSettings() {
 }
 
 async function generateJournalNumber(
-  tx: TxClient,
+  _tx: TxClient,
   prefix: string,
   referenceId: number
 ): Promise<string> {

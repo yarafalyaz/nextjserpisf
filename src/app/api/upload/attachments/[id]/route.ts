@@ -5,7 +5,7 @@ import { unlink } from "fs/promises"
 import path from "path"
 
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()

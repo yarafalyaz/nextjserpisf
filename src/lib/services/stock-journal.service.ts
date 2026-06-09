@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { JournalService } from '@/lib/services/journal.service'
 import { generateDocumentNumber } from '@/lib/utils/document-number'
 import { getSystemSettings } from '@/lib/utils/settings'
@@ -77,7 +76,7 @@ export const stockJournalService = {
     if (totalValue <= 0) return null
 
     const journalNumber = await generateDocumentNumber('JRN')
-    const journalSvc = new JournalService(tx as any)
+    const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: new Date(),
@@ -132,7 +131,7 @@ export const stockJournalService = {
     if (Math.abs(netValue) <= 0) return null
 
     const journalNumber = await generateDocumentNumber('JRN')
-    const journalSvc = new JournalService(tx as any)
+    const journalSvc = new JournalService(tx)
 
     const isIncrease = netValue > 0
     const absValue = Math.abs(netValue)
@@ -183,7 +182,7 @@ export const stockJournalService = {
     if (totalValue <= 0) return null
 
     const journalNumber = await generateDocumentNumber('JRN')
-    const journalSvc = new JournalService(tx as any)
+    const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: new Date(),
@@ -229,7 +228,7 @@ export const stockJournalService = {
     if (totalValue <= 0) return null
 
     const journalNumber = await generateDocumentNumber('JRN')
-    const journalSvc = new JournalService(tx as any)
+    const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: new Date(),
@@ -275,7 +274,7 @@ export const stockJournalService = {
     if (totalValue <= 0) return null
 
     const journalNumber = await generateDocumentNumber('JRN')
-    const journalSvc = new JournalService(tx as any)
+    const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: new Date(),
@@ -321,7 +320,7 @@ export const stockJournalService = {
     if (totalValue <= 0) return null
 
     const journalNumber = await generateDocumentNumber('JRN')
-    const journalSvc = new JournalService(tx as any)
+    const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: new Date(),

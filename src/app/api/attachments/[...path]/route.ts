@@ -18,7 +18,7 @@ const MIME_MAP: Record<string, string> = {
  * are only served to authenticated users.
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const session = await auth()

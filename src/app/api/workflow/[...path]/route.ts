@@ -16,7 +16,7 @@ const MODULE_MAP: Record<string, { model: string; revalidate: string; permission
 }
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   // Auth check — reject unauthenticated requests
