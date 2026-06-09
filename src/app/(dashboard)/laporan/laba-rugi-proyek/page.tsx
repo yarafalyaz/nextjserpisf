@@ -27,41 +27,33 @@ export default async function ProjectPnLPage({
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
   endDate.setHours(23, 59, 59, 999)
 
-  // Get projects with related revenue & cost data
-  const projects = await prisma.project.findMany({
-    where: {
-      createdAt: { gte: startDate, lte: endDate },
-    },
-    include: {
-      customer: { select: { name: true } },
-      customerVehicle: { select: { licensePlate: true } },
-      items: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  })
-
-  const projectIds = projects.map(p => p.id)
-
-  // Parallel fetch revenue, COGS, and expenses for all projects
+  // Period-activity P&L: financials are filtered by their own transaction date
+  // within the period, and we show every project that has activity in that
+  // window. Previously projects were filtered by createdAt while their revenue/
+  // cost were NOT date-filtered, so a Q1 project with Q2 invoices vanished from a
+  // Q2 report and a Q2 project wrongly absorbed future-quarter invoices.
   const [invoices, materialIssues, expenses] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: {
-        projectId: { in: projectIds },
+        projectId: { not: null },
         status: { in: ['posted', 'partial', 'paid'] },
+        date: { gte: startDate, lte: endDate },
       },
       select: { projectId: true, subtotal: true },
     }),
     prisma.materialIssue.findMany({
       where: {
-        projectId: { in: projectIds },
+        projectId: { not: null },
         status: 'completed',
+        date: { gte: startDate, lte: endDate },
       },
       include: { items: true },
     }),
     prisma.expense.findMany({
       where: {
-        projectId: { in: projectIds },
+        projectId: { not: null },
         status: 'approved',
+        date: { gte: startDate, lte: endDate },
       },
       select: { projectId: true, amount: true },
     }),
@@ -89,6 +81,26 @@ export default async function ProjectPnLPage({
       expenseByProject.set(exp.projectId, (expenseByProject.get(exp.projectId) || 0) + Number(exp.amount))
     }
   }
+
+  // Only projects with activity in the period appear in the report.
+  const activeProjectIds = [
+    ...new Set<number>([
+      ...revenueByProject.keys(),
+      ...cogsByProject.keys(),
+      ...expenseByProject.keys(),
+    ]),
+  ]
+
+  const projects = activeProjectIds.length
+    ? await prisma.project.findMany({
+        where: { id: { in: activeProjectIds } },
+        include: {
+          customer: { select: { name: true } },
+          customerVehicle: { select: { licensePlate: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    : []
 
   const rows = projects.map(project => {
     const revenue = revenueByProject.get(project.id) || 0
