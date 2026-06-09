@@ -1,4 +1,4 @@
-import { getErrorMessage } from "@/lib/utils/error"
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { auth } from "@/lib/auth/auth"
 
 /**
@@ -11,6 +11,8 @@ export function action<T extends (...args: unknown[]) => Promise<unknown>>(fn: T
     try {
       return await fn(...args)
     } catch (e: unknown) {
+      // Let Next.js redirect/notFound control-flow errors propagate.
+      if (isNextRedirectError(e)) throw e
       console.error("[Action Error]", fn.name || "unknown", getErrorMessage(e) || e)
       return { success: false, error: getErrorMessage(e, "Terjadi kesalahan server") }
     }
@@ -31,6 +33,8 @@ export function action<T extends (...args: unknown[]) => Promise<unknown>>(fn: T
         }
         return await fn(...args)
       } catch (e: unknown) {
+        // Let Next.js redirect/notFound control-flow errors propagate.
+        if (isNextRedirectError(e)) throw e
         console.error("[Action Error]", fn.name || "unknown", getErrorMessage(e) || e)
         return { success: false, error: getErrorMessage(e, "Terjadi kesalahan server") }
       }
