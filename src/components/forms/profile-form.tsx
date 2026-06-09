@@ -19,7 +19,8 @@ interface ProfileFormProps {
 export function ProfileForm({ user, roles }: ProfileFormProps) {
   const router = useRouter()
   const { update } = useSession()
-  const [isPending, startTransition] = useTransition()
+  const [isProfilePending, startProfileTransition] = useTransition()
+  const [isPasswordPending, startPasswordTransition] = useTransition()
   const [avatarUrl, setAvatarUrl] = useState(user.avatar)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -53,7 +54,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
 
   function onSubmitProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    startTransition(async () => {
+    startProfileTransition(async () => {
       const formData = new FormData(e.currentTarget)
       const result = await updateProfile(formData)
       if (result.error) {
@@ -70,7 +71,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
 
   function onSubmitPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    startTransition(async () => {
+    startPasswordTransition(async () => {
       const formData = new FormData(e.currentTarget)
       const result = await changePassword(formData)
       if (result.error) {
@@ -140,8 +141,8 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button type="submit" isDisabled={isPending}>
-            {isPending ? "Menyimpan..." : "Simpan Perubahan"}
+          <Button type="submit" isDisabled={isProfilePending}>
+            {isProfilePending ? "Menyimpan..." : "Simpan Perubahan"}
           </Button>
         </div>
       </form>
@@ -161,8 +162,8 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-          <Button type="submit" isDisabled={isPending}>
-            {isPending ? "Mengubah..." : "Ubah Password"}
+          <Button type="submit" isDisabled={isPasswordPending}>
+            {isPasswordPending ? "Mengubah..." : "Ubah Password"}
           </Button>
         </div>
       </form>
