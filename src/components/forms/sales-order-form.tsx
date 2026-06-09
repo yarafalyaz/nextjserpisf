@@ -31,8 +31,7 @@ interface SalesOrderFormProps {
   defaultCustomerId?: number
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function SalesOrderForm({ customers, order, quotationId, defaultCustomerId }: SalesOrderFormProps) {
+export function SalesOrderForm({ customers, order, quotationId: _quotationId, defaultCustomerId: _defaultCustomerId }: SalesOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 

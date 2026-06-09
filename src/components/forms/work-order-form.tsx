@@ -10,8 +10,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/page-header"
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function WorkOrderForm({ customers, items, workOrder, quotationId, defaultCustomerId }: { customers: { id: number; name: string }[]; items: { id: number; sku: string; name: string; cost: string }[]; workOrder?: { id: number; customerId: number; quotationId?: number | null; projectId?: number | null; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number }> }; quotationId?: number; defaultCustomerId?: number }) {
+export function WorkOrderForm({ customers, items, workOrder, quotationId: _quotationId, defaultCustomerId: _defaultCustomerId }: { customers: { id: number; name: string }[]; items: { id: number; sku: string; name: string; cost: string }[]; workOrder?: { id: number; customerId: number; quotationId?: number | null; projectId?: number | null; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number }> }; quotationId?: number; defaultCustomerId?: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])

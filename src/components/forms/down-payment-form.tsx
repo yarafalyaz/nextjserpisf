@@ -35,8 +35,7 @@ interface DownPaymentFormProps {
   paymentMethods?: { code: string; name: string }[]
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function DownPaymentForm({ customers, quotations, downPayment, defaultQuotationId, defaultCustomerId, paymentMethods = [] }: DownPaymentFormProps) {
+export function DownPaymentForm({ customers, quotations, downPayment, defaultQuotationId: _defaultQuotationId, defaultCustomerId: _defaultCustomerId, paymentMethods = [] }: DownPaymentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [proofFile, setProofFile] = useState<File | null>(null)
