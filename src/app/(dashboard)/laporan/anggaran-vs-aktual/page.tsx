@@ -41,39 +41,37 @@ export default async function BudgetVsActualPage({
     orderBy: { name: 'asc' },
   })
 
-  // Get account and cost center info
+  // Get account and cost center info + actual journal entries in parallel
   const accountIds = [...new Set(budgets.map((b) => b.accountId))]
   const costCenterIds = [...new Set(budgets.filter((b) => b.costCenterId).map((b) => b.costCenterId!))]
 
-  const accounts = await prisma.account.findMany({
-    where: { id: { in: accountIds } },
-    select: { id: true, code: true, name: true },
-  })
-
-  const costCenters = costCenterIds.length > 0
-    ? await prisma.costCenter.findMany({
-        where: { id: { in: costCenterIds } },
-        select: { id: true, code: true, name: true },
-      })
-    : []
-
-  // Get actual expenses from journal entries for these accounts in the period
-  const journalEntries = await prisma.journalEntry.findMany({
-    where: {
-      accountId: { in: accountIds },
-      journal: {
-        status: { in: ['POSTED', 'REVERSED'] },
-        transactionDate: { gte: startDate, lte: endDate },
+  const [accounts, costCenters, journalEntries] = await Promise.all([
+    prisma.account.findMany({
+      where: { id: { in: accountIds } },
+      select: { id: true, code: true, name: true },
+    }),
+    costCenterIds.length > 0
+      ? prisma.costCenter.findMany({
+          where: { id: { in: costCenterIds } },
+          select: { id: true, code: true, name: true },
+        })
+      : Promise.resolve([]),
+    prisma.journalEntry.findMany({
+      where: {
+        accountId: { in: accountIds },
+        journal: {
+          status: { in: ['POSTED', 'REVERSED'] },
+          transactionDate: { gte: startDate, lte: endDate },
+        },
       },
-      ...(costCenterIds.length > 0 ? {} : {}),
-    },
-    select: {
-      accountId: true,
-      costCenterId: true,
-      debit: true,
-      credit: true,
-    },
-  })
+      select: {
+        accountId: true,
+        costCenterId: true,
+        debit: true,
+        credit: true,
+      },
+    }),
+  ])
 
   // Aggregate actuals by account + costCenter
   const actualMap = new Map<string, number>()

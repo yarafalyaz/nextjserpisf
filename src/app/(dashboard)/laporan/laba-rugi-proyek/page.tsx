@@ -40,32 +40,32 @@ export default async function ProjectPnLPage({
     orderBy: { createdAt: 'desc' },
   })
 
-  // Get invoices linked to projects (revenue)
-  const invoices = await prisma.salesInvoice.findMany({
-    where: {
-      projectId: { in: projects.map(p => p.id) },
-      status: { in: ['posted', 'partial', 'paid'] },
-    },
-    select: { projectId: true, subtotal: true },
-  })
+  const projectIds = projects.map(p => p.id)
 
-  // Get material issues linked to projects (COGS)
-  const materialIssues = await prisma.materialIssue.findMany({
-    where: {
-      projectId: { in: projects.map(p => p.id) },
-      status: 'completed',
-    },
-    include: { items: true },
-  })
-
-  // Get expenses linked to projects
-  const expenses = await prisma.expense.findMany({
-    where: {
-      projectId: { in: projects.map(p => p.id) },
-      status: 'approved',
-    },
-    select: { projectId: true, amount: true },
-  })
+  // Parallel fetch revenue, COGS, and expenses for all projects
+  const [invoices, materialIssues, expenses] = await Promise.all([
+    prisma.salesInvoice.findMany({
+      where: {
+        projectId: { in: projectIds },
+        status: { in: ['posted', 'partial', 'paid'] },
+      },
+      select: { projectId: true, subtotal: true },
+    }),
+    prisma.materialIssue.findMany({
+      where: {
+        projectId: { in: projectIds },
+        status: 'completed',
+      },
+      include: { items: true },
+    }),
+    prisma.expense.findMany({
+      where: {
+        projectId: { in: projectIds },
+        status: 'approved',
+      },
+      select: { projectId: true, amount: true },
+    }),
+  ])
 
   // Aggregate per project
   const revenueByProject = new Map<number, number>()
