@@ -1,0 +1,208 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  notify: vi.fn(),
+  generateDocumentNumber: vi.fn(),
+}));
+
+vi.mock("@/lib/services/notification.service", () => ({
+  notificationService: { checkAndNotifyLowStock: mocks.notify },
+}));
+
+vi.mock("@/lib/utils/document-number", () => ({
+  generateDocumentNumber: mocks.generateDocumentNumber,
+}));
+
+// prisma singleton is imported by the module; provide a stub so import doesn't fail.
+vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+
+import { InventoryService } from "@/lib/services/inventory.service";
+
+function buildService(txSpies: Record<string, any> = {}) {
+  const spies = {
+    moveFindUniqueOrThrow: vi.fn(),
+    moveUpdate: vi.fn().mockResolvedValue({}),
+    moveCreate: vi.fn(),
+    layerCreate: vi.fn().mockResolvedValue({}),
+    layerUpdate: vi.fn().mockResolvedValue({}),
+    itemFindUnique: vi.fn().mockResolvedValue(null),
+    queryRaw: vi.fn(),
+    executeRaw: vi.fn().mockResolvedValue(1),
+    ...txSpies,
+  };
+
+  const tx = {
+    stockMove: {
+      findUniqueOrThrow: spies.moveFindUniqueOrThrow,
+      update: spies.moveUpdate,
+      create: spies.moveCreate,
+    },
+    inventoryLayer: { create: spies.layerCreate, update: spies.layerUpdate },
+    item: { findUnique: spies.itemFindUnique },
+    $queryRaw: spies.queryRaw,
+    $executeRaw: spies.executeRaw,
+  };
+
+  const prismaLike = {
+    $transaction: (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+  } as never;
+
+  return { service: new InventoryService(prismaLike), spies };
+}
+
+describe("InventoryService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("postMove", () => {
+    it("throws when move already posted", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-1", status: "posted", impact: "IN",
+      });
+
+      await expect(service.postMove(1)).rejects.toThrow("already posted");
+    });
+
+    it("handles IN move: creates layer, increments qty, marks posted", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-1", status: "draft", impact: "IN",
+        itemId: 5, warehouseId: 2, qty: 100, cost: 10,
+      });
+
+      await service.postMove(1);
+
+      expect(spies.layerCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ itemId: 5, warehouseId: 2, qtyIn: 100, remaining: 100, unitCost: 10 }),
+      });
+      expect(spies.executeRaw).toHaveBeenCalled();
+      expect(spies.moveUpdate).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { status: "posted" },
+      });
+    });
+
+    it("handles OUT move: consumes FIFO, updates cost, decrements qty", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-2", status: "draft", impact: "OUT",
+        itemId: 5, warehouseId: 2, qty: 30, cost: 0,
+      });
+      // first $queryRaw call → item lock; second → layers
+      spies.queryRaw
+        .mockResolvedValueOnce([{ id: 5, sku: "ITM-5", qty_on_hand: 100 }])
+        .mockResolvedValueOnce([
+          { id: 1, remaining: 20, unit_cost: 5 },
+          { id: 2, remaining: 50, unit_cost: 8 },
+        ]);
+      spies.executeRaw.mockResolvedValue(1);
+
+      await service.postMove(1);
+
+      // consumed 20@5=100 + 10@8=80 = 180, unitCost = 180/30 = 6
+      expect(spies.moveUpdate).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { cost: 6 },
+      });
+      expect(spies.layerUpdate).toHaveBeenCalledTimes(2);
+    });
+
+    it("throws on OUT when item not found", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-2", status: "draft", impact: "OUT",
+        itemId: 5, warehouseId: 2, qty: 30,
+      });
+      spies.queryRaw.mockResolvedValueOnce([]); // item lock returns nothing
+
+      await expect(service.postMove(1)).rejects.toThrow("Item not found");
+    });
+
+    it("throws on OUT when stock insufficient (item-level guard)", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-2", status: "draft", impact: "OUT",
+        itemId: 5, warehouseId: 2, qty: 200,
+      });
+      spies.queryRaw.mockResolvedValueOnce([{ id: 5, sku: "ITM-5", qty_on_hand: 100 }]);
+
+      await expect(service.postMove(1)).rejects.toThrow("Stok tidak mencukupi");
+    });
+
+    it("throws on unknown impact type", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-3", status: "draft", impact: "SIDEWAYS",
+      });
+
+      await expect(service.postMove(1)).rejects.toThrow("Unknown impact type");
+    });
+
+    it("throws on concurrent modification when decrement affects 0 rows", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-2", status: "draft", impact: "OUT",
+        itemId: 5, warehouseId: 2, qty: 30,
+      });
+      spies.queryRaw
+        .mockResolvedValueOnce([{ id: 5, sku: "ITM-5", qty_on_hand: 100 }])
+        .mockResolvedValueOnce([{ id: 1, remaining: 50, unit_cost: 5 }]);
+      spies.executeRaw.mockResolvedValue(0); // 0 rows updated → concurrent change
+
+      await expect(service.postMove(1)).rejects.toThrow("Concurrent stock modification");
+    });
+  });
+
+  describe("reverseMove", () => {
+    it("throws when original move is not posted", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-1", status: "draft", impact: "IN",
+      });
+
+      await expect(service.reverseMove(1)).rejects.toThrow("Cannot reverse move");
+    });
+
+    it("creates an opposite move and marks original reversed (IN→OUT)", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-1", status: "posted", impact: "IN",
+        itemId: 5, qty: 100, cost: 10, referenceType: "GR", referenceId: 9, warehouseId: 2,
+      });
+      spies.moveCreate.mockResolvedValue({ id: 50 });
+
+      const result = await service.reverseMove(1);
+
+      expect(result).toBe(50);
+      expect(spies.moveCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          documentNo: "REV-SM-1",
+          impact: "OUT",
+          status: "draft",
+        }),
+      });
+      expect(spies.moveUpdate).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { status: "reversed" },
+      });
+    });
+
+    it("reverses OUT→IN", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-2", status: "posted", impact: "OUT",
+        itemId: 5, qty: 30, cost: 6, referenceType: "WO", referenceId: 3, warehouseId: 2,
+      });
+      spies.moveCreate.mockResolvedValue({ id: 51 });
+
+      const result = await service.reverseMove(1);
+
+      expect(result).toBe(51);
+      expect(spies.moveCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ impact: "IN" }),
+      });
+    });
+  });
+});
