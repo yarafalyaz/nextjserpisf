@@ -1192,17 +1192,41 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   // Fetch old invoiceId before update to handle invoice reassignment
   const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true } })
   const newInvoiceId = requireId(formData.get("salesInvoiceId"), "salesInvoiceId")
+  const newAmount = requireNumber(formData.get("amount"), "amount")
+  if (newAmount <= 0) {
+    return { success: false, error: "Jumlah pembayaran harus lebih dari 0" }
+  }
 
-  const payment = await prisma.salesPayment.update({
-    where: { id },
-    data: {
-      salesInvoiceId: newInvoiceId,
-      amount: requireNumber(formData.get("amount"), "amount"),
-      paymentDate: new Date(formData.get("paymentDate") as string),
-      paymentMethod: formData.get("paymentMethod") as string,
-      accountId: safeId(formData.get("accountId")),
-      notes: formData.get("notes") as string | null,
-    },
+  // Atomic: lock the target invoice and validate the edited amount against the
+  // remaining balance (excluding THIS payment) — mirrors createSalesPayment.
+  // Previously the edit path did a bare update with no overpay guard, so a
+  // payment could be raised past the invoice grandTotal, silently corrupting AR.
+  const payment = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${newInvoiceId} FOR UPDATE`
+    const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: newInvoiceId } })
+
+    // Sum of all OTHER payments already allocated to the target invoice.
+    const others = await tx.salesPayment.aggregate({
+      where: { salesInvoiceId: newInvoiceId, id: { not: id } },
+      _sum: { amount: true },
+    })
+    const otherPaid = Number(others._sum.amount ?? 0)
+    const remaining = Number(invoice.grandTotal) - otherPaid
+    if (newAmount > remaining) {
+      throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
+    }
+
+    return tx.salesPayment.update({
+      where: { id },
+      data: {
+        salesInvoiceId: newInvoiceId,
+        amount: newAmount,
+        paymentDate: new Date(formData.get("paymentDate") as string),
+        paymentMethod: formData.get("paymentMethod") as string,
+        accountId: safeId(formData.get("accountId")),
+        notes: formData.get("notes") as string | null,
+      },
+    })
   })
 
   // Keep the GL in sync with the edited amount/account/invoice: reverse the old
