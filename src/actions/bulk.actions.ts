@@ -248,7 +248,7 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
 
     return { success: true, message: `${safeIds.length} data berhasil dihapus` }
   } catch (error) {
-    console.error("Bulk delete error:", error)
+    console.error("[bulkDelete]", error)
     return { success: false, message: "Gagal menghapus data. Mungkin ada relasi yang terkait." }
   }
 }
