@@ -3,7 +3,7 @@ import { z } from "zod"
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
 
-const optionalNumber = () => z.number().optional()
+const optionalNumber = () => z.coerce.number().optional()
 
 // ==================== PRODUCT (BOM) ====================
 
@@ -30,8 +30,8 @@ export type UpdateProductInput = z.infer<typeof updateProductSchema>
 // ==================== PRODUCTION ORDER ====================
 
 export const createProductionOrderSchema = z.object({
-  productId: z.number().min(1, "Produk wajib dipilih"),
-  qty: z.number().min(1, "Qty minimal 1"),
+  productId: z.coerce.number().min(1, "Produk wajib dipilih"),
+  qty: z.coerce.number().min(1, "Qty minimal 1"),
   startDate: optionalString(30),
   endDate: optionalString(30),
   notes: optionalString(1000),
@@ -40,8 +40,8 @@ export const createProductionOrderSchema = z.object({
 export type CreateProductionOrderInput = z.infer<typeof createProductionOrderSchema>
 
 export const updateProductionOrderSchema = z.object({
-  productId: z.number().min(1, "Produk wajib dipilih"),
-  qty: z.number().min(1, "Qty minimal 1"),
+  productId: z.coerce.number().min(1, "Produk wajib dipilih"),
+  qty: z.coerce.number().min(1, "Qty minimal 1"),
   startDate: optionalString(30),
   endDate: optionalString(30),
   notes: optionalString(1000),

@@ -4,7 +4,7 @@ const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
 
 const optionalNumber = (min?: number) => {
-  const base = min !== undefined ? z.number().min(min) : z.number()
+  const base = min !== undefined ? z.coerce.number().min(min) : z.coerce.number()
   return base.optional()
 }
 
@@ -14,15 +14,15 @@ const optionalDate = z.string().optional().transform((v) => (v ? new Date(v) : u
 // ==================== BANK STATEMENT ====================
 
 export const bankStatementSchema = z.object({
-  accountId: z.number({ message: "accountId wajib diisi" }).int().positive(),
+  accountId: z.coerce.number({ message: "accountId wajib diisi" }).int().positive(),
   bankId: optionalNumber(),
   accountNumber: optionalString(100),
   date: requiredDate,
   reference: optionalString(200),
   periodStart: optionalDate,
   periodEnd: optionalDate,
-  openingBalance: z.number().default(0),
-  closingBalance: z.number().default(0),
+  openingBalance: z.coerce.number().default(0),
+  closingBalance: z.coerce.number().default(0),
   notes: optionalString(1000),
 })
 
@@ -40,11 +40,11 @@ export const journalSchema = z.object({
 
 export const expenseSchema = z.object({
   employeeId: optionalNumber(),
-  accountId: z.number({ message: "accountId wajib diisi" }).int().positive(),
+  accountId: z.coerce.number({ message: "accountId wajib diisi" }).int().positive(),
   paidFromAccountId: optionalNumber(),
   projectId: optionalNumber(),
   costCenterId: optionalNumber(),
-  amount: z.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
+  amount: z.coerce.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
   date: requiredDate,
   referenceNo: optionalString(100),
   description: optionalString(1000),
@@ -57,7 +57,7 @@ export const expenseSchema = z.object({
 
 export const pettyCashSchema = z.object({
   type: z.enum(["IN", "OUT"], { message: "type wajib diisi (IN/OUT)" }),
-  amount: z.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
+  amount: z.coerce.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
   date: requiredDate,
   accountId: optionalNumber(),
   description: optionalString(1000),
@@ -67,12 +67,12 @@ export const pettyCashSchema = z.object({
 // ==================== BANK RECONCILIATION ====================
 
 export const bankReconciliationSchema = z.object({
-  accountId: z.number({ message: "accountId wajib diisi" }).int().positive(),
+  accountId: z.coerce.number({ message: "accountId wajib diisi" }).int().positive(),
   statementDate: requiredDate,
-  statementBalance: z.number({ message: "statementBalance wajib diisi" }),
+  statementBalance: z.coerce.number({ message: "statementBalance wajib diisi" }),
   periodStart: optionalDate,
   periodEnd: optionalDate,
-  bookBalance: z.number().default(0),
+  bookBalance: z.coerce.number().default(0),
   notes: optionalString(1000),
 })
 
@@ -80,9 +80,9 @@ export const bankReconciliationSchema = z.object({
 
 export const budgetSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi").max(200),
-  accountId: z.number({ message: "accountId wajib diisi" }).int().positive(),
+  accountId: z.coerce.number({ message: "accountId wajib diisi" }).int().positive(),
   costCenterId: optionalNumber(),
-  amount: z.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
+  amount: z.coerce.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
   startDate: requiredDate,
   endDate: requiredDate,
 })

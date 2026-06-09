@@ -9,17 +9,17 @@ const requiredStr = (msg: string, max = 200) =>
   z.string().min(1, msg).max(max)
 
 const requiredId = (field: string) =>
-  z.number({ error: `${field} wajib diisi` }).int().positive()
+  z.coerce.number({ error: `${field} wajib diisi` }).int().positive()
 
-const optionalId = z.number().int().positive().optional()
+const optionalId = z.coerce.number().int().positive().optional()
 
 const optionalNum = (min?: number) => {
-  const base = min !== undefined ? z.number().min(min) : z.number()
+  const base = min !== undefined ? z.coerce.number().min(min) : z.coerce.number()
   return base.optional()
 }
 
 const requiredNum = (_field: string, min = 0) =>
-  z.number().min(min)
+  z.coerce.number().min(min)
 
 const requiredDate = (field: string) =>
   z.string().min(1, `${field} wajib diisi`)

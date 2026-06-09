@@ -4,7 +4,7 @@ const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
 
 const optionalNumber = (min?: number) => {
-  const base = min !== undefined ? z.number().min(min) : z.number()
+  const base = min !== undefined ? z.coerce.number().min(min) : z.coerce.number()
   return base.optional()
 }
 
@@ -64,8 +64,8 @@ export const itemSchema = z.object({
   defaultRackRowId: optionalNumber(),
   unitOfMeasure: z.string().max(20).default("PCS"),
   minStock: optionalNumber(0),
-  cost: z.number().min(0, "Harga beli minimal 0"),
-  price: z.number().min(0, "Harga jual minimal 0"),
+  cost: z.coerce.number().min(0, "Harga beli minimal 0"),
+  price: z.coerce.number().min(0, "Harga jual minimal 0"),
   standardCost: optionalNumber(0),
   purchasePrice: optionalNumber(0),
   costingMethod: z.string().optional(),

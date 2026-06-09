@@ -3,9 +3,9 @@ import { z } from "zod"
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
 
-const requiredId = z.number().min(1, "ID wajib diisi")
-const optionalId = z.number().min(1).optional()
-const optionalNumber = z.number().min(0).optional()
+const requiredId = z.coerce.number().min(1, "ID wajib diisi")
+const optionalId = z.coerce.number().min(1).optional()
+const optionalNumber = z.coerce.number().min(0).optional()
 
 // ==================== QUOTATION ====================
 
@@ -23,7 +23,7 @@ export const updateQuotationSchema = z.object({
 
 export const createDownPaymentSchema = z.object({
   quotationId: requiredId,
-  amount: z.number().min(1, "Jumlah uang muka harus lebih dari 0"),
+  amount: z.coerce.number().min(1, "Jumlah uang muka harus lebih dari 0"),
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: optionalString(200),
   notes: optionalString(500),
@@ -31,7 +31,7 @@ export const createDownPaymentSchema = z.object({
 
 export const updateDownPaymentSchema = z.object({
   quotationId: requiredId,
-  amount: z.number().min(1, "Jumlah uang muka harus lebih dari 0"),
+  amount: z.coerce.number().min(1, "Jumlah uang muka harus lebih dari 0"),
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: optionalString(200),
   notes: optionalString(500),
@@ -80,7 +80,7 @@ export const updateSalesInvoiceSchema = z.object({
 
 export const createSalesPaymentSchema = z.object({
   salesInvoiceId: requiredId,
-  amount: z.number().min(1, "Jumlah pembayaran harus lebih dari 0"),
+  amount: z.coerce.number().min(1, "Jumlah pembayaran harus lebih dari 0"),
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,
@@ -90,7 +90,7 @@ export const createSalesPaymentSchema = z.object({
 
 export const updateSalesPaymentSchema = z.object({
   salesInvoiceId: requiredId,
-  amount: z.number().min(1, "Jumlah pembayaran harus lebih dari 0"),
+  amount: z.coerce.number().min(1, "Jumlah pembayaran harus lebih dari 0"),
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,

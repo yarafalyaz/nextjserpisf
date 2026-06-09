@@ -3,7 +3,7 @@ import { z } from "zod"
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
 
-const optionalId = z.number().min(1).optional()
+const optionalId = z.coerce.number().min(1).optional()
 
 // ==================== TICKET ====================
 

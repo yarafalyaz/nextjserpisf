@@ -14,7 +14,7 @@ describe("parseFormData", () => {
   const schema = z.object({
     name: z.string().min(1, "Nama wajib"),
     email: z.string().email().optional(),
-    qty: z.number().min(1).optional(),
+    qty: z.coerce.number().min(1).optional(),
     active: z.boolean().optional(),
   })
 
@@ -68,8 +68,34 @@ describe("parseFormData", () => {
     }
   })
 
-  it("coerces '0' to number zero", () => {
-    const numSchema = z.object({ val: z.number() })
+  // Regression: parseFormData used to eagerly coerce any all-digit string
+  // (no leading zero) to a number, which corrupted string identifiers.
+  // String fields must now receive the raw string; numbers are coerced
+  // explicitly by z.coerce.number() in the schemas.
+  it("preserves numeric-looking postal codes as strings (regression)", () => {
+    const addrSchema = z.object({ postalCode: z.string().optional() })
+    const fd = makeFormData({ postalCode: "40123" })
+    const result = parseFormData(addrSchema, fd)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.postalCode).toBe("40123")
+    }
+  })
+
+  it("preserves long bank account numbers as exact strings (regression)", () => {
+    const acctSchema = z.object({ accountNumber: z.string().optional() })
+    const fd = makeFormData({ accountNumber: "1234567890123456" })
+    const result = parseFormData(acctSchema, fd)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      // Exact value preserved — coercing to Number would lose precision
+      // past 2^53 (e.g. 16-digit NIK).
+      expect(result.data.accountNumber).toBe("1234567890123456")
+    }
+  })
+
+  it("coerces '0' to number zero (via z.coerce.number)", () => {
+    const numSchema = z.object({ val: z.coerce.number() })
     const fd = makeFormData({ val: "0" })
     const result = parseFormData(numSchema, fd)
     expect(result.success).toBe(true)
@@ -78,8 +104,8 @@ describe("parseFormData", () => {
     }
   })
 
-  it("coerces negative numbers", () => {
-    const numSchema = z.object({ val: z.number() })
+  it("coerces negative numbers (via z.coerce.number)", () => {
+    const numSchema = z.object({ val: z.coerce.number() })
     const fd = makeFormData({ val: "-10" })
     const result = parseFormData(numSchema, fd)
     expect(result.success).toBe(true)
@@ -88,8 +114,8 @@ describe("parseFormData", () => {
     }
   })
 
-  it("coerces decimal numbers", () => {
-    const numSchema = z.object({ val: z.number() })
+  it("coerces decimal numbers (via z.coerce.number)", () => {
+    const numSchema = z.object({ val: z.coerce.number() })
     const fd = makeFormData({ val: "3.14" })
     const result = parseFormData(numSchema, fd)
     expect(result.success).toBe(true)
@@ -111,7 +137,7 @@ describe("parseFormData", () => {
   it("returns joined errors for multiple invalid fields", () => {
     const strict = z.object({
       name: z.string().min(1, "Nama wajib"),
-      qty: z.number().min(1, "Qty min 1"),
+      qty: z.coerce.number().min(1, "Qty min 1"),
     })
     const fd = makeFormData({ name: "", qty: "0" })
     const result = parseFormData(strict, fd)

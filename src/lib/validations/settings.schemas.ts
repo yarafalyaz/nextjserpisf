@@ -7,10 +7,10 @@ const optionalNullString = (max = 255) =>
   z.string().max(max).nullable().optional()
 
 const optionalInt = () =>
-  z.number().int().nullable().optional()
+  z.coerce.number().int().nullable().optional()
 
 const optionalDecimal = () =>
-  z.number().nullable().optional()
+  z.coerce.number().nullable().optional()
 
 const optionalBool = () =>
   z.boolean().optional()

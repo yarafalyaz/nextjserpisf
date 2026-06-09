@@ -32,17 +32,12 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
       return
     }
 
-    // Numeric coercion — only for values that look like numbers
-    // Preserves strings like "08123456789" (leading zero + more digits = phone) and NPWP patterns
-    // But allows "0" and "0.5" etc.
-    if (/^-?\d+(\.\d+)?$/.test(trimmed) && !/^0\d/.test(trimmed)) {
-      const num = Number(trimmed)
-      if (!Number.isNaN(num) && Number.isFinite(num)) {
-        obj[field] = num
-        return
-      }
-    }
-
+    // Numeric values are intentionally left as strings here. Schemas that
+    // expect numbers use z.coerce.number(), which converts safely at parse
+    // time. Guessing the type here corrupted string identifiers — postal
+    // codes ("40123"), bank account numbers, bare NPWP — by turning them into
+    // numbers that string schemas then rejected, and risked silent precision
+    // loss on 16-digit NIK values above Number.MAX_SAFE_INTEGER.
     obj[field] = trimmed
   })
 
