@@ -562,6 +562,7 @@ model Quotation {
 
   @@index([customerId], map: "quotations_customer_id_fkey")
   @@index([customerVehicleId], map: "quotations_customer_vehicle_id_fkey")
+  @@index([status], map: "idx_quotations_status")
   @@map("quotations")
 }
 
@@ -634,6 +635,7 @@ model DownPayment {
 
   @@index([customerId], map: "down_payments_customer_id_fkey")
   @@index([quotationId], map: "down_payments_quotation_id_fkey")
+  @@index([status], map: "idx_down_payments_status")
   @@map("down_payments")
 }
 
@@ -664,6 +666,7 @@ model SalesOrder {
 
   @@index([customerId], map: "sales_orders_customer_id_fkey")
   @@index([quotationId], map: "sales_orders_quotation_id_fkey")
+  @@index([status], map: "idx_sales_orders_status")
   @@map("sales_orders")
 }
 
@@ -807,6 +810,7 @@ model PurchaseRequest {
   purchaseOrders  PurchaseOrder[]
   items           PurchaseRequestItem[]
 
+  @@index([status], map: "idx_purchase_requests_status")
   @@map("purchase_requests")
 }
 
@@ -854,6 +858,7 @@ model PurchaseOrder {
 
   @@index([purchaseRequestId], map: "purchase_orders_purchase_request_id_fkey")
   @@index([vendorId], map: "purchase_orders_vendor_id_fkey")
+  @@index([status], map: "idx_purchase_orders_status")
   @@map("purchase_orders")
 }
 
@@ -889,6 +894,7 @@ model GoodsReceipt {
 
   @@index([purchaseOrderId], map: "goods_receipts_purchase_order_id_fkey")
   @@index([warehouseId], map: "goods_receipts_warehouse_id_fkey")
+  @@index([status], map: "idx_goods_receipts_status")
   @@map("goods_receipts")
 }
 
@@ -1206,6 +1212,7 @@ model MaterialIssue {
   warehouse   Warehouse           @relation(fields: [warehouseId], references: [id])
 
   @@index([warehouseId], map: "material_issues_warehouse_id_fkey")
+  @@index([status], map: "idx_material_issues_status")
   @@map("material_issues")
 }
 
@@ -1312,6 +1319,7 @@ model WorkOrder {
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
+  @@index([status], map: "idx_work_orders_status")
   @@map("work_orders")
 }
 
@@ -1351,6 +1359,7 @@ model Attendance {
   @@unique([employeeId, date], map: "attendances_employee_date_unique")
   @@index([employeeId], map: "attendances_employee_id_fkey")
   @@index([date], map: "attendances_date_idx")
+  @@index([status], map: "idx_attendances_status")
   @@map("attendances")
 }
 
@@ -1369,6 +1378,7 @@ model LeaveRequest {
   employee        Employee @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId], map: "leave_requests_employee_id_fkey")
+  @@index([status], map: "idx_leave_requests_status")
   @@map("leave_requests")
 }
 
@@ -1433,6 +1443,7 @@ model Payroll {
   employee          Employee? @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId], map: "payrolls_employee_id_fkey")
+  @@index([status], map: "idx_payrolls_status")
   @@map("payrolls")
 }
 
@@ -1748,6 +1759,7 @@ model Lead {
   updatedAt         DateTime       @updatedAt @map("updated_at")
   activities        LeadActivity[]
 
+  @@index([status], map: "idx_leads_status")
   @@map("leads")
 }
 
@@ -1890,6 +1902,7 @@ model Asset {
 
   @@index([categoryId], map: "assets_category_id_fkey")
   @@index([groupId], map: "assets_group_id_fkey")
+  @@index([status], map: "idx_assets_status")
   @@map("assets")
 }
 
@@ -2035,6 +2048,7 @@ model Project {
 
   @@index([customerId], map: "projects_customer_id_fkey")
   @@index([customerVehicleId], map: "projects_customer_vehicle_id_fkey")
+  @@index([status], map: "idx_projects_status")
   @@map("projects")
 }
 
