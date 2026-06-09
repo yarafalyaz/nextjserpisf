@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition, useCallback, useMemo } from "react"
+import { useTransition, useCallback, useMemo, useEffect } from "react"
 import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { quotationSchema, type QuotationInput } from "@/lib/validators"
@@ -395,7 +395,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
   }, [subtotal, discount, tax])
 
   // Sync calculated values to form
-  useMemo(() => {
+  useEffect(() => {
     setValue("subtotal", subtotal, { shouldDirty: false })
     setValue("grandTotal", grandTotal, { shouldDirty: false })
   }, [subtotal, grandTotal, setValue])

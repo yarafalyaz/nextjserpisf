@@ -15,6 +15,16 @@ import {
 
 export type BackupResult = { success: boolean; message: string }
 
+/** Sanitize filename to prevent path traversal */
+function sanitizeFilename(filename: string): string {
+  // Strip any directory components — only allow base filename
+  const base = filename.replace(/^.*[\\/]/, "").replace(/\.\./g, "")
+  if (!base || base !== filename) {
+    throw new Error("Nama file tidak valid")
+  }
+  return base
+}
+
 export async function getBackups(): Promise<BackupFile[]> {
   await requirePermission("manage_settings")
   return listBackups()
@@ -38,6 +48,7 @@ export async function restoreDatabaseBackup(
 ): Promise<BackupResult> {
   try {
     await requirePermission("manage_settings")
+    const safeFilename = sanitizeFilename(filename)
     let safetyNet = ""
     if (withSnapshot) {
       try {
@@ -49,10 +60,10 @@ export async function restoreDatabaseBackup(
         safetyNet = " (Snapshot otomatis gagal dibuat.)"
       }
     }
-    await restoreBackup(filename)
-    await logActivity("update", "DatabaseBackup", 0, `Restore database dari: ${filename}`)
+    await restoreBackup(safeFilename)
+    await logActivity("update", "DatabaseBackup", 0, `Restore database dari: ${safeFilename}`)
     revalidatePath("/pengaturan/database")
-    return { success: true, message: `Database berhasil di-restore dari ${filename}.${safetyNet}` }
+    return { success: true, message: `Database berhasil di-restore dari ${safeFilename}.${safetyNet}` }
   } catch (e) {
     return { success: false, message: getErrorMessage(e) || "Gagal restore database" }
   }
@@ -61,8 +72,9 @@ export async function restoreDatabaseBackup(
 export async function deleteDatabaseBackup(filename: string): Promise<BackupResult> {
   try {
     await requirePermission("manage_settings")
-    await deleteBackup(filename)
-    await logActivity("delete", "DatabaseBackup", 0, `Menghapus backup: ${filename}`)
+    const safeFilename = sanitizeFilename(filename)
+    await deleteBackup(safeFilename)
+    await logActivity("delete", "DatabaseBackup", 0, `Menghapus backup: ${safeFilename}`)
     revalidatePath("/pengaturan/database")
     return { success: true, message: "Backup berhasil dihapus" }
   } catch (e) {
