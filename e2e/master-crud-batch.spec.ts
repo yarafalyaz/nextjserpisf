@@ -22,7 +22,12 @@ async function crudMaster(
   await page.goto(opts.createUrl, { waitUntil: "domcontentloaded" })
   await waitForHydration(page)
   for (const f of opts.fields) {
-    await page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first().fill(f.value)
+    const field = page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first()
+    await expect(field).toBeVisible({ timeout: 15000 })
+    await field.scrollIntoViewIfNeeded()
+    await field.fill(f.value)
+    // Verify the value was committed (guards against hydration race)
+    await expect(field).toHaveValue(f.value, { timeout: 5000 })
   }
   const createSubmit = page.locator(
     [
@@ -62,7 +67,11 @@ async function crudMaster(
   await waitForHydration(page)
   for (const f of opts.fields) {
     if (f.updated) {
-      await page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first().fill(f.updated)
+      const field = page.locator(`#${f.id}, input[name='${f.id}'], textarea[name='${f.id}']`).first()
+      await expect(field).toBeVisible({ timeout: 15000 })
+      await field.scrollIntoViewIfNeeded()
+      await field.fill(f.updated)
+      await expect(field).toHaveValue(f.updated, { timeout: 5000 })
     }
   }
   const submitBtn = page.locator(
@@ -103,7 +112,19 @@ async function crudMaster(
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
-  await page.waitForTimeout(2000)
+  // Wait for React hydration: form buttons become truly interactive only after hydration.
+  // We detect hydration by checking that a button click produces a state change (focus ring, etc.)
+  // Simpler heuristic: wait for Next.js hydration marker or form interactivity.
+  await page.waitForFunction(() => {
+    // Next.js sets __NEXT_DATA__ early but hydration is done when React root is mounted
+    // A reliable signal: any button with onClick/onSubmit handlers will have __reactFiber
+    const btn = document.querySelector("button[type='submit']")
+    if (!btn) return false
+    // Check React fiber is attached (hydrated)
+    return Object.keys(btn).some(k => k.startsWith("__reactFiber") || k.startsWith("__reactProps"))
+  }, { timeout: 15000 }).catch(() => {})
+  // Extra safety margin for slower CI runners
+  await page.waitForTimeout(500)
 }
 
 
