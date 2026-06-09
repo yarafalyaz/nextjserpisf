@@ -466,7 +466,8 @@ export async function createVendorPayment(formData: FormData) {
     }
   }
 
-  await onVendorPaymentCreated(payment.id, Number(user.id))
+  // Journal is NOT created here — it is posted only on confirmVendorPayment
+  // to prevent draft/unconfirmed payments from affecting the GL.
 
   await logActivity("create", "VendorPayment", payment.id, `Membuat pembayaran vendor #${payment.id}`)
   revalidatePath("/pembelian/pembayaran")
