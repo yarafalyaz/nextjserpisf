@@ -9,7 +9,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
   }
 
-  const filename = req.nextUrl.searchParams.get("file") || ""
+  const rawFilename = req.nextUrl.searchParams.get("file") || ""
+  // Sanitize: strip path components to prevent traversal
+  const filename = rawFilename.replace(/^.*[\\/]/, "").replace(/\.\./g, "")
+  if (!filename || filename !== rawFilename) {
+    return NextResponse.json({ error: "Nama file tidak valid" }, { status: 400 })
+  }
+
   try {
     const { path: filepath, size } = await readBackupFile(filename)
     const nodeStream = createReadStream(filepath)
