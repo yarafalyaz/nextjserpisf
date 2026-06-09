@@ -11,9 +11,6 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/page-header"
-import type { Metadata } from "next"
-
-export const metadata: Metadata = { title: "Tambah Pajak" }
 
 
 export default function CreateTaxPage() {

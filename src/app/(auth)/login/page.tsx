@@ -5,9 +5,6 @@ import { useRouter } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { Eye, EyeOff, Lock, Mail, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/page-header"
-import type { Metadata } from "next"
-
-export const metadata: Metadata = { title: "Login" }
 
 export default function LoginPage() {
   const router = useRouter()

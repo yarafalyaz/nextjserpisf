@@ -8,9 +8,6 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
-import type { Metadata } from "next"
-
-export const metadata: Metadata = { title: "Tambah Hari Libur" }
 
 
 export default function CreateHolidayPage() {

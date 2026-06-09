@@ -1,9 +1,4 @@
 "use client"
-export const dynamic = "force-dynamic"
-
-import type { Metadata } from "next"
-
-export const metadata: Metadata = { title: "Tambah Bank" }
 
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
