@@ -5,8 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 
 export async function approveStep(approvalId: number, formData: FormData) {
+  try {
   await requirePermission("approve_workflows")
   const session = await auth()
   const notes = formData.get("notes") as string | null
@@ -55,9 +57,16 @@ export async function approveStep(approvalId: number, formData: FormData) {
   await logActivity("approve", "Approval", approvalId, "Menyetujui langkah persetujuan")
   revalidatePath(`/pengaturan/persetujuan/${approvalId}`)
   revalidatePath("/pengaturan/persetujuan")
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[approveStep]", getErrorMessage(e) || e)
+    throw e
+  }
 }
 
 export async function rejectStep(approvalId: number, formData: FormData) {
+  try {
   await requirePermission("approve_workflows")
   const session = await auth()
   const notes = formData.get("notes") as string | null
@@ -92,11 +101,16 @@ export async function rejectStep(approvalId: number, formData: FormData) {
   await logActivity("reject", "Approval", approvalId, "Menolak langkah persetujuan")
   revalidatePath(`/pengaturan/persetujuan/${approvalId}`)
   revalidatePath("/pengaturan/persetujuan")
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[rejectStep]", getErrorMessage(e) || e)
+    throw e
+  }
 }
 
 // ==================== APPROVAL WORKFLOW CRUD ====================
 
-import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 
 type WorkflowStepInput = { name?: string; roleId?: number | null; approverType?: string | null }
