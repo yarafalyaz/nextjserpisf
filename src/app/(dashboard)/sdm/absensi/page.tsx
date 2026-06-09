@@ -30,10 +30,14 @@ export default async function AttendancePage({
 
   // Role-scope: non admin/hr only sees own data
   const isPrivileged = user.roles.includes("super_admin") || user.roles.includes("hr")
+  const session = await auth()
+  const me = session?.user?.id
+    ? await prisma.employee.findFirst({ where: { userId: Number(session.user.id) }, select: { id: true } })
+    : null
+  // Only employees linked to a user account can self-attend.
+  const canSelfAttend = me != null
   let employeeFilter: { employeeId: number } | { employeeId: -1 } | undefined
   if (!isPrivileged) {
-    const session = await auth()
-    const me = session?.user?.id ? await prisma.employee.findFirst({ where: { userId: Number(session.user.id) }, select: { id: true } }) : null
     employeeFilter = { employeeId: me?.id ?? -1 }
   }
 
@@ -75,8 +79,8 @@ export default async function AttendancePage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "SDM", href: "/sdm" }, { label: "Absensi" }]} />
 
-      {/* Self-Service Widget: Check-In / Check-Out */}
-      <SelfAttendanceWidget />
+      {/* Self-Service Widget: Check-In / Check-Out (only for linked employees) */}
+      {canSelfAttend && <SelfAttendanceWidget />}
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h2 className="text-xl font-bold text-foreground">Riwayat Absensi</h2>
