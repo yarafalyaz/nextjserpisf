@@ -58,6 +58,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid referenceType" }, { status: 400 })
   }
 
+  // Whitelist allowed reference types (same as GET)
+  const allowedRefTypes = [
+    "sales_invoice", "sales_order", "quotation", "purchase_order",
+    "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
+    "journal", "expense", "material_issue", "work_order", "project",
+    "goods_receipt", "purchase_return", "sales_return", "bank_statement",
+    "delivery_order", "inventory_transfer", "stock_adjustment",
+  ]
+  if (!allowedRefTypes.includes(safeRefType)) {
+    return NextResponse.json({ error: "Tipe referensi tidak valid" }, { status: 400 })
+  }
+
   // Save to private/uploads/attachments/{referenceType} (NOT public/ — served via authenticated route)
   const uploadDir = path.join(process.cwd(), "private", "uploads", "attachments", safeRefType)
   await mkdir(uploadDir, { recursive: true })
@@ -107,6 +119,18 @@ export async function GET(req: NextRequest) {
 
   if (!referenceType || !referenceId) {
     return NextResponse.json({ error: "referenceType and referenceId are required" }, { status: 400 })
+  }
+
+  // Whitelist allowed reference types to prevent enumeration of arbitrary tables
+  const allowedRefTypes = [
+    "sales_invoice", "sales_order", "quotation", "purchase_order",
+    "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
+    "journal", "expense", "material_issue", "work_order", "project",
+    "goods_receipt", "purchase_return", "sales_return", "bank_statement",
+    "delivery_order", "inventory_transfer", "stock_adjustment",
+  ]
+  if (!allowedRefTypes.includes(referenceType)) {
+    return NextResponse.json({ error: "Tipe referensi tidak valid" }, { status: 400 })
   }
 
   if (!/^\d+$/.test(referenceId)) {
