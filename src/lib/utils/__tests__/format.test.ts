@@ -3,12 +3,13 @@ import {
   formatCurrency,
   formatNumber,
   formatDate,
+  formatRelativeTime,
   formatPercentage,
   formatFileSize,
   truncate,
   formatPhone,
   getInitials,
-  getStatusColor,
+getStatusColor,
   formatPeriod,
 } from "../format"
 
@@ -189,5 +190,73 @@ describe("formatPeriod", () => {
 
   it("returns original for invalid format", () => {
     expect(formatPeriod("invalid")).toBe("invalid")
+  })
+})
+
+describe("formatRelativeTime", () => {
+  it("returns '-' for null/undefined", () => {
+    expect(formatRelativeTime(null)).toBe("-")
+    expect(formatRelativeTime(undefined)).toBe("-")
+  })
+
+  it("returns '-' for invalid date", () => {
+    expect(formatRelativeTime("not-a-date")).toBe("-")
+  })
+
+  it("returns 'Baru saja' for < 60 seconds", () => {
+    const now = new Date()
+    const recent = new Date(now.getTime() - 30_000) // 30s ago
+    expect(formatRelativeTime(recent)).toBe("Baru saja")
+  })
+
+  it("returns minutes for < 60 minutes", () => {
+    const now = new Date()
+    const fiveMinAgo = new Date(now.getTime() - 5 * 60_000)
+    expect(formatRelativeTime(fiveMinAgo)).toBe("5 menit yang lalu")
+  })
+
+  it("returns hours for < 24 hours", () => {
+    const now = new Date()
+    const threeHoursAgo = new Date(now.getTime() - 3 * 3600_000)
+    expect(formatRelativeTime(threeHoursAgo)).toBe("3 jam yang lalu")
+  })
+
+  it("returns days for < 7 days", () => {
+    const now = new Date()
+    const twoDaysAgo = new Date(now.getTime() - 2 * 86400_000)
+    expect(formatRelativeTime(twoDaysAgo)).toBe("2 hari yang lalu")
+  })
+
+  it("returns weeks for < 30 days", () => {
+    const now = new Date()
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 86400_000)
+    expect(formatRelativeTime(twoWeeksAgo)).toBe("2 minggu yang lalu")
+  })
+
+  it("returns months for < 365 days", () => {
+    const now = new Date()
+    const threeMonthsAgo = new Date(now.getTime() - 90 * 86400_000)
+    expect(formatRelativeTime(threeMonthsAgo)).toBe("3 bulan yang lalu")
+  })
+
+  it("returns years for >= 365 days", () => {
+    const now = new Date()
+    const twoYearsAgo = new Date(now.getTime() - 730 * 86400_000)
+    expect(formatRelativeTime(twoYearsAgo)).toBe("2 tahun yang lalu")
+  })
+
+  it("accepts string dates", () => {
+    const now = new Date()
+    const tenMinAgo = new Date(now.getTime() - 10 * 60_000).toISOString()
+    expect(formatRelativeTime(tenMinAgo)).toBe("10 menit yang lalu")
+  })
+})
+
+describe("formatDate edge cases", () => {
+  it("formats with numeric format", () => {
+    const result = formatDate("2024-03-15", { format: "numeric" })
+    expect(result).toContain("15")
+    expect(result).toContain("03")
+    expect(result).toContain("2024")
   })
 })
