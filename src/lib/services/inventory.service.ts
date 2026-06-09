@@ -215,6 +215,7 @@ export const inventoryService = new InventoryService(prisma)
 /**
  * Batch issue all project materials as Stock Move OUT.
  * Creates one stock move per project item and posts them.
+ * Wrapped in a transaction with project row lock to prevent double-submit.
  */
 export async function issueProjectMaterials(
   projectId: number,
@@ -222,53 +223,57 @@ export async function issueProjectMaterials(
 ): Promise<number[]> {
   const { generateDocumentNumber } = await import('@/lib/utils/document-number')
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { items: true },
-  })
-  if (!project) throw new Error('Project not found')
+  return await prisma.$transaction(async (tx) => {
+    // Lock the project row to prevent concurrent material issue
+    await tx.$executeRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`
 
-  const results: number[] = []
-
-  for (const pi of project.items) {
-    if (!pi.itemId) continue
-
-    // Idempotency: skip items already issued for this project (prevents
-    // double stock consumption if a previous run failed partway).
-    const existing = await prisma.stockMove.findFirst({
-      where: {
-        referenceType: 'project_material_issue',
-        referenceId: projectId,
-        itemId: pi.itemId,
-      },
-      select: { id: true },
+    const project = await tx.project.findUnique({
+      where: { id: projectId },
+      include: { items: true },
     })
-    if (existing) {
-      results.push(existing.id)
-      continue
+    if (!project) throw new Error('Project not found')
+
+    const results: number[] = []
+
+    for (const pi of project.items) {
+      if (!pi.itemId) continue
+
+      // Idempotency: skip items already issued for this project
+      const existing = await tx.stockMove.findFirst({
+        where: {
+          referenceType: 'project_material_issue',
+          referenceId: projectId,
+          itemId: pi.itemId,
+        },
+        select: { id: true },
+      })
+      if (existing) {
+        results.push(existing.id)
+        continue
+      }
+
+      const documentNo = await generateDocumentNumber('SM')
+
+      const move = await tx.stockMove.create({
+        data: {
+          documentNo,
+          itemId: pi.itemId,
+          warehouseId,
+          qty: Number(pi.qty),
+          cost: 0,
+          impact: 'OUT',
+          status: 'draft',
+          referenceType: 'project_material_issue',
+          referenceId: projectId,
+          notes: `Material Issue - Project #${projectId} - Item #${pi.itemId}`,
+        },
+      })
+
+      // Post the move (FIFO consumption + qty update) within same tx
+      await inventoryService.postMove(move.id)
+      results.push(move.id)
     }
 
-    const documentNo = await generateDocumentNumber('SM')
-
-    const move = await prisma.stockMove.create({
-      data: {
-        documentNo,
-        itemId: pi.itemId,
-        warehouseId,
-        qty: Number(pi.qty),
-        cost: 0,
-        impact: 'OUT',
-        status: 'draft',
-        referenceType: 'project_material_issue',
-        referenceId: projectId,
-        notes: `Material Issue - Project #${projectId} - Item #${pi.itemId}`,
-      },
-    })
-
-    // Post the move (FIFO consumption + qty update)
-    await inventoryService.postMove(move.id)
-    results.push(move.id)
-  }
-
-  return results
+    return results
+  })
 }

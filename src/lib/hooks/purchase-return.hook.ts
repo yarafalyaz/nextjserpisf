@@ -14,6 +14,9 @@ export async function onPurchaseReturnProcessed(
   userId?: number
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // Lock the purchase return row to prevent concurrent processing
+    await tx.$executeRaw`SELECT id FROM purchase_returns WHERE id = ${returnId} FOR UPDATE`;
+
     const purchaseReturn = await tx.purchaseReturn.findUniqueOrThrow({
       where: { id: returnId },
       include: { items: true, purchaseOrder: true },
@@ -86,16 +89,19 @@ export async function onPurchaseReturnProcessed(
         },
       });
 
-      // Update item qtyOnHand
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
+      // Update item qtyOnHand — guard against negative stock
+      const updated = await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId} AND qty_on_hand >= ${Number(item.qty)}`;
+      if (updated === 0) {
+        throw new Error(`Stok tidak cukup untuk retur item ID ${item.itemId} (qty: ${item.qty})`);
+      }
 
-      // FIFO layer consumption scoped to the resolved warehouse (allowShortfall:
-      // a return is never blocked by stock, mirroring the sales-invoice path).
+      // FIFO layer consumption scoped to the resolved warehouse.
+      // No longer allowShortfall — insufficient layers will throw above via qty guard.
       await consumeFifoLayers(tx, {
         itemId: item.itemId,
         warehouseId,
         qty: Number(item.qty),
-        allowShortfall: true,
+        allowShortfall: false,
         label: `retur pembelian ${purchaseReturn.documentNo}`,
       });
     }
