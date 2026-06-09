@@ -2,7 +2,7 @@
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { requirePermission, requireAuth } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { requireId, safeNumber } from "@/lib/utils/safe-parse"
@@ -109,7 +109,7 @@ const STAGE_STATUS_LABELS: Record<string, string> = {
  */
 export async function initializeProjectStages(projectId: number) {
   try {
-  await requireAuth()
+  await requirePermission("edit_projects")
   const existingStages = await prisma.projectStage.findMany({
     where: { projectId },
   })

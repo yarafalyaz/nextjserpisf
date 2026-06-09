@@ -218,6 +218,10 @@ export async function createMaterialIssue(formData: FormData) {
     formData.get("items") as string | null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
+  if (miItems.length === 0) {
+    throw new Error("Material Issue harus memiliki minimal 1 item dengan qty > 0")
+  }
+
   const issue = await prisma.materialIssue.create({
     data: {
       documentNo,
