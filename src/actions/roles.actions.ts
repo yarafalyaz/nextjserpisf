@@ -1,6 +1,6 @@
 "use server"
 
-import { getErrorMessage } from "@/lib/utils/error"
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
@@ -36,6 +36,7 @@ export async function createRole(formData: FormData) {
   redirect("/pengaturan/peran")
 
   } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
     console.error("[createRole]", getErrorMessage(e) || e)
     throw e
   }
@@ -68,6 +69,7 @@ export async function updateRole(id: number, formData: FormData) {
   redirect("/pengaturan/peran")
 
   } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
     console.error("[updateRole]", getErrorMessage(e) || e)
     throw e
   }
@@ -94,6 +96,7 @@ export async function deleteRole(id: number) {
   redirect("/pengaturan/peran")
 
   } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
     console.error("[deleteRole]", getErrorMessage(e) || e)
     throw e
   }

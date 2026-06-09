@@ -1,6 +1,6 @@
 "use server"
 
-import { getErrorMessage } from "@/lib/utils/error"
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
@@ -249,6 +249,7 @@ export async function updateSystemSettings(formData: FormData) {
   redirect(redirectTo)
 
   } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
     console.error("[updateSystemSettings]", getErrorMessage(e) || e)
     throw e
   }
@@ -303,13 +304,7 @@ export async function updateStorageSettings(formData: FormData) {
     await logActivity("update", "SystemSetting", settings.id, "Memperbarui konfigurasi penyimpanan/CDN")
     redirect("/pengaturan/penyimpanan")
   } catch (e: unknown) {
-    if (
-      typeof e === "object" && e !== null && "digest" in e &&
-      typeof (e as { digest?: unknown }).digest === "string" &&
-      (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
-    ) {
-      throw e
-    }
+    if (isNextRedirectError(e)) throw e
     console.error("[updateStorageSettings]", getErrorMessage(e) || e)
     throw e
   }
