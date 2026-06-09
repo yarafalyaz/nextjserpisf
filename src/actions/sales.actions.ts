@@ -14,6 +14,8 @@ import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, createSalesReturnSchema } from "@/lib/validations/sales.schemas"
 import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== QUOTATION ACTIONS ====================
@@ -401,6 +403,10 @@ export async function createDownPayment(formData: FormData) {
   try {
   const user = await requirePermission("create_down_payments")
 
+  const parsed = parseFormData(createDownPaymentSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("DP")
 
   let proofImage: string | null = null
@@ -419,11 +425,8 @@ export async function createDownPayment(formData: FormData) {
     proofImage = `/uploads/proofs/${filename}`
   }
 
-  const quotationId = requireId(formData.get("quotationId"), "quotationId")
-  const amount = requireNumber(formData.get("amount"), "amount")
-  if (amount <= 0) {
-    throw new Error("Jumlah uang muka harus lebih dari 0")
-  }
+  const quotationId = v.quotationId
+  const amount = v.amount
 
   const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
   if (!["accepted", "converted"].includes(quotation.status)) {
@@ -446,10 +449,10 @@ export async function createDownPayment(formData: FormData) {
       quotationId,
       customerId: quotation.customerId,
       amount,
-      paymentDate: new Date(formData.get("paymentDate") as string),
-      paymentMethod: formData.get("paymentMethod") as string | null,
+      paymentDate: new Date(v.paymentDate),
+      paymentMethod: v.paymentMethod ?? null,
       proofImage,
-      notes: formData.get("notes") as string | null,
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
     },
@@ -493,15 +496,19 @@ export async function createSalesOrder(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_orders")
 
+  const parsed = parseFormData(createSalesOrderSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("SO")
 
   const data = {
     documentNo,
-    customerId: requireId(formData.get("customerId"), "customerId"),
-    quotationId: safeId(formData.get("quotationId")),
-    date: new Date(formData.get("date") as string),
-    deliveryDate: formData.get("deliveryDate") ? new Date(formData.get("deliveryDate") as string) : null,
-    notes: formData.get("notes") as string | null,
+    customerId: v.customerId,
+    quotationId: v.quotationId ?? null,
+    date: new Date(v.date),
+    deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+    notes: v.notes ?? null,
     status: "draft" as const,
     createdBy: Number(user.id),
   }
@@ -636,16 +643,20 @@ export async function createSalesInvoice(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_invoices")
 
+  const parsed = parseFormData(createSalesInvoiceSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("INV")
 
   const invoice = await prisma.salesInvoice.create({
     data: {
       documentNo,
-      customerId: requireId(formData.get("customerId"), "customerId"),
-      salesOrderId: safeId(formData.get("salesOrderId")),
-      quotationId: safeId(formData.get("quotationId")),
-      date: new Date(formData.get("date") as string),
-      dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
+      customerId: v.customerId,
+      salesOrderId: v.salesOrderId ?? null,
+      quotationId: v.quotationId ?? null,
+      date: new Date(v.date),
+      dueDate: v.dueDate ? new Date(v.dueDate) : null,
       subtotal: 0,
       discount: 0,
       tax: 0,
@@ -675,12 +686,13 @@ export async function createSalesPayment(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_payments")
 
+  const parsed = parseFormData(createSalesPaymentSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("PAY")
-  const salesInvoiceId = requireId(formData.get("salesInvoiceId"), "salesInvoiceId")
-  const amount = requireNumber(formData.get("amount"), "amount")
-  if (amount <= 0) {
-    throw new Error("Jumlah pembayaran harus lebih dari 0")
-  }
+  const salesInvoiceId = v.salesInvoiceId
+  const amount = v.amount
 
   // Atomic: lock invoice, validate remaining, create payment + recalc in one transaction.
   const payment = await prisma.$transaction(async (tx) => {
@@ -702,10 +714,10 @@ export async function createSalesPayment(formData: FormData) {
         salesInvoiceId,
         customerId: invoice.customerId,
         amount,
-        paymentDate: new Date(formData.get("paymentDate") as string),
-        paymentMethod: formData.get("paymentMethod") as string,
-        accountId: safeId(formData.get("accountId")),
-        notes: formData.get("notes") as string | null,
+        paymentDate: new Date(v.paymentDate),
+        paymentMethod: v.paymentMethod,
+        accountId: v.accountId ?? null,
+        notes: v.notes ?? null,
         createdBy: Number(user.id),
       },
     })
@@ -718,7 +730,7 @@ export async function createSalesPayment(formData: FormData) {
   await onSalesPaymentCreated(payment.id, Number(user.id))
 
   // Associate uploaded attachments with the new payment
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds as string | undefined
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
@@ -779,9 +791,13 @@ export async function createSalesReturn(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_returns")
 
+  const parsed = parseFormData(createSalesReturnSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("SR")
 
-  const itemsJson = formData.get("items") as string
+  const itemsJson = v.items
   const items = safeJsonParse<any[]>(itemsJson) ?? []
   const validItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
   const returnItemIds = validItems.map((it: any) => Number(it.itemId))
@@ -793,7 +809,7 @@ export async function createSalesReturn(formData: FormData) {
 
   // Selling price for the AR reduction: prefer the original invoice line price,
   // fall back to the item master price, then cost.
-  const invoiceId = safeId(formData.get("salesInvoiceId"))
+  const invoiceId = v.salesInvoiceId ?? null
   const invoicePriceMap = new Map<number, number>()
   if (invoiceId) {
     const invItems = await prisma.salesInvoiceItem.findMany({
@@ -809,9 +825,9 @@ export async function createSalesReturn(formData: FormData) {
     data: {
       documentNo,
       salesInvoiceId: invoiceId,
-      customerId: requireId(formData.get("customerId"), "customerId"),
-      date: new Date(formData.get("date") as string),
-      reason: formData.get("reason") as string | null,
+      customerId: v.customerId,
+      date: new Date(v.date),
+      reason: v.reason ?? null,
       status: "draft",
       createdBy: Number(user.id),
       items: {
@@ -845,8 +861,12 @@ export async function createDeliveryOrder(formData: FormData) {
   try {
   const user = await requirePermission("create_delivery_orders")
 
+  const parsed = parseFormData(createDeliveryOrderSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("DO")
-  const salesOrderId = requireId(formData.get("salesOrderId"), "salesOrderId")
+  const salesOrderId = v.salesOrderId
   const salesOrder = await prisma.salesOrder.findUnique({
     where: { id: salesOrderId },
     select: { customerId: true },
@@ -855,20 +875,20 @@ export async function createDeliveryOrder(formData: FormData) {
   const deliveryOrder = await prisma.deliveryOrder.create({
     data: {
       documentNo,
-      doNumber: (formData.get("doNumber") as string) || null,
+      doNumber: v.doNumber ?? null,
       customerId: salesOrder?.customerId ?? null,
       salesOrderId,
-      date: new Date(formData.get("date") as string),
-      deliveryDate: formData.get("deliveryDate") ? new Date(formData.get("deliveryDate") as string) : null,
-      shippingAddress: (formData.get("shippingAddress") as string) || null,
-      shippingProvince: (formData.get("shippingProvince") as string) || null,
-      shippingCity: (formData.get("shippingCity") as string) || null,
-      shippingDistrict: (formData.get("shippingDistrict") as string) || null,
-      shippingVillage: (formData.get("shippingVillage") as string) || null,
-      shippingPostalCode: (formData.get("shippingPostalCode") as string) || null,
-      shippingPhone: (formData.get("shippingPhone") as string) || null,
-      vehicleNumber: (formData.get("vehicleNumber") as string) || null,
-      notes: formData.get("notes") as string | null,
+      date: new Date(v.date),
+      deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+      shippingAddress: v.shippingAddress ?? null,
+      shippingProvince: v.shippingProvince ?? null,
+      shippingCity: v.shippingCity ?? null,
+      shippingDistrict: v.shippingDistrict ?? null,
+      shippingVillage: v.shippingVillage ?? null,
+      shippingPostalCode: v.shippingPostalCode ?? null,
+      shippingPhone: v.shippingPhone ?? null,
+      vehicleNumber: v.vehicleNumber ?? null,
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
     },

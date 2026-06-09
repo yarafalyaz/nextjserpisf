@@ -11,6 +11,8 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { customerSchema, vendorSchema, itemSchema } from "@/lib/validations/schemas"
+import { parseFormData } from "@/lib/validations/parse-form"
 
 /**
  * Smart delete for master records that carry a `deletedAt` soft-delete column.
@@ -47,29 +49,33 @@ export async function createCustomer(formData: FormData) {
   try {
   await requirePermission("create_customers")
 
+  const parsed = parseFormData(customerSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const settings = await getSystemSettings()
-  let code = (formData.get("code") as string) || null
+  let code = v.code || null
   if (settings.enableAutoCustomerCode !== false || !code) {
     code = await generateDocumentNumber("CUST", "simple")
   }
 
   const customer = await prisma.customer.create({
     data: {
-      name: formData.get("name") as string,
-      email: formData.get("email") as string | null,
-      phone: formData.get("phone") as string | null,
-      address: formData.get("address") as string | null,
-      city: formData.get("city") as string | null,
-      npwp: formData.get("npwp") as string | null,
-      contactPerson: formData.get("contactPerson") as string | null,
-      gender: (formData.get("gender") as string) || null,
+      name: v.name,
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      address: v.address ?? null,
+      city: v.city ?? null,
+      npwp: v.npwp ?? null,
+      contactPerson: v.contactPerson ?? null,
+      gender: v.gender ?? null,
       code,
-      street: formData.get("street") as string | null,
-      province: formData.get("province") as string | null,
-      district: formData.get("district") as string | null,
-      village: formData.get("village") as string | null,
-      postalCode: formData.get("postalCode") as string | null,
-      creditLimit: safeNumber(formData.get("creditLimit")) ?? 0,
+      street: v.street ?? null,
+      province: v.province ?? null,
+      district: v.district ?? null,
+      village: v.village ?? null,
+      postalCode: v.postalCode ?? null,
+      creditLimit: v.creditLimit ?? 0,
       isActive: true,
     },
   })
@@ -89,24 +95,28 @@ export async function updateCustomer(customerId: number, formData: FormData) {
   try {
   await requirePermission("edit_customers")
 
+  const parsed = parseFormData(customerSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   await prisma.customer.update({
     where: { id: customerId },
     data: {
-      name: formData.get("name") as string,
-      email: formData.get("email") as string | null,
-      phone: formData.get("phone") as string | null,
-      address: formData.get("address") as string | null,
-      city: formData.get("city") as string | null,
-      npwp: formData.get("npwp") as string | null,
-      contactPerson: formData.get("contactPerson") as string | null,
-      gender: (formData.get("gender") as string) || null,
-      code: (formData.get("code") as string) || null,
-      street: formData.get("street") as string | null,
-      province: formData.get("province") as string | null,
-      district: formData.get("district") as string | null,
-      village: formData.get("village") as string | null,
-      postalCode: formData.get("postalCode") as string | null,
-      creditLimit: safeNumber(formData.get("creditLimit")) ?? 0,
+      name: v.name,
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      address: v.address ?? null,
+      city: v.city ?? null,
+      npwp: v.npwp ?? null,
+      contactPerson: v.contactPerson ?? null,
+      gender: v.gender ?? null,
+      code: v.code ?? null,
+      street: v.street ?? null,
+      province: v.province ?? null,
+      district: v.district ?? null,
+      village: v.village ?? null,
+      postalCode: v.postalCode ?? null,
+      creditLimit: v.creditLimit ?? 0,
     },
   })
 
@@ -147,33 +157,35 @@ export async function createVendor(formData: FormData) {
   try {
   await requirePermission("create_vendors")
 
-  await requirePermission("create_vendors")
+  const parsed = parseFormData(vendorSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
 
   const settings = await getSystemSettings()
-  let code = (formData.get("code") as string) || null
+  let code = v.code || null
   if (settings.enableAutoVendorCode !== false || !code) {
     code = await generateDocumentNumber("VND", "simple")
   }
 
   const vendor = await prisma.vendor.create({
     data: {
-      name: formData.get("name") as string,
+      name: v.name,
       code,
-      email: formData.get("email") as string | null,
-      phone: formData.get("phone") as string | null,
-      address: formData.get("address") as string | null,
-      city: formData.get("city") as string | null,
-      npwp: formData.get("npwp") as string | null,
-      contactPerson: formData.get("contactPerson") as string | null,
-      paymentTermId: safeId(formData.get("paymentTermId")),
-      street: formData.get("street") as string | null,
-      province: formData.get("province") as string | null,
-      postalCode: formData.get("postalCode") as string | null,
-      districtVendor: formData.get("district") as string | null,
-      villageVendor: formData.get("village") as string | null,
-      bankName: formData.get("bankName") as string | null,
-      bankAccountNumber: formData.get("bankAccountNumber") as string | null,
-      bankAccountHolder: formData.get("bankAccountHolder") as string | null,
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      address: v.address ?? null,
+      city: v.city ?? null,
+      npwp: v.npwp ?? null,
+      contactPerson: v.contactPerson ?? null,
+      paymentTermId: v.paymentTermId ?? null,
+      street: v.street ?? null,
+      province: v.province ?? null,
+      postalCode: v.postalCode ?? null,
+      districtVendor: v.districtVendor ?? null,
+      villageVendor: v.villageVendor ?? null,
+      bankName: v.bankName ?? null,
+      bankAccountNumber: v.bankAccountNumber ?? null,
+      bankAccountHolder: v.bankAccountHolder ?? null,
       isActive: true,
     },
   })
@@ -193,25 +205,29 @@ export async function updateVendor(vendorId: number, formData: FormData) {
   try {
   await requirePermission("edit_vendors")
 
+  const parsed = parseFormData(vendorSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   await prisma.vendor.update({
     where: { id: vendorId },
     data: {
-      name: formData.get("name") as string,
-      email: formData.get("email") as string | null,
-      phone: formData.get("phone") as string | null,
-      address: formData.get("address") as string | null,
-      city: formData.get("city") as string | null,
-      npwp: formData.get("npwp") as string | null,
-      contactPerson: formData.get("contactPerson") as string | null,
-      paymentTermId: safeId(formData.get("paymentTermId")),
-      street: formData.get("street") as string | null,
-      province: formData.get("province") as string | null,
-      postalCode: formData.get("postalCode") as string | null,
-      districtVendor: formData.get("district") as string | null,
-      villageVendor: formData.get("village") as string | null,
-      bankName: formData.get("bankName") as string | null,
-      bankAccountNumber: formData.get("bankAccountNumber") as string | null,
-      bankAccountHolder: formData.get("bankAccountHolder") as string | null,
+      name: v.name,
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      address: v.address ?? null,
+      city: v.city ?? null,
+      npwp: v.npwp ?? null,
+      contactPerson: v.contactPerson ?? null,
+      paymentTermId: v.paymentTermId ?? null,
+      street: v.street ?? null,
+      province: v.province ?? null,
+      postalCode: v.postalCode ?? null,
+      districtVendor: v.districtVendor ?? null,
+      villageVendor: v.villageVendor ?? null,
+      bankName: v.bankName ?? null,
+      bankAccountNumber: v.bankAccountNumber ?? null,
+      bankAccountHolder: v.bankAccountHolder ?? null,
     },
   })
 
@@ -232,14 +248,18 @@ export async function createItem(formData: FormData) {
   try {
   await requirePermission("create_items")
 
+  const parsed = parseFormData(itemSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const itemSettings = await getSystemSettings()
-  let sku = (formData.get("sku") as string) || null
+  let sku = v.sku || null
   if (itemSettings.enableAutoItemCode !== false || !sku) {
     sku = await generateDocumentNumber("ITM", "simple")
   }
 
-  const itemCost = safeNumber(formData.get("cost")) ?? 0
-  const itemPrice = safeNumber(formData.get("price")) ?? 0
+  const itemCost = v.cost
+  const itemPrice = v.price
   if (itemPrice < itemCost) {
     return { success: false, error: "Harga jual tidak boleh lebih rendah dari harga beli (modal)." }
   }
@@ -247,26 +267,26 @@ export async function createItem(formData: FormData) {
   const item = await prisma.item.create({
     data: {
       sku,
-      name: formData.get("name") as string,
-      description: formData.get("description") as string | null,
-      image: formData.get("image") as string | null,
-      categoryId: safeId(formData.get("categoryId")),
-      brandId: safeId(formData.get("brandId")),
-      vendorId: safeId(formData.get("vendorId")),
-      defaultWarehouseId: safeId(formData.get("defaultWarehouseId")),
-      defaultRackId: safeId(formData.get("defaultRackId")),
-      defaultRackRowId: safeId(formData.get("defaultRackRowId")),
-      unitOfMeasure: formData.get("unitOfMeasure") as string || "PCS",
+      name: v.name,
+      description: v.description ?? null,
+      image: v.image ?? null,
+      categoryId: v.categoryId ?? null,
+      brandId: v.brandId ?? null,
+      vendorId: v.vendorId ?? null,
+      defaultWarehouseId: v.defaultWarehouseId ?? null,
+      defaultRackId: v.defaultRackId ?? null,
+      defaultRackRowId: v.defaultRackRowId ?? null,
+      unitOfMeasure: v.unitOfMeasure,
       qtyOnHand: 0,
-      minStock: (safeNumber(formData.get("minStock")) ?? 0),
+      minStock: v.minStock ?? 0,
       cost: itemCost,
       price: itemPrice,
-      standardCost: safeNumber(formData.get("standardCost")) ?? undefined,
-      costingMethod: (formData.get("costingMethod") as string) || undefined,
-      purchasePrice: safeNumber(formData.get("purchasePrice")) ?? undefined,
-      isProduct: formData.get("isProduct") === "true",
-      trackBatch: formData.get("trackBatch") === "true",
-      trackSerial: formData.get("trackSerial") === "true",
+      standardCost: v.standardCost ?? undefined,
+      costingMethod: v.costingMethod ?? undefined,
+      purchasePrice: v.purchasePrice ?? undefined,
+      isProduct: v.isProduct ?? false,
+      trackBatch: v.trackBatch ?? false,
+      trackSerial: v.trackSerial ?? false,
       isActive: true,
     },
   })

@@ -7,7 +7,9 @@ import { onExpenseApproved, onPettyCashCreated } from "@/lib/hooks/accounting.ho
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
-import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/lib/utils/safe-parse"
+import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { bankStatementSchema, expenseSchema, pettyCashSchema, bankReconciliationSchema, budgetSchema, costCenterSchema } from "@/lib/validations/finance.schemas"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
@@ -18,18 +20,22 @@ export async function createBankStatement(formData: FormData) {
   try {
   const user = await requirePermission("create_journals")
 
+  const parsed = parseFormData(bankStatementSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const bankStatement = await prisma.bankStatement.create({
     data: {
-      accountId: requireId(formData.get("accountId"), "accountId"),
-      bankId: safeId(formData.get("bankId")),
-      accountNumber: formData.get("accountNumber") as string | null,
-      date: new Date(formData.get("date") as string),
-      reference: formData.get("reference") as string | null,
-      periodStart: formData.get("periodStart") ? new Date(formData.get("periodStart") as string) : null,
-      periodEnd: formData.get("periodEnd") ? new Date(formData.get("periodEnd") as string) : null,
-      openingBalance: safeNumber(formData.get("openingBalance")) ?? 0,
-      closingBalance: safeNumber(formData.get("closingBalance")) ?? 0,
-      notes: formData.get("notes") as string | null,
+      accountId: v.accountId,
+      bankId: v.bankId ?? null,
+      accountNumber: v.accountNumber ?? null,
+      date: v.date,
+      reference: v.reference ?? null,
+      periodStart: v.periodStart ?? null,
+      periodEnd: v.periodEnd ?? null,
+      openingBalance: v.openingBalance,
+      closingBalance: v.closingBalance,
+      notes: v.notes ?? null,
       status: "draft",
       uploadedBy: Number(user.id),
     },
@@ -188,22 +194,26 @@ export async function createExpense(formData: FormData) {
   try {
   const user = await requirePermission("create_expenses")
 
+  const parsed = parseFormData(expenseSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("EXP")
 
   const expense = await prisma.expense.create({
     data: {
       documentNo,
-      employeeId: safeId(formData.get("employeeId")),
-      accountId: requireId(formData.get("accountId"), "accountId"),
-      paidFromAccountId: safeId(formData.get("paidFromAccountId")),
-      projectId: safeId(formData.get("projectId")),
-      costCenterId: safeId(formData.get("costCenterId")),
-      amount: requireNumber(formData.get("amount"), "amount"),
-      date: new Date(formData.get("date") as string),
-      referenceNo: formData.get("referenceNo") as string | null,
-      description: formData.get("description") as string | null,
-      category: formData.get("category") as string | null,
-      receiptImage: formData.get("receiptImage") as string | null,
+      employeeId: v.employeeId ?? null,
+      accountId: v.accountId,
+      paidFromAccountId: v.paidFromAccountId ?? null,
+      projectId: v.projectId ?? null,
+      costCenterId: v.costCenterId ?? null,
+      amount: v.amount,
+      date: v.date,
+      referenceNo: v.referenceNo ?? null,
+      description: v.description ?? null,
+      category: v.category ?? null,
+      receiptImage: v.receiptImage ?? null,
       status: "draft",
       createdBy: Number(user.id),
     },
@@ -342,10 +352,14 @@ export async function createPettyCash(formData: FormData) {
   try {
   const user = await requirePermission("create_petty_cash")
 
+  const parsed = parseFormData(pettyCashSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("PC")
 
-  const type = formData.get("type") as string // IN or OUT
-  const amount = requireNumber(formData.get("amount"), "amount")
+  const type = v.type
+  const amount = v.amount
 
   // Calculate balanceBefore from the last petty cash record
   const lastRecord = await prisma.pettyCash.findFirst({
@@ -368,9 +382,9 @@ export async function createPettyCash(formData: FormData) {
         amount,
         balanceBefore,
         balanceAfter,
-        date: new Date(formData.get("date") as string),
-        accountId: safeId(formData.get("accountId")),
-        description: formData.get("description") as string | null,
+        date: v.date,
+        accountId: v.accountId ?? null,
+        description: v.description ?? null,
         createdBy: Number(user.id),
       },
     })
@@ -383,7 +397,7 @@ export async function createPettyCash(formData: FormData) {
   await onPettyCashCreated(pettyCash.id, Number(user.id))
 
   // Associate uploaded attachments with the new petty cash record
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds as string | undefined
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
@@ -411,18 +425,22 @@ export async function createBankReconciliation(formData: FormData) {
   try {
   const user = await requirePermission("create_journals")
 
+  const parsed = parseFormData(bankReconciliationSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const reconciliationNumber = await generateDocumentNumber("REC")
 
   const reconciliation = await prisma.bankReconciliation.create({
     data: {
       reconciliationNumber,
-      accountId: requireId(formData.get("accountId"), "accountId"),
-      statementDate: new Date(formData.get("statementDate") as string),
-      statementBalance: requireNumber(formData.get("statementBalance"), "statementBalance"),
-      periodStart: formData.get("periodStart") ? new Date(formData.get("periodStart") as string) : null,
-      periodEnd: formData.get("periodEnd") ? new Date(formData.get("periodEnd") as string) : null,
-      bookBalance: safeNumber(formData.get("bookBalance")) ?? 0,
-      notes: formData.get("notes") as string | null,
+      accountId: v.accountId,
+      statementDate: v.statementDate,
+      statementBalance: v.statementBalance,
+      periodStart: v.periodStart ?? null,
+      periodEnd: v.periodEnd ?? null,
+      bookBalance: v.bookBalance,
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
     },
@@ -530,14 +548,18 @@ export async function createBudget(formData: FormData) {
   try {
   const user = await requirePermission("create_budgets")
 
+  const parsed = parseFormData(budgetSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const budget = await prisma.budget.create({
     data: {
-      name: formData.get("name") as string,
-      accountId: requireId(formData.get("accountId"), "accountId"),
-      costCenterId: safeId(formData.get("costCenterId")),
-      amount: requireNumber(formData.get("amount"), "amount"),
-      startDate: new Date(formData.get("startDate") as string),
-      endDate: new Date(formData.get("endDate") as string),
+      name: v.name,
+      accountId: v.accountId,
+      costCenterId: v.costCenterId ?? null,
+      amount: v.amount,
+      startDate: v.startDate,
+      endDate: v.endDate,
       createdBy: Number(user.id),
     },
   })
@@ -559,12 +581,16 @@ export async function createCostCenter(formData: FormData) {
   try {
   await requirePermission("create_cost_centers")
 
+  const parsed = parseFormData(costCenterSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const costCenter = await prisma.costCenter.create({
     data: {
-      code: formData.get("code") as string,
-      name: formData.get("name") as string,
-      description: formData.get("description") as string | null,
-      isActive: formData.get("isActive") === "on",
+      code: v.code,
+      name: v.name,
+      description: v.description ?? null,
+      isActive: v.isActive,
     },
   })
 
@@ -583,13 +609,17 @@ export async function updateCostCenter(id: number, formData: FormData) {
   try {
   await requirePermission("edit_cost_centers")
 
+  const parsed = parseFormData(costCenterSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   await prisma.costCenter.update({
     where: { id },
     data: {
-      code: formData.get("code") as string,
-      name: formData.get("name") as string,
-      description: formData.get("description") as string | null,
-      isActive: formData.get("isActive") === "on",
+      code: v.code,
+      name: v.name,
+      description: v.description ?? null,
+      isActive: v.isActive,
     },
   })
 

@@ -11,8 +11,17 @@ import { onPurchaseReturnProcessed as onPurchaseReturnStock } from "@/lib/hooks/
 import { notificationService } from "@/lib/services/notification.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
-import { safeJsonParse , requireId, safeId, requireNumber, safeNumber} from "@/lib/utils/safe-parse"
+import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import {
+  purchaseRequestSchema,
+  purchaseOrderSchema,
+  goodsReceiptSchema,
+  vendorBillSchema,
+  vendorPaymentSchema,
+  purchaseReturnSchema,
+} from "@/lib/validations/purchase.schemas"
 
 /**
  * 3-way match guard (PO ↔ Goods Receipt ↔ Vendor Bill).
@@ -68,23 +77,26 @@ export async function createPurchaseRequest(formData: FormData) {
   try {
   const user = await requirePermission("create_purchase_requests")
 
-  const documentNo = await generateDocumentNumber("PR")
-  const requestedBy = requireNumber(formData.get("requestedBy"), "requestedBy") || Number(user.id)
-  const itemsJson = formData.get("items") as string | null
-  const items = safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(itemsJson) ?? []
+  const parsed = parseFormData(purchaseRequestSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
 
-  const requestDateRaw = formData.get("requestDate") as string | null
-  const description = formData.get("description") as string | null
+  const documentNo = await generateDocumentNumber("PR")
+  const requestedBy = v.requestedBy || Number(user.id)
+  const items = safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(v.items ?? null) ?? []
+
+  const requestDateRaw = v.requestDate
+  const description = v.description ?? null
 
   const pr = await prisma.purchaseRequest.create({
     data: {
       documentNo,
-      title: formData.get("title") as string | null,
+      title: v.title ?? null,
       requestedBy,
-      date: new Date(formData.get("date") as string),
+      date: new Date(v.date),
       requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
       description,
-      notes: formData.get("notes") as string | null,
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
       items: {
@@ -144,10 +156,14 @@ export async function createPurchaseOrder(formData: FormData) {
   try {
   const user = await requirePermission("create_purchase_orders")
 
+  const parsed = parseFormData(purchaseOrderSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("PO")
 
   const poItems = (safeJsonParse<{ itemId: number; qty: number; unitPrice: number; discount: number }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
   const subtotal = poItems.reduce((s, it) => s + Number(it.qty) * Number(it.unitPrice), 0)
@@ -157,11 +173,11 @@ export async function createPurchaseOrder(formData: FormData) {
   const po = await prisma.purchaseOrder.create({
     data: {
       documentNo,
-      vendorId: requireId(formData.get("vendorId"), "vendorId"),
-      purchaseRequestId: safeId(formData.get("purchaseRequestId")),
-      date: new Date(formData.get("date") as string),
-      expectedDate: formData.get("expectedDate") ? new Date(formData.get("expectedDate") as string) : null,
-      notes: formData.get("notes") as string | null,
+      vendorId: v.vendorId,
+      purchaseRequestId: v.purchaseRequestId ?? null,
+      date: new Date(v.date),
+      expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+      notes: v.notes ?? null,
       subtotal,
       discount: discountTotal,
       tax: 0,
@@ -181,7 +197,7 @@ export async function createPurchaseOrder(formData: FormData) {
   })
 
   // Update PR status if linked
-  if (formData.get("purchaseRequestId")) {
+  if (v.purchaseRequestId) {
     await onPurchaseOrderCreated(po.id)
   }
 
@@ -296,18 +312,21 @@ export async function createGoodsReceipt(formData: FormData) {
   try {
   const user = await requirePermission("create_goods_receipts")
 
+  const parsed = parseFormData(goodsReceiptSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("GR")
-  const itemsJson = formData.get("items") as string | null
-  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(itemsJson) ?? []
+  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(v.items ?? null) ?? []
 
   const gr = await prisma.$transaction(async (tx) => {
     const createdGr = await tx.goodsReceipt.create({
       data: {
         documentNo,
-        purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
-        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-        date: new Date(formData.get("date") as string),
-        notes: formData.get("notes") as string | null,
+        purchaseOrderId: v.purchaseOrderId,
+        warehouseId: v.warehouseId,
+        date: new Date(v.date),
+        notes: v.notes ?? null,
         status: "draft",
         createdBy: Number(user.id),
         items: {
@@ -383,34 +402,38 @@ export async function createVendorBill(formData: FormData) {
   try {
   const user = await requirePermission("create_vendor_bills")
 
+  const parsed = parseFormData(vendorBillSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("BILL")
 
   // 3-way match before posting the bill
   await assertThreeWayMatch(
-    safeId(formData.get("purchaseOrderId")),
-    safeNumber(formData.get("grandTotal")) ?? 0
+    v.purchaseOrderId ?? null,
+    v.grandTotal
   )
 
   const bill = await prisma.vendorBill.create({
     data: {
       documentNo,
-      vendorId: requireId(formData.get("vendorId"), "vendorId"),
-      purchaseOrderId: safeId(formData.get("purchaseOrderId")),
-      date: new Date(formData.get("date") as string),
-      dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
-      vendorInvoiceNumber: formData.get("vendorInvoiceNumber") as string | null,
-      terms: formData.get("terms") as string | null,
-      notes: formData.get("notes") as string | null,
-      subtotal: (safeNumber(formData.get("subtotal")) ?? 0),
-      tax: (safeNumber(formData.get("tax")) ?? 0),
-      grandTotal: (safeNumber(formData.get("grandTotal")) ?? 0),
+      vendorId: v.vendorId,
+      purchaseOrderId: v.purchaseOrderId ?? null,
+      date: new Date(v.date),
+      dueDate: v.dueDate ? new Date(v.dueDate) : null,
+      vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
+      terms: v.terms ?? null,
+      notes: v.notes ?? null,
+      subtotal: v.subtotal,
+      tax: v.tax,
+      grandTotal: v.grandTotal,
       status: "draft",
       createdBy: Number(user.id),
     },
   })
 
   // Associate uploaded attachments with the new vendor bill
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
@@ -439,23 +462,27 @@ export async function createVendorPayment(formData: FormData) {
   try {
   const user = await requirePermission("create_vendor_payments")
 
+  const parsed = parseFormData(vendorPaymentSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("VPAY")
 
   const payment = await prisma.vendorPayment.create({
     data: {
       documentNo,
-      vendorId: requireId(formData.get("vendorId"), "vendorId"),
-      amount: requireNumber(formData.get("amount"), "amount"),
-      paymentDate: new Date(formData.get("paymentDate") as string),
-      paymentMethod: formData.get("paymentMethod") as string,
-      accountId: safeId(formData.get("accountId")),
-      notes: formData.get("notes") as string | null,
+      vendorId: v.vendorId,
+      amount: v.amount,
+      paymentDate: new Date(v.paymentDate),
+      paymentMethod: v.paymentMethod,
+      accountId: v.accountId ?? null,
+      notes: v.notes ?? null,
       createdBy: Number(user.id),
     },
   })
 
   // Associate uploaded attachments with the new payment
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
@@ -597,10 +624,13 @@ export async function createPurchaseReturn(formData: FormData) {
   try {
   const user = await requirePermission("create_purchase_returns")
 
+  const parsed = parseFormData(purchaseReturnSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("PRET")
 
-  const itemsJson = formData.get("items") as string
-  const items = safeJsonParse<any[]>(itemsJson) ?? []
+  const items = safeJsonParse<any[]>(v.items ?? null) ?? []
   const validPrItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
   const prItemIds = validPrItems.map((it: any) => Number(it.itemId))
   const prCostRows = prItemIds.length
@@ -611,9 +641,9 @@ export async function createPurchaseReturn(formData: FormData) {
   const purchaseReturn = await prisma.purchaseReturn.create({
     data: {
       documentNo,
-      purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
-      date: new Date(formData.get("date") as string),
-      reason: formData.get("reason") as string | null,
+      purchaseOrderId: v.purchaseOrderId,
+      date: new Date(v.date),
+      reason: v.reason ?? null,
       status: "draft",
       createdBy: Number(user.id),
       items: {
@@ -887,30 +917,33 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
   try {
   const user = await requirePermission("create_purchase_requests")
 
+  const parsed = parseFormData(purchaseRequestSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const existingPr = await prisma.purchaseRequest.findUniqueOrThrow({ where: { id } })
   if (existingPr.status !== "draft") {
     throw new Error("Hanya PR draft yang dapat diedit")
   }
 
-  const requestedBy = requireNumber(formData.get("requestedBy"), "requestedBy") || Number(user.id)
-  const itemsJson = formData.get("items") as string | null
-  const items = safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(itemsJson) ?? []
+  const requestedBy = v.requestedBy || Number(user.id)
+  const items = safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(v.items ?? null) ?? []
 
   // Delete old items and create new ones
   await prisma.purchaseRequestItem.deleteMany({ where: { purchaseRequestId: id } })
 
-  const requestDateRaw = formData.get("requestDate") as string | null
-  const description = formData.get("description") as string | null
+  const requestDateRaw = v.requestDate
+  const description = v.description ?? null
 
   const pr = await prisma.purchaseRequest.update({
     where: { id },
     data: {
-      title: formData.get("title") as string | null,
+      title: v.title ?? null,
       requestedBy,
-      date: new Date(formData.get("date") as string),
+      date: new Date(v.date),
       requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
       description,
-      notes: formData.get("notes") as string | null,
+      notes: v.notes ?? null,
       items: {
         create: items
           .filter((i) => i.itemId > 0)
@@ -941,13 +974,17 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   try {
   await requirePermission("create_purchase_orders")
 
+  const parsed = parseFormData(purchaseOrderSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const existingPo = await prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
   if (existingPo.status !== "draft") {
     throw new Error("Hanya PO draft yang dapat diedit")
   }
 
   const poItems = (safeJsonParse<{ itemId: number; qty: number; unitPrice: number; discount: number }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
   const subtotal = poItems.reduce((s, it) => s + Number(it.qty) * Number(it.unitPrice), 0)
@@ -960,11 +997,11 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
     return tx.purchaseOrder.update({
       where: { id },
       data: {
-        vendorId: requireId(formData.get("vendorId"), "vendorId"),
-        purchaseRequestId: safeId(formData.get("purchaseRequestId")),
-        date: new Date(formData.get("date") as string),
-        expectedDate: formData.get("expectedDate") ? new Date(formData.get("expectedDate") as string) : null,
-        notes: formData.get("notes") as string | null,
+        vendorId: v.vendorId,
+        purchaseRequestId: v.purchaseRequestId ?? null,
+        date: new Date(v.date),
+        expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+        notes: v.notes ?? null,
         subtotal,
         discount: discountTotal,
         tax: 0,
@@ -983,7 +1020,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   })
 
   // Update PR status if linked
-  if (formData.get("purchaseRequestId")) {
+  if (v.purchaseRequestId) {
     await onPurchaseOrderCreated(po.id)
   }
 
@@ -1008,6 +1045,10 @@ export async function updateVendorBill(id: number, formData: FormData) {
   try {
   const user = await requirePermission("create_vendor_bills")
 
+  const parsed = parseFormData(vendorBillSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const existingBill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } })
   if (existingBill.status !== "draft") {
     throw new Error("Hanya tagihan draft yang dapat diedit")
@@ -1016,20 +1057,20 @@ export async function updateVendorBill(id: number, formData: FormData) {
   const bill = await prisma.vendorBill.update({
     where: { id },
     data: {
-      vendorId: requireId(formData.get("vendorId"), "vendorId"),
-      purchaseOrderId: safeId(formData.get("purchaseOrderId")),
-      date: new Date(formData.get("date") as string),
-      dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
-      subtotal: (safeNumber(formData.get("subtotal")) ?? 0),
-      tax: (safeNumber(formData.get("tax")) ?? 0),
-      grandTotal: (safeNumber(formData.get("grandTotal")) ?? 0),
+      vendorId: v.vendorId,
+      purchaseOrderId: v.purchaseOrderId ?? null,
+      date: new Date(v.date),
+      dueDate: v.dueDate ? new Date(v.dueDate) : null,
+      subtotal: v.subtotal,
+      tax: v.tax,
+      grandTotal: v.grandTotal,
       status: "draft",
       createdBy: Number(user.id),
     },
   })
 
   // Associate uploaded attachments with the new vendor bill
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
@@ -1063,22 +1104,25 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
   try {
   await requirePermission("create_goods_receipts")
 
+  const parsed = parseFormData(goodsReceiptSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const existingGr = await prisma.goodsReceipt.findUniqueOrThrow({ where: { id } })
   if (existingGr.status !== "draft") {
     throw new Error("Hanya GR draft yang dapat diedit")
   }
 
-  const itemsJson = formData.get("items") as string | null
-  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(itemsJson) ?? []
+  const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(v.items ?? null) ?? []
 
   const gr = await prisma.$transaction(async (tx) => {
     const updated = await tx.goodsReceipt.update({
       where: { id },
       data: {
-        purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
-        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-        date: new Date(formData.get("date") as string),
-        notes: formData.get("notes") as string | null,
+        purchaseOrderId: v.purchaseOrderId,
+        warehouseId: v.warehouseId,
+        date: new Date(v.date),
+        notes: v.notes ?? null,
       },
     })
 
@@ -1123,13 +1167,16 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
   try {
   await requirePermission("create_purchase_returns")
 
+  const parsed = parseFormData(purchaseReturnSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const ret = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
   if (ret.status !== "draft") {
     throw new Error("Hanya retur draft yang dapat diedit")
   }
 
-  const itemsJson = formData.get("items") as string
-  const items = safeJsonParse<any[]>(itemsJson) ?? []
+  const items = safeJsonParse<any[]>(v.items ?? null) ?? []
   const validPrItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
   const updPrIds = validPrItems.map((it: any) => Number(it.itemId))
   const updPrCostRows = updPrIds.length
@@ -1143,9 +1190,9 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
     return tx.purchaseReturn.update({
       where: { id },
       data: {
-        purchaseOrderId: requireId(formData.get("purchaseOrderId"), "purchaseOrderId"),
-        date: new Date(formData.get("date") as string),
-        reason: formData.get("reason") as string | null,
+        purchaseOrderId: v.purchaseOrderId,
+        date: new Date(v.date),
+        reason: v.reason ?? null,
         items: {
           create: validPrItems.map((item: any) => ({
             itemId: Number(item.itemId),
@@ -1175,6 +1222,10 @@ export async function updateVendorPayment(id: number, formData: FormData) {
   try {
   const user = await requirePermission("create_vendor_payments")
 
+  const parsed = parseFormData(vendorPaymentSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const existingPayment = await prisma.vendorPayment.findUniqueOrThrow({ where: { id } })
   if (existingPayment.status !== "draft") {
     throw new Error("Hanya pembayaran draft yang dapat diedit")
@@ -1183,18 +1234,18 @@ export async function updateVendorPayment(id: number, formData: FormData) {
   const payment = await prisma.vendorPayment.update({
     where: { id },
     data: {
-      vendorId: requireId(formData.get("vendorId"), "vendorId"),
-      amount: requireNumber(formData.get("amount"), "amount"),
-      paymentDate: new Date(formData.get("paymentDate") as string),
-      paymentMethod: formData.get("paymentMethod") as string,
-      accountId: safeId(formData.get("accountId")),
-      notes: formData.get("notes") as string | null,
+      vendorId: v.vendorId,
+      amount: v.amount,
+      paymentDate: new Date(v.paymentDate),
+      paymentMethod: v.paymentMethod,
+      accountId: v.accountId ?? null,
+      notes: v.notes ?? null,
       createdBy: Number(user.id),
     },
   })
 
   // Associate uploaded attachments with the new payment
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {

@@ -7,6 +7,8 @@ import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { attendanceSchema, leaveRequestSchema, overtimeRequestSchema, employeeLoanSchema, timesheetSchema, workScheduleSchema, holidaySchema, departmentHolidaySchema, appreciationSchema } from "@/lib/validations/hrm.schemas"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service"
 import { syncNationalHolidays as syncNationalHolidaysService } from "@/lib/services/holiday-sync.service"
@@ -212,19 +214,23 @@ export async function createAttendance(formData: FormData) {
   try {
   await requirePermission("create_attendance")
 
+  const parsed = parseFormData(attendanceSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const attendance = await prisma.attendance.create({
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      date: new Date(formData.get("date") as string),
-      checkIn: formData.get("checkIn") ? new Date(formData.get("checkIn") as string) : null,
-      checkOut: formData.get("checkOut") ? new Date(formData.get("checkOut") as string) : null,
-      status: (formData.get("status") as string) || "present",
-      checkInLatitude: safeNumber(formData.get("checkInLatitude")),
-      checkInLongitude: safeNumber(formData.get("checkInLongitude")),
-      checkOutLatitude: safeNumber(formData.get("checkOutLatitude")),
-      checkOutLongitude: safeNumber(formData.get("checkOutLongitude")),
-      overtimeMinutes: safeNumber(formData.get("overtimeMinutes")),
-      overtimeApproved: formData.get("overtimeApproved") === "true" || formData.get("overtimeApproved") === "on",
+      employeeId: v.employeeId,
+      date: new Date(v.date),
+      checkIn: v.checkIn ? new Date(v.checkIn) : null,
+      checkOut: v.checkOut ? new Date(v.checkOut) : null,
+      status: v.status,
+      checkInLatitude: v.checkInLatitude ?? null,
+      checkInLongitude: v.checkInLongitude ?? null,
+      checkOutLatitude: v.checkOutLatitude ?? null,
+      checkOutLongitude: v.checkOutLongitude ?? null,
+      overtimeMinutes: v.overtimeMinutes ?? null,
+      overtimeApproved: v.overtimeApproved ?? false,
     },
   })
 
@@ -277,9 +283,13 @@ export async function createLeaveRequest(formData: FormData) {
   try {
   await requirePermission("create_leave_requests")
 
-  const employeeId = requireId(formData.get("employeeId"), "employeeId")
-  const startDate = new Date(formData.get("startDate") as string)
-  const endDate = new Date(formData.get("endDate") as string)
+  const parsed = parseFormData(leaveRequestSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
+  const employeeId = v.employeeId
+  const startDate = new Date(v.startDate)
+  const endDate = new Date(v.endDate)
 
   // Guard: overlap — no pending/approved leave can overlap [startDate, endDate].
   const overlap = await prisma.leaveRequest.findFirst({
@@ -298,10 +308,10 @@ export async function createLeaveRequest(formData: FormData) {
   const leave = await prisma.leaveRequest.create({
     data: {
       employeeId,
-      type: formData.get("type") as string,
+      type: v.type,
       startDate,
       endDate,
-      reason: formData.get("reason") as string | null,
+      reason: v.reason ?? null,
       status: "pending",
     },
   })
@@ -380,16 +390,20 @@ export async function createOvertimeRequest(formData: FormData) {
   try {
   await requirePermission("create_overtime_requests")
 
+  const parsed = parseFormData(overtimeRequestSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const overtime = await prisma.overtimeRequest.create({
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      projectId: safeNumber(formData.get("projectId")),
-      date: new Date(formData.get("date") as string),
-      hours: requireNumber(formData.get("hours"), "hours"),
-      totalHours: safeNumber(formData.get("totalHours")),
-      mealHours: safeNumber(formData.get("mealHours")),
-      billableHours: safeNumber(formData.get("billableHours")),
-      reason: formData.get("reason") as string | null,
+      employeeId: v.employeeId,
+      projectId: v.projectId ?? null,
+      date: new Date(v.date),
+      hours: v.hours,
+      totalHours: v.totalHours ?? null,
+      mealHours: v.mealHours ?? null,
+      billableHours: v.billableHours ?? null,
+      reason: v.reason ?? null,
       status: "pending",
     },
   })
@@ -901,17 +915,21 @@ export async function createEmployeeLoan(formData: FormData) {
   try {
   await requirePermission("create_loans")
 
-  const totalAmount = requireNumber(formData.get("totalAmount"), "totalAmount")
+  const parsed = parseFormData(employeeLoanSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
+  const totalAmount = v.totalAmount
 
   const loan = await prisma.employeeLoan.create({
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      loanDate: new Date(formData.get("loanDate") as string),
+      employeeId: v.employeeId,
+      loanDate: new Date(v.loanDate),
       totalAmount,
-      monthlyInstallment: requireNumber(formData.get("monthlyInstallment"), "monthlyInstallment"),
+      monthlyInstallment: v.monthlyInstallment,
       remainingAmount: totalAmount,
       status: "active",
-      notes: formData.get("notes") as string | null,
+      notes: v.notes ?? null,
     },
   })
 
@@ -932,16 +950,20 @@ export async function createTimesheet(formData: FormData) {
   try {
   await requirePermission("create_timesheets")
 
+  const parsed = parseFormData(timesheetSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const timesheet = await prisma.timesheet.create({
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      projectId: requireId(formData.get("projectId"), "projectId"),
-      taskId: safeNumber(formData.get("taskId")),
-      date: new Date(formData.get("date") as string),
-      startTime: formData.get("startTime") as string | null,
-      endTime: formData.get("endTime") as string | null,
-      hours: requireNumber(formData.get("hours"), "hours"),
-      description: formData.get("description") as string | null,
+      employeeId: v.employeeId,
+      projectId: v.projectId,
+      taskId: v.taskId ?? null,
+      date: new Date(v.date),
+      startTime: v.startTime ?? null,
+      endTime: v.endTime ?? null,
+      hours: v.hours,
+      description: v.description ?? null,
     },
   })
 
@@ -962,18 +984,22 @@ export async function createWorkSchedule(formData: FormData) {
   try {
   await requirePermission("create_work_schedules")
 
-  const name = formData.get("name") as string
+  const parsed = parseFormData(workScheduleSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
+  const name = v.name
   const days = formData.getAll("days") as string[]
-  const startTime = formData.get("startTime") as string
-  const endTime = formData.get("endTime") as string
+  const startTime = v.startTime
+  const endTime = v.endTime
   const departmentIds = (formData.getAll("departmentId") as string[])
     .map((d) => safeNumber(d))
     .filter((n): n is number => n != null)
   const employeeIds = (formData.getAll("employeeId") as string[])
     .map((d) => safeNumber(d))
     .filter((n): n is number => n != null)
-  const lateToleranceMinutes = safeNumber(formData.get("lateToleranceMinutes")) ?? 0
-  const isActive = formData.get("isActive") === "true"
+  const lateToleranceMinutes = v.lateToleranceMinutes ?? 0
+  const isActive = v.isActive ?? false
 
   await prisma.workSchedule.create({
     data: {
@@ -1005,11 +1031,15 @@ export async function createHoliday(formData: FormData) {
   try {
   await requirePermission("create_holidays")
 
+  const parsed = parseFormData(holidaySchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const holiday = await prisma.holiday.create({
     data: {
-      name: formData.get("name") as string,
-      date: new Date(formData.get("date") as string),
-      description: formData.get("description") as string | null,
+      name: v.name,
+      date: new Date(v.date),
+      description: v.description ?? null,
     },
   })
 
@@ -1366,12 +1396,16 @@ export async function createDepartmentHoliday(formData: FormData) {
   try {
   await requirePermission("create_holidays")
 
+  const parsed = parseFormData(departmentHolidaySchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const holiday = await prisma.departmentHoliday.create({
     data: {
-      departmentId: requireId(formData.get("departmentId"), "departmentId"),
-      name: formData.get("name") as string,
-      date: new Date(formData.get("date") as string),
-      isRecurring: formData.get("isRecurring") === "on" || formData.get("isRecurring") === "true",
+      departmentId: v.departmentId,
+      name: v.name,
+      date: new Date(v.date),
+      isRecurring: v.isRecurring ?? false,
     },
   })
 
@@ -1436,13 +1470,17 @@ export async function createAppreciation(formData: FormData) {
   try {
   await requirePermission("create_appreciations")
 
+  const parsed = parseFormData(appreciationSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const appreciation = await prisma.appreciation.create({
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      date: new Date(formData.get("date") as string),
-      type: (formData.get("type") as string) || "bonus",
-      amount: safeNumber(formData.get("amount")) ?? 0,
-      notes: formData.get("notes") as string | null,
+      employeeId: v.employeeId,
+      date: new Date(v.date),
+      type: v.type,
+      amount: v.amount ?? 0,
+      notes: v.notes ?? null,
     },
   })
 
