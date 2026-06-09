@@ -151,7 +151,10 @@ export function SelfAttendanceWidget() {
     setGeo(coords)
     setGeoLoading(false)
     try {
-      await selfCheckIn(coords?.latitude, coords?.longitude)
+      const fd = new FormData()
+      if (coords?.latitude != null) fd.append("latitude", String(coords.latitude))
+      if (coords?.longitude != null) fd.append("longitude", String(coords.longitude))
+      await selfCheckIn(fd)
       await loadStatus()
     } catch (e: unknown) {
       setError(getErrorMessage(e, "Gagal absen masuk"))
@@ -167,7 +170,10 @@ export function SelfAttendanceWidget() {
     setGeo(coords)
     setGeoLoading(false)
     try {
-      await selfCheckOut(coords?.latitude, coords?.longitude)
+      const fd = new FormData()
+      if (coords?.latitude != null) fd.append("latitude", String(coords.latitude))
+      if (coords?.longitude != null) fd.append("longitude", String(coords.longitude))
+      await selfCheckOut(fd)
       await loadStatus()
     } catch (e: unknown) {
       setError(getErrorMessage(e, "Gagal absen keluar"))

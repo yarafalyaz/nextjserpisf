@@ -7,22 +7,33 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import {
+  createPaymentMethodSchema,
+  updatePaymentMethodSchema,
+  createShippingMethodSchema,
+  updateShippingMethodSchema,
+} from "@/lib/validations/method.schemas"
 
 // ==================== PAYMENT METHOD ====================
 
 export async function createPaymentMethod(formData: FormData) {
   try {
     await requirePermission("create_payment_methods")
+
+    const parsed = parseFormData(createPaymentMethodSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
     const settings = await getSystemSettings()
-    let code = ((formData.get("code") as string) || "").trim() || null
+    let code = parsed.data.code || null
     if (settings.enableAutoPaymentMethodCode !== false || !code) {
       code = await generateDocumentNumber("MTP", "simple")
     }
     const row = await prisma.paymentMethod.create({
       data: {
         code,
-        name: (formData.get("name") as string).trim(),
-        isActive: formData.get("isActive") === "on",
+        name: parsed.data.name,
+        isActive: parsed.data.isActive ?? false,
       },
     })
     await logActivity("create", "PaymentMethod", row.id, "Membuat metode pembayaran")
@@ -38,12 +49,16 @@ export async function createPaymentMethod(formData: FormData) {
 export async function updatePaymentMethod(id: number, formData: FormData) {
   try {
     await requirePermission("edit_payment_methods")
+
+    const parsed = parseFormData(updatePaymentMethodSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
     await prisma.paymentMethod.update({
       where: { id },
       data: {
-        code: (formData.get("code") as string).trim(),
-        name: (formData.get("name") as string).trim(),
-        isActive: formData.get("isActive") === "on",
+        code: parsed.data.code,
+        name: parsed.data.name,
+        isActive: parsed.data.isActive ?? false,
       },
     })
     await logActivity("update", "PaymentMethod", id, "Memperbarui metode pembayaran")
@@ -75,16 +90,20 @@ export async function deletePaymentMethod(id: number) {
 export async function createShippingMethod(formData: FormData) {
   try {
     await requirePermission("create_shipping_methods")
+
+    const parsed = parseFormData(createShippingMethodSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
     const settings = await getSystemSettings()
-    let code = ((formData.get("code") as string) || "").trim() || null
+    let code = parsed.data.code || null
     if (settings.enableAutoShippingMethodCode !== false || !code) {
       code = await generateDocumentNumber("MTK", "simple")
     }
     const row = await prisma.shippingMethod.create({
       data: {
         code,
-        name: (formData.get("name") as string).trim(),
-        isActive: formData.get("isActive") === "on",
+        name: parsed.data.name,
+        isActive: parsed.data.isActive ?? false,
       },
     })
     await logActivity("create", "ShippingMethod", row.id, "Membuat metode pengiriman")
@@ -100,12 +119,16 @@ export async function createShippingMethod(formData: FormData) {
 export async function updateShippingMethod(id: number, formData: FormData) {
   try {
     await requirePermission("edit_shipping_methods")
+
+    const parsed = parseFormData(updateShippingMethodSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+
     await prisma.shippingMethod.update({
       where: { id },
       data: {
-        code: (formData.get("code") as string).trim(),
-        name: (formData.get("name") as string).trim(),
-        isActive: formData.get("isActive") === "on",
+        code: parsed.data.code,
+        name: parsed.data.name,
+        isActive: parsed.data.isActive ?? false,
       },
     })
     await logActivity("update", "ShippingMethod", id, "Memperbarui metode pengiriman")

@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { getSystemSettings } from "@/lib/utils/settings"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { selfAttendanceLocationSchema } from "@/lib/validations/self-attendance.schemas"
 
 function getWibNow(now = new Date()) {
   const wibOffset = 7 * 60 * 60 * 1000
@@ -75,7 +77,10 @@ async function resolveScheduleInfo(employeeId: number | null | undefined, employ
  * Self-service check in — karyawan absen masuk sendiri.
  * GPS coordinates dikirim dari browser (client-side geolocation).
  */
-export async function selfCheckIn(latitude?: number, longitude?: number) {
+export async function selfCheckIn(formData: FormData) {
+  const parsed = parseFormData(selfAttendanceLocationSchema, formData)
+  if (!parsed.success) throw new Error(parsed.error)
+  const { latitude, longitude } = parsed.data
   const session = await auth()
   if (!session?.user?.id) throw new Error("Silakan login terlebih dahulu")
 
@@ -148,7 +153,10 @@ export async function selfCheckIn(latitude?: number, longitude?: number) {
 /**
  * Self-service check out — karyawan absen pulang sendiri.
  */
-export async function selfCheckOut(latitude?: number, longitude?: number) {
+export async function selfCheckOut(formData: FormData) {
+  const parsed = parseFormData(selfAttendanceLocationSchema, formData)
+  if (!parsed.success) throw new Error(parsed.error)
+  const { latitude, longitude } = parsed.data
   const session = await auth()
   if (!session?.user?.id) throw new Error("Silakan login terlebih dahulu")
 

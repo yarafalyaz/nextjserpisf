@@ -4,8 +4,9 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
-import { safeId } from "@/lib/utils/safe-parse"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { createTicketSchema, updateTicketSchema } from "@/lib/validations/crm.schemas"
 
 // ==================== CRM TICKET ACTIONS ====================
 
@@ -13,21 +14,27 @@ export async function createTicket(formData: FormData) {
   try {
   const user = await requirePermission("create_tickets")
 
+  const parsed = parseFormData(createTicketSchema, formData)
+  if (!parsed.success) {
+    return { success: false, error: parsed.error }
+  }
+  const data = parsed.data
+
   const { generateDocumentNumber } = await import("@/lib/utils/document-number")
   const ticketNumber = await generateDocumentNumber("TKT", "simple")
 
   const ticket = await prisma.crmTicket.create({
     data: {
       ticketNumber,
-      subject: formData.get("subject") as string,
-      description: formData.get("description") as string | null,
-      customerId: safeId(formData.get("customerId")),
-      customerName: formData.get("customerName") as string | null,
-      customerEmail: formData.get("customerEmail") as string | null,
-      customerPhone: formData.get("customerPhone") as string | null,
-      type: formData.get("type") as string | null,
-      priority: formData.get("priority") as string || "medium",
-      assignedTo: safeId(formData.get("assignedTo")),
+      subject: data.subject,
+      description: data.description ?? null,
+      customerId: data.customerId ?? null,
+      customerName: data.customerName ?? null,
+      customerEmail: data.customerEmail ?? null,
+      customerPhone: data.customerPhone ?? null,
+      type: data.type ?? null,
+      priority: data.priority || "medium",
+      assignedTo: data.assignedTo ?? null,
       status: "open",
       createdBy: Number(user.id),
     },
@@ -53,19 +60,25 @@ export async function updateTicket(id: number, formData: FormData) {
   // Fix #35: Harusnya edit_tickets, bukan create_tickets
   await requirePermission("edit_tickets")
 
+  const parsed = parseFormData(updateTicketSchema, formData)
+  if (!parsed.success) {
+    return { success: false, error: parsed.error }
+  }
+  const data = parsed.data
+
   const ticket = await prisma.crmTicket.update({
     where: { id },
     data: {
-      subject: formData.get("subject") as string,
-      description: formData.get("description") as string | null,
-      customerId: safeId(formData.get("customerId")),
-      customerName: formData.get("customerName") as string | null,
-      customerEmail: formData.get("customerEmail") as string | null,
-      customerPhone: formData.get("customerPhone") as string | null,
-      type: formData.get("type") as string | null,
-      priority: formData.get("priority") as string || "medium",
-      assignedTo: safeId(formData.get("assignedTo")),
-      resolutionNotes: formData.get("resolutionNotes") as string | null,
+      subject: data.subject,
+      description: data.description ?? null,
+      customerId: data.customerId ?? null,
+      customerName: data.customerName ?? null,
+      customerEmail: data.customerEmail ?? null,
+      customerPhone: data.customerPhone ?? null,
+      type: data.type ?? null,
+      priority: data.priority || "medium",
+      assignedTo: data.assignedTo ?? null,
+      resolutionNotes: data.resolutionNotes ?? null,
     },
   })
 
