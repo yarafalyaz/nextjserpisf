@@ -276,19 +276,20 @@ export function generateTransactionPDF(
   window.open(pdfData, "_blank")
 }
 
-function formatPdfCurrency(value: number, showSymbol = true) {
+// Exported for unit testing — pure formatting/parsing helpers with branch logic.
+export function formatPdfCurrency(value: number, showSymbol = true) {
   const formatted = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(Number(value || 0))
   return showSymbol ? `Rp ${formatted}` : formatted
 }
 
-function formatPdfDate(value: string) {
+export function formatPdfDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value || "-"
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }).replace(/ /g, "-")
 }
 
 /** Derive jsPDF image format from a dataURL mime type. */
-function imgFormat(dataUrl: string): string {
+export function imgFormat(dataUrl: string): string {
   const m = /^data:image\/(\w+)/.exec(dataUrl)
   const t = (m?.[1] || "png").toUpperCase()
   if (t === "JPG" || t === "JPEG") return "JPEG"
