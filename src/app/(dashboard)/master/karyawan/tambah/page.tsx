@@ -14,10 +14,11 @@ export const metadata: Metadata = { title: "Tambah Karyawan" }
 export default async function CreateEmployeePage() {
   await requirePermission("create_employees")
 
-  const [departments, positions, generatedCode] = await Promise.all([
+  const [departments, positions, generatedCode, roles] = await Promise.all([
     prisma.department.findMany({ orderBy: { name: "asc" } }),
     prisma.position.findMany({ orderBy: { name: "asc" } }),
     peekNextDocumentNumber("EMP", "simple"),
+    prisma.role.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ])
   const settings = await getSystemSettings()
   const enableAutoCode = settings.enableAutoEmployeeCode !== false
@@ -33,7 +34,7 @@ export default async function CreateEmployeePage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Karyawan</h1>
       </div>
-      <EmployeeForm departments={departments} positions={positions} generatedCode={generatedCode} enableAutoCode={enableAutoCode} />
+      <EmployeeForm departments={departments} positions={positions} generatedCode={generatedCode} enableAutoCode={enableAutoCode} roles={roles} />
     </div>
   )
 }

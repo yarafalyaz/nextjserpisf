@@ -12,6 +12,7 @@ import { safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/sa
 import { logActivity } from "@/lib/services/activity-log.service"
 import { customerSchema, vendorSchema, itemSchema } from "@/lib/validations/schemas"
 import { parseFormData } from "@/lib/validations/parse-form"
+import bcrypt from "bcryptjs"
 
 /**
  * Smart delete for master records that carry a `deletedAt` soft-delete column.
@@ -441,11 +442,29 @@ export async function createEmployee(formData: FormData) {
     employeeNo = await generateDocumentNumber("EMP", "simple")
   }
 
-  const employee = await prisma.employee.create({
-    data: {
+  // Optional login account fields
+  const wantsLogin = formData.get("createLoginAccount") === "true" || formData.get("createLoginAccount") === "on"
+  const email = formData.get("email") as string | null
+  const loginPass = formData.get("loginPassword") as string | null
+  const loginRoleIds = formData.getAll("loginRoleIds").map((v) => Number(v)).filter((n) => Number.isFinite(n))
+
+  if (wantsLogin) {
+    if (!email || email.trim() === "") {
+      return { success: false, error: "Email wajib diisi untuk akun login" }
+    }
+    if (!loginPass || loginPass.length < 8) {
+      return { success: false, error: "Kata sandi minimal 8 karakter" }
+    }
+    const existing = await prisma.user.findUnique({ where: { email: email.trim() } })
+    if (existing) {
+      return { success: false, error: "Email sudah terdaftar sebagai pengguna" }
+    }
+  }
+
+  const employeeData = {
       employeeNo,
       name: formData.get("name") as string,
-      email: formData.get("email") as string | null,
+      email: email,
       phone: formData.get("phone") as string | null,
       gender: formData.get("gender") as string | null || null,
       dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : null,
@@ -469,11 +488,30 @@ export async function createEmployee(formData: FormData) {
       employeeVillage: formData.get("village") as string | null,
       postalCode: formData.get("postalCode") as string | null,
       isActive: true,
-    },
+  }
+
+  // Create employee + (optionally) a linked login account atomically.
+  const employee = await prisma.$transaction(async (tx) => {
+    if (wantsLogin && email && loginPass) {
+      const hashedPassword = await bcrypt.hash(loginPass, 12)
+      const user = await tx.user.create({
+        data: {
+          name: employeeData.name,
+          email: email.trim(),
+          password: hashedPassword,
+          isActive: true,
+          ...(loginRoleIds.length > 0
+            ? { roles: { connect: loginRoleIds.map((id) => ({ id })) } }
+            : {}),
+        },
+      })
+      return tx.employee.create({ data: { ...employeeData, userId: user.id } })
+    }
+    return tx.employee.create({ data: employeeData })
   })
 
   revalidatePath("/master/karyawan")
-  await logActivity("create", "Employee", employee.id, "Membuat karyawan")
+  await logActivity("create", "Employee", employee.id, wantsLogin ? "Membuat karyawan + akun login" : "Membuat karyawan")
   return { success: true, id: employee.id }
 
   } catch (e: unknown) {

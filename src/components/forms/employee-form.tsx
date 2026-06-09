@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition, type FormEvent } from "react"
+import { useTransition, useState, type FormEvent } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { employeeSchema, type EmployeeInput } from "@/lib/validators"
@@ -46,12 +46,24 @@ interface EmployeeFormProps {
   positions: { id: number; name: string }[]
   generatedCode?: string
   enableAutoCode?: boolean
+  roles?: { id: number; name: string }[]
 }
 
-export function EmployeeForm({ employee, departments, positions, generatedCode, enableAutoCode = true }: EmployeeFormProps) {
+export function EmployeeForm({ employee, departments, positions, generatedCode, enableAutoCode = true, roles = [] }: EmployeeFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!employee
+  const [createLogin, setCreateLogin] = useState(false)
+  const [loginRoleIds, setLoginRoleIds] = useState<string[]>([])
+
+  const roleOptions = roles.map((r) => ({
+    id: String(r.id),
+    label: r.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+  }))
+
+  function toggleLoginRole(id: string) {
+    setLoginRoleIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
 
   const toDateInputValue = (value?: string | Date | null) => {
     if (!value) return ""
@@ -97,6 +109,14 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
               formData.set(field, input.value)
             }
           })
+        }
+
+        // Optional login account (create mode only)
+        if (!isEdit && createLogin) {
+          formData.set("createLoginAccount", "true")
+          const passInput = form?.querySelector(`input[name="loginPassword"]`) as HTMLInputElement | null
+          if (passInput?.value) formData.set("loginPassword", passInput.value)
+          loginRoleIds.forEach((id) => formData.append("loginRoleIds", id))
         }
 
         const result = isEdit
@@ -299,6 +319,62 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             <AddressPicker defaultValues={{ province: employee?.province ?? undefined, city: employee?.employeeCity ?? employee?.city ?? undefined, district: employee?.employeeDistrict ?? undefined, village: employee?.employeeVillage ?? undefined, postalCode: employee?.postalCode ?? undefined }} />
           </div>
         </FormSection>
+
+        {!isEdit && (
+          <FormSection title="Akun Login" columns={1}>
+            <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={createLogin}
+                onChange={(e) => setCreateLogin(e.target.checked)}
+                className="h-4 w-4 rounded border-default accent-primary cursor-pointer"
+              />
+              <span>Buatkan akun login untuk karyawan ini</span>
+            </label>
+            <p className="text-xs text-muted-foreground -mt-1">
+              Karyawan dengan akun login bisa masuk ke sistem (mis. untuk absensi mandiri). Email di atas dipakai sebagai email login.
+            </p>
+
+            {createLogin && (
+              <div className="flex flex-col gap-5 pt-2 border-t border-default mt-2">
+                <div className="flex flex-col gap-1.5 max-w-md">
+                  <Label htmlFor="loginPassword">Kata Sandi *</Label>
+                  <Input id="loginPassword" name="loginPassword" type="password" placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
+                  <span className="text-xs text-muted-foreground">Minimal 8 karakter. Pastikan email pada bagian atas sudah terisi.</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Peran</Label>
+                  <div className="p-3 border border-default rounded-lg bg-background min-h-[64px]">
+                    {roleOptions.length === 0 ? (
+                      <span className="text-sm text-muted-foreground">Belum ada peran. Buat di Pengaturan &gt; Peran.</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-3">
+                        {roleOptions.map((role) => {
+                          const selected = loginRoleIds.includes(role.id)
+                          return (
+                            <button
+                              key={role.id}
+                              type="button"
+                              onClick={() => toggleLoginRole(role.id)}
+                              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
+                                selected
+                                  ? "bg-primary text-white border-primary"
+                                  : "bg-surface border-default hover:border-primary/50 text-foreground"
+                              }`}
+                            >
+                              {role.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">Pilih satu atau lebih peran untuk menentukan hak akses.</span>
+                </div>
+              </div>
+            )}
+          </FormSection>
+        )}
 
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>

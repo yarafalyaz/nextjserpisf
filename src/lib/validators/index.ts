@@ -111,6 +111,19 @@ export const employeeSchema = z.object({
   district: z.string().optional(),
   village: z.string().optional(),
   postalCode: z.string().optional(),
+  // Optional login account — when enabled, the employee gets a User account
+  // (email + password + roles) so they can sign in (e.g. for self-attendance).
+  createLoginAccount: z.boolean().optional(),
+  loginPassword: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.createLoginAccount) {
+    if (!data.email || data.email.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "Email wajib diisi untuk akun login" })
+    }
+    if (!data.loginPassword || data.loginPassword.length < 8) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loginPassword"], message: "Kata sandi minimal 8 karakter" })
+    }
+  }
 })
 
 export const accountSchema = z.object({
