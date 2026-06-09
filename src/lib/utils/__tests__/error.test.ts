@@ -31,6 +31,19 @@ describe("getErrorMessage", () => {
     expect(getErrorMessage(123)).toBe("Terjadi kesalahan")
     expect(getErrorMessage(undefined, "Custom fallback")).toBe("Custom fallback")
   })
+
+  it("returns fallback for unknown Prisma error code", () => {
+    expect(getErrorMessage({ code: "P9999" })).toBe("Terjadi kesalahan")
+  })
+
+  it("returns fallback when code is not a string", () => {
+    expect(getErrorMessage({ code: 123 })).toBe("Terjadi kesalahan")
+  })
+
+  it("returns fallback for object with non-string message", () => {
+    expect(getErrorMessage({ message: 42 })).toBe("Terjadi kesalahan")
+    expect(getErrorMessage({ message: null })).toBe("Terjadi kesalahan")
+  })
 })
 
 describe("isNextRedirectError", () => {
