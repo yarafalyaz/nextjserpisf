@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest"
 import {
   loginSchema,
+  changePasswordSchema,
   customerSchema,
   itemSchema,
   inventoryTransferSchema,
   journalEntrySchema,
   quotationItemSchema,
   accountSchema,
+  employeeSchema,
 } from "../index"
 
 describe("loginSchema", () => {
@@ -157,6 +159,80 @@ describe("accountSchema", () => {
 
   it("rejects empty name", () => {
     const result = accountSchema.safeParse({ name: "", type: "REVENUE" })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe("changePasswordSchema", () => {
+  it("accepts matching passwords", () => {
+    const result = changePasswordSchema.safeParse({
+      currentPassword: "old123",
+      newPassword: "newpass88",
+      confirmPassword: "newpass88",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects mismatched confirm password", () => {
+    const result = changePasswordSchema.safeParse({
+      currentPassword: "old123",
+      newPassword: "newpass88",
+      confirmPassword: "different",
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0].path).toContain("confirmPassword")
+    }
+  })
+
+  it("rejects short new password", () => {
+    const result = changePasswordSchema.safeParse({
+      currentPassword: "old",
+      newPassword: "short",
+      confirmPassword: "short",
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe("employeeSchema", () => {
+  it("accepts valid employee with string baseSalary (transform)", () => {
+    const result = employeeSchema.safeParse({
+      name: "Budi",
+      joinDate: "2026-01-01",
+      baseSalary: "5.000.000",
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.baseSalary).toBe(5000000)
+    }
+  })
+
+  it("accepts numeric baseSalary", () => {
+    const result = employeeSchema.safeParse({
+      name: "Andi",
+      joinDate: "2026-01-01",
+      baseSalary: 3500000,
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.baseSalary).toBe(3500000)
+    }
+  })
+
+  it("rejects missing name", () => {
+    const result = employeeSchema.safeParse({
+      name: "",
+      joinDate: "2026-01-01",
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects missing joinDate", () => {
+    const result = employeeSchema.safeParse({
+      name: "Test",
+      joinDate: "",
+    })
     expect(result.success).toBe(false)
   })
 })
