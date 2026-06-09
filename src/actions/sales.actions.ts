@@ -72,9 +72,8 @@ export async function createQuotation(formData: FormData) {
         },
       })
 
-      for (let ii = 0; ii < (section.items || []).length; ii++) {
-        const item = section.items[ii]
-        // Calculate the flat discount amount to store
+      // Batch create all items per section (eliminates N+1)
+      const itemsData = (section.items || []).map((item: any, ii: number) => {
         const qty = item.qty || 1
         const unitPrice = item.unitPrice || 0
         const lineSubtotal = qty * unitPrice
@@ -82,20 +81,20 @@ export async function createQuotation(formData: FormData) {
         if (item.discountType === "percent") {
           discountAmount = (lineSubtotal * discountAmount) / 100
         }
-
-        await tx.quotationItem.create({
-          data: {
-            sectionId: s.id,
-            itemId: item.itemId || null,
-            description: item.description || null,
-            qty: item.qty || 1,
-            uom: item.uom || null,
-            unitPrice: item.unitPrice || 0,
-            discount: discountAmount,
-            total: item.total || 0,
-            sortOrder: ii,
-          },
-        })
+        return {
+          sectionId: s.id,
+          itemId: item.itemId || null,
+          description: item.description || null,
+          qty: item.qty || 1,
+          uom: item.uom || null,
+          unitPrice: item.unitPrice || 0,
+          discount: discountAmount,
+          total: item.total || 0,
+          sortOrder: ii,
+        }
+      })
+      if (itemsData.length > 0) {
+        await tx.quotationItem.createMany({ data: itemsData })
       }
     }
 

@@ -550,17 +550,22 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
   const user = await requirePermission("create_payroll")
   
   const employees = await prisma.employee.findMany({
-    where: { isActive: true, deletedAt: null }
+    where: { isActive: true, deletedAt: null },
+    select: { id: true },
   })
+
+  // Batch: fetch all existing payrolls for this period in one query (eliminates N+1)
+  const existingPayrolls = await prisma.payroll.findMany({
+    where: { period, employeeId: { in: employees.map(e => e.id) } },
+    select: { employeeId: true },
+  })
+  const existingSet = new Set(existingPayrolls.map(p => p.employeeId))
 
   let count = 0
   for (const emp of employees) {
-    // Check if payroll exists for this period
-    const exists = await prisma.payroll.findFirst({
-      where: { employeeId: emp.id, period }
-    })
+    if (existingSet.has(emp.id)) continue
 
-    if (!exists) {
+    {
       const est = await getPayrollEstimation(emp.id, startDateStr, endDateStr)
       if (!est || 'success' in est) { continue } // skip failed estimation
       const documentNo = await generateDocumentNumber("PAYROLL")

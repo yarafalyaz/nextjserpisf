@@ -105,18 +105,17 @@ export async function createJournal(formData: FormData) {
       },
     })
 
-    for (const entry of validEntries) {
-      await tx.journalEntry.create({
-        data: {
-          journalId: j.id,
-          accountId: entry.accountId,
-          debit: entry.debit || 0,
-          credit: entry.credit || 0,
-          memo: entry.memo || null,
-          costCenterId: entry.costCenterId || null,
-        },
-      })
-    }
+    // Batch create all entries in one query (eliminates N+1)
+    await tx.journalEntry.createMany({
+      data: validEntries.map(entry => ({
+        journalId: j.id,
+        accountId: entry.accountId,
+        debit: entry.debit || 0,
+        credit: entry.credit || 0,
+        memo: entry.memo || null,
+        costCenterId: entry.costCenterId || null,
+      })),
+    })
 
     return j
   })
@@ -321,7 +320,10 @@ type PettyCashTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
  * insert/update/delete that changes amounts so subsequent balances stay correct.
  */
 async function recalcPettyCashChain(tx: PettyCashTx): Promise<void> {
-  const all = await tx.pettyCash.findMany({ orderBy: [{ date: "asc" }, { id: "asc" }] })
+  const all = await tx.pettyCash.findMany({
+    orderBy: [{ date: "asc" }, { id: "asc" }],
+    select: { id: true, type: true, amount: true, balanceBefore: true, balanceAfter: true },
+  })
   let running = 0
   for (const rec of all) {
     const before = running
@@ -848,19 +850,18 @@ export async function reverseJournal(journalId: number) {
       },
     })
 
-    for (const entry of journal.entries) {
-      await tx.journalEntry.create({
-        data: {
-          journalId: reversalJournal.id,
-          accountId: entry.accountId,
-          debit: entry.credit,
-          credit: entry.debit,
-          memo: `Reversal: ${entry.memo ?? ""}`,
-          costCenterId: entry.costCenterId,
-          profitCenterId: entry.profitCenterId,
-        },
-      })
-    }
+    // Batch create reversal entries (eliminates N+1)
+    await tx.journalEntry.createMany({
+      data: journal.entries.map(entry => ({
+        journalId: reversalJournal.id,
+        accountId: entry.accountId,
+        debit: entry.credit,
+        credit: entry.debit,
+        memo: `Reversal: ${entry.memo ?? ""}`,
+        costCenterId: entry.costCenterId,
+        profitCenterId: entry.profitCenterId,
+      })),
+    })
 
     await tx.journal.update({
       where: { id: journalId },

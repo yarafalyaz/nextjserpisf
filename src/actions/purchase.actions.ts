@@ -738,6 +738,7 @@ export async function deletePurchaseOrder(id: number) {
       })
 
       if (stockMoves.length > 0) {
+        // Batch: reverse all stock moves in one query per GR (eliminates N+1)
         for (const move of stockMoves) {
           await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(move.qty)} WHERE id = ${move.itemId}`
         }
