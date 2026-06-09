@@ -13,10 +13,18 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: mocks.generateDocumentNumber,
 }));
 
-// prisma singleton is imported by the module; provide a stub so import doesn't fail.
-vi.mock("@/lib/db/prisma", () => ({ prisma: {} }));
+// prisma singleton is imported by the module; expose a controllable $transaction
+// so issueProjectMaterials (which uses the singleton) can be exercised.
+const singletonMocks = vi.hoisted(() => ({
+  transaction: vi.fn(),
+}));
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    $transaction: (fn: (t: unknown) => Promise<unknown>) => singletonMocks.transaction(fn),
+  },
+}));
 
-import { InventoryService } from "@/lib/services/inventory.service";
+import { InventoryService, issueProjectMaterials } from "@/lib/services/inventory.service";
 
 function buildService(txSpies: Record<string, any> = {}) {
   const spies = {
@@ -203,6 +211,67 @@ describe("InventoryService", () => {
       expect(spies.moveCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({ impact: "IN" }),
       });
+    });
+  });
+
+  describe("issueProjectMaterials", () => {
+    function buildIssueTx(opts: {
+      project: { items: { itemId: number | null; qty: number }[] } | null;
+      existingMove?: { id: number } | null;
+    }) {
+      const spies = {
+        executeRaw: vi.fn().mockResolvedValue(1),
+        projectFindUnique: vi.fn().mockResolvedValue(opts.project),
+        moveFindFirst: vi.fn().mockResolvedValue(opts.existingMove ?? null),
+        moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
+      };
+      const tx = {
+        $executeRaw: spies.executeRaw,
+        project: { findUnique: spies.projectFindUnique },
+        stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
+      };
+      return { tx, spies };
+    }
+
+    it("throws when project not found", async () => {
+      const { tx } = buildIssueTx({ project: null });
+      singletonMocks.transaction.mockImplementation(async (fn) => fn(tx));
+
+      await expect(issueProjectMaterials(1, 2)).rejects.toThrow("Project not found");
+    });
+
+    it("returns existing move ids when already issued (idempotent)", async () => {
+      const { tx, spies } = buildIssueTx({
+        project: { items: [{ itemId: 5, qty: 10 }] },
+        existingMove: { id: 777 },
+      });
+      singletonMocks.transaction.mockImplementation(async (fn) => fn(tx));
+
+      const result = await issueProjectMaterials(1, 2);
+
+      expect(result).toEqual([777]);
+      expect(spies.moveCreate).not.toHaveBeenCalled();
+    });
+
+    it("skips items without an itemId", async () => {
+      const { tx, spies } = buildIssueTx({
+        project: { items: [{ itemId: null, qty: 5 }] },
+      });
+      singletonMocks.transaction.mockImplementation(async (fn) => fn(tx));
+
+      const result = await issueProjectMaterials(1, 2);
+
+      expect(result).toEqual([]);
+      expect(spies.moveCreate).not.toHaveBeenCalled();
+    });
+
+    it("returns empty array when project has no items", async () => {
+      const { tx } = buildIssueTx({ project: { items: [] } });
+      singletonMocks.transaction.mockImplementation(async (fn) => fn(tx));
+
+      const result = await issueProjectMaterials(1, 2);
+
+      expect(result).toEqual([]);
     });
   });
 });
