@@ -228,6 +228,9 @@ model Customer {
   salesOrders      SalesOrder[]
   workOrders       WorkOrder[]
 
+  @@index([isActive, deletedAt], map: "idx_customers_active_deleted")
+  @@index([name], map: "idx_customers_name")
+  @@index([code], map: "idx_customers_code")
   @@map("customers")
 }
 
