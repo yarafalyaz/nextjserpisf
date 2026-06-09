@@ -41,6 +41,29 @@ export async function createQuotation(formData: FormData) {
     }
   }
 
+  // Server-side recompute of totals — never trust client-sent subtotal /
+  // grandTotal / per-line total. A tampered or buggy client could otherwise
+  // persist a Rp 0 grandTotal that flows downstream into DP and invoicing.
+  // Mirrors the client formula (calculateItemTotal + grandTotal in the form).
+  const headerDiscount = Number(data.discount) || 0
+  const headerTax = Number(data.tax) || 0
+  const computeLine = (item: any) => {
+    const qty = Number(item.qty) || 1
+    const unitPrice = Number(item.unitPrice) || 0
+    const lineSubtotal = qty * unitPrice
+    let discountAmount = Number(item.discount) || 0
+    if (item.discountType === "percent") {
+      discountAmount = (lineSubtotal * discountAmount) / 100
+    }
+    return { discountAmount, total: Math.max(0, lineSubtotal - discountAmount) }
+  }
+  const computedSubtotal = (data.sections || []).reduce(
+    (acc: number, section: any) =>
+      acc + (section.items || []).reduce((s: number, it: any) => s + computeLine(it).total, 0),
+    0,
+  )
+  const computedGrandTotal = Math.max(0, computedSubtotal - headerDiscount + headerTax)
+
   const quotation = await prisma.$transaction(async (tx) => {
     const q = await tx.quotation.create({
       data: {
@@ -49,10 +72,10 @@ export async function createQuotation(formData: FormData) {
         customerVehicleId: data.customerVehicleId || null,
         date: new Date(data.date),
         validUntil: data.validUntil ? new Date(data.validUntil) : null,
-        subtotal: data.subtotal || 0,
-        discount: data.discount || 0,
-        tax: data.tax || 0,
-        grandTotal: data.grandTotal || 0,
+        subtotal: computedSubtotal,
+        discount: headerDiscount,
+        tax: headerTax,
+        grandTotal: computedGrandTotal,
         paymentMethod: data.paymentMethod || null,
         shippingMethod: data.shippingMethod || null,
         notes: data.notes || null,
@@ -74,22 +97,16 @@ export async function createQuotation(formData: FormData) {
 
       // Batch create all items per section (eliminates N+1)
       const itemsData = (section.items || []).map((item: any, ii: number) => {
-        const qty = item.qty || 1
-        const unitPrice = item.unitPrice || 0
-        const lineSubtotal = qty * unitPrice
-        let discountAmount = item.discount || 0
-        if (item.discountType === "percent") {
-          discountAmount = (lineSubtotal * discountAmount) / 100
-        }
+        const { discountAmount, total } = computeLine(item)
         return {
           sectionId: s.id,
           itemId: item.itemId || null,
           description: item.description || null,
-          qty: item.qty || 1,
+          qty: Number(item.qty) || 1,
           uom: item.uom || null,
-          unitPrice: item.unitPrice || 0,
+          unitPrice: Number(item.unitPrice) || 0,
           discount: discountAmount,
-          total: item.total || 0,
+          total,
           sortOrder: ii,
         }
       })
