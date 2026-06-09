@@ -14,6 +14,7 @@ export default async function CreateExpensePage() {
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
     orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true, type: true },
   })
 
   const projects = await prisma.project.findMany({

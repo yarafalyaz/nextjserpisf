@@ -34,7 +34,7 @@ export default async function EditPage({
     endDate: data.endDate.toISOString().split("T")[0],
   }
 
-  const [accounts, costCenters] = await Promise.all([prisma.account.findMany({ orderBy: { code: "asc" } }), prisma.costCenter.findMany({ orderBy: { name: "asc" } })])
+  const [accounts, costCenters] = await Promise.all([prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }), prisma.costCenter.findMany({ orderBy: { name: "asc" }, select: { id: true, code: true, name: true } })])
 
   return (
     <div className="flex flex-col gap-6">

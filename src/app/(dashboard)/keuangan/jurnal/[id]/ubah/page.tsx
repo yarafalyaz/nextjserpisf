@@ -28,7 +28,7 @@ export default async function EditPage({
     description: data.description,
   }
 
-  const accounts = await prisma.account.findMany({ orderBy: { code: "asc" } })
+  const accounts = await prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } })
 
   return (
     <div className="flex flex-col gap-6">

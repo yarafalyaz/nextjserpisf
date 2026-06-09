@@ -14,6 +14,7 @@ export default async function CreateJournalPage() {
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
     orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true, type: true },
   })
 
   return (

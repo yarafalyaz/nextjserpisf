@@ -24,7 +24,7 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const brands = await prisma.vehicleBrand.findMany({ orderBy: { name: "asc" } })
+  const brands = await prisma.vehicleBrand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } })
 
   return (
     <div className="flex flex-col gap-6">

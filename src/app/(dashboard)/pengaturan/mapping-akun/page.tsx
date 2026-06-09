@@ -44,7 +44,7 @@ export default async function AccountMappingPage() {
   await requirePermission("manage_settings")
 
   const settings = await prisma.systemSetting.findFirst()
-  const accounts = await prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" } })
+  const accounts = await prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } })
 
   function accountName(id: number | null | undefined): string {
     if (!id) return "Belum diset"
