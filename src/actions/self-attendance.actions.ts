@@ -6,43 +6,14 @@ import { revalidatePath } from "next/cache"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { selfAttendanceLocationSchema } from "@/lib/validations/self-attendance.schemas"
-
-function getWibNow(now = new Date()) {
-  const wibOffset = 7 * 60 * 60 * 1000
-  return new Date(now.getTime() + wibOffset)
-}
-
-// WIB (UTC+7) date helpers — exported for unit testing (timezone math).
-export function getWibTodayUtcDate(now = new Date()) {
-  const wibNow = getWibNow(now)
-  return new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()))
-}
-
-export function getWibDayOfWeek(now = new Date()) {
-  const wibOffset = 7 * 60 * 60 * 1000
-  const wibNow = new Date(now.getTime() + wibOffset)
-  return wibNow.getUTCDay()
-}
-
-export function parseStartMinutes(startTime: string) {
-  const [h, m] = startTime.split(":").map((v) => Number(v || 0))
-  return h * 60 + m
-}
-
-export function getWibMinutes(now = new Date()) {
-  const wibOffset = 7 * 60 * 60 * 1000
-  const wibNow = new Date(now.getTime() + wibOffset)
-  return wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes()
-}
-
-/** Haversine distance in km between two lat/lng points. Exported for testing. */
-export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
+import {
+  getWibNow,
+  getWibTodayUtcDate,
+  getWibDayOfWeek,
+  parseStartMinutes,
+  getWibMinutes,
+  haversineKm,
+} from "@/lib/utils/attendance-time"
 
 /** Enforce company geofence server-side. Throws if too far. */
 async function enforceGeofence(latitude?: number, longitude?: number) {

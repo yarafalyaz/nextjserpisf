@@ -1,20 +1,11 @@
-import { describe, it, expect, vi } from "vitest"
-
-// The action module is "use server" and pulls in next-auth via @/lib/auth/auth,
-// which can't resolve in the vitest environment. Mock the server-only deps so the
-// pure exported helpers can be imported and tested in isolation.
-vi.mock("@/lib/auth/auth", () => ({ auth: vi.fn() }))
-vi.mock("@/lib/db/prisma", () => ({ prisma: {} }))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
-vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn() }))
-
+import { describe, it, expect } from "vitest"
 import {
   haversineKm,
   getWibTodayUtcDate,
   getWibDayOfWeek,
   parseStartMinutes,
   getWibMinutes,
-} from "../self-attendance.actions"
+} from "@/lib/utils/attendance-time"
 
 describe("haversineKm (geofence distance control)", () => {
   it("returns 0 for identical points", () => {
