@@ -531,21 +531,35 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
   const loginPass = formData.get("loginPassword") as string | null
   const loginRoleIds = formData.getAll("loginRoleIds").map((v) => Number(v)).filter((n) => Number.isFinite(n))
 
+  // Look up whether this employee already has a linked login account.
+  const current = await prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } })
+  const trimmedEmail = email?.trim() || null
+
   if (wantsLogin) {
-    const current = await prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } })
     if (current?.userId) {
       return { success: false, error: "Karyawan ini sudah memiliki akun login" }
     }
-    if (!email || email.trim() === "") {
+    if (!trimmedEmail) {
       return { success: false, error: "Email wajib diisi untuk akun login" }
     }
     if (!loginPass || loginPass.length < 8) {
       return { success: false, error: "Kata sandi minimal 8 karakter" }
     }
-    const existing = await prisma.user.findUnique({ where: { email: email.trim() } })
+    const existing = await prisma.user.findUnique({ where: { email: trimmedEmail } })
     if (existing) {
       return { success: false, error: "Email sudah terdaftar sebagai pengguna" }
     }
+  }
+
+  // If the employee already has a login account and the email is changing,
+  // keep the user's login email in sync (email IS the login credential).
+  let syncUserId: number | null = null
+  if (!wantsLogin && current?.userId && trimmedEmail) {
+    const clash = await prisma.user.findUnique({ where: { email: trimmedEmail } })
+    if (clash && clash.id !== current.userId) {
+      return { success: false, error: "Email sudah terdaftar sebagai pengguna lain" }
+    }
+    syncUserId = current.userId
   }
 
   const updateData = {
@@ -591,6 +605,10 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       await tx.employee.update({ where: { id: employeeId }, data: { ...updateData, userId: user.id } })
     } else {
       await tx.employee.update({ where: { id: employeeId }, data: updateData })
+      // Keep the linked login account's email + name in sync with the employee.
+      if (syncUserId && trimmedEmail) {
+        await tx.user.update({ where: { id: syncUserId }, data: { email: trimmedEmail, name: updateData.name } })
+      }
     }
   })
 

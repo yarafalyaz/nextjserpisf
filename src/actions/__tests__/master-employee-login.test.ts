@@ -13,6 +13,7 @@ const employeeFindUniqueMock = vi.fn()
 const employeeDeleteMock = vi.fn()
 const employeeUpdateMock = vi.fn()
 const txUserCreateMock = vi.fn()
+const txUserUpdateMock = vi.fn()
 const txEmployeeCreateMock = vi.fn()
 const txEmployeeUpdateMock = vi.fn()
 const transactionMock = vi.fn()
@@ -81,7 +82,10 @@ beforeEach(() => {
   // $transaction runs the callback with a tx stub
   transactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) =>
     cb({
-      user: { create: (...a: unknown[]) => txUserCreateMock(...a) },
+      user: {
+        create: (...a: unknown[]) => txUserCreateMock(...a),
+        update: (...a: unknown[]) => txUserUpdateMock(...a),
+      },
       employee: {
         create: (...a: unknown[]) => txEmployeeCreateMock(...a),
         update: (...a: unknown[]) => txEmployeeUpdateMock(...a),
@@ -208,6 +212,31 @@ describe("updateEmployee — create login account for existing employee", () => 
     expect(txUserCreateMock).not.toHaveBeenCalled()
     const empArg = txEmployeeUpdateMock.mock.calls[0][0]
     expect(empArg.data.userId).toBeUndefined()
+  })
+
+  it("syncs the linked user's email + name when an existing-account employee is edited", async () => {
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7 }) // already linked
+    userFindUniqueMock.mockResolvedValue(null) // new email free
+    txEmployeeUpdateMock.mockResolvedValue({ id: 50 })
+    txUserUpdateMock.mockResolvedValue({ id: 7 })
+
+    const res = await updateEmployee(50, fd({ ...baseFields, name: "Budi Baru", email: "budi.baru@corp.id" }))
+
+    expect(res).toEqual({ success: true })
+    expect(txUserCreateMock).not.toHaveBeenCalled()
+    expect(txUserUpdateMock).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: { email: "budi.baru@corp.id", name: "Budi Baru" },
+    })
+  })
+
+  it("rejects the email sync when the new email belongs to a different user", async () => {
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
+    userFindUniqueMock.mockResolvedValue({ id: 99, email: "taken@corp.id" }) // clash
+    const res = await updateEmployee(50, fd({ ...baseFields, email: "taken@corp.id" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/pengguna lain/i)
+    expect(transactionMock).not.toHaveBeenCalled()
   })
 })
 
