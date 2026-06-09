@@ -51,109 +51,145 @@ export default async function ItemDetailPage({
 
   const isLowStock = Number(item.minStock) > 0 && Number(item.qtyOnHand) <= Number(item.minStock)
 
-  // Resolve references for stock moves (vendor, customer, project)
-  const stockMovesWithRef = await Promise.all(
-    item.stockMoves.map(async (sm) => {
-      let party = "-"
-      let partyLabel = ""
-      let docLink = ""
+  // Batch-fetch all references upfront to eliminate N+1 (was 2-4 queries per stock move)
+  const grIds = item.stockMoves.filter(sm => sm.referenceType === "GoodsReceipt" && sm.referenceId).map(sm => sm.referenceId!)
+  const miIds = item.stockMoves.filter(sm => sm.referenceType === "MaterialIssue" && sm.referenceId).map(sm => sm.referenceId!)
+  const srIds = item.stockMoves.filter(sm => sm.referenceType === "SalesReturn" && sm.referenceId).map(sm => sm.referenceId!)
+  const prIds = item.stockMoves.filter(sm => sm.referenceType === "PurchaseReturn" && sm.referenceId).map(sm => sm.referenceId!)
+  const woIds = item.stockMoves.filter(sm => (sm.referenceType === "WorkOrder" || sm.referenceType === "MaterialIssue") && sm.referenceId).map(sm => sm.referenceId!)
 
-      if (sm.referenceType && sm.referenceId) {
-        switch (sm.referenceType) {
-          case "GoodsReceipt": {
-            const gr = await prisma.goodsReceipt.findUnique({ where: { id: sm.referenceId } })
-            if (gr) {
-              // Resolve vendor via PO
-              const po = gr.purchaseOrderId ? await prisma.purchaseOrder.findUnique({ where: { id: gr.purchaseOrderId }, include: { vendor: true } }) : null
-              if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
-            }
-            docLink = `/pembelian/penerimaan/${sm.referenceId}`
-            break
+  const [goodsReceipts, materialIssues, salesReturns, purchaseReturns, workOrders] = await Promise.all([
+    grIds.length ? prisma.goodsReceipt.findMany({ where: { id: { in: grIds } }, select: { id: true, purchaseOrderId: true } }) : [],
+    miIds.length ? prisma.materialIssue.findMany({ where: { id: { in: miIds } }, select: { id: true, projectId: true, workOrderId: true } }) : [],
+    srIds.length ? prisma.salesReturn.findMany({ where: { id: { in: srIds } }, select: { id: true, customerId: true } }) : [],
+    prIds.length ? prisma.purchaseReturn.findMany({ where: { id: { in: prIds } }, select: { id: true, purchaseOrderId: true } }) : [],
+    woIds.length ? prisma.workOrder.findMany({ where: { id: { in: woIds } }, select: { id: true, projectId: true } }) : [],
+  ])
+
+  // Resolve nested references in batch
+  const poIdsFromGr = goodsReceipts.map(gr => gr.purchaseOrderId).filter(Boolean) as number[]
+  const poIdsFromPr = purchaseReturns.map(pr => pr.purchaseOrderId).filter(Boolean) as number[]
+  const allPoIds = [...new Set([...poIdsFromGr, ...poIdsFromPr])]
+  const projectIdsFromMi = materialIssues.map(mi => mi.projectId).filter(Boolean) as number[]
+  const projectIdsFromWo = workOrders.map(wo => wo.projectId).filter(Boolean) as number[]
+  const allProjectIds = [...new Set([...projectIdsFromMi, ...projectIdsFromWo])]
+  const customerIdsFromSr = salesReturns.map(sr => sr.customerId).filter(Boolean) as number[]
+
+  const [purchaseOrders, projects, customers] = await Promise.all([
+    allPoIds.length ? prisma.purchaseOrder.findMany({ where: { id: { in: allPoIds } }, include: { vendor: true } }) : [],
+    allProjectIds.length ? prisma.project.findMany({ where: { id: { in: allProjectIds } }, include: { customer: true, customerVehicle: true } }) : [],
+    customerIdsFromSr.length ? prisma.customer.findMany({ where: { id: { in: customerIdsFromSr } }, select: { id: true, name: true } }) : [],
+  ])
+
+  // Build lookup maps
+  const grMap = new Map(goodsReceipts.map(g => [g.id, g]))
+  const miMap = new Map(materialIssues.map(m => [m.id, m]))
+  const srMap = new Map(salesReturns.map(s => [s.id, s]))
+  const prMap = new Map(purchaseReturns.map(p => [p.id, p]))
+  const woMap = new Map(workOrders.map(w => [w.id, w]))
+  const poMap = new Map(purchaseOrders.map(p => [p.id, p]))
+  const projMap = new Map(projects.map(p => [p.id, p]))
+  const custMap = new Map(customers.map(c => [c.id, c]))
+
+  const stockMovesWithRef = item.stockMoves.map((sm) => {
+    let party = "-"
+    let partyLabel = ""
+    let docLink = ""
+
+    if (sm.referenceType && sm.referenceId) {
+      switch (sm.referenceType) {
+        case "GoodsReceipt": {
+          const gr = grMap.get(sm.referenceId)
+          if (gr?.purchaseOrderId) {
+            const po = poMap.get(gr.purchaseOrderId)
+            if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
           }
-          case "MaterialIssue": {
-            const mi = await prisma.materialIssue.findUnique({ where: { id: sm.referenceId } })
-            if (mi?.projectId) {
-              const proj = await prisma.project.findUnique({ where: { id: mi.projectId }, include: { customer: true, customerVehicle: true } })
+          docLink = `/pembelian/penerimaan/${sm.referenceId}`
+          break
+        }
+        case "MaterialIssue": {
+          const mi = miMap.get(sm.referenceId)
+          if (mi?.projectId) {
+            const proj = projMap.get(mi.projectId)
+            if (proj?.customer) {
+              party = proj.customer.name
+              if (proj.customerVehicle) party += ` (${proj.customerVehicle.licensePlate || ''})`
+              partyLabel = "Customer"
+            } else if (proj) {
+              party = proj.name
+              partyLabel = "Project"
+            }
+          } else if (mi?.workOrderId) {
+            const wo = woMap.get(mi.workOrderId)
+            if (wo?.projectId) {
+              const proj = projMap.get(wo.projectId)
               if (proj?.customer) {
                 party = proj.customer.name
                 if (proj.customerVehicle) party += ` (${proj.customerVehicle.licensePlate || ''})`
                 partyLabel = "Customer"
-              } else if (proj) {
-                party = proj.name
-                partyLabel = "Project"
-              }
-            } else if (mi?.workOrderId) {
-              const wo = await prisma.workOrder.findUnique({ where: { id: mi.workOrderId } })
-              if (wo?.projectId) {
-                const proj = await prisma.project.findUnique({ where: { id: wo.projectId }, include: { customer: true, customerVehicle: true } })
-                if (proj?.customer) {
-                  party = proj.customer.name
-                  if (proj.customerVehicle) party += ` (${proj.customerVehicle.licensePlate || ''})`
-                  partyLabel = "Customer"
-                }
               }
             }
-            docLink = `/inventaris/pengeluaran-material/${sm.referenceId}`
-            break
           }
-          case "SalesReturn": {
-            const sr = await prisma.salesReturn.findUnique({ where: { id: sm.referenceId } })
-            if (sr?.customerId) {
-              const cust = await prisma.customer.findUnique({ where: { id: sr.customerId } })
-              if (cust) { party = cust.name; partyLabel = "Customer" }
-            }
-            docLink = `/penjualan/retur/${sm.referenceId}`
-            break
+          docLink = `/inventaris/pengeluaran-material/${sm.referenceId}`
+          break
+        }
+        case "SalesReturn": {
+          const sr = srMap.get(sm.referenceId)
+          if (sr?.customerId) {
+            const cust = custMap.get(sr.customerId)
+            if (cust) { party = cust.name; partyLabel = "Customer" }
           }
-          case "PurchaseReturn": {
-            const pr = await prisma.purchaseReturn.findUnique({ where: { id: sm.referenceId } })
-            if (pr?.purchaseOrderId) {
-              const po = await prisma.purchaseOrder.findUnique({ where: { id: pr.purchaseOrderId }, include: { vendor: true } })
-              if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
-            }
-            docLink = `/pembelian/retur/${sm.referenceId}`
-            break
+          docLink = `/penjualan/retur/${sm.referenceId}`
+          break
+        }
+        case "PurchaseReturn": {
+          const pr = prMap.get(sm.referenceId)
+          if (pr?.purchaseOrderId) {
+            const po = poMap.get(pr.purchaseOrderId)
+            if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
           }
-          case "StockAdjustment": {
-            partyLabel = "Internal"
-            party = "Penyesuaian Stok"
-            docLink = `/inventaris/penyesuaian/${sm.referenceId}`
-            break
+          docLink = `/pembelian/retur/${sm.referenceId}`
+          break
+        }
+        case "StockAdjustment": {
+          partyLabel = "Internal"
+          party = "Penyesuaian Stok"
+          docLink = `/inventaris/penyesuaian/${sm.referenceId}`
+          break
+        }
+        case "InventoryTransfer": {
+          partyLabel = "Internal"
+          party = "Transfer Gudang"
+          docLink = `/inventaris/transfer/${sm.referenceId}`
+          break
+        }
+        case "WorkOrder": {
+          const wo = woMap.get(sm.referenceId)
+          if (wo?.projectId) {
+            const proj = projMap.get(wo.projectId)
+            if (proj) { party = proj.name; partyLabel = "Project" }
+          } else {
+            partyLabel = "Produksi"
+            party = "Work Order"
           }
-          case "InventoryTransfer": {
-            partyLabel = "Internal"
-            party = "Transfer Gudang"
-            docLink = `/inventaris/transfer/${sm.referenceId}`
-            break
-          }
-          case "WorkOrder": {
-            const wo = await prisma.workOrder.findUnique({ where: { id: sm.referenceId } })
-            if (wo?.projectId) {
-              const proj = await prisma.project.findUnique({ where: { id: wo.projectId } })
-              if (proj) { party = proj.name; partyLabel = "Project" }
-            } else {
-              partyLabel = "Produksi"
-              party = "Work Order"
-            }
-            docLink = `/produksi/perintah-kerja/${sm.referenceId}`
-            break
-          }
+          docLink = `/produksi/perintah-kerja/${sm.referenceId}`
+          break
         }
       }
+    }
 
-      // Fallback: extract party info from description if not resolved
-      if (party === "-" && sm.description) {
-        // Try to extract "dari X" or "untuk X" or "dari X - reason"
-        const dariMatch = sm.description.match(/(?:dari|from)\s+(.+?)(?:\s*[-–]|$)/i)
-        const untukMatch = sm.description.match(/(?:untuk|to|for)\s+(.+?)(?:\s*[-–]|$)/i)
-        if (dariMatch) { party = dariMatch[1].trim(); partyLabel = "Vendor" }
-        else if (untukMatch) { party = untukMatch[1].trim(); partyLabel = "Customer" }
-        else { party = sm.description }
-      }
+    // Fallback: extract party info from description if not resolved
+    if (party === "-" && sm.description) {
+      // Try to extract "dari X" or "untuk X" or "dari X - reason"
+      const dariMatch = sm.description.match(/(?:dari|from)\s+(.+?)(?:\s*[-–]|$)/i)
+      const untukMatch = sm.description.match(/(?:untuk|to|for)\s+(.+?)(?:\s*[-–]|$)/i)
+      if (dariMatch) { party = dariMatch[1].trim(); partyLabel = "Vendor" }
+      else if (untukMatch) { party = untukMatch[1].trim(); partyLabel = "Customer" }
+      else { party = sm.description }
+    }
 
-      return { ...sm, party, partyLabel, docLink }
-    })
-  )
+    return { ...sm, party, partyLabel, docLink }
+  })
 
   return (
     <div className="flex flex-col gap-6">

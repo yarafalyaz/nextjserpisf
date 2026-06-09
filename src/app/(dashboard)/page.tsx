@@ -57,38 +57,38 @@ async function getCharts() {
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
   ninetyDaysAgo.setHours(0, 0, 0, 0)
 
-  const revenueRaw = await prisma.$queryRaw<
-    { date: string; lunas: number; tagihan: number }[]
-  >`
-    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date,
-           COALESCE(SUM(paid_amount), 0) as lunas,
-           COALESCE(SUM(grand_total), 0) as tagihan
-    FROM sales_invoices
-    WHERE created_at >= ${ninetyDaysAgo}
-      AND status IN ('posted', 'partial', 'paid')
-      AND deleted_at IS NULL
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
-    ORDER BY date ASC
-  `
-
-  const statusRaw = await prisma.$queryRaw<{ status: string; count: bigint }[]>`
-    SELECT status, COUNT(*) as count
-    FROM sales_invoices
-    WHERE deleted_at IS NULL
-    GROUP BY status
-  `
-
-  const pipelineRaw = await prisma.$queryRaw<
-    { stage: string; count: bigint }[]
-  >`
-    SELECT ps.name as stage, COUNT(DISTINCT ps.project_id) as count
-    FROM project_stages ps
-    JOIN projects p ON ps.project_id = p.id
-    WHERE p.status NOT IN ('completed', 'cancelled')
-      AND ps.status = 'in_progress'
-    GROUP BY ps.name
-    ORDER BY MIN(ps.sort_order) ASC
-  `
+  const [revenueRaw, statusRaw, pipelineRaw] = await Promise.all([
+    prisma.$queryRaw<
+      { date: string; lunas: number; tagihan: number }[]
+    >`
+      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date,
+             COALESCE(SUM(paid_amount), 0) as lunas,
+             COALESCE(SUM(grand_total), 0) as tagihan
+      FROM sales_invoices
+      WHERE created_at >= ${ninetyDaysAgo}
+        AND status IN ('posted', 'partial', 'paid')
+        AND deleted_at IS NULL
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+      ORDER BY date ASC
+    `,
+    prisma.$queryRaw<{ status: string; count: bigint }[]>`
+      SELECT status, COUNT(*) as count
+      FROM sales_invoices
+      WHERE deleted_at IS NULL
+      GROUP BY status
+    `,
+    prisma.$queryRaw<
+      { stage: string; count: bigint }[]
+    >`
+      SELECT ps.name as stage, COUNT(DISTINCT ps.project_id) as count
+      FROM project_stages ps
+      JOIN projects p ON ps.project_id = p.id
+      WHERE p.status NOT IN ('completed', 'cancelled')
+        AND ps.status = 'in_progress'
+      GROUP BY ps.name
+      ORDER BY MIN(ps.sort_order) ASC
+    `,
+  ])
 
   return {
     revenueData: revenueRaw.map((row) => ({
