@@ -6,12 +6,25 @@ import { auth } from "@/lib/auth/auth"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+import { parseFormData } from "@/lib/validations/parse-form"
+import {
+  approveStepSchema,
+  rejectStepSchema,
+  createWorkflowSchema,
+  updateWorkflowSchema,
+} from "@/lib/validations/approval.schemas"
+import { safeJsonParse } from "@/lib/utils/safe-parse"
+
+type WorkflowStepInput = { name?: string; roleId?: number | null; approverType?: string | null }
 
 export async function approveStep(approvalId: number, formData: FormData) {
   try {
   await requirePermission("approve_workflows")
   const session = await auth()
-  const notes = formData.get("notes") as string | null
+
+  const parsed = parseFormData(approveStepSchema, formData)
+  if (!parsed.success) throw new Error(parsed.error)
+  const { notes } = parsed.data
 
   const approval = await prisma.approval.findUnique({
     where: { id: approvalId },
@@ -69,7 +82,10 @@ export async function rejectStep(approvalId: number, formData: FormData) {
   try {
   await requirePermission("approve_workflows")
   const session = await auth()
-  const notes = formData.get("notes") as string | null
+
+  const parsed = parseFormData(rejectStepSchema, formData)
+  if (!parsed.success) throw new Error(parsed.error)
+  const { notes } = parsed.data
 
   const approval = await prisma.approval.findUnique({
     where: { id: approvalId },
@@ -111,27 +127,23 @@ export async function rejectStep(approvalId: number, formData: FormData) {
 
 // ==================== APPROVAL WORKFLOW CRUD ====================
 
-import { safeJsonParse } from "@/lib/utils/safe-parse"
-
-type WorkflowStepInput = { name?: string; roleId?: number | null; approverType?: string | null }
-
 export async function createApprovalWorkflow(formData: FormData) {
   try {
     await requirePermission("manage_settings")
 
-    const name = (formData.get("name") as string)?.trim()
-    const modelType = (formData.get("modelType") as string)?.trim()
-    if (!name || !modelType) throw new Error("Nama dan tipe dokumen wajib diisi")
+    const parsed = parseFormData(createWorkflowSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const { name, modelType, code, isActive, steps: stepsJson } = parsed.data
 
-    const steps = (safeJsonParse<WorkflowStepInput[]>(formData.get("steps") as string | null) ?? [])
+    const steps = (safeJsonParse<WorkflowStepInput[]>(stepsJson ?? null) ?? [])
       .filter((s) => s.roleId || s.approverType || s.name)
 
     const wf = await prisma.approvalWorkflow.create({
       data: {
         name,
         modelType,
-        code: (formData.get("code") as string) || null,
-        isActive: formData.get("isActive") !== "false",
+        code: code || null,
+        isActive: isActive !== false,
         steps: {
           create: steps.map((s, i) => ({
             stepOrder: i + 1,
@@ -157,11 +169,11 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
   try {
     await requirePermission("manage_settings")
 
-    const name = (formData.get("name") as string)?.trim()
-    const modelType = (formData.get("modelType") as string)?.trim()
-    if (!name || !modelType) throw new Error("Nama dan tipe dokumen wajib diisi")
+    const parsed = parseFormData(updateWorkflowSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const { name, modelType, code, isActive, steps: stepsJson } = parsed.data
 
-    const steps = (safeJsonParse<WorkflowStepInput[]>(formData.get("steps") as string | null) ?? [])
+    const steps = (safeJsonParse<WorkflowStepInput[]>(stepsJson ?? null) ?? [])
       .filter((s) => s.roleId || s.approverType || s.name)
 
     await prisma.$transaction(async (tx) => {
@@ -171,8 +183,8 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
         data: {
           name,
           modelType,
-          code: (formData.get("code") as string) || null,
-          isActive: formData.get("isActive") !== "false",
+          code: code || null,
+          isActive: isActive !== false,
           steps: {
             create: steps.map((s, i) => ({
               stepOrder: i + 1,

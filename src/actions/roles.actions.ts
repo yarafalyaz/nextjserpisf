@@ -6,14 +6,19 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { createRoleSchema, updateRoleSchema } from "@/lib/validations/roles.schemas"
 
 export async function createRole(formData: FormData) {
   try {
   await requirePermission("manage_settings")
 
-  const name = formData.get("name") as string
-  if (!name || !name.trim()) throw new Error("Nama role wajib diisi")
+  const parsed = parseFormData(createRoleSchema, formData)
+  if (!parsed.success) {
+    throw new Error(parsed.error)
+  }
 
+  const { name } = parsed.data
   const permissionIds = formData.getAll("permissions").map((id) => Number(id)).filter(Boolean)
 
   const role = await prisma.role.create({
@@ -40,9 +45,12 @@ export async function updateRole(id: number, formData: FormData) {
   try {
   await requirePermission("manage_settings")
 
-  const name = formData.get("name") as string
-  if (!name || !name.trim()) throw new Error("Nama role wajib diisi")
+  const parsed = parseFormData(updateRoleSchema, formData)
+  if (!parsed.success) {
+    throw new Error(parsed.error)
+  }
 
+  const { name } = parsed.data
   const permissionIds = formData.getAll("permissions").map((pid) => Number(pid)).filter(Boolean)
 
   await prisma.role.update({

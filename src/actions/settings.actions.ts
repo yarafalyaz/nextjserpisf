@@ -6,10 +6,17 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { updateSystemSettingsSchema, updateStorageSettingsSchema } from "@/lib/validations/settings.schemas"
 
 export async function updateSystemSettings(formData: FormData) {
   try {
   await requirePermission("manage_settings")
+
+  const parsed = parseFormData(updateSystemSettingsSchema, formData)
+  if (!parsed.success) {
+    throw new Error(parsed.error)
+  }
 
   const settings = await prisma.systemSetting.findFirst()
   if (!settings) throw new Error("System settings not found")
@@ -256,6 +263,11 @@ export async function updateSystemSettings(formData: FormData) {
 export async function updateStorageSettings(formData: FormData) {
   try {
     await requirePermission("manage_settings")
+
+    const parsed = parseFormData(updateStorageSettingsSchema, formData)
+    if (!parsed.success) {
+      throw new Error(parsed.error)
+    }
 
     const settings = await prisma.systemSetting.findFirst()
     if (!settings) throw new Error("System settings not found")
