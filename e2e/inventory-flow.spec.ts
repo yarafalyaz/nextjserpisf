@@ -20,14 +20,14 @@ test.describe("Inventory module flows", () => {
   })
 
   test("Stock transfer list loads", async ({ page }) => {
-    await page.goto("/inventaris/transfer-stok")
+    await page.goto("/inventaris/transfer")
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText("Transfer")
   })
 
-  test("Goods receipt list loads", async ({ page }) => {
-    await page.goto("/inventaris/penerimaan-barang")
+  test("Stock mutation list loads", async ({ page }) => {
+    await page.goto("/inventaris/mutasi-stok")
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText("Penerimaan")
+    await expect(page.locator("body")).toContainText("Mutasi")
   })
 })
