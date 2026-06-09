@@ -191,6 +191,11 @@ describe("formatPeriod", () => {
   it("returns original for invalid format", () => {
     expect(formatPeriod("invalid")).toBe("invalid")
   })
+
+  it("returns original for out-of-range month", () => {
+    expect(formatPeriod("2026-13")).toBe("2026-13")
+    expect(formatPeriod("2026-00")).toBe("2026-00")
+  })
 })
 
 describe("formatRelativeTime", () => {
