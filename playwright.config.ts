@@ -15,7 +15,6 @@ export default defineConfig({
   workers: process.env.PW_WORKERS ? Number(process.env.PW_WORKERS) : DEFAULT_WORKERS,
   timeout: process.env.CI ? 60_000 : 30_000,
   expect: { timeout: 10_000 },
-  navigationTimeout: 30_000,
   reporter: [["html", { open: "never" }], ["list"]],
 
   use: {
