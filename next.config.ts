@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
   },
+  compress: true,
   experimental: {
     optimizePackageImports: ["lucide-react", "recharts", "date-fns", "@tanstack/react-query"],
   },
