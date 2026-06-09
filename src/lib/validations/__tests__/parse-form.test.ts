@@ -121,4 +121,27 @@ describe("parseFormData", () => {
       expect(result.error).toContain("Qty min 1")
     }
   })
+
+  it("skips File entries in FormData", () => {
+    const fileSchema = z.object({ name: z.string(), file: z.any().optional() })
+    const fd = new FormData()
+    fd.append("name", "Test")
+    fd.append("file", new File(["content"], "test.txt", { type: "text/plain" }))
+    const result = parseFormData(fileSchema, fd)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.name).toBe("Test")
+      expect(result.data.file).toBeUndefined()
+    }
+  })
+
+  it("keeps Infinity-like strings as strings (not coerced to number)", () => {
+    const strSchema = z.object({ val: z.string().optional() })
+    const fd = makeFormData({ val: "Infinity" })
+    const result = parseFormData(strSchema, fd)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.val).toBe("Infinity")
+    }
+  })
 })
