@@ -15,7 +15,7 @@ export async function GET() {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         status: "unhealthy",
