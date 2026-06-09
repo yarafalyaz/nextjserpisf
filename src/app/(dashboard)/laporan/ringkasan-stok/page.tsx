@@ -16,28 +16,26 @@ export const metadata: Metadata = { title: "Ringkasan Stok" }
 export default async function InventorySummaryPage() {
   await requirePermission('view_reports')
 
-  const warehouses = await prisma.warehouse.findMany({
-    where: { isActive: true, deletedAt: null },
-    orderBy: { code: 'asc' },
-  })
-
-  // Get all items with stock
-  const items = await prisma.item.findMany({
-    where: { isActive: true, deletedAt: null, qtyOnHand: { gt: 0 } },
-    include: {
-      category: { select: { name: true } },
-      warehouse: { select: { id: true, code: true, name: true } },
-    },
-    orderBy: { name: 'asc' },
-  })
-
-  // Get inventory layers for value calculation
-  const layers = await prisma.inventoryLayer.findMany({
-    where: { remaining: { gt: 0 } },
-    include: {
-      stockMove: { select: { warehouseId: true } },
-    },
-  })
+  const [warehouses, items, layers] = await Promise.all([
+    prisma.warehouse.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { code: 'asc' },
+    }),
+    prisma.item.findMany({
+      where: { isActive: true, deletedAt: null, qtyOnHand: { gt: 0 } },
+      include: {
+        category: { select: { name: true } },
+        warehouse: { select: { id: true, code: true, name: true } },
+      },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.inventoryLayer.findMany({
+      where: { remaining: { gt: 0 } },
+      include: {
+        stockMove: { select: { warehouseId: true } },
+      },
+    }),
+  ])
 
   // Aggregate value per warehouse
   const valueByWarehouse = new Map<number, number>()
