@@ -37,7 +37,7 @@ export default async function EditPage({
     resolutionNotes: data.resolutionNotes,
   }
 
-  const [customers, users] = await Promise.all([prisma.customer.findMany({ orderBy: { name: "asc" } }), prisma.user.findMany({ orderBy: { name: "asc" } })])
+  const [customers, users] = await Promise.all([prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.user.findMany({ orderBy: { name: "asc" } })])
 
   return (
     <div className="flex flex-col gap-6">

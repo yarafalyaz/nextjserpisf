@@ -31,7 +31,7 @@ export default async function EditRackRowPage({
 
   if (!rackRow) notFound()
 
-  const warehouses = await prisma.warehouse.findMany({
+  const warehouses = await prisma.warehouse.findMany({ where: { deletedAt: null },
     include: { racks: { select: { id: true, name: true } } },
     orderBy: { name: "asc" },
   })

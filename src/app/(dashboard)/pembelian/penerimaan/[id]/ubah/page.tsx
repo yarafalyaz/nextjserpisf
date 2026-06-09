@@ -30,7 +30,7 @@ export default async function EditPage({
     notes: data.notes,
   }
 
-  const [purchaseOrders, warehouses, itemRecords] = await Promise.all([prisma.purchaseOrder.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" }, include: { vendor: { select: { name: true } }, items: true } }), prisma.warehouse.findMany({ orderBy: { name: "asc" } }), prisma.item.findMany({ select: { id: true, name: true, sku: true, trackBatch: true, trackSerial: true, unitOfMeasure: true, uomConversions: { select: { code: true, factorToBase: true } } } })])
+  const [purchaseOrders, warehouses, itemRecords] = await Promise.all([prisma.purchaseOrder.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" }, include: { vendor: { select: { name: true } }, items: true } }), prisma.warehouse.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.item.findMany({ where: { deletedAt: null }, select: { id: true, name: true, sku: true, trackBatch: true, trackSerial: true, unitOfMeasure: true, uomConversions: { select: { code: true, factorToBase: true } } } })])
 
   const itemMap = new Map(
     itemRecords.map((i) => [

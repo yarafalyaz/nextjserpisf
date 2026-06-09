@@ -24,7 +24,7 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const [employees, projects, settings] = await Promise.all([prisma.employee.findMany({ orderBy: { name: "asc" } }), prisma.project.findMany({ orderBy: { name: "asc" } }), getSystemSettings()])
+  const [employees, projects, settings] = await Promise.all([prisma.employee.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.project.findMany({ orderBy: { name: "asc" } }), getSystemSettings()])
 
   return (
     <div className="flex flex-col gap-6">

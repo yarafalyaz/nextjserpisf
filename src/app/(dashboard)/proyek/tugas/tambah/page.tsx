@@ -17,7 +17,7 @@ export default async function CreateTaskPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
-    prisma.employee.findMany({
+    prisma.employee.findMany({ where: { deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),

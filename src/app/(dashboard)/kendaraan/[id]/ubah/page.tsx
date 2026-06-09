@@ -36,7 +36,7 @@ export default async function EditPage({
       orderBy: { name: "asc" },
       select: { id: true, name: true, vehicleModelId: true, drivetrain: true, transmission: true },
     }),
-    prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ])
 
   const vehicle = {

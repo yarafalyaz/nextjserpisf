@@ -22,7 +22,7 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const employees = await prisma.employee.findMany({ orderBy: { name: "asc" } })
+  const employees = await prisma.employee.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } })
 
   const projects = await prisma.project.findMany({
     orderBy: { name: "asc" },

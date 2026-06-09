@@ -22,7 +22,7 @@ export default async function EditPage({
 
   if (!data) notFound()
 
-  const customers = await prisma.customer.findMany({ orderBy: { name: "asc" } })
+  const customers = await prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } })
 
   return (
     <div className="flex flex-col gap-6">

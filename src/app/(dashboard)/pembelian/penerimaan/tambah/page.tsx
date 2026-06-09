@@ -23,8 +23,8 @@ export default async function CreateGoodsReceiptPage({
       include: { vendor: true, items: true },
       orderBy: { createdAt: "desc" },
     }),
-    prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    prisma.item.findMany({
+    prisma.warehouse.findMany({ where: { isActive: true , deletedAt: null }, orderBy: { name: "asc" } }),
+    prisma.item.findMany({ where: { deletedAt: null },
       select: {
         id: true,
         name: true,

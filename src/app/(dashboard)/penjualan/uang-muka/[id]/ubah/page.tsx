@@ -32,7 +32,7 @@ export default async function EditPage({
     notes: data.notes,
   }
 
-  const [customers, quotations] = await Promise.all([prisma.customer.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }), prisma.quotation.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" }, select: { id: true, documentNo: true, customerId: true } })])
+  const [customers, quotations] = await Promise.all([prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }), prisma.quotation.findMany({ where: { status: "approved" }, orderBy: { createdAt: "desc" }, select: { id: true, documentNo: true, customerId: true } })])
   const paymentMethods = await getActivePaymentMethods()
 
   return (
