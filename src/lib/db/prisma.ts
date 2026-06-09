@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client"
 import { PrismaMariaDb } from "@prisma/adapter-mariadb"
+import "@/lib/env" // validate env at startup
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
