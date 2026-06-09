@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { BrandEditForm } from "./_form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Merek Kendaraan" }
+
 export default async function EditBrandPage({
   params,
 }: {

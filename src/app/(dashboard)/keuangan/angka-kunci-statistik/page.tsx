@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
 import { StatisticalKeyFigureTable } from "./_components/statistical-key-figure-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Angka Kunci Statistik" }
+
 export default async function StatisticalKeyFiguresPage({
   searchParams,
 }: {

@@ -9,6 +9,10 @@ import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteTax } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pajak" }
+
 export default async function TaxDetailPage({
   params,
 }: {

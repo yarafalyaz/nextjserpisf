@@ -13,6 +13,10 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 import { AppDatePicker } from "@/components/ui/date-picker"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Mutasi Stok" }
+
 export default async function StockMovementPage({
   searchParams,
 }: {

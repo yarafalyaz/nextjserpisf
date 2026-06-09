@@ -4,6 +4,10 @@ import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { DepartmentCreateForm } from "./form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Departemen" }
+
 export default async function CreateDepartmentPage() {
   const generatedCode = await peekNextDocumentNumber("DEPT", "simple")
 

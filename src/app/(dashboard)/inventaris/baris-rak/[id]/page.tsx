@@ -8,6 +8,10 @@ import { deleteRackRow } from "@/actions/inventory.actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Baris Rak" }
+
 export default async function RackRowDetailPage({
   params,
 }: {

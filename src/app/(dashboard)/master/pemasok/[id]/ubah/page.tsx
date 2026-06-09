@@ -6,6 +6,10 @@ import { VendorForm } from "@/components/forms/vendor-form"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Pemasok" }
+
 export default async function EditVendorPage({
   params,
 }: {

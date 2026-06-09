@@ -6,6 +6,10 @@ import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PettyCashTable } from "./_components/petty-cash-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kas Kecil" }
+
 export default async function PettyCashPage({
   searchParams,
 }: {

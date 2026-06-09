@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { DownPaymentTable } from "./_components/down-payment-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Uang Muka" }
+
 export default async function DownPaymentsPage({
   searchParams,
 }: {

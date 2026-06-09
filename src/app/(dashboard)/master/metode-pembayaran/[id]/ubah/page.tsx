@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { PaymentMethodForm } from "@/components/forms/payment-method-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Metode Pembayaran" }
+
 export default async function EditPaymentMethodPage({
   params,
 }: {

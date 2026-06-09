@@ -13,6 +13,10 @@ import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Permintaan Pembelian" }
+
 export default async function PurchaseRequestDetailPage({
   params,
 }: {

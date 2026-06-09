@@ -8,6 +8,10 @@ import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Laporan Bank" }
+
 export default async function BankStatementsPage({
   searchParams,
 }: {

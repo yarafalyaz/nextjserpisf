@@ -13,6 +13,10 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pengeluaran" }
+
 export default async function ExpenseDetailPage({
   params,
 }: {

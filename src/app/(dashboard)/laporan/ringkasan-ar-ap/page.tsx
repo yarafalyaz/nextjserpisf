@@ -9,6 +9,10 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { PrintHeader } from "@/components/reports/print-header"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ringkasan Ar Ap" }
+
 export default async function ArApSummaryPage() {
   await requirePermission('view_reports')
 

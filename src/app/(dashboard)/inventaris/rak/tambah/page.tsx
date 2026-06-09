@@ -6,6 +6,10 @@ import { getSystemSettings } from "@/lib/utils/settings"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { RackCreateForm } from "../_components/rack-create-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Rak" }
+
 export default async function CreateRackPage() {
   await requirePermission("create_warehouses")
 

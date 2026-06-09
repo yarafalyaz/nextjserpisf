@@ -2,6 +2,10 @@ import { prisma } from "@/lib/db/prisma"
 import { TaxGroupForm } from "./form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Kelompok Pajak" }
+
 export const dynamic = "force-dynamic"
 
 export default async function CreateTaxGroupPage() {

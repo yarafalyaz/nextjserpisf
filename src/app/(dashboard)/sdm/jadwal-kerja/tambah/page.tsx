@@ -4,6 +4,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { WorkScheduleForm } from "@/components/forms/work-schedule-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Jadwal Kerja" }
+
 export default async function CreateWorkSchedulePage() {
   await requirePermission("view_work_schedules")
 

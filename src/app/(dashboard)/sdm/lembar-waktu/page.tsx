@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { TimesheetTable } from "./_components/timesheet-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Lembar Waktu" }
+
 export default async function TimesheetsPage({
   searchParams,
 }: {

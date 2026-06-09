@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { TaxEditForm } from "./form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Pajak" }
+
 export default async function EditTaxPage({
   params,
 }: {

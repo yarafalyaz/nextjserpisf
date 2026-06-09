@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { TimesheetForm } from "@/components/forms/timesheet-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Lembar Waktu" }
+
 export default async function CreateTimesheetPage() {
   await requirePermission("view_timesheets")
 

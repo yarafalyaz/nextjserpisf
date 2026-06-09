@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AssetTransferTable } from "./_components/asset-transfer-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Transfer Stok" }
+
 export default async function AssetTransfersPage({
   searchParams,
 }: {

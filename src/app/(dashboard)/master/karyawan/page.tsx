@@ -6,6 +6,10 @@ import Link from "next/link"
 import { EmployeeTable } from "./_components/employee-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Karyawan" }
+
 export default async function EmployeesPage({
   searchParams,
 }: {

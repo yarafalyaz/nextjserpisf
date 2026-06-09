@@ -10,6 +10,10 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tugas" }
+
 export default async function TaskDetailPage({
   params,
 }: {

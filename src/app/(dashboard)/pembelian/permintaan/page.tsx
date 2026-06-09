@@ -8,6 +8,10 @@ import { PurchaseRequestTable } from "./_components/purchase-request-table"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Permintaan Pembelian" }
+
 export default async function PurchaseRequestsPage({
   searchParams,
 }: {

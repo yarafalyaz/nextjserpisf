@@ -7,6 +7,10 @@ import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteDepartmentHoliday } from "@/actions/hrm.actions"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Hari Libur Departemen" }
+
 export default async function DepartmentHolidayDetailPage({
   params,
 }: {

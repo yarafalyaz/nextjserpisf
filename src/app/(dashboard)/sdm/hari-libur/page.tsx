@@ -5,6 +5,10 @@ import Link from "next/link"
 import { HolidayTable } from "./_components/holiday-table"
 import { SyncHolidaysButton } from "./_components/sync-holidays-button"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Hari Libur" }
+
 export default async function HolidaysPage({
   searchParams,
 }: {

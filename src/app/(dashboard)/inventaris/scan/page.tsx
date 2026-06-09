@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/page-header"
 import { showError } from "@/lib/utils/toast"
 
+
 export default function ScanItemPage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()

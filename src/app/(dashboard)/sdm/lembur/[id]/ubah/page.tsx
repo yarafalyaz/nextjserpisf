@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { OvertimeForm } from "@/components/forms/overtime-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Lembur" }
+
 export default async function EditPage({
   params,
 }: {

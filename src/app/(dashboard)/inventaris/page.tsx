@@ -4,6 +4,11 @@ import {
   BarChart3, Scale, ArrowLeftRight, Wrench, Grid3X3
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Inventaris" }
+
+
 const inventoryModules = [
   { label: "Mutasi Stok", href: "/inventaris/mutasi-stok", icon: BarChart3, desc: "Pergerakan stok" },
   { label: "Penyesuaian", href: "/inventaris/penyesuaian", icon: Scale, desc: "Penyesuaian stok" },

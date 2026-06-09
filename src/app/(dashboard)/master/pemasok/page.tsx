@@ -6,6 +6,10 @@ import Link from "next/link"
 import { VendorTable } from "./_components/vendor-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pemasok" }
+
 export default async function VendorsPage({
   searchParams,
 }: {

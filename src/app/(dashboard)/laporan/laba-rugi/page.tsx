@@ -8,6 +8,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Laba Rugi" }
+
 export default async function IncomeStatementPage({
   searchParams,
 }: {

@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { GoodsReceiptTable } from "./_components/goods-receipt-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Penerimaan Barang" }
+
 export default async function GoodsReceiptsPage({
   searchParams,
 }: {

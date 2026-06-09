@@ -7,6 +7,10 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { AppSearchField } from "@/components/ui/search-field"
 import { OvertimeTable } from "./_components/overtime-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Lembur" }
+
 export default async function OvertimePage({
   searchParams,
 }: {

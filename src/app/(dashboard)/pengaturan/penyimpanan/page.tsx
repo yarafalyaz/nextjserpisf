@@ -10,6 +10,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction }
 import { Separator } from "@/components/ui/shadcn/separator"
 import { AlertTriangle, CheckCircle2, Cloud, HardDrive, Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Penyimpanan" }
+
 function Field({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
   return (
     <div className="flex flex-col gap-1">

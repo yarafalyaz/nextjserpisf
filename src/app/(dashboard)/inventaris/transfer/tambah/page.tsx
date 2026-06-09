@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { InventoryTransferForm } from "@/components/forms/inventory-transfer-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Transfer Stok" }
+
 export default async function CreateTransferPage() {
   await requirePermission("create_inventory_transfers")
 

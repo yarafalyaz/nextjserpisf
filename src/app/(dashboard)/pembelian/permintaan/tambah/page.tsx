@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { PurchaseRequestForm } from "@/components/forms/purchase-request-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Permintaan Pembelian" }
+
 export default async function CreatePurchaseRequestPage() {
   await requirePermission("create_purchase_requests")
 

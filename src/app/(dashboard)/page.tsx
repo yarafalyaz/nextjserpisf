@@ -32,6 +32,11 @@ import {
   TableRow,
 } from "@/components/ui/shadcn/table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Dashboard" }
+
+
 const DONE_STATES = ["completed", "cancelled", "done", "closed"]
 const STAGE_DONE = ["completed", "skipped"]
 

@@ -5,6 +5,10 @@ import Link from "next/link"
 import { ShippingMethodTable } from "./_components/shipping-method-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Metode Pengiriman" }
+
 export default async function ShippingMethodsPage({
   searchParams,
 }: {

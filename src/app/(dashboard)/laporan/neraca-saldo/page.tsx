@@ -9,6 +9,10 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 import { ReportSingleDateFilter } from "@/components/reports/report-date-filter"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Neraca Saldo" }
+
 export default async function TrialBalancePage({
   searchParams,
 }: {

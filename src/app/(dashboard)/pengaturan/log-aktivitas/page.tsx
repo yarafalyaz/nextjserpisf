@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ActivityLogTable } from "./_components/activity-log-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Log Aktivitas" }
+
 export default async function ActivityLogPage() {
   await requirePermission("manage_settings")
 

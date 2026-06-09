@@ -9,6 +9,10 @@ import { TaskTable } from "./_components/task-table"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tugas" }
+
 export default async function TasksPage({
   searchParams,
 }: {

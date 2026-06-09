@@ -6,6 +6,10 @@ import Link from "next/link"
 import { Clock } from "lucide-react"
 import { WorkScheduleTable } from "./_components/work-schedule-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Jadwal Kerja" }
+
 export default async function WorkSchedulesPage({
   searchParams,
 }: {

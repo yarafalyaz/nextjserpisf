@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { EmployeeLoanForm } from "@/components/forms/employee-loan-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Pinjaman" }
+
 export default async function CreateLoanPage() {
   await requirePermission("view_employee_loans")
 

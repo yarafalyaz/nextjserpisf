@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/page-header"
 
+
 export default function CreatePaymentTermPage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()

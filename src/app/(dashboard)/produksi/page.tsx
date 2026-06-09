@@ -4,6 +4,11 @@ import {
   Package, Wrench, Hammer
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Produksi" }
+
+
 const manufacturingModules = [
   { label: "Produk (BOM)", href: "/produksi/products", icon: Package, desc: "Bill of Materials" },
   { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, desc: "Perintah kerja" },

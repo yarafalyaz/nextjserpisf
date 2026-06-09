@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AssetBrandTable } from "./_components/asset-brand-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Merek Kendaraan" }
+
 export default async function AssetBrandsPage({
   searchParams,
 }: {

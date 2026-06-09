@@ -7,6 +7,10 @@ import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pengguna" }
+
 export default async function UsersPage() {
   await requirePermission("manage_users")
 

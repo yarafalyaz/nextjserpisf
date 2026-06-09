@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { VendorBillForm } from "@/components/forms/vendor-bill-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Tagihan" }
+
 export default async function CreateVendorBillPage() {
   await requirePermission("create_vendor_bills")
 

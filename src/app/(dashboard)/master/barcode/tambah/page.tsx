@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/page-header"
 
+
 export default function CreateBarcodePage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()

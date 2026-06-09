@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { AppreciationForm } from "@/components/forms/appreciation-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Apresiasi" }
+
 export default async function EditAppreciationPage({
   params,
 }: {

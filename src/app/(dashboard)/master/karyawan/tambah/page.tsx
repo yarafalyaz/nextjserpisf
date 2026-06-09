@@ -7,6 +7,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Karyawan" }
+
 export default async function CreateEmployeePage() {
   await requirePermission("create_employees")
 

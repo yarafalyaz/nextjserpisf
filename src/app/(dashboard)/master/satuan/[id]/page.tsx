@@ -6,6 +6,10 @@ import { notFound } from "next/navigation"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Satuan" }
+
 export default async function UomDetailPage({
   params,
 }: {

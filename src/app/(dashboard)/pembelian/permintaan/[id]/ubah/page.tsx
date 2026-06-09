@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { PurchaseRequestForm } from "@/components/forms/purchase-request-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Permintaan Pembelian" }
+
 export default async function EditPage({
   params,
 }: {

@@ -6,6 +6,10 @@ import { ItemForm } from "@/components/forms/item-form"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Barang" }
+
 export default async function EditItemPage({
   params,
 }: {

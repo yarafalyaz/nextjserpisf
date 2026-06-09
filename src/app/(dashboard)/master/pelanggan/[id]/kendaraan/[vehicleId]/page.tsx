@@ -9,6 +9,10 @@ import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kendaraan" }
+
 export default async function CustomerVehicleDetailPage({
   params,
 }: {

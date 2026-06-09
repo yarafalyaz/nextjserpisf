@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { QuotationForm } from "@/components/forms/quotation-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Penawaran" }
+
 export default async function EditQuotationPage({
   params,
 }: {

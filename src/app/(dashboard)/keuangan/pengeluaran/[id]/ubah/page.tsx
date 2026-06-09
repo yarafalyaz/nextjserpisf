@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { ExpenseForm } from "@/components/forms/expense-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Pengeluaran" }
+
 export default async function EditPage({
   params,
 }: {

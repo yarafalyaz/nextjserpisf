@@ -5,6 +5,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DownPaymentForm } from "@/components/forms/down-payment-form"
 import { getActivePaymentMethods } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Uang Muka" }
+
 export default async function CreateDownPaymentPage({
   searchParams,
 }: {

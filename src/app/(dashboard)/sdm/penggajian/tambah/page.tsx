@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { PayrollForm } from "@/components/forms/payroll-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Penggajian" }
+
 export default async function CreatePayrollPage() {
   await requirePermission("create_payroll")
 

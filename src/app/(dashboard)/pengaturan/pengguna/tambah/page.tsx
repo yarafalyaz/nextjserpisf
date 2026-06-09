@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { UserCreateForm } from "./_components/user-create-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Pengguna" }
+
 export default async function CreateUserPage() {
   await requirePermission("manage_users")
 

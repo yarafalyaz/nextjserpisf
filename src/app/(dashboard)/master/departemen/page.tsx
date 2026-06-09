@@ -5,6 +5,10 @@ import Link from "next/link"
 import { DepartmentTable } from "./_components/department-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Departemen" }
+
 export default async function DepartmentsPage({
   searchParams,
 }: {

@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { SalesInvoiceForm } from "@/components/forms/sales-invoice-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Faktur" }
+
 export default async function EditPage({
   params,
 }: {

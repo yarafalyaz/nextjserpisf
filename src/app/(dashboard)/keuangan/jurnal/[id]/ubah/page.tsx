@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { JournalForm } from "@/components/forms/journal-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Jurnal" }
+
 export default async function EditPage({
   params,
 }: {

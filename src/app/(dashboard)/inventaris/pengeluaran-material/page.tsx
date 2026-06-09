@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { MaterialIssueTable } from "./_components/material-issue-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pengeluaran Material" }
+
 export default async function MaterialIssuesPage({
   searchParams,
 }: {

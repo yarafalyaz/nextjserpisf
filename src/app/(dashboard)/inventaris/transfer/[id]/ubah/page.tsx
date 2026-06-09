@@ -6,6 +6,10 @@ import { notFound } from "next/navigation"
 import { InventoryTransferForm } from "@/components/forms/inventory-transfer-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Transfer Stok" }
+
 export default async function EditPage({
   params,
 }: {

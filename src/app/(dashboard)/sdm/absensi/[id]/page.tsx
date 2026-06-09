@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Absensi" }
+
 function formatTime(date: Date | null): string {
   if (!date) return "-"
   return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })

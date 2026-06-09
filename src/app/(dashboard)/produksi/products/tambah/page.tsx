@@ -6,6 +6,10 @@ import { ProductForm } from "../_components/product-form"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { prisma } from "@/lib/db/prisma"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Products" }
+
 export default async function CreateProductPage() {
   await requirePermission("create_products")
 

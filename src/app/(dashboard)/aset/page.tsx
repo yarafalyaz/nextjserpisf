@@ -6,6 +6,10 @@ import Link from "next/link"
 import { AssetTable } from "./_components/asset-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Aset" }
+
 export default async function AssetsPage({
   searchParams,
 }: {

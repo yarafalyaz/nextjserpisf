@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AssetCategoryTable } from "./_components/asset-category-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kategori" }
+
 export default async function AssetCategoriesPage({
   searchParams,
 }: {

@@ -5,6 +5,10 @@ import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BarcodeTable } from "./_components/barcode-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Barcode" }
+
 export default async function BarcodesPage() {
   const barcodes = await prisma.barcode.findMany({
     orderBy: { createdAt: "desc" },

@@ -5,6 +5,10 @@ import Link from "next/link"
 import { ProductTable } from "./_components/product-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Products" }
+
 export default async function ProductsPage({
   searchParams,
 }: {

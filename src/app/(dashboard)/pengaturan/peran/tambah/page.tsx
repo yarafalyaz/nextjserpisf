@@ -7,6 +7,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import Link from "next/link"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Peran" }
+
 export default async function CreateRolePage() {
   await requirePermission("manage_settings")
 

@@ -9,6 +9,10 @@ import { deleteDeliveryOrder } from "@/actions/sales.actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Surat Jalan" }
+
 export default async function DeliveryOrderDetailPage({
   params,
 }: {

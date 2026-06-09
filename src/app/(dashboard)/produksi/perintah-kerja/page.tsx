@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { WorkOrderTable } from "./_components/work-order-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Perintah Kerja" }
+
 export default async function WorkOrdersPage({
   searchParams,
 }: {

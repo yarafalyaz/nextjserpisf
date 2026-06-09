@@ -6,6 +6,10 @@ import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { WorkflowTable } from "./_components/workflow-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Workflow" }
+
 export default async function WorkflowPage() {
   await requirePermission("manage_settings")
 

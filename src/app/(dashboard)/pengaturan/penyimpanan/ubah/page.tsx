@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StorageForm } from "./_components/storage-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Penyimpanan" }
+
 export default async function EditStoragePage() {
   await requirePermission("manage_settings")
   const settings = await prisma.systemSetting.findFirst()

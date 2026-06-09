@@ -6,6 +6,10 @@ import { QuotationForm } from "@/components/forms/quotation-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Penawaran" }
+
 export default async function CreateQuotationPage() {
   await requirePermission("create_quotations")
 

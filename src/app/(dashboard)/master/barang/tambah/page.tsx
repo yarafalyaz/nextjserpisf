@@ -7,6 +7,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Barang" }
+
 export default async function CreateItemPage() {
   await requirePermission("create_items")
 

@@ -7,6 +7,10 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { AppSearchField } from "@/components/ui/search-field"
 import { LeaveTable } from "./_components/leave-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Cuti" }
+
 export default async function LeaveRequestsPage({
   searchParams,
 }: {

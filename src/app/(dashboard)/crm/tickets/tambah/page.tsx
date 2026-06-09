@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { TicketForm } from "@/components/forms/ticket-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Tickets" }
+
 export default async function CreateTicketPage() {
   await requirePermission("create_tickets")
 

@@ -9,6 +9,10 @@ import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pusat Biaya" }
+
 export default async function CostCenterDetailPage({
   params,
 }: {

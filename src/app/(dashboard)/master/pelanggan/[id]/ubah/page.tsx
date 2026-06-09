@@ -6,6 +6,10 @@ import { CustomerForm } from "@/components/forms/customer-form"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Pelanggan" }
+
 export default async function EditCustomerPage({
   params,
 }: {

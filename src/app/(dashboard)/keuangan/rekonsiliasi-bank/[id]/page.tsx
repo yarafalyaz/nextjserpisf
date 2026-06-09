@@ -8,6 +8,10 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Rekonsiliasi Bank" }
+
 export default async function BankReconciliationDetailPage({
   params,
 }: {

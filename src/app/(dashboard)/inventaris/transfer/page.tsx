@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { TransferTable } from "./_components/transfer-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Transfer Stok" }
+
 export default async function InventoryTransfersPage({
   searchParams,
 }: {

@@ -4,6 +4,11 @@ import {
   FileSpreadsheet, Scale, BookOpen, Coins, Clock, Package, TrendingUp, Target, Users, Receipt, Landmark, FolderKanban, ArrowLeftRight, BarChart3
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Laporan" }
+
+
 const reportsModules = [
   { label: "Laba Rugi", href: "/laporan/laba-rugi", icon: TrendingUp, desc: "Laba rugi multi-step" },
   { label: "Laba Rugi per Proyek", href: "/laporan/laba-rugi-proyek", icon: FolderKanban, desc: "Laba rugi per proyek/WO" },

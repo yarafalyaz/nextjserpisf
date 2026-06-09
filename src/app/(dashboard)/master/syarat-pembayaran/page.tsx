@@ -5,6 +5,10 @@ import Link from "next/link"
 import { PaymentTermTable } from "./_components/payment-term-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Syarat Pembayaran" }
+
 export default async function PaymentTermsPage({
   searchParams,
 }: {

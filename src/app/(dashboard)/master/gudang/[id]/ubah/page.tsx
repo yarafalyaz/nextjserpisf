@@ -6,6 +6,10 @@ import { WarehouseForm } from "@/components/forms/warehouse-form"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Gudang" }
+
 export default async function EditWarehousePage({
   params,
 }: {

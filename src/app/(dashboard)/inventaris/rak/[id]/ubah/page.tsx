@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { RackEditForm } from "./form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Rak" }
+
 export default async function EditRackPage({
   params,
 }: {

@@ -7,6 +7,10 @@ import { Gift } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppreciationTable } from "./_components/appreciation-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Apresiasi" }
+
 export default async function AppreciationsPage({
   searchParams,
 }: {

@@ -5,6 +5,10 @@ import { PositionCreateForm } from "./form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Jabatan" }
+
 export default async function CreatePositionPage() {
   const [departments, generatedCode] = await Promise.all([
     prisma.department.findMany({ orderBy: { name: "asc" } }),

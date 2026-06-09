@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { ProductionOrderForm } from "@/components/forms/production-order-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Production Orders" }
+
 export default async function CreateProductionOrderPage() {
   await requirePermission("create_production_orders")
 

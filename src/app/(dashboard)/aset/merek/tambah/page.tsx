@@ -4,6 +4,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AssetBrandForm } from "@/components/forms/asset-brand-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Merek Kendaraan" }
+
 export default async function CreateAssetBrandPage() {
   await requirePermission("create_assets")
 

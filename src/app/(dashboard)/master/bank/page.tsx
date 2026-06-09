@@ -5,6 +5,10 @@ import Link from "next/link"
 import { BankTable } from "./_components/bank-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Bank" }
+
 export default async function BanksPage({
   searchParams,
 }: {

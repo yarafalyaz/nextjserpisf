@@ -10,6 +10,10 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kas Kecil" }
+
 export default async function PettyCashDetailPage({
   params,
 }: {

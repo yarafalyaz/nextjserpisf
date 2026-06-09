@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { DeliveryOrderForm } from "@/components/forms/delivery-order-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Surat Jalan" }
+
 export default async function CreateDeliveryOrderPage() {
   await requirePermission("create_delivery_orders")
 

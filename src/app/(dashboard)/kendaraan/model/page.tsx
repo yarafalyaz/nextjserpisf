@@ -7,6 +7,10 @@ import { Car } from "lucide-react"
 import { VehicleModelTable } from "./_components/vehicle-model-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Model Kendaraan" }
+
 export default async function VehicleModelsPage({
   searchParams,
 }: {

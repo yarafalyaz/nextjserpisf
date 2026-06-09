@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { RackRowForm } from "@/components/forms/rack-row-form"
 import { getSystemSettings } from "@/lib/utils/settings"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Baris Rak" }
+
 export default async function EditRackRowPage({
   params,
 }: {

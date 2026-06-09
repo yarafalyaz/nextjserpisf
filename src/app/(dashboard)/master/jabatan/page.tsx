@@ -5,6 +5,10 @@ import Link from "next/link"
 import { PositionTable } from "./_components/position-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Jabatan" }
+
 export default async function PositionsPage() {
   const positions = await prisma.position.findMany({
     include: { department: true },

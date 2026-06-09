@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { GoodsReceiptForm } from "@/components/forms/goods-receipt-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Penerimaan Barang" }
+
 export default async function CreateGoodsReceiptPage({
   searchParams,
 }: {

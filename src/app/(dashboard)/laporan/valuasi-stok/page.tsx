@@ -12,6 +12,10 @@ import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Valuasi Stok" }
+
 export default async function StockValuationPage({
   searchParams,
 }: {

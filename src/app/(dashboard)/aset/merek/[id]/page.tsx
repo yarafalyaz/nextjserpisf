@@ -10,6 +10,10 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Merek Kendaraan" }
+
 export default async function AssetBrandDetailPage({
   params,
 }: {

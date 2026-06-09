@@ -8,6 +8,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Piutang Jatuh Tempo" }
+
 function getAgeGroup(days: number): string {
   if (days <= 30) return '0-30 hari'
   if (days <= 60) return '31-60 hari'

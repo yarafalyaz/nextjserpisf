@@ -9,6 +9,10 @@ import { QuotationTable } from "./_components/quotation-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { FilterDrawer } from "@/components/ui/filter-drawer"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Penawaran" }
+
 export default async function QuotationsPage({
   searchParams,
 }: {

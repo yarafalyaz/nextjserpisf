@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { CostCenterTable } from "./_components/cost-center-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pusat Biaya" }
+
 export default async function CostCentersPage({
   searchParams,
 }: {

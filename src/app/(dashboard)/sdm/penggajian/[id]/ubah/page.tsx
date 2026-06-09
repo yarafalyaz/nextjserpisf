@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { PayrollForm } from "@/components/forms/payroll-form"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Penggajian" }
+
 export default async function EditPayrollPage({
   params,
 }: {

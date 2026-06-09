@@ -8,6 +8,10 @@ import { Pencil } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Merek Kendaraan" }
+
 export default async function BrandDetailPage({
   params,
 }: {

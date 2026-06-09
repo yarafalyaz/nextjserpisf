@@ -6,6 +6,10 @@ import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaskForm } from "../../_components/task-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Tugas" }
+
 export default async function EditTaskPage({
   params,
 }: {

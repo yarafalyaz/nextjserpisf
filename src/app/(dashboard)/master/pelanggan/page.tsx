@@ -6,6 +6,10 @@ import Link from "next/link"
 import { CustomerTable } from "./_components/customer-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pelanggan" }
+
 export default async function CustomersPage({
   searchParams,
 }: {

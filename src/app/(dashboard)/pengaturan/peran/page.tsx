@@ -8,6 +8,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { deleteRole } from "@/actions/roles.actions"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Peran" }
+
 export default async function RolesPage() {
   await requirePermission("manage_settings")
 

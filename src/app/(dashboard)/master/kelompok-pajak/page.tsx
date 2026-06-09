@@ -5,6 +5,10 @@ import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxGroupTable } from "./_components/tax-group-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kelompok Pajak" }
+
 export default async function TaxGroupsPage() {
   const [taxGroups, allTaxes] = await Promise.all([
     prisma.taxGroup.findMany({

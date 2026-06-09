@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxGroupEditForm } from "./form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Kelompok Pajak" }
+
 export default async function EditTaxGroupPage({
   params,
 }: {

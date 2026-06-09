@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { JournalTable } from "./_components/journal-table"
 import { FilterDrawer } from "@/components/ui/filter-drawer"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Jurnal" }
+
 export default async function JournalsPage({
   searchParams,
 }: {

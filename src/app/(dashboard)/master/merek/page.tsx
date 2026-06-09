@@ -5,6 +5,10 @@ import Link from "next/link"
 import { BrandTable } from "./_components/brand-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Merek Kendaraan" }
+
 export default async function BrandsPage({
   searchParams,
 }: {

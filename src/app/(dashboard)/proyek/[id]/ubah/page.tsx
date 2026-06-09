@@ -6,6 +6,10 @@ import { notFound } from "next/navigation"
 import { ProjectForm } from "@/components/forms/project-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Proyek" }
+
 export default async function EditProjectPage({
   params,
 }: {

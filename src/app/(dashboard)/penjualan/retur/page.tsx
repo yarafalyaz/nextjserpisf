@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { ReturnTable } from "./_components/return-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Retur" }
+
 export default async function SalesReturnsPage({
   searchParams,
 }: {

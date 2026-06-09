@@ -5,6 +5,10 @@ import Link from "next/link"
 import { VehicleTable } from "./_components/vehicle-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kendaraan" }
+
 export default async function VehiclesPage({
   searchParams,
 }: {

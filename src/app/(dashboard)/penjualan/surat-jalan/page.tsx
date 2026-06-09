@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { DeliveryOrderTable } from "./_components/delivery-order-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Surat Jalan" }
+
 export default async function DeliveryOrdersPage({
   searchParams,
 }: {

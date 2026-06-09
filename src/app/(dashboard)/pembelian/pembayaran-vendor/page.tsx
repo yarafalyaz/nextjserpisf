@@ -7,6 +7,10 @@ import { VendorPaymentTable } from "./_components/vendor-payment-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pembayaran Vendor" }
+
 export default async function VendorPaymentsPage({
   searchParams,
 }: {

@@ -12,6 +12,10 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pembayaran" }
+
 export default async function SalesPaymentDetailPage({
   params,
 }: {

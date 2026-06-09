@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { ShippingMethodForm } from "@/components/forms/shipping-method-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Metode Pengiriman" }
+
 export default async function EditShippingMethodPage({
   params,
 }: {

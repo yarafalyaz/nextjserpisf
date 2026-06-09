@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { EditBankForm } from "./form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Bank" }
+
 export default async function EditBankPage({
   params,
 }: {

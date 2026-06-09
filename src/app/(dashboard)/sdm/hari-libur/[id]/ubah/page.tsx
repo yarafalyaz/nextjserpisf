@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { HolidayEditForm } from "./form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Hari Libur" }
+
 export default async function EditHolidayPage({
   params,
 }: {

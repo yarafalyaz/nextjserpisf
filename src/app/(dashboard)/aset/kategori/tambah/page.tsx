@@ -4,6 +4,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AssetCategoryForm } from "@/components/forms/asset-category-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Kategori" }
+
 export default async function CreateAssetCategoryPage() {
   await requirePermission("create_assets")
 

@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { OvertimeForm } from "@/components/forms/overtime-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Lembur" }
+
 export default async function CreateOvertimePage() {
   await requirePermission("view_overtime")
 

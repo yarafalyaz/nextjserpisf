@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaskForm } from "../_components/task-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Tugas" }
+
 export default async function CreateTaskPage() {
   await requirePermission("view_projects")
 

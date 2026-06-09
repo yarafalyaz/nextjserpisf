@@ -5,6 +5,10 @@ import Link from "next/link"
 import { TaxTable } from "./_components/tax-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pajak" }
+
 export default async function TaxesPage({
   searchParams,
 }: {

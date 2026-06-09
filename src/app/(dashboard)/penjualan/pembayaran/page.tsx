@@ -7,6 +7,10 @@ import { PaymentTable } from "./_components/payment-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pembayaran" }
+
 export default async function SalesPaymentsPage({
   searchParams,
 }: {

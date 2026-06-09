@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { ExpenseForm } from "@/components/forms/expense-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Pengeluaran" }
+
 export default async function CreateExpensePage() {
   await requirePermission("create_expenses")
 

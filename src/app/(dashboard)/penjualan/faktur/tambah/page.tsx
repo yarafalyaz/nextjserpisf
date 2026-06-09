@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { SalesInvoiceForm } from "@/components/forms/sales-invoice-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Faktur" }
+
 export default async function CreateSalesInvoicePage() {
   await requirePermission("create_sales_invoices")
 

@@ -13,6 +13,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tagihan" }
+
 export default async function VendorBillDetailPage({
   params,
 }: {

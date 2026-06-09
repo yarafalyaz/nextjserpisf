@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Syarat Pembayaran" }
+
 export default async function PaymentTermDetailPage({
   params,
 }: {

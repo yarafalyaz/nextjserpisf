@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Akun" }
+
 export default async function DetailPage({
   params,
 }: {

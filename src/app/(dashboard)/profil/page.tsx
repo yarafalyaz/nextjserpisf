@@ -6,6 +6,10 @@ import { redirect } from "next/navigation"
 import { ProfileForm } from "@/components/forms/profile-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Profil" }
+
 export default async function ProfilePage() {
   const session = await auth()
   if (!session?.user) redirect("/login")

@@ -6,6 +6,10 @@ import Link from "next/link"
 import { BudgetTable } from "./_components/budget-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Anggaran" }
+
 export default async function BudgetsPage({
   searchParams,
 }: {

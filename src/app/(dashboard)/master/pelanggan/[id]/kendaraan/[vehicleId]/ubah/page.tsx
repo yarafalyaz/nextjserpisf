@@ -6,6 +6,10 @@ import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CustomerVehicleForm } from "@/components/forms/customer-vehicle-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Kendaraan" }
+
 export default async function EditCustomerVehiclePage({
   params,
 }: {

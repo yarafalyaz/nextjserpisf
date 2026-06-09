@@ -6,6 +6,10 @@ import Link from "next/link"
 import { WarehouseTable } from "./_components/warehouse-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Gudang" }
+
 export default async function WarehousesPage({
   searchParams,
 }: {

@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { VendorBillTable } from "./_components/vendor-bill-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tagihan" }
+
 export default async function VendorBillsPage({
   searchParams,
 }: {

@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { WorkflowForm } from "../_components/workflow-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Workflow" }
+
 export default async function CreateWorkflowPage() {
   await requirePermission("manage_settings")
 

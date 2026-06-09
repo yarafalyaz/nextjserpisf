@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { RackRowForm } from "@/components/forms/rack-row-form"
 import { getSystemSettings } from "@/lib/utils/settings"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Baris Rak" }
+
 export default async function CreateRackRowPage() {
   const warehouses = await prisma.warehouse.findMany({
     where: {

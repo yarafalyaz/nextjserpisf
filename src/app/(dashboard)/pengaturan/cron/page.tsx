@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CronTaskList } from "./_components/cron-task-list"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Cron" }
+
 const CRON_TASKS = [
   {
     key: "lock-period",

@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { BudgetForm } from "@/components/forms/budget-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Anggaran" }
+
 export default async function CreateBudgetPage() {
   await requirePermission("create_budgets")
 

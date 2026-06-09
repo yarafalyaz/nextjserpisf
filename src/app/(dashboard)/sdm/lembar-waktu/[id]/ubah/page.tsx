@@ -7,6 +7,10 @@ import { getSystemSettings } from "@/lib/utils/settings"
 import { TimesheetForm } from "@/components/forms/timesheet-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Lembar Waktu" }
+
 export default async function EditPage({
   params,
 }: {

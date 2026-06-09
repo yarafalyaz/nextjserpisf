@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/page-header"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { auth } from "@/lib/auth/auth"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Absensi" }
+
 export default async function AttendancePage({
   searchParams,
 }: {

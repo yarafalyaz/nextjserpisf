@@ -9,6 +9,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/page-header"
 import { FormSelect } from "@/components/ui/form-select"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Barang" }
+
 export default async function ItemsPage({
   searchParams,
 }: {

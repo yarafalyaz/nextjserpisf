@@ -3,6 +3,10 @@ export const dynamic = "force-dynamic"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { UomForm } from "./form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Satuan" }
+
 export default function CreateUomPage() {
   return (
     <div className="flex flex-col gap-6">

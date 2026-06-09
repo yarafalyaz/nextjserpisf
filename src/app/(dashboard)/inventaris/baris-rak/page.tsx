@@ -5,6 +5,10 @@ import Link from "next/link"
 import { RackRowTable } from "./_components/rack-row-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Baris Rak" }
+
 export default async function RackRowsPage({
   searchParams,
 }: {

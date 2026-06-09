@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { WorkScheduleForm } from "@/components/forms/work-schedule-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Jadwal Kerja" }
+
 export default async function EditPage({
   params,
 }: {

@@ -6,6 +6,11 @@ import {
   Globe, ScanBarcode, CalendarDays, Scale
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Master Data" }
+
+
 const masterModules = [
   { label: "Pelanggan", href: "/master/pelanggan", icon: Users, desc: "Kelola data pelanggan" },
   { label: "Pemasok", href: "/master/pemasok", icon: Factory, desc: "Kelola data vendor/supplier" },

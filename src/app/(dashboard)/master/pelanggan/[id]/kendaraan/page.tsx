@@ -11,6 +11,10 @@ import { deleteCustomerVehicle } from "@/actions/vehicle.actions"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Eye, Pencil, Plus } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kendaraan" }
+
 export default async function CustomerVehiclesPage({
   params,
 }: {

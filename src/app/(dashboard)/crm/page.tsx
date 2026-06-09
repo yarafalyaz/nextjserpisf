@@ -4,6 +4,11 @@ import {
   Target, Ticket
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Crm" }
+
+
 const crmModules = [
   { label: "Leads", href: "/crm/leads", icon: Target, desc: "Prospek pelanggan" },
   { label: "Tiket", href: "/crm/tickets", icon: Ticket, desc: "Tiket support" },

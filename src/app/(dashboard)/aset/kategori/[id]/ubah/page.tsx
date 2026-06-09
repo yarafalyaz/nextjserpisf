@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { AssetCategoryForm } from "@/components/forms/asset-category-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Kategori" }
+
 export default async function EditPage({
   params,
 }: Readonly<{

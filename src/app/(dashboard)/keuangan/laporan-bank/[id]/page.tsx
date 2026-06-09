@@ -7,6 +7,10 @@ import { formatDate } from "@/lib/utils/format"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Laporan Bank" }
+
 export default async function BankStatementDetailPage({
   params,
 }: {

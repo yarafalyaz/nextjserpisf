@@ -6,6 +6,10 @@ import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import Link from "next/link"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Kelompok Pajak" }
+
 export default async function DetailPage({
   params,
 }: {

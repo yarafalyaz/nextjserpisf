@@ -10,6 +10,10 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction }
 import { Separator } from "@/components/ui/shadcn/separator"
 import { Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Penomoran" }
+
 function PrefixItem({ label, value, auto }: { label: string; value: string | null | undefined; auto?: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5">

@@ -6,6 +6,10 @@ import { notFound } from "next/navigation"
 import { EmployeeForm } from "@/components/forms/employee-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Karyawan" }
+
 export default async function EditEmployeePage({
   params,
 }: {

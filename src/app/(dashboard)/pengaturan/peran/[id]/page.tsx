@@ -7,6 +7,10 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Peran" }
+
 export default async function RoleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("manage_settings")
   const { id } = await params

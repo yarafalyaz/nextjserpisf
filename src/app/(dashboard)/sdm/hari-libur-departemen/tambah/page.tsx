@@ -3,6 +3,10 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { DepartmentHolidayForm } from "../_components/department-holiday-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Hari Libur Departemen" }
+
 export default async function CreateDepartmentHolidayPage() {
   const departments = await prisma.department.findMany({
     orderBy: { name: "asc" },

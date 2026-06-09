@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { PositionCreateForm } from "../../tambah/form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Jabatan" }
+
 export default async function EditPositionPage({
   params,
 }: {

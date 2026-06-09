@@ -18,6 +18,11 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Penggajian" }
+
+
 export default async function PayrollDetailPage({
   params,
 }: {

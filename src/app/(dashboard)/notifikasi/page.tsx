@@ -5,6 +5,10 @@ import { auth } from "@/lib/auth/auth"
 import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Notifikasi" }
+
 export default async function NotificationsPage() {
   const session = await auth()
   if (!session?.user) return null

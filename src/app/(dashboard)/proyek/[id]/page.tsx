@@ -13,6 +13,10 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { Progress } from "@/components/ui/shadcn/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Proyek" }
+
 export default async function ProjectDetailPage({
   params,
 }: {

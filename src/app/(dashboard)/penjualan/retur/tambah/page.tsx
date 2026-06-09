@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { SalesReturnForm } from "@/components/forms/sales-return-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Retur" }
+
 export default async function CreateSalesReturnPage() {
   await requirePermission("create_sales_returns")
 

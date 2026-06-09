@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { PurchaseOrderForm } from "@/components/forms/purchase-order-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Pesanan" }
+
 export default async function CreatePurchaseOrderPage({
   searchParams,
 }: {

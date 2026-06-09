@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ProductForm } from "../../_components/product-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Products" }
+
 export default async function EditProductPage({
   params,
 }: {

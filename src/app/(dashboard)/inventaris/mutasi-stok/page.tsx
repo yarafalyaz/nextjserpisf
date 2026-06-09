@@ -7,6 +7,10 @@ import Link from "next/link"
 import { StockMoveTable } from "./_components/stock-move-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Mutasi Stok" }
+
 export default async function StockMovesPage({
   searchParams,
 }: {

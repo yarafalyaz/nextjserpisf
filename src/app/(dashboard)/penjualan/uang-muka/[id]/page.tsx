@@ -13,6 +13,10 @@ import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Uang Muka" }
+
 export default async function DownPaymentDetailPage({
   params,
 }: {

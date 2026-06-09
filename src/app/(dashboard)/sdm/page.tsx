@@ -4,6 +4,11 @@ import {
   Clock, Palmtree, Timer, Banknote, CalendarDays, PiggyBank
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "SDM" }
+
+
 const hrmModules = [
   { label: "Absensi", href: "/sdm/absensi", icon: Clock, desc: "Absensi karyawan" },
   { label: "Cuti", href: "/sdm/cuti", icon: Palmtree, desc: "Cuti karyawan" },

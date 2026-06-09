@@ -6,6 +6,10 @@ import { AssetForm } from "./form"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { requirePermission } from "@/lib/auth/permissions"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Aset" }
+
 export default async function CreateAssetPage() {
   await requirePermission("create_assets")
 

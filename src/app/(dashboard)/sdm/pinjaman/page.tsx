@@ -8,6 +8,10 @@ import { Banknote } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { LoanTable } from "./_components/loan-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pinjaman" }
+
 export default async function EmployeeLoansPage({
   searchParams,
 }: {

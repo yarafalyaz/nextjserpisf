@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { StockAdjustmentForm } from "@/components/forms/stock-adjustment-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Penyesuaian Stok" }
+
 export default async function CreateAdjustmentPage() {
   await requirePermission("create_stock_adjustments")
 

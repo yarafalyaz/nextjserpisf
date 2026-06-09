@@ -6,6 +6,10 @@ import { VendorPaymentForm } from "@/components/forms/vendor-payment-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getActivePaymentMethods } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Pembayaran Vendor" }
+
 export default async function EditPage({
   params,
 }: {

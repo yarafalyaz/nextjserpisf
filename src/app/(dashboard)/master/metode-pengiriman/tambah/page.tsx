@@ -6,6 +6,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Metode Pengiriman" }
+
 export default async function CreateShippingMethodPage() {
   await requirePermission("create_shipping_methods")
 

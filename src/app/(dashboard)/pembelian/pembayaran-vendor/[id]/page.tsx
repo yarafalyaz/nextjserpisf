@@ -13,6 +13,10 @@ import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pembayaran Vendor" }
+
 export default async function VendorPaymentDetailPage({
   params,
 }: {

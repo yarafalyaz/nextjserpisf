@@ -4,6 +4,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { CostCenterForm } from "@/components/forms/cost-center-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Pusat Biaya" }
+
 export default async function CreateCostCenterPage() {
   await requirePermission("create_cost_centers")
 

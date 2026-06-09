@@ -6,6 +6,10 @@ import { AccountForm } from "@/components/forms/account-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Akun" }
+
 export default async function CreateAccountPage() {
   await requirePermission("create_accounts")
 

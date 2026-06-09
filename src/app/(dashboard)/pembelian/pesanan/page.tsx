@@ -9,6 +9,10 @@ import { PurchaseOrderTable } from "./_components/purchase-order-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { FilterDrawer } from "@/components/ui/filter-drawer"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pesanan" }
+
 export default async function PurchaseOrdersPage({
   searchParams,
 }: {

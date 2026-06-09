@@ -9,6 +9,10 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
 import { AlertTriangle, CheckCircle2, Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Mapping Akun" }
+
 function AccountCard({ label, value }: { label: string; value: string }) {
   const isSet = value !== "Belum diset"
   return (

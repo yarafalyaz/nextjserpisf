@@ -7,6 +7,10 @@ import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Peran" }
+
 export default async function EditRolePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("manage_settings")
   const { id } = await params

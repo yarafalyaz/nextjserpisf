@@ -4,6 +4,11 @@ import {
   ClipboardList, FileCheck, PackageCheck, FileSpreadsheet, Banknote, Undo2
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pembelian" }
+
+
 const purchaseModules = [
   { label: "Permintaan", href: "/pembelian/permintaan", icon: ClipboardList, desc: "Permintaan pembelian" },
   { label: "Pesanan", href: "/pembelian/pesanan", icon: FileCheck, desc: "Pesanan pembelian" },

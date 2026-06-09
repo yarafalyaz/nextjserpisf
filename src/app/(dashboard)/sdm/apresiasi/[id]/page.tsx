@@ -8,6 +8,10 @@ import { deleteAppreciation } from "@/actions/hrm.actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Apresiasi" }
+
 const typeLabels: Record<string, string> = {
   bonus: "Bonus",
   reward: "Reward",

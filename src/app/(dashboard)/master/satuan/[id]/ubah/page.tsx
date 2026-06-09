@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { UomForm } from "../../tambah/form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Satuan" }
+
 export default async function EditUomPage({
   params,
 }: {

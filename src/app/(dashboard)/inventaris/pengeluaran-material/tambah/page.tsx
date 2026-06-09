@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { MaterialIssueForm } from "@/components/forms/material-issue-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Pengeluaran Material" }
+
 export default async function CreateMaterialIssuePage() {
   await requirePermission("create_material_issues")
 

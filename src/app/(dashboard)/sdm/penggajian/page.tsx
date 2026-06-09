@@ -12,6 +12,10 @@ import { FormSelect } from "@/components/ui/form-select"
 
 import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Penggajian" }
+
 const statusToIndo: Record<string, string> = {
   draft: "konsep",
   approved: "disetujui",

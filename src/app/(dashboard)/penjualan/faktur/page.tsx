@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { InvoiceTable } from "./_components/invoice-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Faktur" }
+
 export default async function InvoicesPage() {
   await requirePermission("view_sales_invoices")
 

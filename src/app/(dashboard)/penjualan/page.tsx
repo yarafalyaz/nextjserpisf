@@ -4,6 +4,11 @@ import {
   FileText, Wallet, ShoppingCart, Truck, Receipt, CreditCard, RotateCcw
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Penjualan" }
+
+
 const salesModules = [
   { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, desc: "Penawaran harga" },
   { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, desc: "Uang muka penjualan" },

@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { OrderTable } from "./_components/order-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pesanan" }
+
 export default async function SalesOrdersPage({
   searchParams,
 }: {

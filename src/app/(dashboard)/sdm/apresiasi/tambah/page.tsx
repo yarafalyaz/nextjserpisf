@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppreciationForm } from "@/components/forms/appreciation-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Apresiasi" }
+
 export default async function CreateAppreciationPage() {
   await requirePermission("view_appreciations")
 

@@ -5,6 +5,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getBackups } from "@/actions/database.actions"
 import { BackupManager } from "./_components/backup-manager"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Database" }
+
 export default async function DatabaseBackupPage() {
   await requirePermission("manage_settings")
   const backups = await getBackups()

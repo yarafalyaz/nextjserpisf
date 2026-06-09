@@ -7,6 +7,10 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { AppSearchField } from "@/components/ui/search-field"
 import { ExpenseTable } from "./_components/expense-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pengeluaran" }
+
 export default async function ExpensesPage({
   searchParams,
 }: {

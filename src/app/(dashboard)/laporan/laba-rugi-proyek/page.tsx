@@ -10,6 +10,10 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { PrintHeader } from "@/components/reports/print-header"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Laba Rugi Proyek" }
+
 export default async function ProjectPnLPage({
   searchParams,
 }: {

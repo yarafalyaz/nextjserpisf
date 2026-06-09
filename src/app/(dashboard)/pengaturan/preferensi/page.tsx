@@ -9,6 +9,10 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from "@/components/ui/shadcn/card"
 import { Pencil } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Preferensi" }
+
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div className="flex flex-col gap-1">

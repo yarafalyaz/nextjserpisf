@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BankReconciliationForm } from "./form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Rekonsiliasi Bank" }
+
 export default async function CreateBankReconciliationPage() {
   await requirePermission("manage_bank_reconciliation")
 

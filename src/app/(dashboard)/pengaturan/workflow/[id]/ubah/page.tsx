@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { WorkflowForm } from "../../_components/workflow-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Workflow" }
+
 export default async function EditWorkflowPage({
   params,
 }: Readonly<{

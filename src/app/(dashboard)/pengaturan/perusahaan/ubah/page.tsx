@@ -5,6 +5,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { SettingsEditForm } from "../../ubah/_components/settings-edit-form"
 import { loadSettingsForEdit } from "../../ubah/_lib/load-settings"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Perusahaan" }
+
 export default async function EditCompanyPage() {
   await requirePermission("manage_settings")
   const { settings, accounts } = await loadSettingsForEdit()

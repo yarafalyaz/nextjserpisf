@@ -5,6 +5,10 @@ import { notFound } from "next/navigation"
 import { EditPaymentTermForm } from "./form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Syarat Pembayaran" }
+
 export default async function EditPaymentTermPage({
   params,
 }: {

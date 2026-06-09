@@ -7,6 +7,10 @@ import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { prisma } from "@/lib/db/prisma"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Pemasok" }
+
 export default async function CreateVendorPage() {
   await requirePermission("create_vendors")
 

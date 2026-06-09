@@ -5,6 +5,10 @@ import Link from "next/link"
 import { CurrencyTable } from "./_components/currency-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Mata Uang" }
+
 export default async function CurrenciesPage({
   searchParams,
 }: {

@@ -8,6 +8,10 @@ import { deleteHoliday } from "@/actions/hrm.actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Hari Libur" }
+
 export default async function HolidayDetailPage({
   params,
 }: {

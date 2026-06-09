@@ -9,6 +9,10 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Pusat Laba" }
+
 export default async function ProfitCenterIncomePage({
   searchParams,
 }: {

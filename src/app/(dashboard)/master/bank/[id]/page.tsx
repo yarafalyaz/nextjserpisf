@@ -10,6 +10,10 @@ import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteBank } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Bank" }
+
 export default async function BankDetailPage({
   params,
 }: {

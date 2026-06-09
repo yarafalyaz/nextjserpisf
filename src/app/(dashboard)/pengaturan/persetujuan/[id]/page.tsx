@@ -8,6 +8,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { approveStep, rejectStep } from "@/actions/approval.actions"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Persetujuan" }
+
 export default async function ApprovalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("view_dashboard")
   const { id } = await params

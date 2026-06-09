@@ -10,6 +10,10 @@ import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteCurrency } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Mata Uang" }
+
 export default async function CurrencyDetailPage({
   params,
 }: {

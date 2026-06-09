@@ -16,6 +16,10 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Barang" }
+
 export default async function ItemDetailPage({
   params,
 }: {

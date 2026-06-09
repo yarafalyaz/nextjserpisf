@@ -5,6 +5,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { WorkOrderForm } from "@/components/forms/work-order-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Perintah Kerja" }
+
 export default async function CreateWorkOrderPage({
   searchParams,
 }: {

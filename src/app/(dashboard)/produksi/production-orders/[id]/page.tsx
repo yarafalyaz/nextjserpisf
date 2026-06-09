@@ -10,6 +10,10 @@ import { deleteProductionOrder } from "@/actions/manufacturing.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Production Orders" }
+
 export default async function ProductionOrderDetailPage({
   params,
 }: {

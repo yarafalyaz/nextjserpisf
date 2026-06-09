@@ -8,6 +8,10 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Akun" }
+
 export default async function AccountsPage({
   searchParams,
 }: {

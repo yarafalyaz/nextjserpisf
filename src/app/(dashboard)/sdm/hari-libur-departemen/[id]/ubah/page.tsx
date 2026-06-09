@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { DepartmentHolidayForm } from "../../_components/department-holiday-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Hari Libur Departemen" }
+
 export default async function EditDepartmentHolidayPage({
   params,
 }: {

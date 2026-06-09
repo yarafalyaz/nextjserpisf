@@ -6,6 +6,10 @@ import { VehicleModelForm } from "@/components/forms/vehicle-model-form"
 import { VehicleVariantManager } from "@/components/forms/vehicle-variant-manager"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Model Kendaraan" }
+
 export default async function EditPage({
   params,
 }: {

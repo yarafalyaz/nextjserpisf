@@ -6,6 +6,10 @@ import { PaymentForm } from "@/components/forms/payment-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getActivePaymentMethods } from "@/lib/services/method.service"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Ubah Pembayaran" }
+
 export default async function EditPage({
   params,
 }: {

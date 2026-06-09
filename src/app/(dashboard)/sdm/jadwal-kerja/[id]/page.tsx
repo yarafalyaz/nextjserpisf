@@ -8,6 +8,10 @@ import { deleteWorkSchedule } from "@/actions/hrm.actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Jadwal Kerja" }
+
 const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
 
 export default async function WorkScheduleDetailPage({

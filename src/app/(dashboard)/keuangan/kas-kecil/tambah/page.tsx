@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { PettyCashForm } from "@/components/forms/petty-cash-form"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Kas Kecil" }
+
 export default async function CreatePettyCashPage() {
   await requirePermission("create_petty_cash")
 

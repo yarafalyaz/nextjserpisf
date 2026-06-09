@@ -5,6 +5,11 @@ import {
   FileSpreadsheet, Landmark, BarChart3
 } from "lucide-react"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Keuangan" }
+
+
 const financeModules = [
   { label: "Jurnal", href: "/keuangan/jurnal", icon: BookOpenCheck, desc: "Jurnal umum" },
   { label: "Pengeluaran", href: "/keuangan/pengeluaran", icon: CircleDollarSign, desc: "Pengeluaran" },

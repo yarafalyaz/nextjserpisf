@@ -10,6 +10,10 @@ import { StatusActions } from "@/components/ui/status-actions"
 import { PageHeader, Button, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Cuti" }
+
 export default async function LeaveRequestDetailPage({
   params,
 }: {

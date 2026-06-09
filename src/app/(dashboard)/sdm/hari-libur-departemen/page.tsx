@@ -4,6 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
 import { DepartmentHolidayTable } from "./_components/department-holiday-table"
 
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Hari Libur Departemen" }
+
 export default async function DepartmentHolidaysPage({
   searchParams,
 }: {
