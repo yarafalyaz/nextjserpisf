@@ -153,7 +153,8 @@ export function GoodsReceiptForm({ purchaseOrders, warehouses, defaultPoId, rece
 
         {selectedPO && grItems.length > 0 && (
           <FormSection title="Item" columns={1}>
-            <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
+            <div className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[700px]" style={{ fontSize: "0.8125rem" }}>
               <thead><tr><th>Item</th><th>Qty Dipesan</th><th>Sisa</th><th>Satuan</th><th>Gudang (per item)</th></tr></thead>
               <tbody>
                 {grItems.map((row, index) => {
@@ -248,6 +249,7 @@ export function GoodsReceiptForm({ purchaseOrders, warehouses, defaultPoId, rece
                 })}
               </tbody>
             </table>
+            </div>
           </FormSection>
         )}
 

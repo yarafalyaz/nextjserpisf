@@ -74,8 +74,9 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Material</h3>
           <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah</Button>
         </div>
-        <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-          <thead><tr><th>Item</th><th>Jml</th><th>Harga Satuan</th><th>Total</th><th></th></tr></thead>
+        <div className="overflow-x-auto">
+        <table className="w-full border-collapse min-w-[640px]" style={{ fontSize: "0.8125rem" }}>
+          <thead><tr><th>Item</th><th>Jumlah</th><th>Harga Satuan</th><th>Total</th><th></th></tr></thead>
           <tbody>
             {miItems.map((item, i) => (
               <tr key={i}>
@@ -88,14 +89,15 @@ export function MaterialIssueForm({ warehouses, items, issue }: MaterialIssueFor
                     className="w-full"
                   />
                 </td>
-                <td><input type="number" min={1} value={item.qty} onChange={(e) => updateItem(i, "qty", Number(e.target.value))} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "80px" }} /></td>
+                <td><input type="number" min={1} value={item.qty} onChange={(e) => updateItem(i, "qty", Number(e.target.value))} aria-label={`Jumlah baris ${i + 1}`} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px", width: "80px" }} /></td>
                 <td className="text-right">Rp {item.unitCost.toLocaleString("id-ID")}</td>
                 <td className="text-right">Rp {(item.qty * item.unitCost).toLocaleString("id-ID")}</td>
-                <td>{miItems.length > 1 && <Button type="button" onPress={() => removeItem(i)} variant="danger-soft" size="sm">×</Button>}</td>
+                <td>{miItems.length > 1 && <Button type="button" onPress={() => removeItem(i)} variant="danger-soft" size="sm" aria-label={`Hapus baris ${i + 1}`}>×</Button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
