@@ -41,6 +41,7 @@ interface EmployeeFormProps {
     employeeDistrict?: string | null
     employeeVillage?: string | null
     postalCode?: string | null
+    hasLoginAccount?: boolean
   }
   departments: { id: number; name: string }[]
   positions: { id: number; name: string }[]
@@ -53,6 +54,9 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!employee
+  // Login account can be offered when creating, or when editing an employee
+  // that doesn't have a login account yet.
+  const canOfferLogin = !isEdit || !employee?.hasLoginAccount
   const [createLogin, setCreateLogin] = useState(false)
   const [loginRoleIds, setLoginRoleIds] = useState<string[]>([])
 
@@ -111,8 +115,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
           })
         }
 
-        // Optional login account (create mode only)
-        if (!isEdit && createLogin) {
+        // Optional login account (create, or edit for employees without one)
+        if (canOfferLogin && createLogin) {
           formData.set("createLoginAccount", "true")
           const passInput = form?.querySelector(`input[name="loginPassword"]`) as HTMLInputElement | null
           if (passInput?.value) formData.set("loginPassword", passInput.value)
@@ -320,7 +324,20 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
           </div>
         </FormSection>
 
-        {!isEdit && (
+        {isEdit && employee?.hasLoginAccount && (
+          <FormSection title="Akun Login" columns={1}>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 text-success border border-success/20 font-medium">
+                ✓ Karyawan ini sudah memiliki akun login
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pengaturan peran &amp; reset kata sandi dilakukan di Pengaturan &gt; Pengguna.
+            </p>
+          </FormSection>
+        )}
+
+        {canOfferLogin && (
           <FormSection title="Akun Login" columns={1}>
             <label className="flex items-center gap-2.5 text-sm cursor-pointer">
               <input

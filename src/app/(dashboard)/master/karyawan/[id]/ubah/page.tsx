@@ -43,9 +43,14 @@ export default async function EditEmployeePage({
     employeeDistrict: data.employeeDistrict,
     employeeVillage: data.employeeVillage,
     postalCode: data.postalCode,
+    hasLoginAccount: data.userId != null,
   }
 
-  const [departments, positions] = await Promise.all([prisma.department.findMany({ orderBy: { name: "asc" } }), prisma.position.findMany({ orderBy: { name: "asc" } })])
+  const [departments, positions, roles] = await Promise.all([
+    prisma.department.findMany({ orderBy: { name: "asc" } }),
+    prisma.position.findMany({ orderBy: { name: "asc" } }),
+    prisma.role.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,7 +63,7 @@ export default async function EditEmployeePage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah Karyawan</h1>
       </div>
-      <EmployeeForm employee={employee} departments={departments} positions={positions} />
+      <EmployeeForm employee={employee} departments={departments} positions={positions} roles={roles} />
     </div>
   )
 }

@@ -525,11 +525,32 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
   try {
   await requirePermission("edit_employees")
 
-  await prisma.employee.update({
-    where: { id: employeeId },
-    data: {
+  // Optional: create a login account for an employee that does not have one yet.
+  const wantsLogin = formData.get("createLoginAccount") === "true" || formData.get("createLoginAccount") === "on"
+  const email = formData.get("email") as string | null
+  const loginPass = formData.get("loginPassword") as string | null
+  const loginRoleIds = formData.getAll("loginRoleIds").map((v) => Number(v)).filter((n) => Number.isFinite(n))
+
+  if (wantsLogin) {
+    const current = await prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } })
+    if (current?.userId) {
+      return { success: false, error: "Karyawan ini sudah memiliki akun login" }
+    }
+    if (!email || email.trim() === "") {
+      return { success: false, error: "Email wajib diisi untuk akun login" }
+    }
+    if (!loginPass || loginPass.length < 8) {
+      return { success: false, error: "Kata sandi minimal 8 karakter" }
+    }
+    const existing = await prisma.user.findUnique({ where: { email: email.trim() } })
+    if (existing) {
+      return { success: false, error: "Email sudah terdaftar sebagai pengguna" }
+    }
+  }
+
+  const updateData = {
       name: formData.get("name") as string,
-      email: formData.get("email") as string | null,
+      email: email,
       phone: formData.get("phone") as string | null,
       gender: formData.get("gender") as string | null || null,
       dateOfBirth: formData.get("dateOfBirth") ? new Date(formData.get("dateOfBirth") as string) : null,
@@ -551,11 +572,30 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       employeeDistrict: formData.get("district") as string | null,
       employeeVillage: formData.get("village") as string | null,
       postalCode: formData.get("postalCode") as string | null,
-    },
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (wantsLogin && email && loginPass) {
+      const hashedPassword = await bcrypt.hash(loginPass, 12)
+      const user = await tx.user.create({
+        data: {
+          name: updateData.name,
+          email: email.trim(),
+          password: hashedPassword,
+          isActive: true,
+          ...(loginRoleIds.length > 0
+            ? { roles: { connect: loginRoleIds.map((id) => ({ id })) } }
+            : {}),
+        },
+      })
+      await tx.employee.update({ where: { id: employeeId }, data: { ...updateData, userId: user.id } })
+    } else {
+      await tx.employee.update({ where: { id: employeeId }, data: updateData })
+    }
   })
 
   revalidatePath("/master/karyawan")
-  await logActivity("update", "Employee", employeeId, "Memperbarui karyawan")
+  await logActivity("update", "Employee", employeeId, wantsLogin ? "Memperbarui karyawan + buat akun login" : "Memperbarui karyawan")
   return { success: true }
 
   } catch (e: unknown) {
