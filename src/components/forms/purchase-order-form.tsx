@@ -186,6 +186,7 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
                         onChange={(e) => updateItem(index, "discount", Number(e.target.value))}
                         className="form-input"
                         style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                        min={0}
                       />
                     </td>
                     <td className="text-right">

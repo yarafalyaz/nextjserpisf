@@ -339,7 +339,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="minStock">Minimum Stok</Label>
-            <Input id="minStock" type="number" {...register("minStock", { valueAsNumber: true })} placeholder="0" />
+            <Input id="minStock" type="number" min="0" {...register("minStock", { valueAsNumber: true })} placeholder="0" />
           </div>
         </FormSection>
 
@@ -511,6 +511,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                             <input
                               type="number"
                               step="any"
+                              min="0.001"
                               value={u.factorToBase}
                               onChange={(e) => updateUom(i, "factorToBase", e.target.value)}
                               className="form-input"

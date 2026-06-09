@@ -125,7 +125,8 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
                 <td>
                   <input
                     type="number"
-                    value={ri.qty}
+                                        min="1"
+                                        placeholder
                     onChange={(e) => updateItem(index, "qty", Number(e.target.value))}
                     className="form-input"
                     style={{ fontSize: "0.8125rem", padding: "6px 8px" }}

@@ -42,11 +42,11 @@ export function AssetCategoryForm({ category }: { category?: { id: number; name:
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="depreciationRate">Tingkat Depresiasi (%)</Label>
-            <Input id="depreciationRate" name="depreciationRate" type="number" step="0.01" placeholder="0" defaultValue={category?.depreciationRate ?? ""} />
+            <Input id="depreciationRate" name="depreciationRate" type="number" step="0.01" min="0" placeholder="0" defaultValue={category?.depreciationRate ?? ""} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="usefulLife">Umur Manfaat (tahun)</Label>
-            <Input id="usefulLife" name="usefulLife" type="number" placeholder="0" defaultValue={category?.usefulLife ?? ""} />
+            <Input id="usefulLife" name="usefulLife" type="number" min="0" placeholder="0" defaultValue={category?.usefulLife ?? ""} />
           </div>
         </FormSection>
         <FormActions>

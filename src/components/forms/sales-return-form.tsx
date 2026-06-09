@@ -139,7 +139,8 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                 <td>
                   <input
                     type="number"
-                    value={ri.qty}
+                                        min="1"
+                                        placeholder
                     onChange={(e) => updateItem(index, "qty", (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0))}
                     className="form-input"
                     style={{ fontSize: "0.8125rem", padding: "6px 8px" }}

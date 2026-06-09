@@ -165,7 +165,8 @@ export function PurchaseRequestForm({ items, employees, request }: PRFormProps) 
                       <td className="py-2 px-2">
                         <Input
                           type="number"
-                          min={1}
+                                                    min="1"
+                                                    placeholder
                           value={String(item.qty)}
                           onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
                           className="w-full"
