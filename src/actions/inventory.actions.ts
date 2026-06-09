@@ -543,7 +543,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
   try {
 
-  await requirePermission("create_stock_adjustments")
+  await requirePermission("edit_stock_adjustments")
 
   const adj = await prisma.stockAdjustment.findUniqueOrThrow({ where: { id } })
   if (adj.status !== "draft") {
@@ -601,7 +601,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
   try {
 
-  await requirePermission("create_material_issues")
+  await requirePermission("edit_material_issues")
 
   const mi = await prisma.materialIssue.findUniqueOrThrow({ where: { id } })
   if (mi.status !== "draft") {
@@ -650,7 +650,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
 
   try {
 
-  await requirePermission("create_inventory_transfers")
+  await requirePermission("edit_inventory_transfers")
 
   const tf = await prisma.inventoryTransfer.findUniqueOrThrow({ where: { id } })
   if (tf.status !== "draft") {

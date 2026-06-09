@@ -73,11 +73,10 @@ export function VendorForm({ vendor, generatedCode, enableAutoCode = true, payme
           })
         }
 
-        if (isEdit) {
-          await updateVendor(vendor!.id, formData)
-        } else {
-          await createVendor(formData)
-        }
+        const result = isEdit
+          ? await updateVendor(vendor!.id, formData)
+          : await createVendor(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/master/pemasok")
         router.refresh()

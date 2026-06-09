@@ -80,15 +80,10 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
         formData.set("grandTotal", String(grandTotal))
         formData.set("items", JSON.stringify(billItems))
         const { createVendorBill, updateVendorBill } = await import("@/actions/purchase.actions")
-        if (bill?.id) {
-
-          await updateVendorBill(bill.id, formData)
-
-        } else {
-
-          await createVendorBill(formData)
-
-        }
+        const result = bill?.id
+          ? await updateVendorBill(bill.id, formData)
+          : await createVendorBill(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(bill?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/pembelian/tagihan")
         router.refresh()

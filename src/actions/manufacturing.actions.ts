@@ -541,7 +541,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_production_orders")
+  await requirePermission("edit_production_orders")
 
   const parsed = parseFormData(updateProductionOrderSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }

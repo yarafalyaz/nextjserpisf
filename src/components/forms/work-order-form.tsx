@@ -35,15 +35,10 @@ export function WorkOrderForm({ customers, items, workOrder, quotationId, defaul
         const formData = new FormData(e.currentTarget)
         formData.append("items", JSON.stringify(woItems))
         const { createWorkOrder, updateWorkOrder } = await import("@/actions/inventory.actions")
-        if (workOrder?.id) {
-
-          await updateWorkOrder(workOrder.id, formData)
-
-        } else {
-
-          await createWorkOrder(formData)
-
-        }
+        const result = workOrder?.id
+          ? await updateWorkOrder(workOrder.id, formData)
+          : await createWorkOrder(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(workOrder?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/produksi/perintah-kerja")
         router.refresh()

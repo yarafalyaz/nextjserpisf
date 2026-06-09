@@ -74,15 +74,10 @@ export function PurchaseOrderForm({ vendors, items, defaultPrId, order }: Purcha
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
         formData.append("items", JSON.stringify(poItems))
-        if (order?.id) {
-
-          await updatePurchaseOrder(order.id, formData)
-
-        } else {
-
-          await createPurchaseOrder(formData)
-
-        }
+        const result = order?.id
+          ? await updatePurchaseOrder(order.id, formData)
+          : await createPurchaseOrder(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/pembelian/pesanan")
         router.refresh()

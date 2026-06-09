@@ -45,9 +45,9 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
   const [customerId, setCustomerId] = useState(project?.customerId ? String(project.customerId) : "")
   const [customerVehicleId, setCustomerVehicleId] = useState(project?.customerVehicleId ? String(project.customerVehicleId) : "")
 
-  // Filter vehicles by selected customer (use project's customerId as initial)
-  const filteredVehicles = project?.customerId
-    ? customerVehicles.filter((v) => v.customerId === project.customerId)
+  // Filter vehicles by selected customer (reactive to customerId state)
+  const filteredVehicles = customerId
+    ? customerVehicles.filter((v) => v.customerId === Number(customerId))
     : customerVehicles
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -83,7 +83,7 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
             id="customerId"
             name="customerId"
             value={customerId || null}
-            onChange={(key) => setCustomerId(key ?? "")}
+            onChange={(key) => { setCustomerId(key ?? ""); setCustomerVehicleId("") }}
             placeholder="Cari pelanggan..."
             options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
           />

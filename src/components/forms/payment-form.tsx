@@ -56,15 +56,10 @@ export function PaymentForm({ invoices, accounts, defaultInvoiceId, payment, pay
         const nativeFormData = new FormData(event?.target)
         const attachmentIdsValue = nativeFormData.get("attachmentIds")
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
-        if (payment?.id) {
-
-          await updateSalesPayment(payment.id, formData)
-
-        } else {
-
-          await createSalesPayment(formData)
-
-        }
+        const result = payment?.id
+          ? await updateSalesPayment(payment.id, formData)
+          : await createSalesPayment(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(payment?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/penjualan/pembayaran")
         router.refresh()

@@ -35,7 +35,17 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ExpenseInput>({
     resolver: zodResolver(expenseSchema),
-    defaultValues: {
+    defaultValues: expense ? {
+      date: expense.date,
+      amount: expense.amount,
+      description: expense.description ?? "",
+      category: "",
+      referenceNo: expense.referenceNo ?? "",
+      receiptImage: expense.receiptImage ?? "",
+      accountId: expense.accountId,
+      paidFromAccountId: undefined,
+      projectId: expense.projectId ?? undefined,
+    } : {
       date: new Date().toISOString().split("T")[0],
       amount: 0,
       description: "",

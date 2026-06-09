@@ -884,7 +884,7 @@ export async function updateExpense(id: number, formData: FormData) {
 
   try {
 
-  const user = await requirePermission("create_expenses")
+  const user = await requirePermission("edit_expenses")
 
   // Laravel parity: only draft expenses can be edited
   const existingExpense = await prisma.expense.findUniqueOrThrow({ where: { id } })
@@ -892,12 +892,9 @@ export async function updateExpense(id: number, formData: FormData) {
     throw new Error("Hanya pengeluaran dengan status draft yang dapat diubah")
   }
 
-  const documentNo = await generateDocumentNumber("EXP")
-
   const expense = await prisma.expense.update({
     where: { id },
     data: {
-      documentNo,
       employeeId: safeId(formData.get("employeeId")),
       accountId: requireId(formData.get("accountId"), "accountId"),
       paidFromAccountId: safeId(formData.get("paidFromAccountId")),
@@ -942,7 +939,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
 
   try {
 
-  const user = await requirePermission("create_petty_cash")
+  const user = await requirePermission("edit_petty_cash")
 
   const type = formData.get("type") as string // IN or OUT
   const amount = requireNumber(formData.get("amount"), "amount")

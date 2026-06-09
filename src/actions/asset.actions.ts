@@ -214,7 +214,7 @@ export async function updateAssetBrand(id: number, formData: FormData) {
 
   try {
 
-  await requirePermission("create_asset_brands")
+  await requirePermission("edit_asset_brands")
 
   const parsed = parseFormData(assetBrandSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
@@ -243,7 +243,7 @@ export async function updateAssetCategory(id: number, formData: FormData) {
 
   try {
 
-  await requirePermission("create_asset_categories")
+  await requirePermission("edit_asset_categories")
 
   const parsed = parseFormData(assetCategorySchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
@@ -275,7 +275,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
 
   try {
 
-  const user = await requirePermission("create_asset_transfers")
+  const user = await requirePermission("edit_asset_transfers")
 
   const parsed = parseFormData(assetTransferSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }

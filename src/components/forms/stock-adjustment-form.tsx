@@ -64,15 +64,10 @@ export function StockAdjustmentForm({ warehouses, items, adjustment }: Adjustmen
         formData.append("type", type)
         const notesValue = (e.currentTarget.querySelector('[name="notes"]') as HTMLTextAreaElement)?.value || ""
         formData.append("notes", notesValue)
-        if (adjustment?.id) {
-
-          await updateStockAdjustment(adjustment.id, formData)
-
-        } else {
-
-          await createStockAdjustment(formData)
-
-        }
+        const result = adjustment?.id
+          ? await updateStockAdjustment(adjustment.id, formData)
+          : await createStockAdjustment(formData)
+        if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(adjustment?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/inventaris/penyesuaian")
         router.refresh()

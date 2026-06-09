@@ -302,6 +302,8 @@ export async function syncProjectStatus(projectId: number) {
  */
 export async function getProjectProgress(projectId: number) {
   try {
+  await requirePermission("view_projects")
+
   const totalTasks = await prisma.task.count({ where: { projectId } })
   if (totalTasks === 0) {
     return { success: true, percentage: 0, totalTasks: 0, completedTasks: 0 }
