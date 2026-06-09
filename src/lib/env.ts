@@ -28,8 +28,12 @@ export type ServerEnv = z.infer<typeof serverSchema>
 export type ClientEnv = z.infer<typeof clientSchema>
 
 function validateEnv() {
-  // Skip validation during build (env vars not available)
-  if (process.env.NEXT_PHASE === "phase-production-build") {
+  // Skip validation during build or test/CI (env vars not fully available)
+  if (
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.NODE_ENV === "test" ||
+    process.env.CI === "true"
+  ) {
     return process.env as unknown as ServerEnv
   }
 
