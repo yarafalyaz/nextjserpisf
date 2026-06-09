@@ -91,6 +91,11 @@ describe("method.service", () => {
       expect(resolvePaymentMethodName("unknown_xyz", {})).toBe("unknown_xyz");
     });
 
+    it("falls back to static label when code not in provided map", () => {
+      // map present but missing "cash" → resolves via static paymentMethodLabel
+      expect(resolvePaymentMethodName("cash", { transfer: "Transfer X" })).toBe("Tunai");
+    });
+
     it("resolves without a map argument", () => {
       const result = resolvePaymentMethodName("cash");
       expect(typeof result).toBe("string");
@@ -110,6 +115,10 @@ describe("method.service", () => {
 
     it("falls back to raw code when unknown", () => {
       expect(resolveShippingMethodName("weird_code", {})).toBe("weird_code");
+    });
+
+    it("falls back to static label when code not in provided map", () => {
+      expect(resolveShippingMethodName("pickup", { courier: "Kurir X" })).toBe("Ambil Sendiri");
     });
   });
 });
