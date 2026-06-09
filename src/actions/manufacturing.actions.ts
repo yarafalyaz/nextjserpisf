@@ -5,8 +5,14 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
-import { requireId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import {
+  createProductSchema,
+  updateProductSchema,
+  createProductionOrderSchema,
+  updateProductionOrderSchema,
+} from "@/lib/validations/manufacturing.schemas"
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
 
@@ -14,12 +20,11 @@ export async function createProduct(formData: FormData) {
   try {
   await requirePermission("create_products")
 
-  const name = formData.get("name") as string
-  let code = (formData.get("code") as string) || null
-  const description = formData.get("description") as string | null
-  const vehicleBrandId = safeNumber(formData.get("vehicleBrandId")) ?? undefined
-  const vehicleModelId = safeNumber(formData.get("vehicleModelId")) ?? undefined
+  const parsed = parseFormData(createProductSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
 
+  let code = v.code ?? null
   if (!code) {
     code = await generateDocumentNumber("PRD", "simple")
   }
@@ -30,11 +35,11 @@ export async function createProduct(formData: FormData) {
 
   const product = await prisma.product.create({
     data: {
-      name,
+      name: v.name,
       code,
-      description,
-      vehicleBrandId,
-      vehicleModelId,
+      description: v.description ?? null,
+      vehicleBrandId: v.vehicleBrandId,
+      vehicleModelId: v.vehicleModelId,
       materials: {
         create: itemIds
           .map((itemId, index) => ({
@@ -61,11 +66,9 @@ export async function updateProduct(id: number, formData: FormData) {
   try {
   await requirePermission("edit_products")
 
-  const name = formData.get("name") as string
-  const code = (formData.get("code") as string) || null
-  const description = formData.get("description") as string | null
-  const vehicleBrandId = safeNumber(formData.get("vehicleBrandId")) ?? undefined
-  const vehicleModelId = safeNumber(formData.get("vehicleModelId")) ?? undefined
+  const parsed = parseFormData(updateProductSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
 
   // Parse dynamic material rows
   const itemIds = formData.getAll("materialItemId") as string[]
@@ -74,11 +77,11 @@ export async function updateProduct(id: number, formData: FormData) {
   await prisma.product.update({
     where: { id },
     data: {
-      name,
-      code,
-      description,
-      vehicleBrandId,
-      vehicleModelId,
+      name: v.name,
+      code: v.code ?? null,
+      description: v.description ?? null,
+      vehicleBrandId: v.vehicleBrandId,
+      vehicleModelId: v.vehicleModelId,
       materials: {
         deleteMany: {},
         create: itemIds
@@ -108,34 +111,32 @@ export async function createProductionOrder(formData: FormData) {
   try {
   const user = await requirePermission("create_production_orders")
 
+  const parsed = parseFormData(createProductionOrderSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const documentNo = await generateDocumentNumber("MO")
-  const productId = requireId(formData.get("productId"), "productId")
-  const qty = requireNumber(formData.get("qty"), "qty")
 
   // Get product materials (BOM) to auto-populate production order materials
   const product = await prisma.product.findUniqueOrThrow({
-    where: { id: productId },
+    where: { id: v.productId },
     include: { materials: true },
   })
-
-  const startDate = formData.get("startDate") as string | null
-  const endDate = formData.get("endDate") as string | null
-  const notes = formData.get("notes") as string | null
 
   const productionOrder = await prisma.productionOrder.create({
     data: {
       documentNo,
-      productId,
-      qty,
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null,
-      notes,
+      productId: v.productId,
+      qty: v.qty,
+      startDate: v.startDate ? new Date(v.startDate) : null,
+      endDate: v.endDate ? new Date(v.endDate) : null,
+      notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
       materials: {
         create: product.materials.map((m) => ({
           itemId: m.itemId,
-          qty: Number(m.qty) * qty,
+          qty: Number(m.qty) * v.qty,
         })),
       },
     },
@@ -542,29 +543,25 @@ export async function updateProductionOrder(id: number, formData: FormData) {
   try {
   await requirePermission("create_production_orders")
 
-  // Fix #33: Jangan generate documentNo baru (bocor sequence)
-  const productId = requireId(formData.get("productId"), "productId")
-  const qty = requireNumber(formData.get("qty"), "qty")
+  const parsed = parseFormData(updateProductionOrderSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
 
   // Fix #34: Recalculate materials based on new qty
   const product = await prisma.product.findUniqueOrThrow({
-    where: { id: productId },
+    where: { id: v.productId },
     include: { materials: true },
   })
-
-  const startDate = formData.get("startDate") as string | null
-  const endDate = formData.get("endDate") as string | null
-  const notes = formData.get("notes") as string | null
 
   const productionOrder = await prisma.$transaction(async (tx) => {
     const po = await tx.productionOrder.update({
       where: { id },
       data: {
-        productId,
-        qty,
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        notes,
+        productId: v.productId,
+        qty: v.qty,
+        startDate: v.startDate ? new Date(v.startDate) : null,
+        endDate: v.endDate ? new Date(v.endDate) : null,
+        notes: v.notes ?? null,
       },
     })
 
@@ -578,7 +575,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
         data: product.materials.map((m) => ({
           productionOrderId: id,
           itemId: m.itemId,
-          qty: Number(m.qty) * qty,
+          qty: Number(m.qty) * v.qty,
           standardCost: 0,
         })),
       })

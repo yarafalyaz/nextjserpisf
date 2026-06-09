@@ -5,28 +5,38 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
-import { requireId, safeNumber } from "@/lib/utils/safe-parse"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import {
+  createProjectSchema,
+  updateProjectSchema,
+  createTaskSchema,
+  updateTaskSchema,
+} from "@/lib/validations/project.schemas"
 
 // ==================== PROJECT ACTIONS ====================
 
 export async function createProject(formData: FormData) {
   try {
+  const parsed = parseFormData(createProjectSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   const user = await requirePermission("create_projects")
   const documentNo = await generateDocumentNumber("PRJ")
 
   const project = await prisma.project.create({
     data: {
-      name: formData.get("name") as string,
+      name: data.name,
       documentNo,
-      description: (formData.get("description") as string) || null,
-      customerId: requireId(formData.get("customerId"), "customerId"),
-      customerVehicleId: safeNumber(formData.get("customerVehicleId")),
-      workOrderId: safeNumber(formData.get("workOrderId")),
-      startDate: formData.get("startDate") ? new Date(formData.get("startDate") as string) : null,
-      endDate: formData.get("endDate") ? new Date(formData.get("endDate") as string) : null,
-      notes: formData.get("notes") as string | null,
+      description: data.description ?? null,
+      customerId: data.customerId,
+      customerVehicleId: data.customerVehicleId ?? null,
+      workOrderId: data.workOrderId ?? null,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      endDate: data.endDate ? new Date(data.endDate) : null,
+      notes: data.notes ?? null,
       status: "active",
       createdBy: Number(user.id),
     },
@@ -45,19 +55,23 @@ export async function createProject(formData: FormData) {
 
 export async function updateProject(projectId: number, formData: FormData) {
   try {
+  const parsed = parseFormData(updateProjectSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   await requirePermission("edit_projects")
 
   await prisma.project.update({
     where: { id: projectId },
     data: {
-      name: formData.get("name") as string,
-      description: (formData.get("description") as string) || null,
-      customerId: requireId(formData.get("customerId"), "customerId"),
-      customerVehicleId: safeNumber(formData.get("customerVehicleId")),
-      workOrderId: safeNumber(formData.get("workOrderId")),
-      startDate: formData.get("startDate") ? new Date(formData.get("startDate") as string) : null,
-      endDate: formData.get("endDate") ? new Date(formData.get("endDate") as string) : null,
-      notes: formData.get("notes") as string | null,
+      name: data.name,
+      description: data.description ?? null,
+      customerId: data.customerId,
+      customerVehicleId: data.customerVehicleId ?? null,
+      workOrderId: data.workOrderId ?? null,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      endDate: data.endDate ? new Date(data.endDate) : null,
+      notes: data.notes ?? null,
     },
   })
 
@@ -346,17 +360,21 @@ export async function getProjectStageProgress(projectId: number) {
 
 export async function createTask(formData: FormData) {
   try {
+  const parsed = parseFormData(createTaskSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   await requirePermission("create_projects")
 
   const task = await prisma.task.create({
     data: {
-      projectId: requireId(formData.get("projectId"), "projectId"),
-      name: formData.get("name") as string,
-      description: (formData.get("description") as string) || null,
-      status: (formData.get("status") as string) || "pending",
-      assignedTo: safeNumber(formData.get("assignedTo")),
-      startDate: formData.get("startDate") ? new Date(formData.get("startDate") as string) : null,
-      dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
+      projectId: data.projectId,
+      name: data.name,
+      description: data.description ?? null,
+      status: data.status ?? "pending",
+      assignedTo: data.assignedTo ?? null,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
     },
   })
 
@@ -373,24 +391,26 @@ export async function createTask(formData: FormData) {
 
 export async function updateTask(formData: FormData) {
   try {
+  const parsed = parseFormData(updateTaskSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { data } = parsed
+
   await requirePermission("edit_projects")
 
-  const id = requireId(formData.get("id"), "id")
-
   await prisma.task.update({
-    where: { id },
+    where: { id: data.id },
     data: {
-      projectId: requireId(formData.get("projectId"), "projectId"),
-      name: formData.get("name") as string,
-      description: (formData.get("description") as string) || null,
-      status: (formData.get("status") as string) || "pending",
-      assignedTo: safeNumber(formData.get("assignedTo")),
-      startDate: formData.get("startDate") ? new Date(formData.get("startDate") as string) : null,
-      dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
+      projectId: data.projectId,
+      name: data.name,
+      description: data.description ?? null,
+      status: data.status ?? "pending",
+      assignedTo: data.assignedTo ?? null,
+      startDate: data.startDate ? new Date(data.startDate) : null,
+      dueDate: data.dueDate ? new Date(data.dueDate) : null,
     },
   })
 
-  await logActivity("update", "Task", id, "Memperbarui tugas")
+  await logActivity("update", "Task", data.id, "Memperbarui tugas")
   revalidatePath("/proyek/tugas")
   return { success: true }
 
