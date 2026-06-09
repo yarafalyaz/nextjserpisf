@@ -22,14 +22,13 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npm run lint
+          DATABASE_URL: mysql://root@localhost:3306/dummy
+      - run: npx eslint .
       - run: npx tsc --noEmit
 
   unit:
-    name: Unit Tests (Vitest)
+    name: Unit Tests
     runs-on: ubuntu-latest
-    needs: lint
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,8 +38,8 @@ jobs:
       - run: npm ci
       - run: npx prisma generate
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npm run test
+          DATABASE_URL: mysql://root@localhost:3306/dummy
+      - run: npx vitest run
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
 
@@ -61,6 +60,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+          --tmpfs /var/lib/mysql:rw
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -84,13 +84,8 @@ jobs:
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-          NEXTAUTH_SECRET: ci-secret
-          AUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:4101
-          AUTH_TRUST_HOST: "true"
-          E2E_PORT: "4101"
-      - name: Run Playwright Auth Setup
-        run: npx playwright test --project=setup
+      - name: Run Auth Setup
+        run: npx playwright test --project=setup --workers=1
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
@@ -129,6 +124,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+          --tmpfs /var/lib/mysql:rw
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -136,6 +132,9 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Tune MariaDB
+        run: |
+          mariadb -h 127.0.0.1 -u root -e "SET GLOBAL max_connections=200; SET GLOBAL wait_timeout=600; SET GLOBAL interactive_timeout=600;" 
       - run: npx prisma generate
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
@@ -157,15 +156,9 @@ jobs:
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-          NEXTAUTH_SECRET: ci-secret
-          AUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:4101
-          AUTH_TRUST_HOST: "true"
-          E2E_PORT: "4101"
-      - run: npx playwright test --project=chromium --no-deps --workers=1 --shard=$SHARD_INDEX/$SHARD_TOTAL
+      - name: Run E2E Tests
+        run: npx playwright test --project=chromium --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
         env:
-          SHARD_INDEX: ${{ matrix.shardIndex }}
-          SHARD_TOTAL: ${{ matrix.shardTotal }}
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
           AUTH_SECRET: ci-secret
