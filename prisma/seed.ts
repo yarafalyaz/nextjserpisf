@@ -68,7 +68,7 @@ async function main() {
       "view_purchase_requests", "create_purchase_requests", "edit_purchase_requests", "approve_purchase_requests", "delete_purchase_requests",
       "view_purchase_orders", "create_purchase_orders", "edit_purchase_orders", "approve_purchase_orders", "delete_purchase_orders",
       "view_goods_receipts", "create_goods_receipts", "edit_goods_receipts", "verify_goods_receipts", "delete_goods_receipts",
-      "view_purchase_returns", "create_purchase_returns", "edit_purchase_returns",
+      "view_purchase_returns", "create_purchase_returns", "edit_purchase_returns", "delete_purchase_returns",
       "view_vendor_bills", "create_vendor_bills", "edit_vendor_bills", "approve_vendor_bills", "delete_vendor_bills",
       "view_vendor_payments", "create_vendor_payments", "edit_vendor_payments", "delete_vendor_payments",
       "view_delivery_orders", "create_delivery_orders", "delete_delivery_orders",

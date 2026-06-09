@@ -1282,7 +1282,10 @@ export async function voidVendorBill(id: number) {
   "use server"
 
   try {
-  await requirePermission("create_vendor_bills")
+  // Voiding a POSTED bill reverses its GL (re-opens GR/IR clearing) — a
+  // destructive AP operation, not a create. Guard with delete_vendor_bills so a
+  // create-only clerk cannot reverse posted payables. Mirrors deleteVendorBill.
+  await requirePermission("delete_vendor_bills")
   const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } })
   if (bill.status === "draft") {
     throw new Error("Tagihan draft tidak perlu dibatalkan. Gunakan hapus.")
@@ -1315,7 +1318,7 @@ export async function deletePurchaseReturn(id: number) {
   "use server"
 
   try {
-  await requirePermission("edit_purchase_returns")
+  await requirePermission("delete_purchase_returns")
 
   const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({ where: { id } })
   if (purchaseReturn.status !== "draft") {
