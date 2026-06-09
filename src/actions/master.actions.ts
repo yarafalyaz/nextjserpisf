@@ -1361,13 +1361,23 @@ export async function deleteEmployee(id: number) {
   try {
   await requirePermission("delete_employees")
 
+  // Capture the linked login account (if any) before deleting.
+  const existing = await prisma.employee.findUnique({ where: { id }, select: { userId: true } })
+
   await hardDeleteOrSoftDelete(
     () => prisma.employee.delete({ where: { id } }),
     () => prisma.employee.update({ where: { id }, data: { deletedAt: new Date() } }),
   )
 
+  // Security: a deleted employee must not retain a working login. Deactivate
+  // the linked user account so their credentials stop authenticating
+  // (auth enforces isActive and re-syncs tokens, so this revokes access).
+  if (existing?.userId) {
+    await prisma.user.update({ where: { id: existing.userId }, data: { isActive: false } })
+  }
+
   revalidatePath("/master/karyawan")
-  await logActivity("delete", "Employee", id, "Menghapus karyawan")
+  await logActivity("delete", "Employee", id, existing?.userId ? "Menghapus karyawan + nonaktifkan akun login" : "Menghapus karyawan")
   return { success: true }
 
   } catch (e: unknown) {

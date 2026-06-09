@@ -8,7 +8,10 @@ const revalidateMock = vi.fn()
 const bcryptHashMock = vi.fn()
 
 const userFindUniqueMock = vi.fn()
+const userUpdateMock = vi.fn()
 const employeeFindUniqueMock = vi.fn()
+const employeeDeleteMock = vi.fn()
+const employeeUpdateMock = vi.fn()
 const txUserCreateMock = vi.fn()
 const txEmployeeCreateMock = vi.fn()
 const txEmployeeUpdateMock = vi.fn()
@@ -38,13 +41,20 @@ vi.mock("bcryptjs", () => ({
 }))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    user: { findUnique: (...a: unknown[]) => userFindUniqueMock(...a) },
-    employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
+    user: {
+      findUnique: (...a: unknown[]) => userFindUniqueMock(...a),
+      update: (...a: unknown[]) => userUpdateMock(...a),
+    },
+    employee: {
+      findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
+      delete: (...a: unknown[]) => employeeDeleteMock(...a),
+      update: (...a: unknown[]) => employeeUpdateMock(...a),
+    },
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))
 
-import { createEmployee, updateEmployee } from "../master.actions"
+import { createEmployee, updateEmployee, deleteEmployee } from "../master.actions"
 
 // FormData builder
 function fd(fields: Record<string, string>, multi?: Record<string, string[]>) {
@@ -198,5 +208,28 @@ describe("updateEmployee — create login account for existing employee", () => 
     expect(txUserCreateMock).not.toHaveBeenCalled()
     const empArg = txEmployeeUpdateMock.mock.calls[0][0]
     expect(empArg.data.userId).toBeUndefined()
+  })
+})
+
+describe("deleteEmployee — revoke linked login account", () => {
+  it("deactivates the linked user account when the employee is deleted", async () => {
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
+    employeeDeleteMock.mockResolvedValue({ id: 50 }) // hard delete succeeds
+    userUpdateMock.mockResolvedValue({ id: 7 })
+
+    const res = await deleteEmployee(50)
+
+    expect(res).toEqual({ success: true })
+    expect(userUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
+  })
+
+  it("does not touch any user when the employee has no login account", async () => {
+    employeeFindUniqueMock.mockResolvedValue({ userId: null })
+    employeeDeleteMock.mockResolvedValue({ id: 51 })
+
+    const res = await deleteEmployee(51)
+
+    expect(res).toEqual({ success: true })
+    expect(userUpdateMock).not.toHaveBeenCalled()
   })
 })
