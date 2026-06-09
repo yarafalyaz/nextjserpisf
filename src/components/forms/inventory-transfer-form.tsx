@@ -122,8 +122,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
                     <DetailTableTd>
                       <Input
                         type="number"
-                                                min="1"
-                                                placeholder
+                        min="1"
                         value={item.qty}
                         onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
                         placeholder="Jml"
