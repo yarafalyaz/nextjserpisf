@@ -1100,6 +1100,7 @@ model StockMove {
   @@index([itemId], map: "stock_moves_item_id_fkey")
   @@index([warehouseId], map: "stock_moves_warehouse_id_fkey")
   @@index([status], map: "idx_stock_moves_status")
+  @@index([referenceType, referenceId], map: "idx_stock_moves_ref")
   @@map("stock_moves")
 }
 
