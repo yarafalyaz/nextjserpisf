@@ -28,6 +28,17 @@ export async function createQuotation(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("QUO")
 
+  // Validate vehicle belongs to the selected customer
+  if (data.customerVehicleId && data.customerId) {
+    const vehicle = await prisma.customerVehicle.findFirst({
+      where: { id: Number(data.customerVehicleId), customerId: Number(data.customerId) },
+      select: { id: true },
+    })
+    if (!vehicle) {
+      throw new Error("Kendaraan tidak terdaftar untuk customer ini")
+    }
+  }
+
   const quotation = await prisma.$transaction(async (tx) => {
     const q = await tx.quotation.create({
       data: {
@@ -333,6 +344,19 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
 
   if (quotation.status === "converted") {
     throw new Error("Quotation yang sudah converted tidak bisa diedit")
+  }
+
+  // Validate vehicle belongs to customer if both are provided
+  const updCustomerId = formData.get("customerId") ? requireId(formData.get("customerId"), "customerId") : quotation.customerId
+  const updVehicleId = safeId(formData.get("customerVehicleId"))
+  if (updVehicleId && updCustomerId) {
+    const vehicle = await prisma.customerVehicle.findFirst({
+      where: { id: updVehicleId, customerId: updCustomerId },
+      select: { id: true },
+    })
+    if (!vehicle) {
+      throw new Error("Kendaraan tidak terdaftar untuk customer ini")
+    }
   }
 
   await prisma.quotation.update({
