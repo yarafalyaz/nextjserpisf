@@ -80,7 +80,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
 
   const paymentFrequency = watch("paymentFrequency")
 
-  function onSubmit(data: EmployeeInput) {
+  function onSubmit(data: EmployeeInput, event?: React.BaseSyntheticEvent) {
     startTransition(async () => {
       try {
         const formData = new FormData()
@@ -88,7 +88,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
         // Append/overwrite address fields from AddressPicker hidden inputs
-        const form = document.querySelector("form") as HTMLFormElement | null
+        const form = event?.target as HTMLFormElement | null
         if (form) {
           const addressFields = ["province", "city", "district", "village", "postalCode", "address"]
           addressFields.forEach(field => {

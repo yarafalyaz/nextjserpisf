@@ -59,7 +59,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
     },
   })
 
-  function onSubmit(data: CustomerInput) {
+  function onSubmit(data: CustomerInput, event?: React.BaseSyntheticEvent) {
     startTransition(async () => {
       try {
         const formData = new FormData()
@@ -67,7 +67,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
         // Append/overwrite address fields from AddressPicker hidden inputs
-        const form = document.querySelector("form") as HTMLFormElement | null
+        const form = event?.target as HTMLFormElement | null
         if (form) {
           const addressFields = ["province", "city", "district", "village", "postalCode", "address"]
           addressFields.forEach(field => {
