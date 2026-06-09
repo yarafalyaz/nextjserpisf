@@ -23,6 +23,8 @@ async function loadCSV(filePath: string): Promise<string[][]> {
   return rows
 }
 
+const CACHE_HEADERS = { "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800" }
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const type = searchParams.get("tipe")
@@ -32,21 +34,21 @@ export async function GET(request: NextRequest) {
     if (type === "provinces") {
       const rows = await loadCSV(join(DATA_DIR, "provinces.csv"))
       const data = rows.map(r => ({ code: r[0], name: toTitleCase(r[1]) }))
-      return NextResponse.json(data)
+      return NextResponse.json(data, { headers: CACHE_HEADERS })
     }
 
     if (type === "regencies" && parentCode) {
       const rows = await loadCSV(join(DATA_DIR, "cities.csv"))
       const filtered = rows.filter(r => r[1] === parentCode)
       const data = filtered.map(r => ({ code: r[0], name: toTitleCase(r[2]) }))
-      return NextResponse.json(data)
+      return NextResponse.json(data, { headers: CACHE_HEADERS })
     }
 
     if (type === "districts" && parentCode) {
       const rows = await loadCSV(join(DATA_DIR, "districts.csv"))
       const filtered = rows.filter(r => r[1] === parentCode)
       const data = filtered.map(r => ({ code: r[0], name: toTitleCase(r[2]) }))
-      return NextResponse.json(data)
+      return NextResponse.json(data, { headers: CACHE_HEADERS })
     }
 
     if (type === "villages" && parentCode) {
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest) {
       const rows = await loadCSV(filePath)
       const filtered = rows.filter(r => r[1] === parentCode)
       const data = filtered.map(r => ({ code: r[0], name: toTitleCase(r[2]), postalCode: r[5] || "" }))
-      return NextResponse.json(data)
+      return NextResponse.json(data, { headers: CACHE_HEADERS })
     }
 
     return NextResponse.json({ error: "Invalid type" }, { status: 400 })
