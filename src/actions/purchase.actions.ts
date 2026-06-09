@@ -530,6 +530,14 @@ export async function confirmVendorPayment(paymentId: number) {
   }
 
   await prisma.$transaction(async (tx) => {
+    // Lock payment row to prevent double-confirm
+    await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id = ${paymentId} FOR UPDATE`
+
+    const freshPayment = await tx.vendorPayment.findUniqueOrThrow({ where: { id: paymentId } })
+    if (freshPayment.status !== "draft") {
+      throw new Error("Pembayaran hanya bisa dikonfirmasi dari status draft")
+    }
+
     await tx.vendorPayment.update({
       where: { id: paymentId },
       data: {
@@ -544,11 +552,17 @@ export async function confirmVendorPayment(paymentId: number) {
     })
 
     for (const alloc of allocations) {
+      // Lock each bill row to prevent concurrent overpay from other payments
+      await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${alloc.vendorBillId} FOR UPDATE`
+
       const bill = await tx.vendorBill.findUniqueOrThrow({
         where: { id: alloc.vendorBillId },
       })
 
       const nextPaid = Number(bill.paidAmount) + Number(alloc.amount)
+      if (nextPaid > Number(bill.grandTotal)) {
+        throw new Error(`Alokasi melebihi sisa tagihan vendor bill #${bill.id}`)
+      }
       const nextBalance = Number(bill.grandTotal) - nextPaid
 
       await tx.vendorBill.update({
