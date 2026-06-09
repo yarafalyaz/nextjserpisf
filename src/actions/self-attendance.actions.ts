@@ -59,7 +59,7 @@ export async function selfCheckIn(formData: FormData) {
   const userId = Number(session.user.id)
 
   const employee = await prisma.employee.findFirst({
-    where: { userId },
+    where: { userId, deletedAt: null },
     select: { id: true, name: true, departmentId: true },
   })
   if (!employee) throw new Error("Akun Anda tidak terhubung ke data karyawan")
@@ -137,7 +137,7 @@ export async function selfCheckOut(formData: FormData) {
   const userId = Number(session.user.id)
 
   const employee = await prisma.employee.findFirst({
-    where: { userId },
+    where: { userId, deletedAt: null },
     select: { id: true, name: true, departmentId: true },
   })
   if (!employee) throw new Error("Akun Anda tidak terhubung ke data karyawan")
@@ -226,7 +226,7 @@ export async function getTodayAttendance() {
   const userId = Number(session.user.id)
 
   const employee = await prisma.employee.findFirst({
-    where: { userId },
+    where: { userId, deletedAt: null },
     select: { id: true, name: true },
   })
   if (!employee) return null
