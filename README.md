@@ -85,6 +85,22 @@ npm run db:push      # Push schema to DB
 npm run db:seed      # Seed database
 npm run db:studio    # Open Prisma Studio
 npm run db:generate  # Regenerate Prisma client
-npm run test         # Run unit tests
-npm run test:e2e     # Run E2E tests
+npm run test         # Run unit tests (280+ tests)
+npm run test:e2e     # Run E2E tests (Playwright)
 ```
+
+## CI/CD
+
+GitHub Actions pipeline runs on every push to `main`:
+- **Verify job**: TypeScript check, ESLint, unit tests
+- **E2E job**: MySQL service, DB migration, Playwright (4 shards)
+
+## Code Quality
+
+- 280+ unit tests (Vitest), 82%+ statement coverage
+- E2E tests covering all authenticated modules
+- Zero circular dependencies
+- Zero `console.log` in client code
+- Runtime env validation (Zod)
+- Security headers via proxy (CSP, HSTS, X-Frame-Options)
+- Rate limiting on auth, upload, and API routes
