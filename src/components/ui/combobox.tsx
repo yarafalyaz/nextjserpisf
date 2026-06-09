@@ -44,6 +44,7 @@ export function Combobox({
   const [activeIndex, setActiveIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const listId = useId()
+  const optionIdPrefix = useId()
 
   const selected = options.find((o) => o.value === value) || null
   const filtered = query
@@ -85,6 +86,8 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={open && filtered.length > 0 ? `${optionIdPrefix}-${activeIndex}` : undefined}
           autoComplete="off"
           disabled={disabled}
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
@@ -130,6 +133,7 @@ export function Combobox({
               return (
                 <li
                   key={opt.value}
+                  id={`${optionIdPrefix}-${i}`}
                   role="option"
                   aria-selected={isSelected}
                   className={cn(
