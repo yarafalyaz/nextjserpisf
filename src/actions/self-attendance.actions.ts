@@ -95,12 +95,6 @@ export async function selfCheckIn(formData: FormData) {
   const now = new Date()
   const today = getWibTodayUtcDate(now)
 
-  // Cek sudah check-in hari ini?
-  const existing = await prisma.attendance.findFirst({
-    where: { employeeId: employee.id, date: today },
-  })
-  if (existing) throw new Error("Anda sudah check-in hari ini")
-
   // Hari libur (Minggu / libur nasional / libur departemen) → kerja dicatat
   // sebagai lembur dan otomatis jadi pengajuan lembur saat check-out.
   const holiday = await prisma.holiday.findFirst({ where: { date: today } })
@@ -134,16 +128,24 @@ export async function selfCheckIn(formData: FormData) {
   const isLate = !isOvertimeDay && nowMinutes > deadlineMinutes
   const lateMinutes = isLate ? nowMinutes - deadlineMinutes : 0
 
-  const attendance = await prisma.attendance.create({
-    data: {
-      employeeId: employee.id,
-      date: today,
-      checkIn: now,
-      status: isOvertimeDay ? "overtime" : isLate ? "late" : "present",
-      lateMinutes,
-      checkInLatitude: latitude ?? null,
-      checkInLongitude: longitude ?? null,
-    },
+  // Use transaction to prevent race condition (double check-in)
+  const attendance = await prisma.$transaction(async (tx) => {
+    const duplicate = await tx.attendance.findFirst({
+      where: { employeeId: employee.id, date: today },
+    })
+    if (duplicate) throw new Error("Anda sudah check-in hari ini")
+
+    return tx.attendance.create({
+      data: {
+        employeeId: employee.id,
+        date: today,
+        checkIn: now,
+        status: isOvertimeDay ? "overtime" : isLate ? "late" : "present",
+        lateMinutes,
+        checkInLatitude: latitude ?? null,
+        checkInLongitude: longitude ?? null,
+      },
+    })
   })
 
   revalidatePath("/sdm/absensi")
@@ -167,6 +169,9 @@ export async function selfCheckOut(formData: FormData) {
     select: { id: true, name: true, departmentId: true },
   })
   if (!employee) throw new Error("Akun Anda tidak terhubung ke data karyawan")
+
+  // Server-side geofence: reject if GPS is outside configured radius.
+  await enforceGeofence(latitude, longitude)
 
   const now = new Date()
 
