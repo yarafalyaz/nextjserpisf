@@ -25,6 +25,7 @@ export default async function TimesheetsPage({
   const timesheets = await prisma.timesheet.findMany({
     where,
     include: { employee: { select: { name: true } } },
+    take: 1000,
     orderBy: { date: "desc" },
   })
 

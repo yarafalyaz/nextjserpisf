@@ -25,6 +25,7 @@ export default async function CostCentersPage({
 
   const costCenters = await prisma.costCenter.findMany({
     where,
+    take: 1000,
     orderBy: { name: "asc" },
   })
 

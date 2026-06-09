@@ -32,6 +32,7 @@ export default async function SalesOrdersPage({
   const rawOrders = await prisma.salesOrder.findMany({
     where,
     include: { customer: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

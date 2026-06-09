@@ -33,6 +33,7 @@ export default async function QuotationsPage({
   const rawQuotations = await prisma.quotation.findMany({
     where,
     include: { customer: true, customerVehicle: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

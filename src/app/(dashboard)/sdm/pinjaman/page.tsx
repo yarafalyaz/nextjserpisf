@@ -30,6 +30,7 @@ export default async function EmployeeLoansPage({
   const loans = await prisma.employeeLoan.findMany({
     where,
     include: { employee: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

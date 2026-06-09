@@ -31,6 +31,7 @@ export default async function DownPaymentsPage({
   const rawDps = await prisma.downPayment.findMany({
     where,
     include: { quotation: { include: { customer: true } } },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

@@ -28,6 +28,7 @@ export default async function SalesPaymentsPage({
   const rawPayments = await prisma.salesPayment.findMany({
     where,
     include: { salesInvoice: { include: { customer: true } } },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

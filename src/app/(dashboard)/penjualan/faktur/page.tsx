@@ -11,6 +11,7 @@ export default async function InvoicesPage() {
 
   const rawInvoices = await prisma.salesInvoice.findMany({
     include: { customer: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

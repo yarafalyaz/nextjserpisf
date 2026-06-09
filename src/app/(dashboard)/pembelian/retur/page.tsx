@@ -30,6 +30,7 @@ export default async function PurchaseReturnsPage({
   const returns = await prisma.purchaseReturn.findMany({
     where,
     include: { purchaseOrder: { include: { vendor: true } }, items: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

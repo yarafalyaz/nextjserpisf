@@ -29,6 +29,7 @@ export default async function LeaveRequestsPage({
   const leaves = await prisma.leaveRequest.findMany({
     where,
     include: { employee: { select: { name: true } } },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

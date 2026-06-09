@@ -29,6 +29,7 @@ export default async function OvertimePage({
   const overtimes = await prisma.overtimeRequest.findMany({
     where,
     include: { employee: { select: { name: true } }, project: { select: { name: true } } },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

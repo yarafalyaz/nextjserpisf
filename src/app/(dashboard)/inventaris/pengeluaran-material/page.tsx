@@ -30,6 +30,7 @@ export default async function MaterialIssuesPage({
   const issues = await prisma.materialIssue.findMany({
     where,
     include: { warehouse: true, items: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

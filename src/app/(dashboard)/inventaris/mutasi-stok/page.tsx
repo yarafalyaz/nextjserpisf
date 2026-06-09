@@ -29,6 +29,7 @@ export default async function StockMovesPage({
   const rawMoves = await prisma.stockMove.findMany({
     where,
     include: { item: true, warehouse: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

@@ -47,6 +47,7 @@ export default async function AttendancePage({
   const attendances = await prisma.attendance.findMany({
     where,
     include: { employee: true },
+    take: 1000,
     orderBy: { checkIn: "desc" },
   })
 

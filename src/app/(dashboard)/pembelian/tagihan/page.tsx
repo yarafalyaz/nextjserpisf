@@ -31,6 +31,7 @@ export default async function VendorBillsPage({
   const rawBills = await prisma.vendorBill.findMany({
     where,
     include: { vendor: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

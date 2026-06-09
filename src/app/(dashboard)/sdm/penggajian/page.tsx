@@ -64,6 +64,7 @@ export default async function PayrollPage({
 
   const payrolls = await prisma.payroll.findMany({
     where,
+    take: 1000,
     orderBy: { createdAt: "desc" },
     include: { employee: true },
   })

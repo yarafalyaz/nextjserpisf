@@ -28,6 +28,7 @@ export default async function AppreciationsPage({
   const appreciations = await prisma.appreciation.findMany({
     where,
     include: { employee: true },
+    take: 1000,
     orderBy: { date: "desc" },
   })
 

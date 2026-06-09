@@ -30,6 +30,7 @@ export default async function StockAdjustmentsPage({
   const adjustments = await prisma.stockAdjustment.findMany({
     where,
     include: { warehouse: true, items: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

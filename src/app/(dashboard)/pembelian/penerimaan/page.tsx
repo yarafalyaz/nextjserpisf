@@ -30,6 +30,7 @@ export default async function GoodsReceiptsPage({
   const receipts = await prisma.goodsReceipt.findMany({
     where,
     include: { purchaseOrder: { include: { vendor: true } }, warehouse: true, items: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

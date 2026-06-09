@@ -21,6 +21,7 @@ export default async function RacksPage({
   const racks = await prisma.rack.findMany({
     where,
     include: { warehouse: true, rows: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

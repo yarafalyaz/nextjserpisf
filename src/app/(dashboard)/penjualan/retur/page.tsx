@@ -30,6 +30,7 @@ export default async function SalesReturnsPage({
   const returns = await prisma.salesReturn.findMany({
     where,
     include: { items: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

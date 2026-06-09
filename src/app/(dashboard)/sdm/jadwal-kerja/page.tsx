@@ -23,6 +23,7 @@ export default async function WorkSchedulesPage({
 
   const schedules = await prisma.workSchedule.findMany({
     where,
+    take: 1000,
     orderBy: [{ name: "asc" }],
     include: { employees: { select: { id: true } }, departments: { select: { name: true } } },
   })

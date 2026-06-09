@@ -28,6 +28,7 @@ export default async function RackRowsPage({
         include: { warehouse: true },
       },
     },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

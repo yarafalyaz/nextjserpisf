@@ -20,6 +20,7 @@ export default async function HolidaysPage({
 
   const holidays = await prisma.holiday.findMany({
     where,
+    take: 1000,
     orderBy: { date: "desc" },
   })
 

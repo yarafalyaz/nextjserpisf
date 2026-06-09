@@ -33,6 +33,7 @@ export default async function PurchaseOrdersPage({
   const rawOrders = await prisma.purchaseOrder.findMany({
     where,
     include: { vendor: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

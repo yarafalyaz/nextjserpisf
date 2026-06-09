@@ -28,6 +28,7 @@ export default async function DeliveryOrdersPage({
   const orders = await prisma.deliveryOrder.findMany({
     where,
     include: { salesOrder: { include: { customer: true } } },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

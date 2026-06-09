@@ -30,6 +30,7 @@ export default async function InventoryTransfersPage({
   const transfers = await prisma.inventoryTransfer.findMany({
     where,
     include: { sourceWarehouse: true, destinationWarehouse: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 

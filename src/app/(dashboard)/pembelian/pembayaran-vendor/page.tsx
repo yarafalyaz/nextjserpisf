@@ -28,6 +28,7 @@ export default async function VendorPaymentsPage({
   const rawPayments = await prisma.vendorPayment.findMany({
     where,
     include: { vendor: true },
+    take: 1000,
     orderBy: { createdAt: "desc" },
   })
 
