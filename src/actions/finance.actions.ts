@@ -62,35 +62,47 @@ export async function createJournal(formData: FormData) {
   const entriesJson = formData.get("entries") as string | null
   const entries = safeJsonParse<{ accountId: number; debit: number; credit: number; memo: string; costCenterId?: number }[]>(entriesJson) ?? []
 
-  if (entries.length < 2) {
-    throw new Error("Journal harus memiliki minimal 2 entri")
+  // Validate every entry has a valid accountId — reject early to prevent orphan header
+  const validEntries = entries.filter(e => e.accountId && (e.debit > 0 || e.credit > 0))
+  if (validEntries.length < 2) {
+    throw new Error("Journal harus memiliki minimal 2 entri dengan akun dan nominal valid")
   }
 
-  const totalDebit = entries.reduce((sum, e) => sum + (e.debit || 0), 0)
-  const totalCredit = entries.reduce((sum, e) => sum + (e.credit || 0), 0)
+  const totalDebit = validEntries.reduce((sum, e) => sum + (e.debit || 0), 0)
+  const totalCredit = validEntries.reduce((sum, e) => sum + (e.credit || 0), 0)
   if (Math.abs(totalDebit - totalCredit) > 0.01) {
     throw new Error(`Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`)
   }
 
-  const journal = await prisma.journal.create({
-    data: {
-      journalNumber: documentNo,
-      transactionDate: new Date(formData.get("transactionDate") as string),
-      description: formData.get("description") as string | null,
-      type: (formData.get("type") as string) || "GENERAL",
-      status: "DRAFT",
-      totalDebit,
-      totalCredit,
-      createdBy: Number(user.id),
-    },
-  })
+  // Per-line validation: debit and credit must be non-negative and exclusive
+  for (const entry of validEntries) {
+    if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
+      throw new Error("Nominal debit/credit tidak boleh negatif")
+    }
+    if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
+      throw new Error("Satu baris tidak boleh memiliki debit dan credit sekaligus")
+    }
+  }
 
-  // Create journal entries with optional costCenterId
-  for (const entry of entries) {
-    if (entry.accountId) {
-      await prisma.journalEntry.create({
+  // Wrap header + entries in a single transaction to prevent orphan journals
+  const journal = await prisma.$transaction(async (tx) => {
+    const j = await tx.journal.create({
+      data: {
+        journalNumber: documentNo,
+        transactionDate: new Date(formData.get("transactionDate") as string),
+        description: formData.get("description") as string | null,
+        type: (formData.get("type") as string) || "GENERAL",
+        status: "DRAFT",
+        totalDebit,
+        totalCredit,
+        createdBy: Number(user.id),
+      },
+    })
+
+    for (const entry of validEntries) {
+      await tx.journalEntry.create({
         data: {
-          journalId: journal.id,
+          journalId: j.id,
           accountId: entry.accountId,
           debit: entry.debit || 0,
           credit: entry.credit || 0,
@@ -99,7 +111,9 @@ export async function createJournal(formData: FormData) {
         },
       })
     }
-  }
+
+    return j
+  })
 
   // Associate uploaded attachments with the new journal
   const attachmentIds = formData.get("attachmentIds") as string | null

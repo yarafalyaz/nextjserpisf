@@ -17,6 +17,11 @@ export default async function DashboardLayout({
     redirect("/login")
   }
 
+  // Block deactivated users even if their session/token is still valid
+  if ((session.user as { isActive?: boolean }).isActive === false) {
+    redirect("/login?reason=deactivated")
+  }
+
   return (
     <SessionProvider session={session}>
       <SidebarProvider

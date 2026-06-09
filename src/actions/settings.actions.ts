@@ -237,7 +237,8 @@ export async function updateSystemSettings(formData: FormData) {
 
   revalidatePath("/pengaturan")
   await logActivity("update", "SystemSetting", settings.id, "Memperbarui pengaturan sistem")
-  const redirectTo = str("_redirectTo") || "/pengaturan"
+  const { safeInternalPath } = await import("@/lib/utils/safe-redirect")
+  const redirectTo = safeInternalPath(str("_redirectTo"), "/pengaturan")
   redirect(redirectTo)
 
   } catch (e: unknown) {

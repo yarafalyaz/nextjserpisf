@@ -33,17 +33,20 @@ export async function DELETE(
   }
 
   // Delete file from disk (normalize path)
+  // Files are stored under private/uploads/attachments/ but fileUrl is the API
+  // route path (/api/attachments/<ref>/<filename>). Resolve actual disk path.
   try {
-    const rel = attachment.fileUrl.replace(/^\/+/, "")
-    const uploadsRoot = path.join(process.cwd(), "public", "uploads")
-    const filepath = path.resolve(process.cwd(), "public", rel)
-    const relativePath = path.relative(uploadsRoot, filepath)
+    const filename = attachment.fileUrl.split("/").pop()
+    const refType = attachment.referenceType || "general"
+    const privateRoot = path.join(process.cwd(), "private", "uploads", "attachments", refType)
+    const filepath = path.resolve(privateRoot, filename || "")
+    const relative = path.relative(path.join(process.cwd(), "private", "uploads"), filepath)
 
-    if (!relativePath.startsWith("..") && !path.isAbsolute(relativePath)) {
+    if (filename && !relative.startsWith("..") && !path.isAbsolute(relative)) {
       await unlink(filepath)
     }
   } catch {
-    // File might already be deleted, continue
+    // File might already be deleted or on R2, continue
   }
 
   // Delete from database
