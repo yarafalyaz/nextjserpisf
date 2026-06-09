@@ -7,6 +7,9 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Tambah Kategori Barang" }
 
 
 export default function CreateItemCategoryPage() {
