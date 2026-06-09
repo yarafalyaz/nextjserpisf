@@ -8,7 +8,7 @@ Sistem ERP terintegrasi yang dibangun dengan Next.js 16 App Router, Prisma 7, da
 - **Language**: TypeScript 5
 - **ORM**: Prisma 7 (MySQL via @prisma/adapter-mariadb)
 - **Auth**: NextAuth v5 (Credentials + JWT)
-- **UI**: TailwindCSS 4 + HeroUI + Framer Motion
+- **UI**: TailwindCSS 4 + shadcn/ui (CVA)
 - **Forms**: React Hook Form + Zod
 - **State**: Zustand + TanStack Query
 - **Charts**: Recharts
