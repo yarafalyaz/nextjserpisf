@@ -1283,6 +1283,14 @@ export async function deleteDepartment(id: number) {
   try {
   await requirePermission("delete_departments")
 
+  // Guard: cannot delete department with active employees
+  const empCount = await prisma.employee.count({
+    where: { departmentId: id, deletedAt: null },
+  })
+  if (empCount > 0) {
+    throw new Error(`Departemen masih memiliki ${empCount} karyawan aktif`)
+  }
+
   await prisma.department.delete({ where: { id } })
 
   revalidatePath("/master/karyawan")
