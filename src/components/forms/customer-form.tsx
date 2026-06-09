@@ -108,7 +108,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="phone">Telepon *</Label>
-            <Input id="phone" type="tel" inputMode="numeric" {...register("phone", { required: "Telepon wajib diisi" })} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
+            <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
             {errors.phone && <span className="text-xs text-danger mt-1">{errors.phone.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">

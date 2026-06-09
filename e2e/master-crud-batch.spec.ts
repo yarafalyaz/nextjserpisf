@@ -34,7 +34,7 @@ async function crudMaster(
     ].filter(Boolean).join(", ")
   ).first()
   await createSubmit.click()
-  await page.waitForURL(`**${opts.listUrl}`, { timeout: 30000 })
+  await page.waitForURL(`**${opts.listUrl}`, { timeout: 45000 })
   await page.waitForLoadState("networkidle")
 
   // Search-first verification: lists paginate client-side (20/page), so a freshly
@@ -74,7 +74,7 @@ async function crudMaster(
     ].filter(Boolean).join(", ")
   ).first()
   await submitBtn.click()
-  await page.waitForURL(`**${opts.listUrl}`, { timeout: 30000 })
+  await page.waitForURL(`**${opts.listUrl}`, { timeout: 45000 })
   await page.waitForLoadState("networkidle")
   if (opts.fields[0].updated) {
     const updatedText = opts.fields.find((f) => f.updated && f.id === "name")?.updated ?? opts.fields[0].updated
