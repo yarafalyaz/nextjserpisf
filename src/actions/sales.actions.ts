@@ -922,6 +922,11 @@ export async function deleteQuotation(id: number) {
     if (projectIds.length) await tx.project.deleteMany({ where: { id: { in: projectIds } } })
 
     await tx.downPayment.deleteMany({ where: { quotationId: id } })
+    // Delete quotation sections + items before the quotation itself
+    const sections = await tx.quotationSection.findMany({ where: { quotationId: id }, select: { id: true } })
+    const sectionIds = sections.map((s) => s.id)
+    if (sectionIds.length) await tx.quotationItem.deleteMany({ where: { sectionId: { in: sectionIds } } })
+    await tx.quotationSection.deleteMany({ where: { quotationId: id } })
     await tx.quotation.delete({ where: { id } })
   })
 
