@@ -152,6 +152,46 @@ describe("notification.service", () => {
     });
   });
 
+  describe("notifyLateCheckIn", () => {
+    it("notifies with department and scheduled time", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      await notificationService.notifyLateCheckIn(
+        { id: 5, name: "Budi", departmentName: "Bengkel" },
+        "08:15",
+        "08:00"
+      );
+
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            title: "Budi (Bengkel) Telat Masuk",
+            body: "Check-in: 08:15 (Jadwal: 08:00)",
+            type: "warning",
+          }),
+        ]),
+      });
+    });
+
+    it("notifies without department and scheduled time", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      await notificationService.notifyLateCheckIn({ id: 5, name: "Andi" }, "09:00");
+
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            title: "Andi Telat Masuk",
+            body: "Check-in: 09:00",
+            type: "warning",
+          }),
+        ]),
+      });
+    });
+  });
+
   describe("notifyDocumentReady", () => {
     it("notifies with WorkOrder label", async () => {
       mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
