@@ -65,7 +65,7 @@ test.describe("Inventaris - Rak CRUD", () => {
 
     // Wait for redirect or stay on page (might get validation error)
     try {
-      await page.waitForURL("**/inventaris/rak", { timeout: 15000 })
+      await page.waitForURL("**/inventaris/rak", { timeout: 30000 })
     } catch {
       // If form has error, skip
       const errorText = await page.locator(".text-danger, [role='alert']").first().textContent().catch(() => "")

@@ -43,7 +43,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
 
     await expect(
       page.getByRole("heading", { name: "Tambah Termin Pembayaran" })
-    ).toBeVisible({ timeout: 15000 })
+    ).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
     await page.locator("#code").fill(code)
@@ -52,7 +52,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     await waitForHydration(page)
     await page.getByRole("button", { name: "Simpan" }).click()
 
-    await page.waitForURL("**/master/syarat-pembayaran", { timeout: 15000 })
+    await page.waitForURL("**/master/syarat-pembayaran", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 

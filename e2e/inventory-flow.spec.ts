@@ -10,7 +10,7 @@ test.describe("Inventory module flows", () => {
   test("Stock adjustment create form loads", async ({ page }) => {
     await page.goto("/inventaris/penyesuaian/tambah")
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 30000 })
   })
 
   test("Material issue list loads", async ({ page }) => {

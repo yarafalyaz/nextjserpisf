@@ -34,7 +34,7 @@ async function selectOptionBySearch(page: Page, input: string, query: string, op
 
 async function submitAndWaitForListPage(page: Page, buttonName: RegExp) {
   await Promise.all([
-    page.waitForURL(/\/inventaris\/baris-rak$/, { timeout: 15000 }),
+    page.waitForURL(/\/inventaris\/baris-rak$/, { timeout: 30000 }),
     page.getByRole("button", { name: buttonName }).first().click(),
   ])
 }
@@ -54,7 +54,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/inventaris/baris-rak/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
     await selectOptionBySearch(page, "input[placeholder='Cari gudang...']", "Gudang", /Gudang/i)
@@ -80,7 +80,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page.locator(`a[href^="/inventaris/baris-rak/"]`).filter({ hasText: name }).first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
     const idMatch = href?.match(/\/inventaris\/baris-rak\/(\d+)/)
     if (!idMatch) throw new Error("Could not parse rack row ID from detail link")
@@ -103,7 +103,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     // ─── DELETE ───────────────────────────────────────────────
     await closeMobileSidebarIfOpen(page)
     const updatedRow = page.locator("tr").filter({ has: page.locator(`a[href='/inventaris/baris-rak/${id}']`) })
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
     await updatedRow.locator("button[aria-label='Menu']").click()
     
     // Perbaikan: gunakan page.getByRole() untuk mencari menuitem

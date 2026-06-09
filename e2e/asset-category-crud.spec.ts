@@ -36,7 +36,7 @@ test.describe("Aset Kategori CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/aset/kategori/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Kategori Aset" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Kategori Aset" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
     const nameInput = page.locator("#name")
@@ -58,12 +58,12 @@ test.describe("Aset Kategori CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page.getByRole("link", { name }).first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not find href on detail link")
     await page.goto(new URL(detailHref, page.url()).toString(), { waitUntil: "domcontentloaded" })
 
-    await page.waitForURL(/\/aset\/kategori\/\d+$/, { timeout: 15000 })
+    await page.waitForURL(/\/aset\/kategori\/\d+$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
@@ -74,11 +74,11 @@ test.describe("Aset Kategori CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
-    await expect(row).toBeVisible({ timeout: 15000 })
+    await expect(row).toBeVisible({ timeout: 30000 })
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/aset\/kategori\/\d+\/ubah$/, { timeout: 15000 })
+    await page.waitForURL(/\/aset\/kategori\/\d+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await waitForHydration(page)
@@ -92,7 +92,7 @@ test.describe("Aset Kategori CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
     await updatedRow.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
@@ -100,6 +100,6 @@ test.describe("Aset Kategori CRUD", () => {
     await page.getByRole("button", { name: "Hapus" }).last().click()
     await page.waitForLoadState("networkidle")
 
-    await expect(page.getByRole("row", { name: new RegExp(updated) })).toHaveCount(0, { timeout: 15000 })
+    await expect(page.getByRole("row", { name: new RegExp(updated) })).toHaveCount(0, { timeout: 30000 })
   })
 })

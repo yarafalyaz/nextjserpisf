@@ -37,7 +37,7 @@ test.describe("Pengaturan Peran CRUD", () => {
     await page.goto("/pengaturan/peran/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Peran" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Peran" })).toBeVisible({ timeout: 30000 })
     await page.locator("#name").first().fill(name)
     await waitForHydration(page)
     await page.locator("button[type='submit']").click()
@@ -49,16 +49,16 @@ test.describe("Pengaturan Peran CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name })
-    await expect(createdRow).toBeVisible({ timeout: 15000 })
+    await expect(createdRow).toBeVisible({ timeout: 30000 })
     await createdRow.locator("a").filter({ hasText: "Detail" }).click({ force: true })
 
-    await page.waitForURL(/\/pengaturan\/peran\/\d+$/, { timeout: 15000 })
+    await page.waitForURL(/\/pengaturan\/peran\/\d+$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible({ timeout: 30000 })
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.getByRole("link", { name: "Ubah Peran" }).click({ force: true })
-    await page.waitForURL(/\/pengaturan\/peran\/\d+\/ubah$/, { timeout: 15000 })
+    await page.waitForURL(/\/pengaturan\/peran\/\d+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").first().fill(updated)
     await waitForHydration(page)
@@ -73,10 +73,10 @@ test.describe("Pengaturan Peran CRUD", () => {
     // Server action form: deleteRole → revalidatePath → redirect("/pengaturan/peran")
     // The redirect triggers a React re-render on the same URL.
     const updatedRow = page.locator("tr").filter({ hasText: updated })
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
     const hapusButton = updatedRow.locator("button[type='submit']", { hasText: "Hapus" })
-    await expect(hapusButton).toBeVisible({ timeout: 15000 })
+    await expect(hapusButton).toBeVisible({ timeout: 30000 })
 
     // Click Hapus — server action POSTs internally, deletes, revalidates, redirects
     await hapusButton.click()

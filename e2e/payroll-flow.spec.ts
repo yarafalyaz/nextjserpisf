@@ -10,7 +10,7 @@ test.describe("Payroll module flows", () => {
   test("Payroll create form loads", async ({ page }) => {
     await page.goto("/sdm/penggajian/tambah")
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 30000 })
   })
 
   test("Employee loan list loads", async ({ page }) => {

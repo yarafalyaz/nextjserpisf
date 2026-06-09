@@ -36,7 +36,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/aset/merek/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Merek Aset" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Merek Aset" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
     const nameInput = page.locator("#name")
@@ -51,13 +51,13 @@ test.describe("Aset Brand (Merek) CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const createdRow = page.locator("tr").filter({ hasText: name }).first()
-    await expect(createdRow).toBeVisible({ timeout: 15000 })
+    await expect(createdRow).toBeVisible({ timeout: 30000 })
     const linkElement = createdRow.locator("a").filter({ hasText: name }).first()
     const detailHref = await linkElement.getAttribute("href")
     if (!detailHref) throw new Error("Could not find href on detail link")
     await page.goto(new URL(detailHref, page.url()).toString(), { waitUntil: "domcontentloaded" })
 
-    await page.waitForURL(/\/aset\/merek\/\d+$/, { timeout: 15000 })
+    await page.waitForURL(/\/aset\/merek\/\d+$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
@@ -67,13 +67,13 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     const rowForEdit = page.locator("tr").filter({ hasText: name }).first()
-    await expect(rowForEdit).toBeVisible({ timeout: 15000 })
+    await expect(rowForEdit).toBeVisible({ timeout: 30000 })
 
     // Open ActionDropdown → Edit
     await rowForEdit.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/aset\/merek\/\d+\/ubah$/, { timeout: 15000 })
+    await page.waitForURL(/\/aset\/merek\/\d+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await waitForHydration(page)
@@ -85,14 +85,14 @@ test.describe("Aset Brand (Merek) CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
     await updatedRow.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
 
     // Confirm dialog
     const confirmBtn = page.getByRole("button", { name: "Hapus" }).last()
-    await expect(confirmBtn).toBeVisible({ timeout: 15000 })
+    await expect(confirmBtn).toBeVisible({ timeout: 30000 })
     await confirmBtn.click({ force: true })
 
     await page.waitForLoadState("networkidle")

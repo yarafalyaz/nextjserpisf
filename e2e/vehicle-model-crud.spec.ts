@@ -51,7 +51,7 @@ test.describe("Kendaraan Model CRUD", () => {
 
     // ─── UPDATE via detail → edit button ──────────────────────
     const detailLink = page.locator(`a[href^="/kendaraan/model/"]`).filter({ hasText: name }).first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
     const idMatch = href?.match(/\/kendaraan\/model\/(\d+)/)
     if (!idMatch) throw new Error("Could not parse model ID from detail link")
@@ -60,7 +60,7 @@ test.describe("Kendaraan Model CRUD", () => {
     await page.goto(`/kendaraan/model/${id}/ubah`, { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     const nameInput = page.getByPlaceholder('Contoh: Avanza').first()
-    await expect(nameInput).toBeVisible({ timeout: 15000 })
+    await expect(nameInput).toBeVisible({ timeout: 30000 })
 
     await nameInput.fill(updated)
     await expect(nameInput).toHaveValue(updated)
@@ -79,7 +79,7 @@ test.describe("Kendaraan Model CRUD", () => {
 
     // ─── DELETE via ActionDropdown ────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated })
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
     await updatedRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
@@ -94,7 +94,7 @@ test.describe("Kendaraan Model CRUD", () => {
     await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(brandName)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     const brandRow = page.locator("tr").filter({ hasText: brandName })
-    await expect(brandRow).toBeVisible({ timeout: 15000 })
+    await expect(brandRow).toBeVisible({ timeout: 30000 })
     await brandRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()

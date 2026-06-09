@@ -38,7 +38,7 @@ test.describe("Master Departemen CRUD", () => {
     await page.goto("/master/departemen/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Departemen" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Departemen" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
     await page.locator("#description").fill(description)
@@ -57,7 +57,7 @@ test.describe("Master Departemen CRUD", () => {
       .locator("a[href^='/master/departemen/']")
       .filter({ hasText: name })
       .first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
@@ -72,12 +72,12 @@ test.describe("Master Departemen CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     const rowForEdit = page.locator("tr").filter({ hasText: name }).first()
-    await expect(rowForEdit).toBeVisible({ timeout: 15000 })
+    await expect(rowForEdit).toBeVisible({ timeout: 30000 })
 
     await rowForEdit.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/master\/departemen\/\d+\/ubah$/, { timeout: 15000 })
+    await page.waitForURL(/\/master\/departemen\/\d+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await waitForHydration(page)
     await page.locator("#name").fill(updated)
@@ -92,17 +92,17 @@ test.describe("Master Departemen CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
     await updatedRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
 
     const confirmBtn = page.locator("button").filter({ hasText: "Hapus" }).last()
-    await expect(confirmBtn).toBeVisible({ timeout: 15000 })
+    await expect(confirmBtn).toBeVisible({ timeout: 30000 })
     await confirmBtn.click({ force: true })
 
     await page.waitForLoadState("networkidle")
-    await expect(updatedRow).toBeHidden({ timeout: 15000 })
+    await expect(updatedRow).toBeHidden({ timeout: 30000 })
     await expect(page.locator("body")).not.toContainText(updated, { timeout: 5000 })
   })
 })

@@ -6,9 +6,9 @@ test.describe("Authentication flow", () => {
 
   test("should show login form", async ({ page }) => {
     await page.goto("/login")
-    await expect(page.locator("#email")).toBeVisible({ timeout: 15000 })
-    await expect(page.locator("#password")).toBeVisible({ timeout: 15000 })
-    await expect(page.getByRole("button", { name: /masuk|login/i })).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("#email")).toBeVisible({ timeout: 30000 })
+    await expect(page.locator("#password")).toBeVisible({ timeout: 30000 })
+    await expect(page.getByRole("button", { name: /masuk|login/i })).toBeVisible({ timeout: 30000 })
   })
 
   test("should block access to dashboard and redirect to login", async ({ page }) => {

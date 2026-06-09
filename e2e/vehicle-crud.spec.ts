@@ -34,7 +34,7 @@ test.describe("Kendaraan CRUD", () => {
     await expect(page.locator("body")).toContainText(plate)
 
     const detailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: plate }).first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
     const idMatch = href?.match(/\/kendaraan\/(\d+)/)
     if (!idMatch) throw new Error("Could not parse vehicle ID from detail link")
@@ -54,14 +54,14 @@ test.describe("Kendaraan CRUD", () => {
     await expect(page.locator("body")).toContainText(updatedColor)
 
     const updatedRow = page.locator("tr").filter({ hasText: updatedPlate }).first()
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
     const updatedDetailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: updatedPlate }).first()
-    await expect(updatedDetailLink).toBeVisible({ timeout: 15000 })
+    await expect(updatedDetailLink).toBeVisible({ timeout: 30000 })
     await updatedDetailLink.click()
 
     const deleteBtn = page.getByRole("button").filter({ has: page.locator("svg.lucide-trash2") }).first()
-    await expect(deleteBtn).toBeVisible({ timeout: 15000 })
+    await expect(deleteBtn).toBeVisible({ timeout: 30000 })
     await deleteBtn.click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 

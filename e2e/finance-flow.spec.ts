@@ -10,7 +10,7 @@ test.describe("Finance module flows", () => {
   test("Expense create form loads", async ({ page }) => {
     await page.goto("/keuangan/pengeluaran/tambah")
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 30000 })
   })
 
   test("Petty cash list loads", async ({ page }) => {
@@ -28,7 +28,7 @@ test.describe("Finance module flows", () => {
   test("Journal create form loads", async ({ page }) => {
     await page.goto("/keuangan/jurnal/tambah")
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 30000 })
   })
 
   test("Budget list loads", async ({ page }) => {

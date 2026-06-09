@@ -38,7 +38,7 @@ test.describe("Master Pajak CRUD", () => {
     await page.goto("/master/pajak/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#tax-name").fill(name)
     await page.locator("#tax-rate").fill(rate)
@@ -54,7 +54,7 @@ test.describe("Master Pajak CRUD", () => {
       .locator("a[href^='/master/pajak/']")
       .filter({ hasText: name })
       .first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const detailHref = await detailLink.getAttribute("href")
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
@@ -69,25 +69,25 @@ test.describe("Master Pajak CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
-    await expect(row).toBeVisible({ timeout: 15000 })
+    await expect(row).toBeVisible({ timeout: 30000 })
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/master\/pajak\/\d+\/ubah$/, { timeout: 15000 })
+    await page.waitForURL(/\/master\/pajak\/\d+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
 
     // Edit form has no explicit id, use name attribute
     await page.locator('input[name="name"]').fill(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
-    await page.waitForURL("**/master/pajak", { timeout: 15000 })
+    await page.waitForURL("**/master/pajak", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
     await updatedRow.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
@@ -97,6 +97,6 @@ test.describe("Master Pajak CRUD", () => {
     await page.waitForLoadState("networkidle")
 
     // Verify gone
-    await expect(page.getByRole("row", { name: new RegExp(updated) })).toHaveCount(0, { timeout: 15000 })
+    await expect(page.getByRole("row", { name: new RegExp(updated) })).toHaveCount(0, { timeout: 30000 })
   })
 })

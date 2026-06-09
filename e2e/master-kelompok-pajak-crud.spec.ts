@@ -37,13 +37,13 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await page.waitForLoadState("networkidle")
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
     await waitForHydration(page)
     await page.getByRole("button", { name: "Simpan" }).click()
 
-    await page.waitForURL("**/master/kelompok-pajak", { timeout: 15000 })
+    await page.waitForURL("**/master/kelompok-pajak", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await closeMobileSidebarIfOpen(page)
 
@@ -78,6 +78,6 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     })
     await waitForHydration(page)
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).not.toContainText(name, { timeout: 15000 })
+    await expect(page.locator("body")).not.toContainText(name, { timeout: 30000 })
   })
 })

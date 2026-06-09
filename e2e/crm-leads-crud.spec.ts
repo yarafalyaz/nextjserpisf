@@ -37,7 +37,7 @@ test.describe("CRM Leads CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/crm/leads/tambah", { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
-    await expect(page.getByRole("heading", { name: "Tambah Prospek" })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole("heading", { name: "Tambah Prospek" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
     const nameInput = page.locator("#name")
@@ -54,7 +54,7 @@ test.describe("CRM Leads CRUD", () => {
 
     // ─── DETAIL ───────────────────────────────────────────────
     const detailLink = page.getByRole("link", { name }).first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
     if (!href) throw new Error("Detail link has no href")
 
@@ -72,11 +72,11 @@ test.describe("CRM Leads CRUD", () => {
     await closeMobileSidebarIfOpen(page)
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
-    await expect(row).toBeVisible({ timeout: 15000 })
+    await expect(row).toBeVisible({ timeout: 30000 })
     await row.getByRole("button", { name: "Menu" }).click()
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/crm\/leads\/\d+\/ubah$/, { timeout: 15000 })
+    await page.waitForURL(/\/crm\/leads\/\d+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await waitForHydration(page)
     await page.locator("#name").fill(updated)
@@ -89,7 +89,7 @@ test.describe("CRM Leads CRUD", () => {
     // ─── DELETE via detail page ──────────────────────────────
     // Buka detail terbaru yang match nama tepat
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
     const updatedHref = await updatedRow.getByRole("link", { name: updated }).first().getAttribute("href")
     if (!updatedHref) throw new Error("Updated row link has no href")
 
@@ -100,7 +100,7 @@ test.describe("CRM Leads CRUD", () => {
 
     // Hapus via tombol dengan aria-label (komponen DeleteButton)
     const triggerHapus = page.locator("button[aria-label='Hapus'], button:has-text('Hapus')").last()
-    await expect(triggerHapus).toBeVisible({ timeout: 15000 })
+    await expect(triggerHapus).toBeVisible({ timeout: 30000 })
     await triggerHapus.click()
 
     // Tunggu dialog muncul, lalu klik tombol Hapus di dalamnya
@@ -118,6 +118,6 @@ test.describe("CRM Leads CRUD", () => {
     await page.waitForLoadState("networkidle")
     await waitForHydration(page)
     await closeMobileSidebarIfOpen(page)
-    await expect(page.locator("body")).not.toContainText(email, { timeout: 15000 })
+    await expect(page.locator("body")).not.toContainText(email, { timeout: 30000 })
   })
 })

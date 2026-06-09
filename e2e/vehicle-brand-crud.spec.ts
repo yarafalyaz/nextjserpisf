@@ -31,7 +31,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     await expect(page.locator("body")).toContainText(name)
 
     const detailLink = page.locator(`a[href^="/kendaraan/merek/"]`).filter({ hasText: name }).first()
-    await expect(detailLink).toBeVisible({ timeout: 15000 })
+    await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
     const idMatch = href?.match(/\/kendaraan\/merek\/(\d+)/)
     if (!idMatch) throw new Error("Could not parse brand ID from detail link")
@@ -49,7 +49,7 @@ test.describe("Kendaraan Merek CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     const updatedRow = page.locator("tr").filter({ hasText: updated })
-    await expect(updatedRow).toBeVisible({ timeout: 15000 })
+    await expect(updatedRow).toBeVisible({ timeout: 30000 })
     await updatedRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()

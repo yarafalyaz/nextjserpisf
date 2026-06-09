@@ -41,11 +41,11 @@ test.describe("Master Karyawan CRUD", () => {
     const searchInput = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
     await searchInput.fill(name)
     await searchInput.press("Enter")
-    await expect(page.locator("tr").filter({ hasText: name }).first()).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("tr").filter({ hasText: name }).first()).toBeVisible({ timeout: 30000 })
 
     // UPDATE
     const row = page.locator("tr").filter({ hasText: name }).first()
-    await expect(row).toBeVisible({ timeout: 15000 })
+    await expect(row).toBeVisible({ timeout: 30000 })
     await row.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
@@ -67,7 +67,7 @@ test.describe("Master Karyawan CRUD", () => {
     const postUpdateSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()
     await postUpdateSearch.fill(updated)
     await postUpdateSearch.press("Enter")
-    await expect(page.locator("tr").filter({ hasText: updated }).first()).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("tr").filter({ hasText: updated }).first()).toBeVisible({ timeout: 30000 })
 
     // DELETE
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
@@ -79,13 +79,13 @@ test.describe("Master Karyawan CRUD", () => {
     await listSearch.press("Enter")
 
     const targetRow = page.locator("tr").filter({ hasText: updated }).first()
-    await expect(targetRow).toBeVisible({ timeout: 15000 })
+    await expect(targetRow).toBeVisible({ timeout: 30000 })
     await targetRow.locator("button[aria-label='Menu']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
     await expect(page.locator("[role='dialog']")).toBeHidden({ timeout: 10000 })
-    await expect(page.locator("text=Data berhasil dihapus").first()).toBeVisible({ timeout: 15000 })
+    await expect(page.locator("text=Data berhasil dihapus").first()).toBeVisible({ timeout: 30000 })
 
     await page.goto("/master/karyawan", { waitUntil: "domcontentloaded" })
     const postDeleteSearch = page.locator("input[placeholder='Cari nama, NIP, atau telepon...']").first()

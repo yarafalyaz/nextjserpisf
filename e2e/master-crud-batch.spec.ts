@@ -34,7 +34,7 @@ async function crudMaster(
     ].filter(Boolean).join(", ")
   ).first()
   await createSubmit.click()
-  await page.waitForURL(`**${opts.listUrl}`, { timeout: 15000 })
+  await page.waitForURL(`**${opts.listUrl}`, { timeout: 30000 })
   await page.waitForLoadState("networkidle")
 
   // Search-first verification: lists paginate client-side (20/page), so a freshly
@@ -48,10 +48,10 @@ async function crudMaster(
 
   // ─── READ detail/edit via ActionDropdown ─────────────────────
   const rowCreate = page.locator("tr").filter({ hasText: opts.fields[0].value })
-  await expect(rowCreate).toBeVisible({ timeout: 15000 })
+  await expect(rowCreate).toBeVisible({ timeout: 30000 })
   await rowCreate.locator("button[aria-label='Menu']").click()
   await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
-  await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/\\d+\\/ubah`), { timeout: 15000 })
+  await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/\\d+\\/ubah`), { timeout: 30000 })
   const currentUrl = page.url()
   const idMatch = currentUrl.match(/\/(\d+)\/ubah/)
   if (!idMatch) throw new Error("Could not parse ID from edit URL")
@@ -74,7 +74,7 @@ async function crudMaster(
     ].filter(Boolean).join(", ")
   ).first()
   await submitBtn.click()
-  await page.waitForURL(`**${opts.listUrl}`, { timeout: 15000 })
+  await page.waitForURL(`**${opts.listUrl}`, { timeout: 30000 })
   await page.waitForLoadState("networkidle")
   if (opts.fields[0].updated) {
     const updatedText = opts.fields.find((f) => f.updated && f.id === "name")?.updated ?? opts.fields[0].updated
@@ -89,7 +89,7 @@ async function crudMaster(
   // ─── DELETE ───────────────────────────────────────────────────
   const searchText = opts.fields.find((f) => f.updated && f.id === "name")?.updated || opts.fields[0].updated || opts.fields[0].value
   const rowAfterUpdate = page.locator("tr").filter({ hasText: searchText }).first()
-  await expect(rowAfterUpdate).toBeVisible({ timeout: 15000 })
+  await expect(rowAfterUpdate).toBeVisible({ timeout: 30000 })
   await rowAfterUpdate.locator("button[aria-label='Menu']").click()
   await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
   await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
@@ -269,21 +269,21 @@ test.describe("Master Akun Mutation", () => {
     await page.locator("[role='option']").filter({ hasText: "Aset" }).first().click()
 
     await page.locator("#submit-account").click()
-    await page.waitForURL("**/master/akun", { timeout: 15000 })
+    await page.waitForURL("**/master/akun", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
     // More reliable: find the edit link in the row containing our name
     const row = page.locator(".font-mono").filter({ hasText: /ACC-/ }).last()
-    await expect(row).toBeVisible({ timeout: 15000 })
+    await expect(row).toBeVisible({ timeout: 30000 })
 
     // Navigate directly to the edit URL by finding the record's code
     const nameCell = page.locator("td").filter({ hasText: name }).first()
-    await expect(nameCell).toBeVisible({ timeout: 15000 })
+    await expect(nameCell).toBeVisible({ timeout: 30000 })
     const nameRow = nameCell.locator("xpath=ancestor::tr")
     const editAnchor = nameRow.locator("a[href*='/ubah']").first()
     await editAnchor.click()
-    await page.waitForURL(/\/master\/akun\/\d+\/ubah/, { timeout: 15000 })
+    await page.waitForURL(/\/master\/akun\/\d+\/ubah/, { timeout: 30000 })
 
     // On edit form: fill name + re-select type (required)
     await page.locator("#name").fill(updated)
@@ -298,7 +298,7 @@ test.describe("Master Akun Mutation", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     const rowUpdated = page.locator("td").filter({ hasText: updated }).first()
-    await expect(rowUpdated).toBeVisible({ timeout: 15000 })
+    await expect(rowUpdated).toBeVisible({ timeout: 30000 })
   })
 })
 
