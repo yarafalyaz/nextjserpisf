@@ -51,7 +51,8 @@ export interface BackupFile {
   local?: boolean
 }
 
-function isValidBackupName(name: string): boolean {
+// Exported for unit testing — security-critical filename guard.
+export function isValidBackupName(name: string): boolean {
   // Only our generated names: backup-YYYYMMDD-HHMMSS[...].sql — no path traversal
   return /^backup-[\w-]+\.sql$/.test(name) && !name.includes("..") && !name.includes("/")
 }
