@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
@@ -194,7 +193,7 @@ export async function updateProjectStageProgress(
   }
 
   // Set timestamps based on status transition
-  const updateData: Record<string, any> = { status }
+  const updateData: Record<string, unknown> = { status }
   if (status === "in_progress") {
     updateData.startedAt = new Date()
   }

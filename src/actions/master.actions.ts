@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
@@ -689,10 +688,11 @@ export async function createPosition(formData: FormData) {
       revalidatePath("/master/karyawan")
       await logActivity("create", "Position", position.id, "Membuat jabatan")
       return { success: true, id: position.id }
-    } catch (createErr: any) {
-      const isUniqueCodeConflict = createErr?.code === "P2002" && (
-        (Array.isArray(createErr?.meta?.target) && createErr.meta.target.includes("code")) ||
-        String(createErr?.message || "").includes("positions_code_key")
+    } catch (createErr: unknown) {
+      const err = createErr as { code?: string; meta?: { target?: string[] }; message?: string }
+      const isUniqueCodeConflict = err?.code === "P2002" && (
+        (Array.isArray(err?.meta?.target) && err.meta.target.includes("code")) ||
+        String(err?.message || "").includes("positions_code_key")
       )
       if (!isUniqueCodeConflict) throw createErr
       code = null
