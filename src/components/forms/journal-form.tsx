@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/page-header"
 interface JournalFormProps {
   accounts: { id: number; code: string; name: string
 }[]
-  journal?: { id: number; date: string; description?: string | null; entries?: Array<{ accountId: number; debit: number; credit: number; description?: string }> }
+  journal?: { id: number; date: string; description?: string | null; type?: string | null; entries?: Array<{ accountId: number; debit: number; credit: number; memo?: string }> }
 }
 
 interface JournalEntry { accountId: number; debit: number; credit: number; memo: string }
@@ -23,12 +23,21 @@ interface JournalEntry { accountId: number; debit: number; credit: number; memo:
 export function JournalForm({ accounts, journal }: JournalFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [entries, setEntries] = useState<JournalEntry[]>([
-    { accountId: 0, debit: 0, credit: 0, memo: "" },
-    { accountId: 0, debit: 0, credit: 0, memo: "" },
-  ])
-  const [description, setDescription] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [entries, setEntries] = useState<JournalEntry[]>(
+    journal?.entries && journal.entries.length > 0
+      ? journal.entries.map((e) => ({
+          accountId: e.accountId,
+          debit: e.debit,
+          credit: e.credit,
+          memo: e.memo ?? "",
+        }))
+      : [
+          { accountId: 0, debit: 0, credit: 0, memo: "" },
+          { accountId: 0, debit: 0, credit: 0, memo: "" },
+        ],
+  )
+  const [description, setDescription] = useState(journal?.description ?? "")
+  const [date, setDate] = useState(journal?.date ?? new Date().toISOString().split("T")[0])
 
   function addEntry() { setEntries([...entries, { accountId: 0, debit: 0, credit: 0, memo: "" }]) }
   function removeEntry(i: number) { setEntries(entries.filter((_, idx) => idx !== i)) }

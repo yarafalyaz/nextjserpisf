@@ -782,14 +782,57 @@ export async function updateJournal(id: number, formData: FormData) {
   await assertPeriodOpen(existing.transactionDate)
   await assertPeriodOpen(new Date(formData.get("transactionDate") as string))
 
+  // Parse and validate entries with the same rigor as createJournal —
+  // previously the edit path ignored line entries entirely, so edited lines
+  // were silently discarded and the balance invariant was never re-checked.
+  const entriesJson = formData.get("entries") as string | null
+  const entries = safeJsonParse<{ accountId: number; debit: number; credit: number; memo: string; costCenterId?: number }[]>(entriesJson) ?? []
+  const validEntries = entries.filter(e => e.accountId && (e.debit > 0 || e.credit > 0))
+  if (validEntries.length < 2) {
+    throw new Error("Journal harus memiliki minimal 2 entri dengan akun dan nominal valid")
+  }
+
+  const totalDebit = validEntries.reduce((sum, e) => sum + (e.debit || 0), 0)
+  const totalCredit = validEntries.reduce((sum, e) => sum + (e.credit || 0), 0)
+  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    throw new Error(`Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`)
+  }
+  for (const entry of validEntries) {
+    if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
+      throw new Error("Nominal debit/credit tidak boleh negatif")
+    }
+    if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
+      throw new Error("Satu baris tidak boleh memiliki debit dan credit sekaligus")
+    }
+  }
+
   // Fix #14: Jangan generate documentNo baru dan jangan reset totals ke 0
-  const journal = await prisma.journal.update({
-    where: { id },
-    data: {
-      transactionDate: new Date(formData.get("transactionDate") as string),
-      description: formData.get("description") as string | null,
-      type: (formData.get("type") as string) || "GENERAL",
-    },
+  // Replace header + entries atomically (delete old entries, recreate from form).
+  const journal = await prisma.$transaction(async (tx) => {
+    const j = await tx.journal.update({
+      where: { id },
+      data: {
+        transactionDate: new Date(formData.get("transactionDate") as string),
+        description: formData.get("description") as string | null,
+        type: (formData.get("type") as string) || "GENERAL",
+        totalDebit,
+        totalCredit,
+      },
+    })
+
+    await tx.journalEntry.deleteMany({ where: { journalId: id } })
+    await tx.journalEntry.createMany({
+      data: validEntries.map(entry => ({
+        journalId: id,
+        accountId: entry.accountId,
+        debit: entry.debit || 0,
+        credit: entry.credit || 0,
+        memo: entry.memo || null,
+        costCenterId: entry.costCenterId || null,
+      })),
+    })
+
+    return j
   })
 
   // Associate uploaded attachments

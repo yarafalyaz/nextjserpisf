@@ -18,6 +18,7 @@ export default async function EditPage({
 
   const data = await prisma.journal.findUnique({
     where: { id: Number(id) },
+    include: { entries: { orderBy: { id: "asc" } } },
   })
 
   if (!data) notFound()
@@ -26,6 +27,13 @@ export default async function EditPage({
     id: data.id,
     date: data.transactionDate.toISOString().split("T")[0],
     description: data.description,
+    type: data.type,
+    entries: data.entries.map((e) => ({
+      accountId: e.accountId,
+      debit: Number(e.debit),
+      credit: Number(e.credit),
+      memo: e.memo ?? "",
+    })),
   }
 
   const accounts = await prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } })
