@@ -28,32 +28,30 @@ export default async function ProfitCenterIncomePage({
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
   endDate.setHours(23, 59, 59, 999)
 
-  // Get profit centers
-  const profitCenters = await prisma.profitCenter.findMany({ orderBy: { code: 'asc' } })
-
-  // Get revenue entries
-  const revenueEntries = await prisma.journalEntry.findMany({
-    where: {
-      account: { type: 'REVENUE' },
-      journal: {
-        status: { in: ['POSTED', 'REVERSED'] },
-        transactionDate: { gte: startDate, lte: endDate },
+  // Parallel fetch profit centers, revenue and expense entries
+  const [profitCenters, revenueEntries, expenseEntries] = await Promise.all([
+    prisma.profitCenter.findMany({ orderBy: { code: 'asc' } }),
+    prisma.journalEntry.findMany({
+      where: {
+        account: { type: 'REVENUE' },
+        journal: {
+          status: { in: ['POSTED', 'REVERSED'] },
+          transactionDate: { gte: startDate, lte: endDate },
+        },
       },
-    },
-    include: { account: true },
-  })
-
-  // Get expense entries
-  const expenseEntries = await prisma.journalEntry.findMany({
-    where: {
-      account: { type: 'EXPENSE' },
-      journal: {
-        status: { in: ['POSTED', 'REVERSED'] },
-        transactionDate: { gte: startDate, lte: endDate },
+      include: { account: true },
+    }),
+    prisma.journalEntry.findMany({
+      where: {
+        account: { type: 'EXPENSE' },
+        journal: {
+          status: { in: ['POSTED', 'REVERSED'] },
+          transactionDate: { gte: startDate, lte: endDate },
+        },
       },
-    },
-    include: { account: true },
-  })
+      include: { account: true },
+    }),
+  ])
 
   // Aggregate revenue by account
   const revenueByAccount = new Map<number, { code: string; name: string; amount: number }>()
