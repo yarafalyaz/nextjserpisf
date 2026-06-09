@@ -134,7 +134,7 @@ jobs:
       - run: npm ci
       - name: Tune MariaDB
         run: |
-          mariadb -h 127.0.0.1 -u root -e "SET GLOBAL max_connections=200; SET GLOBAL wait_timeout=600; SET GLOBAL interactive_timeout=600;" 
+          mysql -h 127.0.0.1 -u root -e "SET GLOBAL max_connections=200; SET GLOBAL wait_timeout=600; SET GLOBAL interactive_timeout=600;" 
       - run: npx prisma generate
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
