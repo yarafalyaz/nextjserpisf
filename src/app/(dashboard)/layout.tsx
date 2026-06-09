@@ -5,6 +5,15 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { SidebarInset, SidebarProvider } from "@/components/ui/shadcn/sidebar"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s — Silengkap",
+    default: "Silengkap ERP",
+  },
+  description: "Sistem ERP bengkel otomotif",
+}
 
 export default async function DashboardLayout({
   children,
