@@ -744,6 +744,12 @@ export async function onPettyCashCreated(
 
     if (isInflow) {
       // IN: Dr. PettyCash, Cr. Source Account
+      const sourceAccountId =
+        pettyCash.sourceAccountId ?? settings.cashBankAccountId;
+      if (!sourceAccountId) {
+        throw new Error("Akun sumber dana (sourceAccountId/cashBankAccountId) belum dikonfigurasi untuk pengisian kas kecil");
+      }
+
       await tx.journalEntry.create({
         data: {
           journalId: journal.id,
@@ -754,35 +760,32 @@ export async function onPettyCashCreated(
         },
       });
 
-      const sourceAccountId =
-        pettyCash.sourceAccountId ?? settings.cashBankAccountId;
-      if (sourceAccountId) {
-        await tx.journalEntry.create({
-          data: {
-            journalId: journal.id,
-            accountId: sourceAccountId,
-            debit: 0,
-            credit: pettyCash.amount,
-            memo: "Sumber Dana Kas Kecil",
-          },
-        });
-      }
+      await tx.journalEntry.create({
+        data: {
+          journalId: journal.id,
+          accountId: sourceAccountId,
+          debit: 0,
+          credit: pettyCash.amount,
+          memo: "Sumber Dana Kas Kecil",
+        },
+      });
     } else {
       // OUT: Dr. Expense Account, Cr. PettyCash
       const expenseAccountId =
         pettyCash.expenseAccountId ?? settings.generalExpenseAccountId;
-
-      if (expenseAccountId) {
-        await tx.journalEntry.create({
-          data: {
-            journalId: journal.id,
-            accountId: expenseAccountId,
-            debit: pettyCash.amount,
-            credit: 0,
-            memo: `Pengeluaran: ${pettyCash.description ?? ""}`,
-          },
-        });
+      if (!expenseAccountId) {
+        throw new Error("Akun beban (expenseAccountId/generalExpenseAccountId) belum dikonfigurasi untuk pengeluaran kas kecil");
       }
+
+      await tx.journalEntry.create({
+        data: {
+          journalId: journal.id,
+          accountId: expenseAccountId,
+          debit: pettyCash.amount,
+          credit: 0,
+          memo: `Pengeluaran: ${pettyCash.description ?? ""}`,
+        },
+      });
 
       await tx.journalEntry.create({
         data: {
