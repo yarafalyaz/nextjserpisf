@@ -12,30 +12,31 @@ function getWibNow(now = new Date()) {
   return new Date(now.getTime() + wibOffset)
 }
 
-function getWibTodayUtcDate(now = new Date()) {
+// WIB (UTC+7) date helpers — exported for unit testing (timezone math).
+export function getWibTodayUtcDate(now = new Date()) {
   const wibNow = getWibNow(now)
   return new Date(Date.UTC(wibNow.getUTCFullYear(), wibNow.getUTCMonth(), wibNow.getUTCDate()))
 }
 
-function getWibDayOfWeek(now = new Date()) {
+export function getWibDayOfWeek(now = new Date()) {
   const wibOffset = 7 * 60 * 60 * 1000
   const wibNow = new Date(now.getTime() + wibOffset)
   return wibNow.getUTCDay()
 }
 
-function parseStartMinutes(startTime: string) {
+export function parseStartMinutes(startTime: string) {
   const [h, m] = startTime.split(":").map((v) => Number(v || 0))
   return h * 60 + m
 }
 
-function getWibMinutes(now = new Date()) {
+export function getWibMinutes(now = new Date()) {
   const wibOffset = 7 * 60 * 60 * 1000
   const wibNow = new Date(now.getTime() + wibOffset)
   return wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes()
 }
 
-/** Haversine distance in km between two lat/lng points. */
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+/** Haversine distance in km between two lat/lng points. Exported for testing. */
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLng = (lng2 - lng1) * Math.PI / 180
