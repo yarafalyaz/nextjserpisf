@@ -4,6 +4,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { toBaseFactor } from "@/lib/services/uom.service";
+import { PurchaseStatus, Status } from "@/lib/constants";
 
 /**
  * Goods Receipt Hook - Observer pattern replacement.
@@ -39,7 +40,7 @@ export async function onGoodsReceiptVerified(
     if (existingMoves) return; // Idempotent: silently no-op
 
     // Idempotency: check if already verified
-    if (goodsReceipt.status === "verified") {
+    if (goodsReceipt.status === PurchaseStatus.VERIFIED) {
       return; // Already processed
     }
 
@@ -64,7 +65,7 @@ export async function onGoodsReceiptVerified(
         where: {
           goodsReceipt: {
             purchaseOrderId: goodsReceipt.purchaseOrderId,
-            status: { in: ["verified", "completed"] },
+            status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
             id: { not: goodsReceiptId }, // Exclude current GR
           },
         },
@@ -92,7 +93,7 @@ export async function onGoodsReceiptVerified(
       await tx.purchaseOrder.update({
         where: { id: goodsReceipt.purchaseOrderId },
         data: {
-          status: allReceived ? "received" : "partial_received",
+          status: allReceived ? PurchaseStatus.RECEIVED : "partial_received",
         },
       });
     }
@@ -202,7 +203,7 @@ export async function onGoodsReceiptVerified(
     // ─── 5. Update GR status ─────────────────────────────────────────────
     await tx.goodsReceipt.update({
       where: { id: goodsReceiptId },
-      data: { status: "verified" },
+      data: { status: PurchaseStatus.VERIFIED },
     });
   });
 }

@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { createInLayer } from "@/lib/services/inventory-fifo";
+import { Status } from "@/lib/constants";
 
 /**
  * Sales Return Hook - Observer pattern replacement.
@@ -32,7 +33,7 @@ export async function onSalesReturnCompleted(
     if (existingMoves) return; // Idempotent: silently no-op
 
     // Guard: must be in a completable state
-    if (salesReturn.status === "completed" || salesReturn.status === "cancelled") {
+    if (salesReturn.status === Status.COMPLETED || salesReturn.status === Status.CANCELLED) {
       return; // already completed/cancelled; idempotent no-op
     }
 
@@ -88,7 +89,7 @@ export async function onSalesReturnCompleted(
     await tx.salesReturn.update({
       where: { id: returnId },
       data: {
-        status: "completed",
+        status: Status.COMPLETED,
       },
     });
   });

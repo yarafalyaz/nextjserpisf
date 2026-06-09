@@ -1,5 +1,6 @@
 
 import { prisma } from "@/lib/db/prisma";
+import { PurchaseStatus, Status } from "@/lib/constants";
 
 /**
  * Purchase Order Hook - Observer pattern replacement.
@@ -24,7 +25,7 @@ export async function onPurchaseOrderCreated(
       where: { id: po.purchaseRequestId },
     });
     if (!pr) return;
-    if (pr.status === "ordered" || pr.status === "completed") return;
+    if (pr.status === PurchaseStatus.ORDERED || pr.status === Status.COMPLETED) return;
 
     // Check if all PR items are covered by POs
     const prItems = await tx.purchaseRequestItem.findMany({
@@ -35,7 +36,7 @@ export async function onPurchaseOrderCreated(
       where: {
         purchaseOrder: {
           purchaseRequestId: po.purchaseRequestId,
-          status: { notIn: ["cancelled", "draft"] },
+          status: { notIn: [Status.CANCELLED, Status.DRAFT] },
         },
       },
     });
@@ -58,7 +59,7 @@ export async function onPurchaseOrderCreated(
     // Update PR status
     let newStatus: string;
     if (allOrdered) {
-      newStatus = "ordered";
+      newStatus = PurchaseStatus.ORDERED;
     } else if (anyOrdered) {
       newStatus = "partial_ordered";
     } else {

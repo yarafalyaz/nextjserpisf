@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { Status } from "@/lib/constants";
 
 /**
  * Material Issue Hook - Observer pattern replacement.
@@ -34,7 +35,7 @@ export async function onMaterialIssueCompleted(
     if (existingMoves) return;
 
     // Guard: observer should only run on transition to completed.
-    if (issue.status === "completed") {
+    if (issue.status === Status.COMPLETED) {
       return; // already completed; idempotent no-op
     }
 
@@ -97,7 +98,7 @@ export async function onMaterialIssueCompleted(
     await tx.materialIssue.update({
       where: { id: issueId },
       data: {
-        status: "completed",
+        status: Status.COMPLETED,
       },
     });
   });

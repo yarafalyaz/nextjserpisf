@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { InventoryStatus, Status } from "@/lib/constants";
 
 /**
  * Stock Adjustment Hook - Observer pattern replacement.
@@ -33,7 +34,7 @@ export async function onStockAdjustmentProcessed(
     if (existingMoves) return; // Idempotent: silently no-op
 
     // Guard: must be in a processable state
-    if (adjustment.status === "processed" || adjustment.status === "cancelled") {
+    if (adjustment.status === InventoryStatus.PROCESSED || adjustment.status === Status.CANCELLED) {
       return; // already processed/cancelled; idempotent no-op
     }
 
@@ -107,7 +108,7 @@ export async function onStockAdjustmentProcessed(
     await tx.stockAdjustment.update({
       where: { id: adjustmentId },
       data: {
-        status: "processed",
+        status: InventoryStatus.PROCESSED,
         approvedBy: userId ?? null,
         approvedAt: new Date(),
       },

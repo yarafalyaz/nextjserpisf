@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
 import { onSalesInvoicePosted } from "@/lib/hooks/accounting.hook";
+import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
 
 /**
  * Down Payment Hook - Observer pattern replacement.
@@ -58,7 +59,7 @@ export async function onDownPaymentConfirmed(
     });
 
     // Guard: already confirmed — silent skip (idempotency)
-    if (dp.status === "confirmed") {
+    if (dp.status === SalesStatus.CONFIRMED) {
       return;
     }
 
@@ -67,7 +68,7 @@ export async function onDownPaymentConfirmed(
       throw new Error("Quotation tidak ditemukan untuk Down Payment ini.");
     }
 
-    if (quotation.status !== "accepted") {
+    if (quotation.status !== SalesStatus.ACCEPTED) {
       throw new Error("Quotation belum di-accept.");
     }
 
@@ -201,7 +202,7 @@ export async function onDownPaymentConfirmed(
         customerId: quotation.customerId,
         customerVehicleId: quotation.customerVehicleId,
         date: new Date(),
-        status: "pending",
+        status: WorkOrderStatus.PENDING,
         notes: bomNotes.trim(),
         createdBy: userId ?? null,
       },
@@ -239,10 +240,10 @@ export async function onDownPaymentConfirmed(
     // Initialize default project stages
     await tx.projectStage.createMany({
       data: [
-        { projectId: project.id, name: "Persiapan", sortOrder: 1, status: "pending" },
-        { projectId: project.id, name: "Pengerjaan", sortOrder: 2, status: "pending" },
-        { projectId: project.id, name: "Quality Check", sortOrder: 3, status: "pending" },
-        { projectId: project.id, name: "Selesai", sortOrder: 4, status: "pending" },
+        { projectId: project.id, name: "Persiapan", sortOrder: 1, status: Status.PENDING },
+        { projectId: project.id, name: "Pengerjaan", sortOrder: 2, status: Status.PENDING },
+        { projectId: project.id, name: "Quality Check", sortOrder: 3, status: Status.PENDING },
+        { projectId: project.id, name: "Selesai", sortOrder: 4, status: Status.PENDING },
       ],
     });
 
@@ -260,7 +261,7 @@ export async function onDownPaymentConfirmed(
         tax: quotation.tax ?? 0,
         grandTotal: quotation.grandTotal,
         totalAmount: quotation.grandTotal,
-        status: "confirmed",
+        status: SalesStatus.CONFIRMED,
         notes: `Auto-generated dari DP ${dp.documentNo}`,
         createdBy: userId ?? null,
       },
@@ -341,14 +342,14 @@ export async function onDownPaymentConfirmed(
     await tx.downPayment.update({
       where: { id: dpId },
       data: {
-        status: "confirmed",
+        status: SalesStatus.CONFIRMED,
       },
     });
 
     // ─── 6. Update Quotation status → converted ─────────────────────
     await tx.quotation.update({
       where: { id: quotation.id },
-      data: { status: "converted" },
+      data: { status: SalesStatus.CONVERTED },
     });
 
     readyDocuments.push(

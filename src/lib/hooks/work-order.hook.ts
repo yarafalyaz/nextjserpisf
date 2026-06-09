@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { WorkOrderStatus } from "@/lib/constants";
 
 /**
  * Work Order Hook - Observer pattern replacement.
@@ -33,7 +34,7 @@ export async function onWorkOrderCompleted(
     if (existingMoves) return; // Idempotent: silently no-op
 
     // Guard: must be in a completable state
-    if (workOrder.status === "completed" || workOrder.status === "cancelled") {
+    if (workOrder.status === WorkOrderStatus.COMPLETED || workOrder.status === WorkOrderStatus.CANCELLED) {
       return; // already completed/cancelled; idempotent no-op
     }
 
@@ -103,7 +104,7 @@ export async function onWorkOrderCompleted(
     await tx.workOrder.update({
       where: { id: workOrderId },
       data: {
-        status: "completed",
+        status: WorkOrderStatus.COMPLETED,
         endDate: new Date(),
       },
     });

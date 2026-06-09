@@ -12,7 +12,7 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   const invoice = await db.salesInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
 
   // Laravel parity: skip observer update for cancelled/draft invoice
-  if (["cancelled", "draft"].includes(invoice.status)) return;
+  if (invoice.status === SalesInvoiceStatus.cancelled || invoice.status === SalesInvoiceStatus.draft) return;
 
   const payments = await db.salesPayment.findMany({
     where: { salesInvoiceId: invoiceId },
