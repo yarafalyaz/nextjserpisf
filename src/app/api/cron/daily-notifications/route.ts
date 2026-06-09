@@ -17,6 +17,7 @@ import { notificationService } from "@/lib/services/notification.service"
  * - Absent employees after 10:00
  */
 export async function GET(request: Request) {
+  try {
   if (!isValidCronRequest(request)) {
     return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
   }
@@ -187,4 +188,7 @@ export async function GET(request: Request) {
     adminsNotified: admins.length,
     results,
   })
+  } catch {
+    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+  }
 }

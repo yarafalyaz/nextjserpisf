@@ -5,6 +5,7 @@ import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
 export async function POST(req: NextRequest) {
+  try {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
@@ -105,9 +106,13 @@ export async function POST(req: NextRequest) {
   })
 
   return NextResponse.json(attachment)
+  } catch {
+    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+  }
 }
 
 export async function GET(req: NextRequest) {
+  try {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
@@ -150,4 +155,7 @@ export async function GET(req: NextRequest) {
   })
 
   return NextResponse.json(attachments)
+  } catch {
+    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+  }
 }
