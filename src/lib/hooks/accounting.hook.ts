@@ -448,9 +448,9 @@ export async function onStockAdjustmentProcessed(
     include: { items: true },
   });
 
-  // Idempotency check
+  // Idempotency check — covers both IN and OUT journal types
   const existing = await prisma.journal.findFirst({
-    where: { referenceType: "StockAdjustment", referenceId: adjustmentId },
+    where: { referenceType: { in: ["StockAdjustment", "StockAdjustmentOut"] }, referenceId: adjustmentId },
   });
   if (existing) return;
 
@@ -518,7 +518,7 @@ export async function onStockAdjustmentProcessed(
         data: {
           journalNumber,
           transactionDate: new Date(),
-          referenceType: "StockAdjustment",
+          referenceType: "StockAdjustmentOut",
           referenceId: adjustment.id,
           description: `Penyesuaian Stok Keluar ${adjustment.documentNo}`,
           type: "ADJUSTMENT",
