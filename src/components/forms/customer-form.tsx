@@ -156,7 +156,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
         </FormSection>
         <FormActions>
           <Button type="button" onPress={() => router.back()}>Batal</Button>
-          <Button type="submit" variant="primary" isDisabled={isPending}>
+          <Button type="submit" variant="primary" isDisabled={isPending} id="submit-customer">
             {isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan"}
           </Button>
         </FormActions>

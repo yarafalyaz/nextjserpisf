@@ -33,8 +33,9 @@ function formDataToObject(formData: FormData): Record<string, unknown> {
     }
 
     // Numeric coercion — only for values that look like numbers
-    // Preserves strings like "08123456789" (leading zero = phone) and NPWP patterns
-    if (/^-?\d+(\.\d+)?$/.test(trimmed) && !trimmed.startsWith("0")) {
+    // Preserves strings like "08123456789" (leading zero + more digits = phone) and NPWP patterns
+    // But allows "0" and "0.5" etc.
+    if (/^-?\d+(\.\d+)?$/.test(trimmed) && !/^0\d/.test(trimmed)) {
       const num = Number(trimmed)
       if (!Number.isNaN(num) && Number.isFinite(num)) {
         obj[field] = num

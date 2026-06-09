@@ -38,6 +38,7 @@ async function crudMaster(
       "button:has-text('Tambah')",
     ].filter(Boolean).join(", ")
   ).first()
+  await createSubmit.scrollIntoViewIfNeeded()
   await createSubmit.click()
   await page.waitForURL(`**${opts.listUrl}`, { timeout: 45000 })
   await page.waitForLoadState("networkidle")
@@ -82,6 +83,7 @@ async function crudMaster(
       "button:has-text('Simpan')",
     ].filter(Boolean).join(", ")
   ).first()
+  await submitBtn.scrollIntoViewIfNeeded()
   await submitBtn.click()
   await page.waitForURL(`**${opts.listUrl}`, { timeout: 45000 })
   await page.waitForLoadState("networkidle")
@@ -257,6 +259,7 @@ test.describe("Master Pelanggan CRUD", () => {
         { id: "phone", value: `0812${String(ts).slice(-8)}`, updated: `0813${String(ts).slice(-8)}` },
         { id: "email", value: `cust${String(ts).slice(-6)}@e2e.test`, updated: `custupd${String(ts).slice(-6)}@e2e.test` },
       ],
+      submitId: "submit-customer",
     })
   })
 })
@@ -283,7 +286,8 @@ test.describe("Master Akun Mutation", () => {
     const updated = `Akun E2E Updated ${ts}`
 
     await page.goto("/master/akun/tambah", { waitUntil: "domcontentloaded" })
-    await page.locator("#name").fill(name)
+    await waitForHydration(page)
+    await page.locator("form #name").fill(name)
 
     // select required type (combobox)
     await page.locator("#type").click()
@@ -307,7 +311,8 @@ test.describe("Master Akun Mutation", () => {
     await page.waitForURL(/\/master\/akun\/\d+\/ubah/, { timeout: 30000 })
 
     // On edit form: fill name + re-select type (required)
-    await page.locator("#name").fill(updated)
+    await waitForHydration(page)
+    await page.locator("form #name").fill(updated)
     // Type combobox has no value on edit, so it shows the "Pilih Tipe" placeholder.
     await page.locator("#type").click()
     await page.locator("[role='option']").filter({ hasText: "Aset" }).first().click()
