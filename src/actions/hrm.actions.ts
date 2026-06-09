@@ -11,6 +11,7 @@ import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service"
 import { syncNationalHolidays as syncNationalHolidaysService } from "@/lib/services/holiday-sync.service"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { onPayrollPaid } from "@/lib/hooks/accounting.hook"
 import { getSystemSettings } from "@/lib/utils/settings"
 
 function getWibNow(now = new Date()) {
@@ -878,6 +879,9 @@ export async function markPayrollPaid(payrollId: number) {
       }
     }
   })
+
+  // Post journal entry for salary expense
+  await onPayrollPaid(payrollId)
 
   await logActivity("mark", "Payroll", payrollId, "Menandai penggajian sebagai dibayar")
   revalidatePath("/sdm/penggajian")

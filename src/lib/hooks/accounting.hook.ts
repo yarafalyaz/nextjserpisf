@@ -1201,3 +1201,78 @@ export async function onVendorPaymentCreated(
     });
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. onPayrollPaid
+//    Dr. Salary Expense (netSalary + statutory)
+//    Cr. Bank/Cash (netSalary)
+//    Cr. Tax/BPJS Payable (statutory)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function onPayrollPaid(
+  payrollId: number,
+  userId?: number
+): Promise<void> {
+  const settings = await getSystemSettings();
+  if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId) return;
+
+  // Idempotency
+  const existing = await prisma.journal.findFirst({
+    where: { referenceType: "Payroll", referenceId: payrollId },
+  });
+  if (existing) return;
+
+  const payroll = await prisma.payroll.findUniqueOrThrow({
+    where: { id: payrollId },
+  });
+
+  const netSalary = Number(payroll.netSalary) || 0;
+  const statutory = Number(payroll.bpjsHealthEmployee ?? 0) + Number(payroll.bpjsEmploymentEmployee ?? 0) + Number(payroll.pph21 ?? 0);
+  const totalExpense = netSalary + statutory;
+
+  if (totalExpense <= 0) return;
+
+  await assertPeriodOpen(payroll.paymentDate ?? new Date());
+
+  await prisma.$transaction(async (tx) => {
+    const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
+
+    const entries: Array<{ accountId: number; debit: number; credit: number; memo: string }> = [
+      // Dr. Salary Expense
+      { accountId: settings.salaryExpenseAccountId!, debit: totalExpense, credit: 0, memo: "Beban Gaji" },
+      // Cr. Bank/Cash (net paid to employee)
+      { accountId: settings.payrollBankAccountId!, debit: 0, credit: netSalary, memo: "Pembayaran Gaji" },
+    ];
+
+    // Cr. Salaries Payable for statutory (BPJS+PPh) if account configured
+    if (statutory > 0 && settings.salariesPayableAccountId) {
+      entries.push({
+        accountId: settings.salariesPayableAccountId,
+        debit: 0,
+        credit: statutory,
+        memo: "BPJS + PPh21 karyawan",
+      });
+    } else if (statutory > 0) {
+      // Fallback: credit to same bank account
+      entries[1].credit += statutory;
+    }
+
+    await tx.journal.create({
+      data: {
+        journalNumber,
+        transactionDate: payroll.paymentDate ?? new Date(),
+        referenceType: "Payroll",
+        referenceId: payrollId,
+        description: `Penggajian ${payroll.documentNo}`,
+        type: "AUTO",
+        status: "POSTED",
+        totalDebit: totalExpense,
+        totalCredit: totalExpense,
+        createdBy: userId ?? null,
+        entries: {
+          create: entries,
+        },
+      },
+    });
+  });
+}
