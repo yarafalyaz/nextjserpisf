@@ -281,15 +281,16 @@ export async function convertQuotationToOrder(quotationId: number) {
     throw new Error("Hanya penawaran accepted yang dapat dikonversi")
   }
 
-  const existing = await prisma.salesOrder.findFirst({ where: { quotationId } })
-  if (existing) {
-    throw new Error("Penawaran ini sudah memiliki Sales Order")
-  }
-
   const documentNo = await generateDocumentNumber("SO")
   const allItems = quotation.sections.flatMap((section) => section.items)
 
   const salesOrder = await prisma.$transaction(async (tx) => {
+    // Idempotency inside tx to prevent race condition (double-click)
+    const existing = await tx.salesOrder.findFirst({ where: { quotationId } })
+    if (existing) {
+      throw new Error("Penawaran ini sudah memiliki Sales Order")
+    }
+
     const so = await tx.salesOrder.create({
       data: {
         documentNo,
