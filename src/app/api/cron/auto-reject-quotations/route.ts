@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
+import { SalesStatus, Status } from "@/lib/constants"
 
 /**
  * Cron: Auto-reject quotations that have been in 'sent' status for more than 14 days.
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   // Find quotations that are in 'sent' status and haven't been updated in 14 days
   const staleQuotations = await prisma.quotation.findMany({
     where: {
-      status: "sent",
+      status: SalesStatus.SENT,
       deletedAt: null,
       updatedAt: { lt: cutoffDate },
     },
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
       // Update quotation status to rejected
       prisma.quotation.update({
         where: { id: quotation.id },
-        data: { status: "rejected" },
+        data: { status: Status.REJECTED },
       }),
       // Create history entry
       prisma.quotationHistory.create({

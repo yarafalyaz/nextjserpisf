@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { auth } from "@/lib/auth/auth"
 import { revalidatePath } from "next/cache"
+import { Status } from "@/lib/constants"
 
 const MODULE_MAP: Record<string, { model: string; revalidate: string; permission: string }> = {
   "penjualan/penawaran": { model: "quotation", revalidate: "/penjualan/penawaran", permission: "approve_quotations" },
@@ -56,7 +57,7 @@ export async function POST(
     return NextResponse.json({ error: "Aksi tidak valid" }, { status: 400 })
   }
 
-  const newStatus = action === "approve" ? "approved" : "rejected"
+  const newStatus = action === "approve" ? Status.APPROVED : Status.REJECTED
 
   try {
     await (prisma as any)[config.model].update({
