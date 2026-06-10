@@ -105,19 +105,12 @@ export async function createVehicle(formData: FormData) {
       }
     }
 
-    const usedVehicleIds = await prisma.vehicle.findMany({
-      select: { id: true },
-      orderBy: { id: "asc" },
-    })
-    let reusableVehicleId = 1
-    for (const v of usedVehicleIds) {
-      if (v.id === reusableVehicleId) reusableVehicleId += 1
-      else if (v.id > reusableVehicleId) break
-    }
-
+    // Let the DB assign the PK via autoincrement. The previous "smallest unused
+    // id" scan + explicit id assignment raced under concurrency (two creates
+    // computing the same gap id → PK collision → intermittent create failure),
+    // and was inconsistent with createCustomerVehicle which uses autoincrement.
     const vehicle = await prisma.vehicle.create({
       data: {
-        id: reusableVehicleId,
         plateNumber: plateNo,
         vehicleVariantId,
         year: year ?? null,

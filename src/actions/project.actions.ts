@@ -91,6 +91,35 @@ export async function deleteProject(id: number) {
   try {
   await requirePermission("delete_projects")
 
+  // Integrity guard: refuse to delete a project that still has real
+  // cross-module work attached. timesheets.projectId is a required FK
+  // (onDelete: Restrict) so a raw delete throws a generic error; workOrders /
+  // tasks / overtimeRequests represent logged work/documents that must not
+  // vanish silently. (items/stages/logs are project-intrinsic and cascade by
+  // design.) Mirrors deleteVehicle's in-use guard.
+  const project = await prisma.project.findUnique({
+    where: { id },
+    select: {
+      _count: {
+        select: { workOrders: true, timesheets: true, tasks: true, overtimeRequests: true },
+      },
+    },
+  })
+  if (!project) {
+    return { success: false, error: "Proyek tidak ditemukan" }
+  }
+  const { workOrders, timesheets, tasks, overtimeRequests } = project._count
+  const dependents = workOrders + timesheets + tasks + overtimeRequests
+  if (dependents > 0) {
+    return {
+      success: false,
+      error:
+        "Proyek tidak dapat dihapus karena masih memiliki data terkait " +
+        `(work order: ${workOrders}, lembar waktu: ${timesheets}, tugas: ${tasks}, lembur: ${overtimeRequests}). ` +
+        "Hapus atau pindahkan data tersebut terlebih dahulu.",
+    }
+  }
+
   await prisma.project.delete({ where: { id } })
 
   await logActivity("delete", "Project", id, "Menghapus proyek")
