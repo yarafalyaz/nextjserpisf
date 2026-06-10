@@ -36,7 +36,7 @@ export function NotificationDropdown() {
   async function fetchNotifications() {
     setLoading(true)
     try {
-      const res = await fetch("/api/notifikasi")
+      const res = await fetch("/api/notifications")
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications || [])
@@ -57,7 +57,7 @@ export function NotificationDropdown() {
   }
 
   async function markAsRead(id: number) {
-    await fetch(`/api/notifikasi/${id}/read`, { method: "POST" })
+    await fetch(`/api/notifications/${id}/read`, { method: "POST" })
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
     setUnreadCount(prev => Math.max(0, prev - 1))
   }
