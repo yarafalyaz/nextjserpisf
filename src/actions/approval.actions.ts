@@ -26,46 +26,53 @@ export async function approveStep(approvalId: number, formData: FormData) {
   if (!parsed.success) throw new Error(parsed.error)
   const { notes } = parsed.data
 
-  const approval = await prisma.approval.findUnique({
-    where: { id: approvalId },
-    include: { workflow: { include: { steps: { orderBy: { stepOrder: "asc" } } } } },
-  })
+  // Serialize concurrent approve/reject on the same approval. Without the row
+  // lock, a double-clicked button or two concurrent approvers both pass the
+  // "pending" check and both run currentStep + 1, silently skipping a level.
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM approvals WHERE id = ${approvalId} FOR UPDATE`
 
-  if (!approval) throw new Error("Approval tidak ditemukan")
-  if (approval.status !== "pending") throw new Error("Approval sudah diproses")
+    const approval = await tx.approval.findUnique({
+      where: { id: approvalId },
+      include: { workflow: { include: { steps: { orderBy: { stepOrder: "asc" } } } } },
+    })
 
-  const totalSteps = approval.workflow.steps.length
+    if (!approval) throw new Error("Approval tidak ditemukan")
+    if (approval.status !== "pending") throw new Error("Approval sudah diproses")
 
-  // Create history entry
-  await prisma.approvalHistory.create({
-    data: {
-      approvalId: approval.id,
-      step: approval.currentStep,
-      action: "approve",
-      userId: session?.user?.id ? Number(session.user.id) : null,
-      notes: notes || null,
-    },
-  })
+    const totalSteps = approval.workflow.steps.length
 
-  // If last step, mark as approved
-  if (approval.currentStep >= totalSteps) {
-    await prisma.approval.update({
-      where: { id: approval.id },
+    // Create history entry
+    await tx.approvalHistory.create({
       data: {
-        status: "approved",
-        finalApprovedBy: session?.user?.id ? Number(session.user.id) : null,
-        completedAt: new Date(),
+        approvalId: approval.id,
+        step: approval.currentStep,
+        action: "approve",
+        userId: session?.user?.id ? Number(session.user.id) : null,
+        notes: notes || null,
       },
     })
-  } else {
-    // Advance to next step
-    await prisma.approval.update({
-      where: { id: approval.id },
-      data: {
-        currentStep: approval.currentStep + 1,
-      },
-    })
-  }
+
+    // If last step, mark as approved
+    if (approval.currentStep >= totalSteps) {
+      await tx.approval.update({
+        where: { id: approval.id },
+        data: {
+          status: "approved",
+          finalApprovedBy: session?.user?.id ? Number(session.user.id) : null,
+          completedAt: new Date(),
+        },
+      })
+    } else {
+      // Advance to next step
+      await tx.approval.update({
+        where: { id: approval.id },
+        data: {
+          currentStep: approval.currentStep + 1,
+        },
+      })
+    }
+  })
 
   await logActivity("approve", "Approval", approvalId, "Menyetujui langkah persetujuan")
   revalidatePath(`/pengaturan/persetujuan/${approvalId}`)
@@ -87,31 +94,36 @@ export async function rejectStep(approvalId: number, formData: FormData) {
   if (!parsed.success) throw new Error(parsed.error)
   const { notes } = parsed.data
 
-  const approval = await prisma.approval.findUnique({
-    where: { id: approvalId },
-  })
+  // Serialize concurrent approve/reject on the same approval (see approveStep).
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM approvals WHERE id = ${approvalId} FOR UPDATE`
 
-  if (!approval) throw new Error("Approval tidak ditemukan")
-  if (approval.status !== "pending") throw new Error("Approval sudah diproses")
+    const approval = await tx.approval.findUnique({
+      where: { id: approvalId },
+    })
 
-  // Create history entry
-  await prisma.approvalHistory.create({
-    data: {
-      approvalId: approval.id,
-      step: approval.currentStep,
-      action: "reject",
-      userId: session?.user?.id ? Number(session.user.id) : null,
-      notes: notes || null,
-    },
-  })
+    if (!approval) throw new Error("Approval tidak ditemukan")
+    if (approval.status !== "pending") throw new Error("Approval sudah diproses")
 
-  // Set status to rejected
-  await prisma.approval.update({
-    where: { id: approval.id },
-    data: {
-      status: "rejected",
-      completedAt: new Date(),
-    },
+    // Create history entry
+    await tx.approvalHistory.create({
+      data: {
+        approvalId: approval.id,
+        step: approval.currentStep,
+        action: "reject",
+        userId: session?.user?.id ? Number(session.user.id) : null,
+        notes: notes || null,
+      },
+    })
+
+    // Set status to rejected
+    await tx.approval.update({
+      where: { id: approval.id },
+      data: {
+        status: "rejected",
+        completedAt: new Date(),
+      },
+    })
   })
 
   await logActivity("reject", "Approval", approvalId, "Menolak langkah persetujuan")
