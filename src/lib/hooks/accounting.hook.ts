@@ -1187,7 +1187,15 @@ export async function onVendorBillPosted(
       debitEntries.push({ accountId: settings.purchaseTaxAccountId!, debit: taxAmount, credit: 0, memo: "PPN Masukan" });
     }
   } else {
-    debitEntries.push({ accountId: settings.purchaseExpenseAccountId || settings.purchasePayableAccountId!, debit: grandTotal, credit: 0, memo: "Purchase expense" });
+    // Service/expense bill (no goods receipt): debit the expense account. Fail
+    // closed when it is unconfigured rather than falling back to the payable
+    // account — that fallback produced a net-zero Dr AP / Cr AP entry that
+    // looked "posted" but never actually recognised the liability in the GL.
+    // Mirrors the fail-closed convention used by onPettyCashCreated/onExpenseApproved.
+    if (!settings.purchaseExpenseAccountId) {
+      throw new Error("Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya")
+    }
+    debitEntries.push({ accountId: settings.purchaseExpenseAccountId, debit: grandTotal, credit: 0, memo: "Purchase expense" });
   }
 
   await prisma.$transaction(async (tx) => {
