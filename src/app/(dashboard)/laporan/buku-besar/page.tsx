@@ -2,11 +2,12 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { BookOpen } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
@@ -105,21 +106,24 @@ export default async function GeneralLedgerPage({
   const totalCredit = entries.reduce((sum, e) => sum + e.credit, 0)
   const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : 0
 
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const ledgerSubtitle = selectedAccount ? `${selectedAccount.code} – ${selectedAccount.name}` : undefined
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Buku Besar" },
-      ]} />
-
-      <div className="flex items-center gap-2">
-        <BookOpen size={24} />
-        <h1 className="text-2xl font-bold text-foreground">Buku Besar</h1>
-        <ExportButtons title="Buku_Besar" />
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Buku Besar" },
+        ]} />
       </div>
 
-      <form className="mb-6 flex items-center gap-4 flex-wrap print:hidden">
+      <div className="flex items-center justify-end print:hidden">
+        <ExportButtons title="Buku Besar" />
+      </div>
+
+      <form className="mb-2 flex items-center gap-4 flex-wrap print:hidden">
         <div className="flex flex-col gap-1.5 w-[250px]">
           <Label htmlFor="accountId">Akun</Label>
           <FormSelect
@@ -136,78 +140,87 @@ export default async function GeneralLedgerPage({
       </form>
 
       {!accountId && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-8 text-center">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-8 text-center print:hidden">
           <BookOpen size={48} className="mx-auto text-muted-foreground mb-3" />
           <p className="text-muted-foreground text-sm">Pilih akun untuk melihat buku besar</p>
         </div>
       )}
 
       {accountId && selectedAccount && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">
-              {selectedAccount.code} - {selectedAccount.name}
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} - {endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <div className="p-4 px-5">
-            <div className="overflow-x-auto">
-              <DetailTable>
-                <DetailTableHead>
-                  <DetailTableTh>Tanggal</DetailTableTh>
-                  <DetailTableTh>No. Jurnal</DetailTableTh>
-                  <DetailTableTh>Keterangan</DetailTableTh>
-                  <DetailTableTh align="right">Debit</DetailTableTh>
-                  <DetailTableTh align="right">Kredit</DetailTableTh>
-                  <DetailTableTh align="right">Saldo</DetailTableTh>
-                </DetailTableHead>
-                <DetailTableBody>
-                  {rows.length === 0 && (
-                    <DetailTableRow>
-                      <DetailTableTd colSpan={6} className="text-center text-muted-foreground">Tidak ada transaksi dalam periode ini</DetailTableTd>
-                    </DetailTableRow>
-                  )}
-                  {rows.map((row) => (
-                    <DetailTableRow key={row.id}>
-                      <DetailTableTd>{row.date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}</DetailTableTd>
-                      <DetailTableTd>{row.journalNumber}</DetailTableTd>
-                      <DetailTableTd>{row.memo || row.description || '-'}</DetailTableTd>
-                      <DetailTableTd align="right">{row.debit > 0 ? formatCurrency(row.debit) : '-'}</DetailTableTd>
-                      <DetailTableTd align="right">{row.credit > 0 ? formatCurrency(row.credit) : '-'}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(row.balance)}</DetailTableTd>
-                    </DetailTableRow>
-                  ))}
-                </DetailTableBody>
-              </DetailTable>
-            </div>
+        <>
+          {/* Professional letterhead (screen + print) */}
+          <ReportLetterhead title="Buku Besar" subtitle={ledgerSubtitle} periodLabel={periodLabel} />
 
-            {/* Summary */}
-            {rows.length > 0 && (
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total Debit</p>
-                    <p className="text-sm font-semibold text-foreground">{formatCurrency(totalDebit)}</p>
-                  </div>
-                </div>
-                <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total Kredit</p>
-                    <p className="text-sm font-semibold text-foreground">{formatCurrency(totalCredit)}</p>
-                  </div>
-                </div>
-                <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Saldo Akhir</p>
-                    <p className="text-sm font-semibold text-foreground">{formatCurrency(finalBalance)}</p>
-                  </div>
-                </div>
+          <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+            <div className="p-4 px-5">
+              <div className="overflow-x-auto">
+                <DetailTable data-report-table="Buku Besar">
+                  <DetailTableHead>
+                    <DetailTableTh>Tanggal</DetailTableTh>
+                    <DetailTableTh>No. Jurnal</DetailTableTh>
+                    <DetailTableTh>Keterangan</DetailTableTh>
+                    <DetailTableTh align="right">Debit (Rp)</DetailTableTh>
+                    <DetailTableTh align="right">Kredit (Rp)</DetailTableTh>
+                    <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
+                  </DetailTableHead>
+                  <DetailTableBody>
+                    <DetailTableRow className="bg-muted/30">
+                      <DetailTableTd colSpan={5} className="font-semibold">Saldo Awal</DetailTableTd>
+                      <DetailTableTd align="right" className="font-semibold">{formatAccounting(openingBalance)}</DetailTableTd>
+                    </DetailTableRow>
+                    {rows.length === 0 && (
+                      <DetailTableRow>
+                        <DetailTableTd colSpan={6} className="text-center text-muted-foreground">Tidak ada transaksi dalam periode ini</DetailTableTd>
+                      </DetailTableRow>
+                    )}
+                    {rows.map((row) => (
+                      <DetailTableRow key={row.id}>
+                        <DetailTableTd>{row.date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}</DetailTableTd>
+                        <DetailTableTd>{row.journalNumber}</DetailTableTd>
+                        <DetailTableTd>{row.memo || row.description || '-'}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(row.debit)}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(row.credit)}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(row.balance)}</DetailTableTd>
+                      </DetailTableRow>
+                    ))}
+                    {rows.length > 0 && (
+                      <DetailTableRow className="font-bold border-t-2 border-default">
+                        <DetailTableTd colSpan={3}>TOTAL & Saldo Akhir</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(totalDebit)}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(totalCredit)}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(finalBalance)}</DetailTableTd>
+                      </DetailTableRow>
+                    )}
+                  </DetailTableBody>
+                </DetailTable>
               </div>
-            )}
+
+              {/* Summary (screen only) */}
+              {rows.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
+                  <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Debit</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(totalDebit)}</p>
+                    </div>
+                  </div>
+                  <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Kredit</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(totalCredit)}</p>
+                    </div>
+                  </div>
+                  <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Saldo Akhir</p>
+                      <p className="text-sm font-semibold text-foreground">{formatCurrency(finalBalance)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

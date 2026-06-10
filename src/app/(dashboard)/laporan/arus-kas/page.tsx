@@ -2,12 +2,12 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { Wallet } from 'lucide-react'
+import { formatCurrency, formatAccounting, formatPeriod } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -84,28 +84,31 @@ export default async function CashFlowPage({
 
   const sortedMonths = Array.from(monthlyData.entries()).sort((a, b) => b[0].localeCompare(a[0]))
 
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Laporan", href: "/laporan" },
-  { label: "Arus Kas" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <Wallet size={24} />
-          <h1>Laporan Arus Kas</h1>
-        <ExportButtons title="Arus_Kas" />
-        </div>
-        <p>
-          Periode: {startDate.toLocaleDateString('id-ID')} - {endDate.toLocaleDateString('id-ID')}
-        </p>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Arus Kas" },
+        ]} />
       </div>
 
-      <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      <div className="flex items-center justify-end print:hidden">
+        <ExportButtons title="Arus Kas" />
+      </div>
 
-      {/* KPI Summary */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+      <div className="print:hidden">
+        <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      </div>
+
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Laporan Arus Kas" subtitle="Cash Flow" periodLabel={periodLabel} />
+
+      {/* KPI Summary (screen only) */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-xl font-bold text-success">
             {formatCurrency(totalInflow)}
@@ -127,12 +130,12 @@ export default async function CashFlowPage({
       </div>
 
       {/* Cash Accounts */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Akun Kas/Bank</h2>
         </div>
         <div className="p-4 px-5">
-          <DetailTable>
+          <DetailTable data-report-table="Akun Kas/Bank">
             <DetailTableHead>
               <DetailTableTh>Kode</DetailTableTh>
               <DetailTableTh>Nama Akun</DetailTableTh>
@@ -160,42 +163,40 @@ export default async function CashFlowPage({
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Arus Kas per Bulan</h2>
         </div>
         <div className="p-4 px-5">
-          <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <DetailTable>
-                <DetailTableHead>
-                  <DetailTableTh>Bulan</DetailTableTh>
-                  <DetailTableTh align="right">Penerimaan</DetailTableTh>
-                  <DetailTableTh align="right">Pengeluaran</DetailTableTh>
-                  <DetailTableTh align="right">Arus Bersih</DetailTableTh>
-                </DetailTableHead>
-                <DetailTableBody>
-                  {sortedMonths.map(([month, data]) => (
-                    <DetailTableRow key={month}>
-                      <DetailTableTd>{month}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(data.inflow)}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(data.outflow)}</DetailTableTd>
-                      <DetailTableTd align="right" className={data.inflow - data.outflow >= 0 ? "text-success" : "text-danger"}>
-                        {formatCurrency(data.inflow - data.outflow)}
-                      </DetailTableTd>
-                    </DetailTableRow>
-                  ))}
-                  {sortedMonths.length === 0 && (
-                    <DetailTableRow>
-                      <DetailTableTd colSpan={4} className="text-center">Tidak ada data arus kas pada periode ini</DetailTableTd>
-                    </DetailTableRow>
-                  )}
-                  {sortedMonths.length > 0 && (
-                    <DetailTableRow className="font-bold">
-                      <DetailTableTd>Total</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(totalInflow)}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(totalOutflow)}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(netCashFlow)}</DetailTableTd>
-                    </DetailTableRow>
-                  )}
-                </DetailTableBody>
-              </DetailTable>
-            </div>
+          <div className="overflow-x-auto">
+            <DetailTable data-report-table="Arus Kas per Bulan">
+              <DetailTableHead>
+                <DetailTableTh>Bulan</DetailTableTh>
+                <DetailTableTh align="right">Penerimaan (Rp)</DetailTableTh>
+                <DetailTableTh align="right">Pengeluaran (Rp)</DetailTableTh>
+                <DetailTableTh align="right">Arus Bersih (Rp)</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {sortedMonths.map(([month, data]) => (
+                  <DetailTableRow key={month}>
+                    <DetailTableTd>{formatPeriod(month)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(data.inflow)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(data.outflow)}</DetailTableTd>
+                    <DetailTableTd align="right" className={data.inflow - data.outflow >= 0 ? "text-success" : "text-danger"}>
+                      {formatAccounting(data.inflow - data.outflow)}
+                    </DetailTableTd>
+                  </DetailTableRow>
+                ))}
+                {sortedMonths.length === 0 && (
+                  <DetailTableRow>
+                    <DetailTableTd colSpan={4} className="text-center">Tidak ada data arus kas pada periode ini</DetailTableTd>
+                  </DetailTableRow>
+                )}
+                {sortedMonths.length > 0 && (
+                  <DetailTableRow className="font-bold border-t-2 border-default">
+                    <DetailTableTd>Total</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(totalInflow)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(totalOutflow)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(netCashFlow)}</DetailTableTd>
+                  </DetailTableRow>
+                )}
+              </DetailTableBody>
+            </DetailTable>
           </div>
         </div>
       </div>
