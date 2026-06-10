@@ -2,12 +2,13 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { Target, DollarSign, TrendingDown, BarChart3, Percent } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -117,24 +118,31 @@ export default async function BudgetVsActualPage({
     return 'text-success'
   }
 
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Anggaran vs Aktual" },
-      ]} />
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Anggaran vs Aktual" },
+        ]} />
+      </div>
 
-      <div className="flex items-center gap-2">
-        <Target size={24} />
-        <h1 className="text-2xl font-bold text-foreground">Anggaran vs Realisasi</h1>
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Budget_vs_Actual" />
       </div>
 
-      <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      <div className="print:hidden">
+        <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      </div>
+
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Anggaran vs Realisasi" subtitle="Budget vs Actual" periodLabel={periodLabel} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
             <DollarSign size={20} className="text-primary" />
@@ -174,7 +182,7 @@ export default async function BudgetVsActualPage({
       </div>
 
       {/* Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail Anggaran vs Realisasi</h2>
           <p className="text-xs text-muted-foreground">
@@ -189,7 +197,7 @@ export default async function BudgetVsActualPage({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <DetailTable>
+              <DetailTable data-report-table="Budget vs Actual">
                 <DetailTableHead>
                   <DetailTableTh>Nama Anggaran</DetailTableTh>
                   <DetailTableTh>Akun</DetailTableTh>
@@ -205,9 +213,9 @@ export default async function BudgetVsActualPage({
                       <DetailTableTd>{row.name}</DetailTableTd>
                       <DetailTableTd>{row.accountName}</DetailTableTd>
                       <DetailTableTd>{row.costCenterName}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(row.budget)}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(row.actual)}</DetailTableTd>
-                      <DetailTableTd align="right">{formatCurrency(row.variance)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccounting(row.budget)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccounting(row.actual)}</DetailTableTd>
+                      <DetailTableTd align="right">{formatAccounting(row.variance)}</DetailTableTd>
                       <DetailTableTd align="right" className={getColorClass(row.percentage)}>
                         {row.percentage.toFixed(1)}%
                       </DetailTableTd>

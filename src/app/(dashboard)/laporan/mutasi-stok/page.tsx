@@ -2,12 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { ArrowLeftRight } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
-import { PrintHeader } from "@/components/reports/print-header"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
@@ -72,21 +71,19 @@ export default async function StockMovementPage({
   const totalOut = rows.filter(r => r.impact === 'OUT').reduce((s, r) => s + r.qty, 0)
   const totalValueIn = rows.filter(r => r.impact === 'IN').reduce((s, r) => s + r.value, 0)
   const totalValueOut = rows.filter(r => r.impact === 'OUT').reduce((s, r) => s + r.value, 0)
-  const period = `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col gap-6">
-      <PrintHeader title="Laporan Mutasi Stok" period={period} />
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Mutasi Stok" },
-      ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <ArrowLeftRight size={24} />
-          <h1>Laporan Mutasi Stok</h1>
-        </div>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Mutasi Stok" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Mutasi_Stok" />
       </div>
 
@@ -106,8 +103,11 @@ export default async function StockMovementPage({
         <Button type="submit" variant="primary" size="sm">Tampilkan</Button>
       </form>
 
-      {/* KPI */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Laporan Mutasi Stok" subtitle="Stock Movement" periodLabel={periodLabel} />
+
+      {/* KPI (screen only) */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Transaksi</div>
           <div className="text-xl font-bold">{rows.length}</div>
@@ -129,7 +129,7 @@ export default async function StockMovementPage({
       </div>
 
       {/* Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail Mutasi</h2>
           <span className="text-sm text-muted-foreground">{rows.length} transaksi</span>
@@ -163,7 +163,7 @@ export default async function StockMovementPage({
                   </DetailTableTd>
                   <DetailTableTd align="right" className="text-success">{row.impact === 'IN' ? row.qty.toLocaleString('id-ID') : '-'}</DetailTableTd>
                   <DetailTableTd align="right" className="text-danger">{row.impact === 'OUT' ? row.qty.toLocaleString('id-ID') : '-'}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.value)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.value)}</DetailTableTd>
                   <DetailTableTd className="text-sm text-muted-foreground">{row.reference}</DetailTableTd>
                 </DetailTableRow>
               ))}
@@ -175,7 +175,7 @@ export default async function StockMovementPage({
                   <DetailTableTd colSpan={6}>TOTAL</DetailTableTd>
                   <DetailTableTd align="right" className="text-success">{totalIn.toLocaleString('id-ID')}</DetailTableTd>
                   <DetailTableTd align="right" className="text-danger">{totalOut.toLocaleString('id-ID')}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(totalValueIn + totalValueOut)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(totalValueIn + totalValueOut)}</DetailTableTd>
                   <DetailTableTd>{""}</DetailTableTd>
                 </DetailTableRow>
               )}

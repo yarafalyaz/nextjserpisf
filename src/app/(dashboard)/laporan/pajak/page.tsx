@@ -2,13 +2,12 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { Receipt } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
-import { PrintHeader } from "@/components/reports/print-header"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -75,28 +74,31 @@ export default async function TaxReportPage({
   const totalInputTax = inputTaxRows.reduce((s, r) => s + r.tax, 0)
 
   const netTax = totalOutputTax - totalInputTax
-  const period = `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col gap-6">
-      <PrintHeader title="Laporan Pajak (PPN)" period={period} />
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Laporan Pajak" },
-      ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <Receipt size={24} />
-          <h1>Laporan Pajak (PPN)</h1>
-        </div>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Laporan Pajak" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Laporan_Pajak" />
       </div>
 
-      <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      <div className="print:hidden">
+        <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      </div>
+
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Laporan Pajak (PPN)" periodLabel={periodLabel} />
 
       {/* KPI */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-[0.8125rem] text-muted-foreground font-medium">PPN Keluaran</div>
           <div className="text-xl font-bold">{formatCurrency(totalOutputTax)}</div>
@@ -115,7 +117,7 @@ export default async function TaxReportPage({
       </div>
 
       {/* PPN Keluaran */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">PPN KELUARAN</h2>
         </div>
@@ -134,8 +136,8 @@ export default async function TaxReportPage({
                   <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
                   <DetailTableTd className="font-mono text-sm">{row.documentNo}</DetailTableTd>
                   <DetailTableTd>{row.party}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.dpp)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.tax)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.dpp)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.tax)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               {outputTaxRows.length === 0 && (
@@ -144,8 +146,8 @@ export default async function TaxReportPage({
               {outputTaxRows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">
                   <DetailTableTd colSpan={3}>TOTAL</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(totalOutputDPP)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(totalOutputTax)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(totalOutputDPP)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(totalOutputTax)}</DetailTableTd>
                 </DetailTableRow>
               )}
             </DetailTableBody>
@@ -154,7 +156,7 @@ export default async function TaxReportPage({
       </div>
 
       {/* PPN Masukan */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">PPN MASUKAN</h2>
         </div>
@@ -173,8 +175,8 @@ export default async function TaxReportPage({
                   <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
                   <DetailTableTd className="font-mono text-sm">{row.documentNo}</DetailTableTd>
                   <DetailTableTd>{row.party}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.dpp)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.tax)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.dpp)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.tax)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               {inputTaxRows.length === 0 && (
@@ -183,8 +185,8 @@ export default async function TaxReportPage({
               {inputTaxRows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">
                   <DetailTableTd colSpan={3}>TOTAL</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(totalInputDPP)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(totalInputTax)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(totalInputDPP)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(totalInputTax)}</DetailTableTd>
                 </DetailTableRow>
               )}
             </DetailTableBody>
@@ -193,7 +195,7 @@ export default async function TaxReportPage({
       </div>
 
       {/* Summary */}
-      <div className={`bg-surface rounded-xl p-5 px-6 flex items-center justify-between shadow-sm border-2 ${netTax >= 0 ? 'border-danger' : 'border-success'}`}>
+      <div className={`bg-surface rounded-xl p-5 px-6 flex items-center justify-between shadow-sm border-2 no-break ${netTax >= 0 ? 'border-danger' : 'border-success'}`}>
         <span className="text-lg font-bold">PPN {netTax >= 0 ? 'KURANG BAYAR' : 'LEBIH BAYAR'}</span>
         <span className={`text-2xl font-bold ${netTax >= 0 ? 'text-danger' : 'text-success'}`}>{formatCurrency(Math.abs(netTax))}</span>
       </div>

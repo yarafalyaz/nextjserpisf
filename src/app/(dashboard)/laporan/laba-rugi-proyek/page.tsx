@@ -2,13 +2,12 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { FolderKanban } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
-import { PrintHeader } from "@/components/reports/print-header"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -130,28 +129,31 @@ export default async function ProjectPnLPage({
   const totalCost = rows.reduce((s, r) => s + r.totalCost, 0)
   const totalProfit = rows.reduce((s, r) => s + r.profit, 0)
   const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0
-  const period = `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col gap-6">
-      <PrintHeader title="Laba Rugi per Proyek" period={period} />
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Laba Rugi per Proyek" },
-      ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <FolderKanban size={24} />
-          <h1>Laba Rugi per Proyek / Perintah Kerja</h1>
-        </div>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Laba Rugi per Proyek" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="PnL_by_Project" />
       </div>
 
-      <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      <div className="print:hidden">
+        <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      </div>
+
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Laba Rugi per Proyek / Perintah Kerja" periodLabel={periodLabel} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Pendapatan</div>
           <div className="text-xl font-bold text-success">{formatCurrency(totalRevenue)}</div>
@@ -171,7 +173,7 @@ export default async function ProjectPnLPage({
       </div>
 
       {/* Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail per Proyek</h2>
           <span className="text-sm text-muted-foreground">{rows.length} proyek</span>
@@ -202,10 +204,10 @@ export default async function ProjectPnLPage({
                       {row.status}
                     </span>
                   </DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.revenue)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.cogs)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.expense)}</DetailTableTd>
-                  <DetailTableTd align="right" className={row.profit >= 0 ? 'text-success font-medium' : 'text-danger font-medium'}>{formatCurrency(row.profit)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.revenue)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.cogs)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.expense)}</DetailTableTd>
+                  <DetailTableTd align="right" className={row.profit >= 0 ? 'text-success font-medium' : 'text-danger font-medium'}>{formatAccounting(row.profit)}</DetailTableTd>
                   <DetailTableTd align="right" className={row.margin >= 20 ? 'text-success' : row.margin >= 0 ? 'text-warning' : 'text-danger'}>{row.margin.toFixed(1)}%</DetailTableTd>
                 </DetailTableRow>
               ))}
@@ -215,10 +217,10 @@ export default async function ProjectPnLPage({
               {rows.length > 0 && (
                 <DetailTableRow className="font-bold border-t-2 border-default">
                   <DetailTableTd colSpan={5}>TOTAL</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(totalRevenue)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(rows.reduce((s, r) => s + r.cogs, 0))}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(rows.reduce((s, r) => s + r.expense, 0))}</DetailTableTd>
-                  <DetailTableTd align="right" className={totalProfit >= 0 ? 'text-success' : 'text-danger'}>{formatCurrency(totalProfit)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(totalRevenue)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(rows.reduce((s, r) => s + r.cogs, 0))}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(rows.reduce((s, r) => s + r.expense, 0))}</DetailTableTd>
+                  <DetailTableTd align="right" className={totalProfit >= 0 ? 'text-success' : 'text-danger'}>{formatAccounting(totalProfit)}</DetailTableTd>
                   <DetailTableTd align="right">{avgMargin.toFixed(1)}%</DetailTableTd>
                 </DetailTableRow>
               )}

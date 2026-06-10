@@ -2,12 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { Package } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
-import { PrintHeader } from "@/components/reports/print-header"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
@@ -81,21 +80,19 @@ export default async function StockValuationPage({
     warehouseSummary.set(row.warehouseCode, existing)
   }
 
-  const period = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col gap-6">
-      <PrintHeader title="Valuasi Stok per Gudang" period={period} />
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Valuasi Stok" },
-      ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <Package size={24} />
-          <h1>Valuasi Stok per Gudang</h1>
-        </div>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Valuasi Stok" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Stock_Valuation" />
       </div>
 
@@ -113,8 +110,11 @@ export default async function StockValuationPage({
         <Button type="submit" variant="primary" size="sm">Filter</Button>
       </form>
 
-      {/* KPI */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Valuasi Stok per Gudang" subtitle="Stock Valuation" periodLabel={periodLabel} />
+
+      {/* KPI (screen only) */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Item</div>
           <div className="text-xl font-bold">{rows.length}</div>
@@ -135,7 +135,7 @@ export default async function StockValuationPage({
 
       {/* Per-warehouse summary */}
       {!warehouseId && warehouseSummary.size > 1 && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Ringkasan per Gudang</h2>
           </div>
@@ -153,7 +153,7 @@ export default async function StockValuationPage({
                     <DetailTableTd className="font-medium">{code} - {ws.name}</DetailTableTd>
                     <DetailTableTd align="right">{ws.items}</DetailTableTd>
                     <DetailTableTd align="right">{ws.qty.toLocaleString('id-ID')}</DetailTableTd>
-                    <DetailTableTd align="right" className="font-semibold">{formatCurrency(ws.value)}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-semibold">{formatAccounting(ws.value)}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
@@ -163,7 +163,7 @@ export default async function StockValuationPage({
       )}
 
       {/* Detail Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail Valuasi Stok</h2>
           <span className="text-sm text-muted-foreground">{rows.length} baris</span>
@@ -189,8 +189,8 @@ export default async function StockValuationPage({
                   <DetailTableTd>{row.warehouseCode}</DetailTableTd>
                   <DetailTableTd>{row.uom}</DetailTableTd>
                   <DetailTableTd align="right">{row.qty.toLocaleString('id-ID')}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(row.qty > 0 ? row.value / row.qty : 0)}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatCurrency(row.value)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(row.qty > 0 ? row.value / row.qty : 0)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               {rows.length === 0 && (
@@ -201,7 +201,7 @@ export default async function StockValuationPage({
                   <DetailTableTd colSpan={5}>TOTAL</DetailTableTd>
                   <DetailTableTd align="right">{totalQty.toLocaleString('id-ID')}</DetailTableTd>
                   <DetailTableTd align="right">-</DetailTableTd>
-                  <DetailTableTd align="right" className="text-primary">{formatCurrency(totalValue)}</DetailTableTd>
+                  <DetailTableTd align="right" className="text-primary">{formatAccounting(totalValue)}</DetailTableTd>
                 </DetailTableRow>
               )}
             </DetailTableBody>

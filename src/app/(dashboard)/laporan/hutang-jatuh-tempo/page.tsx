@@ -2,11 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatDate } from '@/lib/utils/format'
-import { FileText } from 'lucide-react'
+import { formatCurrency, formatAccounting, formatDate } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -60,20 +60,27 @@ export default async function AgingPayablesPage() {
 
   const totalOutstanding = data.reduce((sum, d) => sum + d.amount, 0)
 
+  const period = `Per ${today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Laporan", href: "/laporan" },
-  { label: "Umur Hutang" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground"><FileText size={20} /> Umur Hutang</h1>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Umur Hutang" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Aging_Payables" />
       </div>
 
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Umur Hutang" subtitle="Aging Payables" periodLabel={period} />
+
       {/* Summary Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex flex-col">
             <span className="text-[0.8125rem] text-muted-foreground font-medium">Total Belum Lunas</span>
@@ -91,9 +98,9 @@ export default async function AgingPayablesPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
         <div className="overflow-x-auto">
-          <DetailTable>
+          <DetailTable data-report-table="Aging Payables">
             <DetailTableHead>
               <DetailTableTh>Pemasok</DetailTableTh>
               <DetailTableTh>No. Tagihan</DetailTableTh>
@@ -111,7 +118,7 @@ export default async function AgingPayablesPage() {
                     <DetailTableTd className="font-medium">{row.vendorName}</DetailTableTd>
                     <DetailTableTd className="font-mono">{row.documentNo}</DetailTableTd>
                     <DetailTableTd>{formatDate(row.dueDate, { format: 'short' })}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(row.amount)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(row.amount)}</DetailTableTd>
                     <DetailTableTd align="right">{row.ageDays}</DetailTableTd>
                     <DetailTableTd><span className={`status-badge status-${row.ageDays > 90 ? 'danger' : row.ageDays > 60 ? 'warning' : 'default'}`}>{row.ageGroup}</span></DetailTableTd>
                   </DetailTableRow>

@@ -2,12 +2,12 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { Building2 } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -88,33 +88,36 @@ export default async function ProfitCenterIncomePage({
   const totalExpense = expenseItems.reduce((sum, e) => sum + e.amount, 0)
   const netIncome = totalRevenue - totalExpense
 
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Laporan", href: "/laporan" },
-  { label: "Pusat Laba" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <Building2 size={24} />
-          <h1>Laporan Laba Rugi per Pusat Laba</h1>
-        <ExportButtons title="Pusat_Laba" />
-        </div>
-        <p>
-          Periode: {startDate.toLocaleDateString('id-ID')} - {endDate.toLocaleDateString('id-ID')}
-        </p>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Pusat Laba" },
+        ]} />
       </div>
 
-      <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      <div className="flex items-center justify-end print:hidden">
+        <ExportButtons title="Pusat_Laba" />
+      </div>
+
+      <div className="print:hidden">
+        <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+      </div>
+
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Laporan Laba Rugi per Pusat Laba" periodLabel={periodLabel} />
 
       {/* Profit Centers List */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Daftar Pusat Laba</h2>
         </div>
         <div className="p-4 px-5">
-          <DetailTable>
+          <DetailTable data-report-table="Daftar Pusat Laba">
             <DetailTableHead>
               <DetailTableTh>Kode</DetailTableTh>
               <DetailTableTh>Nama</DetailTableTh>
@@ -140,7 +143,7 @@ export default async function ProfitCenterIncomePage({
       </div>
 
       {/* KPI Summary */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-xl font-bold text-success">
             {formatCurrency(totalRevenue)}
@@ -162,12 +165,12 @@ export default async function ProfitCenterIncomePage({
       </div>
 
       {/* Revenue Section */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">PENDAPATAN</h2>
         </div>
         <div className="p-4 px-5">
-          <DetailTable>
+          <DetailTable data-report-table="Pendapatan">
             <DetailTableHead>
               <DetailTableTh>Kode</DetailTableTh>
               <DetailTableTh>Nama Akun</DetailTableTh>
@@ -178,7 +181,7 @@ export default async function ProfitCenterIncomePage({
                 <DetailTableRow key={r.code}>
                   <DetailTableTd>{r.code}</DetailTableTd>
                   <DetailTableTd>{r.name}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(r.amount)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(r.amount)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               {revenueItems.length === 0 && (
@@ -186,9 +189,9 @@ export default async function ProfitCenterIncomePage({
                   <DetailTableTd colSpan={3} className="text-center">Tidak ada data pendapatan</DetailTableTd>
                 </DetailTableRow>
               )}
-              <DetailTableRow className="font-bold">
+              <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>Total Pendapatan</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(totalRevenue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalRevenue)}</DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>
@@ -196,12 +199,12 @@ export default async function ProfitCenterIncomePage({
       </div>
 
       {/* Expense Section */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">BEBAN</h2>
         </div>
         <div className="p-4 px-5">
-          <DetailTable>
+          <DetailTable data-report-table="Beban">
             <DetailTableHead>
               <DetailTableTh>Kode</DetailTableTh>
               <DetailTableTh>Nama Akun</DetailTableTh>
@@ -212,7 +215,7 @@ export default async function ProfitCenterIncomePage({
                 <DetailTableRow key={e.code}>
                   <DetailTableTd>{e.code}</DetailTableTd>
                   <DetailTableTd>{e.name}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(e.amount)}</DetailTableTd>
+                  <DetailTableTd align="right">{formatAccounting(e.amount)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               {expenseItems.length === 0 && (
@@ -220,9 +223,9 @@ export default async function ProfitCenterIncomePage({
                   <DetailTableTd colSpan={3} className="text-center">Tidak ada data beban</DetailTableTd>
                 </DetailTableRow>
               )}
-              <DetailTableRow className="font-bold">
+              <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>Total Beban</DetailTableTd>
-                <DetailTableTd align="right">{formatCurrency(totalExpense)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalExpense)}</DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>
@@ -230,7 +233,7 @@ export default async function ProfitCenterIncomePage({
       </div>
 
       {/* Net Income */}
-      <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default no-break">
         <div className={`text-xl font-bold ${netIncome >= 0 ? "text-success" : "text-danger"}`}>
           {formatCurrency(netIncome)}
         </div>

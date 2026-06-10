@@ -2,12 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { BarChart3 } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
-import { PrintHeader } from "@/components/reports/print-header"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -93,26 +92,27 @@ export default async function InventorySummaryPage() {
   }
   const categoryRows = Array.from(byCategory.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.value - a.value)
 
-  const period = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col gap-6">
-      <PrintHeader title="Ringkasan Persediaan" period={period} />
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Ringkasan Persediaan" },
-      ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <BarChart3 size={24} />
-          <h1>Ringkasan Persediaan</h1>
-        </div>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Ringkasan Persediaan" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Inventory_Summary" />
       </div>
 
-      {/* KPI */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Ringkasan Persediaan" subtitle="Inventory Summary" periodLabel={periodLabel} />
+
+      {/* KPI (screen only) */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Jenis Item</div>
           <div className="text-xl font-bold">{totalItems}</div>
@@ -132,7 +132,7 @@ export default async function InventorySummaryPage() {
       </div>
 
       {/* Per Warehouse */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">PERSEDIAAN PER GUDANG</h2>
         </div>
@@ -152,14 +152,14 @@ export default async function InventorySummaryPage() {
                   <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
                   <DetailTableTd align="right">{row.items}</DetailTableTd>
                   <DetailTableTd align="right">{row.qty.toLocaleString('id-ID')}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatCurrency(row.value)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
                 </DetailTableRow>
               ))}
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
                 <DetailTableTd align="right">{totalItems}</DetailTableTd>
                 <DetailTableTd align="right">{totalQty.toLocaleString('id-ID')}</DetailTableTd>
-                <DetailTableTd align="right" className="text-primary">{formatCurrency(totalValue)}</DetailTableTd>
+                <DetailTableTd align="right" className="text-primary">{formatAccounting(totalValue)}</DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>
@@ -167,7 +167,7 @@ export default async function InventorySummaryPage() {
       </div>
 
       {/* Per Category */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">PERSEDIAAN PER KATEGORI</h2>
         </div>
@@ -185,7 +185,7 @@ export default async function InventorySummaryPage() {
                   <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
                   <DetailTableTd align="right">{row.count}</DetailTableTd>
                   <DetailTableTd align="right">{row.qty.toLocaleString('id-ID')}</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatCurrency(row.value)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>
@@ -195,7 +195,7 @@ export default async function InventorySummaryPage() {
 
       {/* Critical Items */}
       {criticalItems.length > 0 && (
-        <div className="bg-surface rounded-xl border border-danger/30 shadow-sm overflow-hidden">
+        <div className="bg-surface rounded-xl border border-danger/30 shadow-sm overflow-hidden no-break">
           <div className="flex items-center justify-between p-4 px-5 border-b border-danger/30 bg-danger/5">
             <h2 className="text-[0.9375rem] font-semibold text-danger">ITEM KRITIS (Stok ≤ Minimum)</h2>
           </div>

@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatDate } from '@/lib/utils/format'
-import { Package } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 
 import type { Metadata } from "next"
 
@@ -63,20 +63,27 @@ export default async function AgingInventoryPage() {
 
   const totalItems = data.length
 
+  const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Laporan", href: "/laporan" },
-  { label: "Umur Persediaan" },
-]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground"><Package size={20} /> Umur Persediaan</h1>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Umur Persediaan" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Aging_Inventory" />
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6">
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Umur Persediaan" subtitle="Aging Inventory" periodLabel={periodLabel} />
+
+      {/* Summary Cards (screen only) */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex flex-col">
             <span className="text-[0.8125rem] text-muted-foreground font-medium">Total Item Aktif</span>
@@ -94,9 +101,9 @@ export default async function AgingInventoryPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
         <div className="overflow-x-auto">
-          <DetailTable>
+          <DetailTable data-report-table="Umur Persediaan">
             <DetailTableHead>
               <DetailTableTh>Nama Item</DetailTableTh>
               <DetailTableTh>SKU</DetailTableTh>

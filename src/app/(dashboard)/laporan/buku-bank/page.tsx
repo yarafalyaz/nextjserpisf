@@ -2,12 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { Landmark } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
-import { PrintHeader } from "@/components/reports/print-header"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/page-header"
@@ -96,21 +95,19 @@ export default async function BankBookPage({
   const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
   const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
   const closingBalance = rows.length > 0 ? rows[rows.length - 1].balance : openingBalance
-  const period = `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col gap-6">
-      <PrintHeader title="Buku Bank" period={period} />
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Buku Bank" },
-      ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-2">
-          <Landmark size={24} />
-          <h1>Buku Bank / Kas</h1>
-        </div>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Buku Bank" },
+        ]} />
+      </div>
+
+      <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Bank_Book" />
       </div>
 
@@ -131,15 +128,18 @@ export default async function BankBookPage({
       </form>
 
       {!accountId && (
-        <div className="bg-surface rounded-xl p-8 border border-default text-center text-muted-foreground">
+        <div className="bg-surface rounded-xl p-8 border border-default text-center text-muted-foreground print:hidden">
           Pilih rekening bank/kas untuk melihat mutasi
         </div>
       )}
 
       {accountId && selectedAccount && (
         <>
+          {/* Professional letterhead (screen + print) */}
+          <ReportLetterhead title="Buku Bank / Kas" subtitle={`${selectedAccount.code} - ${selectedAccount.name}`} periodLabel={periodLabel} />
+
           {/* KPI */}
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6 print:hidden">
             <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
               <div className="text-[0.8125rem] text-muted-foreground font-medium">Saldo Awal</div>
               <div className="text-lg font-bold">{formatCurrency(openingBalance)}</div>
@@ -159,7 +159,7 @@ export default async function BankBookPage({
           </div>
 
           {/* Mutasi Table */}
-          <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+          <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
             <div className="flex items-center justify-between p-4 px-5 border-b border-default">
               <h2 className="text-[0.9375rem] font-semibold text-foreground">Mutasi {selectedAccount.code} - {selectedAccount.name}</h2>
               <span className="text-sm text-muted-foreground">{rows.length} transaksi</span>
@@ -182,16 +182,16 @@ export default async function BankBookPage({
                     <DetailTableTd className="font-medium">Saldo Awal</DetailTableTd>
                     <DetailTableTd align="right">-</DetailTableTd>
                     <DetailTableTd align="right">-</DetailTableTd>
-                    <DetailTableTd align="right" className="font-medium">{formatCurrency(openingBalance)}</DetailTableTd>
+                    <DetailTableTd align="right" className="font-medium">{formatAccounting(openingBalance)}</DetailTableTd>
                   </DetailTableRow>
                   {rows.map((row, i) => (
                     <DetailTableRow key={i}>
                       <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>
                       <DetailTableTd className="font-mono text-sm">{row.journalNumber}</DetailTableTd>
                       <DetailTableTd>{row.description}</DetailTableTd>
-                      <DetailTableTd align="right" className="text-success">{row.debit > 0 ? formatCurrency(row.debit) : '-'}</DetailTableTd>
-                      <DetailTableTd align="right" className="text-danger">{row.credit > 0 ? formatCurrency(row.credit) : '-'}</DetailTableTd>
-                      <DetailTableTd align="right" className="font-medium">{formatCurrency(row.balance)}</DetailTableTd>
+                      <DetailTableTd align="right" className="text-success">{row.debit > 0 ? formatAccounting(row.debit) : '-'}</DetailTableTd>
+                      <DetailTableTd align="right" className="text-danger">{row.credit > 0 ? formatAccounting(row.credit) : '-'}</DetailTableTd>
+                      <DetailTableTd align="right" className="font-medium">{formatAccounting(row.balance)}</DetailTableTd>
                     </DetailTableRow>
                   ))}
                   {rows.length === 0 && (
@@ -199,9 +199,9 @@ export default async function BankBookPage({
                   )}
                   <DetailTableRow className="font-bold border-t-2 border-default">
                     <DetailTableTd colSpan={3}>TOTAL / SALDO AKHIR</DetailTableTd>
-                    <DetailTableTd align="right" className="text-success">{formatCurrency(totalDebit)}</DetailTableTd>
-                    <DetailTableTd align="right" className="text-danger">{formatCurrency(totalCredit)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(closingBalance)}</DetailTableTd>
+                    <DetailTableTd align="right" className="text-success">{formatAccounting(totalDebit)}</DetailTableTd>
+                    <DetailTableTd align="right" className="text-danger">{formatAccounting(totalCredit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(closingBalance)}</DetailTableTd>
                   </DetailTableRow>
                 </DetailTableBody>
               </DetailTable>
