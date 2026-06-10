@@ -90,6 +90,13 @@ export async function createUser(formData: FormData) {
       return { error: "Nama, email, dan password wajib diisi" }
     }
 
+    // Enforce the same minimum-length policy as changePassword (min 8), so a
+    // user can't be created with a password weaker than they're allowed to
+    // change it to later.
+    if (password.length < 8) {
+      return { error: "Password minimal 8 karakter" }
+    }
+
     const hashedPassword = await bcrypt.hash(password, 12)
 
     // Use try/catch on create to handle race condition (duplicate email)
