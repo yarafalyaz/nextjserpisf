@@ -24,7 +24,11 @@ export default async function AgingReceivablesPage() {
 
   const invoices = await prisma.salesInvoice.findMany({
     where: {
-      status: { notIn: ['paid', 'cancelled'] },
+      // Exclude draft invoices: a draft is not yet a real receivable (not posted
+      // to AR/GL), so counting it would inflate aging vs the trial-balance AR
+      // account. Mirrors the AP aging report (hutang-jatuh-tempo), which already
+      // excludes draft bills.
+      status: { notIn: ['draft', 'paid', 'cancelled'] },
       dueDate: { not: null },
     },
     include: { customer: true },
