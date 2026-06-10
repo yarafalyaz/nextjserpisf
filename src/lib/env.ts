@@ -17,6 +17,9 @@ const serverSchema = z.object({
   R2_BUCKET: z.string().optional(),
   ACCUMULATED_DEPRECIATION_ACCOUNT_ID: z.coerce.number().optional(),
   DEPRECIATION_EXPENSE_ACCOUNT_ID: z.coerce.number().optional(),
+  FIXED_ASSET_ACCOUNT_ID: z.coerce.number().optional(),
+  ASSET_CASH_ACCOUNT_ID: z.coerce.number().optional(),
+  ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID: z.coerce.number().optional(),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 })
 
