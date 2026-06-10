@@ -59,7 +59,6 @@ async function resolveWorkSchedule(employeeId: number | null | undefined, depart
 // ==================== ATTENDANCE ACTIONS ====================
 
 export async function checkIn(employeeId: number, latitude?: number, longitude?: number) {
-  try {
   await requirePermission("create_attendance")
 
   const now = new Date()
@@ -102,6 +101,10 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
     throw new Error("Anda sedang dalam masa cuti. Tidak dapat check-in.")
   }
 
+  // Atomic create — if two requests race past the findFirst above, the second
+  // hits the @@unique([employeeId, date]) constraint and gets P2002; translate
+  // it to the same friendly message so both callers get a clean error.
+
   const schedule = await resolveWorkSchedule(employeeId, employee.departmentId, dayOfWeek)
   const startTime = schedule?.startTime ?? "08:00"
   const tolerance = schedule?.lateToleranceMinutes ?? 0
@@ -111,24 +114,27 @@ export async function checkIn(employeeId: number, latitude?: number, longitude?:
   const isLate = !isOvertimeDay && nowMinutes > deadlineMinutes
   const lateMinutes = isLate ? nowMinutes - deadlineMinutes : 0
 
-  const attendance = await prisma.attendance.create({
-    data: {
-      employeeId,
-      date: today,
-      checkIn: now,
-      status: isOvertimeDay ? "overtime" : isLate ? "late" : "present",
-      lateMinutes,
-      checkInLatitude: latitude ?? null,
-      checkInLongitude: longitude ?? null,
-    },
-  })
+  try {
+    const attendance = await prisma.attendance.create({
+      data: {
+        employeeId,
+        date: today,
+        checkIn: now,
+        status: isOvertimeDay ? "overtime" : isLate ? "late" : "present",
+        lateMinutes,
+        checkInLatitude: latitude ?? null,
+        checkInLongitude: longitude ?? null,
+      },
+    })
 
-  await logActivity("checkin", "Attendance", attendance.id, "Check-in absensi")
-  revalidatePath("/sdm/absensi")
-  return { success: true, id: attendance.id }
-
+    await logActivity("checkin", "Attendance", attendance.id, "Check-in absensi")
+    revalidatePath("/sdm/absensi")
+    return { success: true, id: attendance.id }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    if (typeof e === "object" && e !== null && "code" in e && (e as { code: string }).code === "P2002") {
+      throw new Error("Sudah check-in hari ini")
+    }
     console.error("[checkIn]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }

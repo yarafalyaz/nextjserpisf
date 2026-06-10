@@ -9,7 +9,11 @@ import { timingSafeEqual } from "node:crypto"
  * timing side-channel on byte-by-byte string comparison.
  */
 export function isValidCronRequest(request: Request): boolean {
-  const secret = process.env.CRON_SECRET
+  // CRON_CREDENTIAL is the env var name used in production deployment and the
+  // admin settings UI; CRON_SECRET is the simpler name for local/dev. Accept
+  // both so the UI and route handlers always agree, regardless of which name
+  // the operator chose to set.
+  const secret = process.env.CRON_SECRET || process.env["CRON_CREDENTIAL"]
   if (!secret) return false
 
   const header = request.headers.get("authorization")

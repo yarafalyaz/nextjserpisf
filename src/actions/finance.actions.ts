@@ -911,12 +911,34 @@ export async function reverseJournal(journalId: number) {
     throw new Error("Hanya journal yang sudah POSTED yang bisa di-reverse")
   }
 
+  // Atomic conditional claim — serialize concurrent reverse requests so only one
+  // reversal journal is created; duplicates get a clean error instead of
+  // corrupting the GL with two reversals.
+  const claim = await prisma.journal.updateMany({
+    where: { id: journalId, status: "POSTED" },
+    data: { status: "REVERSING" },
+  })
+  if (claim.count === 0) {
+    const current = await prisma.journal.findUnique({
+      where: { id: journalId },
+      select: { status: true },
+    })
+    throw new Error(
+      current?.status === "REVERSED"
+        ? "Jurnal sudah pernah dibalik"
+        : current
+          ? `Jurnal tidak bisa dibalik (status: ${current.status})`
+          : "Jurnal tidak ditemukan"
+    )
+  }
+
   // Cannot reverse a journal that belongs to a closed period
   await assertPeriodOpen(journal.transactionDate)
 
   const documentNo = await generateDocumentNumber("JRN-RV")
 
-  await prisma.$transaction(async (tx) => {
+  try {
+    await prisma.$transaction(async (tx) => {
     const reversalJournal = await tx.journal.create({
       data: {
         journalNumber: documentNo,
@@ -949,7 +971,16 @@ export async function reverseJournal(journalId: number) {
       where: { id: journalId },
       data: { status: "REVERSED" },
     })
-  })
+    })
+  } catch (e) {
+    // Tx failed after the claim flipped status to REVERSING — roll back the
+    // claim so the journal can be retried instead of being stuck in limbo.
+    await prisma.journal.updateMany({
+      where: { id: journalId, status: "REVERSING" },
+      data: { status: "POSTED" },
+    })
+    throw e
+  }
 
   await logActivity("reverse", "Journal", journalId, "Membalik jurnal")
   revalidatePath("/keuangan/jurnal")

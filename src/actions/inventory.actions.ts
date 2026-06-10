@@ -83,10 +83,30 @@ export async function processStockAdjustment(adjustmentId: number) {
     throw new Error("Adjustment hanya bisa diproses dari status draft")
   }
 
+  // Atomic conditional claim — serialize concurrent process requests so only
+  // one caller creates stock moves and journal; duplicates get a clean error
+  // instead of silently doubling stock movement.
+  const claim = await prisma.stockAdjustment.updateMany({
+    where: { id: adjustmentId, status: "draft" },
+    data: { status: "processing" },
+  })
+  if (claim.count === 0) {
+    // Either already processed by another request or not in draft status.
+    const current = await prisma.stockAdjustment.findUnique({
+      where: { id: adjustmentId },
+      select: { status: true },
+    })
+    throw new Error(
+      current
+        ? `Penyesuaian stok sudah berstatus ${current.status}`
+        : "Penyesuaian stok tidak ditemukan"
+    )
+  }
+
   // Create Stock Moves IN/OUT per item
   await onStockAdjustmentStock(adjustmentId, Number(user.id))
 
-  // Update status
+  // Update status from processing → processed
   await prisma.stockAdjustment.update({
     where: { id: adjustmentId },
     data: { status: "processed" },
@@ -164,6 +184,25 @@ export async function processInventoryTransfer(transferId: number) {
     throw new Error("Transfer hanya bisa diproses dari status draft")
   }
 
+  // Atomic conditional claim — serialize concurrent process requests; only one
+  // caller creates OUT stock moves; duplicates get a clean error instead of
+  // silently doubling the outbound movement.
+  const claim = await prisma.inventoryTransfer.updateMany({
+    where: { id: transferId, status: "draft" },
+    data: { status: "processing" },
+  })
+  if (claim.count === 0) {
+    const current = await prisma.inventoryTransfer.findUnique({
+      where: { id: transferId },
+      select: { status: true },
+    })
+    throw new Error(
+      current
+        ? `Transfer sudah berstatus ${current.status}`
+        : "Transfer tidak ditemukan"
+    )
+  }
+
   // Hook creates OUT stock moves (idempotent); action owns status processed.
   await onInventoryTransferProcessed(transferId, Number(user.id))
 
@@ -194,6 +233,25 @@ export async function receiveInventoryTransfer(transferId: number) {
 
   if (transfer.status !== "processed") {
     throw new Error("Transfer hanya bisa di-receive dari status processed")
+  }
+
+  // Atomic conditional claim — serialize concurrent receive requests; only one
+  // caller creates IN stock moves; duplicates get a clean error instead of
+  // silently doubling the inbound movement.
+  const claim = await prisma.inventoryTransfer.updateMany({
+    where: { id: transferId, status: "processed" },
+    data: { status: "receiving" },
+  })
+  if (claim.count === 0) {
+    const current = await prisma.inventoryTransfer.findUnique({
+      where: { id: transferId },
+      select: { status: true },
+    })
+    throw new Error(
+      current
+        ? `Transfer sudah berstatus ${current.status}`
+        : "Transfer tidak ditemukan"
+    )
   }
 
   // Hook creates IN stock moves/layers (idempotent); action owns status received.
@@ -277,6 +335,24 @@ export async function completeMaterialIssue(issueId: number) {
 
   if (issue.status !== "draft") {
     throw new Error("Material Issue hanya bisa di-complete dari status draft")
+  }
+
+  // Atomic conditional claim — serialize concurrent complete requests so only one
+  // caller triggers stock moves and journal; duplicates get a clean error.
+  const claim = await prisma.materialIssue.updateMany({
+    where: { id: issueId, status: "draft" },
+    data: { status: "processing" },
+  })
+  if (claim.count === 0) {
+    const current = await prisma.materialIssue.findUnique({
+      where: { id: issueId },
+      select: { status: true },
+    })
+    throw new Error(
+      current
+        ? `Material Issue sudah berstatus ${current.status}`
+        : "Material Issue tidak ditemukan"
+    )
   }
 
   // Hook creates stock moves, qty updates, journal, and sets status → completed (idempotent).

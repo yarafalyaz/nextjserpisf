@@ -1562,9 +1562,21 @@ export async function updateAccount(id: number, formData: FormData) {
   try {
   await requirePermission("edit_accounts")
 
-  let code = (formData.get("code") as string) || null
-  if (!code) {
-    code = await generateDocumentNumber("ACC", "simple")
+  // Account code is an accounting identifier; silently regenerating it when the
+  // user clears the field would corrupt the audit trail and break references
+  // to this account in historical journal entries. Read the current code from
+  // the DB and preserve it if the form sent nothing usable.
+  const submittedCode = (formData.get("code") as string)?.trim()
+  let code: string
+  if (!submittedCode) {
+    const current = await prisma.account.findUnique({
+      where: { id },
+      select: { code: true },
+    })
+    if (!current) throw new Error("Akun tidak ditemukan")
+    code = current.code
+  } else {
+    code = submittedCode
   }
 
   const account = await prisma.account.update({
