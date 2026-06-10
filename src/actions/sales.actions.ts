@@ -1167,15 +1167,17 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
             qty: item.qty,
             unitPrice: item.unitPrice,
             discount: item.discount ?? 0,
-            total: (item.qty * item.unitPrice) - (item.discount ?? 0),
+            total: Math.max(0, (item.qty * item.unitPrice) - (item.discount ?? 0)),
             uom: item.uom || null,
             serialNumbers: item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
           })),
         })
       }
 
-      // Recalculate totals
-      const subtotal = items.reduce((sum, item) => sum + (item.qty * item.unitPrice) - (item.discount ?? 0), 0)
+      // Recalculate totals. Clamp each line to >= 0 so a flat discount larger
+      // than the line subtotal can't drive the stored total/subtotal (and the
+      // posted AR/revenue GL) negative. Mirrors the quotation computeLine clamp.
+      const subtotal = items.reduce((sum, item) => sum + Math.max(0, (item.qty * item.unitPrice) - (item.discount ?? 0)), 0)
       const taxRate = formData.get("taxRate") ? Number(formData.get("taxRate")) : 0
       const discountTotal = formData.get("discount") ? Number(formData.get("discount")) : 0
       const taxAmount = Math.round((subtotal - discountTotal) * taxRate / 100)
