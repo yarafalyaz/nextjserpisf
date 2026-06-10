@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
+import { canAccessAttachment } from "@/lib/auth/attachment-permissions"
 import { readFile, stat } from "fs/promises"
 import path from "path"
 
@@ -36,6 +37,13 @@ export async function GET(
     if (seg === ".." || seg.includes("/") || seg.includes("\\")) {
       return NextResponse.json({ error: "Invalid path" }, { status: 400 })
     }
+  }
+
+  // Resource-level authz: the first segment is the referenceType. Being logged
+  // in is not enough — the caller must be allowed to view that document type
+  // (closes IDOR — reading any attachment file by guessing its path).
+  if (!(await canAccessAttachment(segments[0]))) {
+    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
   }
 
   const relativePath = segments.join("/")

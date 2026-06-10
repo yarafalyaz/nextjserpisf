@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
+import { canAccessAttachment } from "@/lib/auth/attachment-permissions"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
@@ -71,6 +72,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Tipe referensi tidak valid" }, { status: 400 })
   }
 
+  // Resource-level authz: must be allowed to view this document type, not just
+  // be logged in (closes IDOR — attaching files to any document by id).
+  if (!(await canAccessAttachment(safeRefType))) {
+    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+  }
+
   // Save to private/uploads/attachments/{referenceType} (NOT public/ — served via authenticated route)
   const uploadDir = path.join(process.cwd(), "private", "uploads", "attachments", safeRefType)
   await mkdir(uploadDir, { recursive: true })
@@ -136,6 +143,12 @@ export async function GET(req: NextRequest) {
   ]
   if (!allowedRefTypes.includes(referenceType)) {
     return NextResponse.json({ error: "Tipe referensi tidak valid" }, { status: 400 })
+  }
+
+  // Resource-level authz: must be allowed to view this document type, not just
+  // be logged in (closes IDOR — listing attachment metadata of any document).
+  if (!(await canAccessAttachment(referenceType))) {
+    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
   }
 
   if (!/^\d+$/.test(referenceId)) {
