@@ -99,6 +99,57 @@ describe("updateSystemSettingsSchema", () => {
   })
 })
 
+describe("updateSystemSettingsSchema — payroll/geofence/fiscal bounds", () => {
+  it("rejects a negative latePenaltyPerMinute (would turn a penalty into a salary bonus)", () => {
+    expect(
+      updateSystemSettingsSchema.safeParse({ latePenaltyPerMinute: -100 }).success,
+    ).toBe(false)
+    expect(
+      updateSystemSettingsSchema.safeParse({ latePenaltyPerMinute: 100 }).success,
+    ).toBe(true)
+  })
+
+  it("rejects a negative overtime multiplier/coefficient (would flip overtime into a deduction)", () => {
+    expect(updateSystemSettingsSchema.safeParse({ overtimeMultiplier: -1 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ overtimeCoefficient: -0.5 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ overtimeMultiplier: 2 }).success).toBe(true)
+  })
+
+  it("rejects a negative attendance radius (would break geofencing)", () => {
+    expect(updateSystemSettingsSchema.safeParse({ attendanceRadiusKm: -1 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ attendanceRadiusKm: 0 }).success).toBe(true)
+  })
+
+  it("bounds fiscalYearStartMonth to 1..12", () => {
+    expect(updateSystemSettingsSchema.safeParse({ fiscalYearStartMonth: 0 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ fiscalYearStartMonth: 13 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ fiscalYearStartMonth: 1 }).success).toBe(true)
+    expect(updateSystemSettingsSchema.safeParse({ fiscalYearStartMonth: 12 }).success).toBe(true)
+  })
+
+  it("bounds payrollCutoffDay to 1..31", () => {
+    expect(updateSystemSettingsSchema.safeParse({ payrollCutoffDay: 0 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ payrollCutoffDay: 32 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ payrollCutoffDay: 25 }).success).toBe(true)
+  })
+
+  it("rejects a negative maxLatePenaltyMinutes", () => {
+    expect(updateSystemSettingsSchema.safeParse({ maxLatePenaltyMinutes: -5 }).success).toBe(false)
+    expect(updateSystemSettingsSchema.safeParse({ maxLatePenaltyMinutes: 60 }).success).toBe(true)
+  })
+
+  it("still allows null for the bounded numeric fields (unset)", () => {
+    const result = updateSystemSettingsSchema.parse({
+      fiscalYearStartMonth: null,
+      latePenaltyPerMinute: null,
+      attendanceRadiusKm: null,
+      payrollCutoffDay: null,
+    })
+    expect(result.fiscalYearStartMonth).toBeNull()
+    expect(result.latePenaltyPerMinute).toBeNull()
+  })
+})
+
 describe("updateStorageSettingsSchema", () => {
   it("defaults storageDriver to 'local' when omitted", () => {
     const result = updateStorageSettingsSchema.parse({})

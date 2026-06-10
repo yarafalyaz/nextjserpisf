@@ -12,6 +12,20 @@ const optionalInt = () =>
 const optionalDecimal = () =>
   z.coerce.number().nullable().optional()
 
+// Bounded numeric helpers for settings that feed payroll / geofence / fiscal
+// logic. Without bounds a negative latePenaltyPerMinute turns a late penalty
+// into a salary BONUS, a negative overtime multiplier flips overtime into a
+// deduction, an out-of-range fiscalYearStartMonth/payrollCutoffDay corrupts
+// period logic, and a negative radius breaks attendance geofencing.
+const boundedInt = (min: number, max: number) =>
+  z.coerce.number().int().min(min).max(max).nullable().optional()
+
+const nonNegativeDecimal = () =>
+  z.coerce.number().min(0).nullable().optional()
+
+const nonNegativeInt = () =>
+  z.coerce.number().int().min(0).nullable().optional()
+
 const optionalBool = () =>
   z.boolean().optional()
 
@@ -36,7 +50,7 @@ export const updateSystemSettingsSchema = z.object({
 
   // General
   costingMethod: optionalString(50),
-  fiscalYearStartMonth: optionalInt(),
+  fiscalYearStartMonth: boundedInt(1, 12),
   currencyCode: optionalString(10),
   currencySymbol: optionalString(10),
   currencyLocale: optionalString(20),
@@ -97,18 +111,18 @@ export const updateSystemSettingsSchema = z.object({
   stockMovementPrefix: optionalString(50),
 
   // Overtime
-  overtimeMultiplier: optionalDecimal(),
-  overtimeCoefficient: optionalDecimal(),
+  overtimeMultiplier: nonNegativeDecimal(),
+  overtimeCoefficient: nonNegativeDecimal(),
   overtimeMealBreakStart: optionalString(10),
   overtimeMealBreakEnd: optionalString(10),
   restBreakStart: optionalString(10),
   restBreakEnd: optionalString(10),
 
   // Attendance
-  attendanceRadiusKm: optionalDecimal(),
-  latePenaltyPerMinute: optionalDecimal(),
-  maxLatePenaltyMinutes: optionalInt(),
-  payrollCutoffDay: optionalInt(),
+  attendanceRadiusKm: nonNegativeDecimal(),
+  latePenaltyPerMinute: nonNegativeDecimal(),
+  maxLatePenaltyMinutes: nonNegativeInt(),
+  payrollCutoffDay: boundedInt(1, 31),
 
   // Quotation
   quotationFooterNotes: optionalNullString(2000),
