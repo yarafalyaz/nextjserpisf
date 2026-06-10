@@ -457,29 +457,37 @@ export async function createDownPayment(formData: FormData) {
     throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
   }
 
-  // Cumulative cap: sum existing non-cancelled DPs must not exceed grandTotal
-  const existingDPs = await prisma.downPayment.aggregate({
-    where: { quotationId, status: { not: "cancelled" } },
-    _sum: { amount: true },
-  })
-  const totalExisting = Number(existingDPs._sum.amount ?? 0)
-  if (totalExisting + amount > Number(quotation.grandTotal)) {
-    throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalExisting})`)
-  }
+  // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
+  // two concurrent DP creations on the same quotation can't each pass the cap
+  // check (TOCTOU) and together over-pay the quotation grandTotal. Mirrors the
+  // convertQuotationToOrder / createVendorBill lock pattern. The GL hook runs
+  // after commit (onDownPaymentReceived opens its own tx and is idempotent).
+  const dp = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
-  const dp = await prisma.downPayment.create({
-    data: {
-      documentNo,
-      quotationId,
-      customerId: quotation.customerId,
-      amount,
-      paymentDate: new Date(v.paymentDate),
-      paymentMethod: v.paymentMethod ?? null,
-      proofImage,
-      notes: v.notes ?? null,
-      status: "draft",
-      createdBy: Number(user.id),
-    },
+    const existingDPs = await tx.downPayment.aggregate({
+      where: { quotationId, status: { not: "cancelled" } },
+      _sum: { amount: true },
+    })
+    const totalExisting = Number(existingDPs._sum.amount ?? 0)
+    if (totalExisting + amount > Number(quotation.grandTotal)) {
+      throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalExisting})`)
+    }
+
+    return tx.downPayment.create({
+      data: {
+        documentNo,
+        quotationId,
+        customerId: quotation.customerId,
+        amount,
+        paymentDate: new Date(v.paymentDate),
+        paymentMethod: v.paymentMethod ?? null,
+        proofImage,
+        notes: v.notes ?? null,
+        status: "draft",
+        createdBy: Number(user.id),
+      },
+    })
   })
 
   await onDownPaymentReceived(dp.id, Number(user.id))
@@ -843,71 +851,77 @@ export async function createSalesReturn(formData: FormData) {
   // fall back to the item master price, then cost.
   const invoiceId = v.salesInvoiceId ?? null
   const invoicePriceMap = new Map<number, number>()
+  const invoicedQtyByItem = new Map<number, number>()
   if (invoiceId) {
     const invItems = await prisma.salesInvoiceItem.findMany({
       where: { salesInvoiceId: invoiceId, itemId: { in: returnItemIds.length ? returnItemIds : [-1] } },
       select: { itemId: true, unitPrice: true, qty: true },
     })
-    // Over-return guard: a return linked to an invoice must not return more units
-    // than were invoiced, counting prior non-cancelled returns. Without this, the
-    // return over-restocks inventory and over-credits AR. Mirrors the DP cap.
-    const invoicedQtyByItem = new Map<number, number>()
     for (const it of invItems) {
       if (it.itemId == null) continue
       invoicePriceMap.set(it.itemId, Number(it.unitPrice))
       invoicedQtyByItem.set(it.itemId, (invoicedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
     }
-
-    const priorReturns = await prisma.salesReturnItem.findMany({
-      where: {
-        salesReturn: { salesInvoiceId: invoiceId, status: { not: "cancelled" } },
-        itemId: { in: returnItemIds.length ? returnItemIds : [-1] },
-      },
-      select: { itemId: true, qty: true },
-    })
-    const alreadyReturnedByItem = new Map<number, number>()
-    for (const r of priorReturns) {
-      alreadyReturnedByItem.set(r.itemId, (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
-    }
-
-    const violation = findOverReturn(
-      validItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
-      invoicedQtyByItem,
-      alreadyReturnedByItem
-    )
-    if (violation) {
-      if (violation.type === "not_on_invoice") {
-        return { success: false, error: `Item #${violation.itemId} tidak ada pada faktur yang dipilih, tidak bisa diretur.` }
-      }
-      return {
-        success: false,
-        error:
-          `Jumlah retur item #${violation.itemId} melebihi yang difakturkan ` +
-          `(difakturkan: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
-      }
-    }
   }
   const resolvePrice = (itemId: number) =>
     invoicePriceMap.get(itemId) ?? (masterPriceMap.get(itemId) || returnCostMap.get(itemId) || 0)
 
-  const salesReturn = await prisma.salesReturn.create({
-    data: {
-      documentNo,
-      salesInvoiceId: invoiceId,
-      customerId: v.customerId,
-      date: new Date(v.date),
-      reason: v.reason ?? null,
-      status: "draft",
-      createdBy: Number(user.id),
-      items: {
-        create: validItems.map((item: any) => ({
-          itemId: Number(item.itemId),
-          qty: item.qty,
-          cost: returnCostMap.get(Number(item.itemId)) ?? 0,
-          price: resolvePrice(Number(item.itemId)),
-        })),
+  // Lock the invoice + re-run the over-return guard INSIDE the transaction so
+  // two concurrent returns against the same invoice can't each pass the cap
+  // (TOCTOU) and together over-restock inventory + over-credit AR. Mirrors the
+  // createDownPayment lock pattern. A violation throws (rolls back the no-op tx)
+  // and is surfaced by the outer catch with the same message.
+  const salesReturn = await prisma.$transaction(async (tx) => {
+    if (invoiceId) {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`
+
+      const priorReturns = await tx.salesReturnItem.findMany({
+        where: {
+          salesReturn: { salesInvoiceId: invoiceId, status: { not: "cancelled" } },
+          itemId: { in: returnItemIds.length ? returnItemIds : [-1] },
+        },
+        select: { itemId: true, qty: true },
+      })
+      const alreadyReturnedByItem = new Map<number, number>()
+      for (const r of priorReturns) {
+        alreadyReturnedByItem.set(r.itemId, (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
+      }
+
+      const violation = findOverReturn(
+        validItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+        invoicedQtyByItem,
+        alreadyReturnedByItem
+      )
+      if (violation) {
+        if (violation.type === "not_on_invoice") {
+          throw new Error(`Item #${violation.itemId} tidak ada pada faktur yang dipilih, tidak bisa diretur.`)
+        }
+        throw new Error(
+          `Jumlah retur item #${violation.itemId} melebihi yang difakturkan ` +
+          `(difakturkan: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`
+        )
+      }
+    }
+
+    return tx.salesReturn.create({
+      data: {
+        documentNo,
+        salesInvoiceId: invoiceId,
+        customerId: v.customerId,
+        date: new Date(v.date),
+        reason: v.reason ?? null,
+        status: "draft",
+        createdBy: Number(user.id),
+        items: {
+          create: validItems.map((item: any) => ({
+            itemId: Number(item.itemId),
+            qty: item.qty,
+            cost: returnCostMap.get(Number(item.itemId)) ?? 0,
+            price: resolvePrice(Number(item.itemId)),
+          })),
+        },
       },
-    },
+    })
   })
 
   // Notify admins
