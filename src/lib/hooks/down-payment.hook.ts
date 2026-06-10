@@ -58,8 +58,17 @@ export async function onDownPaymentConfirmed(
       },
     });
 
-    // Guard: already confirmed — silent skip (idempotency)
+    // Guard: already confirmed — silent skip (idempotency).
+    // Recovery: if a prior confirm committed the invoice but the process died
+    // before the post-commit onSalesInvoicePosted call (revenue/COGS/stock-out),
+    // re-capture the invoice id so the idempotent posting hook below completes
+    // it on retry instead of leaving a "posted" invoice with no GL revenue.
     if (dp.status === SalesStatus.CONFIRMED) {
+      const orphanInv = await tx.salesInvoice.findFirst({
+        where: { quotationId: dp.quotationId },
+        select: { id: true },
+      });
+      postedInvoiceId = orphanInv?.id ?? null;
       return;
     }
 
