@@ -16,6 +16,7 @@ import {
   assetDisposalSchema,
 } from "@/lib/validations/asset.schemas"
 import { Prisma } from "@prisma/client"
+import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal"
 
 // ==================== ASSET GL HELPERS ====================
 // Asset GL accounts are configured via environment variables, mirroring the
@@ -527,7 +528,6 @@ export async function disposeAsset(formData: FormData) {
 
   const grossCost = Number(asset.purchaseCost)
   const bookValue = Number(asset.currentValue)
-  const accumulatedDep = grossCost - bookValue // depreciation booked so far
   const gainLoss = proceeds - bookValue // positive = gain, negative = loss
   const gl = getAssetGlAccounts()
 
@@ -566,31 +566,18 @@ export async function disposeAsset(formData: FormData) {
       gl.gainLoss &&
       (proceeds === 0 || gl.cashBank)
     ) {
-      const round = (n: number) => new Prisma.Decimal(n.toFixed(2))
-      const entries: { accountId: number; debit: Prisma.Decimal; credit: Prisma.Decimal; memo: string }[] = []
+      // Pure helper builds the balanced double-entry set (unit-tested across
+      // gain/loss/break-even/write-off branches) and asserts balance itself.
+      const built = buildAssetDisposalEntries({
+        grossCost,
+        bookValue,
+        proceeds,
+        assetName: asset.name,
+        accounts: gl,
+      })
 
-      if (proceeds > 0) {
-        entries.push({ accountId: gl.cashBank, debit: round(proceeds), credit: round(0), memo: `Hasil pelepasan - ${asset.name}` })
-      }
-      if (accumulatedDep > 0) {
-        entries.push({ accountId: gl.accumDep, debit: round(accumulatedDep), credit: round(0), memo: `Penghapusan akumulasi penyusutan - ${asset.name}` })
-      }
-      // Remove the asset at gross cost.
-      entries.push({ accountId: gl.fixedAsset, debit: round(0), credit: round(grossCost), memo: `Penghapusan aset tetap - ${asset.name}` })
-      // Residual gain (credit) or loss (debit).
-      if (gainLoss > 0) {
-        entries.push({ accountId: gl.gainLoss, debit: round(0), credit: round(gainLoss), memo: `Laba pelepasan - ${asset.name}` })
-      } else if (gainLoss < 0) {
-        entries.push({ accountId: gl.gainLoss, debit: round(-gainLoss), credit: round(0), memo: `Rugi pelepasan - ${asset.name}` })
-      }
-
-      const totalDebit = entries.reduce((s, e) => s + Number(e.debit), 0)
-      const totalCredit = entries.reduce((s, e) => s + Number(e.credit), 0)
-      // Defense-in-depth: this hook writes journal rows directly (not via
-      // JournalService), so assert balance before persisting.
-      if (Math.abs(totalDebit - totalCredit) > 0.01) {
-        throw new Error(`Jurnal pelepasan aset tidak balance: D=${totalDebit} K=${totalCredit}`)
-      }
+      const totalDebit = built.reduce((s, e) => s + e.debit, 0)
+      const totalCredit = built.reduce((s, e) => s + e.credit, 0)
 
       const journalNumber = await nextAssetJournalNumber(tx, disposalDate)
       await tx.journal.create({
@@ -602,9 +589,16 @@ export async function disposeAsset(formData: FormData) {
           description: `Pelepasan aset: ${asset.name} (${asset.code})`,
           type: "ASSET_DISPOSAL",
           status: "POSTED",
-          totalDebit: round(totalDebit),
-          totalCredit: round(totalCredit),
-          entries: { create: entries },
+          totalDebit: new Prisma.Decimal(totalDebit.toFixed(2)),
+          totalCredit: new Prisma.Decimal(totalCredit.toFixed(2)),
+          entries: {
+            create: built.map((e) => ({
+              accountId: e.accountId,
+              debit: new Prisma.Decimal(e.debit.toFixed(2)),
+              credit: new Prisma.Decimal(e.credit.toFixed(2)),
+              memo: e.memo,
+            })),
+          },
         },
       })
     }
