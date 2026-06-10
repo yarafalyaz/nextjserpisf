@@ -55,6 +55,12 @@ export async function onGoodsReceiptVerified(
 
     // ─── 2. Update PO status ─────────────────────────────────────────────
     if (goodsReceipt.purchaseOrderId) {
+      // Lock the PO row so two GR verifications on the SAME PO serialize.
+      // Each GR locks only its own row above, so without this two concurrent
+      // verifies each compute cumulative received excluding the other and both
+      // could slip past the over-receipt guard below.
+      await tx.$queryRaw`SELECT id FROM purchase_orders WHERE id = ${goodsReceipt.purchaseOrderId} FOR UPDATE`;
+
       // Check if all items in PO have been received
       const poItems = await tx.purchaseOrderItem.findMany({
         where: { purchaseOrderId: goodsReceipt.purchaseOrderId },
@@ -82,6 +88,27 @@ export async function onGoodsReceiptVerified(
       for (const item of goodsReceipt.items) {
         const current = receivedMap.get(item.itemId) ?? 0;
         receivedMap.set(item.itemId, current + Number(item.qty));
+      }
+
+      // Over-receipt guard: cumulative received qty must not exceed the ordered
+      // qty on the PO. The PO is the contract; over-delivery is handled by
+      // editing the PO, not by silently inflating inventory (which also raises
+      // the 3-way-match bill ceiling and lets the vendor over-bill). Hard cap
+      // with no tolerance, mirroring findOverReturn's qty guard (the value-based
+      // 3-way match keeps its rounding tolerance; a qty count does not).
+      // PurchaseOrderItem.receivedQty is a dead column (never written), so
+      // cumulative received is summed from verified GR items here. Comparison
+      // uses the same raw-qty convention as the allReceived check below (no UoM
+      // conversion), staying consistent with the existing PO-status logic.
+      for (const poItem of poItems) {
+        const received = receivedMap.get(poItem.itemId) ?? 0;
+        if (received > Number(poItem.qty)) {
+          throw new Error(
+            `Penerimaan melebihi pesanan untuk item #${poItem.itemId}: ` +
+            `diterima kumulatif ${received} melebihi dipesan ${Number(poItem.qty)}. ` +
+            `Sesuaikan qty penerimaan atau ubah PO.`
+          );
+        }
       }
 
       // Determine if fully received
