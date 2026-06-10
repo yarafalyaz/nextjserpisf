@@ -46,7 +46,10 @@ export default async function StockMovementPage({
       item: { select: { sku: true, name: true, unitOfMeasure: true } },
       warehouse: { select: { code: true, name: true } },
     },
-    orderBy: { date: 'asc' },
+    // Stable secondary sort so same-day rows render in a consistent order across
+    // refreshes (this report has no running balance, so totals are unaffected;
+    // this is display determinism only, matching buku-besar/buku-bank).
+    orderBy: [{ date: 'asc' }, { id: 'asc' }],
   })
 
   const rows = moves.map(m => ({
