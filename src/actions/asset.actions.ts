@@ -15,6 +15,34 @@ import {
   assetSchema,
   assetDisposalSchema,
 } from "@/lib/validations/asset.schemas"
+import { Prisma } from "@prisma/client"
+
+// ==================== ASSET GL HELPERS ====================
+// Asset GL accounts are configured via environment variables, mirroring the
+// depreciation cron (DEPRECIATION_EXPENSE_ACCOUNT_ID /
+// ACCUMULATED_DEPRECIATION_ACCOUNT_ID). When an account is unset the matching
+// journal is skipped silently, the same convention stock journaling uses.
+function getAssetGlAccounts() {
+  return {
+    fixedAsset: parseInt(process.env.FIXED_ASSET_ACCOUNT_ID || "0") || 0,
+    cashBank: parseInt(process.env.ASSET_CASH_ACCOUNT_ID || "0") || 0,
+    accumDep: parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0") || 0,
+    gainLoss: parseInt(process.env.ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID || "0") || 0,
+  }
+}
+
+// Next journal number, sharing the cron's "JOURNAL" document sequence so asset
+// acquisition/disposal numbers are contiguous with depreciation (JRN-YYYYMM-NNNNN).
+async function nextAssetJournalNumber(tx: Prisma.TransactionClient, date: Date) {
+  const seq = await tx.documentSequence.upsert({
+    where: { key: "JOURNAL" },
+    update: { currentValue: { increment: 1 } },
+    create: { key: "JOURNAL", currentValue: 1 },
+  })
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  return `JRN-${y}${m}-${String(seq.currentValue).padStart(5, "0")}`
+}
 
 // ==================== ASSET CATEGORY ACTIONS ====================
 
@@ -366,21 +394,58 @@ export async function createAsset(formData: FormData) {
   }
 
   const purchaseCost = data.purchasePrice ?? 0
-  const asset = await prisma.asset.create({
-    data: {
-      name: data.name,
-      code: code,
-      categoryId: data.categoryId ?? null,
-      purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
-      purchaseCost,
-      // Book value starts at acquisition cost so depreciation can run.
-      currentValue: purchaseCost,
-      residualValue: data.residualValue ?? 0,
-      depreciationMethod: data.depreciationMethod || "straight_line",
-      location: data.location || null,
-      status: data.status || "active",
-      notes: data.description || null,
-    },
+  const acquisitionDate = data.purchaseDate ? new Date(data.purchaseDate) : new Date()
+  const gl = getAssetGlAccounts()
+
+  const asset = await prisma.$transaction(async (tx) => {
+    const created = await tx.asset.create({
+      data: {
+        name: data.name,
+        code: code,
+        categoryId: data.categoryId ?? null,
+        purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
+        purchaseCost,
+        // Book value starts at acquisition cost so depreciation can run.
+        currentValue: purchaseCost,
+        residualValue: data.residualValue ?? 0,
+        depreciationMethod: data.depreciationMethod || "straight_line",
+        location: data.location || null,
+        status: data.status || "active",
+        notes: data.description || null,
+      },
+    })
+
+    // Post acquisition to GL: Dr Fixed Asset / Cr Cash-Bank. Skipped silently
+    // when the accounts are unconfigured (same convention as stock journaling),
+    // which keeps existing subledger-only installs unchanged. Posting on
+    // acquisition is what makes the running depreciation credits (Cr Accumulated
+    // Depreciation) have an offsetting gross asset balance on the balance sheet,
+    // and lets disposal reverse a complete, balanced asset lifecycle.
+    if (purchaseCost > 0 && gl.fixedAsset && gl.cashBank) {
+      const journalNumber = await nextAssetJournalNumber(tx, acquisitionDate)
+      const amount = new Prisma.Decimal(purchaseCost.toFixed(2))
+      await tx.journal.create({
+        data: {
+          journalNumber,
+          transactionDate: acquisitionDate,
+          referenceType: "ASSET_ACQUISITION",
+          referenceId: created.id,
+          description: `Perolehan aset: ${created.name} (${created.code})`,
+          type: "ASSET_ACQUISITION",
+          status: "POSTED",
+          totalDebit: amount,
+          totalCredit: amount,
+          entries: {
+            create: [
+              { accountId: gl.fixedAsset, debit: amount, credit: new Prisma.Decimal(0), memo: `Aset tetap - ${created.name}` },
+              { accountId: gl.cashBank, debit: new Prisma.Decimal(0), credit: amount, memo: `Pembayaran perolehan - ${created.name}` },
+            ],
+          },
+        },
+      })
+    }
+
+    return created
   })
 
   await logActivity("create", "Asset", asset.id, "Membuat aset")
@@ -431,9 +496,14 @@ export async function updateAsset(id: number, formData: FormData) {
 
 /**
  * Dispose an asset: mark it disposed, record proceeds + gain/loss in history,
- * and zero out its book value. (Asset acquisitions are tracked in the asset
- * subledger rather than posted to GL on purchase, so disposal mirrors that:
- * the running depreciation journals already moved cost to accumulated dep.)
+ * and zero out its book value.
+ *
+ * GL: when the asset carries an acquisition journal (i.e. its gross cost was
+ * posted to the Fixed Asset account), disposal reverses the full lifecycle in a
+ * balanced entry: Dr Cash (proceeds) + Dr Accumulated Depreciation + Cr Fixed
+ * Asset (gross cost), with the residual booked to Gain/Loss on Disposal. Legacy
+ * assets that predate GL integration (no acquisition journal) keep the original
+ * subledger-only behaviour so their books are not corrupted.
  */
 export async function disposeAsset(formData: FormData) {
   "use server"
@@ -455,8 +525,11 @@ export async function disposeAsset(formData: FormData) {
     throw new Error("Aset sudah dilepas (disposed)")
   }
 
+  const grossCost = Number(asset.purchaseCost)
   const bookValue = Number(asset.currentValue)
+  const accumulatedDep = grossCost - bookValue // depreciation booked so far
   const gainLoss = proceeds - bookValue // positive = gain, negative = loss
+  const gl = getAssetGlAccounts()
 
   await prisma.$transaction(async (tx) => {
     await tx.asset.update({
@@ -476,6 +549,65 @@ export async function disposeAsset(formData: FormData) {
         date: disposalDate,
       },
     })
+
+    // Only post disposal GL when the asset's gross cost was itself posted to GL
+    // (acquisition journal exists) and the disposal accounts are configured.
+    // This fail-closed guard keeps legacy subledger-only assets untouched while
+    // giving GL-integrated assets a balanced, complete disposal entry.
+    const acquisitionJournal = await tx.journal.findFirst({
+      where: { referenceType: "ASSET_ACQUISITION", referenceId: data.assetId },
+      select: { id: true },
+    })
+
+    if (
+      acquisitionJournal &&
+      gl.fixedAsset &&
+      gl.accumDep &&
+      gl.gainLoss &&
+      (proceeds === 0 || gl.cashBank)
+    ) {
+      const round = (n: number) => new Prisma.Decimal(n.toFixed(2))
+      const entries: { accountId: number; debit: Prisma.Decimal; credit: Prisma.Decimal; memo: string }[] = []
+
+      if (proceeds > 0) {
+        entries.push({ accountId: gl.cashBank, debit: round(proceeds), credit: round(0), memo: `Hasil pelepasan - ${asset.name}` })
+      }
+      if (accumulatedDep > 0) {
+        entries.push({ accountId: gl.accumDep, debit: round(accumulatedDep), credit: round(0), memo: `Penghapusan akumulasi penyusutan - ${asset.name}` })
+      }
+      // Remove the asset at gross cost.
+      entries.push({ accountId: gl.fixedAsset, debit: round(0), credit: round(grossCost), memo: `Penghapusan aset tetap - ${asset.name}` })
+      // Residual gain (credit) or loss (debit).
+      if (gainLoss > 0) {
+        entries.push({ accountId: gl.gainLoss, debit: round(0), credit: round(gainLoss), memo: `Laba pelepasan - ${asset.name}` })
+      } else if (gainLoss < 0) {
+        entries.push({ accountId: gl.gainLoss, debit: round(-gainLoss), credit: round(0), memo: `Rugi pelepasan - ${asset.name}` })
+      }
+
+      const totalDebit = entries.reduce((s, e) => s + Number(e.debit), 0)
+      const totalCredit = entries.reduce((s, e) => s + Number(e.credit), 0)
+      // Defense-in-depth: this hook writes journal rows directly (not via
+      // JournalService), so assert balance before persisting.
+      if (Math.abs(totalDebit - totalCredit) > 0.01) {
+        throw new Error(`Jurnal pelepasan aset tidak balance: D=${totalDebit} K=${totalCredit}`)
+      }
+
+      const journalNumber = await nextAssetJournalNumber(tx, disposalDate)
+      await tx.journal.create({
+        data: {
+          journalNumber,
+          transactionDate: disposalDate,
+          referenceType: "ASSET_DISPOSAL",
+          referenceId: data.assetId,
+          description: `Pelepasan aset: ${asset.name} (${asset.code})`,
+          type: "ASSET_DISPOSAL",
+          status: "POSTED",
+          totalDebit: round(totalDebit),
+          totalCredit: round(totalCredit),
+          entries: { create: entries },
+        },
+      })
+    }
   })
 
   await logActivity("dispose", "Asset", data.assetId, `Melepas aset ${asset.code} (${gainLoss >= 0 ? "laba" : "rugi"} ${Math.abs(gainLoss)})`)
