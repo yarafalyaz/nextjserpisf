@@ -9,9 +9,33 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createRoleSchema, updateRoleSchema } from "@/lib/validations/roles.schemas"
 
+// Least-privilege guard: a non-super-admin must not attach a permission they
+// don't already hold. Without this, a manage_settings holder could mint/modify
+// a role carrying manage_users / approve_workflows / etc. and escalate beyond
+// their own permission set (a privesc that bypasses the super_admin-name check,
+// since the role need not be named super_admin). super_admin bypasses.
+// Returns an error message when disallowed, otherwise null.
+async function assertCanGrantPermissions(
+  actor: { roles: string[]; permissions: string[] },
+  permissionIds: number[]
+): Promise<string | null> {
+  if (actor.roles.includes("super_admin")) return null
+  if (permissionIds.length === 0) return null
+  const requested = await prisma.permission.findMany({
+    where: { id: { in: permissionIds } },
+    select: { name: true },
+  })
+  const held = new Set(actor.permissions)
+  const missing = requested.filter((p) => !held.has(p.name)).map((p) => p.name)
+  if (missing.length > 0) {
+    return `Anda tidak dapat memberikan izin yang tidak Anda miliki: ${missing.join(", ")}`
+  }
+  return null
+}
+
 export async function createRole(formData: FormData) {
   try {
-  await requirePermission("manage_settings")
+  const actor = await requirePermission("manage_settings")
 
   const parsed = parseFormData(createRoleSchema, formData)
   if (!parsed.success) {
@@ -20,6 +44,11 @@ export async function createRole(formData: FormData) {
 
   const { name } = parsed.data
   const permissionIds = formData.getAll("permissions").map((id) => Number(id)).filter(Boolean)
+
+  const grantErr = await assertCanGrantPermissions(actor, permissionIds)
+  if (grantErr) {
+    throw new Error(grantErr)
+  }
 
   const role = await prisma.role.create({
     data: {
@@ -44,7 +73,7 @@ export async function createRole(formData: FormData) {
 
 export async function updateRole(id: number, formData: FormData) {
   try {
-  await requirePermission("manage_settings")
+  const actor = await requirePermission("manage_settings")
 
   const parsed = parseFormData(updateRoleSchema, formData)
   if (!parsed.success) {
@@ -53,6 +82,11 @@ export async function updateRole(id: number, formData: FormData) {
 
   const { name } = parsed.data
   const permissionIds = formData.getAll("permissions").map((pid) => Number(pid)).filter(Boolean)
+
+  const grantErr = await assertCanGrantPermissions(actor, permissionIds)
+  if (grantErr) {
+    throw new Error(grantErr)
+  }
 
   await prisma.role.update({
     where: { id },
