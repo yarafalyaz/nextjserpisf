@@ -1443,6 +1443,7 @@ model Payroll {
   updatedAt         DateTime  @updatedAt @map("updated_at")
   employee          Employee? @relation(fields: [employeeId], references: [id])
 
+  @@unique([employeeId, period], map: "uq_payroll_employee_period")
   @@index([employeeId], map: "payrolls_employee_id_fkey")
   @@index([status], map: "idx_payrolls_status")
   @@map("payrolls")

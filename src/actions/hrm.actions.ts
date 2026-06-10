@@ -577,36 +577,47 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
       const deductions = 0
       const netSalary = (est.baseSalary ?? 0) + allowances + (est.overtimeTotal ?? 0) + (est.appreciationTotal ?? 0) - deductions - (est.loanDeduction ?? 0) - (est.lateDeduction ?? 0) - (est.absentDeduction ?? 0) - statutory
       
-      await prisma.payroll.create({
-        data: {
-          documentNo,
-          employeeId: emp.id,
-          period,
-          startDate: new Date(startDateStr),
-          endDate: new Date(endDateStr),
-          baseSalary: est.baseSalary ?? 0,
-          allowances,
-          deductions,
-          overtimeTotal: est.overtimeTotal ?? 0,
-          appreciationTotal: est.appreciationTotal ?? 0,
-          loanDeduction: est.loanDeduction ?? 0,
-          lateDeduction: est.lateDeduction,
-          lateMinutes: est.lateMinutes,
-          workingDays: est.workingDays ?? 0,
-          presentDays: est.presentDays ?? 0,
-          absentDays: est.absentDays ?? 0,
-          absentDeduction: est.absentDeduction ?? 0,
-          grossSalary: est.grossSalary ?? 0,
-          bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
-          bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
-          pph21: est.pph21 ?? 0,
-          netSalary: netSalary,
-          totalAmount: netSalary,
-          status: "draft",
-          createdBy: Number(user.id),
+      try {
+        await prisma.payroll.create({
+          data: {
+            documentNo,
+            employeeId: emp.id,
+            period,
+            startDate: new Date(startDateStr),
+            endDate: new Date(endDateStr),
+            baseSalary: est.baseSalary ?? 0,
+            allowances,
+            deductions,
+            overtimeTotal: est.overtimeTotal ?? 0,
+            appreciationTotal: est.appreciationTotal ?? 0,
+            loanDeduction: est.loanDeduction ?? 0,
+            lateDeduction: est.lateDeduction,
+            lateMinutes: est.lateMinutes,
+            workingDays: est.workingDays ?? 0,
+            presentDays: est.presentDays ?? 0,
+            absentDays: est.absentDays ?? 0,
+            absentDeduction: est.absentDeduction ?? 0,
+            grossSalary: est.grossSalary ?? 0,
+            bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
+            bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
+            pph21: est.pph21 ?? 0,
+            netSalary: netSalary,
+            totalAmount: netSalary,
+            status: "draft",
+            createdBy: Number(user.id),
+          }
+        })
+        count++
+      } catch (err: unknown) {
+        // A concurrent batch/processPayroll won the race: the DB unique
+        // constraint (employeeId, period) rejected this duplicate. Skip this
+        // employee (already has a payroll for the period) instead of aborting
+        // the whole batch.
+        if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002") {
+          continue
         }
-      })
-      count++
+        throw err
+      }
     }
   }
 
@@ -725,6 +736,12 @@ export async function processPayroll(formData: FormData) {
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
+    // Concurrent insert won the race against the app-level idempotency check
+    // (TOCTOU): the DB unique constraint (employeeId, period) rejected the
+    // duplicate. Surface the same friendly message as the pre-check.
+    if (e && typeof e === "object" && "code" in e && (e as { code?: string }).code === "P2002") {
+      return { success: false, error: "Penggajian untuk karyawan ini pada periode tersebut sudah ada." }
+    }
     console.error("[processPayroll]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
