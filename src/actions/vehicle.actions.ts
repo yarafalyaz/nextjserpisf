@@ -334,6 +334,33 @@ export async function updateVehicle(id: number, formData: FormData) {
 export async function deleteVehicle(id: number) {
   try {
     await requirePermission("delete_vehicles")
+
+    // Integrity guard: Vehicle → CustomerVehicle is onDelete: Cascade, and the
+    // customerVehicleId on Quotation/WorkOrder/SalesOrder/SalesInvoice/Project is
+    // nullable (SetNull). A raw delete would cascade-remove the ownership link AND
+    // silently NULL the vehicle reference on every historical document, erasing
+    // service-history linkage. Refuse if any dependent record exists (mirrors
+    // deleteRole's in-use guard).
+    const links = await prisma.customerVehicle.findMany({
+      where: { vehicleId: id },
+      select: {
+        id: true,
+        _count: { select: { workOrders: true, quotations: true, projects: true } },
+      },
+    })
+    const dependents = links.reduce(
+      (sum, l) => sum + l._count.workOrders + l._count.quotations + l._count.projects,
+      0
+    )
+    if (dependents > 0) {
+      return {
+        success: false,
+        error:
+          `Kendaraan ini punya ${dependents} dokumen terkait (perintah kerja/penawaran/proyek) ` +
+          `dan tidak bisa dihapus karena akan menghilangkan riwayat servis. Nonaktifkan kepemilikan kendaraan sebagai gantinya.`,
+      }
+    }
+
     await prisma.vehicle.delete({ where: { id } })
     revalidatePath("/kendaraan")
     await logActivity("delete", "Vehicle", id, "Menghapus kendaraan")
