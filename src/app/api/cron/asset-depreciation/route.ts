@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
+import { computeMonthlyDepreciation } from "@/lib/finance/asset-depreciation"
 
 /**
  * Cron: Run monthly asset depreciation for all active assets.
@@ -77,37 +78,23 @@ export async function GET(request: Request) {
         continue
       }
 
-      const purchaseCost = Number(asset.purchaseCost)
       const currentValue = Number(asset.currentValue)
-      const residualValue = Number(asset.residualValue)
 
-      // Skip if already at/below residual value (fully depreciated)
-      const depreciableFloor = Math.max(0, residualValue)
-      if (currentValue <= depreciableFloor) { skipped++; continue }
-
-      // Calculate monthly depreciation (residual-aware, method-dependent)
-      let monthlyDepreciation = 0
-      const isDeclining = asset.depreciationMethod === "declining_balance"
-
-      if (isDeclining && category.depreciationRate) {
-        // Declining balance: currentValue * annualRate / 12 (book value method)
-        const rate = Number(category.depreciationRate) / 100
-        monthlyDepreciation = currentValue * rate / 12
-      } else if (category.usefulLife && category.usefulLife > 0) {
-        // Straight-line on depreciable base: (cost - residual) / months
-        monthlyDepreciation = (purchaseCost - depreciableFloor) / (category.usefulLife * 12)
-      } else if (category.depreciationRate) {
-        // Rate-based straight-line on depreciable base
-        const rate = Number(category.depreciationRate) / 100
-        monthlyDepreciation = (purchaseCost - depreciableFloor) * rate / 12
-      }
+      // Calculate monthly depreciation (residual-aware, method-dependent).
+      // Pure math lives in computeMonthlyDepreciation (unit-tested); returns 0
+      // to signal "skip" (already at residual, or no usable method/rate).
+      const monthlyDepreciation = computeMonthlyDepreciation({
+        purchaseCost: Number(asset.purchaseCost),
+        currentValue,
+        residualValue: Number(asset.residualValue),
+        depreciationMethod: asset.depreciationMethod,
+        categoryDepreciationRate: category.depreciationRate
+          ? Number(category.depreciationRate)
+          : null,
+        categoryUsefulLife: category.usefulLife ?? null,
+      })
 
       if (monthlyDepreciation <= 0) { skipped++; continue }
-
-      // Never depreciate below the residual value
-      if (currentValue - monthlyDepreciation < depreciableFloor) {
-        monthlyDepreciation = currentValue - depreciableFloor
-      }
 
       const newValue = currentValue - monthlyDepreciation
       const depreciationDecimal = new Prisma.Decimal(monthlyDepreciation.toFixed(2))
