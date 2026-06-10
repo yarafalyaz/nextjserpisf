@@ -644,12 +644,20 @@ export async function postInvoice(invoiceId: number) {
     }
   }
 
-  await prisma.salesInvoice.update({
-    where: { id: invoiceId },
+  // Atomically claim the post: only the request that flips status away from
+  // draft wins. Without this, two concurrent posts could both pass the draft
+  // guard above and each call onSalesInvoicePosted → double GL posting + double
+  // StockMove OUT. The conditional updateMany serializes it; the loser aborts.
+  const claim = await prisma.salesInvoice.updateMany({
+    where: { id: invoiceId, status: "draft" },
     data: { status: "posted" },
   })
+  if (claim.count === 0) {
+    throw new Error("Invoice sudah di-post atau sedang diproses.")
+  }
 
-  // Trigger accounting hook (replaces Laravel Observer)
+  // Trigger accounting hook (replaces Laravel Observer) — runs once, guarded by
+  // the atomic claim above so only the winning request reaches here.
   await onSalesInvoicePosted(invoiceId, Number(user.id))
 
   await logActivity("post", "SalesInvoice", invoiceId, `Posting faktur penjualan #${invoiceId}`)
@@ -1186,7 +1194,12 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // posted AR/revenue GL) negative. Mirrors the quotation computeLine clamp.
       const subtotal = items.reduce((sum, item) => sum + Math.max(0, (item.qty * item.unitPrice) - (item.discount ?? 0)), 0)
       const taxRate = formData.get("taxRate") ? Number(formData.get("taxRate")) : 0
-      const discountTotal = formData.get("discount") ? Number(formData.get("discount")) : 0
+      // Clamp the header discount to [0, subtotal] so a discount larger than the
+      // line subtotal can't drive the taxable base, taxAmount, or grandTotal
+      // negative (which would post a negative AR/revenue GL). Mirrors the
+      // per-line clamp above.
+      const rawDiscount = formData.get("discount") ? Number(formData.get("discount")) : 0
+      const discountTotal = Math.min(Math.max(0, rawDiscount), subtotal)
       const taxAmount = Math.round((subtotal - discountTotal) * taxRate / 100)
       const grandTotal = subtotal - discountTotal + taxAmount
 
@@ -1346,6 +1359,52 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   const resolveUpdPrice = (itemId: number) =>
     updInvoicePriceMap.get(itemId) ?? (updMasterPriceMap.get(itemId) || updReturnCostMap.get(itemId) || 0)
 
+  // Over-return guard (mirrors createSalesReturn). Without this, a small valid
+  // return could be EDITED to a qty far exceeding what was invoiced → on
+  // completeSalesReturn it over-restocks inventory and over-credits AR. Prior
+  // returns must EXCLUDE this return's own id, because its existing rows are
+  // about to be deleted/replaced below (counting them would double-count).
+  if (updInvoiceId) {
+    const updInvItemsQty = await prisma.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: updInvoiceId, itemId: { in: updReturnIds.length ? updReturnIds : [-1] } },
+      select: { itemId: true, qty: true },
+    })
+    const updInvoicedQtyByItem = new Map<number, number>()
+    for (const it of updInvItemsQty) {
+      if (it.itemId == null) continue
+      updInvoicedQtyByItem.set(it.itemId, (updInvoicedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
+    }
+
+    const updPriorReturns = await prisma.salesReturnItem.findMany({
+      where: {
+        salesReturn: { salesInvoiceId: updInvoiceId, status: { not: "cancelled" }, id: { not: id } },
+        itemId: { in: updReturnIds.length ? updReturnIds : [-1] },
+      },
+      select: { itemId: true, qty: true },
+    })
+    const updAlreadyReturnedByItem = new Map<number, number>()
+    for (const r of updPriorReturns) {
+      updAlreadyReturnedByItem.set(r.itemId, (updAlreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
+    }
+
+    const updViolation = findOverReturn(
+      validReturnItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+      updInvoicedQtyByItem,
+      updAlreadyReturnedByItem
+    )
+    if (updViolation) {
+      if (updViolation.type === "not_on_invoice") {
+        return { success: false, error: `Item #${updViolation.itemId} tidak ada pada faktur yang dipilih, tidak bisa diretur.` }
+      }
+      return {
+        success: false,
+        error:
+          `Jumlah retur item #${updViolation.itemId} melebihi yang difakturkan ` +
+          `(difakturkan: ${updViolation.invoiced}, sudah diretur: ${updViolation.alreadyReturned}, sisa: ${updViolation.remaining}).`,
+      }
+    }
+  }
+
   const salesReturn = await prisma.$transaction(async (tx) => {
     // Delete existing items to prevent duplicates
     await tx.salesReturnItem.deleteMany({
@@ -1461,10 +1520,27 @@ export async function updateDownPayment(id: number, formData: FormData) {
     throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
   }
 
+  const amount = requireNumber(formData.get("amount"), "amount")
+  if (amount <= 0) {
+    throw new Error("Nominal uang muka harus lebih dari 0")
+  }
+
+  // Cumulative cap (mirrors createDownPayment), excluding THIS DP's own id since
+  // it is being edited (counting it would double-count its current amount).
+  // Without this, a valid DP could be edited to exceed the quotation grandTotal.
+  const otherDPs = await prisma.downPayment.aggregate({
+    where: { quotationId, status: { not: "cancelled" }, id: { not: id } },
+    _sum: { amount: true },
+  })
+  const totalOther = Number(otherDPs._sum.amount ?? 0)
+  if (totalOther + amount > Number(quotation.grandTotal)) {
+    throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalOther})`)
+  }
+
   const data: any = {
     quotationId,
     customerId: quotation.customerId,
-    amount: requireNumber(formData.get("amount"), "amount"),
+    amount,
     paymentDate: new Date(formData.get("paymentDate") as string),
     paymentMethod: formData.get("paymentMethod") as string | null,
     notes: formData.get("notes") as string | null,

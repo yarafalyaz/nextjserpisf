@@ -223,25 +223,29 @@ export async function deleteAsset(id: number) {
   try {
   await requirePermission("delete_assets")
 
-  // Depreciation posts GL journals keyed by polymorphic reference
-  // (referenceType "ASSET_DEPRECIATION_YYYYMM", referenceId = asset.id) with
-  // NO database FK, so a raw delete would orphan those journals in the GL
-  // while removing the asset subledger record. A depreciated asset carries
-  // financial history and must be DISPOSED, not hard-deleted. Refuse deletion
-  // when any depreciation journal exists (fail-closed; mirrors the vehicle and
-  // role delete guards). Reversing months of legitimate depreciation here
-  // would be more destructive than refusing.
-  const depreciationJournals = await prisma.journal.count({
+  // Depreciation AND acquisition both post GL journals keyed by polymorphic
+  // reference (referenceType "ASSET_DEPRECIATION_YYYYMM" or "ASSET_ACQUISITION",
+  // referenceId = asset.id) with NO database FK, so a raw delete would orphan
+  // those journals in the GL while removing the asset subledger record. An asset
+  // that has recognised value in the GL carries financial history and must be
+  // DISPOSED, not hard-deleted. Refuse deletion when ANY acquisition or
+  // depreciation journal exists (fail-closed; mirrors the vehicle/role delete
+  // guards). Reversing legitimate GL postings here would be more destructive
+  // than refusing.
+  const glJournals = await prisma.journal.count({
     where: {
-      referenceType: { startsWith: "ASSET_DEPRECIATION" },
+      OR: [
+        { referenceType: { startsWith: "ASSET_DEPRECIATION" } },
+        { referenceType: "ASSET_ACQUISITION" },
+      ],
       referenceId: id,
     },
   })
-  if (depreciationJournals > 0) {
+  if (glJournals > 0) {
     return {
       success: false,
       error:
-        "Aset tidak bisa dihapus karena sudah memiliki riwayat penyusutan (jurnal GL). Gunakan fitur pelepasan/disposal aset, bukan hapus.",
+        "Aset tidak bisa dihapus karena sudah memiliki jurnal GL (akuisisi/penyusutan). Gunakan fitur pelepasan/disposal aset, bukan hapus.",
     }
   }
 
@@ -470,6 +474,33 @@ export async function updateAsset(id: number, formData: FormData) {
     const { data } = parsed
 
     const purchaseCost = data.purchasePrice ?? 0
+
+    // If the asset's acquisition was posted to the GL (Dr Fixed Asset = original
+    // cost), the purchaseCost is now an accounting basis, not a free-form field.
+    // Changing it would desync the GL: disposeAsset credits Fixed Asset using the
+    // (edited) purchaseCost while the acquisition journal debited the original —
+    // leaving the Fixed Asset account permanently imbalanced over the lifecycle.
+    // Fail-closed: refuse a cost change once acquisition is on the GL (the asset
+    // must be disposed/re-acquired or corrected via journal). Other fields edit
+    // freely. Mirrors the fail-closed GL guards on deleteAsset/disposeAsset.
+    const existing = await prisma.asset.findUniqueOrThrow({
+      where: { id },
+      select: { purchaseCost: true },
+    })
+    if (Number(existing.purchaseCost) !== purchaseCost) {
+      const acquisitionJournal = await prisma.journal.findFirst({
+        where: { referenceType: "ASSET_ACQUISITION", referenceId: id },
+        select: { id: true },
+      })
+      if (acquisitionJournal) {
+        return {
+          success: false,
+          error:
+            "Harga perolehan tidak dapat diubah karena akuisisi aset sudah tercatat di GL. Gunakan pelepasan (disposal) atau jurnal koreksi.",
+        }
+      }
+    }
+
     await prisma.asset.update({
       where: { id },
       data: {
@@ -532,10 +563,17 @@ export async function disposeAsset(formData: FormData) {
   const gl = getAssetGlAccounts()
 
   await prisma.$transaction(async (tx) => {
-    await tx.asset.update({
-      where: { id: data.assetId },
+    // Atomically claim the disposal: only the request that flips status away
+    // from "disposed" wins. The previous status check ran OUTSIDE the tx and the
+    // update was unconditional, so two concurrent disposals could both pass the
+    // check and each post an ASSET_DISPOSAL journal + history (double gain/loss).
+    const claim = await tx.asset.updateMany({
+      where: { id: data.assetId, status: { not: "disposed" } },
       data: { status: "disposed", currentValue: 0 },
     })
+    if (claim.count === 0) {
+      throw new Error("Aset sudah dilepas (disposed) atau sedang diproses.")
+    }
     await tx.assetHistory.create({
       data: {
         assetId: data.assetId,
