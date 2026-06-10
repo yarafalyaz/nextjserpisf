@@ -4,6 +4,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
+import { Prisma } from "@prisma/client"
 import { onPurchaseReturnProcessed, onVendorBillPosted, onVendorPaymentCreated, deleteJournalByReference, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook"
 import { onPurchaseOrderCreated } from "@/lib/hooks/purchase-order.hook"
@@ -33,13 +34,14 @@ import {
  * the value of goods received. Prevents paying for undelivered/over-billed goods.
  */
 async function assertThreeWayMatch(
+  tx: Prisma.TransactionClient,
   purchaseOrderId: number | null | undefined,
   billGrandTotal: number,
   excludeBillId?: number
 ): Promise<void> {
   if (!purchaseOrderId) return // bills without a PO link are not matched
 
-  const grs = await prisma.goodsReceipt.findMany({
+  const grs = await tx.goodsReceipt.findMany({
     where: { purchaseOrderId, status: { in: ["verified", "completed"] } },
     include: { items: true },
   })
@@ -52,10 +54,17 @@ async function assertThreeWayMatch(
     0
   )
 
-  const otherBills = await prisma.vendorBill.aggregate({
+  // Count EVERY non-cancelled bill, not just posted/paid. createVendorBill posts
+  // the AP journal (onVendorBillPosted) on creation while leaving the bill
+  // status "draft" — so a draft bill already recognises the liability in the GL.
+  // Filtering to posted/paid here let two create-path bills both pass the match
+  // (each sees the other as draft → uncounted) and over-bill the PO even
+  // sequentially. notIn:['cancelled'] = draft|posted|partial|paid = every bill
+  // that has recognised AP for this PO.
+  const otherBills = await tx.vendorBill.aggregate({
     where: {
       purchaseOrderId,
-      status: { in: ["posted", "paid"] },
+      status: { notIn: ["cancelled"] },
       ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
     },
     _sum: { grandTotal: true },
@@ -411,41 +420,51 @@ export async function createVendorBill(formData: FormData) {
 
   const documentNo = await generateDocumentNumber("BILL")
 
-  // 3-way match before posting the bill
-  await assertThreeWayMatch(
-    v.purchaseOrderId ?? null,
-    v.grandTotal
-  )
-
-  const bill = await prisma.vendorBill.create({
-    data: {
-      documentNo,
-      vendorId: v.vendorId,
-      purchaseOrderId: v.purchaseOrderId ?? null,
-      date: new Date(v.date),
-      dueDate: v.dueDate ? new Date(v.dueDate) : null,
-      vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
-      terms: v.terms ?? null,
-      notes: v.notes ?? null,
-      subtotal: v.subtotal,
-      tax: v.tax,
-      grandTotal: v.grandTotal,
-      status: "draft",
-      createdBy: Number(user.id),
-    },
-  })
-
-  // Associate uploaded attachments with the new vendor bill
-  const attachmentIds = v.attachmentIds
-  if (attachmentIds) {
-    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
-    if (ids.length > 0) {
-      await prisma.transactionAttachment.updateMany({
-        where: { id: { in: ids }, referenceId: 0 },
-        data: { referenceId: bill.id },
-      })
+  // Lock the PO row, run the 3-way match, and create the bill atomically so two
+  // concurrent createVendorBill calls on the same PO cannot both pass the match
+  // and over-bill. With the draft bill now counted by assertThreeWayMatch, the
+  // serialized second call sees the first bill and is rejected. Mirrors the
+  // confirmVendorPayment lock pattern. GL posting runs AFTER commit because
+  // onVendorBillPosted opens its own transaction (no nesting) and is idempotent.
+  const bill = await prisma.$transaction(async (tx) => {
+    if (v.purchaseOrderId) {
+      await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`
     }
-  }
+
+    await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, v.grandTotal)
+
+    const created = await tx.vendorBill.create({
+      data: {
+        documentNo,
+        vendorId: v.vendorId,
+        purchaseOrderId: v.purchaseOrderId ?? null,
+        date: new Date(v.date),
+        dueDate: v.dueDate ? new Date(v.dueDate) : null,
+        vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
+        terms: v.terms ?? null,
+        notes: v.notes ?? null,
+        subtotal: v.subtotal,
+        tax: v.tax,
+        grandTotal: v.grandTotal,
+        status: "draft",
+        createdBy: Number(user.id),
+      },
+    })
+
+    // Associate uploaded attachments with the new vendor bill
+    const attachmentIds = v.attachmentIds
+    if (attachmentIds) {
+      const ids = safeJsonParse<number[]>(attachmentIds) ?? []
+      if (ids.length > 0) {
+        await tx.transactionAttachment.updateMany({
+          where: { id: { in: ids }, referenceId: 0 },
+          data: { referenceId: created.id },
+        })
+      }
+    }
+
+    return created
+  })
 
   await onVendorBillPosted(bill.id, Number(user.id))
   await logActivity("create", "VendorBill", bill.id, `Membuat tagihan vendor #${bill.id}`)
@@ -522,17 +541,33 @@ export async function confirmVendorBill(billId: number) {
     throw new Error("Tagihan hanya bisa diposting dari status draft")
   }
 
-  // 3-way match (PO ↔ GR ↔ Bill) before posting
-  await assertThreeWayMatch(bill.purchaseOrderId, Number(bill.grandTotal), bill.id)
+  // Lock the PO row, re-check the bill is still draft, run the 3-way match, and
+  // flip to posted atomically. Without the lock + in-tx re-check, two concurrent
+  // confirms (or a confirm racing a createVendorBill) on the same PO could both
+  // pass the match and over-bill. Mirrors confirmVendorPayment. GL posting runs
+  // after commit (onVendorBillPosted opens its own tx and is idempotent).
+  await prisma.$transaction(async (tx) => {
+    if (bill.purchaseOrderId) {
+      await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${bill.purchaseOrderId} FOR UPDATE`
+    }
 
-  await prisma.vendorBill.update({
-    where: { id: billId },
-    data: {
-      status: "posted",
-      approvedBy: Number(user.id),
-      approvedAt: new Date(),
-      balanceDue: bill.grandTotal,
-    },
+    const fresh = await tx.vendorBill.findUniqueOrThrow({ where: { id: billId } })
+    if (fresh.status !== "draft") {
+      throw new Error("Tagihan hanya bisa diposting dari status draft")
+    }
+
+    // 3-way match (PO ↔ GR ↔ Bill) before posting
+    await assertThreeWayMatch(tx, fresh.purchaseOrderId, Number(fresh.grandTotal), fresh.id)
+
+    await tx.vendorBill.update({
+      where: { id: billId },
+      data: {
+        status: "posted",
+        approvedBy: Number(user.id),
+        approvedAt: new Date(),
+        balanceDue: fresh.grandTotal,
+      },
+    })
   })
 
   await onVendorBillPosted(billId, Number(user.id))
