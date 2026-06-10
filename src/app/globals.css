@@ -2377,8 +2377,72 @@ html.dark [cmdk-group-heading] {
   cursor: not-allowed;
 }
 
+/* ==================== REPORT LETTERHEAD (screen + print) ==================== */
+.report-letterhead {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--border, #e5e7eb);
+}
+
+.report-letterhead-company {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.report-letterhead-logo {
+  height: 56px;
+  width: auto;
+  object-fit: contain;
+}
+
+.report-letterhead-company-name {
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--foreground, #111827);
+}
+
+.report-letterhead-company-line {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground, #6b7280);
+  line-height: 1.4;
+}
+
+.report-letterhead-title-block {
+  text-align: center;
+}
+
+.report-letterhead-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--foreground, #111827);
+}
+
+.report-letterhead-subtitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--muted-foreground, #6b7280);
+}
+
+.report-letterhead-period {
+  font-size: 0.875rem;
+  color: var(--muted-foreground, #6b7280);
+  margin-top: 2px;
+}
+
 /* ==================== PRINT STYLES ==================== */
 @media print {
+  @page {
+    size: A4;
+    margin: 16mm 14mm 18mm 14mm;
+  }
+
   .sidebar,
   .header,
   .sidebar-toggle,
@@ -2399,7 +2463,7 @@ html.dark [cmdk-group-heading] {
   body {
     background: white !important;
     color: black !important;
-    font-size: 12pt;
+    font-size: 11pt;
   }
 
   .bg-surface {
@@ -2409,6 +2473,36 @@ html.dark [cmdk-group-heading] {
     padding: 0 !important;
   }
 
+  /* Report letterhead: formal centered header, black-on-white. */
+  .report-letterhead {
+    border-bottom: 2px solid #000 !important;
+    margin-bottom: 16px;
+  }
+
+  .report-letterhead-company {
+    justify-content: flex-start;
+  }
+
+  .report-letterhead-company-name {
+    color: #000 !important;
+  }
+
+  .report-letterhead-company-line,
+  .report-letterhead-subtitle,
+  .report-letterhead-period {
+    color: #333 !important;
+  }
+
+  .report-letterhead-title {
+    color: #000 !important;
+    font-size: 16pt;
+  }
+
+  .report-letterhead-logo {
+    height: 48px;
+  }
+
+  /* Legacy print header (kept for older pages). */
   .print-header {
     display: flex !important;
     flex-direction: column;
@@ -2442,6 +2536,46 @@ html.dark [cmdk-group-heading] {
   .shadow-md {
     box-shadow: none !important;
   }
+
+  /* Statement tables: crisp ruled lines, repeating header on page breaks. */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 10pt;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr,
+  .no-break {
+    page-break-inside: avoid;
+  }
+
+  th {
+    border-bottom: 1px solid #000 !important;
+    background: #f2f2f2 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  td {
+    border-bottom: 1px solid #e0e0e0 !important;
+  }
+
+  .page-break-before { page-break-before: always; }
+  .page-break-after { page-break-after: always; }
+
+  /* Force monetary/status colors to render on paper. */
+  .text-success { color: #16a34a !important; }
+  .text-danger { color: #dc2626 !important; }
+  .text-primary { color: #000 !important; }
+  .text-muted-foreground { color: #555 !important; }
 }
 
 .dark {

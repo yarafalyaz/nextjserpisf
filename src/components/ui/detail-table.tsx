@@ -2,15 +2,19 @@
 
 import { cn } from "@/lib/utils"
 
-interface DetailTableProps {
+interface DetailTableProps extends React.TableHTMLAttributes<HTMLTableElement> {
   children: React.ReactNode
   className?: string
 }
 
-export function DetailTable({ children, className }: DetailTableProps) {
+export function DetailTable({ children, className, ...rest }: DetailTableProps) {
+  // Forward arbitrary table attributes (notably `data-report-table`, which the
+  // PDF/CSV exporter scans for via document.querySelectorAll). Previously these
+  // were swallowed, so Export PDF/CSV silently produced "no data" on every
+  // report built with this primitive.
   return (
     <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full border-collapse text-sm">
+      <table className="w-full border-collapse text-sm" {...rest}>
         {children}
       </table>
     </div>

@@ -2,11 +2,13 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency } from '@/lib/utils/format'
-import { TrendingUp, DollarSign, Percent, BarChart3 } from 'lucide-react'
+import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { DollarSign, Percent, BarChart3, TrendingUp } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
+import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { computeIncomeStatement } from "@/lib/finance/income-statement"
 
 import type { Metadata } from "next"
@@ -60,34 +62,31 @@ export default async function IncomeStatementPage({
   const hasCogs = cogsData.length > 0
   const hasOther = otherIncomeData.length > 0 || otherExpenseData.length > 0
 
+  const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-        { label: "Dasbor", href: "/" },
-        { label: "Laporan", href: "/laporan" },
-        { label: "Laba Rugi" },
-      ]} />
-
-      <div className="flex items-center gap-2">
-        <TrendingUp size={24} />
-        <h1 className="text-2xl font-bold text-foreground">Laporan Laba Rugi</h1>
+      <div className="print:hidden">
+        <AppBreadcrumbs items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Laporan", href: "/laporan" },
+          { label: "Laba Rugi" },
+        ]} />
       </div>
 
-      <ReportDateFilter defaultStartDate={startDate.toISOString().split("T")[0]} defaultEndDate={endDate.toISOString().split("T")[0]} />
+      <div className="flex items-center justify-end print:hidden">
+        <ExportButtons title="Laba Rugi" />
+      </div>
 
+      <div className="print:hidden">
+        <ReportDateFilter defaultStartDate={startDate.toISOString().split("T")[0]} defaultEndDate={endDate.toISOString().split("T")[0]} />
+      </div>
 
+      {/* Professional letterhead (screen + print) */}
+      <ReportLetterhead title="Laporan Laba Rugi" subtitle="Multi-Step" periodLabel={periodLabel} />
 
-
-
-
-
-
-
-
-
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI Cards (screen only) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:hidden">
         <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
             <DollarSign size={20} className="text-primary" />
@@ -128,19 +127,13 @@ export default async function IncomeStatementPage({
 
       {/* Income Statement Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Laporan Laba Rugi Multi-Step</h2>
-          <p className="text-xs text-muted-foreground">
-            {startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} - {endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
-        </div>
         <div className="p-4 px-5">
           <div className="overflow-x-auto">
-            <DetailTable>
+            <DetailTable data-report-table="Laba Rugi">
               <DetailTableHead>
                 <DetailTableTh>Kode</DetailTableTh>
                 <DetailTableTh>Nama Akun</DetailTableTh>
-                <DetailTableTh align="right">Jumlah</DetailTableTh>
+                <DetailTableTh align="right">Jumlah (Rp)</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {/* Revenue Section */}
@@ -151,12 +144,12 @@ export default async function IncomeStatementPage({
                   <DetailTableRow key={acc.id}>
                     <DetailTableTd>{acc.code}</DetailTableTd>
                     <DetailTableTd>{acc.name}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(acc.balance)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(acc.balance)}</DetailTableTd>
                   </DetailTableRow>
                 ))}
                 <DetailTableRow>
                   <DetailTableTd colSpan={2} className="font-semibold">Total Pendapatan</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatCurrency(totalRevenue)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(totalRevenue)}</DetailTableTd>
                 </DetailTableRow>
 
                 {/* COGS Section */}
@@ -169,20 +162,20 @@ export default async function IncomeStatementPage({
                       <DetailTableRow key={acc.id}>
                         <DetailTableTd>{acc.code}</DetailTableTd>
                         <DetailTableTd>{acc.name}</DetailTableTd>
-                        <DetailTableTd align="right">{formatCurrency(acc.balance)}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(acc.balance)}</DetailTableTd>
                       </DetailTableRow>
                     ))}
                     <DetailTableRow>
                       <DetailTableTd colSpan={2} className="font-semibold">Total HPP</DetailTableTd>
-                      <DetailTableTd align="right" className="font-semibold">{formatCurrency(totalCogs)}</DetailTableTd>
+                      <DetailTableTd align="right" className="font-semibold">{formatAccounting(totalCogs)}</DetailTableTd>
                     </DetailTableRow>
                   </>
                 )}
 
                 {/* Gross Profit */}
-                <DetailTableRow>
+                <DetailTableRow className="border-t-2 border-default">
                   <DetailTableTd colSpan={2} className="font-bold text-primary">LABA KOTOR</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold text-primary">{formatCurrency(grossProfit)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold text-primary">{formatAccounting(grossProfit)}</DetailTableTd>
                 </DetailTableRow>
 
                 {/* Operating Expenses */}
@@ -193,18 +186,18 @@ export default async function IncomeStatementPage({
                   <DetailTableRow key={acc.id}>
                     <DetailTableTd>{acc.code}</DetailTableTd>
                     <DetailTableTd>{acc.name}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(acc.balance)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(acc.balance)}</DetailTableTd>
                   </DetailTableRow>
                 ))}
                 <DetailTableRow>
                   <DetailTableTd colSpan={2} className="font-semibold">Total Beban Operasional</DetailTableTd>
-                  <DetailTableTd align="right" className="font-semibold">{formatCurrency(totalExpense)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(totalExpense)}</DetailTableTd>
                 </DetailTableRow>
 
                 {/* Operating Profit */}
-                <DetailTableRow>
+                <DetailTableRow className="border-t-2 border-default">
                   <DetailTableTd colSpan={2} className="font-bold text-primary">LABA OPERASIONAL</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold text-primary">{formatCurrency(operatingProfit)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold text-primary">{formatAccounting(operatingProfit)}</DetailTableTd>
                 </DetailTableRow>
 
                 {/* Other Income/Expense */}
@@ -217,27 +210,27 @@ export default async function IncomeStatementPage({
                       <DetailTableRow key={acc.id}>
                         <DetailTableTd>{acc.code}</DetailTableTd>
                         <DetailTableTd>{acc.name}</DetailTableTd>
-                        <DetailTableTd align="right">{formatCurrency(acc.balance)}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(acc.balance)}</DetailTableTd>
                       </DetailTableRow>
                     ))}
                     {otherExpenseData.map((acc) => (
                       <DetailTableRow key={acc.id}>
                         <DetailTableTd>{acc.code}</DetailTableTd>
                         <DetailTableTd>{acc.name}</DetailTableTd>
-                        <DetailTableTd align="right">({formatCurrency(acc.balance)})</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(-acc.balance)}</DetailTableTd>
                       </DetailTableRow>
                     ))}
                     <DetailTableRow>
                       <DetailTableTd colSpan={2} className="font-semibold">Total Lain-lain</DetailTableTd>
-                      <DetailTableTd align="right" className="font-semibold">{formatCurrency(totalOther)}</DetailTableTd>
+                      <DetailTableTd align="right" className="font-semibold">{formatAccounting(totalOther)}</DetailTableTd>
                     </DetailTableRow>
                   </>
                 )}
 
                 {/* Net Profit */}
-                <DetailTableRow>
+                <DetailTableRow className="border-t-2 border-default">
                   <DetailTableTd colSpan={2} className="font-bold text-lg text-primary">LABA BERSIH SEBELUM PAJAK</DetailTableTd>
-                  <DetailTableTd align="right" className="font-bold text-lg text-primary">{formatCurrency(netProfit)}</DetailTableTd>
+                  <DetailTableTd align="right" className="font-bold text-lg text-primary">{formatAccounting(netProfit)}</DetailTableTd>
                 </DetailTableRow>
               </DetailTableBody>
             </DetailTable>

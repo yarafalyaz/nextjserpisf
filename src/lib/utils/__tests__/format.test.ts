@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   formatCurrency,
+  formatAccounting,
   formatNumber,
   formatDate,
   formatRelativeTime,
@@ -41,6 +42,45 @@ describe("formatCurrency", () => {
 
   it("uses custom symbol", () => {
     expect(formatCurrency(100, { symbol: "$ " })).toBe("$ 100")
+  })
+})
+
+describe("formatAccounting", () => {
+  it("formats positive number without symbol by default", () => {
+    expect(formatAccounting(1500000)).toBe("1.500.000")
+  })
+
+  it("wraps negatives in parentheses", () => {
+    expect(formatAccounting(-250000)).toBe("(250.000)")
+  })
+
+  it("renders zero as em-dash by default", () => {
+    expect(formatAccounting(0)).toBe("–")
+    expect(formatAccounting(null)).toBe("–")
+    expect(formatAccounting(undefined)).toBe("–")
+  })
+
+  it("treats sub-cent drift as zero", () => {
+    expect(formatAccounting(0.004)).toBe("–")
+    expect(formatAccounting(-0.004)).toBe("–")
+  })
+
+  it("can disable zero-dash", () => {
+    expect(formatAccounting(0, { zeroDash: false })).toBe("0")
+  })
+
+  it("prefixes symbol when showSymbol=true", () => {
+    expect(formatAccounting(1000, { showSymbol: true })).toBe("Rp 1.000")
+    expect(formatAccounting(-1000, { showSymbol: true })).toBe("(Rp 1.000)")
+  })
+
+  it("respects decimals", () => {
+    expect(formatAccounting(1500.5, { decimals: 2 })).toBe("1.500,50")
+  })
+
+  it("handles string input and NaN", () => {
+    expect(formatAccounting("250000")).toBe("250.000")
+    expect(formatAccounting("abc")).toBe("–")
   })
 })
 

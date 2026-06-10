@@ -34,6 +34,49 @@ export function formatCurrency(
 }
 
 /**
+ * Format a number in accounting convention: thousands-separated, negatives in
+ * parentheses, zero as an em-dash. Mirrors how Accurate/Jurnal/Zahir present
+ * figures on financial statements.
+ * Examples:
+ *   1500000  → "1.500.000"
+ *   -250000  → "(250.000)"
+ *   0        → "–"
+ * Pass showSymbol to prefix the currency symbol (default off; statements usually
+ * print a single symbol in the column header, not per row).
+ */
+export function formatAccounting(
+  amount: number | string | null | undefined,
+  options?: {
+    symbol?: string
+    decimals?: number
+    showSymbol?: boolean
+    zeroDash?: boolean
+  }
+): string {
+  const {
+    symbol = 'Rp ',
+    decimals = 0,
+    showSymbol = false,
+    zeroDash = true,
+  } = options ?? {}
+
+  const numericAmount = Number(amount ?? 0)
+  if (isNaN(numericAmount)) return zeroDash ? '–' : '0'
+
+  // Treat sub-cent magnitudes as zero so float drift never prints "(0)".
+  if (zeroDash && Math.abs(numericAmount) < 0.005) return '–'
+
+  const magnitude = Math.abs(numericAmount)
+  const formatted = new Intl.NumberFormat('id-ID', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(magnitude)
+
+  const body = showSymbol ? `${symbol}${formatted}` : formatted
+  return numericAmount < 0 ? `(${body})` : body
+}
+
+/**
  * Format a number with Indonesian locale (dot as thousands separator).
  * Example: 1500000.5 → "1.500.000,5"
  */
