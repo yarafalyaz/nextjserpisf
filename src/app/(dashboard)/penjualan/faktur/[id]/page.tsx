@@ -61,6 +61,17 @@ export default async function InvoiceDetailPage({
   })
 
   const pmMap = await getPaymentMethodMap()
+
+  // Derive the effective tax RATE from taxAmount (reliably the PPN amount on
+  // every write path) over the taxable base. Reading invoice.tax directly is
+  // unsafe: it holds the amount on DP/quotation-created invoices but the rate
+  // after updateSalesInvoice, so the editor could be prefilled with the amount
+  // (e.g. 55000) as if it were a rate (e.g. 11). This derivation is correct in
+  // both cases. Rounded to 2 decimals to absorb float noise.
+  const taxBase = Number(invoice.subtotal ?? 0) - Number(invoice.discount ?? 0)
+  const derivedTaxRate = taxBase > 0
+    ? Math.round((Number(invoice.taxAmount ?? 0) / taxBase) * 10000) / 100
+    : 0
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -135,7 +146,7 @@ export default async function InvoiceDetailPage({
                 quotationId={invoice.quotationId}
                 date={invoice.date.toISOString().split("T")[0]}
                 dueDate={invoice.dueDate?.toISOString().split("T")[0]}
-                taxRate={Number(invoice.tax ?? 0)}
+                taxRate={derivedTaxRate}
                 discountTotal={Number(invoice.discount ?? 0)}
                 items={invoice.items.map((item) => ({
                   id: item.id,
