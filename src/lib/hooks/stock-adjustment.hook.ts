@@ -41,17 +41,29 @@ export async function onStockAdjustmentProcessed(
     // Create Stock Move per item based on difference
     const journalItems: { qty: number; cost: number; difference: number }[] = [];
     for (const item of adjustment.items) {
-      const qtyDiff = Number(item.difference);
+      const enteredUnitCost = Number(item.unitCost ?? 0);
+
+      // Lock the item row first so the qtyOnHand we read is the authoritative,
+      // serialized baseline. The stored systemQty/difference were derived from a
+      // client-supplied currentQty at create time and can be stale or forged.
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+      const liveItem = await tx.item.findUnique({
+        where: { id: item.itemId },
+        select: { qtyOnHand: true },
+      });
+      const liveQty = Number(liveItem?.qtyOnHand ?? 0);
+
+      // Stock-take semantics: actualQty is the physical count the user asserts.
+      // Compute the delta against the LIVE on-hand (not the client baseline) so
+      // the final qtyOnHand converges to actualQty exactly.
+      const actualQty = Number(item.actualQty);
+      const qtyDiff = actualQty - liveQty;
 
       // Skip if no difference
       if (qtyDiff === 0) continue;
 
       const impact = qtyDiff > 0 ? "IN" : "OUT";
       const qty = Math.abs(qtyDiff);
-      const enteredUnitCost = Number(item.unitCost ?? 0);
-
-      // Lock the item row to serialize global qtyOnHand updates (both directions).
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
 
       // Effective unit cost for the StockMove AND the GL journal:
       //   • Positive (IN): the user-entered unit cost establishes the new layer.
@@ -83,7 +95,7 @@ export async function onStockAdjustmentProcessed(
           status: "posted",
           referenceType: "StockAdjustment",
           referenceId: adjustment.id,
-          notes: `Penyesuaian Stok ${adjustment.documentNo} (${Number(item.systemQty)} → ${Number(item.actualQty)})`,
+          notes: `Penyesuaian Stok ${adjustment.documentNo} (${liveQty} → ${actualQty})`,
           createdBy: userId ?? null,
         },
       });

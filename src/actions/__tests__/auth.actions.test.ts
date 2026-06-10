@@ -9,6 +9,7 @@ const revalidateMock = vi.fn()
 const userFindMock = vi.fn()
 const userCreateMock = vi.fn()
 const userUpdateMock = vi.fn()
+const roleFindManyMock = vi.fn()
 
 const bcryptCompareMock = vi.fn()
 const bcryptHashMock = vi.fn()
@@ -27,6 +28,9 @@ vi.mock("@/lib/db/prisma", () => ({
       findUniqueOrThrow: (...a: unknown[]) => userFindMock(...a),
       create: (...a: unknown[]) => userCreateMock(...a),
       update: (...a: unknown[]) => userUpdateMock(...a),
+    },
+    role: {
+      findMany: (...a: unknown[]) => roleFindManyMock(...a),
     },
   },
 }))
@@ -66,9 +70,14 @@ beforeEach(() => {
   for (const m of [
     signInMock, signOutMock, requireAuthMock, requirePermissionMock,
     revalidateMock, userFindMock, userCreateMock, userUpdateMock,
-    bcryptCompareMock, bcryptHashMock,
+    roleFindManyMock, bcryptCompareMock, bcryptHashMock,
   ]) m.mockReset()
   bcryptHashMock.mockResolvedValue("hashed-value")
+  // requirePermission resolves to the acting user (default: a plain admin
+  // holding manage_users but NOT super_admin). The privesc guard reads .roles.
+  requirePermissionMock.mockResolvedValue({ id: "1", roles: ["admin"], permissions: ["manage_users"] })
+  // No requested role is super_admin by default.
+  roleFindManyMock.mockResolvedValue([])
 })
 
 describe("loginAction", () => {
@@ -145,8 +154,6 @@ describe("changePassword", () => {
 })
 
 describe("createUser", () => {
-  beforeEach(() => requirePermissionMock.mockResolvedValue(undefined))
-
   it("enforces the manage_users permission before creating", async () => {
     userCreateMock.mockResolvedValue({ id: 1 })
     await createUser(fd({ name: "X", email: "x@y.z", password: "passval12" }))
@@ -179,7 +186,6 @@ describe("createUser", () => {
 
 describe("updateUserRoles", () => {
   it("requires manage_users and uses set semantics", async () => {
-    requirePermissionMock.mockResolvedValue(undefined)
     userUpdateMock.mockResolvedValue({ id: 3 })
     const res = await updateUserRoles(3, [5, 6])
     expect(res).toEqual({ success: true })
@@ -195,6 +201,25 @@ describe("updateUserRoles", () => {
     const res = await updateUserRoles(3, [1])
     expect(res).toMatchObject({ error: expect.any(String) })
     expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("blocks a non-super-admin from granting super_admin", async () => {
+    // Actor holds manage_users but is NOT super_admin (beforeEach default).
+    // Requested role id 9 resolves to super_admin.
+    roleFindManyMock.mockResolvedValue([{ name: "super_admin" }])
+    const res = await updateUserRoles(3, [9])
+    expect(res).toMatchObject({ error: expect.any(String) })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("allows a super_admin actor to grant super_admin", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserRoles(3, [9])
+    expect(res).toEqual({ success: true })
+    // super_admin bypass: no role lookup needed.
+    expect(roleFindManyMock).not.toHaveBeenCalled()
+    expect(userUpdateMock).toHaveBeenCalled()
   })
 })
 

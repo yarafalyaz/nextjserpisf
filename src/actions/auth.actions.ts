@@ -6,6 +6,26 @@ import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
 
+// Privilege-escalation guard: a non-super-admin (even one holding manage_users)
+// must not be able to grant the super_admin role to anyone — including
+// themselves. Returns an error message when the assignment is disallowed,
+// otherwise null. Not exported, so it stays a plain helper under "use server".
+async function assertNoSuperAdminGrant(
+  actorRoles: string[],
+  roleIds: number[]
+): Promise<string | null> {
+  if (actorRoles.includes("super_admin")) return null
+  if (roleIds.length === 0) return null
+  const requested = await prisma.role.findMany({
+    where: { id: { in: roleIds } },
+    select: { name: true },
+  })
+  if (requested.some((r) => r.name === "super_admin")) {
+    return "Hanya super admin yang dapat memberikan role super admin"
+  }
+  return null
+}
+
 export async function loginAction(formData: FormData) {
   const email = formData.get("email") as string
   const password = formData.get("password") as string
@@ -79,7 +99,7 @@ export async function changePassword(formData: FormData) {
 export async function createUser(formData: FormData) {
   try {
     // Fix #19: Add permission check
-    await requirePermission("manage_users")
+    const actor = await requirePermission("manage_users")
 
     const name = formData.get("name") as string
     const email = formData.get("email") as string
@@ -88,6 +108,13 @@ export async function createUser(formData: FormData) {
 
     if (!name || !email || !password) {
       return { error: "Nama, email, dan password wajib diisi" }
+    }
+
+    // Privilege-escalation guard: block granting super_admin unless the actor
+    // is super_admin (prevents a manage_users holder from minting super admins).
+    const grantErr = await assertNoSuperAdminGrant(actor.roles, roleIds)
+    if (grantErr) {
+      return { error: grantErr }
     }
 
     // Enforce the same minimum-length policy as changePassword (min 8), so a
@@ -127,7 +154,14 @@ export async function createUser(formData: FormData) {
 export async function updateUserRoles(userId: number, roleIds: number[]) {
   try {
     // Fix #20: Add permission check — prevents privilege escalation
-    await requirePermission("manage_users")
+    const actor = await requirePermission("manage_users")
+
+    // Privilege-escalation guard: a non-super-admin must not be able to assign
+    // the super_admin role to anyone (including themselves).
+    const grantErr = await assertNoSuperAdminGrant(actor.roles, roleIds)
+    if (grantErr) {
+      return { error: grantErr }
+    }
 
     await prisma.user.update({
       where: { id: userId },

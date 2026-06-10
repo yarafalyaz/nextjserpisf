@@ -17,9 +17,43 @@ import { safeJsonParse } from "@/lib/utils/safe-parse"
 
 type WorkflowStepInput = { name?: string; roleId?: number | null; approverType?: string | null }
 
+// Enforce that the acting user is actually the designated approver for the
+// approval's current step. requirePermission("approve_workflows") only gates
+// the *capability*; without this, anyone holding it could approve/reject ANY
+// step of ANY approval, defeating role/user-scoped multi-level approval.
+// super_admin bypasses (consistent with requirePermission). A step with neither
+// userId nor roleId (e.g. approverType-only / unrestricted) falls back to the
+// permission gate already passed by the caller.
+async function assertStepApprover(
+  approval: {
+    currentStep: number
+    workflow: { steps: { stepOrder: number; roleId: number | null; userId: number | null }[] }
+  },
+  user: { id: string | number; roles: string[] }
+): Promise<void> {
+  if (user.roles.includes("super_admin")) return
+  const stepDef = approval.workflow.steps.find((s) => s.stepOrder === approval.currentStep)
+  if (!stepDef) return
+  if (stepDef.userId != null) {
+    if (Number(user.id) !== stepDef.userId) {
+      throw new Error("Forbidden: Anda bukan approver untuk langkah ini.")
+    }
+    return
+  }
+  if (stepDef.roleId != null) {
+    const role = await prisma.role.findUnique({
+      where: { id: stepDef.roleId },
+      select: { name: true },
+    })
+    if (!role || !user.roles.includes(role.name)) {
+      throw new Error("Forbidden: Anda bukan approver untuk langkah ini.")
+    }
+  }
+}
+
 export async function approveStep(approvalId: number, formData: FormData) {
   try {
-  await requirePermission("approve_workflows")
+  const user = await requirePermission("approve_workflows")
   const session = await auth()
 
   const parsed = parseFormData(approveStepSchema, formData)
@@ -39,6 +73,9 @@ export async function approveStep(approvalId: number, formData: FormData) {
 
     if (!approval) throw new Error("Approval tidak ditemukan")
     if (approval.status !== "pending") throw new Error("Approval sudah diproses")
+
+    // Only the designated approver for the current step may approve it.
+    await assertStepApprover(approval, user)
 
     const totalSteps = approval.workflow.steps.length
 
@@ -87,7 +124,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
 
 export async function rejectStep(approvalId: number, formData: FormData) {
   try {
-  await requirePermission("approve_workflows")
+  const user = await requirePermission("approve_workflows")
   const session = await auth()
 
   const parsed = parseFormData(rejectStepSchema, formData)
@@ -100,10 +137,14 @@ export async function rejectStep(approvalId: number, formData: FormData) {
 
     const approval = await tx.approval.findUnique({
       where: { id: approvalId },
+      include: { workflow: { include: { steps: { orderBy: { stepOrder: "asc" } } } } },
     })
 
     if (!approval) throw new Error("Approval tidak ditemukan")
     if (approval.status !== "pending") throw new Error("Approval sudah diproses")
+
+    // Only the designated approver for the current step may reject it.
+    await assertStepApprover(approval, user)
 
     // Create history entry
     await tx.approvalHistory.create({
