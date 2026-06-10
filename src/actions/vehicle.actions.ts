@@ -341,15 +341,35 @@ export async function deleteVehicle(id: number) {
         _count: { select: { workOrders: true, quotations: true, projects: true } },
       },
     })
-    const dependents = links.reduce(
+    const relationDependents = links.reduce(
       (sum, l) => sum + l._count.workOrders + l._count.quotations + l._count.projects,
       0
     )
+
+    // SalesOrder.customerVehicleId and SalesInvoice.customerVehicleId are plain
+    // (non-relation) Int columns — CustomerVehicle has no back-relation for them,
+    // so they cannot be counted via _count above. The guard's comment promised to
+    // protect SalesOrder/SalesInvoice but the code never enforced it: a vehicle
+    // referenced ONLY by an SO/Invoice (no WO/quotation/project) would pass and be
+    // deleted, orphaning their customer_vehicle_id (no FK = silent dangling
+    // reference, erasing the vehicle linkage on financial documents). Count them
+    // directly against the cascade-deleted CustomerVehicle link ids.
+    const linkIds = links.map((l) => l.id)
+    let salesDependents = 0
+    if (linkIds.length > 0) {
+      const [soCount, invCount] = await Promise.all([
+        prisma.salesOrder.count({ where: { customerVehicleId: { in: linkIds } } }),
+        prisma.salesInvoice.count({ where: { customerVehicleId: { in: linkIds } } }),
+      ])
+      salesDependents = soCount + invCount
+    }
+
+    const dependents = relationDependents + salesDependents
     if (dependents > 0) {
       return {
         success: false,
         error:
-          `Kendaraan ini punya ${dependents} dokumen terkait (perintah kerja/penawaran/proyek) ` +
+          `Kendaraan ini punya ${dependents} dokumen terkait (perintah kerja/penawaran/proyek/penjualan) ` +
           `dan tidak bisa dihapus karena akan menghilangkan riwayat servis. Nonaktifkan kepemilikan kendaraan sebagai gantinya.`,
       }
     }
