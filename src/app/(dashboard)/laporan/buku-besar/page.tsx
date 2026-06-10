@@ -73,7 +73,14 @@ export default async function GeneralLedgerPage({
           select: { journalNumber: true, transactionDate: true, description: true },
         },
       },
-      orderBy: { journal: { transactionDate: 'asc' } },
+      // Deterministic ordering: date first, then entry id as a stable tiebreaker.
+      // Without the id tiebreaker, same-day entries render in arbitrary order and
+      // the running-balance column shows inconsistent intermediate values across
+      // refreshes (the final balance is unaffected, but the per-row saldo isn't).
+      orderBy: [
+        { journal: { transactionDate: 'asc' } },
+        { id: 'asc' },
+      ],
     })
 
     entries = journalEntries.map((e) => ({
