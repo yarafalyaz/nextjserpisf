@@ -29,6 +29,7 @@ export default async function AssetCategoriesPage({
     where,
     orderBy: { name: "asc" },
     select: { id: true, name: true, depreciationRate: true, usefulLife: true },
+    take: 1000,
   })
 
   const data = categories.map((cat) => ({

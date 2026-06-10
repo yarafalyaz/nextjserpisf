@@ -15,6 +15,7 @@ export default async function UomPage() {
     select: { unitOfMeasure: true },
     distinct: ["unitOfMeasure"],
     orderBy: { unitOfMeasure: "asc" },
+    take: 1000,
   })
 
   const uomList = items.map((i) => i.unitOfMeasure)

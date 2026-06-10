@@ -34,6 +34,7 @@ export default async function AccountsPage({
   const accounts = await prisma.account.findMany({
     where,
     orderBy: { code: "asc" },
+    take: 1000,
   })
 
   // Group by type

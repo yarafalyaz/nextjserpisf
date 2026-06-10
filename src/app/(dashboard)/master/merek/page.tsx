@@ -26,6 +26,7 @@ export default async function BrandsPage({
     where,
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { items: true } } },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(brands))

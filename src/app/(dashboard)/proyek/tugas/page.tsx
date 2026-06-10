@@ -37,6 +37,7 @@ export default async function TasksPage({
       assignee: true,
     },
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(tasks))

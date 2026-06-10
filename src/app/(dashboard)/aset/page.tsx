@@ -36,6 +36,7 @@ export default async function AssetsPage({
       group: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(assets))

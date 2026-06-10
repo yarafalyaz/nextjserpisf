@@ -25,6 +25,7 @@ export default async function CurrenciesPage({
   const rawCurrencies = await prisma.currency.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const currencies = rawCurrencies.map((c) => ({

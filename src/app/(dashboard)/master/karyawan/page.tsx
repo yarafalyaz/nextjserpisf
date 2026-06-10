@@ -34,6 +34,7 @@ export default async function EmployeesPage({
     where,
     include: { department: true, position: true },
     orderBy: { name: "asc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(employees))

@@ -32,6 +32,7 @@ export default async function VehicleBrandsPage({
     include: {
       _count: { select: { models: true } },
     },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(brands))

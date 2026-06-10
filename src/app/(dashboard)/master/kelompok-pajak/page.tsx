@@ -14,6 +14,7 @@ export default async function TaxGroupsPage() {
     prisma.taxGroup.findMany({
       include: { taxes: true },
       orderBy: { createdAt: "desc" },
+      take: 1000,
     }),
     prisma.tax.findMany({ where: { isActive: true } }),
   ])

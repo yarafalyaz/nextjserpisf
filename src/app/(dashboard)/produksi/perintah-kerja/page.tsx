@@ -36,6 +36,7 @@ export default async function WorkOrdersPage({
     where,
     include: { customer: true },
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(workOrders))

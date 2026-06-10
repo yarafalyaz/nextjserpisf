@@ -32,6 +32,7 @@ export default async function VendorsPage({
   const vendors = await prisma.vendor.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(vendors))

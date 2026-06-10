@@ -25,6 +25,7 @@ export default async function ItemCategoriesPage({
   const categories = await prisma.itemCategory.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(categories))

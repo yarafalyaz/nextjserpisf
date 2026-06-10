@@ -29,6 +29,7 @@ export default async function AssetBrandsPage({
     where,
     orderBy: { name: "asc" },
     include: { _count: { select: { models: true } } },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(brands))

@@ -28,6 +28,7 @@ export default async function PaymentTermsPage({
   const paymentTerms = await prisma.paymentTerm.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(paymentTerms))

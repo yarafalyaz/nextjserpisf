@@ -35,6 +35,7 @@ export default async function ProductionOrdersPage({
     where,
     include: { product: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const data = JSON.parse(JSON.stringify(orders))

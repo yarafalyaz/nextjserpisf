@@ -26,6 +26,7 @@ export default async function ProductsPage({
     where,
     orderBy: { createdAt: "desc" },
     include: { materials: { select: { id: true } } },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(products))

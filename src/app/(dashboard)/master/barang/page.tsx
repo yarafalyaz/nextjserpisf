@@ -39,6 +39,7 @@ export default async function ItemsPage({
       where,
       include: { category: true },
       orderBy: { createdAt: "desc" },
+      take: 1000,
     }),
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
   ])

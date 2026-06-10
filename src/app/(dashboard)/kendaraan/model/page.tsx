@@ -33,6 +33,7 @@ export default async function VehicleModelsPage({
       _count: { select: { variants: true } },
     },
     orderBy: { name: "asc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(models))

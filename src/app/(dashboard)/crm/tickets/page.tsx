@@ -35,6 +35,7 @@ export default async function TicketsPage({
   const tickets = await prisma.crmTicket.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const data = JSON.parse(JSON.stringify(tickets))

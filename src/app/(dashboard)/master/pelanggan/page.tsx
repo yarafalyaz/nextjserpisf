@@ -33,6 +33,7 @@ export default async function CustomersPage({
   const customers = await prisma.customer.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(customers))

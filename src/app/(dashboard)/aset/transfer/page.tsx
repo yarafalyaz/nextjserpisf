@@ -29,6 +29,7 @@ export default async function AssetTransfersPage({
     where,
     include: { asset: { select: { name: true } } },
     orderBy: { transferDate: "desc" },
+    take: 1000,
   })
 
   const data = JSON.parse(JSON.stringify(transfers))

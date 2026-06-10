@@ -13,6 +13,7 @@ export default async function PositionsPage() {
   const positions = await prisma.position.findMany({
     include: { department: true },
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(positions))

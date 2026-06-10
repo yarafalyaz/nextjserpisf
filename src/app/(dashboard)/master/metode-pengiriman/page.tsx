@@ -25,7 +25,7 @@ export default async function ShippingMethodsPage({
     }),
   }
 
-  const rows = await prisma.shippingMethod.findMany({ where, orderBy: { name: "asc" } })
+  const rows = await prisma.shippingMethod.findMany({ where, orderBy: { name: "asc" }, take: 1000 })
   const tableData = JSON.parse(JSON.stringify(rows))
 
   return (

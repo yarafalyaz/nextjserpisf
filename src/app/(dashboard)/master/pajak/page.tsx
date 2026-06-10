@@ -25,6 +25,7 @@ export default async function TaxesPage({
   const rawTaxes = await prisma.tax.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const taxes = rawTaxes.map((t) => ({

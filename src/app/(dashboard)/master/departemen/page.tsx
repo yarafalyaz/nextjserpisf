@@ -29,6 +29,7 @@ export default async function DepartmentsPage({
     where,
     orderBy: { createdAt: "desc" },
     select: { id: true, code: true, name: true, description: true },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(departments))

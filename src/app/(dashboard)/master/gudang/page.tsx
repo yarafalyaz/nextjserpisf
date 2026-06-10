@@ -34,6 +34,7 @@ export default async function WarehousesPage({
     where,
     include: { racks: true },
     orderBy: { name: "asc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(warehouses))

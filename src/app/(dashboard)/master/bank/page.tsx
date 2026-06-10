@@ -28,6 +28,7 @@ export default async function BanksPage({
   const banks = await prisma.bank.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(banks))

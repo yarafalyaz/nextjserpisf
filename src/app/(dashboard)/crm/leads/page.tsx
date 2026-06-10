@@ -36,6 +36,7 @@ export default async function LeadsPage({
   const leads = await prisma.lead.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 1000,
   })
 
   const data = JSON.parse(JSON.stringify(leads))

@@ -13,6 +13,7 @@ export default async function BarcodesPage() {
   const barcodes = await prisma.barcode.findMany({
     orderBy: { createdAt: "desc" },
     include: { item: { select: { name: true } } },
+    take: 1000,
   })
 
   const tableData = JSON.parse(JSON.stringify(barcodes))
