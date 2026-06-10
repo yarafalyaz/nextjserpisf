@@ -477,9 +477,23 @@ export async function approveOvertime(overtimeId: number) {
 
 export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string) {
   try {
-  await requirePermission("view_payroll")
+  const sessionUser = await requirePermission("view_payroll")
   const startDate = new Date(startDateStr)
   const endDate = new Date(endDateStr)
+
+  // IDOR guard — scoped user sessions (non-admin) can only view their own
+  // payroll estimation. Super-admin and HR admin retain full access for
+  // organisational reporting purposes.
+  const isAdmin = sessionUser.roles.includes("super_admin") || sessionUser.roles.includes("hr_admin")
+  if (!isAdmin) {
+    const employee = await prisma.employee.findFirst({
+      where: { userId: Number(sessionUser.id) },
+      select: { id: true },
+    })
+    if (!employee || employee.id !== Number(employeeId)) {
+      throw new Error("Anda hanya bisa melihat estimasi gaji Anda sendiri")
+    }
+  }
 
   // 1. Base Salary & Active Loans
   const employee = await prisma.employee.findUnique({
