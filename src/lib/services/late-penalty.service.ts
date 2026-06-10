@@ -27,8 +27,13 @@ export async function calculateLatePenalty(
   endDate: Date
 ): Promise<LatePenaltyResult> {
   const settings = await getSystemSettings()
-  const penaltyPerMinute = Number(settings.latePenaltyPerMinute)
-  const maxMinutes = settings.maxLatePenaltyMinutes
+  const rawPerMinute = Number(settings.latePenaltyPerMinute)
+  // Fail safe to 0 so a missing/invalid setting can never inject NaN into payroll.
+  const penaltyPerMinute = Number.isFinite(rawPerMinute) && rawPerMinute > 0 ? rawPerMinute : 0
+  const rawMax = Number(settings.maxLatePenaltyMinutes)
+  // Only cap when a positive finite max is configured; otherwise leave uncapped
+  // (a null/undefined max previously turned lateMinutes into null -> NaN penalty).
+  const maxMinutes = Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null
 
   const attendances = await prisma.attendance.findMany({
     where: {
@@ -44,7 +49,7 @@ export async function calculateLatePenalty(
   for (const attendance of attendances) {
     let lateMinutes = attendance.lateMinutes
     if (lateMinutes <= 0) continue
-    if (lateMinutes > maxMinutes) lateMinutes = maxMinutes
+    if (maxMinutes !== null && lateMinutes > maxMinutes) lateMinutes = maxMinutes
 
     const penalty = lateMinutes * penaltyPerMinute
     details.push({

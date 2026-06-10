@@ -147,4 +147,55 @@ describe("late-penalty.service", () => {
       expect(result.totalPenalty).toBe(0);
     });
   });
+
+  describe("NaN / invalid settings guard", () => {
+    it("defaults penaltyPerMinute to 0 when null/undefined (not NaN in payroll)", async () => {
+      mockSettings.mockResolvedValue({
+        latePenaltyPerMinute: null,
+        maxLatePenaltyMinutes: 60,
+      });
+      mockFindMany.mockResolvedValue([
+        { date: new Date("2026-06-05"), lateMinutes: 10, checkIn: new Date("2026-06-05T08:10:00") },
+      ]);
+
+      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+
+      // Penalty must be 0, NOT NaN — NaN in payroll totals is a data-integrity issue.
+      expect(Number.isNaN(result.totalPenalty)).toBe(false);
+      expect(result.totalPenalty).toBe(0);
+    });
+
+    it("defaults maxMinutes to null (uncapped) when null/undefined — does not null out lateMinutes", async () => {
+      mockSettings.mockResolvedValue({
+        latePenaltyPerMinute: 500,
+        maxLatePenaltyMinutes: null,
+      });
+      mockFindMany.mockResolvedValue([
+        { date: new Date("2026-06-05"), lateMinutes: 120, checkIn: new Date("2026-06-05T10:00:00") },
+      ]);
+
+      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+
+      // Should NOT cap to null (previous bug: null maxMinutes made lateMinutes become null),
+      // and penalty must not be NaN.
+      expect(Number.isNaN(result.totalPenalty)).toBe(false);
+      expect(result.details[0].lateMinutes).toBe(120);
+      expect(result.totalPenalty).toBe(120 * 500);
+    });
+
+    it("handles NaN from Number() conversion gracefully", async () => {
+      mockSettings.mockResolvedValue({
+        latePenaltyPerMinute: NaN,
+        maxLatePenaltyMinutes: NaN,
+      });
+      mockFindMany.mockResolvedValue([
+        { date: new Date("2026-06-05"), lateMinutes: 10, checkIn: new Date("2026-06-05T08:10:00") },
+      ]);
+
+      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+
+      expect(Number.isNaN(result.totalPenalty)).toBe(false);
+      expect(result.totalPenalty).toBe(0);
+    });
+  });
 });
