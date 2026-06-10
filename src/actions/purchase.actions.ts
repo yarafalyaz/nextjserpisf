@@ -332,6 +332,19 @@ export async function createGoodsReceipt(formData: FormData) {
   const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(v.items ?? null) ?? []
 
   const gr = await prisma.$transaction(async (tx) => {
+    // Lock + validate the PO status before creating the receipt. Without this a
+    // GR could be created against a PO that is still draft (bypassing approval),
+    // already received, or cancelled — and the unconditional flip to "received"
+    // below would then also block cancelPurchaseOrder. A receipt is only valid
+    // against an approved/ordered PO.
+    const po = await tx.purchaseOrder.findUniqueOrThrow({
+      where: { id: v.purchaseOrderId },
+      select: { status: true },
+    })
+    if (po.status !== "approved" && po.status !== "ordered") {
+      throw new Error(`Penerimaan barang hanya bisa dibuat dari PO berstatus 'approved' atau 'ordered' (status saat ini: '${po.status}').`)
+    }
+
     const createdGr = await tx.goodsReceipt.create({
       data: {
         documentNo,
@@ -854,6 +867,19 @@ export async function deletePurchaseOrder(id: number) {
     include: { goodsReceipts: true },
   })
 
+  // Guard: refuse deletion when a non-cancelled Vendor Bill still references this
+  // PO. createVendorBill posts the AP journal (Dr Clearing/Expense / Cr AP) on a
+  // bill — deleting the PO here only reverses the GR's inventory/clearing leg and
+  // leaves the bill's AP + clearing entries orphaned (clearing stuck Dr with no
+  // pair, AP dangling, bill pointing at a deleted PO → GL no longer balances).
+  // The bill must be voided first. Mirrors the in-use guards on deleteProject.
+  const activeBills = await prisma.vendorBill.count({
+    where: { purchaseOrderId: id, status: { notIn: ["cancelled"] } },
+  })
+  if (activeBills > 0) {
+    throw new Error("PO tidak dapat dihapus karena masih memiliki tagihan vendor aktif. Batalkan/void tagihan terlebih dahulu.")
+  }
+
   await prisma.$transaction(async (tx) => {
     // 1. Delete all related GoodsReceipts and reverse their stock moves
     for (const gr of po.goodsReceipts) {
@@ -927,6 +953,21 @@ export async function deleteGoodsReceipt(id: number) {
       items: true,
     },
   })
+
+  // Guard: refuse deletion when a non-cancelled Vendor Bill references this GR's
+  // PO. A goods-based Vendor Bill posts Dr Clearing / Cr AP against the receipt;
+  // deleting the GR here reverses only the GR's own Dr Inventory / Cr Clearing
+  // leg, leaving the bill's clearing entry stranded (clearing stuck with no pair)
+  // and breaking the 3-way match invariant. Void the bill first. Mirrors the
+  // guard on deletePurchaseOrder.
+  if (gr.purchaseOrderId) {
+    const activeBills = await prisma.vendorBill.count({
+      where: { purchaseOrderId: gr.purchaseOrderId, status: { notIn: ["cancelled"] } },
+    })
+    if (activeBills > 0) {
+      throw new Error("Penerimaan barang tidak dapat dihapus karena PO terkait masih memiliki tagihan vendor aktif. Batalkan/void tagihan terlebih dahulu.")
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     // 1. Reverse all stock moves + inventory layers + qty_on_hand created by this GR
@@ -1180,32 +1221,48 @@ export async function updateVendorBill(id: number, formData: FormData) {
     throw new Error("Hanya tagihan draft yang dapat diedit")
   }
 
-  const bill = await prisma.vendorBill.update({
-    where: { id },
-    data: {
-      vendorId: v.vendorId,
-      purchaseOrderId: v.purchaseOrderId ?? null,
-      date: new Date(v.date),
-      dueDate: v.dueDate ? new Date(v.dueDate) : null,
-      subtotal: v.subtotal,
-      tax: v.tax,
-      grandTotal: v.grandTotal,
-      status: "draft",
-      createdBy: Number(user.id),
-    },
-  })
-
-  // Associate uploaded attachments with the new vendor bill
-  const attachmentIds = v.attachmentIds
-  if (attachmentIds) {
-    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
-    if (ids.length > 0) {
-      await prisma.transactionAttachment.updateMany({
-        where: { id: { in: ids }, referenceId: 0 },
-        data: { referenceId: bill.id },
-      })
+  // Lock the PO + re-run the 3-way match BEFORE persisting the edit, mirroring
+  // createVendorBill/confirmVendorBill. Without this, a draft bill created small
+  // (passing the match) could be edited to an over-bill grandTotal and the
+  // journal would be reposted with a value the 3-way match should have rejected
+  // — i.e. the over-bill guard was bypassable via edit. assertThreeWayMatch
+  // excludes this bill's own id so it doesn't count itself.
+  const bill = await prisma.$transaction(async (tx) => {
+    if (v.purchaseOrderId) {
+      await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`
     }
-  }
+
+    await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, v.grandTotal, id)
+
+    const updated = await tx.vendorBill.update({
+      where: { id },
+      data: {
+        vendorId: v.vendorId,
+        purchaseOrderId: v.purchaseOrderId ?? null,
+        date: new Date(v.date),
+        dueDate: v.dueDate ? new Date(v.dueDate) : null,
+        subtotal: v.subtotal,
+        tax: v.tax,
+        grandTotal: v.grandTotal,
+        status: "draft",
+        createdBy: Number(user.id),
+      },
+    })
+
+    // Associate uploaded attachments with the vendor bill
+    const attachmentIds = v.attachmentIds
+    if (attachmentIds) {
+      const ids = safeJsonParse<number[]>(attachmentIds) ?? []
+      if (ids.length > 0) {
+        await tx.transactionAttachment.updateMany({
+          where: { id: { in: ids }, referenceId: 0 },
+          data: { referenceId: updated.id },
+        })
+      }
+    }
+
+    return updated
+  })
 
   // The bill journal is posted at creation; reverse + repost so the edited
   // amount/tax/PO-link (which can flip the goods-based clearing branch) is reflected.
@@ -1382,10 +1439,14 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     }
   }
 
-  // Keep the GL in sync with the edited amount/account: reverse the old journal
-  // (no-op if none) then repost from the updated payment.
-  await deleteJournalByReference("VendorPayment", id)
-  await onVendorPaymentCreated(payment.id, Number(user.id))
+  // Journal is NOT posted here. Per the design contract (see createVendorPayment:
+  // "Journal is NOT created here — posted only on confirmVendorPayment"), a draft
+  // payment must not affect the GL. This function only edits drafts (guarded
+  // above), so posting via onVendorPaymentCreated would push Dr AP / Cr Bank to
+  // the GL without a vendorPaymentAllocation and without the overpay guard, while
+  // the bill's balanceDue stays unchanged → subledger (bills) drifts from GL AP.
+  // The journal + allocations are created atomically in confirmVendorPayment.
+
   await logActivity("update", "VendorPayment", payment.id, `Memperbarui pembayaran vendor #${payment.id}`)
   revalidatePath("/pembelian/pembayaran-vendor")
   return { success: true, id: payment.id }
