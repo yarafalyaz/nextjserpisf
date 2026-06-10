@@ -13,6 +13,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { findOverReturn } from "@/lib/sales/return-validation"
+import { allocatePaymentToBills } from "@/lib/finance/payment-allocation"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { PurchaseStatus, Status } from "@/lib/constants"
@@ -577,14 +578,28 @@ export async function confirmVendorPayment(paymentId: number) {
       },
     })
 
-    const allocations = await tx.vendorPaymentAllocation.findMany({
-      where: { vendorPaymentId: paymentId },
+    // Lock the vendor's open bills as a set, then auto-allocate the payment
+    // oldest-first. Allocation rows were never created on the create-side, so
+    // confirming a payment previously left vendor bills permanently unpaid
+    // (AP aging overstated). We generate them deterministically here.
+    await tx.$executeRaw`SELECT id FROM vendor_bills WHERE vendor_id = ${freshPayment.vendorId} AND status IN ('posted', 'partial') AND balance_due > 0 AND deleted_at IS NULL FOR UPDATE`
+
+    const openBills = await tx.vendorBill.findMany({
+      where: {
+        vendorId: freshPayment.vendorId,
+        status: { in: ["posted", "partial"] },
+        balanceDue: { gt: 0 },
+        deletedAt: null,
+      },
+      orderBy: [{ date: "asc" }, { id: "asc" }],
     })
 
-    for (const alloc of allocations) {
-      // Lock each bill row to prevent concurrent overpay from other payments
-      await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${alloc.vendorBillId} FOR UPDATE`
+    const allocations = allocatePaymentToBills(
+      Number(freshPayment.amount),
+      openBills.map((b) => ({ id: b.id, balanceDue: Number(b.balanceDue) }))
+    )
 
+    for (const alloc of allocations) {
       const bill = await tx.vendorBill.findUniqueOrThrow({
         where: { id: alloc.vendorBillId },
       })
@@ -594,6 +609,14 @@ export async function confirmVendorPayment(paymentId: number) {
         throw new Error(`Alokasi melebihi sisa tagihan vendor bill #${bill.id}`)
       }
       const nextBalance = Number(bill.grandTotal) - nextPaid
+
+      await tx.vendorPaymentAllocation.create({
+        data: {
+          vendorPaymentId: paymentId,
+          vendorBillId: bill.id,
+          amount: alloc.amount,
+        },
+      })
 
       await tx.vendorBill.update({
         where: { id: bill.id },
