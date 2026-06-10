@@ -82,6 +82,13 @@ export async function proxy(req: NextRequest) {
       return addSecurityHeaders(NextResponse.next())
     }
 
+    // Health check must be reachable without a session — it's the liveness
+    // probe for monitors / load balancers / k8s / CI. It exposes no sensitive
+    // data (DB SELECT 1 + status) and returns 200/503 by design.
+    if (pathname === "/api/health") {
+      return addSecurityHeaders(NextResponse.next())
+    }
+
     // Rate limit upload endpoints more strictly
     if (pathname.startsWith("/api/upload")) {
       const result = takeRateLimit(`upload:${ip}`, RATE_LIMITS.upload)

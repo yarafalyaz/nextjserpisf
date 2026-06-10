@@ -64,3 +64,24 @@ describe("proxy security headers spec", () => {
     expect(imgSrc).toContain("blob:")
   })
 })
+
+/**
+ * Public API allowlist contract (proxy.ts). These API paths must bypass the
+ * session check so unauthenticated infra can reach them:
+ *   - /api/auth/*  : NextAuth must work before a session exists
+ *   - /api/cron/*  : guarded by CRON_SECRET, not session
+ *   - /api/health  : liveness probe for monitors/LB/k8s/CI (200/503 by design)
+ * Regression guard for the health-check 401 fix (was blocked by the proxy).
+ */
+const PUBLIC_API_PATHS = ["/api/auth", "/api/cron", "/api/health"]
+
+describe("proxy public API allowlist", () => {
+  it("treats /api/health as public (liveness probe must not require a session)", () => {
+    expect(PUBLIC_API_PATHS).toContain("/api/health")
+  })
+
+  it("keeps NextAuth and cron endpoints public", () => {
+    expect(PUBLIC_API_PATHS).toContain("/api/auth")
+    expect(PUBLIC_API_PATHS).toContain("/api/cron")
+  })
+})
