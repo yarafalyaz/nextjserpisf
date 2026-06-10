@@ -58,6 +58,16 @@ export async function onDownPaymentConfirmed(
       },
     });
 
+    // Also lock the QUOTATION row. The DP row lock above only serializes
+    // confirms of the SAME down payment; a quotation may have multiple DPs
+    // (createDownPayment allows cumulative DPs), so two different DPs on the
+    // same quotation confirmed concurrently would both pass the
+    // existingWO/SO/Invoice idempotency checks below and double-create the
+    // documents (+ double revenue/COGS/stock-out). Locking the quotation makes
+    // that check-then-create atomic per quotation. Lock order is dp -> quotation;
+    // convertQuotationToOrder locks the quotation only, so there is no cycle.
+    await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${dp.quotationId} FOR UPDATE`;
+
     // Guard: already confirmed — silent skip (idempotency).
     // Recovery: if a prior confirm committed the invoice but the process died
     // before the post-commit onSalesInvoicePosted call (revenue/COGS/stock-out),

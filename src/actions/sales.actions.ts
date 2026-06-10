@@ -304,7 +304,14 @@ export async function convertQuotationToOrder(quotationId: number) {
   const allItems = quotation.sections.flatMap((section) => section.items)
 
   const salesOrder = await prisma.$transaction(async (tx) => {
-    // Idempotency inside tx to prevent race condition (double-click)
+    // Serialize concurrent converts for the SAME quotation by locking the
+    // quotation row. Without this, two simultaneous requests both pass the
+    // findFirst idempotency check (TOCTOU) and create two SOs from one
+    // quotation. A DB unique on SalesOrder.quotationId is NOT used here because
+    // void-and-reissue legitimately keeps a cancelled row pointing at the same
+    // quotation, and MySQL has no partial/filtered unique index. The row lock
+    // makes the check-then-create atomic without that regression.
+    await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`;
     const existing = await tx.salesOrder.findFirst({ where: { quotationId } })
     if (existing) {
       throw new Error("Penawaran ini sudah memiliki Sales Order")
