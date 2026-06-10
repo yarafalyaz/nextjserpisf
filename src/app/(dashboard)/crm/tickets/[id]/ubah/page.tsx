@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
 import { TicketForm } from "@/components/forms/ticket-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -14,6 +15,7 @@ export default async function EditPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_tickets")
   const { id } = await params
 
   const data = await prisma.crmTicket.findUnique({
@@ -30,6 +32,7 @@ export default async function EditPage({
     status: data.status,
     assignedTo: data.assignedTo,
     ticketNumber: data.ticketNumber ?? undefined,
+    customerId: data.customerId,
     customerName: data.customerName,
     customerEmail: data.customerEmail,
     customerPhone: data.customerPhone,

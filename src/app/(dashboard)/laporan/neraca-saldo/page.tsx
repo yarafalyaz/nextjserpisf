@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
+import { computeTrialBalance } from '@/lib/finance/trial-balance'
 import { formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -20,7 +21,11 @@ export default async function TrialBalancePage({
 }) {
   await requirePermission('view_reports')
   const params = await searchParams
+  // Include the whole "as of" day: new Date("YYYY-MM-DD") is midnight, so a bare
+  // `lte` would drop same-day transactions (which carry a full timestamp). Other
+  // reports already use end-of-day; match that here.
   const asOfDate = params.date ? new Date(params.date) : new Date()
+  if (params.date) asOfDate.setHours(23, 59, 59, 999)
 
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
@@ -37,30 +42,18 @@ export default async function TrialBalancePage({
     orderBy: { code: 'asc' },
   })
 
-  const data = accounts
-    .map((acc) => {
-      const totalDebit = acc.journalEntries.reduce((sum, e) => sum + Number(e.debit), 0)
-      const totalCredit = acc.journalEntries.reduce((sum, e) => sum + Number(e.credit), 0)
-      const netBalance = totalDebit - totalCredit
-      // Proper trial balance: net debit balance for debit-normal accounts (ASSET, EXPENSE),
-      // net credit balance for credit-normal accounts (LIABILITY, EQUITY, REVENUE).
-      const isDebitNormal = acc.type === 'ASSET' || acc.type === 'EXPENSE'
-      const debitBalance = isDebitNormal ? Math.max(0, netBalance) : Math.max(0, -netBalance)
-      const creditBalance = isDebitNormal ? Math.max(0, -netBalance) : Math.max(0, netBalance)
-      return {
-        id: acc.id,
-        code: acc.code,
-        name: acc.name,
-        type: acc.type,
-        totalDebit: debitBalance,
-        totalCredit: creditBalance,
-      }
-    })
-    .filter((a) => a.totalDebit > 0 || a.totalCredit > 0)
-
-  const grandTotalDebit = data.reduce((sum, a) => sum + a.totalDebit, 0)
-  const grandTotalCredit = data.reduce((sum, a) => sum + a.totalCredit, 0)
-  const isBalanced = Math.abs(grandTotalDebit - grandTotalCredit) < 0.01
+  // Aggregation + debit/credit-column placement lives in computeTrialBalance
+  // (unit-tested) so the Σdebit == Σkredit invariant is guarded against regression.
+  const { lines: data, grandTotalDebit, grandTotalCredit, isBalanced } = computeTrialBalance(
+    accounts.map((acc) => ({
+      id: acc.id,
+      code: acc.code,
+      name: acc.name,
+      type: acc.type,
+      totalDebit: acc.journalEntries.reduce((sum, e) => sum + Number(e.debit), 0),
+      totalCredit: acc.journalEntries.reduce((sum, e) => sum + Number(e.credit), 0),
+    })),
+  )
 
   const asOfLabel = asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
 

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/page-header"
 interface TicketFormProps {
   customers: { id: number; name: string
 }[]
-  ticket?: { id: number; subject: string; description?: string | null; priority: string; status: string; assignedTo?: number | null; ticketNumber?: string; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null; type?: string | null; resolutionNotes?: string | null }
+  ticket?: { id: number; subject: string; description?: string | null; priority: string; status: string; assignedTo?: number | null; ticketNumber?: string; customerId?: number | null; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null; type?: string | null; resolutionNotes?: string | null }
   users: { id: number; name: string }[]
 }
 
@@ -22,7 +22,7 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!ticket?.id
-  const [customerId, setCustomerId] = useState<string | null>(null)
+  const [customerId, setCustomerId] = useState<string | null>(ticket?.customerId ? String(ticket.customerId) : null)
   const [assignedTo, setAssignedTo] = useState<string | null>(ticket?.assignedTo ? String(ticket.assignedTo) : null)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {

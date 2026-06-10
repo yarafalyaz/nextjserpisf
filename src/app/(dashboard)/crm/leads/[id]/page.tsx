@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
@@ -21,6 +22,7 @@ export default async function LeadDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_leads")
   const { id } = await params
 
   const lead = await prisma.lead.findUnique({

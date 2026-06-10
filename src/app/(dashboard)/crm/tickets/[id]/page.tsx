@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -20,6 +21,7 @@ export default async function CrmTicketDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_tickets")
   const { id } = await params
 
   const ticket = await prisma.crmTicket.findUnique({

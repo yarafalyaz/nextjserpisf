@@ -21,7 +21,11 @@ export default async function BalanceSheetPage({
 }) {
   await requirePermission('view_reports')
   const params = await searchParams
+  // Include the whole "as of" day: new Date("YYYY-MM-DD") is midnight, so a bare
+  // `lte` would drop same-day transactions (which carry a full timestamp). Other
+  // reports already use end-of-day; match that here.
   const asOfDate = params.date ? new Date(params.date) : new Date()
+  if (params.date) asOfDate.setHours(23, 59, 59, 999)
 
   const entries = await prisma.journalEntry.findMany({
     where: {
