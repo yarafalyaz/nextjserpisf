@@ -1022,19 +1022,27 @@ export async function createCurrency(formData: FormData) {
   try {
   await requirePermission("create_currencies")
 
-  const currency = await prisma.currency.create({
-    data: {
-      code: formData.get("code") as string,
-      name: formData.get("name") as string,
-      rate: (safeNumber(formData.get("rate")) ?? 0),
-      symbol: (formData.get("symbol") as string) || undefined,
-      symbolPosition: (formData.get("symbolPosition") as string) || undefined,
-      decimalSeparator: (formData.get("decimalSeparator") as string) || undefined,
-      thousandsSeparator: (formData.get("thousandsSeparator") as string) || undefined,
-      decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
-      isBase: formData.get("isBase") === "on",
-      isActive: true,
-    },
+  const isBase = formData.get("isBase") === "on"
+
+  const currency = await prisma.$transaction(async (tx) => {
+    // Guard: only one currency may be base — clear all others first.
+    if (isBase) {
+      await tx.currency.updateMany({ where: { isBase: true }, data: { isBase: false } })
+    }
+    return tx.currency.create({
+      data: {
+        code: formData.get("code") as string,
+        name: formData.get("name") as string,
+        rate: (safeNumber(formData.get("rate")) ?? 0),
+        symbol: (formData.get("symbol") as string) || undefined,
+        symbolPosition: (formData.get("symbolPosition") as string) || undefined,
+        decimalSeparator: (formData.get("decimalSeparator") as string) || undefined,
+        thousandsSeparator: (formData.get("thousandsSeparator") as string) || undefined,
+        decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
+        isBase,
+        isActive: true,
+      },
+    })
   })
 
   revalidatePath("/master/mata-uang")
@@ -1052,19 +1060,27 @@ export async function updateCurrency(id: number, formData: FormData) {
   try {
   await requirePermission("edit_currencies")
 
-  await prisma.currency.update({
-    where: { id },
-    data: {
-      code: formData.get("code") as string,
-      name: formData.get("name") as string,
-      rate: (safeNumber(formData.get("rate")) ?? 0),
-      symbol: (formData.get("symbol") as string) || undefined,
-      symbolPosition: (formData.get("symbolPosition") as string) || undefined,
-      decimalSeparator: (formData.get("decimalSeparator") as string) || undefined,
-      thousandsSeparator: (formData.get("thousandsSeparator") as string) || undefined,
-      decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
-      isBase: formData.get("isBase") === "on",
-    },
+  const isBase = formData.get("isBase") === "on"
+
+  await prisma.$transaction(async (tx) => {
+    // Guard: only one currency may be base — clear all others first.
+    if (isBase) {
+      await tx.currency.updateMany({ where: { isBase: true, id: { not: id } }, data: { isBase: false } })
+    }
+    await tx.currency.update({
+      where: { id },
+      data: {
+        code: formData.get("code") as string,
+        name: formData.get("name") as string,
+        rate: (safeNumber(formData.get("rate")) ?? 0),
+        symbol: (formData.get("symbol") as string) || undefined,
+        symbolPosition: (formData.get("symbolPosition") as string) || undefined,
+        decimalSeparator: (formData.get("decimalSeparator") as string) || undefined,
+        thousandsSeparator: (formData.get("thousandsSeparator") as string) || undefined,
+        decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
+        isBase,
+      },
+    })
   })
 
   revalidatePath("/master/mata-uang")

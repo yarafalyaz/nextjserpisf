@@ -600,6 +600,19 @@ export async function deleteRack(id: number) {
   try {
   await requirePermission("delete_warehouses")
 
+  // Guard: prevent hard-delete if Rack is referenced by transactional records.
+  const [itemCount, stockMoveCount, rackRowCount] = await Promise.all([
+    prisma.item.count({ where: { defaultRackId: id } }),
+    prisma.stockMove.count({ where: { rackId: id } }),
+    prisma.rackRow.count({ where: { rackId: id } }),
+  ])
+  if (itemCount > 0 || stockMoveCount > 0 || rackRowCount > 0) {
+    return {
+      success: false,
+      error: `Rak masih digunakan oleh ${itemCount} barang, ${stockMoveCount} pergerakan stok, dan ${rackRowCount} baris rak. Hapus atau pindahkan referensi terlebih dahulu.`,
+    }
+  }
+
   await prisma.rack.delete({ where: { id } })
 
   await logActivity("delete", "Rack", id, `Menghapus rak #${id}`)
