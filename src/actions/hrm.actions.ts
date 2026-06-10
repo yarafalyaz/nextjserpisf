@@ -680,7 +680,12 @@ export async function processPayroll(formData: FormData) {
   const statutory = bpjs.total + pph21
 
   const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction - absentDeduction - statutory
-  const totalAmount = safeNumber(formData.get("totalAmount")) ?? netSalary
+  // totalAmount must mirror the server-computed netSalary — never trust a
+  // client-supplied total. Accepting formData "totalAmount" let the stored
+  // figure (shown on payslips/reports/list-totals) diverge from the actual net
+  // pay and from the GL posting, which posts netSalary + statutory (see
+  // postPayrollJournal in accounting.hook.ts).
+  const totalAmount = netSalary
   const paymentDateRaw = formData.get("paymentDate") as string | null
 
   const payroll = await prisma.payroll.create({
@@ -779,7 +784,12 @@ export async function updatePayroll(id: number, formData: FormData) {
 
   // Recalculate net_salary auto
   const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction - absentDeduction - statutory
-  const totalAmount = safeNumber(formData.get("totalAmount")) ?? netSalary
+  // totalAmount must mirror the server-computed netSalary — never trust a
+  // client-supplied total. Accepting formData "totalAmount" let the stored
+  // figure (shown on payslips/reports/list-totals) diverge from the actual net
+  // pay and from the GL posting, which posts netSalary + statutory (see
+  // postPayrollJournal in accounting.hook.ts).
+  const totalAmount = netSalary
   const paymentDateRaw = formData.get("paymentDate") as string | null
 
   const payroll = await prisma.payroll.update({
