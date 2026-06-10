@@ -1199,7 +1199,11 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         data: {
           subtotal,
           discount: discountTotal,
-          tax: taxRate,
+          // Store the PPN AMOUNT in `tax` (not the rate) so the field carries
+          // the same meaning on every write path (DP/quotation paths already
+          // store the amount). Keeps tax === taxAmount and prevents the report /
+          // editor from ever reading a bare rate as if it were the amount.
+          tax: taxAmount,
           taxAmount,
           grandTotal,
           totalAmount: grandTotal,
