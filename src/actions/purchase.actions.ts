@@ -599,6 +599,21 @@ export async function confirmVendorPayment(paymentId: number) {
       openBills.map((b) => ({ id: b.id, balanceDue: Number(b.balanceDue) }))
     )
 
+    // Guard against GL/subledger drift: the GL hook (onVendorPaymentCreated)
+    // debits Accounts Payable by the FULL payment.amount, but allocations are
+    // capped at each bill's balance, so any amount exceeding the vendor's total
+    // open balances is left unallocated. Confirming such an overpay would reduce
+    // GL AP by more than the subledger (bills) — the AP control account would no
+    // longer match the sum of open bills. Refuse it. Recording the excess as a
+    // vendor advance/prepayment is a separate feature (needs a prepayment account).
+    const allocatedTotal = allocations.reduce((s, a) => s + Number(a.amount), 0)
+    if (allocatedTotal + 0.01 < Number(freshPayment.amount)) {
+      throw new Error(
+        `Nominal pembayaran (${Number(freshPayment.amount)}) melebihi total tagihan terutang vendor (${allocatedTotal}). ` +
+          `Kurangi nominal pembayaran agar sesuai sisa tagihan.`
+      )
+    }
+
     for (const alloc of allocations) {
       const bill = await tx.vendorBill.findUniqueOrThrow({
         where: { id: alloc.vendorBillId },
