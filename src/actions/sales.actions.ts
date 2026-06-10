@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, createSalesReturnSchema } from "@/lib/validations/sales.schemas"
+import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 
 // ==================== QUOTATION ACTIONS ====================
@@ -830,9 +831,46 @@ export async function createSalesReturn(formData: FormData) {
   if (invoiceId) {
     const invItems = await prisma.salesInvoiceItem.findMany({
       where: { salesInvoiceId: invoiceId, itemId: { in: returnItemIds.length ? returnItemIds : [-1] } },
-      select: { itemId: true, unitPrice: true },
+      select: { itemId: true, unitPrice: true, qty: true },
     })
-    for (const it of invItems) if (it.itemId != null) invoicePriceMap.set(it.itemId, Number(it.unitPrice))
+    // Over-return guard: a return linked to an invoice must not return more units
+    // than were invoiced, counting prior non-cancelled returns. Without this, the
+    // return over-restocks inventory and over-credits AR. Mirrors the DP cap.
+    const invoicedQtyByItem = new Map<number, number>()
+    for (const it of invItems) {
+      if (it.itemId == null) continue
+      invoicePriceMap.set(it.itemId, Number(it.unitPrice))
+      invoicedQtyByItem.set(it.itemId, (invoicedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
+    }
+
+    const priorReturns = await prisma.salesReturnItem.findMany({
+      where: {
+        salesReturn: { salesInvoiceId: invoiceId, status: { not: "cancelled" } },
+        itemId: { in: returnItemIds.length ? returnItemIds : [-1] },
+      },
+      select: { itemId: true, qty: true },
+    })
+    const alreadyReturnedByItem = new Map<number, number>()
+    for (const r of priorReturns) {
+      alreadyReturnedByItem.set(r.itemId, (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
+    }
+
+    const violation = findOverReturn(
+      validItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+      invoicedQtyByItem,
+      alreadyReturnedByItem
+    )
+    if (violation) {
+      if (violation.type === "not_on_invoice") {
+        return { success: false, error: `Item #${violation.itemId} tidak ada pada faktur yang dipilih, tidak bisa diretur.` }
+      }
+      return {
+        success: false,
+        error:
+          `Jumlah retur item #${violation.itemId} melebihi yang difakturkan ` +
+          `(difakturkan: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
+      }
+    }
   }
   const resolvePrice = (itemId: number) =>
     invoicePriceMap.get(itemId) ?? (masterPriceMap.get(itemId) || returnCostMap.get(itemId) || 0)
