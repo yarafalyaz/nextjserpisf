@@ -8,7 +8,8 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
  */
 
 export async function onExpenseApprovedSyncPettyCash(
-  expenseId: number
+  expenseId: number,
+  approvedByUserId?: number
 ): Promise<void> {
   const expense = await prisma.expense.findUniqueOrThrow({
     where: { id: expenseId },
@@ -50,7 +51,7 @@ export async function onExpenseApprovedSyncPettyCash(
         referenceNo: expense.documentNo,
         balanceBefore: 0,
         balanceAfter: 0,
-        createdBy: expense.approvedBy ?? null,
+        createdBy: approvedByUserId ?? expense.approvedBy ?? null,
       },
     });
 

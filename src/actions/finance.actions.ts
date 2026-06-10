@@ -259,13 +259,20 @@ export async function approveExpense(expenseId: number) {
   // Workflow approval must be complete (no-op if no workflow configured).
   await assertApproved("Expense", expenseId)
 
+  // Sync to PettyCash FIRST (idempotent on documentNo), THEN flip to approved.
+  // Ordering matters: if the petty-cash sync fails, the expense stays in
+  // "draft" and the whole approveExpense is retryable. The previous order
+  // (approve → sync) committed the approved status first, so a sync failure
+  // left the expense permanently approved-but-unsynced (petty cash
+  // under-recorded with no retry path, since approveExpense rejects non-draft).
+  // The hook re-checks documentNo inside its own transaction, so a retry after
+  // a partial failure will not double-create the petty cash record.
+  await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id))
+
   await prisma.expense.update({
     where: { id: expenseId },
     data: { status: "approved", approvedBy: Number(user.id) },
   })
-
-  // Sync to PettyCash if paid from petty cash account
-  await onExpenseApprovedSyncPettyCash(expenseId)
 
   await logActivity("approve", "Expense", expenseId, "Menyetujui pengeluaran")
   revalidatePath("/keuangan/pengeluaran")

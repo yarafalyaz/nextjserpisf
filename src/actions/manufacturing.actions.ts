@@ -242,13 +242,20 @@ export async function completeWorkOrder(workOrderId: number) {
   // same materials would leave inventory twice and Inventory would be credited
   // twice. WO completion here is a status/fulfilment milestone only.
 
-  await prisma.workOrder.update({
-    where: { id: workOrderId },
+  // Atomically claim completion: only the request that flips status away from
+  // in_progress/pending wins. Without this, two concurrent "selesai" clicks
+  // could both pass the status guard above and each run autoCreateDeliveryOrder
+  // → duplicate Delivery Orders. The conditional updateMany serializes it.
+  const claim = await prisma.workOrder.updateMany({
+    where: { id: workOrderId, status: { in: ["in_progress", "pending"] } },
     data: {
       status: "completed",
       endDate: new Date(),
     },
   })
+  if (claim.count === 0) {
+    throw new Error("Work Order sudah diselesaikan atau sedang diproses.")
+  }
 
   // Update all WO items to completed
   await prisma.workOrderItem.updateMany({
@@ -256,7 +263,8 @@ export async function completeWorkOrder(workOrderId: number) {
     data: { status: "completed" },
   })
 
-  // Auto-create DeliveryOrder for parts if applicable
+  // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
+  // the atomic claim above so only the winning request reaches here).
   await autoCreateDeliveryOrder(workOrderId, Number(user.id))
 
   // Sync linked Project status

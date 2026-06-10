@@ -165,6 +165,7 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
 
   // Jam kerja di hari libur → otomatis jadi pengajuan lembur (menunggu persetujuan).
   let overtimeMinutes: number | null = null
+  let overtimeHours = 0
   if (isOvertimeDay && attendance.checkIn) {
     const grossMinutes = Math.max(0, Math.round((now.getTime() - attendance.checkIn.getTime()) / 60000))
     // Potong jam istirahat (ISOMA) yang beririsan dengan jam kerja.
@@ -173,23 +174,14 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
     const inMin = inWib.getUTCHours() * 60 + inWib.getUTCMinutes()
     const overlap = breakOverlapMinutes(inMin, nowMinutes, settings.restBreakStart, settings.restBreakEnd)
     overtimeMinutes = Math.max(0, grossMinutes - overlap)
-    const hours = Math.round((overtimeMinutes / 60) * 100) / 100
-    if (hours > 0) {
-      await prisma.overtimeRequest.create({
-        data: {
-          employeeId,
-          date: attendance.date,
-          hours,
-          totalHours: hours,
-          reason: "Otomatis dari absensi hari libur",
-          status: "pending",
-        },
-      })
-    }
+    overtimeHours = Math.round((overtimeMinutes / 60) * 100) / 100
   }
 
-  await prisma.attendance.update({
-    where: { id: attendance.id },
+  // Atomically claim the check-out: only the request that flips checkOut from
+  // null wins. Serializes concurrent double check-outs so the overtime request
+  // below is created at most once (mirrors selfCheckOut).
+  const claim = await prisma.attendance.updateMany({
+    where: { id: attendance.id, checkOut: null },
     data: {
       checkOut: now,
       checkOutLatitude: latitude ?? null,
@@ -198,6 +190,23 @@ export async function checkOut(employeeId: number, latitude?: number, longitude?
       status: isHalfDay ? "half_day" : attendance.status,
     },
   })
+  if (claim.count === 0) {
+    throw new Error("Sudah check-out")
+  }
+
+  // Only the winner of the claim reaches here → overtime created exactly once.
+  if (isOvertimeDay && overtimeHours > 0) {
+    await prisma.overtimeRequest.create({
+      data: {
+        employeeId,
+        date: attendance.date,
+        hours: overtimeHours,
+        totalHours: overtimeHours,
+        reason: "Otomatis dari absensi hari libur",
+        status: "pending",
+      },
+    })
+  }
 
   await logActivity("checkout", "Attendance", attendance.id, "Check-out absensi")
   revalidatePath("/sdm/absensi")
