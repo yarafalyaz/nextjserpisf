@@ -40,31 +40,41 @@ export async function onTransferProcessed(
     });
     if (existingOutMoves) return;
 
-    // Create Stock Move OUT per item from source warehouse
-    for (const item of transfer.items) {
-      if (Number(item.qty) <= 0) continue;
+    // Aggregate by itemId before generating moves. A duplicate item row would
+    // otherwise create two OUT moves that split the FIFO consume across layers
+    // at different costs; the IN side matches OUT by itemId via findFirst and
+    // would reuse the first OUT move's cost for every duplicate row, drifting
+    // the destination layer cost basis. One move per item keeps OUT and IN
+    // costs consistent. No-op for the normal one-row-per-item case.
+    const aggregated = new Map<number, number>();
+    for (const it of transfer.items) {
+      const q = Number(it.qty);
+      if (q > 0) aggregated.set(it.itemId, (aggregated.get(it.itemId) ?? 0) + q);
+    }
 
+    // Create Stock Move OUT per item from source warehouse
+    for (const [itemId, qty] of aggregated) {
       const smDocNo = await generateDocumentNumber("SM");
 
       // Lock the item row to serialize global qtyOnHand updates.
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`;
 
       // Consume FIFO from the SOURCE warehouse — track cost so the destination
       // layer can preserve the cost basis (avoids transfers zeroing out COGS).
       const { consumedCost } = await consumeFifoLayers(tx, {
-        itemId: item.itemId,
+        itemId: itemId,
         warehouseId: transfer.sourceWarehouseId,
-        qty: Number(item.qty),
+        qty: qty,
         label: `transfer ${transfer.documentNo}`,
       });
-      const unitCost = Number(item.qty) > 0 ? consumedCost / Number(item.qty) : 0;
+      const unitCost = qty > 0 ? consumedCost / qty : 0;
 
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
-          itemId: item.itemId,
+          itemId: itemId,
           warehouseId: transfer.sourceWarehouseId,
-          qty: item.qty,
+          qty: qty,
           cost: unitCost,
           impact: "OUT",
           status: "posted",
@@ -76,7 +86,7 @@ export async function onTransferProcessed(
       });
 
       // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${itemId}`;
     }
   });
 }
@@ -114,20 +124,28 @@ export async function onTransferReceived(
       throw new Error("Transfer harus berstatus 'processed' untuk diterima.");
     }
 
-    // Create Stock Move IN per item to destination warehouse
-    for (const item of transfer.items) {
-      if (Number(item.qty) <= 0) continue;
+    // Aggregate by itemId — mirrors onTransferProcessed so each item has exactly
+    // one IN move matching its single OUT move. Prevents duplicate item rows from
+    // each grabbing the first OUT move's cost via findFirst (cost-basis drift).
+    const aggregated = new Map<number, number>();
+    for (const it of transfer.items) {
+      const q = Number(it.qty);
+      if (q > 0) aggregated.set(it.itemId, (aggregated.get(it.itemId) ?? 0) + q);
+    }
 
+    // Create Stock Move IN per item to destination warehouse
+    for (const [itemId, qty] of aggregated) {
       const smDocNo = await generateDocumentNumber("SM");
 
       // Preserve the cost basis carried by the matching OUT move (FIFO cost
-      // captured when the transfer was processed) instead of zeroing it.
+      // captured when the transfer was processed) instead of zeroing it. With
+      // one OUT move per item (see onTransferProcessed), this match is unique.
       const outMove = await tx.stockMove.findFirst({
         where: {
           referenceType: "InventoryTransfer",
           referenceId: transfer.id,
           impact: "OUT",
-          itemId: item.itemId,
+          itemId: itemId,
         },
         select: { cost: true },
       });
@@ -136,9 +154,9 @@ export async function onTransferReceived(
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
-          itemId: item.itemId,
+          itemId: itemId,
           warehouseId: transfer.destinationWarehouseId,
-          qty: item.qty,
+          qty: qty,
           cost: carriedUnitCost,
           impact: "IN",
           status: "posted",
@@ -150,7 +168,7 @@ export async function onTransferReceived(
       });
 
       // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${itemId}`;
 
       // Create FIFO inventory layer for received stock in the DESTINATION warehouse
       const sm = await tx.stockMove.findFirst({
@@ -159,10 +177,10 @@ export async function onTransferReceived(
       });
       if (sm) {
         await createInLayer(tx, {
-          itemId: item.itemId,
+          itemId: itemId,
           warehouseId: transfer.destinationWarehouseId,
           stockMoveId: sm.id,
-          qty: Number(item.qty),
+          qty: qty,
           unitCost: carriedUnitCost,
         });
       }
