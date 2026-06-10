@@ -12,6 +12,7 @@ import { notificationService } from "@/lib/services/notification.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
+import { findOverReturn } from "@/lib/sales/return-validation"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { PurchaseStatus, Status } from "@/lib/constants"
@@ -638,6 +639,56 @@ export async function createPurchaseReturn(formData: FormData) {
     ? await prisma.item.findMany({ where: { id: { in: prItemIds } }, select: { id: true, cost: true } })
     : []
   const prCostMap = new Map(prCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
+
+  // Over-return guard: a purchase return must not return more units than were
+  // actually received (verified/completed GR for this PO), counting prior
+  // non-cancelled returns. Without this, the return over-reduces inventory and
+  // over-credits the vendor. Mirrors the sales-return cap.
+  if (prItemIds.length) {
+    const grItems = await prisma.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: {
+          purchaseOrderId: v.purchaseOrderId,
+          status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+        },
+        itemId: { in: prItemIds },
+      },
+      select: { itemId: true, qty: true },
+    })
+    const receivedQtyByItem = new Map<number, number>()
+    for (const it of grItems) {
+      receivedQtyByItem.set(it.itemId, (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
+    }
+
+    const priorReturns = await prisma.purchaseReturnItem.findMany({
+      where: {
+        purchaseReturn: { purchaseOrderId: v.purchaseOrderId, status: { not: "cancelled" } },
+        itemId: { in: prItemIds },
+      },
+      select: { itemId: true, qty: true },
+    })
+    const alreadyReturnedByItem = new Map<number, number>()
+    for (const r of priorReturns) {
+      alreadyReturnedByItem.set(r.itemId, (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
+    }
+
+    const violation = findOverReturn(
+      validPrItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+      receivedQtyByItem,
+      alreadyReturnedByItem
+    )
+    if (violation) {
+      if (violation.type === "not_on_invoice") {
+        return { success: false, error: `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.` }
+      }
+      return {
+        success: false,
+        error:
+          `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
+          `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
+      }
+    }
+  }
 
   const purchaseReturn = await prisma.purchaseReturn.create({
     data: {
