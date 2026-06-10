@@ -68,7 +68,13 @@ export default async function BankBookPage({
       include: {
         journal: { select: { journalNumber: true, transactionDate: true, description: true } },
       },
-      orderBy: { journal: { transactionDate: 'asc' } },
+      // Deterministic ordering: date first, then entry id as a stable tiebreaker
+      // so same-day rows keep a consistent running-balance (saldo) order across
+      // refreshes. Mirrors the general ledger (buku-besar).
+      orderBy: [
+        { journal: { transactionDate: 'asc' } },
+        { id: 'asc' },
+      ],
     })
 
     entries = periodEntries.map(e => ({
