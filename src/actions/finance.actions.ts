@@ -291,13 +291,17 @@ export async function markExpensePaid(expenseId: number) {
     throw new Error("Hanya pengeluaran yang sudah disetujui yang dapat ditandai sebagai dibayar")
   }
 
+  // Post the accounting journal FIRST (Laravel parity: GL created when paid).
+  // Posting before the status flip means a journal failure (e.g. closed period)
+  // leaves the expense at "approved" and retryable, instead of stranding it as
+  // "paid" with no GL entry. The journal's (referenceType, referenceId) unique
+  // constraint already prevents any double-post on concurrent calls.
+  await onExpenseApproved(expenseId)
+
   await prisma.expense.update({
     where: { id: expenseId },
     data: { status: "paid" },
   })
-
-  // Accounting journal (Laravel parity: created when status becomes paid)
-  await onExpenseApproved(expenseId)
 
   await logActivity("mark", "Expense", expenseId, "Menandai pengeluaran sebagai dibayar")
   revalidatePath("/keuangan/pengeluaran")
