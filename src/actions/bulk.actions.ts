@@ -197,6 +197,40 @@ const dmmfModelMap = new Map(
 
 const BULK_DELETE_MAX = 500
 
+/**
+ * Models with financial (GL journal) or stock (FIFO/qtyOnHand) side effects, or
+ * a status guard on their single-delete path. Raw bulkDelete bypasses both the
+ * per-entity reversal hooks (orphaning GL journals / corrupting stock) AND the
+ * status guards that forbid deleting posted/confirmed records. These MUST be
+ * deleted one-by-one through their dedicated server actions, which reverse the
+ * journal, recompute running balances, undo stock moves, and refuse to delete
+ * already-posted records. Pure master/config models are not listed and remain
+ * safe for raw bulk delete.
+ */
+const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
+  // Finance — post GL journals
+  "pettyCash",
+  "expense",
+  "journal",
+  "salesPayment",
+  "vendorPayment",
+  "salesInvoice",
+  "vendorBill",
+  "downPayment",
+  "salesReturn",
+  "purchaseReturn",
+  // Inventory / stock — post stock moves + FIFO layers
+  "goodsReceipt",
+  "materialIssue",
+  "stockAdjustment",
+  "stockTransfer",
+  "deliveryOrder",
+  // Manufacturing / payroll — downstream side effects
+  "productionOrder",
+  "workOrder",
+  "loan",
+])
+
 export async function bulkDelete(model: ModelName, ids: number[]) {
   const safeIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)))
   if (!safeIds.length) return { success: false, message: "Tidak ada data valid yang dipilih" }
@@ -214,6 +248,20 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
     return { success: false, message: "Operasi hapus tidak diizinkan untuk model ini" }
   }
   await requirePermission(permission)
+
+  // Integrity guard: refuse raw bulk delete for models with GL/stock side
+  // effects or a status guard. Raw deleteMany here would bypass the reversal
+  // hooks (leaving orphaned journals / corrupted stock) and the status guard
+  // (allowing deletion of posted/confirmed records). Route the user to the
+  // per-row delete action, which handles reversal + guards correctly.
+  if (BULK_DELETE_REQUIRES_INDIVIDUAL.has(model)) {
+    return {
+      success: false,
+      message:
+        "Data ini punya dampak akuntansi/stok dan harus dihapus satu per satu " +
+        "agar jurnal & saldo terkait ikut dibatalkan dengan benar.",
+    }
+  }
 
   try {
      
