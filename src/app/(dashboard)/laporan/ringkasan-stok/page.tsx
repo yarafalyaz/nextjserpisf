@@ -24,48 +24,73 @@ export default async function InventorySummaryPage() {
       where: { isActive: true, deletedAt: null, qtyOnHand: { gt: 0 } },
       include: {
         category: { select: { name: true } },
-        warehouse: { select: { id: true, code: true, name: true } },
       },
       orderBy: { name: 'asc' },
     }),
     prisma.inventoryLayer.findMany({
       where: { remaining: { gt: 0 } },
-      include: {
-        stockMove: { select: { warehouseId: true } },
-      },
+      select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },
     }),
   ])
 
-  // Aggregate value per warehouse
-  const valueByWarehouse = new Map<number, number>()
+  // Per-warehouse aggregation. Derive qty, value AND item count from the FIFO
+  // layers using the layer's own warehouseId — the canonical physical location,
+  // identical to the valuasi-stok report. Computing every column from one
+  // source guarantees the qty/value columns foot exactly (Σ rows === TOTAL) and
+  // stay consistent with the inventory valuation report. The previous version
+  // mixed axes (value by stockMove.warehouseId, qty/count by
+  // item.defaultWarehouseId), so rows could show qty without value and items
+  // lacking a default warehouse silently dropped out of the rows while still
+  // inflating the total.
+  type WhAgg = { qty: number; value: number; items: Set<number> }
+  const byWarehouse = new Map<number, WhAgg>() // key 0 = no/unknown warehouse
   for (const layer of layers) {
-    const whId = layer.stockMove.warehouseId || 0
-    const value = Number(layer.remaining) * Number(layer.unitCost)
-    valueByWarehouse.set(whId, (valueByWarehouse.get(whId) || 0) + value)
+    const whId = layer.warehouseId ?? 0
+    const agg = byWarehouse.get(whId) || { qty: 0, value: 0, items: new Set<number>() }
+    const remaining = Number(layer.remaining)
+    agg.qty += remaining
+    agg.value += remaining * Number(layer.unitCost)
+    agg.items.add(layer.itemId)
+    byWarehouse.set(whId, agg)
   }
 
-  // Aggregate items per warehouse
-  const itemsByWarehouse = new Map<number, { count: number; totalQty: number }>()
-  for (const item of items) {
-    const whId = item.defaultWarehouseId || 0
-    const existing = itemsByWarehouse.get(whId) || { count: 0, totalQty: 0 }
-    existing.count++
-    existing.totalQty += Number(item.qtyOnHand)
-    itemsByWarehouse.set(whId, existing)
+  // Rows for active warehouses, plus a catch-all for layers whose warehouse is
+  // null or no longer active, so no stock is dropped from the footing.
+  const warehouseRows = warehouses.map(wh => {
+    const agg = byWarehouse.get(wh.id)
+    return {
+      code: wh.code,
+      name: wh.name,
+      items: agg?.items.size || 0,
+      qty: agg?.qty || 0,
+      value: agg?.value || 0,
+    }
+  })
+  const listedIds = new Set(warehouses.map(w => w.id))
+  const orphan: WhAgg = { qty: 0, value: 0, items: new Set<number>() }
+  for (const [whId, agg] of byWarehouse) {
+    if (listedIds.has(whId)) continue
+    orphan.qty += agg.qty
+    orphan.value += agg.value
+    for (const id of agg.items) orphan.items.add(id)
+  }
+  if (orphan.qty > 0 || orphan.value > 0) {
+    warehouseRows.push({ code: '-', name: 'Tanpa Gudang / Lainnya', items: orphan.items.size, qty: orphan.qty, value: orphan.value })
   }
 
-  // Build warehouse summary
-  const warehouseRows = warehouses.map(wh => ({
-    code: wh.code,
-    name: wh.name,
-    items: itemsByWarehouse.get(wh.id)?.count || 0,
-    qty: itemsByWarehouse.get(wh.id)?.totalQty || 0,
-    value: valueByWarehouse.get(wh.id) || 0,
-  }))
-
-  const totalItems = items.length
-  const totalQty = items.reduce((s, i) => s + Number(i.qtyOnHand), 0)
-  const totalValue = Array.from(valueByWarehouse.values()).reduce((s, v) => s + v, 0)
+  // Totals reconcile to the same FIFO layers as the rows above. qty and value
+  // foot exactly; item count is distinct SKUs in stock (a SKU stocked in two
+  // warehouses counts once here but appears in both warehouse rows).
+  const distinctItems = new Set<number>()
+  let totalQty = 0
+  let totalValue = 0
+  for (const layer of layers) {
+    distinctItems.add(layer.itemId)
+    const remaining = Number(layer.remaining)
+    totalQty += remaining
+    totalValue += remaining * Number(layer.unitCost)
+  }
+  const totalItems = distinctItems.size
 
   // Low stock items
   const lowStockItems = await prisma.item.findMany({
