@@ -317,35 +317,40 @@ export async function updateItem(itemId: number, formData: FormData) {
   try {
   await requirePermission("edit_items")
 
-  const updItemCost = safeNumber(formData.get("cost")) ?? 0
-  const updItemPrice = safeNumber(formData.get("price")) ?? 0
-  if (updItemPrice < updItemCost) {
+  // Validate with the same schema as createItem — previously updateItem read
+  // raw formData (name/sku/unitOfMeasure as string) with no validation, so an
+  // empty required field silently wrote null/empty to the row.
+  const parsed = parseFormData(itemSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
+  if (v.price < v.cost) {
     return { success: false, error: "Harga jual tidak boleh lebih rendah dari harga beli (modal)." }
   }
 
   await prisma.item.update({
     where: { id: itemId },
     data: {
-      sku: formData.get("sku") as string,
-      name: formData.get("name") as string,
-      description: formData.get("description") as string | null,
-      image: formData.get("image") as string | null,
-      categoryId: safeId(formData.get("categoryId")),
-      brandId: safeId(formData.get("brandId")),
-      vendorId: safeId(formData.get("vendorId")),
-      defaultWarehouseId: safeId(formData.get("defaultWarehouseId")),
-      defaultRackId: safeId(formData.get("defaultRackId")),
-      defaultRackRowId: safeId(formData.get("defaultRackRowId")),
-      unitOfMeasure: formData.get("unitOfMeasure") as string,
-      minStock: (safeNumber(formData.get("minStock")) ?? 0),
-      cost: updItemCost,
-      price: updItemPrice,
-      standardCost: safeNumber(formData.get("standardCost")) ?? undefined,
-      costingMethod: (formData.get("costingMethod") as string) || undefined,
-      purchasePrice: safeNumber(formData.get("purchasePrice")) ?? undefined,
-      isProduct: formData.get("isProduct") === "true",
-      trackBatch: formData.get("trackBatch") === "true",
-      trackSerial: formData.get("trackSerial") === "true",
+      sku: v.sku || undefined,
+      name: v.name,
+      description: v.description ?? null,
+      image: v.image ?? null,
+      categoryId: v.categoryId ?? null,
+      brandId: v.brandId ?? null,
+      vendorId: v.vendorId ?? null,
+      defaultWarehouseId: v.defaultWarehouseId ?? null,
+      defaultRackId: v.defaultRackId ?? null,
+      defaultRackRowId: v.defaultRackRowId ?? null,
+      unitOfMeasure: v.unitOfMeasure,
+      minStock: v.minStock ?? 0,
+      cost: v.cost,
+      price: v.price,
+      standardCost: v.standardCost ?? undefined,
+      costingMethod: v.costingMethod ?? undefined,
+      purchasePrice: v.purchasePrice ?? undefined,
+      isProduct: v.isProduct ?? false,
+      trackBatch: v.trackBatch ?? false,
+      trackSerial: v.trackSerial ?? false,
     },
   })
 
