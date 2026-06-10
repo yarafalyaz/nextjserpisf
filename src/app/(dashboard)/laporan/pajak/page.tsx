@@ -26,13 +26,17 @@ export default async function TaxReportPage({
   const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), now.getMonth(), 1)
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
 
-  // PPN Keluaran (Output Tax) - from Sales Invoices
+  // PPN Keluaran (Output Tax) - from Sales Invoices.
+  // Filter/sum on taxAmount (the computed PPN value), NOT `tax`: on a
+  // SalesInvoice `tax` stores the RATE (e.g. 11), while taxAmount holds the
+  // actual money — same field the GL posting uses. Reading `tax` here showed
+  // the rate as the PPN amount and broke the filed VAT return.
   const salesInvoices = await prisma.salesInvoice.findMany({
     where: {
       date: { gte: startDate, lte: endDate },
       status: { not: 'cancelled' },
       deletedAt: null,
-      tax: { gt: 0 },
+      taxAmount: { gt: 0 },
     },
     include: { customer: { select: { name: true } } },
     orderBy: { date: 'asc' },
@@ -43,7 +47,7 @@ export default async function TaxReportPage({
     documentNo: inv.documentNo,
     party: inv.customer.name,
     dpp: Number(inv.subtotal) - Number(inv.discount),
-    tax: Number(inv.tax),
+    tax: Number(inv.taxAmount),
   }))
   const totalOutputDPP = outputTaxRows.reduce((s, r) => s + r.dpp, 0)
   const totalOutputTax = outputTaxRows.reduce((s, r) => s + r.tax, 0)
