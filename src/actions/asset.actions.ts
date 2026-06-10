@@ -194,6 +194,28 @@ export async function deleteAsset(id: number) {
   try {
   await requirePermission("delete_assets")
 
+  // Depreciation posts GL journals keyed by polymorphic reference
+  // (referenceType "ASSET_DEPRECIATION_YYYYMM", referenceId = asset.id) with
+  // NO database FK, so a raw delete would orphan those journals in the GL
+  // while removing the asset subledger record. A depreciated asset carries
+  // financial history and must be DISPOSED, not hard-deleted. Refuse deletion
+  // when any depreciation journal exists (fail-closed; mirrors the vehicle and
+  // role delete guards). Reversing months of legitimate depreciation here
+  // would be more destructive than refusing.
+  const depreciationJournals = await prisma.journal.count({
+    where: {
+      referenceType: { startsWith: "ASSET_DEPRECIATION" },
+      referenceId: id,
+    },
+  })
+  if (depreciationJournals > 0) {
+    return {
+      success: false,
+      error:
+        "Aset tidak bisa dihapus karena sudah memiliki riwayat penyusutan (jurnal GL). Gunakan fitur pelepasan/disposal aset, bukan hapus.",
+    }
+  }
+
   // AssetHistory + AssetTransfer cascade on delete (FK onDelete: Cascade).
   await prisma.asset.delete({ where: { id } })
 
