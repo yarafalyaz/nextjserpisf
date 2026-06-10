@@ -525,7 +525,26 @@ export async function deleteCustomerVehicle(id: number) {
 
     const vehicle = await prisma.customerVehicle.findUniqueOrThrow({
       where: { id },
+      select: {
+        customerId: true,
+        _count: { select: { workOrders: true, quotations: true, projects: true } },
+      },
     })
+
+    // Integrity guard: customerVehicleId on Quotation/WorkOrder/Project is nullable
+    // (SetNull), so deleting a customer-vehicle with history silently NULLs the
+    // vehicle reference on those documents, erasing service-history linkage.
+    // Refuse when dependents exist (mirrors deleteVehicle / deleteRole).
+    const dependents =
+      vehicle._count.workOrders + vehicle._count.quotations + vehicle._count.projects
+    if (dependents > 0) {
+      return {
+        success: false,
+        error:
+          `Kendaraan pelanggan ini punya ${dependents} dokumen terkait (perintah kerja/penawaran/proyek) ` +
+          `dan tidak bisa dihapus karena akan menghilangkan riwayat servis. Nonaktifkan kendaraan sebagai gantinya.`,
+      }
+    }
 
     await prisma.customerVehicle.delete({
       where: { id },
