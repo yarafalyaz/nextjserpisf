@@ -895,17 +895,94 @@ export async function onPurchaseReturnProcessed(
   });
   if (existing) return;
 
-  // Compute total from items (PurchaseReturn has no totalAmount field)
+  // AP relief = agreed return price (what the vendor credits back).
   const totalAmount = purchaseReturn.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
     0
   );
   if (totalAmount <= 0) return;
 
+  // Inventory relief = ACTUAL FIFO carrying cost that left stock, read back from
+  // the OUT stock moves the stock hook (purchase-return.hook) created. This is
+  // what was really removed from inventory; it can differ from the agreed return
+  // price when purchase prices drifted since the goods were received.
+  const outMoves = await prisma.stockMove.findMany({
+    where: { referenceType: "PurchaseReturn", referenceId: returnId, impact: "OUT" },
+    select: { qty: true, cost: true },
+  });
+  const inventoryAmount = outMoves.reduce(
+    (sum, m) => sum + Number(m.qty) * Number(m.cost),
+    0
+  );
+
   await assertPeriodOpen(new Date());
 
   await prisma.$transaction(async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PR", returnId);
+
+    // Build double-entry:
+    //   Dr Hutang Usaha     = return price (AP reduced by what the vendor credits)
+    //   Cr Persediaan       = FIFO carrying cost actually relieved from stock
+    //   Dr/Cr Selisih Retur = price variance (return price vs carrying cost)
+    // When no variance account is configured or the carrying cost is unavailable,
+    // fall back to crediting Inventory at the return price (old behavior) so the
+    // journal stays balanced.
+    const varianceAccount = settings.purchaseReturnAccountId ?? null;
+    const useVariance =
+      varianceAccount != null &&
+      inventoryAmount > 0 &&
+      Math.abs(totalAmount - inventoryAmount) > 0.001;
+
+    const inventoryCredit = useVariance ? inventoryAmount : totalAmount;
+    const variance = totalAmount - inventoryAmount; // >0: gain (Cr), <0: loss (Dr)
+
+    const entries: { accountId: number; debit: number; credit: number; memo: string }[] = [
+      {
+        accountId: settings.purchasePayableAccountId!,
+        debit: totalAmount,
+        credit: 0,
+        memo: "Pengurangan Hutang (Retur)",
+      },
+      {
+        accountId: settings.inventoryAccountId!,
+        debit: 0,
+        credit: inventoryCredit,
+        memo: "Pengembalian Persediaan (biaya FIFO)",
+      },
+    ];
+
+    if (useVariance) {
+      if (variance > 0) {
+        // Return price > carrying cost → credit the variance (gain on return).
+        entries.push({
+          accountId: varianceAccount!,
+          debit: 0,
+          credit: variance,
+          memo: "Selisih harga retur pembelian",
+        });
+      } else {
+        // Return price < carrying cost → debit the variance (loss on return).
+        entries.push({
+          accountId: varianceAccount!,
+          debit: -variance,
+          credit: 0,
+          memo: "Selisih harga retur pembelian",
+        });
+      }
+    }
+
+    const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
+    const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
+
+    // Balance guard: this hook writes journalEntry rows directly, bypassing
+    // JournalService.createJournal's validation. The variance branches above
+    // are provably balanced, but guard explicitly so a future edit can never
+    // silently persist an unbalanced purchase-return journal.
+    if (Math.abs(totalDebit - totalCredit) > 0.001) {
+      throw new Error(
+        `Jurnal retur pembelian tidak balance. Debit: ${totalDebit.toFixed(2)}, Kredit: ${totalCredit.toFixed(2)}.`
+      );
+    }
 
     const journal = await tx.journal.create({
       data: {
@@ -916,33 +993,23 @@ export async function onPurchaseReturnProcessed(
         description: `Retur Pembelian ${purchaseReturn.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: totalAmount,
-        totalCredit: totalAmount,
+        totalDebit,
+        totalCredit,
         createdBy: userId ?? null,
       },
     });
 
-    // Dr. Hutang Usaha
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.purchasePayableAccountId!,
-        debit: totalAmount,
-        credit: 0,
-        memo: "Pengurangan Hutang (Retur)",
-      },
-    });
-
-    // Cr. Persediaan
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.inventoryAccountId!,
-        debit: 0,
-        credit: totalAmount,
-        memo: "Pengembalian Persediaan",
-      },
-    });
+    for (const entry of entries) {
+      await tx.journalEntry.create({
+        data: {
+          journalId: journal.id,
+          accountId: entry.accountId,
+          debit: entry.debit,
+          credit: entry.credit,
+          memo: entry.memo,
+        },
+      });
+    }
   });
 }
 

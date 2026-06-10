@@ -71,6 +71,25 @@ export async function onPurchaseReturnProcessed(
         throw new Error("Warehouse retur pembelian tidak ditemukan.");
       }
 
+      // Lock the item row to serialize global qtyOnHand updates.
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+
+      // Consume FIFO from the resolved warehouse FIRST and capture the ACTUAL
+      // carrying cost that leaves inventory. The StockMove and the GL inventory
+      // relief use this real FIFO cost — not the agreed return price (item.cost),
+      // which the AP side keeps. Any difference is a purchase-return price
+      // variance booked by accounting.hook.onPurchaseReturnProcessed.
+      const { consumedCost } = await consumeFifoLayers(tx, {
+        itemId: item.itemId,
+        warehouseId,
+        qty: Number(item.qty),
+        allowShortfall: false,
+        label: `retur pembelian ${purchaseReturn.documentNo}`,
+      });
+      const carryingUnitCost = Number(item.qty) > 0
+        ? consumedCost / Number(item.qty)
+        : Number(item.cost ?? 0);
+
       const smDocNo = await generateDocumentNumber("SM");
 
       await tx.stockMove.create({
@@ -79,7 +98,7 @@ export async function onPurchaseReturnProcessed(
           itemId: item.itemId,
           warehouseId,
           qty: item.qty,
-          cost: item.cost,
+          cost: carryingUnitCost,
           impact: "OUT",
           status: "posted",
           referenceType: "PurchaseReturn",
@@ -94,16 +113,6 @@ export async function onPurchaseReturnProcessed(
       if (updated === 0) {
         throw new Error(`Stok tidak cukup untuk retur item ID ${item.itemId} (qty: ${item.qty})`);
       }
-
-      // FIFO layer consumption scoped to the resolved warehouse.
-      // No longer allowShortfall — insufficient layers will throw above via qty guard.
-      await consumeFifoLayers(tx, {
-        itemId: item.itemId,
-        warehouseId,
-        qty: Number(item.qty),
-        allowShortfall: false,
-        label: `retur pembelian ${purchaseReturn.documentNo}`,
-      });
     }
 
     // Stock-only hook: GL for a purchase return is posted exclusively by
