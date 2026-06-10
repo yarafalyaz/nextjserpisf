@@ -8,6 +8,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportSingleDateFilter } from "@/components/reports/report-date-filter"
+import { computeBalanceSheet } from "@/lib/finance/balance-sheet"
 
 import type { Metadata } from "next"
 
@@ -32,55 +33,18 @@ export default async function BalanceSheetPage({
     include: { account: true },
   })
 
-  // Aggregate by account
-  const accountBalances = new Map<number, { name: string; code: string; type: string; balance: number }>()
-  for (const entry of entries) {
-    const existing = accountBalances.get(entry.accountId) || {
-      name: entry.account.name,
-      code: entry.account.code,
-      type: entry.account.type,
-      balance: 0,
-    }
-    if (entry.account.type === 'ASSET') {
-      existing.balance += Number(entry.debit) - Number(entry.credit)
-    } else {
-      existing.balance += Number(entry.credit) - Number(entry.debit)
-    }
-    accountBalances.set(entry.accountId, existing)
-  }
-
-  const assets: { name: string; code: string; balance: number }[] = []
-  const liabilities: { name: string; code: string; balance: number }[] = []
-  const equity: { name: string; code: string; balance: number }[] = []
-
-  // Revenue and Expense balances contribute to Retained Earnings (current net income).
-  let revenueTotal = 0
-  let expenseTotal = 0
-
-  for (const [, acc] of accountBalances) {
-    if (acc.balance === 0) continue
-    const item = { name: acc.name, code: acc.code, balance: acc.balance }
-    if (acc.type === 'ASSET') assets.push(item)
-    else if (acc.type === 'LIABILITY') liabilities.push(item)
-    else if (acc.type === 'EQUITY') equity.push(item)
-    else if (acc.type === 'REVENUE') revenueTotal += acc.balance
-    else if (acc.type === 'EXPENSE') expenseTotal += acc.balance
-  }
-
-  // Net income = Revenue - Expense (both stored as credit-normal/debit-normal respectively)
-  const netIncome = revenueTotal - expenseTotal
-  if (Math.abs(netIncome) >= 0.01) {
-    equity.push({ name: 'Laba/Rugi Berjalan', code: 'NI', balance: netIncome })
-  }
-
-  assets.sort((a, b) => a.code.localeCompare(b.code))
-  liabilities.sort((a, b) => a.code.localeCompare(b.code))
-  equity.sort((a, b) => a.code.localeCompare(b.code))
-
-  const totalAssets = assets.reduce((s, a) => s + a.balance, 0)
-  const totalLiabilities = liabilities.reduce((s, a) => s + a.balance, 0)
-  const totalEquity = equity.reduce((s, a) => s + a.balance, 0)
-  const isBalanced = Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01
+  // Aggregation + net-income roll-up lives in computeBalanceSheet (unit-tested).
+  const { assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity, isBalanced } =
+    computeBalanceSheet(
+      entries.map((e) => ({
+        accountId: e.accountId,
+        accountName: e.account.name,
+        accountCode: e.account.code,
+        accountType: e.account.type,
+        debit: Number(e.debit),
+        credit: Number(e.credit),
+      }))
+    )
 
   return (
     <div className="flex flex-col gap-6">
