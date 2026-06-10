@@ -39,23 +39,46 @@ export async function onStockAdjustmentProcessed(
     }
 
     // Create Stock Move per item based on difference
+    const journalItems: { qty: number; cost: number; difference: number }[] = [];
     for (const item of adjustment.items) {
-      const diff = Number(item.difference);
+      const qtyDiff = Number(item.difference);
 
       // Skip if no difference
-      if (diff === 0) continue;
+      if (qtyDiff === 0) continue;
+
+      const impact = qtyDiff > 0 ? "IN" : "OUT";
+      const qty = Math.abs(qtyDiff);
+      const enteredUnitCost = Number(item.unitCost ?? 0);
+
+      // Lock the item row to serialize global qtyOnHand updates (both directions).
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+
+      // Effective unit cost for the StockMove AND the GL journal:
+      //   • Positive (IN): the user-entered unit cost establishes the new layer.
+      //   • Negative (OUT): the ACTUAL FIFO cost consumed, so the GL Inventory
+      //     credit matches the stock subledger reduction instead of an entered
+      //     cost that may have drifted from the real layer costs.
+      let effectiveUnitCost = enteredUnitCost;
+      if (qtyDiff < 0) {
+        // Consume oldest layers in this warehouse and capture the real cost.
+        const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
+          itemId: item.itemId,
+          warehouseId: adjustment.warehouseId,
+          qty,
+          label: `penyesuaian ${adjustment.documentNo}`,
+        });
+        const totalCost = consumedCost + shortfall * enteredUnitCost;
+        effectiveUnitCost = qty > 0 ? totalCost / qty : enteredUnitCost;
+      }
 
       const smDocNo = await generateDocumentNumber("SM");
-      const impact = diff > 0 ? "IN" : "OUT";
-      const qty = Math.abs(diff);
-
       const sm = await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
           warehouseId: adjustment.warehouseId,
           qty,
-          cost: item.unitCost,
+          cost: effectiveUnitCost,
           impact,
           status: "posted",
           referenceType: "StockAdjustment",
@@ -65,40 +88,29 @@ export async function onStockAdjustmentProcessed(
         },
       });
 
-      // Update item qtyOnHand
-      const qtyDiff = Number(item.difference);
+      // Update item qtyOnHand (global total)
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qtyDiff} WHERE id = ${item.itemId}`;
 
-      // FIFO layer handling (scoped to the adjustment warehouse)
+      // Positive adjustment — create new FIFO layer at the entered cost.
+      // Negative adjustment already consumed FIFO layers above.
       if (qtyDiff > 0) {
-        // Positive adjustment — create new layer in this warehouse
         await createInLayer(tx, {
           itemId: item.itemId,
           warehouseId: adjustment.warehouseId,
           stockMoveId: sm.id,
           qty: qtyDiff,
-          unitCost: Number(item.unitCost ?? 0),
-        });
-      } else if (qtyDiff < 0) {
-        // Negative adjustment — lock item row, then consume oldest layers in WH
-        await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
-        await consumeFifoLayers(tx, {
-          itemId: item.itemId,
-          warehouseId: adjustment.warehouseId,
-          qty: Math.abs(qtyDiff),
-          label: `penyesuaian ${adjustment.documentNo}`,
+          unitCost: enteredUnitCost,
         });
       }
+
+      journalItems.push({ qty: Number(item.actualQty), cost: effectiveUnitCost, difference: qtyDiff });
     }
 
-    // Create Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment)
+    // Create Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment).
+    // OUT lines carry the actual FIFO cost; IN lines the entered cost.
     await stockJournalService.onStockAdjustment(
       tx,
-      adjustment.items.map((i) => ({
-        qty: Number(i.actualQty),
-        cost: Number(i.unitCost),
-        difference: Number(i.difference),
-      })),
+      journalItems,
       adjustment.documentNo ?? `ADJ-${adjustmentId}`,
       adjustmentId,
       userId
