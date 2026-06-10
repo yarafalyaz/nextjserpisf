@@ -45,23 +45,44 @@ export async function onWorkOrderCompleted(
     });
     if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
 
-    // Create Stock Move OUT per item (materials consumed in production)
+    // Create Stock Move OUT per item (materials consumed in production).
+    // Capture the ACTUAL FIFO-consumed cost so the StockMove and GL journal use
+    // the real layer cost — not the stored item.cost master snapshot, which
+    // drifts from FIFO once purchase prices change. Mirrors the sales-invoice
+    // COGS fix (accounting.hook onSalesInvoicePosted). consumeFifoLayers throws
+    // on insufficient stock here (no allowShortfall), so consumedCost always
+    // reflects the full quantity.
+    const journalLines: { qty: number; cost: number }[] = [];
     for (const item of workOrder.items) {
       if (Number(item.qty) <= 0) continue;
-
-      const smDocNo = await generateDocumentNumber("SM");
 
       // Resolve warehouse per item (chain: item default → fallback)
       const itemData = await tx.item.findUnique({ where: { id: item.itemId }, select: { defaultWarehouseId: true } });
       const resolvedWarehouseId = itemData?.defaultWarehouseId ?? fallbackWarehouse.id;
 
+      const qty = Number(item.qty);
+
+      // Lock the item row to serialize global qtyOnHand updates.
+      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+
+      // Consume FIFO from the resolved warehouse (guards per-warehouse stock)
+      // and read back the true consumed cost.
+      const { consumedCost } = await consumeFifoLayers(tx, {
+        itemId: item.itemId,
+        warehouseId: resolvedWarehouseId,
+        qty,
+        label: `WO ${workOrder.documentNo}`,
+      });
+      const moveUnitCost = qty > 0 ? consumedCost / qty : Number(item.cost);
+
+      const smDocNo = await generateDocumentNumber("SM");
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
           warehouseId: resolvedWarehouseId,
           qty: item.qty,
-          cost: item.cost,
+          cost: moveUnitCost,
           impact: "OUT",
           status: "posted",
           referenceType: "WorkOrder",
@@ -71,30 +92,16 @@ export async function onWorkOrderCompleted(
         },
       });
 
-      // Lock the item row to serialize global qtyOnHand updates.
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
-
-      // Consume FIFO from the resolved warehouse (guards per-warehouse stock).
-      await consumeFifoLayers(tx, {
-        itemId: item.itemId,
-        warehouseId: resolvedWarehouseId,
-        qty: Number(item.qty),
-        label: `WO ${workOrder.documentNo}`,
-      });
-
       // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId}`;
+      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${item.itemId}`;
+
+      journalLines.push({ qty, cost: moveUnitCost });
     }
 
-    // Create Journal Entry (Dr WIP, Cr Inventory)
+    // Create Journal Entry (Dr WIP, Cr Inventory) at the actual FIFO cost
     await stockJournalService.onWorkOrderCompleted(
       tx,
-      workOrder.items
-        .filter((i) => Number(i.qty) > 0)
-        .map((i) => ({
-          qty: Number(i.qty),
-          cost: Number(i.cost),
-        })),
+      journalLines,
       workOrder.documentNo ?? `WO-${workOrderId}`,
       workOrderId,
       userId
