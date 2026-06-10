@@ -144,6 +144,39 @@ describe("uploadToStorage", () => {
     })
     expect(res.key).toMatch(/^attachments\/attachments-\d+/)
   })
+
+  it("derives the extension from the validated MIME, not the client filename (XSS guard)", async () => {
+    findFirstMock.mockResolvedValue(null)
+    // Attacker: filename ".html" with a spoofed image Content-Type. Must be
+    // stored as .png (from MIME), never .html — otherwise it'd be served as
+    // text/html from public/uploads (stored XSS).
+    const file = makeFile("evil.html", "image/png", 50)
+    const res = await uploadToStorage(file, { category: "items", prefix: "x" })
+    expect(res.key).toMatch(/\.png$/)
+    expect(res.key).not.toContain(".html")
+  })
+
+  it("rejects SVG uploads (script-capable, served same-origin)", async () => {
+    findFirstMock.mockResolvedValue(null)
+    const svg = makeFile("logo.svg", "image/svg+xml", 50)
+    await expect(uploadToStorage(svg, { category: "logos" })).rejects.toThrow(
+      /tidak didukung/,
+    )
+    expect(writeFileMock).not.toHaveBeenCalled()
+  })
+
+  it("falls back to a safe .bin extension for an unknown-MIME custom type", async () => {
+    findFirstMock.mockResolvedValue(null)
+    // A custom allowedTypes entry whose MIME isn't in MIME_EXT, with a
+    // dangerous filename extension -> must not write a .js file.
+    const file = makeFile("payload.js", "text/plain", 50)
+    const res = await uploadToStorage(file, {
+      category: "attachments",
+      allowedTypes: ["text/plain"],
+    })
+    expect(res.key).toMatch(/\.bin$/)
+    expect(res.key).not.toContain(".js")
+  })
 })
 
 describe("cloud helpers are no-ops on the local driver", () => {

@@ -21,7 +21,29 @@ export type UploadCategory =
   | "items"
   | "attachments"
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"]
+// SVG intentionally excluded: it can carry inline <script>, and these images
+// are served same-origin from public/uploads, so an SVG upload would be a
+// stored-XSS vector.
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
+// Canonical extension per allowed MIME type. The stored extension is derived
+// from the (validated) MIME, NOT the client-supplied filename — otherwise a
+// file named "evil.html" sent with a spoofed image Content-Type would be saved
+// as .html under public/uploads and served as text/html (stored XSS).
+const MIME_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "application/pdf": "pdf",
+}
+
+// Active/script-capable extensions that must never be written to a publicly
+// served directory, used as a backstop for any custom allowedTypes whose MIME
+// is not in MIME_EXT.
+const DANGEROUS_EXT = new Set([
+  "html", "htm", "xhtml", "xml", "svg", "js", "mjs", "cjs", "php", "phtml", "phar", "sh",
+])
 
 export interface StorageConfig {
   driver: string
@@ -92,9 +114,15 @@ export function publicUrl(key: string, assetBaseUrl?: string): string {
   return base ? `${base}/${clean}` : `/uploads/${clean}`
 }
 
-function sanitizedExt(filename: string): string {
-  const raw = (filename.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-  return (raw.slice(0, 10) || "jpg").toLowerCase()
+// Resolve the on-disk extension. Prefer the canonical extension for the
+// validated MIME type; only fall back to the client filename's extension when
+// the MIME is unknown, and never honour a script/active extension.
+function resolveExt(mimeType: string, filename: string): string {
+  const byMime = MIME_EXT[mimeType]
+  if (byMime) return byMime
+  const raw = (filename.split(".").pop() || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase()
+  if (!raw || DANGEROUS_EXT.has(raw)) return "bin"
+  return raw
 }
 
 export async function uploadToStorage(file: File, opts: UploadOptions): Promise<UploadResult> {
@@ -102,7 +130,7 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
   const allowed = opts.allowedTypes ?? ALLOWED_IMAGE_TYPES
 
   if (!allowed.includes(file.type)) {
-    throw new Error("Format file tidak didukung. Gunakan JPG, PNG, WebP, GIF, atau SVG.")
+    throw new Error("Format file tidak didukung. Gunakan JPG, PNG, WebP, atau GIF.")
   }
   if (file.size > maxBytes) {
     throw new Error(`Ukuran file maksimal ${Math.round(maxBytes / (1024 * 1024))}MB`)
@@ -110,7 +138,7 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
 
   const config = await getStorageConfig()
 
-  const ext = sanitizedExt(file.name)
+  const ext = resolveExt(file.type, file.name)
   const prefix = (opts.prefix || opts.category).replace(/[^a-zA-Z0-9_-]/g, "")
   const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
   const key = `${opts.category}/${filename}`
