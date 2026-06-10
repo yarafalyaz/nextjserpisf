@@ -7,6 +7,7 @@ import { TrendingUp, DollarSign, Percent, BarChart3 } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
+import { computeIncomeStatement } from "@/lib/finance/income-statement"
 
 import type { Metadata } from "next"
 
@@ -43,38 +44,18 @@ export default async function IncomeStatementPage({
     orderBy: { code: 'asc' },
   })
 
-  // Categorize accounts
-  const revenueAccounts = accounts.filter((a) => a.type === 'REVENUE')
-  const cogsAccounts = accounts.filter((a) => a.code.startsWith('5-1'))
-  const expenseAccounts = accounts.filter((a) => a.type === 'EXPENSE' && !a.code.startsWith('5-1'))
-  const otherIncomeAccounts = accounts.filter((a) => a.code.startsWith('8-'))
-  const otherExpenseAccounts = accounts.filter((a) => a.code.startsWith('9-'))
-
-  // Calculate balances
-  const calcBalance = (accs: typeof accounts, isRevenue: boolean) =>
-    accs.map((acc) => {
+  // Categorize + multi-step P&L math lives in computeIncomeStatement (unit-tested).
+  const {
+    revenueData, cogsData, expenseData, otherIncomeData, otherExpenseData,
+    totalRevenue, totalCogs, grossProfit, totalExpense, operatingProfit,
+    totalOther, netProfit, margin,
+  } = computeIncomeStatement(
+    accounts.map((acc) => {
       const totalDebit = acc.journalEntries.reduce((sum, e) => sum + Number(e.debit), 0)
       const totalCredit = acc.journalEntries.reduce((sum, e) => sum + Number(e.credit), 0)
-      const balance = isRevenue ? totalCredit - totalDebit : totalDebit - totalCredit
-      return { id: acc.id, code: acc.code, name: acc.name, balance }
-    }).filter((a) => a.balance !== 0)
-
-  const revenueData = calcBalance(revenueAccounts, true)
-  const cogsData = calcBalance(cogsAccounts, false)
-  const expenseData = calcBalance(expenseAccounts, false)
-  const otherIncomeData = calcBalance(otherIncomeAccounts, true)
-  const otherExpenseData = calcBalance(otherExpenseAccounts, false)
-
-  const totalRevenue = revenueData.reduce((sum, a) => sum + a.balance, 0)
-  const totalCogs = cogsData.reduce((sum, a) => sum + a.balance, 0)
-  const grossProfit = totalRevenue - totalCogs
-  const totalExpense = expenseData.reduce((sum, a) => sum + a.balance, 0)
-  const operatingProfit = grossProfit - totalExpense
-  const totalOtherIncome = otherIncomeData.reduce((sum, a) => sum + a.balance, 0)
-  const totalOtherExpense = otherExpenseData.reduce((sum, a) => sum + a.balance, 0)
-  const totalOther = totalOtherIncome - totalOtherExpense
-  const netProfit = operatingProfit + totalOther
-  const margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
+      return { id: acc.id, code: acc.code, name: acc.name, type: acc.type, debit: totalDebit, credit: totalCredit }
+    })
+  )
 
   const hasCogs = cogsData.length > 0
   const hasOther = otherIncomeData.length > 0 || otherExpenseData.length > 0
