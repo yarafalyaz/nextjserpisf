@@ -13,6 +13,7 @@ import { bankStatementSchema, expenseSchema, pettyCashSchema, bankReconciliation
 import { logActivity } from "@/lib/services/activity-log.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
+import { computePettyCashChain, findFirstNegativeBalance } from "@/lib/finance/petty-cash-chain"
 
 // ==================== BANK STATEMENT ACTIONS ====================
 
@@ -322,23 +323,50 @@ type PettyCashTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
  * Recompute the petty-cash running balance chain (balanceBefore/balanceAfter)
  * for every record in chronological order. Call inside a transaction after any
  * insert/update/delete that changes amounts so subsequent balances stay correct.
+ *
+ * When `guardNegative` is true, throws if any recomputed balanceAfter would be
+ * negative. This is the order-aware overdraw guard: it catches backdated OUT
+ * entries inserted mid-chain (which the per-record pre-check at insert time
+ * cannot see) and edits that push a later balance below zero.
  */
-async function recalcPettyCashChain(tx: PettyCashTx): Promise<void> {
+async function recalcPettyCashChain(
+  tx: PettyCashTx,
+  opts?: { guardNegative?: boolean }
+): Promise<void> {
   const all = await tx.pettyCash.findMany({
     orderBy: [{ date: "asc" }, { id: "asc" }],
-    select: { id: true, type: true, amount: true, balanceBefore: true, balanceAfter: true },
+    select: { id: true, documentNo: true, type: true, amount: true, balanceBefore: true, balanceAfter: true },
   })
-  let running = 0
-  for (const rec of all) {
-    const before = running
-    const after = rec.type === "IN" ? before + Number(rec.amount) : before - Number(rec.amount)
-    if (Number(rec.balanceBefore) !== before || Number(rec.balanceAfter) !== after) {
+  const records = all.map((r) => ({
+    id: r.id,
+    documentNo: r.documentNo,
+    type: r.type,
+    amount: Number(r.amount),
+  }))
+
+  // Order-aware overdraw guard: catches backdated OUT entries inserted mid-chain
+  // and edits that push a later balance below zero (the insert-time pre-check
+  // only sees the tail balance, not the post-reorder chain).
+  if (opts?.guardNegative) {
+    const negative = findFirstNegativeBalance(records)
+    if (negative) {
+      throw new Error(
+        `Saldo kas kecil menjadi negatif pada transaksi ${negative.record.documentNo ?? `#${negative.record.id}`} ` +
+          `(saldo: ${negative.balanceAfter.toLocaleString("id-ID")}). Periksa urutan tanggal dan jumlah pengeluaran.`
+      )
+    }
+  }
+
+  const balances = computePettyCashChain(records)
+  const existing = new Map(all.map((r) => [r.id, r]))
+  for (const b of balances) {
+    const rec = existing.get(b.id)!
+    if (Number(rec.balanceBefore) !== b.balanceBefore || Number(rec.balanceAfter) !== b.balanceAfter) {
       await tx.pettyCash.update({
-        where: { id: rec.id },
-        data: { balanceBefore: before, balanceAfter: after },
+        where: { id: b.id },
+        data: { balanceBefore: b.balanceBefore, balanceAfter: b.balanceAfter },
       })
     }
-    running = after
   }
 }
 
@@ -395,7 +423,7 @@ export async function createPettyCash(formData: FormData) {
       },
     })
     // Keep the running-balance chain correct regardless of insertion order.
-    await recalcPettyCashChain(tx)
+    await recalcPettyCashChain(tx, { guardNegative: true })
     return created
   })
 
@@ -703,7 +731,7 @@ export async function deletePettyCash(id: number) {
     await deletePettyCashJournal(tx, id)
     await tx.transactionAttachment.deleteMany({ where: { referenceType: "PettyCash", referenceId: id } })
     await tx.pettyCash.delete({ where: { id } })
-    await recalcPettyCashChain(tx)
+    await recalcPettyCashChain(tx, { guardNegative: true })
   })
 
   await logActivity("delete", "PettyCash", id, "Menghapus transaksi kas kecil")
@@ -1009,7 +1037,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
     })
 
     // Recompute running balances for the whole chain (this + subsequent records).
-    await recalcPettyCashChain(tx)
+    await recalcPettyCashChain(tx, { guardNegative: true })
     return updated
   })
 
