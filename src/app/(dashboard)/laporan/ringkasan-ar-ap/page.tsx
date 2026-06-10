@@ -17,7 +17,12 @@ export default async function ArApSummaryPage() {
 
   // ─── ACCOUNTS RECEIVABLE ──────────────────────────────────────
   const invoices = await prisma.salesInvoice.findMany({
-    where: { status: { not: 'cancelled' }, deletedAt: null },
+    // Exclude draft: a draft invoice is not yet posted to AR/GL, so including it
+    // would overstate receivables vs the trial-balance AR account. Mirrors the
+    // aging report (piutang-jatuh-tempo) and credit-limit enforcement, which
+    // both define real AR as posted/partial. 'paid' is harmless (outstanding=0
+    // is filtered out below) but kept so fully-settled history stays consistent.
+    where: { status: { notIn: ['draft', 'cancelled'] }, deletedAt: null },
     include: { customer: { select: { name: true } } },
     orderBy: { dueDate: 'asc' },
   })
@@ -39,7 +44,10 @@ export default async function ArApSummaryPage() {
 
   // ─── ACCOUNTS PAYABLE ─────────────────────────────────────────
   const bills = await prisma.vendorBill.findMany({
-    where: { status: { not: 'cancelled' }, deletedAt: null },
+    // Exclude draft for the same reason as AR above: a draft bill is not yet
+    // posted to AP/GL, so including it would overstate payables vs the
+    // trial-balance AP account.
+    where: { status: { notIn: ['draft', 'cancelled'] }, deletedAt: null },
     include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: 'asc' },
   })
