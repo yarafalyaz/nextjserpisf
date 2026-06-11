@@ -9,6 +9,7 @@ export async function GET() {
     }
 
     const models = await prisma.vehicleModel.findMany({
+      take: 1000,
       orderBy: { name: "asc" },
       select: { id: true, name: true, vehicleBrandId: true },
     })
