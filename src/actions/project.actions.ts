@@ -425,7 +425,15 @@ export async function updateTask(formData: FormData) {
   if (!parsed.success) return { success: false, error: parsed.error }
   const { data } = parsed
 
-  await requirePermission("edit_projects")
+  const actor = await requirePermission("edit_projects")
+  const isManager = actor.permissions.includes("manage_projects")
+
+  const existing = await prisma.task.findUniqueOrThrow({ where: { id: data.id } })
+
+  // Security Guard: Staff can only update tasks assigned to them.
+  if (!isManager && existing.assignedTo !== Number(actor.id)) {
+    throw new Error("Anda hanya dapat memperbarui tugas yang ditugaskan kepada Anda.")
+  }
 
   await prisma.task.update({
     where: { id: data.id },
