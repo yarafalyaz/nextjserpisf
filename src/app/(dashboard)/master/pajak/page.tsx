@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Pajak" }
 
 export default async function TaxesPage({
@@ -14,6 +15,8 @@ export default async function TaxesPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_taxes")
+
   const params = await searchParams
 
   const where = {

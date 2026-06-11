@@ -8,6 +8,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Satuan" }
 
 export default async function UomDetailPage({
@@ -15,6 +16,8 @@ export default async function UomDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_units")
+
   const { id } = await params
 
   const uom = await prisma.unitOfMeasure.findUnique({

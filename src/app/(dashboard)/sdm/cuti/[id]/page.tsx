@@ -12,6 +12,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Cuti" }
 
 export default async function LeaveRequestDetailPage({
@@ -19,6 +20,8 @@ export default async function LeaveRequestDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_employees")
+
   const { id } = await params
 
   const leave = await prisma.leaveRequest.findUnique({

@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Kategori Barang" }
 
 export default async function ItemCategoriesPage({
@@ -14,6 +15,8 @@ export default async function ItemCategoriesPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_item_categories")
+
   const params = await searchParams
 
   const where = {

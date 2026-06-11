@@ -10,6 +10,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Hari Libur" }
 
 export default async function HolidayDetailPage({
@@ -17,6 +18,8 @@ export default async function HolidayDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_employees")
+
   const { id } = await params
 
   const holiday = await prisma.holiday.findUnique({

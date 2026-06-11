@@ -13,6 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Pemasok" }
 
 export default async function VendorDetailPage({
@@ -20,6 +21,8 @@ export default async function VendorDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_vendors")
+
   const { id } = await params
 
   const vendor = await prisma.vendor.findUnique({

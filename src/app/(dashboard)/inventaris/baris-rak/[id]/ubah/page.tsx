@@ -7,6 +7,7 @@ import { getSystemSettings } from "@/lib/utils/settings"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Baris Rak" }
 
 export default async function EditRackRowPage({
@@ -14,6 +15,8 @@ export default async function EditRackRowPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_inventory")
+
   const { id } = await params
 
   const rackRow = await prisma.rackRow.findUnique({

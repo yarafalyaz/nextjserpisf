@@ -7,6 +7,7 @@ import { SyncHolidaysButton } from "./_components/sync-holidays-button"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Hari Libur" }
 
 export default async function HolidaysPage({
@@ -14,6 +15,8 @@ export default async function HolidaysPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_employees")
+
   const params = await searchParams
 
   const where = {

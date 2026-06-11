@@ -10,6 +10,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Baris Rak" }
 
 export default async function RackRowDetailPage({
@@ -17,6 +18,8 @@ export default async function RackRowDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_inventory")
+
   const { id } = await params
 
   const rackRow = await prisma.rackRow.findUnique({

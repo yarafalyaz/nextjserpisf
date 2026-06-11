@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Departemen" }
 
 export default async function DepartmentsPage({
@@ -14,6 +15,8 @@ export default async function DepartmentsPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_departments")
+
   const params = await searchParams
 
   const where = {

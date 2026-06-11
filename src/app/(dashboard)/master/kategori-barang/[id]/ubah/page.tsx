@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Kategori Barang" }
 
 export default async function EditItemCategoryPage({
@@ -14,6 +15,8 @@ export default async function EditItemCategoryPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_item_categories")
+
   const { id } = await params
   const category = await prisma.itemCategory.findUnique({ where: { id: Number(id) } })
 

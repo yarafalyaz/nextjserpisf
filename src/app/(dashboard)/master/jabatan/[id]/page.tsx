@@ -13,6 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Jabatan" }
 
 export default async function PositionDetailPage({
@@ -20,6 +21,8 @@ export default async function PositionDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_positions")
+
   const { id } = await params
 
   const position = await prisma.position.findUnique({

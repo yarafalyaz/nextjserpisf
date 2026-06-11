@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic"
 
-import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
 import { redirect } from "next/navigation"
 import { ProfileForm } from "@/components/forms/profile-form"
@@ -8,14 +7,16 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requireAuth } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Profil" }
 
 export default async function ProfilePage() {
-  const session = await auth()
-  if (!session?.user) redirect("/login")
+  await requireAuth()
+
+  const userSession = await requireAuth()
 
   const user = await prisma.user.findUnique({
-    where: { id: Number(session.user.id) },
+    where: { id: Number(userSession.id) },
     include: { roles: true },
   })
 

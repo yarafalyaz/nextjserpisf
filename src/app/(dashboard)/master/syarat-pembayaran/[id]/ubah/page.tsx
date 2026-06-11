@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Syarat Pembayaran" }
 
 export default async function EditPaymentTermPage({
@@ -14,6 +15,8 @@ export default async function EditPaymentTermPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_payment_terms")
+
   const { id } = await params
 
   const paymentTerm = await prisma.paymentTerm.findUnique({

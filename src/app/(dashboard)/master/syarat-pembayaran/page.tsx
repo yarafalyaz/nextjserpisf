@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Syarat Pembayaran" }
 
 export default async function PaymentTermsPage({
@@ -14,6 +15,8 @@ export default async function PaymentTermsPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_payment_terms")
+
   const params = await searchParams
 
   const where = {

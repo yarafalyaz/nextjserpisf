@@ -13,6 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Kategori Barang" }
 
 export default async function ItemCategoryDetailPage({
@@ -20,6 +21,8 @@ export default async function ItemCategoryDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_item_categories")
+
   const { id } = await params
 
   const category = await prisma.itemCategory.findUnique({

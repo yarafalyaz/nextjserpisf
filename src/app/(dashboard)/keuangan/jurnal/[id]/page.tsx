@@ -11,6 +11,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Jurnal" }
 
 export default async function JournalDetailPage({
@@ -18,6 +19,8 @@ export default async function JournalDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_journals")
+
   const { id } = await params
 
   const journal = await prisma.journal.findUnique({

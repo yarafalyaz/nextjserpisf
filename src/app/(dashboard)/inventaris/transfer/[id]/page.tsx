@@ -12,6 +12,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Transfer Stok" }
 
 export default async function InventoryTransferDetailPage({
@@ -19,6 +20,8 @@ export default async function InventoryTransferDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_inventory")
+
   const { id } = await params
 
   const transfer = await prisma.inventoryTransfer.findUnique({

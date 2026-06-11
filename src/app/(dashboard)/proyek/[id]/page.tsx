@@ -15,6 +15,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/aler
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Proyek" }
 
 export default async function ProjectDetailPage({
@@ -22,6 +23,8 @@ export default async function ProjectDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_projects")
+
   const { id } = await params
 
   const project = await prisma.project.findUnique({

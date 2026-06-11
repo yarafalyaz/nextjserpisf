@@ -8,6 +8,7 @@ import { getActivePaymentMethods } from "@/lib/services/method.service"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Uang Muka" }
 
 export default async function EditPage({
@@ -15,6 +16,8 @@ export default async function EditPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_sales_orders")
+
   const { id } = await params
 
   const data = await prisma.downPayment.findUnique({

@@ -7,6 +7,7 @@ import { getActivePaymentMethods } from "@/lib/services/method.service"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Tambah Uang Muka" }
 
 export default async function CreateDownPaymentPage({
@@ -14,6 +15,8 @@ export default async function CreateDownPaymentPage({
 }: {
   searchParams: Promise<{ quotationId?: string; salesOrderId?: string }>
 }) {
+  await requirePermission("edit_sales_orders")
+
   const params = await searchParams
   const quotationId = params.quotationId ? Number(params.quotationId) : undefined
 

@@ -8,6 +8,7 @@ import Link from "next/link"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Angka Kunci Statistik" }
 
 export default async function DetailPage({
@@ -15,6 +16,8 @@ export default async function DetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_statistical_key_figures")
+
   const { id } = await params
 
   const data = await prisma.statisticalKeyFigure.findUnique({

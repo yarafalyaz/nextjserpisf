@@ -13,6 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Penerimaan Barang" }
 
 export default async function GoodsReceiptDetailPage({
@@ -20,6 +21,8 @@ export default async function GoodsReceiptDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_purchase_orders")
+
   const { id } = await params
 
   const receipt = await prisma.goodsReceipt.findUnique({

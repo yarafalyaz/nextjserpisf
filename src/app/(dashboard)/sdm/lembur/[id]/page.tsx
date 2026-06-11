@@ -12,6 +12,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Lembur" }
 
 export default async function OvertimeRequestDetailPage({
@@ -19,6 +20,8 @@ export default async function OvertimeRequestDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_employees")
+
   const { id } = await params
 
   const overtime = await prisma.overtimeRequest.findUnique({

@@ -14,6 +14,7 @@ import { Pencil } from "lucide-react"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Kategori" }
 
 export default async function AssetCategoryDetailPage({
@@ -21,6 +22,8 @@ export default async function AssetCategoryDetailPage({
 }: Readonly<{
   params: Promise<Readonly<{ id: string }>>
 }>) {
+  await requirePermission("view_asset_categories")
+
   const { id } = await params
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()

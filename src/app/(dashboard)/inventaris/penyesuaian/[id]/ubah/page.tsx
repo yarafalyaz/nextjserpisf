@@ -8,6 +8,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Penyesuaian Stok" }
 
 export default async function EditPage({
@@ -15,6 +16,8 @@ export default async function EditPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_inventory")
+
   const { id } = await params
 
   const data = await prisma.stockAdjustment.findUnique({

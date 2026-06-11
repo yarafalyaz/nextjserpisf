@@ -13,6 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Gudang" }
 
 export default async function WarehouseDetailPage({
@@ -20,6 +21,8 @@ export default async function WarehouseDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_warehouses")
+
   const { id } = await params
 
   const warehouse = await prisma.warehouse.findUnique({

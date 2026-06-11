@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Metode Pengiriman" }
 
 export default async function ShippingMethodsPage({
@@ -14,6 +15,8 @@ export default async function ShippingMethodsPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_shipping_methods")
+
   const params = await searchParams
 
   const where = {

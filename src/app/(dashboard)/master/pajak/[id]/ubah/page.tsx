@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Pajak" }
 
 export default async function EditTaxPage({
@@ -14,6 +15,8 @@ export default async function EditTaxPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_taxes")
+
   const { id } = await params
   const tax = await prisma.tax.findUnique({ where: { id: Number(id) } })
 

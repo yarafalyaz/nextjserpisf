@@ -4,11 +4,14 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Tambah Kelompok Pajak" }
 
 export const dynamic = "force-dynamic"
 
 export default async function CreateTaxGroupPage() {
+  await requirePermission("edit_tax_groups")
+
   const taxes = await prisma.tax.findMany({ where: { isActive: true }, orderBy: { name: "asc" } })
 
   return (

@@ -14,6 +14,7 @@ import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/me
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Pembayaran" }
 
 export default async function SalesPaymentDetailPage({
@@ -21,6 +22,8 @@ export default async function SalesPaymentDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_sales_orders")
+
   const { id } = await params
 
   const payment = await prisma.salesPayment.findUnique({

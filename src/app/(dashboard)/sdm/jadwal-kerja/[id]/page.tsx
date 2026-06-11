@@ -10,6 +10,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Jadwal Kerja" }
 
 const dayNames = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
@@ -19,6 +20,8 @@ export default async function WorkScheduleDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_employees")
+
   const { id } = await params
 
   const schedule = await prisma.workSchedule.findUnique({

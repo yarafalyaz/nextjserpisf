@@ -10,6 +10,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Lembar Waktu" }
 
 export default async function TimesheetDetailPage({
@@ -17,6 +18,8 @@ export default async function TimesheetDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_employees")
+
   const { id } = await params
 
   const timesheet = await prisma.timesheet.findUnique({

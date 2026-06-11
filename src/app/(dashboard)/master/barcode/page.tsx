@@ -7,9 +7,12 @@ import { BarcodeTable } from "./_components/barcode-table"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Barcode" }
 
 export default async function BarcodesPage() {
+  await requirePermission("view_barcodes")
+
   const barcodes = await prisma.barcode.findMany({
     orderBy: { createdAt: "desc" },
     include: { item: { select: { name: true } } },

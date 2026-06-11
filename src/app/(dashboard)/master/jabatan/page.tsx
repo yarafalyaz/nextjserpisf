@@ -7,9 +7,12 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Jabatan" }
 
 export default async function PositionsPage() {
+  await requirePermission("view_positions")
+
   const positions = await prisma.position.findMany({
     include: { department: true },
     orderBy: { createdAt: "desc" },

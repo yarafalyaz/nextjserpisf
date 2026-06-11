@@ -11,6 +11,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Rak" }
 
 export default async function RackDetailPage({
@@ -18,6 +19,8 @@ export default async function RackDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_inventory")
+
   const { id } = await params
 
   const rack = await prisma.rack.findUnique({

@@ -7,9 +7,12 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Satuan" }
 
 export default async function UomPage() {
+  await requirePermission("view_units")
+
   const items = await prisma.item.findMany({
     where: { deletedAt: null },
     select: { unitOfMeasure: true },

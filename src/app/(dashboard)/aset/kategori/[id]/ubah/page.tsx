@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Kategori" }
 
 export default async function EditPage({
@@ -14,6 +15,8 @@ export default async function EditPage({
 }: Readonly<{
   params: Promise<Readonly<{ id: string }>>
 }>) {
+  await requirePermission("edit_asset_categories")
+
   const { id } = await params
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()

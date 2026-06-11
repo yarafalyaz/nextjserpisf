@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Kendaraan" }
 
 export default async function VehiclesPage({
@@ -14,6 +15,8 @@ export default async function VehiclesPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_vehicles")
+
 
   const params = await searchParams
 

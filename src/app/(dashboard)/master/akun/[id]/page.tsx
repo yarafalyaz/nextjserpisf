@@ -7,6 +7,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Akun" }
 
 export default async function DetailPage({
@@ -14,6 +15,8 @@ export default async function DetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_accounts")
+
   const { id } = await params
 
   const data = await prisma.account.findUnique({

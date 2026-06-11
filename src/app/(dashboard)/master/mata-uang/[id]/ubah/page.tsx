@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Mata Uang" }
 
 export default async function EditCurrencyPage({
@@ -14,6 +15,8 @@ export default async function EditCurrencyPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_currencies")
+
   const { id } = await params
   const currency = await prisma.currency.findUnique({ where: { id: Number(id) } })
 

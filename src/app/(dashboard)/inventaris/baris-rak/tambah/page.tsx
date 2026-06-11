@@ -6,9 +6,12 @@ import { getSystemSettings } from "@/lib/utils/settings"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Tambah Baris Rak" }
 
 export default async function CreateRackRowPage() {
+  await requirePermission("edit_inventory")
+
   const warehouses = await prisma.warehouse.findMany({
     where: {
       deletedAt: null,

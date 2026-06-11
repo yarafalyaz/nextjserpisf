@@ -11,6 +11,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Pinjaman" }
 
 export default async function EmployeeLoanDetailPage({
@@ -18,6 +19,8 @@ export default async function EmployeeLoanDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_employees")
+
   const { id } = await params
 
   const loan = await prisma.employeeLoan.findUnique({

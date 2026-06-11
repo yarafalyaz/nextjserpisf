@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { auth } from "@/lib/auth/auth"
+import { requireAuth } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
@@ -10,11 +10,10 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Notifikasi" }
 
 export default async function NotificationsPage() {
-  const session = await auth()
-  if (!session?.user) return null
+  const user = await requireAuth()
 
   const notifications = await prisma.notification.findMany({
-    where: { userId: Number(session.user.id) },
+    where: { userId: Number(user.id) },
     orderBy: { createdAt: "desc" },
     take: 50,
   })

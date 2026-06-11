@@ -12,6 +12,7 @@ import { Pencil } from "lucide-react"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Merek Kendaraan" }
 
 export default async function AssetBrandDetailPage({
@@ -19,6 +20,8 @@ export default async function AssetBrandDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_asset_brands")
+
   const { id } = await params
   const numId = Number(id)
   if (isNaN(numId)) notFound()

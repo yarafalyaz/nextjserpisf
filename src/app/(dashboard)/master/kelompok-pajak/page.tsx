@@ -7,9 +7,12 @@ import { TaxGroupTable } from "./_components/tax-group-table"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Kelompok Pajak" }
 
 export default async function TaxGroupsPage() {
+  await requirePermission("view_tax_groups")
+
   const [taxGroups, allTaxes] = await Promise.all([
     prisma.taxGroup.findMany({
       include: { taxes: true },

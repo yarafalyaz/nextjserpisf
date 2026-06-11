@@ -6,6 +6,7 @@ import { StatisticalKeyFigureTable } from "./_components/statistical-key-figure-
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Angka Kunci Statistik" }
 
 export default async function StatisticalKeyFiguresPage({
@@ -13,6 +14,8 @@ export default async function StatisticalKeyFiguresPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_statistical_key_figures")
+
   const params = await searchParams
 
   const where = {

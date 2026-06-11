@@ -12,6 +12,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Model Kendaraan" }
 
 export default async function VehicleModelDetailPage({
@@ -19,6 +20,8 @@ export default async function VehicleModelDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_vehicles")
+
   const { id } = await params
 
   const model = await prisma.vehicleModel.findUnique({

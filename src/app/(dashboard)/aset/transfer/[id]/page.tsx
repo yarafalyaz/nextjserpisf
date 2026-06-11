@@ -12,6 +12,7 @@ import { Pencil } from "lucide-react"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Transfer Stok" }
 
 export default async function AssetTransferDetailPage({
@@ -19,6 +20,8 @@ export default async function AssetTransferDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_asset_transfers")
+
   const { id } = await params
 
   const transfer = await prisma.assetTransfer.findUnique({

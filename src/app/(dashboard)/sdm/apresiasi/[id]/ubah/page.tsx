@@ -6,6 +6,7 @@ import { AppreciationForm } from "@/components/forms/appreciation-form"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Apresiasi" }
 
 export default async function EditAppreciationPage({
@@ -13,6 +14,8 @@ export default async function EditAppreciationPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_employees")
+
   const { id } = await params
 
   const data = await prisma.appreciation.findUnique({

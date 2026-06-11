@@ -12,6 +12,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Merek Kendaraan" }
 
 export default async function VehicleBrandDetailPage({
@@ -19,6 +20,8 @@ export default async function VehicleBrandDetailPage({
 }: Readonly<{
   params: Promise<Readonly<{ id: string }>>
 }>) {
+  await requirePermission("view_vehicles")
+
   const { id } = await params
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()

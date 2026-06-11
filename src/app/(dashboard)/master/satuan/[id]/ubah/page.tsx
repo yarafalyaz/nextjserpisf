@@ -7,6 +7,7 @@ import { UomForm } from "../../tambah/form"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Satuan" }
 
 export default async function EditUomPage({
@@ -14,6 +15,8 @@ export default async function EditUomPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_units")
+
   const { id } = await params
 
   const uom = await prisma.unitOfMeasure.findUnique({ where: { id: Number(id) } })

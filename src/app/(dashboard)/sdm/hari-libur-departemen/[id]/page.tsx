@@ -9,6 +9,7 @@ import { deleteDepartmentHoliday } from "@/actions/hrm.actions"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Hari Libur Departemen" }
 
 export default async function DepartmentHolidayDetailPage({
@@ -16,6 +17,8 @@ export default async function DepartmentHolidayDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_employees")
+
   const { id } = await params
 
   const holiday = await prisma.departmentHoliday.findUnique({

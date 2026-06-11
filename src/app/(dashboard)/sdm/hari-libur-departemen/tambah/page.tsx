@@ -5,9 +5,12 @@ import { DepartmentHolidayForm } from "../_components/department-holiday-form"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Tambah Hari Libur Departemen" }
 
 export default async function CreateDepartmentHolidayPage() {
+  await requirePermission("edit_employees")
+
   const departments = await prisma.department.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true },

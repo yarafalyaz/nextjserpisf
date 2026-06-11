@@ -6,6 +6,7 @@ import { DepartmentHolidayForm } from "../../_components/department-holiday-form
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Hari Libur Departemen" }
 
 export default async function EditDepartmentHolidayPage({
@@ -13,6 +14,8 @@ export default async function EditDepartmentHolidayPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_employees")
+
   const { id } = await params
 
   const holiday = await prisma.departmentHoliday.findUnique({

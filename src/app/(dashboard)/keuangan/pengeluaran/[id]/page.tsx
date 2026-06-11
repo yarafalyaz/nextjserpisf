@@ -15,6 +15,7 @@ import { Pencil } from "lucide-react"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Pengeluaran" }
 
 export default async function ExpenseDetailPage({
@@ -22,6 +23,8 @@ export default async function ExpenseDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_expenses")
+
   const { id } = await params
 
   const expense = await prisma.expense.findUnique({

@@ -11,6 +11,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Surat Jalan" }
 
 export default async function DeliveryOrderDetailPage({
@@ -18,6 +19,8 @@ export default async function DeliveryOrderDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("view_sales_orders")
+
   const { id } = await params
 
   const deliveryOrder = await prisma.deliveryOrder.findUnique({

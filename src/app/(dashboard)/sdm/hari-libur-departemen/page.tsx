@@ -6,6 +6,7 @@ import { DepartmentHolidayTable } from "./_components/department-holiday-table"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Hari Libur Departemen" }
 
 export default async function DepartmentHolidaysPage({
@@ -13,6 +14,8 @@ export default async function DepartmentHolidaysPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
+  await requirePermission("view_employees")
+
   const params = await searchParams
 
   const where = {

@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
+import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Ubah Jabatan" }
 
 export default async function EditPositionPage({
@@ -14,6 +15,8 @@ export default async function EditPositionPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requirePermission("edit_positions")
+
   const { id } = await params
 
   const position = await prisma.position.findUnique({
