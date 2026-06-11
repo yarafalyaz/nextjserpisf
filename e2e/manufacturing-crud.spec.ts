@@ -8,7 +8,7 @@ async function waitForHydration(page: Page) {
 test.describe("Produksi - Production Order CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/produksi/production-orders", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Production", { timeout: 30000 })
+    await expect(page.locator("body")).toContainText("Perintah Produksi", { timeout: 30000 })
 
     await page.goto("/produksi/production-orders/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)

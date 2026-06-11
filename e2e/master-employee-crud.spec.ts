@@ -23,7 +23,7 @@ test.describe("Master Karyawan CRUD", () => {
     await deptInput.press("ArrowDown")
     await deptInput.press("Enter")
 
-    const positionInput = page.locator("input[placeholder='Cari posisi...']").first()
+    const positionInput = page.locator("input[placeholder='Cari jabatan...']").first()
     await positionInput.click()
     await positionInput.press("ArrowDown")
     await positionInput.press("Enter")
