@@ -1111,13 +1111,13 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
   const requestedBy = v.requestedBy || Number(user.id)
   const items = safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(v.items ?? null) ?? []
 
-  // Delete old items and create new ones
-  await prisma.purchaseRequestItem.deleteMany({ where: { purchaseRequestId: id } })
-
-  const requestDateRaw = v.requestDate
-  const description = v.description ?? null
-
-  const pr = await prisma.purchaseRequest.update({
+  const pr = await prisma.$transaction(async (tx) => {
+    const latestStatus = await tx.purchaseRequest.findUnique({ where: { id }, select: { status: true } })
+    if (latestStatus && latestStatus.status !== "draft") throw new Error("Hanya PR draft yang dapat diedit")
+    await tx.purchaseRequestItem.deleteMany({ where: { purchaseRequestId: id } })
+    const requestDateRaw = v.requestDate
+    const description = v.description ?? null
+    return tx.purchaseRequest.update({
     where: { id },
     data: {
       title: v.title ?? null,
@@ -1136,6 +1136,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
           })),
       },
     },
+  })
   })
 
   await logActivity("update", "PurchaseRequest", pr.id, `Memperbarui permintaan pembelian #${pr.id}`)
@@ -1175,8 +1176,10 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 
   // Keep existing documentNo (do not regenerate on edit)
   const po = await prisma.$transaction(async (tx) => {
-    await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } })
-    return tx.purchaseOrder.update({
+  const latest = await tx.purchaseOrder.findUnique({ where: { id }, select: { status: true } })
+  if (latest && latest.status !== "draft") throw new Error("Hanya PO draft yang dapat diedit")
+  await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } })
+  return tx.purchaseOrder.update({
       where: { id },
       data: {
         vendorId: v.vendorId,
@@ -1243,6 +1246,9 @@ export async function updateVendorBill(id: number, formData: FormData) {
   // — i.e. the over-bill guard was bypassable via edit. assertThreeWayMatch
   // excludes this bill's own id so it doesn't count itself.
   const bill = await prisma.$transaction(async (tx) => {
+    const latestBill = await tx.vendorBill.findUnique({ where: { id }, select: { status: true } })
+    if (latestBill && latestBill.status !== "draft") throw new Error("Hanya tagihan draft yang dapat diedit")
+
     if (v.purchaseOrderId) {
       await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`
     }
@@ -1314,6 +1320,8 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
   const items = safeJsonParse<{ itemId: number; qty: number; unitCost: number; warehouseId?: number | null; uom?: string | null; batchNumber?: string | null; expiryDate?: string | null; serialNumbers?: string[] | null }[]>(v.items ?? null) ?? []
 
   const gr = await prisma.$transaction(async (tx) => {
+    const latestStatus = await tx.goodsReceipt.findUnique({ where: { id }, select: { status: true } })
+    if (latestStatus && latestStatus.status !== "draft") throw new Error("Hanya GR draft yang dapat diedit")
     const updated = await tx.goodsReceipt.update({
       where: { id },
       data: {
@@ -1384,6 +1392,8 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
 
   // Keep existing documentNo (do not regenerate), and replace items atomically.
   const purchaseReturn = await prisma.$transaction(async (tx) => {
+    const latestPr = await tx.purchaseReturn.findUnique({ where: { id }, select: { status: true } })
+    if (latestPr && latestPr.status !== "draft") throw new Error("Hanya retur draft yang dapat diedit")
     await tx.purchaseReturnItem.deleteMany({ where: { purchaseReturnId: id } })
     return tx.purchaseReturn.update({
       where: { id },
