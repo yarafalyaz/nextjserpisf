@@ -137,6 +137,24 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
+  // Sensitive route protection — super_admin only
+  if (isLoggedIn) {
+    const userRoles = (token?.roles as string[] | undefined) ?? []
+    const isSuperAdmin = userRoles.includes("super_admin")
+    const sensitiveRoutes = [
+      "/master/roles",
+      "/master/users",
+      "/pengaturan/database",
+      "/pengaturan/system",
+      "/pengaturan/audit-log",
+    ]
+    for (const pattern of sensitiveRoutes) {
+      if (pathname.startsWith(pattern) && !isSuperAdmin) {
+        return NextResponse.redirect(new URL("/", req.url))
+      }
+    }
+  }
+
   return addSecurityHeaders(NextResponse.next())
 }
 
