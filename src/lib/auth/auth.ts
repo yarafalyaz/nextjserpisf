@@ -57,6 +57,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           isActive: user.isActive,
+          passwordHash: user.password.substring(0, 12), // Session binding: track password changes
           roles: user.roles.map((r) => r.name),
           permissions: [
             ...new Set(
@@ -73,6 +74,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id ?? "";
         token.name = user.name;
         token.isActive = (user as any).isActive !== false;
+        token.passwordHash = (user as any).passwordHash;
         token.roles = (user as any).roles;
         token.permissions = (user as any).permissions;
       }
@@ -100,10 +102,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               name: true,
               avatar: true,
               isActive: true,
+              password: true, // Fetch hash to check for password changes
               roles: { include: { permissions: { select: { name: true } } } },
             },
           });
-          if (dbUser && dbUser.isActive) {
+
+          // Check for deactivation OR password change.
+          // If the stored hash fragment doesn't match the current DB hash,
+          // the user has changed their password and we must revoke all other sessions.
+          const isPasswordValid = dbUser && token.passwordHash === dbUser.password.substring(0, 12);
+
+          if (dbUser && dbUser.isActive && isPasswordValid) {
             token.name = dbUser.name;
             token.avatar = dbUser.avatar;
             token.isActive = true;
@@ -112,7 +121,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               ...new Set(dbUser.roles.flatMap((r) => r.permissions.map((p) => p.name))),
             ];
           } else {
-            // User deleted or deactivated → invalidate the token for all guards.
+            // User deleted, deactivated, OR changed password → invalidate the token.
             token.isActive = false;
             token.roles = [];
             token.permissions = [];

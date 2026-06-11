@@ -376,6 +376,16 @@ export async function createMaterialIssueFromWorkOrder(workOrderId: number, ware
     },
   })
 
+  // Idempotency: prevent duplicate Material Issues for the same Work Order.
+  // One WO should only have one MI to prevent multiple stock-outs for one job.
+  const existingMi = await prisma.materialIssue.findFirst({
+    where: { workOrderId },
+    select: { id: true, documentNo: true },
+  })
+  if (existingMi) {
+    throw new Error(`Material Issue sudah pernah dibuat untuk Work Order ini (No: ${existingMi.documentNo}).`)
+  }
+
   if (wo.items.length === 0) {
     throw new Error("Work Order tidak memiliki item. Tambahkan item terlebih dahulu.")
   }
@@ -504,8 +514,8 @@ export async function deleteWorkOrder(id: number) {
   await requirePermission("delete_work_orders")
 
   const wo = await prisma.workOrder.findUniqueOrThrow({ where: { id } })
-  if (wo.status === "completed" || wo.status === "done") {
-    throw new Error("Tidak bisa menghapus Work Order yang sudah completed")
+  if (wo.status !== "pending" && wo.status !== "draft") {
+    throw new Error(`Tidak bisa menghapus Work Order dengan status '${wo.status}'. Hanya status 'pending' atau 'draft' yang bisa dihapus.`)
   }
 
   await prisma.workOrder.delete({ where: { id } })
@@ -526,8 +536,8 @@ export async function deleteProductionOrder(id: number) {
   await requirePermission("delete_production_orders")
 
   const po = await prisma.productionOrder.findUniqueOrThrow({ where: { id } })
-  if (po.status === "completed" || po.status === "in_progress") {
-    throw new Error("Tidak bisa menghapus Production Order yang sudah in_progress/completed")
+  if (po.status !== "draft" && po.status !== "pending") {
+    throw new Error(`Tidak bisa menghapus Production Order dengan status '${po.status}'. Hanya status 'draft' atau 'pending' yang bisa dihapus.`)
   }
 
   await prisma.productionOrder.delete({ where: { id } })
