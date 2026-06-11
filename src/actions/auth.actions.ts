@@ -26,6 +26,24 @@ async function assertNoSuperAdminGrant(
   return null
 }
 
+// Target-escalation guard: a non-super-admin must not be able to modify or
+// disable an existing super_admin's account.
+async function assertCanModifyTarget(
+  actorRoles: string[],
+  targetUserId: number
+): Promise<string | null> {
+  if (actorRoles.includes("super_admin")) return null
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    include: { roles: { select: { name: true } } },
+  })
+  if (!target) return "Pengguna tidak ditemukan"
+  if (target.roles.some((r) => r.name === "super_admin")) {
+    return "Hanya super admin yang dapat mengubah atau menonaktifkan akun super admin"
+  }
+  return null
+}
+
 export async function loginAction(formData: FormData) {
   const email = formData.get("email") as string
   const password = formData.get("password") as string
@@ -156,6 +174,13 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     // Fix #20: Add permission check — prevents privilege escalation
     const actor = await requirePermission("manage_users")
 
+    // Target-escalation guard: a non-super-admin must not be able to alter the
+    // roles of an existing super_admin (e.g. demote/strip the super_admin role).
+    const targetErr = await assertCanModifyTarget(actor.roles, userId)
+    if (targetErr) {
+      return { error: targetErr }
+    }
+
     // Privilege-escalation guard: a non-super-admin must not be able to assign
     // the super_admin role to anyone (including themselves).
     const grantErr = await assertNoSuperAdminGrant(actor.roles, roleIds)
@@ -183,7 +208,14 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
 export async function toggleUserActive(userId: number) {
   try {
     // Fix #21: Add permission check
-    await requirePermission("manage_users")
+    const actor = await requirePermission("manage_users")
+
+    // Target-escalation guard: a non-super-admin must not be able to disable
+    // an existing super_admin's account.
+    const targetErr = await assertCanModifyTarget(actor.roles, userId)
+    if (targetErr) {
+      return { error: targetErr }
+    }
 
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: userId },

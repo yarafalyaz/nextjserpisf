@@ -7,6 +7,7 @@ const requirePermissionMock = vi.fn()
 const revalidateMock = vi.fn()
 
 const userFindMock = vi.fn()
+const userFindUniqueMock = vi.fn()
 const userCreateMock = vi.fn()
 const userUpdateMock = vi.fn()
 const roleFindManyMock = vi.fn()
@@ -26,6 +27,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: {
       findUniqueOrThrow: (...a: unknown[]) => userFindMock(...a),
+      findUnique: (...a: unknown[]) => userFindUniqueMock(...a),
       create: (...a: unknown[]) => userCreateMock(...a),
       update: (...a: unknown[]) => userUpdateMock(...a),
     },
@@ -69,7 +71,7 @@ function fd(entries: Record<string, string | string[]>): FormData {
 beforeEach(() => {
   for (const m of [
     signInMock, signOutMock, requireAuthMock, requirePermissionMock,
-    revalidateMock, userFindMock, userCreateMock, userUpdateMock,
+    revalidateMock, userFindMock, userFindUniqueMock, userCreateMock, userUpdateMock,
     roleFindManyMock, bcryptCompareMock, bcryptHashMock,
   ]) m.mockReset()
   bcryptHashMock.mockResolvedValue("hashed-value")
@@ -78,6 +80,8 @@ beforeEach(() => {
   requirePermissionMock.mockResolvedValue({ id: "1", roles: ["admin"], permissions: ["manage_users"] })
   // No requested role is super_admin by default.
   roleFindManyMock.mockResolvedValue([])
+  // Default target user has no roles (for assertCanModifyTarget).
+  userFindUniqueMock.mockResolvedValue({ id: 3, roles: [] })
 })
 
 describe("loginAction", () => {
@@ -221,18 +225,54 @@ describe("updateUserRoles", () => {
     expect(roleFindManyMock).not.toHaveBeenCalled()
     expect(userUpdateMock).toHaveBeenCalled()
   })
+
+  it("blocks a non-super-admin from altering an existing super_admin's roles", async () => {
+    // Actor is a plain admin (beforeEach default). Target #3 IS a super_admin.
+    userFindUniqueMock.mockResolvedValue({ id: 3, roles: [{ name: "super_admin" }] })
+    const res = await updateUserRoles(3, [5])
+    expect(res).toMatchObject({ error: expect.stringContaining("super admin") })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("allows a super_admin actor to alter another super_admin's roles", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userFindUniqueMock.mockResolvedValue({ id: 3, roles: [{ name: "super_admin" }] })
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserRoles(3, [5])
+    expect(res).toEqual({ success: true })
+    // super_admin bypass: target guard short-circuits without a target lookup.
+    expect(userFindUniqueMock).not.toHaveBeenCalled()
+    expect(userUpdateMock).toHaveBeenCalled()
+  })
 })
 
 describe("toggleUserActive", () => {
   it("flips the active flag", async () => {
-    requirePermissionMock.mockResolvedValue(undefined)
     userFindMock.mockResolvedValue({ id: 4, isActive: true })
     userUpdateMock.mockResolvedValue({ id: 4 })
+    userFindUniqueMock.mockResolvedValue({ id: 4, roles: [] })
     const res = await toggleUserActive(4)
     expect(res).toEqual({ success: true })
     expect(userUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ data: { isActive: false } }),
     )
+  })
+
+  it("blocks a non-super-admin from disabling an existing super_admin", async () => {
+    // Actor is a plain admin (beforeEach default). Target #4 IS a super_admin.
+    userFindUniqueMock.mockResolvedValue({ id: 4, roles: [{ name: "super_admin" }] })
+    const res = await toggleUserActive(4)
+    expect(res).toMatchObject({ error: expect.stringContaining("super admin") })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("allows a super_admin actor to disable another super_admin", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userFindMock.mockResolvedValue({ id: 4, isActive: true })
+    userUpdateMock.mockResolvedValue({ id: 4 })
+    const res = await toggleUserActive(4)
+    expect(res).toEqual({ success: true })
+    expect(userUpdateMock).toHaveBeenCalled()
   })
 })
 
