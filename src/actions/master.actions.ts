@@ -8,7 +8,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
-import { safeId, requireNumber, safeNumber, safeJsonParse } from "@/lib/utils/safe-parse"
+import { safeId, requireNumber, safeNumber, safeJsonParse, requireString } from "@/lib/utils/safe-parse"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { customerSchema, vendorSchema, itemSchema } from "@/lib/validations/schemas"
 import { parseFormData } from "@/lib/validations/parse-form"
@@ -393,7 +393,7 @@ export async function createWarehouse(formData: FormData) {
 
   const warehouse = await prisma.warehouse.create({
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       code,
       address: formData.get("address") as string | null,
       isActive: true,
@@ -418,7 +418,7 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
   await prisma.warehouse.update({
     where: { id: warehouseId },
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       code: formData.get("code") as string,
       address: formData.get("address") as string | null,
     },
@@ -468,7 +468,7 @@ export async function createEmployee(formData: FormData) {
 
   const employeeData = {
       employeeNo,
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       email: email,
       phone: formData.get("phone") as string | null,
       gender: formData.get("gender") as string | null || null,
@@ -476,7 +476,7 @@ export async function createEmployee(formData: FormData) {
       maritalStatus: formData.get("maritalStatus") as string | null || null,
       departmentId: safeId(formData.get("departmentId")),
       positionId: safeId(formData.get("positionId")),
-      joinDate: new Date(formData.get("joinDate") as string),
+      joinDate: new Date(requireString(formData.get("joinDate"), "joinDate")),
       paymentFrequency: (formData.get("paymentFrequency") as string) || "MONTHLY",
       baseSalary: (safeNumber(formData.get("baseSalary")) ?? 0),
       idNumber: formData.get("idNumber") as string | null,
@@ -568,7 +568,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
   }
 
   const updateData = {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       email: email,
       phone: formData.get("phone") as string | null,
       gender: formData.get("gender") as string | null || null,
@@ -642,7 +642,7 @@ export async function createAccount(formData: FormData) {
   const account = await prisma.account.create({
     data: {
       code,
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       type: formData.get("type") as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE",
       parentId: safeNumber(formData.get("parentId")),
       isActive: true,
@@ -668,7 +668,7 @@ export async function createItemCategory(formData: FormData) {
 
   const category = await prisma.itemCategory.create({
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       description: formData.get("description") as string | null,
       parentId: safeNumber(formData.get("parentId")),
     },
@@ -692,7 +692,7 @@ export async function updateItemCategory(id: number, formData: FormData) {
   await prisma.itemCategory.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       description: formData.get("description") as string | null,
       parentId: safeNumber(formData.get("parentId")),
     },
@@ -722,7 +722,7 @@ export async function createDepartment(formData: FormData) {
 
   const department = await prisma.department.create({
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       code,
       description: formData.get("description") as string | null,
     },
@@ -746,7 +746,7 @@ export async function updateDepartment(id: number, formData: FormData) {
   await prisma.department.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       code: formData.get("code") as string | null,
       description: formData.get("description") as string | null,
     },
@@ -780,7 +780,7 @@ export async function createPosition(formData: FormData) {
     try {
       const position = await prisma.position.create({
         data: {
-          name: formData.get("name") as string,
+          name: requireString(formData.get("name"), "name"),
           code,
           departmentId: safeId(formData.get("departmentId")),
         },
@@ -816,7 +816,7 @@ export async function updatePosition(id: number, formData: FormData) {
   await prisma.position.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       departmentId: safeId(formData.get("departmentId")),
     },
   })
@@ -840,7 +840,7 @@ export async function createLead(formData: FormData) {
 
   const data = {
     leadNumber,
-    name: formData.get("name") as string,
+    name: requireString(formData.get("name"), "name"),
     email: formData.get("email") as string || null,
     phone: formData.get("phone") as string || null,
     company: formData.get("company") as string || null,
@@ -875,7 +875,7 @@ export async function updateLead(id: number, formData: FormData) {
   await prisma.lead.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       email: formData.get("email") as string || null,
       phone: formData.get("phone") as string || null,
       company: formData.get("company") as string || null,
@@ -910,8 +910,8 @@ export async function createBank(formData: FormData) {
 
   const bank = await prisma.bank.create({
     data: {
-      name: formData.get("name") as string,
-      code: formData.get("code") as string,
+      name: requireString(formData.get("name"), "name"),
+      code: requireString(formData.get("code"), "code"),
       accountId: safeId(formData.get("accountId")),
       isActive: true,
     },
@@ -935,8 +935,8 @@ export async function updateBank(id: number, formData: FormData) {
   await prisma.bank.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
-      code: formData.get("code") as string,
+      name: requireString(formData.get("name"), "name"),
+      code: requireString(formData.get("code"), "code"),
       accountId: safeId(formData.get("accountId")),
     },
   })
@@ -960,7 +960,7 @@ export async function createTax(formData: FormData) {
 
   const tax = await prisma.tax.create({
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       rate: (safeNumber(formData.get("rate")) ?? 0),
       code: (formData.get("code") as string) || undefined,
       description: (formData.get("description") as string) || undefined,
@@ -992,7 +992,7 @@ export async function updateTax(id: number, formData: FormData) {
   await prisma.tax.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       rate: (safeNumber(formData.get("rate")) ?? 0),
       code: (formData.get("code") as string) || undefined,
       description: (formData.get("description") as string) || undefined,
@@ -1031,8 +1031,8 @@ export async function createCurrency(formData: FormData) {
     }
     return tx.currency.create({
       data: {
-        code: formData.get("code") as string,
-        name: formData.get("name") as string,
+        code: requireString(formData.get("code"), "code"),
+        name: requireString(formData.get("name"), "name"),
         rate: (safeNumber(formData.get("rate")) ?? 0),
         symbol: (formData.get("symbol") as string) || undefined,
         symbolPosition: (formData.get("symbolPosition") as string) || undefined,
@@ -1070,8 +1070,8 @@ export async function updateCurrency(id: number, formData: FormData) {
     await tx.currency.update({
       where: { id },
       data: {
-        code: formData.get("code") as string,
-        name: formData.get("name") as string,
+        code: requireString(formData.get("code"), "code"),
+        name: requireString(formData.get("name"), "name"),
         rate: (safeNumber(formData.get("rate")) ?? 0),
         symbol: (formData.get("symbol") as string) || undefined,
         symbolPosition: (formData.get("symbolPosition") as string) || undefined,
@@ -1129,7 +1129,7 @@ export async function createBarcode(formData: FormData) {
 
   const barcodeEntry = await prisma.barcode.create({
     data: {
-      barcode: formData.get("barcode") as string,
+      barcode: requireString(formData.get("barcode"), "barcode"),
       itemId: requireNumber(formData.get("itemId"), "itemId"),
       type: (formData.get("type") as string) || "EAN13",
     },
@@ -1152,7 +1152,7 @@ export async function updateBarcode(id: number, formData: FormData) {
     await prisma.barcode.update({
       where: { id },
       data: {
-        barcode: formData.get("barcode") as string,
+        barcode: requireString(formData.get("barcode"), "barcode"),
         itemId: requireNumber(formData.get("itemId"), "itemId"),
         type: (formData.get("type") as string) || "EAN13",
       },
@@ -1173,7 +1173,7 @@ export async function createTaxGroup(formData: FormData) {
   try {
   await requirePermission("create_taxes")
 
-  const name = formData.get("name") as string
+  const name = requireString(formData.get("name"), "name")
   const taxIds = formData.getAll("taxIds").map((id) => Number(id))
 
   const taxGroup = await prisma.taxGroup.create({
@@ -1199,7 +1199,7 @@ export async function createTaxGroup(formData: FormData) {
 export async function updateTaxGroup(id: number, formData: FormData) {
   try {
     await requirePermission("edit_taxes")
-    const name = formData.get("name") as string
+    const name = requireString(formData.get("name"), "name")
     const taxIds = formData.getAll("taxIds").map((t) => Number(t))
     await prisma.$transaction([
       prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),
@@ -1229,7 +1229,7 @@ export async function createStatisticalKeyFigure(formData: FormData) {
 
   const figure = await prisma.statisticalKeyFigure.create({
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       unit: formData.get("unit") as string,
       value: (safeNumber(formData.get("value")) ?? 0),
     },
@@ -1252,7 +1252,7 @@ export async function updateStatisticalKeyFigure(id: number, formData: FormData)
     await prisma.statisticalKeyFigure.update({
       where: { id },
       data: {
-        name: formData.get("name") as string,
+        name: requireString(formData.get("name"), "name"),
         unit: formData.get("unit") as string,
         value: (safeNumber(formData.get("value")) ?? 0),
       },
@@ -1275,8 +1275,8 @@ export async function createPaymentTerm(formData: FormData) {
 
   const paymentTerm = await prisma.paymentTerm.create({
     data: {
-      name: formData.get("name") as string,
-      code: formData.get("code") as string,
+      name: requireString(formData.get("name"), "name"),
+      code: requireString(formData.get("code"), "code"),
       days: (safeNumber(formData.get("days")) ?? 0),
       isActive: true,
     },
@@ -1300,8 +1300,8 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
   await prisma.paymentTerm.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
-      code: formData.get("code") as string,
+      name: requireString(formData.get("name"), "name"),
+      code: requireString(formData.get("code"), "code"),
       days: (safeNumber(formData.get("days")) ?? 0),
     },
   })
@@ -1582,7 +1582,7 @@ export async function updateAccount(id: number, formData: FormData) {
   // user clears the field would corrupt the audit trail and break references
   // to this account in historical journal entries. Read the current code from
   // the DB and preserve it if the form sent nothing usable.
-  const submittedCode = (formData.get("code") as string)?.trim()
+  const submittedCode = (requireString(formData.get("code"), "code"))?.trim()
   let code: string
   if (!submittedCode) {
     const current = await prisma.account.findUnique({
@@ -1599,7 +1599,7 @@ export async function updateAccount(id: number, formData: FormData) {
     where: { id },
     data: {
       code,
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
       type: formData.get("type") as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE",
       parentId: safeNumber(formData.get("parentId")),
       isActive: true,
@@ -1625,7 +1625,7 @@ export async function createBrand(formData: FormData) {
 
   const brand = await prisma.brand.create({
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
     },
   })
 
@@ -1647,7 +1647,7 @@ export async function updateBrand(id: number, formData: FormData) {
   await prisma.brand.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
+      name: requireString(formData.get("name"), "name"),
     },
   })
 

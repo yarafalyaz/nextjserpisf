@@ -45,6 +45,17 @@ export function requireId(value: FormDataEntryValue | null | undefined, fieldNam
 }
 
 /**
+ * Safely parse a required string. Throws if empty.
+ */
+export function requireString(value: FormDataEntryValue | null | undefined, fieldName: string): string {
+  const trimmed = typeof value === "string" ? value.trim() : ""
+  if (!trimmed) {
+    throw new Error(`Field "${fieldName}" wajib diisi`)
+  }
+  return trimmed
+}
+
+/**
  * Safely parse JSON. Returns null if invalid.
  */
 export function safeJsonParse<T = unknown>(value: string | null | undefined): T | null {
