@@ -32,12 +32,14 @@ export async function createStockAdjustment(formData: FormData) {
 
   // Fetch latest system quantity for each item in the warehouse to prevent
   // client-side tampering of 'currentQty'.
+  // Since Silengkap calculates stock dynamically from StockMove:
   const itemIds = adjItems.map((it) => it.itemId)
-  const stocks = await prisma.stock.findMany({
+  const stockMoves = await prisma.stockMove.groupBy({
+    by: ['itemId'],
     where: { warehouseId: v.warehouseId, itemId: { in: itemIds } },
-    select: { itemId: true, qty: true },
+    _sum: { qty: true },
   })
-  const stockMap = new Map(stocks.map((s) => [s.itemId, Number(s.qty)]))
+  const stockMap = new Map(stockMoves.map((s) => [s.itemId, Number(s._sum.qty || 0)]))
 
   const adjustment = await prisma.stockAdjustment.create({
     data: {
@@ -51,7 +53,7 @@ export async function createStockAdjustment(formData: FormData) {
       createdBy: Number(user.id),
       items: {
         create: adjItems.map((it) => {
-          const systemQty = stockMap.get(Number(it.itemId)) || 0
+          const systemQty = Number(stockMap.get(Number(it.itemId)) || 0)
           const actualQty = Number(it.newQty || 0)
           if (actualQty < 0) throw new Error("Kuantitas fisik (actual) tidak boleh negatif")
           const difference = actualQty - systemQty
