@@ -9,7 +9,7 @@ export default function LoginPage() {
           <div className="flex size-6 items-center justify-center rounded-md bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900">
             <GalleryVerticalEnd className="size-4" />
           </div>
-          Acme Inc.
+          Silengkap
         </a>
         <LoginForm />
       </div>

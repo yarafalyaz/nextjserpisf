@@ -1,6 +1,5 @@
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { Button } from "@/components/ui/shadcn/button"
 import {
   Card,
   CardContent,
@@ -48,7 +47,7 @@ export default function KetentuanLayananPage() {
             <section className="flex flex-col gap-2">
               <h2 className="text-lg font-semibold text-foreground">4. Pembatasan Tanggung Jawab</h2>
               <p className="text-sm text-muted-foreground">
-                YaraERP disediakan "sebagaimana adanya" tanpa jaminan dalam bentuk apa pun. Kami tidak bertanggung jawab atas kerugian materiil, kehilangan data, atau gangguan bisnis yang disebabkan oleh penggunaan atau ketidakmampuan menggunakan sistem ini.
+                YaraERP disediakan &quot;sebagaimana adanya&quot; tanpa jaminan dalam bentuk apa pun. Kami tidak bertanggung jawab atas kerugian materiil, kehilangan data, atau gangguan bisnis yang disebabkan oleh penggunaan atau ketidakmampuan menggunakan sistem ini.
               </p>
             </section>
 

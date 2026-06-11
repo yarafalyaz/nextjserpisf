@@ -29,6 +29,18 @@ export function LoginForm({
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [callbackUrl] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      const cb = params.get("callbackUrl")
+      if (cb) {
+        const newUrl = window.location.pathname
+        window.history.replaceState({}, "", newUrl)
+        return cb
+      }
+    }
+    return "/"
+  })
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -45,7 +57,7 @@ export function LoginForm({
       setError("Email atau password salah")
       setLoading(false)
     } else {
-      router.push("/")
+      router.push(callbackUrl)
       router.refresh()
     }
   }

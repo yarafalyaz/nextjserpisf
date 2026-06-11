@@ -120,6 +120,10 @@ export async function proxy(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.AUTH_SECRET })
   const isLoggedIn = !!token
   const isAuthPage = pathname.startsWith("/login")
+  const isPublicPage =
+    isAuthPage ||
+    pathname === "/ketentuan-layanan" ||
+    pathname === "/kebijakan-privasi"
 
   // Redirect logged-in users away from login page
   if (isAuthPage && isLoggedIn) {
@@ -127,7 +131,7 @@ export async function proxy(req: NextRequest) {
   }
 
   // Redirect non-logged-in users to login
-  if (!isAuthPage && !isLoggedIn) {
+  if (!isPublicPage && !isLoggedIn) {
     const loginUrl = new URL("/login", req.url)
     loginUrl.searchParams.set("callbackUrl", pathname)
     return NextResponse.redirect(loginUrl)
