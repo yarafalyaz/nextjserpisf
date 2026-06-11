@@ -911,7 +911,7 @@ export async function createBank(formData: FormData) {
   const bank = await prisma.bank.create({
     data: {
       name: requireString(formData.get("name"), "name"),
-      code: requireString(formData.get("code"), "code"),
+      code: formData.get("code") as string,
       accountId: safeId(formData.get("accountId")),
       isActive: true,
     },
@@ -936,7 +936,7 @@ export async function updateBank(id: number, formData: FormData) {
     where: { id },
     data: {
       name: requireString(formData.get("name"), "name"),
-      code: requireString(formData.get("code"), "code"),
+      code: formData.get("code") as string,
       accountId: safeId(formData.get("accountId")),
     },
   })
@@ -1031,7 +1031,7 @@ export async function createCurrency(formData: FormData) {
     }
     return tx.currency.create({
       data: {
-        code: requireString(formData.get("code"), "code"),
+        code: formData.get("code") as string,
         name: requireString(formData.get("name"), "name"),
         rate: (safeNumber(formData.get("rate")) ?? 0),
         symbol: (formData.get("symbol") as string) || undefined,
@@ -1070,7 +1070,7 @@ export async function updateCurrency(id: number, formData: FormData) {
     await tx.currency.update({
       where: { id },
       data: {
-        code: requireString(formData.get("code"), "code"),
+        code: formData.get("code") as string,
         name: requireString(formData.get("name"), "name"),
         rate: (safeNumber(formData.get("rate")) ?? 0),
         symbol: (formData.get("symbol") as string) || undefined,
@@ -1276,7 +1276,7 @@ export async function createPaymentTerm(formData: FormData) {
   const paymentTerm = await prisma.paymentTerm.create({
     data: {
       name: requireString(formData.get("name"), "name"),
-      code: requireString(formData.get("code"), "code"),
+      code: formData.get("code") as string,
       days: (safeNumber(formData.get("days")) ?? 0),
       isActive: true,
     },
@@ -1301,7 +1301,7 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
     where: { id },
     data: {
       name: requireString(formData.get("name"), "name"),
-      code: requireString(formData.get("code"), "code"),
+      code: formData.get("code") as string,
       days: (safeNumber(formData.get("days")) ?? 0),
     },
   })
@@ -1582,7 +1582,7 @@ export async function updateAccount(id: number, formData: FormData) {
   // user clears the field would corrupt the audit trail and break references
   // to this account in historical journal entries. Read the current code from
   // the DB and preserve it if the form sent nothing usable.
-  const submittedCode = (requireString(formData.get("code"), "code"))?.trim()
+  const submittedCode = (formData.get("code") as string)?.trim() || null
   let code: string
   if (!submittedCode) {
     const current = await prisma.account.findUnique({
