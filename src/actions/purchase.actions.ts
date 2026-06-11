@@ -662,11 +662,16 @@ export async function confirmVendorPayment(paymentId: number) {
       )
     }
 
-    for (const alloc of allocations) {
-      const bill = await tx.vendorBill.findUniqueOrThrow({
-        where: { id: alloc.vendorBillId },
-      })
+    // Reuse already-fetched + locked bills (openBills) instead of re-querying
+    // per allocation (eliminates N+1). Every alloc.vendorBillId originates from
+    // openBills via allocatePaymentToBills, so the map lookup always hits.
+    const openBillMap = new Map(openBills.map((b) => [b.id, b]))
 
+    for (const alloc of allocations) {
+      const bill = openBillMap.get(alloc.vendorBillId)
+      if (!bill) {
+        throw new Error(`Vendor bill #${alloc.vendorBillId} tidak ditemukan dalam tagihan terkunci`)
+      }
       const nextPaid = Number(bill.paidAmount) + Number(alloc.amount)
       if (nextPaid > Number(bill.grandTotal)) {
         throw new Error(`Alokasi melebihi sisa tagihan vendor bill #${bill.id}`)
@@ -882,11 +887,21 @@ export async function deletePurchaseOrder(id: number) {
 
   await prisma.$transaction(async (tx) => {
     // 1. Delete all related GoodsReceipts and reverse their stock moves
+    const allGrIds = po.goodsReceipts.map(gr => gr.id)
+    const allStockMoves = await tx.stockMove.findMany({
+      where: { referenceType: "GoodsReceipt", referenceId: { in: allGrIds.length ? allGrIds : [-1] } },
+      select: { id: true, itemId: true, qty: true, referenceId: true },
+    })
+    const stockMovesByGrId = new Map<number, typeof allStockMoves>()
+    for (const move of allStockMoves) {
+      if (!move.referenceId) continue
+      const arr = stockMovesByGrId.get(move.referenceId) || []
+      arr.push(move)
+      stockMovesByGrId.set(move.referenceId, arr)
+    }
+
     for (const gr of po.goodsReceipts) {
-      const stockMoves = await tx.stockMove.findMany({
-        where: { referenceType: "GoodsReceipt", referenceId: gr.id },
-        select: { id: true, itemId: true, qty: true },
-      })
+      const stockMoves = stockMovesByGrId.get(gr.id) || []
 
       if (stockMoves.length > 0) {
         // Batch: reverse all stock moves in one query per GR (eliminates N+1)
