@@ -16,6 +16,7 @@ export default async function LoginPage() {
               alt={settings.companyName || "Logo"}
               width={24}
               height={24}
+              priority
               className="size-6 object-contain"
             />
           ) : (

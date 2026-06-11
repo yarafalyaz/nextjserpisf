@@ -221,42 +221,53 @@ function useActive() {
   }
 }
 
+import { cn } from "@/lib/utils"
+
 export function AppSidebar({ companyName, companyLogo }: AppSidebarProps) {
   const { isActive, isGroupActive } = useActive()
-  const { setOpenMobile, isMobile } = useSidebar()
+  const { state, setOpenMobile, isMobile } = useSidebar()
 
   const handleNav = () => {
     if (isMobile) setOpenMobile(false)
   }
 
+  const isCollapsed = state === "collapsed"
+
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <Link href="/">
-                {companyLogo ? (
-                  <SafeImage
-                    src={companyLogo}
-                    alt={companyName || "Logo"}
-                    width={32}
-                    height={32}
-                    className="size-8 object-contain rounded-lg border bg-white p-0.5"
-                  />
-                ) : (
+      <SidebarHeader className={cn("h-12 border-b border-sidebar-border flex items-center", isCollapsed ? "justify-center p-0" : "px-4 py-0")}>
+        {companyLogo ? (
+          <Link href="/" onClick={handleNav} className={cn("flex items-center justify-center w-full h-full", isCollapsed ? "" : "h-10 overflow-hidden")}>
+            <SafeImage
+              src={companyLogo}
+              alt={companyName || "Logo"}
+              width={isCollapsed ? 32 : 240}
+              height={isCollapsed ? 32 : 80}
+              style={isCollapsed ? undefined : { width: "auto", height: "auto" }}
+              priority
+              className={cn(
+                "object-contain transition-all duration-200",
+                isCollapsed ? "size-8" : "h-16 min-h-16 w-auto max-w-full"
+              )}
+            />
+          </Link>
+        ) : (
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <Link href="/">
                   <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <Building2 className="size-4" />
                   </div>
-                )}
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-bold">{companyName || "YaraERP"}</span>
-                  <span className="truncate text-xs text-sidebar-foreground/70">Enterprise Suite</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-bold">{companyName || "YaraERP"}</span>
+                    <span className="truncate text-xs text-sidebar-foreground/70">Enterprise Suite</span>
+                  </div>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
       </SidebarHeader>
 
       <SidebarContent>

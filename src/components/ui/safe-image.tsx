@@ -6,6 +6,7 @@ interface SafeImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, "src"
   alt: string
   width: number
   height: number
+  priority?: boolean
 }
 
 function isInternalImageSource(src: string): boolean {
@@ -14,7 +15,7 @@ function isInternalImageSource(src: string): boolean {
 
 export function SafeImage({ src, alt, width, height, className, ...rest }: SafeImageProps) {
   if (isInternalImageSource(src)) {
-    return <Image src={src} alt={alt} width={width} height={height} className={className} unoptimized />
+    return <Image src={src} alt={alt} width={width} height={height} className={className} unoptimized {...(rest as any)} />
   }
 
   // For external URLs not listed in remotePatterns, fall back to native img.
