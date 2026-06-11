@@ -30,7 +30,7 @@ test.describe("Produksi - Work Order CRUD", () => {
 test.describe("Produksi - Products CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {
     await page.goto("/produksi/products", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Product", { timeout: 30000 })
+    await expect(page.locator("body")).toContainText("Produk (BOM)", { timeout: 30000 })
 
     await page.goto("/produksi/products/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
