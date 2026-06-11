@@ -125,8 +125,8 @@ export function LoginForm({
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        Dengan mengklik masuk, Anda menyetujui <a href="#" className="underline underline-offset-4">Ketentuan Layanan</a>{" "}
-        dan <a href="#" className="underline underline-offset-4">Kebijakan Privasi</a> kami.
+        Dengan mengklik masuk, Anda menyetujui <a href="/ketentuan-layanan" className="underline underline-offset-4">Ketentuan Layanan</a>{" "}
+        dan <a href="/kebijakan-privasi" className="underline underline-offset-4">Kebijakan Privasi</a> kami.
       </FieldDescription>
     </div>
   )

@@ -2,21 +2,21 @@
 
 ## 1. Arsitektur Mapping: Laravel → Next.js
 
-| Laravel Concept | Next.js Equivalent |
-|----------------|-------------------|
-| Controller + Route | Server Action / Route Handler |
-| Eloquent Model | Prisma Model + Service Layer |
-| Observer | Explicit Hook Function (dipanggil dari Server Action) |
-| Service Class | TypeScript Service Class (server-only) |
-| Middleware | Next.js Middleware + Auth Check |
-| Blade/Filament View | React Server Component + Client Component |
-| API Resource | Prisma select/include + transform |
-| Form Request (validation) | Zod Schema |
-| Event/Listener | Explicit function call dalam transaction |
-| Queue/Job | Vercel Cron / BullMQ / inngest |
-| Storage (filesystem) | S3 / Local via `@vercel/blob` atau `multer` |
-| Cache | `unstable_cache` / Redis |
-| Session | NextAuth session (JWT/Database) |
+| Laravel Concept           | Next.js Equivalent                                    |
+| ------------------------- | ----------------------------------------------------- |
+| Controller + Route        | Server Action / Route Handler                         |
+| Eloquent Model            | Prisma Model + Service Layer                          |
+| Observer                  | Explicit Hook Function (dipanggil dari Server Action) |
+| Service Class             | TypeScript Service Class (server-only)                |
+| Middleware                | Next.js Middleware + Auth Check                       |
+| Blade/Filament View       | React Server Component + Client Component             |
+| API Resource              | Prisma select/include + transform                     |
+| Form Request (validation) | Zod Schema                                            |
+| Event/Listener            | Explicit function call dalam transaction              |
+| Queue/Job                 | Vercel Cron / BullMQ / inngest                        |
+| Storage (filesystem)      | S3 / Local via `@vercel/blob` atau `multer`           |
+| Cache                     | `unstable_cache` / Redis                              |
+| Session                   | NextAuth session (JWT/Database)                       |
 
 ---
 
@@ -112,37 +112,43 @@ model Journal {
 
 ```typescript
 // src/lib/services/inventory.service.ts
-import { PrismaClient, Prisma, StockMove } from "@prisma/client"
-import { notificationService } from "./notification.service"
+import { PrismaClient, Prisma, StockMove } from "@prisma/client";
+import { notificationService } from "./notification.service";
 
-type TxClient = Omit<PrismaClient, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">
+type TxClient = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
 
 export class InventoryService {
   constructor(private prisma: PrismaClient) {}
 
   async postMove(moveId: number): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const move = await tx.stockMove.findUniqueOrThrow({
-        where: { id: moveId },
-      })
+    await this.prisma.$transaction(
+      async (tx) => {
+        const move = await tx.stockMove.findUniqueOrThrow({
+          where: { id: moveId },
+        });
 
-      if (move.status === "posted") {
-        throw new Error(`Stock move ${move.documentNo} is already posted.`)
-      }
+        if (move.status === "posted") {
+          throw new Error(`Stock move ${move.documentNo} is already posted.`);
+        }
 
-      if (move.impact === "IN") {
-        await this.handleIn(tx, move)
-      } else if (move.impact === "OUT") {
-        await this.handleOut(tx, move)
-      }
+        if (move.impact === "IN") {
+          await this.handleIn(tx, move);
+        } else if (move.impact === "OUT") {
+          await this.handleOut(tx, move);
+        }
 
-      await tx.stockMove.update({
-        where: { id: moveId },
-        data: { status: "posted" },
-      })
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    })
+        await tx.stockMove.update({
+          where: { id: moveId },
+          data: { status: "posted" },
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   }
 
   private async handleIn(tx: TxClient, move: StockMove): Promise<void> {
@@ -156,26 +162,26 @@ export class InventoryService {
         remaining: move.qty,
         unitCost: move.cost,
       },
-    })
+    });
 
     // Atomic increment
     await tx.$executeRaw`
       UPDATE items SET qty_on_hand = qty_on_hand + ${move.qty}
       WHERE id = ${move.itemId}
-    `
+    `;
   }
 
   private async handleOut(tx: TxClient, move: StockMove): Promise<void> {
     // Check stock with lock
     const [item] = await tx.$queryRaw<any[]>`
       SELECT * FROM items WHERE id = ${move.itemId} FOR UPDATE
-    `
+    `;
 
-    if (!item) throw new Error(`Item not found: ${move.itemId}`)
+    if (!item) throw new Error(`Item not found: ${move.itemId}`);
     if (item.qty_on_hand < move.qty) {
       throw new Error(
-        `Stok tidak mencukupi untuk item ${item.sku}. Tersedia: ${item.qty_on_hand}, Dibutuhkan: ${move.qty}`
-      )
+        `Stok tidak mencukupi untuk item ${item.sku}. Tersedia: ${item.qty_on_hand}, Dibutuhkan: ${move.qty}`,
+      );
     }
 
     // FIFO consumption
@@ -184,15 +190,15 @@ export class InventoryService {
       WHERE item_id = ${move.itemId} AND remaining > 0
       ORDER BY created_at ASC, id ASC
       FOR UPDATE
-    `
+    `;
 
-    let qtyToConsume = Number(move.qty)
-    let totalCost = 0
+    let qtyToConsume = Number(move.qty);
+    let totalCost = 0;
 
     for (const layer of layers) {
-      if (qtyToConsume <= 0) break
+      if (qtyToConsume <= 0) break;
 
-      const consume = Math.min(Number(layer.remaining), qtyToConsume)
+      const consume = Math.min(Number(layer.remaining), qtyToConsume);
 
       await tx.inventoryLayer.update({
         where: { id: layer.id },
@@ -200,38 +206,47 @@ export class InventoryService {
           qtyOut: { increment: consume },
           remaining: { decrement: consume },
         },
-      })
+      });
 
-      totalCost += consume * Number(layer.unit_cost)
-      qtyToConsume -= consume
+      totalCost += consume * Number(layer.unit_cost);
+      qtyToConsume -= consume;
     }
 
     if (qtyToConsume > 0) {
-      throw new Error("Inkonsistensi data: layer FIFO tidak mencukupi.")
+      throw new Error("Inkonsistensi data: layer FIFO tidak mencukupi.");
     }
 
     // Update cost on move
-    const unitCost = totalCost / Number(move.qty)
+    const unitCost = totalCost / Number(move.qty);
     await tx.stockMove.update({
       where: { id: move.id },
       data: { cost: unitCost },
-    })
+    });
 
     // Atomic decrement with guard
     const result = await tx.$executeRaw`
       UPDATE items SET qty_on_hand = qty_on_hand - ${move.qty}
       WHERE id = ${move.itemId} AND qty_on_hand >= ${move.qty}
-    `
+    `;
 
     if (result === 0) {
-      throw new Error("Concurrent stock modification detected. Please retry.")
+      throw new Error("Concurrent stock modification detected. Please retry.");
     }
 
     // Check low stock
-    const updatedItem = await tx.item.findUnique({ where: { id: move.itemId } })
-    if (updatedItem && updatedItem.minStock > 0 && updatedItem.qtyOnHand <= updatedItem.minStock) {
+    const updatedItem = await tx.item.findUnique({
+      where: { id: move.itemId },
+    });
+    if (
+      updatedItem &&
+      updatedItem.minStock > 0 &&
+      updatedItem.qtyOnHand <= updatedItem.minStock
+    ) {
       // Queue notification (outside transaction)
-      setTimeout(() => notificationService.checkAndNotifyLowStock(updatedItem), 0)
+      setTimeout(
+        () => notificationService.checkAndNotifyLowStock(updatedItem),
+        0,
+      );
     }
   }
 
@@ -245,7 +260,7 @@ export class InventoryService {
 
 ```typescript
 // src/lib/services/document-sequence.service.ts
-import { prisma } from "@/lib/db/prisma"
+import { prisma } from "@/lib/db/prisma";
 
 export class DocumentSequenceService {
   static async next(key: string): Promise<number> {
@@ -254,20 +269,20 @@ export class DocumentSequenceService {
         INSERT INTO document_sequences (\`key\`, current_value, created_at, updated_at)
         VALUES (${key}, 1, NOW(), NOW())
         ON DUPLICATE KEY UPDATE current_value = current_value + 1, updated_at = NOW()
-      `
+      `;
 
       const row = await tx.$queryRaw<any[]>`
         SELECT current_value FROM document_sequences
         WHERE \`key\` = ${key} FOR UPDATE
-      `
+      `;
 
-      return Number(row[0].current_value)
-    })
+      return Number(row[0].current_value);
+    });
   }
 
   static async peek(key: string): Promise<number> {
-    const row = await prisma.documentSequence.findUnique({ where: { key } })
-    return row ? Number(row.currentValue) : 0
+    const row = await prisma.documentSequence.findUnique({ where: { key } });
+    return row ? Number(row.currentValue) : 0;
   }
 }
 ```
@@ -276,19 +291,23 @@ export class DocumentSequenceService {
 
 ```typescript
 // src/lib/hooks/accounting.hook.ts
-import { prisma } from "@/lib/db/prisma"
-import { getSystemSettings } from "@/lib/utils/settings"
+import { prisma } from "@/lib/db/prisma";
+import { getSystemSettings } from "@/lib/utils/settings";
 
 export async function onSalesInvoicePosted(invoiceId: number, userId?: number) {
-  const settings = await getSystemSettings()
-  if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId) return
+  const settings = await getSystemSettings();
+  if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId)
+    return;
 
   const invoice = await prisma.salesInvoice.findUniqueOrThrow({
     where: { id: invoiceId },
-  })
+  });
 
   await prisma.$transaction(async (tx) => {
-    const journalNumber = `INV/${invoice.id}/${new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14)}`
+    const journalNumber = `INV/${invoice.id}/${new Date()
+      .toISOString()
+      .replace(/[-:T.Z]/g, "")
+      .slice(0, 14)}`;
 
     const journal = await tx.journal.create({
       data: {
@@ -303,10 +322,10 @@ export async function onSalesInvoicePosted(invoiceId: number, userId?: number) {
         totalCredit: invoice.totalAmount,
         createdBy: userId,
       },
-    })
+    });
 
-    const taxAmount = Number(invoice.taxAmount ?? 0)
-    const subtotal = Number(invoice.totalAmount) - taxAmount
+    const taxAmount = Number(invoice.taxAmount ?? 0);
+    const subtotal = Number(invoice.totalAmount) - taxAmount;
 
     // Dr. Receivable
     await tx.journalEntry.create({
@@ -317,7 +336,7 @@ export async function onSalesInvoicePosted(invoiceId: number, userId?: number) {
         credit: 0,
         memo: "Piutang Usaha",
       },
-    })
+    });
 
     // Cr. Revenue
     await tx.journalEntry.create({
@@ -328,7 +347,7 @@ export async function onSalesInvoicePosted(invoiceId: number, userId?: number) {
         credit: subtotal,
         memo: "Pendapatan Penjualan",
       },
-    })
+    });
 
     // Cr. Tax (if any)
     if (taxAmount > 0 && settings.salesTaxAccountId) {
@@ -340,24 +359,36 @@ export async function onSalesInvoicePosted(invoiceId: number, userId?: number) {
           credit: taxAmount,
           memo: "PPN Keluaran",
         },
-      })
+      });
     }
-  })
+  });
 }
 
-export async function onSalesPaymentCreated(paymentId: number, userId?: number) {
+export async function onSalesPaymentCreated(
+  paymentId: number,
+  userId?: number,
+) {
   // Dr. Cash/Bank, Cr. Receivable
 }
 
-export async function onPurchaseOrderReceived(orderId: number, userId?: number) {
+export async function onPurchaseOrderReceived(
+  orderId: number,
+  userId?: number,
+) {
   // Dr. Inventory + Tax, Cr. Payable
 }
 
-export async function onStockAdjustmentProcessed(adjustmentId: number, userId?: number) {
+export async function onStockAdjustmentProcessed(
+  adjustmentId: number,
+  userId?: number,
+) {
   // Dr/Cr Inventory vs Adjustment based on positive/negative
 }
 
-export async function onWorkOrderCompleted(workOrderId: number, userId?: number) {
+export async function onWorkOrderCompleted(
+  workOrderId: number,
+  userId?: number,
+) {
   // Dr. WIP, Cr. Inventory
 }
 
@@ -369,15 +400,24 @@ export async function onPettyCashCreated(pettyCashId: number, userId?: number) {
   // IN: Dr. PettyCash, Cr. Source | OUT: Dr. Expense, Cr. PettyCash
 }
 
-export async function onSalesReturnCompleted(returnId: number, userId?: number) {
+export async function onSalesReturnCompleted(
+  returnId: number,
+  userId?: number,
+) {
   // Dr. Sales Return, Cr. Receivable
 }
 
-export async function onPurchaseReturnProcessed(returnId: number, userId?: number) {
+export async function onPurchaseReturnProcessed(
+  returnId: number,
+  userId?: number,
+) {
   // Dr. Payable, Cr. Inventory
 }
 
-export async function onMaterialIssueCompleted(issueId: number, userId?: number) {
+export async function onMaterialIssueCompleted(
+  issueId: number,
+  userId?: number,
+) {
   // Dr. Material Issue Expense, Cr. Inventory
 }
 ```
@@ -390,35 +430,35 @@ export async function onMaterialIssueCompleted(issueId: number, userId?: number)
 
 ```typescript
 // src/actions/sales.actions.ts
-"use server"
+"use server";
 
-import { auth } from "@/lib/auth/auth"
-import { prisma } from "@/lib/db/prisma"
-import { onSalesInvoicePosted } from "@/lib/hooks/accounting.hook"
-import { revalidatePath } from "next/cache"
+import { auth } from "@/lib/auth/auth";
+import { prisma } from "@/lib/db/prisma";
+import { onSalesInvoicePosted } from "@/lib/hooks/accounting.hook";
+import { revalidatePath } from "next/cache";
 
 export async function postInvoice(invoiceId: number) {
-  const session = await auth()
-  if (!session?.user) throw new Error("Unauthorized")
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
 
   const invoice = await prisma.salesInvoice.findUniqueOrThrow({
     where: { id: invoiceId },
-  })
+  });
 
   if (invoice.status !== "sent" && invoice.status !== "draft") {
-    throw new Error("Invoice hanya bisa di-post dari status draft/sent")
+    throw new Error("Invoice hanya bisa di-post dari status draft/sent");
   }
 
   await prisma.salesInvoice.update({
     where: { id: invoiceId },
     data: { status: "posted" },
-  })
+  });
 
   // Trigger accounting hook (replaces Laravel Observer)
-  await onSalesInvoicePosted(invoiceId, Number(session.user.id))
+  await onSalesInvoicePosted(invoiceId, Number(session.user.id));
 
-  revalidatePath("/sales/invoices")
-  return { success: true }
+  revalidatePath("/sales/invoices");
+  return { success: true };
 }
 ```
 
@@ -427,10 +467,10 @@ export async function postInvoice(invoiceId: number) {
 ```typescript
 // src/actions/sales.actions.ts
 export async function confirmDownPayment(dpId: number) {
-  "use server"
+  "use server";
 
-  const session = await auth()
-  if (!session?.user) throw new Error("Unauthorized")
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
 
   await prisma.$transaction(async (tx) => {
     const dp = await tx.downPayment.findUniqueOrThrow({
@@ -444,16 +484,17 @@ export async function confirmDownPayment(dpId: number) {
           },
         },
       },
-    })
+    });
 
-    if (dp.status === "confirmed") throw new Error("Already confirmed")
-    if (dp.quotation?.status !== "accepted") throw new Error("Quotation not accepted")
+    if (dp.status === "confirmed") throw new Error("Already confirmed");
+    if (dp.quotation?.status !== "accepted")
+      throw new Error("Quotation not accepted");
 
     // Idempotency check
     const existing = await tx.workOrder.findFirst({
       where: { quotationId: dp.quotation.id },
-    })
-    if (existing) throw new Error("Documents already exist")
+    });
+    if (existing) throw new Error("Documents already exist");
 
     // 1. Create Work Order
     // 2. Create Project + initializeStages
@@ -465,12 +506,12 @@ export async function confirmDownPayment(dpId: number) {
     await tx.downPayment.update({
       where: { id: dpId },
       data: { status: "confirmed" },
-    })
-  })
+    });
+  });
 
-  revalidatePath("/sales/down-payments")
-  revalidatePath("/sales/invoices")
-  revalidatePath("/sales/orders")
+  revalidatePath("/sales/down-payments");
+  revalidatePath("/sales/invoices");
+  revalidatePath("/sales/orders");
 }
 ```
 
@@ -482,10 +523,10 @@ export async function confirmDownPayment(dpId: number) {
 
 ```typescript
 // src/lib/auth/auth.ts
-import NextAuth from "next-auth"
-import Credentials from "next-auth/providers/credentials"
-import bcrypt from "bcryptjs"
-import { prisma } from "@/lib/db/prisma"
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/db/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
@@ -501,67 +542,72 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           include: {
             roles: { include: { permissions: true } },
           },
-        })
+        });
 
-        if (!user) return null
-        const valid = await bcrypt.compare(credentials.password as string, user.password)
-        if (!valid) return null
+        if (!user) return null;
+        const valid = await bcrypt.compare(
+          credentials.password as string,
+          user.password,
+        );
+        if (!valid) return null;
 
         return {
           id: String(user.id),
           email: user.email,
           name: user.name,
           roles: user.roles.map((r) => r.name),
-          permissions: user.roles.flatMap((r) => r.permissions.map((p) => p.name)),
-        }
+          permissions: user.roles.flatMap((r) =>
+            r.permissions.map((p) => p.name),
+          ),
+        };
       },
     }),
   ],
   callbacks: {
     jwt({ token, user }) {
       if (user) {
-        token.roles = user.roles
-        token.permissions = user.permissions
+        token.roles = user.roles;
+        token.permissions = user.permissions;
       }
-      return token
+      return token;
     },
     session({ session, token }) {
-      session.user.id = token.sub!
-      session.user.roles = token.roles as string[]
-      session.user.permissions = token.permissions as string[]
-      return session
+      session.user.id = token.sub!;
+      session.user.roles = token.roles as string[];
+      session.user.permissions = token.permissions as string[];
+      return session;
     },
   },
-})
+});
 ```
 
 ### 5.2 Permission Helper
 
 ```typescript
 // src/lib/auth/permissions.ts
-import { auth } from "./auth"
+import { auth } from "./auth";
 
 export async function requireAuth() {
-  const session = await auth()
-  if (!session?.user) throw new Error("Unauthorized")
-  return session.user
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  return session.user;
 }
 
 export async function requirePermission(permission: string) {
-  const user = await requireAuth()
-  if (user.roles.includes("super_admin")) return user
+  const user = await requireAuth();
+  if (user.roles.includes("super_admin")) return user;
   if (!user.permissions.includes(permission)) {
-    throw new Error(`Forbidden: missing permission ${permission}`)
+    throw new Error(`Forbidden: missing permission ${permission}`);
   }
-  return user
+  return user;
 }
 
 export async function requireRole(role: string) {
-  const user = await requireAuth()
+  const user = await requireAuth();
   if (!user.roles.includes(role) && !user.roles.includes("super_admin")) {
-    throw new Error(`Forbidden: missing role ${role}`)
+    throw new Error(`Forbidden: missing role ${role}`);
   }
-  return user
+  return user;
 }
 ```
 
@@ -571,28 +617,28 @@ export async function requireRole(role: string) {
 
 ```typescript
 // src/lib/utils/settings.ts
-import { prisma } from "@/lib/db/prisma"
-import { cache } from "react"
+import { prisma } from "@/lib/db/prisma";
+import { cache } from "react";
 
 export const getSystemSettings = cache(async () => {
-  let settings = await prisma.systemSetting.findFirst()
+  let settings = await prisma.systemSetting.findFirst();
 
   if (!settings) {
     settings = await prisma.systemSetting.create({
       data: {
         companyName: "Yara ERP",
-        companyEmail: "admin@yaraerp.co.id",
+        companyEmail: "admin@yaraerp.app",
         costingMethod: "FIFO",
         fiscalYearStartMonth: 1,
         currencyCode: "IDR",
         currencySymbol: "Rp ",
         // ... default values
       },
-    })
+    });
   }
 
-  return settings
-})
+  return settings;
+});
 ```
 
 ---
@@ -601,27 +647,28 @@ export const getSystemSettings = cache(async () => {
 
 ```typescript
 // src/lib/utils/document-number.ts
-import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
-import { getSystemSettings } from "./settings"
+import { DocumentSequenceService } from "@/lib/services/document-sequence.service";
+import { getSystemSettings } from "./settings";
 
 export async function generateDocumentNumber(
   prefix: string,
-  format: "complex" | "simple" = "complex"
+  format: "complex" | "simple" = "complex",
 ): Promise<string> {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const year = now.getFullYear()
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const year = now.getFullYear();
 
   if (format === "complex") {
-    const key = `${prefix}-${year}-${month}`
-    const seq = await DocumentSequenceService.next(key)
-    const settings = await getSystemSettings()
-    const companyCode = settings.companyName?.substring(0, 3).toUpperCase() ?? "YRA"
-    return `${String(seq).padStart(3, "0")}/${prefix}/${companyCode}/${month}/${year}`
+    const key = `${prefix}-${year}-${month}`;
+    const seq = await DocumentSequenceService.next(key);
+    const settings = await getSystemSettings();
+    const companyCode =
+      settings.companyName?.substring(0, 3).toUpperCase() ?? "YRA";
+    return `${String(seq).padStart(3, "0")}/${prefix}/${companyCode}/${month}/${year}`;
   } else {
-    const key = `${prefix}-GLOBAL`
-    const seq = await DocumentSequenceService.next(key)
-    return `${prefix}-${String(seq).padStart(4, "0")}`
+    const key = `${prefix}-GLOBAL`;
+    const seq = await DocumentSequenceService.next(key);
+    return `${prefix}-${String(seq).padStart(4, "0")}`;
   }
 }
 ```
@@ -632,7 +679,7 @@ export async function generateDocumentNumber(
 
 ```typescript
 // src/lib/services/notification.service.ts
-import { prisma } from "@/lib/db/prisma"
+import { prisma } from "@/lib/db/prisma";
 
 export const notificationService = {
   async notifyAdmins(title: string, body: string, type: string = "info") {
@@ -641,7 +688,7 @@ export const notificationService = {
         isActive: true,
         roles: { some: { name: { in: ["super_admin", "admin"] } } },
       },
-    })
+    });
 
     await prisma.notification.createMany({
       data: admins.map((admin) => ({
@@ -651,25 +698,35 @@ export const notificationService = {
         type,
         readAt: null,
       })),
-    })
+    });
   },
 
-  async notifyUser(userId: number, title: string, body: string, type: string = "info") {
+  async notifyUser(
+    userId: number,
+    title: string,
+    body: string,
+    type: string = "info",
+  ) {
     await prisma.notification.create({
       data: { userId, title, body, type },
-    })
+    });
   },
 
-  async checkAndNotifyLowStock(item: { id: number; name: string; qtyOnHand: number; minStock: number }) {
+  async checkAndNotifyLowStock(item: {
+    id: number;
+    name: string;
+    qtyOnHand: number;
+    minStock: number;
+  }) {
     if (item.minStock > 0 && item.qtyOnHand <= item.minStock) {
       await this.notifyAdmins(
         `⚠️ Stok ${item.name} Menipis`,
         `Stok saat ini: ${item.qtyOnHand} (Minimum: ${item.minStock}). Segera lakukan pembelian.`,
-        "warning"
-      )
+        "warning",
+      );
     }
   },
-}
+};
 ```
 
 ---
@@ -729,14 +786,14 @@ export default async function InvoicesPage({
 
 ```typescript
 // src/app/(dashboard)/sales/invoices/_components/invoice-table.tsx
-"use client"
+"use client";
 
-import { useRouter, useSearchParams } from "next/navigation"
-import { Table, Pagination, Input, Chip } from "@heroui/react"
-import { postInvoice } from "@/actions/sales.actions"
+import { useRouter, useSearchParams } from "next/navigation";
+import { Table, Pagination, Input, Chip } from "@heroui/react";
+import { postInvoice } from "@/actions/sales.actions";
 
 export function InvoiceTable({ data, total, page, perPage }) {
-  const router = useRouter()
+  const router = useRouter();
   // TanStack Table or HeroUI Table implementation
 }
 ```
@@ -745,21 +802,21 @@ export function InvoiceTable({ data, total, page, perPage }) {
 
 ## 10. Key Differences & Gotchas
 
-| Aspek | Laravel | Next.js |
-|-------|---------|---------|
-| Observer auto-trigger | Implicit (model events) | Explicit (call hook in action) |
-| DB Transaction | `DB::transaction(fn)` | `prisma.$transaction(async tx => {})` |
-| Row locking | `->lockForUpdate()` | `$queryRaw ... FOR UPDATE` |
-| Atomic increment | `DB::raw('col + 1')` | `$executeRaw` or `{ increment: 1 }` |
-| Polymorphic | Native morphTo/morphMany | Manual (referenceType + referenceId strings) |
-| Soft Delete | `SoftDeletes` trait | Prisma middleware + `deletedAt` field |
-| Eager Loading | `->with(['relation'])` | `include: { relation: true }` |
-| Scopes | Model scope methods | Helper functions returning `where` objects |
-| Validation | FormRequest class | Zod schema + `safeParse()` |
-| File Upload | `$request->file()->store()` | `formData.get('file')` + write to disk/S3 |
-| Pagination | `->paginate(20)` | Manual skip/take + count |
-| Auth check | `auth()->id()` | `const session = await auth()` |
-| Settings | `SystemSetting::current()` | `await getSystemSettings()` (cached) |
+| Aspek                 | Laravel                     | Next.js                                      |
+| --------------------- | --------------------------- | -------------------------------------------- |
+| Observer auto-trigger | Implicit (model events)     | Explicit (call hook in action)               |
+| DB Transaction        | `DB::transaction(fn)`       | `prisma.$transaction(async tx => {})`        |
+| Row locking           | `->lockForUpdate()`         | `$queryRaw ... FOR UPDATE`                   |
+| Atomic increment      | `DB::raw('col + 1')`        | `$executeRaw` or `{ increment: 1 }`          |
+| Polymorphic           | Native morphTo/morphMany    | Manual (referenceType + referenceId strings) |
+| Soft Delete           | `SoftDeletes` trait         | Prisma middleware + `deletedAt` field        |
+| Eager Loading         | `->with(['relation'])`      | `include: { relation: true }`                |
+| Scopes                | Model scope methods         | Helper functions returning `where` objects   |
+| Validation            | FormRequest class           | Zod schema + `safeParse()`                   |
+| File Upload           | `$request->file()->store()` | `formData.get('file')` + write to disk/S3    |
+| Pagination            | `->paginate(20)`            | Manual skip/take + count                     |
+| Auth check            | `auth()->id()`              | `const session = await auth()`               |
+| Settings              | `SystemSetting::current()`  | `await getSystemSettings()` (cached)         |
 
 ---
 

@@ -47,25 +47,25 @@ npm run dev
 
 ### Default Login
 
-- **Email**: admin@yaraerp.co.id
+- **Email**: admin@yaraerp.app
 - **Password**: password123
 
 ## Modules (41 Routes)
 
-| # | Module | Description |
-|---|--------|-------------|
-| 1 | Dashboard | KPI Cards, Recent Invoices, Low Stock Alerts |
-| 2 | Master Data | Customers, Vendors, Items, Warehouses, Employees, Accounts |
-| 3 | Sales | Quotation → DP → SO → Invoice → Payment → Return |
-| 4 | Purchase | PR → PO → Goods Receipt → Return |
-| 5 | Inventory | Stock Moves, Adjustments, Transfers, Material Issues |
-| 6 | Manufacturing | Work Orders, Production Orders |
-| 7 | HRM | Attendance, Leave, Overtime, Payroll |
-| 8 | Finance | Journals, Expenses, Petty Cash, Bank Reconciliation |
-| 9 | CRM | Leads, Tickets |
-| 10 | Assets | Asset Management |
-| 11 | Reports | Balance Sheet, P&L, Trial Balance |
-| 12 | Settings | Company Config, Account Mapping |
+| #   | Module        | Description                                                |
+| --- | ------------- | ---------------------------------------------------------- |
+| 1   | Dashboard     | KPI Cards, Recent Invoices, Low Stock Alerts               |
+| 2   | Master Data   | Customers, Vendors, Items, Warehouses, Employees, Accounts |
+| 3   | Sales         | Quotation → DP → SO → Invoice → Payment → Return           |
+| 4   | Purchase      | PR → PO → Goods Receipt → Return                           |
+| 5   | Inventory     | Stock Moves, Adjustments, Transfers, Material Issues       |
+| 6   | Manufacturing | Work Orders, Production Orders                             |
+| 7   | HRM           | Attendance, Leave, Overtime, Payroll                       |
+| 8   | Finance       | Journals, Expenses, Petty Cash, Bank Reconciliation        |
+| 9   | CRM           | Leads, Tickets                                             |
+| 10  | Assets        | Asset Management                                           |
+| 11  | Reports       | Balance Sheet, P&L, Trial Balance                          |
+| 12  | Settings      | Company Config, Account Mapping                            |
 
 ## Key Features
 
@@ -92,6 +92,7 @@ npm run test:e2e     # Run E2E tests (Playwright)
 ## CI/CD
 
 GitHub Actions pipeline runs on every push to `main`:
+
 - **Verify job**: TypeScript check, ESLint, unit tests
 - **E2E job**: MySQL service, DB migration, Playwright (4 shards)
 
