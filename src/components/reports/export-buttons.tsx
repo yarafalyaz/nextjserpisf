@@ -28,7 +28,11 @@ export function ExportButtons({ title }: { title: string }) {
       rows.forEach((row) => {
         const cells = row.querySelectorAll('th, td')
         const rowData = Array.from(cells).map((cell) => {
-          const text = (cell as HTMLElement).innerText.replace(/"/g, '""')
+          let text = (cell as HTMLElement).innerText.replace(/"/g, '""')
+          // CSV formula injection guard: prefix cells starting with formula
+          // characters (=, +, -, @, |, \t) with a breaking tab so Excel/Calc
+          // treats them as plain text, not executable formulas.
+          if (/^[=+\-@\t|%]/.test(text)) text = '\t' + text
           return `"${text}"`
         })
         csv += rowData.join(',') + '\n'

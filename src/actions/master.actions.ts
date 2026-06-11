@@ -608,9 +608,18 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       await tx.employee.update({ where: { id: employeeId }, data: { ...updateData, userId: user.id } })
     } else {
       await tx.employee.update({ where: { id: employeeId }, data: updateData })
-      // Keep the linked login account's email + name in sync with the employee.
-      if (syncUserId && trimmedEmail) {
-        await tx.user.update({ where: { id: syncUserId }, data: { email: trimmedEmail, name: updateData.name } })
+      // Keep the linked login account's email + name + roles in sync with the employee.
+      if (syncUserId) {
+        await tx.user.update({
+          where: { id: syncUserId },
+          data: {
+            name: updateData.name,
+            ...(trimmedEmail ? { email: trimmedEmail } : {}),
+            roles: {
+              set: loginRoleIds.map((id) => ({ id })),
+            },
+          },
+        })
       }
     }
   })

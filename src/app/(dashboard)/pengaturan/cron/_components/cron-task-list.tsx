@@ -83,7 +83,7 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
               <button
                 disabled={running === task.key}
                 onClick={() => handleRun(task.key)}
-                className="ml-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                className="ml-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 {running === task.key ? (
                   <>

@@ -20,6 +20,13 @@ export default async function EditEmployeePage({
 
   const data = await prisma.employee.findUnique({
     where: { id: Number(id) },
+    include: {
+      user: {
+        include: {
+          roles: true,
+        },
+      },
+    },
   })
 
   if (!data) notFound()
@@ -44,6 +51,7 @@ export default async function EditEmployeePage({
     employeeVillage: data.employeeVillage,
     postalCode: data.postalCode,
     hasLoginAccount: data.userId != null,
+    roleIds: data.user?.roles.map(r => String(r.id)) ?? [],
   }
 
   const [departments, positions, roles] = await Promise.all([

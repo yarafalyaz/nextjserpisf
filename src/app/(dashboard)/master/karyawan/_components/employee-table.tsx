@@ -18,6 +18,9 @@ interface Employee {
   position: { name: string } | null
   phone: string | null
   isActive: boolean
+  user?: {
+    roles: { name: string }[]
+  } | null
 }
 
 const columnHelper = createColumnHelper<Employee>()
@@ -48,6 +51,11 @@ const columns = [
   columnHelper.accessor((row) => row.department?.name, {
     id: "departmentName",
     header: "Departemen",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor((row) => row.user?.roles.map(r => r.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())).join(", "), {
+    id: "rolesName",
+    header: "Peran",
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("phone", {

@@ -237,17 +237,21 @@ export function AppSidebar({ companyName, companyLogo }: AppSidebarProps) {
     <Sidebar collapsible="icon">
       <SidebarHeader className={cn("h-12 border-b border-sidebar-border flex items-center", isCollapsed ? "justify-center p-0" : "px-4 py-0")}>
         {companyLogo ? (
-          <Link href="/" onClick={handleNav} className={cn("flex items-center justify-center w-full h-full", isCollapsed ? "" : "h-10 overflow-hidden")}>
+          <Link href="/" onClick={handleNav} className="flex items-center justify-center h-full">
             <SafeImage
               src={companyLogo}
               alt={companyName || "Logo"}
-              width={isCollapsed ? 32 : 240}
-              height={isCollapsed ? 32 : 80}
-              style={isCollapsed ? undefined : { width: "auto", height: "auto" }}
+              width={isCollapsed ? 32 : 180}
+              height={isCollapsed ? 32 : 36}
+              style={
+                isCollapsed
+                  ? { width: "32px", height: "32px" }
+                  : { width: "auto", height: "36px" }
+              }
               priority
               className={cn(
                 "object-contain transition-all duration-200",
-                isCollapsed ? "size-8" : "h-16 min-h-16 w-auto max-w-full"
+                isCollapsed ? "size-8" : "h-9 w-auto max-w-full"
               )}
             />
           </Link>

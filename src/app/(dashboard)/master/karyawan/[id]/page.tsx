@@ -33,6 +33,11 @@ export default async function EmployeeDetailPage({
     include: {
       department: true,
       position: true,
+      user: {
+        include: {
+          roles: true,
+        },
+      },
       attendances: { take: 10, orderBy: { date: "desc" } },
       leaveRequests: { take: 10, orderBy: { createdAt: "desc" } },
       overtimeRequests: { take: 10, orderBy: { date: "desc" } },
@@ -72,11 +77,16 @@ export default async function EmployeeDetailPage({
                 <DetailCard>
                   <DetailField label="NIP" value={employee.employeeNo} mono />
                   <DetailField label="Department" value={employee.department?.name || "-"} />
-                  <DetailField label="Posisi" value={employee.position?.name || "-"} />
+                  <DetailField label="Jabatan" value={employee.position?.name || "-"} />
                   <DetailField label="Email" value={employee.email || "-"} />
                   <DetailField label="Telepon" value={employee.phone || "-"} />
                   <DetailField label="Tanggal Masuk" value={formatDate(employee.joinDate)} />
                   <DetailField label="Gaji Pokok" value={formatCurrency(Number(employee.baseSalary))} />
+                  <DetailField label="Peran (Akun)" value={
+                    employee.user
+                      ? employee.user.roles.map(r => r.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())).join(", ") || "-"
+                      : "-"
+                  } />
                   <DetailField label="Status" value={
                     <span className={`status-badge ${employee.isActive ? "status-active" : "status-cancelled"}`}>
                       {employee.isActive ? "Active" : "Inactive"}

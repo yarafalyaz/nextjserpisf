@@ -42,6 +42,7 @@ interface EmployeeFormProps {
     employeeVillage?: string | null
     postalCode?: string | null
     hasLoginAccount?: boolean
+    roleIds?: string[]
   }
   departments: { id: number; name: string }[]
   positions: { id: number; name: string }[]
@@ -58,7 +59,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
   // that doesn't have a login account yet.
   const canOfferLogin = !isEdit || !employee?.hasLoginAccount
   const [createLogin, setCreateLogin] = useState(false)
-  const [loginRoleIds, setLoginRoleIds] = useState<string[]>([])
+  const [loginRoleIds, setLoginRoleIds] = useState<string[]>(employee?.roleIds || [])
 
   const roleOptions = roles.map((r) => ({
     id: String(r.id),
@@ -120,6 +121,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
           formData.set("createLoginAccount", "true")
           const passInput = form?.querySelector(`input[name="loginPassword"]`) as HTMLInputElement | null
           if (passInput?.value) formData.set("loginPassword", passInput.value)
+          loginRoleIds.forEach((id) => formData.append("loginRoleIds", id))
+        } else if (isEdit && employee?.hasLoginAccount) {
           loginRoleIds.forEach((id) => formData.append("loginRoleIds", id))
         }
 
@@ -233,11 +236,11 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
               control={control}
               render={({ field }) => (
                 <>
-                  <Label>Posisi</Label>
+                  <Label>Jabatan</Label>
                   <Combobox
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                    placeholder="Cari posisi..."
+                    placeholder="Cari jabatan..."
                     options={positions.map((p) => ({ value: String(p.id), label: p.name }))}
                   />
                 </>
@@ -326,14 +329,40 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
 
         {isEdit && employee?.hasLoginAccount && (
           <FormSection title="Akun Login" columns={1}>
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-sm mb-3">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 text-success border border-success/20 font-medium">
-                ✓ Karyawan ini sudah memiliki akun login
+                ✓ Karyawan ini memiliki akun login
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Pengaturan peran &amp; reset kata sandi dilakukan di Pengaturan &gt; Pengguna.
-            </p>
+            <div className="flex flex-col gap-1.5">
+              <Label>Peran</Label>
+              <div className="p-3 border border-default rounded-lg bg-background min-h-[64px]">
+                {roleOptions.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">Belum ada peran. Buat di Pengaturan &gt; Peran.</span>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    {roleOptions.map((role) => {
+                      const selected = loginRoleIds.includes(role.id)
+                      return (
+                        <button
+                          key={role.id}
+                          type="button"
+                          onClick={() => toggleLoginRole(role.id)}
+                          className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
+                            selected
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-surface border-default hover:border-primary/50 text-foreground"
+                          }`}
+                        >
+                          {role.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground">Pilih satu atau lebih peran untuk menentukan hak akses akun karyawan.</span>
+            </div>
           </FormSection>
         )}
 
@@ -375,7 +404,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
                               onClick={() => toggleLoginRole(role.id)}
                               className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
                                 selected
-                                  ? "bg-primary text-white border-primary"
+                                  ? "bg-primary text-primary-foreground border-primary"
                                   : "bg-surface border-default hover:border-primary/50 text-foreground"
                               }`}
                             >

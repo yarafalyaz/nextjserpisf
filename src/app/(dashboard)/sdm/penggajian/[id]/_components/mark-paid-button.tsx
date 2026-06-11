@@ -28,7 +28,7 @@ export function MarkPaidPayrollButton({ payrollId }: { payrollId: number }) {
 
   return (
     <>
-      <PageHeaderButton onPress={() => setIsOpen(true)} className="bg-primary text-white hover:bg-primary-600 transition-colors">
+      <PageHeaderButton onPress={() => setIsOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary-600 transition-colors">
         <Banknote size={14} /> Tandai Dibayar
       </PageHeaderButton>
 

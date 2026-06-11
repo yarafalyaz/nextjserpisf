@@ -46,7 +46,7 @@ export default async function DashboardLayout({
       >
         <AppSidebar companyName={settings.companyName ?? undefined} companyLogo={settings.companyLogo ?? undefined} />
         <SidebarInset>
-          <SiteHeader />
+          <SiteHeader companyLogo={settings.companyLogo ?? undefined} />
           <main className="app-content">{children}</main>
         </SidebarInset>
       </SidebarProvider>

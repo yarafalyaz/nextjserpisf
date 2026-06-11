@@ -73,7 +73,7 @@ export default async function ApprovalDetailPage({ params }: { params: Promise<{
             const isDone = step.stepOrder < approval.currentStep || approval.status === "approved"
             return (
               <div key={step.id} className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${isActive ? "border-primary bg-primary/5" : isDone ? "border-success/30 bg-success/5" : "border-default"}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isActive ? "bg-primary text-white" : isDone ? "bg-success text-white" : "bg-default text-muted-foreground"}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isActive ? "bg-primary text-primary-foreground" : isDone ? "bg-success text-white" : "bg-default text-muted-foreground"}`}>
                   {step.stepOrder}
                 </div>
                 <div className="flex-1">

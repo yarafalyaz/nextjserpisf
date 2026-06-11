@@ -71,7 +71,7 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
                     onClick={() => toggleRole(role.id)}
                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
                       isSelected
-                        ? "bg-primary text-white border-primary"
+                        ? "bg-primary text-primary-foreground border-primary"
                         : "bg-surface border-default hover:border-primary/50 text-foreground"
                     }`}
                   >

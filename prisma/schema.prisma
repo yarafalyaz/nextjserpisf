@@ -18,6 +18,7 @@ model User {
   journals      Journal[]
   notifications Notification[]
   roles         Role[]         @relation("UserRoles")
+  employee      Employee[]
 
   @@map("users")
 }
@@ -464,6 +465,7 @@ model Employee {
   employeeLoans       EmployeeLoan[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
+  user                User?             @relation(fields: [userId], references: [id])
   leaveRequests       LeaveRequest[]
   overtimeRequests    OvertimeRequest[]
   payrolls            Payroll[]

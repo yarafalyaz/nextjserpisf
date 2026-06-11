@@ -1,7 +1,6 @@
 "use client"
 
 import { signOut, useSession } from "next-auth/react"
-import { usePathname } from "next/navigation"
 import { getInitials } from "@/lib/utils/format"
 import {
   Bell,
@@ -16,6 +15,7 @@ import { SidebarTrigger } from "@/components/ui/shadcn/sidebar"
 import { Separator } from "@/components/ui/shadcn/separator"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 import { NotificationDropdown } from "@/components/layout/notification-dropdown"
+import { SafeImage } from "@/components/ui/safe-image"
 import { Button } from "@/components/ui/shadcn/button"
 import {
   DropdownMenu,
@@ -27,50 +27,30 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/shadcn/dropdown-menu"
 
-const titleMap: Record<string, string> = {
-  "/": "Dasbor",
-  "/master": "Master Data",
-  "/penjualan": "Penjualan",
-  "/pembelian": "Pembelian",
-  "/inventaris": "Inventaris",
-  "/produksi": "Manufaktur",
-  "/sdm": "SDM",
-  "/keuangan": "Keuangan",
-  "/crm": "CRM",
-  "/kendaraan": "Kendaraan",
-  "/proyek": "Proyek",
-  "/aset": "Aset",
-  "/laporan": "Laporan",
-  "/pengaturan": "Pengaturan",
-  "/profil": "Profil",
-  "/notifikasi": "Notifikasi",
+interface HeaderProps {
+  companyLogo?: string
 }
 
-function pageTitle(pathname: string) {
-  const exact = titleMap[pathname]
-  if (exact) return exact
-
-  const [section, leaf] = pathname.split("/").filter(Boolean)
-  const base = titleMap[`/${section}`]
-
-  if (!leaf) return base ?? "Silengkap"
-
-  return leaf
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ")
-}
-
-export function Header() {
+export function Header({ companyLogo }: HeaderProps = {}) {
   const { data: session } = useSession()
-  const pathname = usePathname()
 
   return (
     <header className="group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 sticky top-0 z-50 flex h-12 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 transition-[width,height] ease-linear">
       <div className="flex w-full items-center gap-2 px-4 lg:px-6">
         <SidebarTrigger className="-ml-1" id="sidebar-toggle" />
         <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-4" />
-        <h1 className="min-w-0 truncate text-base font-medium">{pageTitle(pathname)}</h1>
+        {companyLogo && (
+          <div className="md:hidden flex items-center mr-2">
+            <SafeImage
+              src={companyLogo}
+              alt="Logo"
+              width={28}
+              height={28}
+              style={{ width: "auto", height: "28px" }}
+              className="object-contain"
+            />
+          </div>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           <Button

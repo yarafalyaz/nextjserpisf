@@ -32,7 +32,15 @@ export default async function EmployeesPage({
 
   const employees = await prisma.employee.findMany({
     where,
-    include: { department: true, position: true },
+    include: {
+      department: true,
+      position: true,
+      user: {
+        include: {
+          roles: true,
+        },
+      },
+    },
     orderBy: { name: "asc" },
     take: 1000,
   })
@@ -45,7 +53,7 @@ export default async function EmployeesPage({
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Karyawan" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Karyawan</h1>
-<Link href="/master/karyawan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-employee-btn">
+<Link href="/master/karyawan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-employee-btn">
           + Tambah Karyawan
         </Link>
       </div>

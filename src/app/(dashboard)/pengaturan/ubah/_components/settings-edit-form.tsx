@@ -909,7 +909,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <button
                   type="button"
                   onClick={handleAutoMap}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-primary text-white hover:bg-primary/90 transition-all"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
                   data-print-keep
                 >
                   Auto-Map Akun
@@ -937,7 +937,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         <Button
           type="submit"
           isDisabled={isPending}
-          className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-all"
+          className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-all"
         >
           {isPending ? "Menyimpan..." : "Simpan Pengaturan"}
         </Button>

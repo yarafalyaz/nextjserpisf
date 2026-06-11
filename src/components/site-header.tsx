@@ -2,6 +2,10 @@
 
 import { Header } from "@/components/layout/header"
 
-export function SiteHeader() {
-  return <Header />
+interface SiteHeaderProps {
+  companyLogo?: string
+}
+
+export function SiteHeader({ companyLogo }: SiteHeaderProps) {
+  return <Header companyLogo={companyLogo} />
 }
