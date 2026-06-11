@@ -878,7 +878,7 @@ export async function createLead(formData: FormData) {
 export async function updateLead(id: number, formData: FormData) {
   try {
   const actor = await requirePermission("edit_leads")
-  const isAdmin = actor.permissions.includes("manage_leads")
+  const isAdmin = actor.permissions.includes("manage_leads") || actor.roles.includes("super_admin")
 
   const existing = await prisma.lead.findUniqueOrThrow({ where: { id } })
   

@@ -220,6 +220,7 @@ async function main() {
       "create_leads",
       "edit_leads",
       "delete_leads",
+      "manage_leads",
       "view_tickets",
       "create_tickets",
       "edit_tickets",
@@ -254,6 +255,7 @@ async function main() {
       "create_projects",
       "edit_projects",
       "delete_projects",
+      "manage_projects",
       "view_budgets",
       "create_budgets",
       "delete_budgets",
@@ -361,7 +363,10 @@ async function main() {
     const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@yaraerp.app";
     const adminPassword = process.env.SEED_ADMIN_PASSWORD || "password123";
     const usingDefaultPassword = !process.env.SEED_ADMIN_PASSWORD;
-    const hashedPassword = await bcrypt.hash(adminPassword, 12);
+    // Stabilize hash for default password to prevent E2E session invalidation due to non-deterministic salts on different runners.
+    const hashedPassword = usingDefaultPassword
+      ? "$2b$12$9xrLycAwOhmZKQRhnkKJUOpE1UZzoQbT1qjDtJaznL0lMVzoKU.5i"
+      : await bcrypt.hash(adminPassword, 12);
     await conn.query(
       `INSERT IGNORE INTO users (name, email, password, is_active, created_at, updated_at) 
        VALUES ('Super Admin', ?, ?, true, NOW(), NOW())`,

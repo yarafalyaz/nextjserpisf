@@ -426,7 +426,7 @@ export async function updateTask(formData: FormData) {
   const { data } = parsed
 
   const actor = await requirePermission("edit_projects")
-  const isManager = actor.permissions.includes("manage_projects")
+  const isManager = actor.permissions.includes("manage_projects") || actor.roles.includes("super_admin")
 
   const existing = await prisma.task.findUniqueOrThrow({ where: { id: data.id } })
 
