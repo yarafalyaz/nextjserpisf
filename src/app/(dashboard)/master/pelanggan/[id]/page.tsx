@@ -73,7 +73,6 @@ export default async function CustomerDetailPage({
                 <DetailField label="Email" value={customer.email || "-"} />
                 <DetailField label="Telepon" value={customer.phone || "-"} />
                 <DetailField label="Kota" value={customer.city || "-"} />
-                <DetailField label="NPWP" value={customer.npwp || "-"} mono />
                 <DetailField label="Contact Person" value={customer.contactPerson || "-"} />
                 <DetailField label="Terdaftar" value={formatDate(customer.createdAt)} />
                 <DetailField label="Alamat" value={customer.address || "-"} colSpan="full" />

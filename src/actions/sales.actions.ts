@@ -1350,6 +1350,15 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   try {
   await requirePermission("create_sales_returns")
 
+  const existingReturn = await prisma.salesReturn.findUnique({
+    where: { id },
+    select: { status: true },
+  })
+  if (!existingReturn) throw new Error("Retur tidak ditemukan")
+  if (existingReturn.status !== "draft") {
+    throw new Error("Hanya retur berstatus draft yang dapat diedit")
+  }
+
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
   const itemsJson = formData.get("items") as string
   const items = safeJsonParse<any[]>(itemsJson) ?? []

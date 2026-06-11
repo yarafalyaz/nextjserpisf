@@ -28,7 +28,6 @@ interface CustomerFormProps {
     district: string | null
     village: string | null
     postalCode: string | null
-    npwp: string | null
     contactPerson: string | null
     gender: string | null
     code: string | null
@@ -51,7 +50,6 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
       phone: customer?.phone || "",
       address: customer?.address || "",
       city: customer?.city || "",
-      npwp: customer?.npwp || "",
       contactPerson: customer?.contactPerson || "",
       gender: customer?.gender || "",
       code: customer?.code || (enableAutoCode ? generatedCode : "") || "",
@@ -110,10 +108,6 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
             <Label htmlFor="phone">Telepon *</Label>
             <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
             {errors.phone && <span className="text-xs text-danger mt-1">{errors.phone.message}</span>}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="npwp">NPWP</Label>
-            <Input id="npwp" {...register("npwp")} placeholder="XX.XXX.XXX.X-XXX.XXX" />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="creditLimit">Batas Kredit (Rp)</Label>

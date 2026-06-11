@@ -27,14 +27,6 @@ describe("validations/schemas", () => {
       if (result.success) expect(result.data.email).toBeUndefined();
     });
 
-    it("validates NPWP format", () => {
-      const ok = customerSchema.safeParse({ name: "X", npwp: "12.345.678.9-012.345" });
-      expect(ok.success).toBe(true);
-
-      const bad = customerSchema.safeParse({ name: "X", npwp: "123456789" });
-      expect(bad.success).toBe(false);
-    });
-
     it("accepts valid gender enum and rejects invalid", () => {
       expect(customerSchema.safeParse({ name: "X", gender: "male" }).success).toBe(true);
       expect(customerSchema.safeParse({ name: "X", gender: "other" }).success).toBe(false);

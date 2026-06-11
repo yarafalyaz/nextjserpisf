@@ -21,11 +21,6 @@ export const customerSchema = z.object({
   district: optionalString(200),
   village: optionalString(200),
   postalCode: optionalString(200),
-  npwp: z
-    .string()
-    .regex(/^\d{2}\.\d{3}\.\d{3}\.\d-\d{3}\.\d{3}$/, "Format NPWP tidak valid")
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
   contactPerson: optionalString(100),
   gender: z.enum(["male", "female"]).optional(),
   creditLimit: optionalNumber(0),

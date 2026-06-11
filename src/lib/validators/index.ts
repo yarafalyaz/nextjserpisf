@@ -24,7 +24,6 @@ export const customerSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
-  npwp: z.string().optional(),
   contactPerson: z.string().optional(),
   gender: z.string().optional(),
   code: z.string().optional(),

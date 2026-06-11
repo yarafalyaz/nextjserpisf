@@ -44,6 +44,7 @@ export async function createStockAdjustment(formData: FormData) {
         create: adjItems.map((it) => {
           const systemQty = Number(it.currentQty || 0)
           const actualQty = Number(it.newQty || 0)
+          if (actualQty < 0) throw new Error("Kuantitas fisik (actual) tidak boleh negatif")
           const difference = actualQty - systemQty
           return {
             itemId: Number(it.itemId),
@@ -646,6 +647,13 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
   const adjustment = await prisma.$transaction(async (tx) => {
     await tx.stockAdjustmentItem.deleteMany({ where: { stockAdjustmentId: id } })
+
+    // Re-check status inside transaction (TOCTOU guard)
+    const latest = await tx.stockAdjustment.findUnique({ where: { id }, select: { status: true } })
+    if (latest && latest.status !== "draft") {
+      throw new Error("Hanya stock adjustment draft yang dapat diedit")
+    }
+
     return tx.stockAdjustment.update({
       where: { id },
       data: {
@@ -658,6 +666,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
           create: adjItems.map((it) => {
             const systemQty = Number(it.currentQty || 0)
             const actualQty = Number(it.newQty || 0)
+            if (actualQty < 0) throw new Error("Kuantitas fisik (actual) tidak boleh negatif")
             const difference = actualQty - systemQty
             return {
               itemId: Number(it.itemId),
@@ -704,6 +713,13 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
   const issue = await prisma.$transaction(async (tx) => {
     await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } })
+
+    // Re-check status inside transaction (TOCTOU guard)
+    const latest = await tx.materialIssue.findUnique({ where: { id }, select: { status: true } })
+    if (latest && latest.status !== "draft") {
+      throw new Error("Hanya material issue draft yang dapat diedit")
+    }
+
     return tx.materialIssue.update({
       where: { id },
       data: {
@@ -753,6 +769,13 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
 
   const transfer = await prisma.$transaction(async (tx) => {
     await tx.inventoryTransferItem.deleteMany({ where: { inventoryTransferId: id } })
+
+    // Re-check status inside transaction (TOCTOU guard)
+    const latest = await tx.inventoryTransfer.findUnique({ where: { id }, select: { status: true } })
+    if (latest && latest.status !== "draft") {
+      throw new Error("Hanya transfer draft yang dapat diedit")
+    }
+
     return tx.inventoryTransfer.update({
       where: { id },
       data: {

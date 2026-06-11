@@ -211,7 +211,6 @@ model Customer {
   phone            String?
   address          String?           @db.Text
   city             String?
-  npwp             String?
   gender           String?           @map("gender")
   code             String?           @map("code")
   creditLimit      Decimal           @default(0.00) @map("credit_limit") @db.Decimal(15, 2)
