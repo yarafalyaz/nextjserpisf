@@ -36,6 +36,13 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/shadcn/collapsible"
 import { NavUser } from "@/components/layout/nav-user"
+import { SafeImage } from "@/components/ui/safe-image"
+
+interface AppSidebarProps {
+  companyName?: string
+  companyLogo?: string
+}
+
 
 interface NavItem {
   label: string
@@ -214,7 +221,7 @@ function useActive() {
   }
 }
 
-export function AppSidebar() {
+export function AppSidebar({ companyName, companyLogo }: AppSidebarProps) {
   const { isActive, isGroupActive } = useActive()
   const { setOpenMobile, isMobile } = useSidebar()
 
@@ -229,11 +236,21 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Building2 className="size-4" />
-                </div>
+                {companyLogo ? (
+                  <SafeImage
+                    src={companyLogo}
+                    alt={companyName || "Logo"}
+                    width={32}
+                    height={32}
+                    className="size-8 object-contain rounded-lg border bg-white p-0.5"
+                  />
+                ) : (
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                    <Building2 className="size-4" />
+                  </div>
+                )}
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-bold">YaraERP</span>
+                  <span className="truncate font-bold">{companyName || "YaraERP"}</span>
                   <span className="truncate text-xs text-sidebar-foreground/70">Enterprise Suite</span>
                 </div>
               </Link>

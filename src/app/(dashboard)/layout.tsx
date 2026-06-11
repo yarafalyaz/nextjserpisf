@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/site-header"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { SidebarInset, SidebarProvider } from "@/components/ui/shadcn/sidebar"
 import type { Metadata } from "next"
+import { getSystemSettings } from "@/lib/utils/settings"
 
 export const metadata: Metadata = {
   title: {
@@ -31,6 +32,8 @@ export default async function DashboardLayout({
     redirect("/login?reason=deactivated")
   }
 
+  const settings = await getSystemSettings()
+
   return (
     <SessionProvider session={session}>
       <SidebarProvider
@@ -41,7 +44,7 @@ export default async function DashboardLayout({
           } as React.CSSProperties
         }
       >
-        <AppSidebar />
+        <AppSidebar companyName={settings.companyName ?? undefined} companyLogo={settings.companyLogo ?? undefined} />
         <SidebarInset>
           <SiteHeader />
           <main className="app-content">{children}</main>
