@@ -339,10 +339,38 @@ export async function createGoodsReceipt(formData: FormData) {
     // against an approved/ordered PO.
     const po = await tx.purchaseOrder.findUniqueOrThrow({
       where: { id: v.purchaseOrderId },
-      select: { status: true },
+      include: { items: { select: { itemId: true, qty: true } } },
     })
     if (po.status !== "approved" && po.status !== "ordered") {
       throw new Error(`Penerimaan barang hanya bisa dibuat dari PO berstatus 'approved' atau 'ordered' (status saat ini: '${po.status}').`)
+    }
+
+    // Guard: Prevent over-receiving.
+    // Fetch all prior completed/draft receipts for this PO to calculate remaining balance.
+    const priorReceipts = await tx.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: { purchaseOrderId: v.purchaseOrderId, status: { not: "cancelled" } },
+        itemId: { in: items.map(i => i.itemId) },
+      },
+      select: { itemId: true, qty: true },
+    })
+    const alreadyReceived = new Map<number, number>()
+    for (const r of priorReceipts) {
+      alreadyReceived.set(r.itemId, (alreadyReceived.get(r.itemId) ?? 0) + Number(r.qty))
+    }
+    const poQtyMap = new Map(po.items.map(i => [i.itemId, Number(i.qty)]))
+
+    for (const item of items) {
+      if (item.itemId <= 0 || item.qty <= 0) continue
+      const ordered = poQtyMap.get(item.itemId) ?? 0
+      const totalAfterThis = (alreadyReceived.get(item.itemId) ?? 0) + Number(item.qty)
+      
+      if (ordered === 0) {
+        throw new Error(`Item #${item.itemId} tidak ada dalam pesanan pembelian (PO).`)
+      }
+      if (totalAfterThis > ordered) {
+        throw new Error(`Kuantitas item #${item.itemId} melebihi pesanan. Sisa yang bisa diterima: ${ordered - (alreadyReceived.get(item.itemId) ?? 0)}.`)
+      }
     }
 
     const createdGr = await tx.goodsReceipt.create({

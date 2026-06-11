@@ -17,11 +17,17 @@ import {
 
 /** Enforce company geofence server-side. Throws if too far. */
 async function enforceGeofence(latitude?: number, longitude?: number) {
-  if (latitude == null || longitude == null) return // no coords provided → skip (client may not have GPS)
   const settings = await prisma.systemSetting.findFirst({
     select: { companyLatitude: true, companyLongitude: true, attendanceRadiusKm: true },
   })
   if (!settings?.companyLatitude || !settings?.companyLongitude || !settings?.attendanceRadiusKm) return
+
+  // If geofence is enabled, GPS coordinates are MANDATORY.
+  // Allowing null bypasses the radius check entirely (fraud vector).
+  if (latitude == null || longitude == null) {
+    throw new Error("Gagal mendapatkan lokasi GPS. Pastikan izin lokasi (GPS) diaktifkan untuk absen.")
+  }
+
   const dist = haversineKm(latitude, longitude, Number(settings.companyLatitude), Number(settings.companyLongitude))
   const maxKm = Number(settings.attendanceRadiusKm)
   if (maxKm > 0 && dist > maxKm) {
