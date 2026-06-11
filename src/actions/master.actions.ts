@@ -615,9 +615,9 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
           data: {
             name: updateData.name,
             ...(trimmedEmail ? { email: trimmedEmail } : {}),
-            roles: {
-              set: loginRoleIds.map((id) => ({ id })),
-            },
+            ...(loginRoleIds.length > 0
+              ? { roles: { set: loginRoleIds.map((id) => ({ id })) } }
+              : {}),
           },
         })
       }
