@@ -356,7 +356,97 @@ async function main() {
         [perm.id, staffRole.id],
       );
     }
-    console.log("✅ Permissions assigned to roles");
+
+    // === ADDITIONAL ROLES ===
+
+    // General Affairs (GA) — office management, assets, vehicles
+    await conn.query(
+      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('ga', NOW(), NOW())",
+    );
+    const [gaRole] = await conn.query("SELECT id FROM roles WHERE name = 'ga'");
+    const gaPerms = await conn.query(
+      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'edit_%' OR name LIKE 'delete_%' OR name LIKE 'manage_%'",
+    );
+    // GA gets most view/edit/delete but NOT financial or HR sensitive ops
+    for (const perm of gaPerms) {
+      const pname = String((perm as Record<string, unknown>).name ?? '');
+      if (pname.includes('journal') || pname.includes('payroll') || pname.includes('salary') || pname.includes('settings') || pname.includes('users') || pname.includes('roles')) continue;
+      await conn.query(
+        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
+        [(perm as Record<string, unknown>).id as number, (gaRole as Record<string, unknown>).id as number],
+      );
+    }
+
+    // Kepala Bengkel — manufacturing, work orders, production
+    await conn.query(
+      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('kepala_bengkel', NOW(), NOW())",
+    );
+    const [kbRole] = await conn.query("SELECT id FROM roles WHERE name = 'kepala_bengkel'");
+    const kbPerms = await conn.query(
+      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'create_%' OR name LIKE 'edit_%'",
+    );
+    for (const perm of kbPerms) {
+      const pname = String((perm as Record<string, unknown>).name ?? '');
+      if (pname.includes('settings') || pname.includes('users') || pname.includes('roles') || pname.includes('journal') || pname.includes('payroll')) continue;
+      await conn.query(
+        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
+        [(perm as Record<string, unknown>).id as number, (kbRole as Record<string, unknown>).id as number],
+      );
+    }
+
+    // Karyawan (Employee) — self-service only
+    await conn.query(
+      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('karyawan', NOW(), NOW())",
+    );
+    const [karyawanRole] = await conn.query("SELECT id FROM roles WHERE name = 'karyawan'");
+    const karyawanPerms = await conn.query(
+      "SELECT id FROM permissions WHERE name LIKE 'view_%'",
+    );
+    // Karyawan gets read-only access to most modules
+    for (const perm of karyawanPerms) {
+      const pname = String((perm as Record<string, unknown>).name ?? '');
+      if (pname.includes('settings') || pname.includes('users') || pname.includes('roles') || pname.includes('journal')) continue;
+      await conn.query(
+        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
+        [(perm as Record<string, unknown>).id as number, (karyawanRole as Record<string, unknown>).id as number],
+      );
+    }
+
+    // Purchasing — purchase requests, orders, vendor bills
+    await conn.query(
+      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('purchasing', NOW(), NOW())",
+    );
+    const [purchasingRole] = await conn.query("SELECT id FROM roles WHERE name = 'purchasing'");
+    const purchasingPerms = await conn.query(
+      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'create_%' OR name LIKE 'edit_%'",
+    );
+    for (const perm of purchasingPerms) {
+      const pname = String((perm as Record<string, unknown>).name ?? '');
+      if (!pname.includes('purchase') && !pname.includes('vendor') && !pname.includes('item') && !pname.includes('warehouse') && !pname.includes('inventory') && !pname.startsWith('view_')) continue;
+      await conn.query(
+        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
+        [(perm as Record<string, unknown>).id as number, (purchasingRole as Record<string, unknown>).id as number],
+      );
+    }
+
+    // Warehouse — inventory, stock, transfers, goods receipt
+    await conn.query(
+      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('warehouse', NOW(), NOW())",
+    );
+    const [warehouseRole] = await conn.query("SELECT id FROM roles WHERE name = 'warehouse'");
+    const warehousePerms = await conn.query(
+      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'create_%' OR name LIKE 'edit_%'",
+    );
+    for (const perm of warehousePerms) {
+      const pname = String((perm as Record<string, unknown>).name ?? '');
+      if (!pname.includes('inventory') && !pname.includes('warehouse') && !pname.includes('stock') && !pname.includes('transfer') && !pname.includes('rack') && !pname.includes('material') && !pname.includes('receipt') && !pname.includes('item') && !pname.startsWith('view_')) continue;
+      await conn.query(
+        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
+        [(perm as Record<string, unknown>).id as number, (warehouseRole as Record<string, unknown>).id as number],
+      );
+    }
+
+    console.log("✅ Roles created: super_admin, admin, staff, ga, kepala_bengkel, karyawan, purchasing, warehouse");
 
     // Create default super-admin user.
     // Credentials come from env so production never ships a known password.
