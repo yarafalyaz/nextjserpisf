@@ -51,6 +51,8 @@ const columns = [
         editHref={`/master/pelanggan/${info.row.original.id}/ubah`}
         deleteAction={deleteCustomer}
         deleteId={info.row.original.id}
+        editPermission="edit_customers"
+        deletePermission="delete_customers"
       />
     ),
   }),

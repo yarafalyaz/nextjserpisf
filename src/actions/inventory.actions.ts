@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { safeSubtract, safeMultiply } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
 import { onStockAdjustmentProcessed, onMaterialIssueCompleted } from "@/lib/hooks/accounting.hook"
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook"
@@ -56,14 +57,14 @@ export async function createStockAdjustment(formData: FormData) {
           const systemQty = Number(stockMap.get(Number(it.itemId)) || 0)
           const actualQty = Number(it.newQty || 0)
           if (actualQty < 0) throw new Error("Kuantitas fisik (actual) tidak boleh negatif")
-          const difference = actualQty - systemQty
+          const difference = safeSubtract(actualQty, systemQty, 0)
           return {
             itemId: Number(it.itemId),
             systemQty,
             actualQty,
             difference,
             unitCost: Number(it.unitCost || 0),
-            totalCost: difference * Number(it.unitCost || 0),
+            totalCost: safeMultiply(difference, Number(it.unitCost || 0), 0),
             notes: it.reason || null,
           }
         }),
@@ -115,17 +116,19 @@ export async function processStockAdjustment(adjustmentId: number) {
     )
   }
 
-  // Create Stock Moves IN/OUT per item
-  await onStockAdjustmentStock(adjustmentId, Number(user.id))
+  await prisma.$transaction(async (tx) => {
+    // Create Stock Moves IN/OUT per item
+    await onStockAdjustmentStock(adjustmentId, Number(user.id), tx)
 
-  // Update status from processing → processed
-  await prisma.stockAdjustment.update({
-    where: { id: adjustmentId },
-    data: { status: "processed" },
+    // Update status from processing → processed
+    await tx.stockAdjustment.update({
+      where: { id: adjustmentId },
+      data: { status: "processed" },
+    })
+
+    // Accounting journal
+    await onStockAdjustmentProcessed(adjustmentId, Number(user.id), tx)
   })
-
-  // Accounting journal
-  await onStockAdjustmentProcessed(adjustmentId, Number(user.id))
 
   await logActivity("process", "StockAdjustment", adjustmentId, `Memproses penyesuaian stok #${adjustmentId}`)
   revalidatePath("/inventaris/penyesuaian")
@@ -215,12 +218,14 @@ export async function processInventoryTransfer(transferId: number) {
     )
   }
 
-  // Hook creates OUT stock moves (idempotent); action owns status processed.
-  await onInventoryTransferProcessed(transferId, Number(user.id))
+  await prisma.$transaction(async (tx) => {
+    // Hook creates OUT stock moves (idempotent); action owns status processed.
+    await onInventoryTransferProcessed(transferId, Number(user.id), tx)
 
-  await prisma.inventoryTransfer.update({
-    where: { id: transferId },
-    data: { status: "processed" },
+    await tx.inventoryTransfer.update({
+      where: { id: transferId },
+      data: { status: "processed" },
+    })
   })
 
   await logActivity("process", "InventoryTransfer", transferId, `Memproses transfer inventaris #${transferId}`)
@@ -367,11 +372,13 @@ export async function completeMaterialIssue(issueId: number) {
     )
   }
 
-  // Hook creates stock moves, qty updates, journal, and sets status → completed (idempotent).
-  await onMaterialIssueStock(issueId, Number(user.id))
+  await prisma.$transaction(async (tx) => {
+    // Hook creates stock moves, qty updates, journal, and sets status → completed (idempotent).
+    await onMaterialIssueStock(issueId, Number(user.id), tx)
 
-  // Accounting journal
-  await onMaterialIssueCompleted(issueId, Number(user.id))
+    // Accounting journal
+    await onMaterialIssueCompleted(issueId, Number(user.id), tx)
+  })
 
   await logActivity("complete", "MaterialIssue", issueId, `Menyelesaikan pengeluaran material #${issueId}`)
   revalidatePath("/inventaris/pengeluaran-material")
@@ -678,14 +685,14 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
             const systemQty = Number(it.currentQty || 0)
             const actualQty = Number(it.newQty || 0)
             if (actualQty < 0) throw new Error("Kuantitas fisik (actual) tidak boleh negatif")
-            const difference = actualQty - systemQty
+            const difference = safeSubtract(actualQty, systemQty, 0)
             return {
               itemId: Number(it.itemId),
               systemQty,
               actualQty,
               difference,
               unitCost: Number(it.unitCost || 0),
-              totalCost: difference * Number(it.unitCost || 0),
+              totalCost: safeMultiply(difference, Number(it.unitCost || 0), 0),
               notes: it.reason || null,
             }
           }),

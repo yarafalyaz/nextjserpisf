@@ -64,6 +64,8 @@ const columns = [
         viewHref={`/penjualan/penawaran/${info.row.original.id}`}
         deleteAction={deleteQuotation}
         deleteId={info.row.original.id}
+        editPermission="edit_quotations"
+        deletePermission="delete_quotations"
       />
     ),
   }),

@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { safeMultiply } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -136,7 +137,7 @@ export async function createProductionOrder(formData: FormData) {
       materials: {
         create: product.materials.map((m) => ({
           itemId: m.itemId,
-          qty: Number(m.qty) * v.qty,
+          qty: safeMultiply(Number(m.qty), v.qty, 4),
         })),
       },
     },
@@ -593,7 +594,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
         data: product.materials.map((m) => ({
           productionOrderId: id,
           itemId: m.itemId,
-          qty: Number(m.qty) * v.qty,
+          qty: safeMultiply(Number(m.qty), v.qty, 4),
           standardCost: 0,
         })),
       })

@@ -13,11 +13,19 @@ import { toBaseFactor } from "@/lib/services/uom.service";
 // Helper: Get system settings (account IDs)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function getSystemSettings() {
-  const settings = await prisma.systemSetting.findFirst();
+async function getSystemSettings(tx?: TxClient) {
+  const db = tx || prisma;
+  const settings = await db.systemSetting.findFirst();
   if (!settings) throw new Error("System settings belum dikonfigurasi.");
   return settings;
 }
+
+const executeInTx = async (
+  txClient: TxClient | undefined,
+  callback: (tx: TxClient) => Promise<unknown>
+) => {
+  return txClient ? callback(txClient) : prisma.$transaction(callback);
+};
 
 async function generateJournalNumber(
   _tx: TxClient,
@@ -36,8 +44,8 @@ async function generateJournalNumber(
 export async function deleteJournalByReference(
   referenceType: string,
   referenceId: number
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+, txClient?: TxClient): Promise<void> {
+  await executeInTx(txClient, async (tx) => {
     await deleteJournalByReferenceTx(tx, referenceType, referenceId);
   });
 }
@@ -76,25 +84,27 @@ export async function deleteJournalByReferenceTx(
 
 export async function onSalesInvoicePosted(
   invoiceId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId) return;
 
-  const invoice = await prisma.salesInvoice.findUniqueOrThrow({
+  const invoice = await db.salesInvoice.findUniqueOrThrow({
     where: { id: invoiceId },
     include: { items: true },
   });
 
   // Idempotency: check if journal already exists
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "SalesInvoice", referenceId: invoiceId },
   });
   if (existing) return;
 
-  await assertPeriodOpen(invoice.date);
+  await assertPeriodOpen(invoice.date, txClient);
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     // Fix: Re-fetch the invoice inside the transaction under a lock to prevent
     // stale data from being used in the journal.
     const inv = await tx.salesInvoice.findUnique({
@@ -281,25 +291,33 @@ export async function onSalesInvoicePosted(
 
 export async function onSalesPaymentCreated(
   paymentId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.salesReceivableAccountId) return;
 
-  const payment = await prisma.salesPayment.findUniqueOrThrow({
+  const payment = await db.salesPayment.findUniqueOrThrow({
     where: { id: paymentId },
     include: { salesInvoice: true },
   });
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "SalesPayment", referenceId: paymentId },
   });
   if (existing) return;
 
-  await assertPeriodOpen(payment.paymentDate ?? new Date());
+  await assertPeriodOpen(payment.paymentDate ?? new Date(), txClient);
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
+    // double-check inside tx
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "SalesPayment", referenceId: paymentId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "PAY", paymentId);
 
     // Determine cash/bank account from payment method or default
@@ -356,7 +374,7 @@ export async function onSalesPaymentCreated(
 export async function onPurchaseOrderReceived(
   orderId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.inventoryAccountId || !settings.purchasePayableAccountId) return;
 
@@ -372,7 +390,7 @@ export async function onPurchaseOrderReceived(
 
   await assertPeriodOpen(new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PO-RCV", orderId);
 
     const taxAmount = Number(order.tax ?? 0);
@@ -443,7 +461,7 @@ export async function onPurchaseOrderReceived(
 export async function onStockAdjustmentProcessed(
   adjustmentId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.inventoryAccountId || !settings.stockAdjustmentAccountId) return;
 
@@ -471,7 +489,7 @@ export async function onStockAdjustmentProcessed(
 
   await assertPeriodOpen(new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     // Journal for positive adjustments (stock increase)
     if (totalPositive > 0) {
       const journalNumber = await generateJournalNumber(tx, "ADJ-IN", adjustmentId);
@@ -567,7 +585,7 @@ export async function onStockAdjustmentProcessed(
 export async function onWorkOrderCompleted(
   workOrderId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.wipAccountId || !settings.inventoryAccountId) return;
 
@@ -592,7 +610,7 @@ export async function onWorkOrderCompleted(
 
   await assertPeriodOpen(new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "WO", workOrderId);
 
     const journal = await tx.journal.create({
@@ -643,7 +661,7 @@ export async function onWorkOrderCompleted(
 export async function onExpenseApproved(
   expenseId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const expense = await prisma.expense.findUniqueOrThrow({
     where: { id: expenseId },
   });
@@ -658,7 +676,7 @@ export async function onExpenseApproved(
 
   await assertPeriodOpen(expense.date ?? new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "EXP", expenseId);
 
     const journal = await tx.journal.create({
@@ -709,7 +727,7 @@ export async function onExpenseApproved(
 export async function onPettyCashCreated(
   pettyCashId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.pettyCashAccountId) return;
 
@@ -725,7 +743,7 @@ export async function onPettyCashCreated(
 
   await assertPeriodOpen(pettyCash.transactionDate ?? new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PC", pettyCashId);
     const isInflow = pettyCash.type === "IN";
 
@@ -812,18 +830,20 @@ export async function onPettyCashCreated(
 
 export async function onSalesReturnCompleted(
   returnId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.salesReturnAccountId || !settings.salesReceivableAccountId || !settings.inventoryAccountId) return;
 
-  const salesReturn = await prisma.salesReturn.findUniqueOrThrow({
+  const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
   });
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "SalesReturn", referenceId: returnId },
   });
   if (existing) return;
@@ -836,9 +856,15 @@ export async function onSalesReturnCompleted(
   const costTotal = salesReturn.items.reduce((sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0), 0);
   if (priceTotal <= 0 && costTotal <= 0) return;
 
-  await assertPeriodOpen(new Date());
+  await assertPeriodOpen(new Date(), txClient);
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
+    // double-check inside tx
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "SalesReturn", referenceId: returnId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "SR", returnId);
 
     const journal = await tx.journal.create({
@@ -883,18 +909,20 @@ export async function onSalesReturnCompleted(
 
 export async function onPurchaseReturnProcessed(
   returnId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId || !settings.inventoryAccountId) return;
 
-  const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({
+  const purchaseReturn = await db.purchaseReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
   });
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "PurchaseReturn", referenceId: returnId },
   });
   if (existing) return;
@@ -910,7 +938,7 @@ export async function onPurchaseReturnProcessed(
   // the OUT stock moves the stock hook (purchase-return.hook) created. This is
   // what was really removed from inventory; it can differ from the agreed return
   // price when purchase prices drifted since the goods were received.
-  const outMoves = await prisma.stockMove.findMany({
+  const outMoves = await db.stockMove.findMany({
     where: { referenceType: "PurchaseReturn", referenceId: returnId, impact: "OUT" },
     select: { qty: true, cost: true },
   });
@@ -919,9 +947,15 @@ export async function onPurchaseReturnProcessed(
     0
   );
 
-  await assertPeriodOpen(new Date());
+  await assertPeriodOpen(new Date(), txClient);
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
+    // double check
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "PurchaseReturn", referenceId: returnId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "PR", returnId);
 
     // Build double-entry:
@@ -1026,7 +1060,7 @@ export async function onPurchaseReturnProcessed(
 export async function onMaterialIssueCompleted(
   issueId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.materialExpenseAccountId || !settings.inventoryAccountId) return;
 
@@ -1051,7 +1085,7 @@ export async function onMaterialIssueCompleted(
 
   await assertPeriodOpen(new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "MI", issueId);
 
     const journal = await tx.journal.create({
@@ -1102,7 +1136,7 @@ export async function onMaterialIssueCompleted(
 export async function onDownPaymentReceived(
   dpId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const settings = await getSystemSettings();
   // Fix #27: Harus punya cashBankAccountId untuk Dr. Bank/Cash
   if (!settings.cashBankAccountId || !settings.salesReceivableAccountId) return;
@@ -1118,7 +1152,7 @@ export async function onDownPaymentReceived(
 
   await assertPeriodOpen(dp.paymentDate || new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
     await tx.journal.create({
@@ -1154,21 +1188,23 @@ export async function onDownPaymentReceived(
 
 export async function onVendorBillPosted(
   billId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId) return;
 
-  const bill = await prisma.vendorBill.findUniqueOrThrow({
+  const bill = await db.vendorBill.findUniqueOrThrow({
     where: { id: billId },
   });
 
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "VendorBill", referenceId: billId },
   });
   if (existing) return;
 
-  await assertPeriodOpen(bill.date);
+  await assertPeriodOpen(bill.date, txClient);
 
   // A bill linked to a PO that already had goods received is "goods-based": the
   // goods already hit Inventory at GR (Dr Inventory / Cr clearing). The bill must
@@ -1180,7 +1216,7 @@ export async function onVendorBillPosted(
   const goodsBased =
     bill.purchaseOrderId != null &&
     settings.purchaseInventoryAccountId != null &&
-    (await prisma.goodsReceipt.count({ where: { purchaseOrderId: bill.purchaseOrderId } })) > 0;
+    (await db.goodsReceipt.count({ where: { purchaseOrderId: bill.purchaseOrderId } })) > 0;
 
   const debitEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [];
   if (goodsBased) {
@@ -1202,7 +1238,13 @@ export async function onVendorBillPosted(
     debitEntries.push({ accountId: settings.purchaseExpenseAccountId, debit: grandTotal, credit: 0, memo: "Purchase expense" });
   }
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
+    // double check
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "VendorBill", referenceId: billId },
+    });
+    if (existingInTx) return;
+
     // Fix: Re-fetch the bill inside the transaction under a lock to prevent
     // stale data from being used in the journal.
     const b = await tx.vendorBill.findUnique({
@@ -1261,24 +1303,32 @@ export async function onVendorBillPosted(
 
 export async function onVendorPaymentCreated(
   paymentId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   // Fix #28: Harus punya cashBankAccountId untuk Cr. Bank/Cash
   if (!settings.purchasePayableAccountId || !settings.cashBankAccountId) return;
 
-  const payment = await prisma.vendorPayment.findUniqueOrThrow({
+  const payment = await db.vendorPayment.findUniqueOrThrow({
     where: { id: paymentId },
   });
 
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "VendorPayment", referenceId: paymentId },
   });
   if (existing) return;
 
-  await assertPeriodOpen(payment.paymentDate || new Date());
+  await assertPeriodOpen(payment.paymentDate || new Date(), txClient);
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
+    // double check
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "VendorPayment", referenceId: paymentId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "VP", paymentId);
 
     await tx.journal.create({
@@ -1316,7 +1366,7 @@ export async function onVendorPaymentCreated(
 export async function onPayrollPaid(
   payrollId: number,
   userId?: number
-): Promise<void> {
+, txClient?: TxClient): Promise<void> {
   const settings = await getSystemSettings();
   if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId) return;
 
@@ -1338,7 +1388,7 @@ export async function onPayrollPaid(
 
   await assertPeriodOpen(payroll.paymentDate ?? new Date());
 
-  await prisma.$transaction(async (tx) => {
+  await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
 
     const entries: Array<{ accountId: number; debit: number; credit: number; memo: string }> = [

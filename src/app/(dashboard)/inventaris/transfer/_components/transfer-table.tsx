@@ -61,6 +61,8 @@ const columns = [
         viewHref={`/inventaris/transfer/${info.row.original.id}`}
         deleteAction={deleteInventoryTransfer}
         deleteId={info.row.original.id}
+        editPermission="edit_inventory_transfers"
+        deletePermission="delete_inventory_transfers"
       />
     ),
   }),

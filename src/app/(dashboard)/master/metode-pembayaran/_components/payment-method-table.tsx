@@ -46,6 +46,8 @@ const columns = [
         editHref={`/master/metode-pembayaran/${info.row.original.id}/ubah`}
         deleteAction={deletePaymentMethod}
         deleteId={info.row.original.id}
+        editPermission="edit_payment_methods"
+        deletePermission="delete_payment_methods"
       />
     ),
   }),

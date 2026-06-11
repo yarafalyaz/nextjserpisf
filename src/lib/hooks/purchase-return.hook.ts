@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
+import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 
@@ -11,9 +11,14 @@ import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 
 export async function onPurchaseReturnProcessed(
   returnId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+  const executeInTx = async (tx: TxClient | undefined, callback: (t: TxClient) => Promise<unknown>) => {
+    return tx ? callback(tx) : prisma.$transaction(callback);
+  };
+
+  await executeInTx(txClient, async (tx) => {
     // Lock the purchase return row to prevent concurrent processing
     await tx.$executeRaw`SELECT id FROM purchase_returns WHERE id = ${returnId} FOR UPDATE`;
 

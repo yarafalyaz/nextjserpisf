@@ -58,6 +58,8 @@ const columns = [
         viewHref={`/keuangan/jurnal/${info.row.original.id}`}
         deleteAction={deleteJournal}
         deleteId={info.row.original.id}
+        editPermission="edit_journals"
+        deletePermission="delete_journals"
       />
     ),
   }),

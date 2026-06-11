@@ -58,6 +58,8 @@ const columns = [
         viewHref={`/pembelian/pesanan/${info.row.original.id}`}
         deleteAction={deletePurchaseOrder}
         deleteId={info.row.original.id}
+        editPermission="edit_purchase_orders"
+        deletePermission="delete_purchase_orders"
       />
     ),
   }),

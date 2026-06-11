@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/shadcn/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useSession } from "next-auth/react"
 
 interface ActionDropdownProps {
   viewHref?: string
@@ -21,9 +22,19 @@ interface ActionDropdownProps {
   printAction?: () => void
   deleteAction?: (id: number) => Promise<{ success: boolean }>
   deleteId?: number
+  /** Permission required to show the edit action. Omit to always show. */
+  editPermission?: string
+  /** Permission required to show the delete action. Omit to always show. */
+  deletePermission?: string
 }
 
-export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, deleteId }: ActionDropdownProps) {
+export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, deleteId, editPermission, deletePermission }: ActionDropdownProps) {
+  const { data: session } = useSession()
+  const userRoles = session?.user?.roles ?? []
+  const userPerms = session?.user?.permissions ?? []
+  const isSuperAdmin = userRoles.includes("super_admin")
+  const canEdit = !editPermission || isSuperAdmin || userPerms.includes(editPermission)
+  const canDelete = !deletePermission || isSuperAdmin || userPerms.includes(deletePermission)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
@@ -60,7 +71,7 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
               Lihat Detail
             </DropdownMenuItem>
           )}
-          {editHref && (
+          {editHref && canEdit && (
             <DropdownMenuItem onSelect={() => router.push(editHref)}>
               <Pencil className="size-4 text-muted-foreground" />
               Ubah
@@ -72,7 +83,7 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
               Cetak PDF
             </DropdownMenuItem>
           )}
-          {deleteAction && deleteId && (
+          {deleteAction && deleteId && canDelete && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem

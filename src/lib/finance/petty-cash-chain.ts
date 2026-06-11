@@ -1,3 +1,5 @@
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
+
 /**
  * Pure petty-cash running-balance chain math, extracted from
  * `src/actions/finance.actions.ts` so the balance computation and the
@@ -34,7 +36,7 @@ export function computePettyCashChain(
   let running = 0
   for (const rec of records) {
     const before = running
-    const after = rec.type === "IN" ? before + Number(rec.amount) : before - Number(rec.amount)
+    const after = rec.type === "IN" ? safeAdd(before, rec.amount, 0) : safeSubtract(before, rec.amount, 0)
     out.push({ id: rec.id, balanceBefore: before, balanceAfter: after })
     running = after
   }
@@ -53,7 +55,7 @@ export function findFirstNegativeBalance(
 ): { record: PettyCashChainRecord; balanceAfter: number } | null {
   let running = 0
   for (const rec of records) {
-    running = rec.type === "IN" ? running + Number(rec.amount) : running - Number(rec.amount)
+    running = rec.type === "IN" ? safeAdd(running, rec.amount, 0) : safeSubtract(running, rec.amount, 0)
     if (running < 0) {
       return { record: rec, balanceAfter: running }
     }

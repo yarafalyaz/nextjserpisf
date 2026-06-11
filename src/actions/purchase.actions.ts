@@ -3,6 +3,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { safeAdd, safeSubtract, safeMultiply, safeRound } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
 import { Prisma } from "@prisma/client"
 import { onPurchaseReturnProcessed, onVendorBillPosted, onVendorPaymentCreated, deleteJournalByReference, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
@@ -50,7 +51,7 @@ async function assertThreeWayMatch(
   }
 
   const receivedValue = grs.reduce(
-    (sum, gr) => sum + gr.items.reduce((s, it) => s + Number(it.qty) * Number(it.unitCost ?? 0), 0),
+    (sum, gr) => safeAdd(sum, gr.items.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitCost ?? 0, 0), 0), 0), 0),
     0
   )
 
@@ -72,10 +73,10 @@ async function assertThreeWayMatch(
   const alreadyBilled = Number(otherBills._sum.grandTotal ?? 0)
 
   // Allow a small tolerance for rounding/freight differences.
-  const tolerance = Math.max(1000, receivedValue * 0.01)
-  if (alreadyBilled + billGrandTotal > receivedValue + tolerance) {
+  const tolerance = safeRound(Math.max(1000, safeMultiply(receivedValue, 0.01, 2)), 0)
+  if (safeAdd(alreadyBilled, billGrandTotal, 0) > safeAdd(receivedValue, tolerance, 0)) {
     throw new Error(
-      `3-way match gagal: total tagihan (${(alreadyBilled + billGrandTotal).toLocaleString("id-ID")}) ` +
+      `3-way match gagal: total tagihan (${safeAdd(alreadyBilled, billGrandTotal, 0).toLocaleString("id-ID")}) ` +
         `melebihi nilai barang diterima (${receivedValue.toLocaleString("id-ID")}).`
     )
   }
@@ -178,9 +179,9 @@ export async function createPurchaseOrder(formData: FormData) {
     v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
-  const subtotal = poItems.reduce((s, it) => s + Number(it.qty) * Number(it.unitPrice), 0)
-  const discountTotal = poItems.reduce((s, it) => s + Number(it.discount || 0), 0)
-  const grandTotal = subtotal - discountTotal
+  const subtotal = poItems.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0)
+  const discountTotal = poItems.reduce((s, it) => safeAdd(s, it.discount || 0, 0), 0)
+  const grandTotal = safeSubtract(subtotal, discountTotal, 0)
 
   const po = await prisma.purchaseOrder.create({
     data: {
@@ -202,7 +203,7 @@ export async function createPurchaseOrder(formData: FormData) {
           qty: Number(it.qty),
           unitPrice: Number(it.unitPrice),
           discount: Number(it.discount || 0),
-          total: Number(it.qty) * Number(it.unitPrice) - Number(it.discount || 0),
+          total: safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0),
         })),
       },
     },
@@ -609,9 +610,10 @@ export async function confirmVendorBill(billId: number) {
         balanceDue: fresh.grandTotal,
       },
     })
-  })
 
-  await onVendorBillPosted(billId, Number(user.id))
+    // Trigger GL hook inside transaction
+    await onVendorBillPosted(billId, Number(user.id), tx)
+  })
 
   await logActivity("confirm", "VendorBill", billId, `Posting tagihan vendor #${billId}`)
   revalidatePath("/pembelian/tagihan")
@@ -700,11 +702,11 @@ export async function confirmVendorPayment(paymentId: number) {
       if (!bill) {
         throw new Error(`Vendor bill #${alloc.vendorBillId} tidak ditemukan dalam tagihan terkunci`)
       }
-      const nextPaid = Number(bill.paidAmount) + Number(alloc.amount)
+      const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0)
       if (nextPaid > Number(bill.grandTotal)) {
         throw new Error(`Alokasi melebihi sisa tagihan vendor bill #${bill.id}`)
       }
-      const nextBalance = Number(bill.grandTotal) - nextPaid
+      const nextBalance = safeSubtract(bill.grandTotal, nextPaid, 0)
 
       await tx.vendorPaymentAllocation.create({
         data: {
@@ -723,9 +725,10 @@ export async function confirmVendorPayment(paymentId: number) {
         },
       })
     }
-  })
 
-  await onVendorPaymentCreated(paymentId, Number(user.id))
+    // Trigger GL hook inside transaction
+    await onVendorPaymentCreated(paymentId, Number(user.id), tx)
+  })
 
   await logActivity("confirm", "VendorPayment", paymentId, `Konfirmasi pembayaran vendor #${paymentId}`)
   revalidatePath("/pembelian/pembayaran")
@@ -850,11 +853,14 @@ export async function processPurchaseReturn(returnId: number) {
     throw new Error("Purchase return hanya bisa diproses dari status draft")
   }
 
-  // Hook creates stock moves, layers, journal, and sets status → returned (idempotent).
-  await onPurchaseReturnStock(returnId, Number(user.id))
+  // Atomically process stock adjustment and post GL journal in a single transaction.
+  await prisma.$transaction(async (tx) => {
+    // Hook creates stock moves, layers, journal, and sets status → returned (idempotent).
+    await onPurchaseReturnStock(returnId, Number(user.id), tx)
 
-  // Accounting journal
-  await onPurchaseReturnProcessed(returnId, Number(user.id))
+    // Accounting journal
+    await onPurchaseReturnProcessed(returnId, Number(user.id), tx)
+  })
 
   await logActivity("process", "PurchaseReturn", returnId, `Memproses retur pembelian #${returnId}`)
   revalidatePath("/pembelian/retur")
@@ -932,10 +938,11 @@ export async function deletePurchaseOrder(id: number) {
       const stockMoves = stockMovesByGrId.get(gr.id) || []
 
       if (stockMoves.length > 0) {
-        // Batch: reverse all stock moves in one query per GR (eliminates N+1)
+        const qtyUpdates: Promise<unknown>[] = []
         for (const move of stockMoves) {
-          await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(move.qty)} WHERE id = ${move.itemId}`
+          qtyUpdates.push(tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(move.qty)} WHERE id = ${move.itemId}`)
         }
+        await Promise.all(qtyUpdates)
 
         await tx.inventoryLayer.deleteMany({
           where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
@@ -1020,9 +1027,11 @@ export async function deleteGoodsReceipt(id: number) {
     })
 
     if (stockMoves.length > 0) {
+      const qtyUpdates: Promise<unknown>[] = []
       for (const move of stockMoves) {
-        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(move.qty)} WHERE id = ${move.itemId}`
+        qtyUpdates.push(tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(move.qty)} WHERE id = ${move.itemId}`)
       }
+      await Promise.all(qtyUpdates)
 
       await tx.inventoryLayer.deleteMany({
         where: { stockMoveId: { in: stockMoves.map((m) => m.id) } },
@@ -1198,9 +1207,9 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
     v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
-  const subtotal = poItems.reduce((s, it) => s + Number(it.qty) * Number(it.unitPrice), 0)
-  const discountTotal = poItems.reduce((s, it) => s + Number(it.discount || 0), 0)
-  const grandTotal = subtotal - discountTotal
+  const subtotal = poItems.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0)
+  const discountTotal = poItems.reduce((s, it) => safeAdd(s, it.discount || 0, 0), 0)
+  const grandTotal = safeSubtract(subtotal, discountTotal, 0)
 
   // Keep existing documentNo (do not regenerate on edit)
   const po = await prisma.$transaction(async (tx) => {
@@ -1225,7 +1234,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
             qty: Number(it.qty),
             unitPrice: Number(it.unitPrice),
             discount: Number(it.discount || 0),
-            total: Number(it.qty) * Number(it.unitPrice) - Number(it.discount || 0),
+            total: safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0),
           })),
         },
       },

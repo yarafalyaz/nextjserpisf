@@ -46,6 +46,8 @@ const columns = [
         editHref={`/master/metode-pengiriman/${info.row.original.id}/ubah`}
         deleteAction={deleteShippingMethod}
         deleteId={info.row.original.id}
+        editPermission="edit_shipping_methods"
+        deletePermission="delete_shipping_methods"
       />
     ),
   }),

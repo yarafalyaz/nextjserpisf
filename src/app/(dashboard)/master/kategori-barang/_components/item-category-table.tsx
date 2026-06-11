@@ -37,6 +37,8 @@ const columns = [
         editHref={`/master/kategori-barang/${info.row.original.id}/ubah`}
         deleteAction={deleteItemCategory}
         deleteId={info.row.original.id}
+        editPermission="edit_item_categories"
+        deletePermission="delete_item_categories"
       />
     ),
   }),

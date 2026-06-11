@@ -58,6 +58,7 @@ const columns = [
         viewHref={`/keuangan/kas-kecil/${info.row.original.id}`}
         deleteAction={deletePettyCash}
         deleteId={info.row.original.id}
+        deletePermission="delete_petty_cash"
       />
     ),
   }),

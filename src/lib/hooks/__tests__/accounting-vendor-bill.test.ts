@@ -50,7 +50,10 @@ describe("onVendorBillPosted - service/expense branch", () => {
     // $transaction invokes its callback with a tx exposing model delegates
     mocks.transaction.mockImplementation(async (cb: (tx: any) => any) =>
       cb({
-        journal: { create: mocks.journalCreate },
+        journal: {
+          create: mocks.journalCreate,
+          findFirst: mocks.journalFindFirst,
+        },
         vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
       })
     )

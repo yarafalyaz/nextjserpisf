@@ -3,6 +3,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
 import type { TxClient } from "@/lib/db/prisma"
 import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived, deleteJournalByReference, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
@@ -51,19 +52,19 @@ export async function createQuotation(formData: FormData) {
   const computeLine = (item: any) => {
     const qty = Number(item.qty) || 1
     const unitPrice = Number(item.unitPrice) || 0
-    const lineSubtotal = qty * unitPrice
+    const lineSubtotal = safeMultiply(qty, unitPrice, 0)
     let discountAmount = Number(item.discount) || 0
     if (item.discountType === "percent") {
-      discountAmount = (lineSubtotal * discountAmount) / 100
+      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, discountAmount, 4), 100, 4), 0)
     }
-    return { discountAmount, total: Math.max(0, lineSubtotal - discountAmount) }
+    return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
   }
   const computedSubtotal = (data.sections || []).reduce(
     (acc: number, section: any) =>
-      acc + (section.items || []).reduce((s: number, it: any) => s + computeLine(it).total, 0),
+      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
     0,
   )
-  const computedGrandTotal = Math.max(0, computedSubtotal - headerDiscount + headerTax)
+  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
 
   const quotation = await prisma.$transaction(async (tx) => {
     const q = await tx.quotation.create({
@@ -459,7 +460,7 @@ export async function createDownPayment(formData: FormData) {
 
   // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
   // two concurrent DP creations on the same quotation can't each pass the cap
-  // check (TOCTOU) and together over-pay the quotation grandTotal. Mirrors the
+  // (TOCTOU) and together over-pay the quotation grandTotal. Mirrors the
   // convertQuotationToOrder / createVendorBill lock pattern. The GL hook runs
   // after commit (onDownPaymentReceived opens its own tx and is idempotent).
   const dp = await prisma.$transaction(async (tx) => {
@@ -652,21 +653,20 @@ export async function postInvoice(invoiceId: number) {
     }
   }
 
-  // Atomically claim the post: only the request that flips status away from
-  // draft wins. Without this, two concurrent posts could both pass the draft
-  // guard above and each call onSalesInvoicePosted → double GL posting + double
-  // StockMove OUT. The conditional updateMany serializes it; the loser aborts.
-  const claim = await prisma.salesInvoice.updateMany({
-    where: { id: invoiceId, status: "draft" },
-    data: { status: "posted" },
-  })
-  if (claim.count === 0) {
-    throw new Error("Invoice sudah di-post atau sedang diproses.")
-  }
+  // Atomically claim the post and post GL journal in a single transaction.
+  await prisma.$transaction(async (tx) => {
+    const claim = await tx.salesInvoice.updateMany({
+      where: { id: invoiceId, status: "draft" },
+      data: { status: "posted" },
+    })
+    if (claim.count === 0) {
+      throw new Error("Invoice sudah di-post atau sedang diproses.")
+    }
 
-  // Trigger accounting hook (replaces Laravel Observer) — runs once, guarded by
-  // the atomic claim above so only the winning request reaches here.
-  await onSalesInvoicePosted(invoiceId, Number(user.id))
+    // Trigger accounting hook (replaces Laravel Observer) — runs once, guarded by
+    // the atomic claim above so only the winning request reaches here.
+    await onSalesInvoicePosted(invoiceId, Number(user.id), tx)
+  })
 
   await logActivity("post", "SalesInvoice", invoiceId, `Posting faktur penjualan #${invoiceId}`)
   revalidatePath("/penjualan/faktur")
@@ -743,7 +743,7 @@ export async function createSalesPayment(formData: FormData) {
     if (!["posted", "partial"].includes(invoice.status)) {
       throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
     }
-    const remaining = Number(invoice.grandTotal) - Number(invoice.paidAmount)
+    const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 0)
     if (amount > remaining) {
       throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
     }
@@ -763,11 +763,10 @@ export async function createSalesPayment(formData: FormData) {
     })
     // Recalculate invoice paid amount/status atomically with the payment insert
     await onSalesPaymentRecalculate(created.id, tx)
+    // Create accounting journal (idempotent; guarded by unique referenceType+referenceId)
+    await onSalesPaymentCreated(created.id, Number(user.id), tx)
     return created
   })
-
-  // Create accounting journal (idempotent; guarded by unique referenceType+referenceId)
-  await onSalesPaymentCreated(payment.id, Number(user.id))
 
   // Associate uploaded attachments with the new payment
   const attachmentIds = v.attachmentIds as string | undefined
@@ -808,13 +807,16 @@ export async function completeSalesReturn(returnId: number) {
     throw new Error("Sales return sudah completed")
   }
 
-  // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
-  // set it here first, otherwise the hook's "already completed" guard aborts and
-  // stock is never returned while the accounting leg still posts (GL/stock drift).
-  await onSalesReturnStock(returnId, Number(user.id))
+  // Atomically process stock adjustment and post GL journal in a single transaction.
+  await prisma.$transaction(async (tx) => {
+    // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
+    // set it here first, otherwise the hook's "already completed" guard aborts and
+    // stock is never returned while the accounting leg still posts (GL/stock drift).
+    await onSalesReturnStock(returnId, Number(user.id), tx)
 
-  // Accounting journal
-  await onSalesReturnCompleted(returnId, Number(user.id))
+    // Accounting journal
+    await onSalesReturnCompleted(returnId, Number(user.id), tx)
+  })
 
   await logActivity("complete", "SalesReturn", returnId, `Menyelesaikan retur penjualan #${returnId}`)
   revalidatePath("/penjualan/retur")
@@ -1006,9 +1008,7 @@ export async function deleteQuotation(id: number) {
     const invoiceIds = invoices.map((inv) => inv.id)
 
     // Reverse GL + stock for each linked invoice before cascading the delete.
-    for (const invId of invoiceIds) {
-      await reverseSalesInvoicePostingTx(tx, invId)
-    }
+    await Promise.all(invoiceIds.map((invId) => reverseSalesInvoicePostingTx(tx, invId)))
 
     if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
@@ -1190,14 +1190,16 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // Insert new items
       if (items.length > 0) {
         await tx.salesInvoiceItem.createMany({
-          data: items.map((item) => ({
+          data: items.map((item, idx) => ({
             salesInvoiceId: id,
             itemId: item.itemId,
-            qty: item.qty,
-            unitPrice: item.unitPrice,
-            discount: item.discount ?? 0,
-            total: Math.max(0, (item.qty * item.unitPrice) - (item.discount ?? 0)),
+            description: null,
+            qty: Number(item.qty) || 1,
             uom: item.uom || null,
+            unitPrice: Number(item.unitPrice) || 0,
+            discount: item.discount || 0,
+            total: Math.max(0, safeSubtract(safeMultiply(item.qty, item.unitPrice, 0), item.discount ?? 0, 0)),
+            sortOrder: idx,
             serialNumbers: item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
           })),
         })
@@ -1206,7 +1208,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // Recalculate totals. Clamp each line to >= 0 so a flat discount larger
       // than the line subtotal can't drive the stored total/subtotal (and the
       // posted AR/revenue GL) negative. Mirrors the quotation computeLine clamp.
-      const subtotal = items.reduce((sum, item) => sum + Math.max(0, (item.qty * item.unitPrice) - (item.discount ?? 0)), 0)
+      const subtotal = items.reduce((sum, item) => safeAdd(sum, Math.max(0, safeSubtract(safeMultiply(item.qty, item.unitPrice, 0), item.discount ?? 0, 0)), 0), 0)
       const taxRate = formData.get("taxRate") ? Number(formData.get("taxRate")) : 0
       // Clamp the header discount to [0, subtotal] so a discount larger than the
       // line subtotal can't drive the taxable base, taxAmount, or grandTotal
@@ -1214,8 +1216,8 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // per-line clamp above.
       const rawDiscount = formData.get("discount") ? Number(formData.get("discount")) : 0
       const discountTotal = Math.min(Math.max(0, rawDiscount), subtotal)
-      const taxAmount = Math.round((subtotal - discountTotal) * taxRate / 100)
-      const grandTotal = subtotal - discountTotal + taxAmount
+      const taxAmount = safeRound(safeDivide(safeMultiply(safeSubtract(subtotal, discountTotal, 0), taxRate, 4), 100, 4), 0)
+      const grandTotal = safeSubtract(safeAdd(subtotal, taxAmount, 0), discountTotal, 0)
 
       // Get current paidAmount to determine payment status
       const current = await tx.salesInvoice.findUniqueOrThrow({ where: { id }, select: { paidAmount: true } })
@@ -1289,7 +1291,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       _sum: { amount: true },
     })
     const otherPaid = Number(others._sum.amount ?? 0)
-    const remaining = Number(invoice.grandTotal) - otherPaid
+    const remaining = safeSubtract(invoice.grandTotal, otherPaid, 0)
     if (newAmount > remaining) {
       throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
     }
@@ -1600,9 +1602,7 @@ export async function deleteSalesOrder(id: number) {
     const invoices = await tx.salesInvoice.findMany({ where: { salesOrderId: id }, select: { id: true } })
     const invoiceIds = invoices.map((inv) => inv.id)
     // Reverse GL + stock for each linked invoice before cascading the delete.
-    for (const invId of invoiceIds) {
-      await reverseSalesInvoicePostingTx(tx, invId)
-    }
+    await Promise.all(invoiceIds.map((invId) => reverseSalesInvoicePostingTx(tx, invId)))
     if (invoiceIds.length) await tx.salesPayment.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: { in: invoiceIds } } })
     if (invoiceIds.length) await tx.salesInvoice.deleteMany({ where: { id: { in: invoiceIds } } })
@@ -1668,34 +1668,42 @@ async function reverseSalesInvoicePostingTx(tx: TxClient, invoiceId: number): Pr
     where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT" },
     select: { id: true, itemId: true, warehouseId: true, qty: true, cost: true },
   })
+  const qtyUpdates: Promise<any>[] = []
+  const moveInserts: any[] = []
+  
   for (const m of outMoves) {
     const qty = Number(m.qty)
     if (qty <= 0) continue
-    await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${m.itemId}`
-    const revMove = await tx.stockMove.create({
-      data: {
-        documentNo: `SM-REV-INV-${invoiceId}-${m.id}`,
-        itemId: m.itemId,
-        warehouseId: m.warehouseId,
-        qty,
-        cost: m.cost,
-        impact: "IN",
-        status: "posted",
-        referenceType: "SalesInvoiceReversal",
-        referenceId: invoiceId,
-        notes: `Pembalikan stok penghapusan faktur #${invoiceId}`,
-      },
+    qtyUpdates.push(tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${m.itemId}`)
+    moveInserts.push({
+      documentNo: `SM-REV-INV-${invoiceId}-${m.id}`,
+      itemId: m.itemId,
+      warehouseId: m.warehouseId,
+      qty,
+      cost: m.cost,
+      impact: "IN",
+      status: "posted",
+      referenceType: "SalesInvoiceReversal",
+      referenceId: invoiceId,
+      notes: `Pembalikan stok penghapusan faktur #${invoiceId}`,
     })
-    await tx.inventoryLayer.create({
-      data: {
+  }
+
+  if (qtyUpdates.length > 0) {
+    await Promise.all(qtyUpdates)
+    const revMoves = await Promise.all(
+      moveInserts.map((m) => tx.stockMove.create({ data: m }))
+    )
+    await tx.inventoryLayer.createMany({
+      data: revMoves.map((m) => ({
         itemId: m.itemId,
-        warehouseId: m.warehouseId,
-        stockMoveId: revMove.id,
-        qtyIn: qty,
+        warehouseId: m.warehouseId!,
+        stockMoveId: m.id,
+        qtyIn: Number(m.qty),
         qtyOut: 0,
-        remaining: qty,
+        remaining: Number(m.qty),
         unitCost: m.cost,
-      },
+      }))
     })
   }
   if (outMoves.length > 0) {

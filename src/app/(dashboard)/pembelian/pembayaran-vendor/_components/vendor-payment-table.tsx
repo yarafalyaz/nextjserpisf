@@ -54,6 +54,8 @@ const columns = [
         viewHref={`/pembelian/pembayaran-vendor/${info.row.original.id}`}
         deleteAction={deleteVendorPayment}
         deleteId={info.row.original.id}
+        editPermission="edit_vendor_payments"
+        deletePermission="delete_vendor_payments"
       />
     ),
   }),

@@ -56,6 +56,8 @@ const columns = [
       <ActionDropdown
         deleteAction={deleteDownPayment}
         deleteId={info.row.original.id}
+        editPermission="edit_down_payments"
+        deletePermission="delete_down_payments"
       />
     ),
   }),

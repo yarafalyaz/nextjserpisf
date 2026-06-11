@@ -77,6 +77,8 @@ const columns = [
         viewHref={`/pembelian/penerimaan/${info.row.original.id}`}
         deleteAction={deleteGoodsReceipt}
         deleteId={info.row.original.id}
+        editPermission="edit_goods_receipts"
+        deletePermission="delete_goods_receipts"
       />
     ),
   }),

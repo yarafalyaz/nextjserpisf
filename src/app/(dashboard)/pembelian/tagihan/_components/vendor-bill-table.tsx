@@ -58,6 +58,8 @@ const columns = [
         viewHref={`/pembelian/tagihan/${info.row.original.id}`}
         deleteAction={deleteVendorBill}
         deleteId={info.row.original.id}
+        editPermission="edit_vendor_bills"
+        deletePermission="delete_vendor_bills"
       />
     ),
   }),

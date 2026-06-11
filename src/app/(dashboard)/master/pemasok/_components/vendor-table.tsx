@@ -51,6 +51,8 @@ const columns = [
         editHref={`/master/pemasok/${info.row.original.id}/ubah`}
         deleteAction={deleteVendor}
         deleteId={info.row.original.id}
+        editPermission="edit_vendors"
+        deletePermission="delete_vendors"
       />
     ),
   }),

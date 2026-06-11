@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { JournalService } from "@/lib/services/journal.service";
 
 // Build a mock prisma-like client whose $transaction runs the callback with a mock tx.

@@ -58,6 +58,8 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={`/pembelian/retur/${info.row.original.id}`}
+        editPermission="edit_purchase_returns"
+        deletePermission="delete_purchase_returns"
       />
     ),
   }),

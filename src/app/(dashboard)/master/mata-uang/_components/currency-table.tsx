@@ -42,6 +42,8 @@ const columns = [
         editHref={`/master/mata-uang/${info.row.original.id}/ubah`}
         deleteAction={deleteCurrency}
         deleteId={info.row.original.id}
+        editPermission="edit_currencies"
+        deletePermission="delete_currencies"
       />
     ),
   }),

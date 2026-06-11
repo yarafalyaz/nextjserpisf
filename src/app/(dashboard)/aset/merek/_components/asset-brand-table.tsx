@@ -39,6 +39,7 @@ const columns = [
         editHref={`/aset/merek/${info.row.original.id}/ubah`}
         deleteAction={deleteAssetBrand}
         deleteId={info.row.original.id}
+        deletePermission="delete_asset_brands"
       />
     ),
   }),

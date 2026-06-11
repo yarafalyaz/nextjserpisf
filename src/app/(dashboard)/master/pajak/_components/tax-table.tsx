@@ -37,6 +37,8 @@ const columns = [
         editHref={`/master/pajak/${info.row.original.id}/ubah`}
         deleteAction={deleteTax}
         deleteId={info.row.original.id}
+        editPermission="edit_taxes"
+        deletePermission="delete_taxes"
       />
     ),
   }),

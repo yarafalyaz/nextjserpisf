@@ -1,5 +1,5 @@
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { Status } from "@/lib/constants";
@@ -13,9 +13,14 @@ import { Status } from "@/lib/constants";
 
 export async function onSalesReturnCompleted(
   returnId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+  const executeInTx = async (tx: TxClient | undefined, callback: (t: TxClient) => Promise<unknown>) => {
+    return tx ? callback(tx) : prisma.$transaction(callback);
+  };
+
+  await executeInTx(txClient, async (tx) => {
     // Serialize concurrent calls for the same sales return.
     await tx.$queryRaw`SELECT id FROM sales_returns WHERE id = ${returnId} FOR UPDATE`;
     const salesReturn = await tx.salesReturn.findUniqueOrThrow({

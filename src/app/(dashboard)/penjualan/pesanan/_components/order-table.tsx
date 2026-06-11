@@ -55,6 +55,8 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={`/penjualan/pesanan/${info.row.original.id}`}
+        editPermission="edit_sales_orders"
+        deletePermission="delete_sales_orders"
       />
     ),
   }),

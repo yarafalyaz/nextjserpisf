@@ -1,6 +1,6 @@
 "use server"
 
-import { auth } from "@/lib/auth/auth"
+import { requireAuth } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { getSystemSettings } from "@/lib/utils/settings"
@@ -59,10 +59,9 @@ export async function selfCheckIn(formData: FormData) {
   const parsed = parseFormData(selfAttendanceLocationSchema, formData)
   if (!parsed.success) throw new Error(parsed.error)
   const { latitude, longitude } = parsed.data
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Silakan login terlebih dahulu")
+  const user = await requireAuth()
 
-  const userId = Number(session.user.id)
+  const userId = Number(user.id)
 
   const employee = await prisma.employee.findFirst({
     where: { userId, deletedAt: null },
@@ -137,10 +136,9 @@ export async function selfCheckOut(formData: FormData) {
   const parsed = parseFormData(selfAttendanceLocationSchema, formData)
   if (!parsed.success) throw new Error(parsed.error)
   const { latitude, longitude } = parsed.data
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Silakan login terlebih dahulu")
+  const user = await requireAuth()
 
-  const userId = Number(session.user.id)
+  const userId = Number(user.id)
 
   const employee = await prisma.employee.findFirst({
     where: { userId, deletedAt: null },
@@ -237,10 +235,9 @@ export async function selfCheckOut(formData: FormData) {
  * Get today's attendance status for the current user.
  */
 export async function getTodayAttendance() {
-  const session = await auth()
-  if (!session?.user?.id) return null
-
-  const userId = Number(session.user.id)
+  try {
+  const user = await requireAuth()
+  const userId = Number(user.id)
 
   const employee = await prisma.employee.findFirst({
     where: { userId, deletedAt: null },
@@ -277,14 +274,16 @@ export async function getTodayAttendance() {
         checkOutLongitude: attendance.checkOutLongitude ? Number(attendance.checkOutLongitude) : null,
       }
     : null
+  } catch {
+    return null
+  }
 }
 
 /**
  * Get company coordinates from settings to calculate distance.
  */
 export async function getCompanyLocation() {
-  const session = await auth()
-  if (!session?.user?.id) throw new Error("Silakan login terlebih dahulu")
+  await requireAuth()
 
   const settings = await prisma.systemSetting.findFirst({
     select: {

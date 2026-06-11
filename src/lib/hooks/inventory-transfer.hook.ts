@@ -1,6 +1,14 @@
-import { prisma } from "@/lib/db/prisma";
+import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+
+
+const executeInTx = async (
+  txClient: TxClient | undefined,
+  callback: (tx: TxClient) => Promise<unknown>
+) => {
+  return txClient ? callback(txClient) : prisma.$transaction(callback);
+};
 
 /**
  * Inventory Transfer Hook - Observer pattern replacement.
@@ -20,8 +28,8 @@ import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo"
 export async function onTransferProcessed(
   transferId: number,
   userId?: number
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+, txClient?: TxClient): Promise<void> {
+  await executeInTx(txClient, async (tx) => {
     // Serialize concurrent calls for the same transfer (prevents double-processing
     // racing past the idempotency check below).
     await tx.$queryRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
@@ -100,8 +108,8 @@ export async function onTransferProcessed(
 export async function onTransferReceived(
   transferId: number,
   userId?: number
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+, txClient?: TxClient): Promise<void> {
+  await executeInTx(txClient, async (tx) => {
     // Serialize concurrent calls for the same transfer.
     await tx.$queryRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
     const transfer = await tx.inventoryTransfer.findUniqueOrThrow({

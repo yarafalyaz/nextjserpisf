@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma"
+import { prisma, TxClient } from "@/lib/db/prisma"
 
 /**
  * Accounting period lock.
@@ -7,8 +7,9 @@ import { prisma } from "@/lib/db/prisma"
  * posting (or reversal/edit) may be dated on or before that date. This prevents
  * back-dating entries into a period that has already been closed/reported.
  */
-export async function assertPeriodOpen(transactionDate: Date): Promise<void> {
-  const settings = await prisma.systemSetting.findFirst({ select: { periodLockDate: true } })
+export async function assertPeriodOpen(transactionDate: Date, tx?: TxClient): Promise<void> {
+  const db = tx || prisma
+  const settings = await db.systemSetting.findFirst({ select: { periodLockDate: true } })
   const lock = settings?.periodLockDate
   if (!lock) return
 

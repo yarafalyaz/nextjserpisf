@@ -110,6 +110,7 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={`/sdm/absensi/${info.row.original.id}`}
+        editPermission="edit_attendance"
       />
     ),
   }),

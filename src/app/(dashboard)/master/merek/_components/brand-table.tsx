@@ -37,6 +37,8 @@ const columns = [
         editHref={`/master/merek/${info.row.original.id}/ubah`}
         deleteAction={deleteBrand}
         deleteId={info.row.original.id}
+        editPermission="edit_brands"
+        deletePermission="delete_brands"
       />
     ),
   }),

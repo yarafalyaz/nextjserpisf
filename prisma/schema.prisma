@@ -20,6 +20,7 @@ model User {
   roles         Role[]         @relation("UserRoles")
   employee      Employee[]
 
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -32,6 +33,7 @@ model Role {
   permissions Permission[] @relation("RolePermissions")
   users       User[]       @relation("UserRoles")
 
+  @@index([createdAt])
   @@map("roles")
 }
 
@@ -43,6 +45,7 @@ model Permission {
   updatedAt DateTime @updatedAt @map("updated_at")
   roles     Role[]   @relation("RolePermissions")
 
+  @@index([createdAt])
   @@map("permissions")
 }
 
@@ -183,6 +186,7 @@ model DocumentSequence {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  @@index([createdAt])
   @@map("document_sequences")
 }
 
@@ -197,6 +201,7 @@ model Notification {
   user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId], map: "notifications_user_id_fkey")
+  @@index([createdAt])
   @@map("notifications")
 }
 
@@ -231,6 +236,7 @@ model Customer {
   @@index([isActive, deletedAt], map: "idx_customers_active_deleted")
   @@index([name], map: "idx_customers_name")
   @@index([code], map: "idx_customers_code")
+  @@index([createdAt])
   @@map("customers")
 }
 
@@ -266,6 +272,7 @@ model Vendor {
 
   @@index([paymentTermId], map: "vendors_payment_term_id_fkey")
   @@index([isActive, deletedAt])
+  @@index([createdAt])
   @@map("vendors")
 }
 
@@ -276,6 +283,7 @@ model Brand {
   updatedAt DateTime @updatedAt @map("updated_at")
   items     Item[]
 
+  @@index([createdAt])
   @@map("brands")
 }
 
@@ -291,6 +299,7 @@ model ItemCategory {
   items       Item[]
 
   @@index([parentId], map: "item_categories_parent_id_fkey")
+  @@index([createdAt])
   @@map("item_categories")
 }
 
@@ -343,6 +352,7 @@ model Item {
   @@index([vendorId], map: "items_vendor_id_fkey")
   @@index([isActive], map: "idx_items_is_active")
   @@index([isActive, deletedAt])
+  @@index([createdAt])
   @@map("items")
 }
 
@@ -366,6 +376,7 @@ model Warehouse {
   stockAdjustments StockAdjustment[]
   stockMoves       StockMove[]
 
+  @@index([createdAt])
   @@map("warehouses")
 }
 
@@ -381,6 +392,7 @@ model Rack {
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
 
   @@index([warehouseId], map: "racks_warehouse_id_fkey")
+  @@index([createdAt])
   @@map("racks")
 }
 
@@ -395,6 +407,7 @@ model RackRow {
   rack      Rack     @relation(fields: [rackId], references: [id])
 
   @@index([rackId], map: "rack_rows_rack_id_fkey")
+  @@index([createdAt])
   @@map("rack_rows")
 }
 
@@ -410,6 +423,7 @@ model Department {
   positions     Position[]
   workSchedules WorkSchedule[]      @relation("DepartmentWorkSchedules")
 
+  @@index([createdAt])
   @@map("departments")
 }
 
@@ -424,6 +438,7 @@ model Position {
   department   Department? @relation(fields: [departmentId], references: [id])
 
   @@index([departmentId], map: "positions_department_id_fkey")
+  @@index([createdAt])
   @@map("positions")
 }
 
@@ -476,6 +491,8 @@ model Employee {
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
   @@index([isActive, deletedAt])
+  @@index([userId])
+  @@index([createdAt])
   @@map("employees")
 }
 
@@ -497,6 +514,7 @@ model Account {
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
+  @@index([createdAt])
   @@map("accounts")
 }
 
@@ -510,6 +528,7 @@ model PaymentTerm {
   updatedAt DateTime @updatedAt @map("updated_at")
   vendors   Vendor[]
 
+  @@index([createdAt])
   @@map("payment_terms")
 }
 
@@ -521,6 +540,7 @@ model PaymentMethod {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([createdAt])
   @@map("payment_methods")
 }
 
@@ -532,6 +552,7 @@ model ShippingMethod {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([createdAt])
   @@map("shipping_methods")
 }
 
@@ -568,6 +589,9 @@ model Quotation {
   @@index([customerId], map: "quotations_customer_id_fkey")
   @@index([customerVehicleId], map: "quotations_customer_vehicle_id_fkey")
   @@index([status], map: "idx_quotations_status")
+  @@index([projectId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("quotations")
 }
 
@@ -582,6 +606,7 @@ model QuotationSection {
   quotation   Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
   @@index([quotationId], map: "quotation_sections_quotation_id_fkey")
+  @@index([createdAt])
   @@map("quotation_sections")
 }
 
@@ -601,6 +626,8 @@ model QuotationItem {
   section     QuotationSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@index([sectionId], map: "quotation_items_section_id_fkey")
+  @@index([itemId])
+  @@index([createdAt])
   @@map("quotation_items")
 }
 
@@ -618,6 +645,8 @@ model QuotationHistory {
   quotation        Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
   @@index([quotationId], map: "quotation_histories_quotation_id_fkey")
+  @@index([userId])
+  @@index([createdAt])
   @@map("quotation_histories")
 }
 
@@ -641,6 +670,8 @@ model DownPayment {
   @@index([customerId], map: "down_payments_customer_id_fkey")
   @@index([quotationId], map: "down_payments_quotation_id_fkey")
   @@index([status], map: "idx_down_payments_status")
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("down_payments")
 }
 
@@ -672,6 +703,9 @@ model SalesOrder {
   @@index([customerId], map: "sales_orders_customer_id_fkey")
   @@index([quotationId], map: "sales_orders_quotation_id_fkey")
   @@index([status], map: "idx_sales_orders_status")
+  @@index([customerVehicleId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("sales_orders")
 }
 
@@ -687,6 +721,7 @@ model SalesOrderItem {
   salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
 
   @@index([salesOrderId], map: "sales_order_items_sales_order_id_fkey")
+  @@index([itemId])
   @@map("sales_order_items")
 }
 
@@ -726,6 +761,10 @@ model SalesInvoice {
   @@index([salesOrderId], map: "sales_invoices_sales_order_id_fkey")
   @@index([status], map: "idx_sales_invoices_status")
   @@index([dueDate], map: "idx_sales_invoices_due_date")
+  @@index([customerVehicleId])
+  @@index([projectId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("sales_invoices")
 }
 
@@ -743,6 +782,7 @@ model SalesInvoiceItem {
   salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
 
   @@index([salesInvoiceId], map: "sales_invoice_items_sales_invoice_id_fkey")
+  @@index([itemId])
   @@map("sales_invoice_items")
 }
 
@@ -763,6 +803,10 @@ model SalesPayment {
   salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
 
   @@index([salesInvoiceId], map: "sales_payments_sales_invoice_id_fkey")
+  @@index([customerId])
+  @@index([accountId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("sales_payments")
 }
 
@@ -779,6 +823,11 @@ model SalesReturn {
   updatedAt      DateTime          @updatedAt @map("updated_at")
   items          SalesReturnItem[]
 
+  @@index([status])
+  @@index([salesInvoiceId])
+  @@index([customerId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("sales_returns")
 }
 
@@ -792,6 +841,7 @@ model SalesReturnItem {
   salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
 
   @@index([salesReturnId], map: "sales_return_items_sales_return_id_fkey")
+  @@index([itemId])
   @@map("sales_return_items")
 }
 
@@ -816,6 +866,11 @@ model PurchaseRequest {
   items           PurchaseRequestItem[]
 
   @@index([status], map: "idx_purchase_requests_status")
+  @@index([requestedBy])
+  @@index([requesterId])
+  @@index([approvedBy])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("purchase_requests")
 }
 
@@ -828,6 +883,7 @@ model PurchaseRequestItem {
   purchaseRequest   PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
 
   @@index([purchaseRequestId], map: "purchase_request_items_purchase_request_id_fkey")
+  @@index([itemId])
   @@map("purchase_request_items")
 }
 
@@ -864,6 +920,9 @@ model PurchaseOrder {
   @@index([purchaseRequestId], map: "purchase_orders_purchase_request_id_fkey")
   @@index([vendorId], map: "purchase_orders_vendor_id_fkey")
   @@index([status], map: "idx_purchase_orders_status")
+  @@index([approvedBy])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("purchase_orders")
 }
 
@@ -879,6 +938,7 @@ model PurchaseOrderItem {
   purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
 
   @@index([purchaseOrderId], map: "purchase_order_items_purchase_order_id_fkey")
+  @@index([itemId])
   @@map("purchase_order_items")
 }
 
@@ -900,6 +960,8 @@ model GoodsReceipt {
   @@index([purchaseOrderId], map: "goods_receipts_purchase_order_id_fkey")
   @@index([warehouseId], map: "goods_receipts_warehouse_id_fkey")
   @@index([status], map: "idx_goods_receipts_status")
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("goods_receipts")
 }
 
@@ -919,6 +981,9 @@ model GoodsReceiptItem {
   goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
 
   @@index([goodsReceiptId], map: "goods_receipt_items_goods_receipt_id_fkey")
+  @@index([itemId])
+  @@index([warehouseId])
+  @@index([stockMoveId])
   @@map("goods_receipt_items")
 }
 
@@ -936,6 +1001,9 @@ model PurchaseReturn {
   purchaseOrder   PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id])
 
   @@index([purchaseOrderId], map: "purchase_returns_purchase_order_id_fkey")
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("purchase_returns")
 }
 
@@ -948,6 +1016,7 @@ model PurchaseReturnItem {
   purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
 
   @@index([purchaseReturnId], map: "purchase_return_items_purchase_return_id_fkey")
+  @@index([itemId])
   @@map("purchase_return_items")
 }
 
@@ -984,6 +1053,11 @@ model VendorBill {
   @@index([vendorId], map: "vendor_bills_vendor_id_fkey")
   @@index([status], map: "idx_vendor_bills_status")
   @@index([dueDate], map: "idx_vendor_bills_due_date")
+  @@index([goodsReceiptId])
+  @@index([costCenterId])
+  @@index([approvedBy])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("vendor_bills")
 }
 
@@ -1007,6 +1081,10 @@ model VendorBillItem {
   vendorBill         VendorBill @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
 
   @@index([vendorBillId], map: "vendor_bill_items_vendor_bill_id_fkey")
+  @@index([itemId])
+  @@index([goodsReceiptItemId])
+  @@index([accountId])
+  @@index([costCenterId])
   @@map("vendor_bill_items")
 }
 
@@ -1033,6 +1111,12 @@ model VendorPayment {
   vendor          Vendor                    @relation(fields: [vendorId], references: [id])
 
   @@index([vendorId], map: "vendor_payments_vendor_id_fkey")
+  @@index([status])
+  @@index([bankId])
+  @@index([confirmedBy])
+  @@index([accountId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("vendor_payments")
 }
 
@@ -1044,6 +1128,7 @@ model VendorPaymentAllocation {
   vendorPayment   VendorPayment @relation(fields: [vendorPaymentId], references: [id], onDelete: Cascade)
 
   @@index([vendorPaymentId], map: "vendor_payment_allocations_vendor_payment_id_fkey")
+  @@index([vendorBillId])
   @@map("vendor_payment_allocations")
 }
 
@@ -1075,6 +1160,11 @@ model DeliveryOrder {
   salesOrder         SalesOrder          @relation(fields: [salesOrderId], references: [id])
 
   @@index([salesOrderId], map: "delivery_orders_sales_order_id_fkey")
+  @@index([status])
+  @@index([customerId])
+  @@index([confirmedBy])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("delivery_orders")
 }
 
@@ -1106,6 +1196,10 @@ model StockMove {
   @@index([warehouseId], map: "stock_moves_warehouse_id_fkey")
   @@index([status], map: "idx_stock_moves_status")
   @@index([referenceType, referenceId], map: "idx_stock_moves_ref")
+  @@index([rackId])
+  @@index([rackRowId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("stock_moves")
 }
 
@@ -1127,6 +1221,7 @@ model InventoryLayer {
   @@index([itemId], map: "inventory_layers_item_id_fkey")
   @@index([stockMoveId], map: "inventory_layers_stock_move_id_fkey")
   @@index([itemId, warehouseId], map: "inventory_layers_item_warehouse_idx")
+  @@index([createdAt])
   @@map("inventory_layers")
 }
 
@@ -1150,6 +1245,11 @@ model StockAdjustment {
   warehouse   Warehouse             @relation(fields: [warehouseId], references: [id])
 
   @@index([warehouseId], map: "stock_adjustments_warehouse_id_fkey")
+  @@index([status])
+  @@index([approvedBy])
+  @@index([journalId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("stock_adjustments")
 }
 
@@ -1168,6 +1268,8 @@ model StockAdjustmentItem {
   stockAdjustment   StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
 
   @@index([stockAdjustmentId], map: "stock_adjustment_items_stock_adjustment_id_fkey")
+  @@index([itemId])
+  @@index([batchId])
   @@map("stock_adjustment_items")
 }
 
@@ -1188,6 +1290,9 @@ model InventoryTransfer {
 
   @@index([destinationWarehouseId], map: "inventory_transfers_destination_warehouse_id_fkey")
   @@index([sourceWarehouseId], map: "inventory_transfers_source_warehouse_id_fkey")
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("inventory_transfers")
 }
 
@@ -1199,6 +1304,7 @@ model InventoryTransferItem {
   inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
 
   @@index([inventoryTransferId], map: "inventory_transfer_items_inventory_transfer_id_fkey")
+  @@index([itemId])
   @@map("inventory_transfer_items")
 }
 
@@ -1219,6 +1325,10 @@ model MaterialIssue {
 
   @@index([warehouseId], map: "material_issues_warehouse_id_fkey")
   @@index([status], map: "idx_material_issues_status")
+  @@index([projectId])
+  @@index([workOrderId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("material_issues")
 }
 
@@ -1231,6 +1341,7 @@ model MaterialIssueItem {
   materialIssue   MaterialIssue @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
 
   @@index([materialIssueId], map: "material_issue_items_material_issue_id_fkey")
+  @@index([itemId])
   @@map("material_issue_items")
 }
 
@@ -1253,6 +1364,7 @@ model Product {
 
   @@index([vehicleBrandId], map: "products_vehicle_brand_id_fkey")
   @@index([vehicleModelId], map: "products_vehicle_model_id_fkey")
+  @@index([createdAt])
   @@map("products")
 }
 
@@ -1264,6 +1376,7 @@ model ProductMaterial {
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId], map: "product_materials_product_id_fkey")
+  @@index([itemId])
   @@map("product_materials")
 }
 
@@ -1285,6 +1398,9 @@ model ProductionOrder {
   product           Product                   @relation(fields: [productId], references: [id])
 
   @@index([productId], map: "production_orders_product_id_fkey")
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("production_orders")
 }
 
@@ -1299,6 +1415,7 @@ model ProductionOrderMaterial {
   productionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
 
   @@index([productionOrderId], map: "production_order_materials_production_order_id_fkey")
+  @@index([itemId])
   @@map("production_order_materials")
 }
 
@@ -1326,6 +1443,10 @@ model WorkOrder {
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
   @@index([status], map: "idx_work_orders_status")
+  @@index([customerVehicleId])
+  @@index([projectId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("work_orders")
 }
 
@@ -1340,6 +1461,7 @@ model WorkOrderItem {
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
 
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
+  @@index([itemId])
   @@map("work_order_items")
 }
 
@@ -1366,6 +1488,7 @@ model Attendance {
   @@index([employeeId], map: "attendances_employee_id_fkey")
   @@index([date], map: "attendances_date_idx")
   @@index([status], map: "idx_attendances_status")
+  @@index([createdAt])
   @@map("attendances")
 }
 
@@ -1385,6 +1508,8 @@ model LeaveRequest {
 
   @@index([employeeId], map: "leave_requests_employee_id_fkey")
   @@index([status], map: "idx_leave_requests_status")
+  @@index([approvedBy])
+  @@index([createdAt])
   @@map("leave_requests")
 }
 
@@ -1412,6 +1537,10 @@ model OvertimeRequest {
 
   @@index([employeeId], map: "overtime_requests_employee_id_fkey")
   @@index([projectId], map: "overtime_requests_project_id_fkey")
+  @@index([status])
+  @@index([approvedBy])
+  @@index([approvedBySupervisor])
+  @@index([createdAt])
   @@map("overtime_requests")
 }
 
@@ -1451,6 +1580,9 @@ model Payroll {
   @@unique([employeeId, period], map: "uq_payroll_employee_period")
   @@index([employeeId], map: "payrolls_employee_id_fkey")
   @@index([status], map: "idx_payrolls_status")
+  @@index([approvedBy])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("payrolls")
 }
 
@@ -1467,6 +1599,7 @@ model WorkSchedule {
   employees            Employee[]   @relation("EmployeeWorkSchedules")
   departments          Department[] @relation("DepartmentWorkSchedules")
 
+  @@index([createdAt])
   @@map("work_schedules")
 }
 
@@ -1484,6 +1617,8 @@ model EmployeeLoan {
   employee           Employee @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId], map: "employee_loans_employee_id_fkey")
+  @@index([status])
+  @@index([createdAt])
   @@map("employee_loans")
 }
 
@@ -1506,6 +1641,7 @@ model Timesheet {
   @@index([employeeId], map: "timesheets_employee_id_fkey")
   @@index([projectId], map: "timesheets_project_id_fkey")
   @@index([taskId], map: "timesheets_task_id_fkey")
+  @@index([createdAt])
   @@map("timesheets")
 }
 
@@ -1531,6 +1667,7 @@ model Journal {
   @@index([createdBy], map: "journals_created_by_fkey")
   @@index([status], map: "idx_journals_status")
   @@index([transactionDate], map: "idx_journals_transaction_date")
+  @@index([createdAt])
   @@map("journals")
 }
 
@@ -1548,6 +1685,8 @@ model JournalEntry {
 
   @@index([accountId], map: "journal_entries_account_id_fkey")
   @@index([journalId], map: "journal_entries_journal_id_fkey")
+  @@index([costCenterId])
+  @@index([profitCenterId])
   @@map("journal_entries")
 }
 
@@ -1575,6 +1714,11 @@ model Expense {
   @@index([projectId], map: "expenses_project_id_idx")
   @@index([employeeId], map: "expenses_employee_id_idx")
   @@index([status], map: "expenses_status_idx")
+  @@index([paidFromAccountId])
+  @@index([approvedBy])
+  @@index([costCenterId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("expenses")
 }
 
@@ -1597,6 +1741,10 @@ model PettyCash {
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   @@index([accountId], map: "petty_cash_account_id_idx")
+  @@index([sourceAccountId])
+  @@index([expenseAccountId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("petty_cash")
 }
 
@@ -1614,6 +1762,8 @@ model Budget {
 
   @@index([accountId], map: "budgets_account_id_idx")
   @@index([costCenterId], map: "budgets_cost_center_id_idx")
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("budgets")
 }
 
@@ -1629,6 +1779,9 @@ model CostCenter {
   updatedAt      DateTime   @updatedAt @map("updated_at")
   skfValues      SkfValue[]
 
+  @@index([departmentId])
+  @@index([profitCenterId])
+  @@index([createdAt])
   @@map("cost_centers")
 }
 
@@ -1640,6 +1793,7 @@ model ProfitCenter {
   updatedAt DateTime   @updatedAt @map("updated_at")
   skfValues SkfValue[]
 
+  @@index([createdAt])
   @@map("profit_centers")
 }
 
@@ -1667,6 +1821,9 @@ model BankStatement {
 
   @@index([accountId], map: "bank_statements_account_id_idx")
   @@index([bankId], map: "bank_statements_bank_id_idx")
+  @@index([status])
+  @@index([uploadedBy])
+  @@index([createdAt])
   @@map("bank_statements")
 }
 
@@ -1689,6 +1846,8 @@ model BankStatementLine {
   bankStatement    BankStatement @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
 
   @@index([bankStatementId], map: "bank_statement_lines_bank_statement_id_fkey")
+  @@index([matchedJournalId])
+  @@index([matchedPaymentId])
   @@map("bank_statement_lines")
 }
 
@@ -1717,6 +1876,13 @@ model BankReconciliation {
   updatedAt            DateTime                 @updatedAt @map("updated_at")
   items                BankReconciliationItem[]
 
+  @@index([status])
+  @@index([accountId])
+  @@index([bankId])
+  @@index([bankStatementId])
+  @@index([completedBy])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("bank_reconciliations")
 }
 
@@ -1738,6 +1904,10 @@ model BankReconciliationItem {
   bankReconciliation   BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
 
   @@index([bankReconciliationId], map: "bank_reconciliation_items_bank_reconciliation_id_fkey")
+  @@index([bankStatementLineId])
+  @@index([journalEntryId])
+  @@index([relatedJournalId])
+  @@index([relatedPaymentId])
   @@map("bank_reconciliation_items")
 }
 
@@ -1767,6 +1937,10 @@ model Lead {
   activities        LeadActivity[]
 
   @@index([status], map: "idx_leads_status")
+  @@index([customerId])
+  @@index([assignedTo])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("leads")
 }
 
@@ -1787,6 +1961,8 @@ model LeadActivity {
   lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId], map: "lead_activities_lead_id_fkey")
+  @@index([userId])
+  @@index([createdAt])
   @@map("lead_activities")
 }
 
@@ -1813,6 +1989,11 @@ model CrmTicket {
   updatedAt       DateTime           @updatedAt @map("updated_at")
   comments        CrmTicketComment[]
 
+  @@index([status])
+  @@index([customerId])
+  @@index([assignedTo])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("crm_tickets")
 }
 
@@ -1827,6 +2008,8 @@ model CrmTicketComment {
   ticket     CrmTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId], map: "crm_ticket_comments_ticket_id_fkey")
+  @@index([userId])
+  @@index([createdAt])
   @@map("crm_ticket_comments")
 }
 
@@ -1844,6 +2027,11 @@ model AssetCategory {
   updatedAt                        DateTime @updatedAt @map("updated_at")
   assets                           Asset[]
 
+  @@index([assetAccountId])
+  @@index([accumulatedDepreciationAccountId])
+  @@index([depreciationExpenseAccountId])
+  @@index([gainLossAccountId])
+  @@index([createdAt])
   @@map("asset_categories")
 }
 
@@ -1854,6 +2042,7 @@ model AssetGroup {
   updatedAt DateTime @updatedAt @map("updated_at")
   assets    Asset[]
 
+  @@index([createdAt])
   @@map("asset_groups")
 }
 
@@ -1864,6 +2053,7 @@ model AssetBrand {
   updatedAt DateTime          @updatedAt @map("updated_at")
   models    AssetBrandModel[]
 
+  @@index([createdAt])
   @@map("asset_brands")
 }
 
@@ -1876,6 +2066,7 @@ model AssetBrandModel {
   brand        AssetBrand @relation(fields: [assetBrandId], references: [id])
 
   @@index([assetBrandId], map: "asset_brand_models_asset_brand_id_fkey")
+  @@index([createdAt])
   @@map("asset_brand_models")
 }
 
@@ -1910,6 +2101,10 @@ model Asset {
   @@index([categoryId], map: "assets_category_id_fkey")
   @@index([groupId], map: "assets_group_id_fkey")
   @@index([status], map: "idx_assets_status")
+  @@index([employeeId])
+  @@index([assetBrandModelId])
+  @@index([assetBrandId])
+  @@index([createdAt])
   @@map("assets")
 }
 
@@ -1924,6 +2119,7 @@ model AssetHistory {
   asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([assetId], map: "asset_histories_asset_id_fkey")
+  @@index([createdAt])
   @@map("asset_histories")
 }
 
@@ -1942,6 +2138,10 @@ model AssetTransfer {
   asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   @@index([assetId], map: "asset_transfers_asset_id_fkey")
+  @@index([fromEmployeeId])
+  @@index([toEmployeeId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("asset_transfers")
 }
 
@@ -1953,6 +2153,7 @@ model VehicleBrand {
   products  Product[]
   models    VehicleModel[]
 
+  @@index([createdAt])
   @@map("vehicle_brands")
 }
 
@@ -1969,6 +2170,7 @@ model VehicleModel {
 
   @@unique([vehicleBrandId, name], map: "vehicle_models_brand_name_unique")
   @@index([vehicleBrandId], map: "vehicle_models_vehicle_brand_id_fkey")
+  @@index([createdAt])
   @@map("vehicle_models")
 }
 
@@ -1984,6 +2186,7 @@ model VehicleVariant {
   vehicles       Vehicle[]
 
   @@index([vehicleModelId], map: "vehicle_variants_vehicle_model_id_fkey")
+  @@index([createdAt])
   @@map("vehicle_variants")
 }
 
@@ -1999,6 +2202,7 @@ model Vehicle {
   variant          VehicleVariant?   @relation(fields: [vehicleVariantId], references: [id])
 
   @@index([vehicleVariantId], map: "vehicles_vehicle_variant_id_fkey")
+  @@index([createdAt])
   @@map("vehicles")
 }
 
@@ -2025,6 +2229,7 @@ model CustomerVehicle {
 
   @@index([customerId], map: "customer_vehicles_customer_id_fkey")
   @@index([vehicleId], map: "customer_vehicles_vehicle_id_fkey")
+  @@index([createdAt])
   @@map("customer_vehicles")
 }
 
@@ -2056,6 +2261,9 @@ model Project {
   @@index([customerId], map: "projects_customer_id_fkey")
   @@index([customerVehicleId], map: "projects_customer_vehicle_id_fkey")
   @@index([status], map: "idx_projects_status")
+  @@index([workOrderId])
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("projects")
 }
 
@@ -2069,6 +2277,7 @@ model ProjectItem {
   project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId], map: "project_items_project_id_fkey")
+  @@index([itemId])
   @@map("project_items")
 }
 
@@ -2087,6 +2296,8 @@ model ProjectStage {
   project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId], map: "project_stages_project_id_fkey")
+  @@index([status])
+  @@index([createdAt])
   @@map("project_stages")
 }
 
@@ -2100,6 +2311,8 @@ model ProjectStageProgress {
   stage          ProjectStage @relation(fields: [projectStageId], references: [id], onDelete: Cascade)
 
   @@index([projectStageId], map: "project_stage_progress_project_stage_id_fkey")
+  @@index([createdBy])
+  @@index([createdAt])
   @@map("project_stage_progress")
 }
 
@@ -2113,6 +2326,8 @@ model ProjectLog {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId], map: "project_logs_project_id_fkey")
+  @@index([userId])
+  @@index([createdAt])
   @@map("project_logs")
 }
 
@@ -2131,6 +2346,7 @@ model ApprovalWorkflow {
   steps       ApprovalWorkflowStep[]
   approvals   Approval[]
 
+  @@index([createdAt])
   @@map("approval_workflows")
 }
 
@@ -2151,6 +2367,9 @@ model ApprovalWorkflowStep {
   workflow                ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId], map: "approval_workflow_steps_workflow_id_fkey")
+  @@index([roleId])
+  @@index([userId])
+  @@index([createdAt])
   @@map("approval_workflow_steps")
 }
 
@@ -2172,6 +2391,11 @@ model Approval {
   workflow        ApprovalWorkflow  @relation(fields: [workflowId], references: [id])
 
   @@index([workflowId], map: "approvals_workflow_id_fkey")
+  @@index([referenceType, referenceId])
+  @@index([status])
+  @@index([requestedBy])
+  @@index([finalApprovedBy])
+  @@index([createdAt])
   @@map("approvals")
 }
 
@@ -2186,6 +2410,8 @@ model ApprovalHistory {
   approval   Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
 
   @@index([approvalId], map: "approval_histories_approval_id_fkey")
+  @@index([userId])
+  @@index([createdAt])
   @@map("approval_histories")
 }
 
@@ -2198,6 +2424,8 @@ model Bank {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([accountId])
+  @@index([createdAt])
   @@map("banks")
 }
 
@@ -2220,6 +2448,8 @@ model Tax {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  @@index([accountId])
+  @@index([createdAt])
   @@map("taxes")
 }
 
@@ -2231,6 +2461,7 @@ model Holiday {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@index([createdAt])
   @@map("holidays")
 }
 
@@ -2251,6 +2482,7 @@ model Currency {
   exchangeRatesFrom  ExchangeRate[] @relation("ExchangeRateFrom")
   exchangeRatesTo    ExchangeRate[] @relation("ExchangeRateTo")
 
+  @@index([createdAt])
   @@map("currencies")
 }
 
@@ -2264,6 +2496,7 @@ model Barcode {
   item      Item     @relation(fields: [itemId], references: [id])
 
   @@index([itemId], map: "barcodes_item_id_fkey")
+  @@index([createdAt])
   @@map("barcodes")
 }
 
@@ -2274,6 +2507,7 @@ model TaxGroup {
   updatedAt DateTime      @updatedAt @map("updated_at")
   taxes     TaxGroupTax[]
 
+  @@index([createdAt])
   @@map("tax_groups")
 }
 
@@ -2299,6 +2533,7 @@ model StatisticalKeyFigure {
   updatedAt DateTime   @updatedAt @map("updated_at")
   skfValues SkfValue[]
 
+  @@index([createdAt])
   @@map("statistical_key_figures")
 }
 
@@ -2330,6 +2565,7 @@ model CronLog {
   duration Int?
   ranAt    DateTime @default(now()) @map("ran_at")
 
+  @@index([status])
   @@map("cron_logs")
 }
 
@@ -2346,6 +2582,8 @@ model TransactionAttachment {
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@index([referenceType, referenceId])
+  @@index([uploadedBy])
+  @@index([createdAt])
   @@map("transaction_attachments")
 }
 
@@ -2362,6 +2600,7 @@ model DeliveryOrderItem {
 
   @@index([deliveryOrderId], map: "delivery_order_items_delivery_order_id_fkey")
   @@index([itemId], map: "delivery_order_items_item_id_fkey")
+  @@index([salesOrderItemId])
   @@map("delivery_order_items")
 }
 
@@ -2381,6 +2620,7 @@ model ItemBatch {
 
   @@index([itemId], map: "item_batches_item_id_fkey")
   @@index([warehouseId], map: "item_batches_warehouse_id_fkey")
+  @@index([createdAt])
   @@map("item_batches")
 }
 
@@ -2398,6 +2638,8 @@ model ItemSerial {
 
   @@index([itemId], map: "item_serials_item_id_fkey")
   @@index([warehouseId], map: "item_serials_warehouse_id_fkey")
+  @@index([status])
+  @@index([createdAt])
   @@map("item_serials")
 }
 
@@ -2412,6 +2654,7 @@ model UomConversion {
 
   @@unique([itemId, code])
   @@index([itemId], map: "uom_conversions_item_id_fkey")
+  @@index([createdAt])
   @@map("uom_conversions")
 }
 
@@ -2428,6 +2671,7 @@ model ExchangeRate {
 
   @@index([fromCurrencyId], map: "exchange_rates_from_currency_id_fkey")
   @@index([toCurrencyId], map: "exchange_rates_to_currency_id_fkey")
+  @@index([createdAt])
   @@map("exchange_rates")
 }
 
@@ -2441,6 +2685,7 @@ model CrmPipeline {
   updatedAt   DateTime           @updatedAt @map("updated_at")
   stages      CrmPipelineStage[]
 
+  @@index([createdAt])
   @@map("crm_pipelines")
 }
 
@@ -2456,6 +2701,7 @@ model CrmPipelineStage {
   pipeline    CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
 
   @@index([pipelineId], map: "crm_pipeline_stages_pipeline_id_fkey")
+  @@index([createdAt])
   @@map("crm_pipeline_stages")
 }
 
@@ -2470,6 +2716,9 @@ model ApprovalDelegation {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([createdAt])
   @@map("approval_delegations")
 }
 
@@ -2489,6 +2738,7 @@ model SkfValue {
   @@index([costCenterId], map: "skf_values_cost_center_id_fkey")
   @@index([profitCenterId], map: "skf_values_profit_center_id_fkey")
   @@index([statisticalKeyFigureId], map: "skf_values_statistical_key_figure_id_fkey")
+  @@index([createdAt])
   @@map("skf_values")
 }
 
@@ -2503,6 +2753,8 @@ model UnitOfMeasure {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
+  @@index([baseUnitId])
+  @@index([createdAt])
   @@map("unit_of_measures")
 }
 
@@ -2518,6 +2770,7 @@ model Appreciation {
   employee   Employee @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId], map: "appreciations_employee_id_fkey")
+  @@index([createdAt])
   @@map("appreciations")
 }
 
@@ -2538,6 +2791,8 @@ model Task {
 
   @@index([assignedTo], map: "tasks_assigned_to_fkey")
   @@index([projectId], map: "tasks_project_id_fkey")
+  @@index([status])
+  @@index([createdAt])
   @@map("tasks")
 }
 
@@ -2552,6 +2807,7 @@ model DepartmentHoliday {
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 
   @@index([departmentId], map: "department_holidays_department_id_fkey")
+  @@index([createdAt])
   @@map("department_holidays")
 }
 

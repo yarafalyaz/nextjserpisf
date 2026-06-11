@@ -69,6 +69,7 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={`/penjualan/faktur/${info.row.original.id}`}
+        deletePermission="delete_sales_invoices"
       />
     ),
   }),

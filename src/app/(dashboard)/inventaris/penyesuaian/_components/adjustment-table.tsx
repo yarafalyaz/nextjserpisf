@@ -70,6 +70,8 @@ const columns = [
         viewHref={`/inventaris/penyesuaian/${info.row.original.id}`}
         deleteAction={deleteStockAdjustment}
         deleteId={info.row.original.id}
+        editPermission="edit_stock_adjustments"
+        deletePermission="delete_stock_adjustments"
       />
     ),
   }),

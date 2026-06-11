@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { safeAdd, safeSubtract, safeSum } from "@/lib/utils/math"
 import { computeBpjsEmployee, computePph21Monthly } from "@/lib/services/payroll-statutory.service"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
@@ -515,7 +516,7 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
   // Loan deduction capped to what each loan actually still owes (remaining), so the
   // final-installment scenario doesn't over-deduct the employee.
   const loanDeduction = employee.employeeLoans.reduce(
-    (sum, loan) => sum + Math.min(Number(loan.monthlyInstallment), Number(loan.remainingAmount)),
+    (sum, loan) => sum + safeAdd(0, Math.min(Number(loan.monthlyInstallment), Number(loan.remainingAmount)), 0),
     0
   )
 
@@ -527,7 +528,7 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
       date: { gte: startDate, lte: endDate }
     }
   })
-  const overtimeTotal = overtimes.reduce((sum, ot) => sum + Number(ot.calculatedValue ?? 0), 0)
+  const overtimeTotal = overtimes.reduce((sum, ot) => safeAdd(sum, ot.calculatedValue ?? 0, 0), 0)
 
   // 3. Appreciation Total
   const appreciations = await prisma.appreciation.findMany({
@@ -536,7 +537,7 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
       date: { gte: startDate, lte: endDate }
     }
   })
-  const appreciationTotal = appreciations.reduce((sum, ap) => sum + Number(ap.amount ?? 0), 0)
+  const appreciationTotal = appreciations.reduce((sum, ap) => safeAdd(sum, ap.amount ?? 0, 0), 0)
 
   // 4. Late Deduction
   const latePenalty = await calculateLatePenalty(employeeId, startDate, endDate)
@@ -545,7 +546,7 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
   const attendance = await calculateAttendanceSummary(employeeId, startDate, endDate)
 
   // 6. Statutory: BPJS (employee portion) + PPh21
-  const grossSalary = baseSalary + overtimeTotal + appreciationTotal
+  const grossSalary = safeSum([baseSalary, overtimeTotal, appreciationTotal], 0)
   const bpjs = computeBpjsEmployee(baseSalary)
   const pph21 = computePph21Monthly(grossSalary, employee.maritalStatus, bpjs.total)
 
@@ -606,7 +607,9 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
       // they default to 0 and can be edited before approval. Formula mirrors processPayroll.
       const allowances = 0
       const deductions = 0
-      const netSalary = (est.baseSalary ?? 0) + allowances + (est.overtimeTotal ?? 0) + (est.appreciationTotal ?? 0) - deductions - (est.loanDeduction ?? 0) - (est.lateDeduction ?? 0) - (est.absentDeduction ?? 0) - statutory
+      const gross = safeSum([est.baseSalary ?? 0, allowances, est.overtimeTotal ?? 0, est.appreciationTotal ?? 0], 0);
+      const deds = safeSum([deductions, est.loanDeduction ?? 0, est.lateDeduction ?? 0, est.absentDeduction ?? 0, statutory], 0);
+      const netSalary = safeSubtract(gross, deds, 0)
       
       try {
         await prisma.payroll.create({
@@ -716,12 +719,13 @@ export async function processPayroll(formData: FormData) {
 
   // Statutory: BPJS (employee) + PPh21, computed server-side from base salary.
   const empForTax = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, select: { maritalStatus: true } }) : null
-  const grossSalary = baseSalary + allowances + overtimeTotal + appreciationTotal
+  const grossSalary = safeSum([baseSalary, allowances, overtimeTotal, appreciationTotal], 0)
   const bpjs = computeBpjsEmployee(baseSalary)
   const pph21 = computePph21Monthly(grossSalary, empForTax?.maritalStatus, bpjs.total)
-  const statutory = bpjs.total + pph21
+  const statutory = safeAdd(bpjs.total, pph21, 0)
 
-  const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction - absentDeduction - statutory
+  const deductionsSum = safeSum([deductions, loanDeduction, lateDeduction, absentDeduction, statutory], 0);
+  const netSalary = safeSubtract(grossSalary, deductionsSum, 0)
   // totalAmount must mirror the server-computed netSalary — never trust a
   // client-supplied total. Accepting formData "totalAmount" let the stored
   // figure (shown on payslips/reports/list-totals) diverge from the actual net
@@ -825,13 +829,14 @@ export async function updatePayroll(id: number, formData: FormData) {
 
   // Statutory: BPJS (employee) + PPh21, computed server-side.
   const empForTaxUpd = employeeId ? await prisma.employee.findUnique({ where: { id: employeeId }, select: { maritalStatus: true } }) : null
-  const grossSalary = baseSalary + allowances + overtimeTotal + appreciationTotal
+  const grossSalary = safeSum([baseSalary, allowances, overtimeTotal, appreciationTotal], 0)
   const bpjs = computeBpjsEmployee(baseSalary)
   const pph21 = computePph21Monthly(grossSalary, empForTaxUpd?.maritalStatus, bpjs.total)
-  const statutory = bpjs.total + pph21
+  const statutory = safeAdd(bpjs.total, pph21, 0)
 
   // Recalculate net_salary auto
-  const netSalary = baseSalary + allowances + overtimeTotal + appreciationTotal - deductions - loanDeduction - lateDeduction - absentDeduction - statutory
+  const deductionsSum = safeSum([deductions, loanDeduction, lateDeduction, absentDeduction, statutory], 0);
+  const netSalary = safeSubtract(grossSalary, deductionsSum, 0)
   // totalAmount must mirror the server-computed netSalary — never trust a
   // client-supplied total. Accepting formData "totalAmount" let the stored
   // figure (shown on payslips/reports/list-totals) diverge from the actual net
@@ -937,6 +942,7 @@ export async function markPayrollPaid(payrollId: number) {
         orderBy: { loanDate: "asc" },
       })
       let budget = Number(payroll.loanDeduction)
+      const updates: Promise<unknown>[] = []
       for (const loan of activeLoans) {
         if (budget <= 0) break
         const installment = Number(loan.monthlyInstallment)
@@ -944,15 +950,20 @@ export async function markPayrollPaid(payrollId: number) {
         if (remaining <= 0) continue
         const applied = Math.min(installment, remaining, budget)
         if (applied <= 0) continue
-        const newRemaining = remaining - applied
-        budget -= applied
-        await tx.employeeLoan.update({
-          where: { id: loan.id },
-          data: {
-            remainingAmount: newRemaining,
-            status: newRemaining <= 0 ? "paid_off" : "active",
-          },
-        })
+        const newRemaining = safeSubtract(remaining, applied, 0)
+        budget = safeSubtract(budget, applied, 0)
+        updates.push(
+          tx.employeeLoan.update({
+            where: { id: loan.id },
+            data: {
+              remainingAmount: newRemaining,
+              status: newRemaining <= 0 ? "paid_off" : "active",
+            },
+          })
+        )
+      }
+      if (updates.length > 0) {
+        await Promise.all(updates)
       }
     }
   })

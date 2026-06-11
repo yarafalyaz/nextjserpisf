@@ -38,6 +38,8 @@ const columns = [
         editHref={`/kendaraan/merek/${info.row.original.id}/ubah`}
         deleteAction={deleteVehicleBrand}
         deleteId={info.row.original.id}
+        editPermission="edit_vehicle_brands"
+        deletePermission="delete_vehicle_brands"
       />
     ),
   }),

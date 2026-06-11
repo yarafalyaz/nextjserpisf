@@ -78,6 +78,8 @@ const columns = [
         editHref={`/master/karyawan/${info.row.original.id}/ubah`}
         deleteAction={deleteEmployee}
         deleteId={info.row.original.id}
+        editPermission="edit_employees"
+        deletePermission="delete_employees"
       />
     ),
   }),

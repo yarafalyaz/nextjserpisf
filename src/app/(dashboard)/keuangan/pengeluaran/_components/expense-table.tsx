@@ -62,6 +62,8 @@ const columns = [
         viewHref={`/keuangan/pengeluaran/${info.row.original.id}`}
         deleteAction={deleteExpense}
         deleteId={info.row.original.id}
+        editPermission="edit_expenses"
+        deletePermission="delete_expenses"
       />
     ),
   }),

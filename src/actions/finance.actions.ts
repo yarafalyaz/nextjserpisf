@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { safeAdd, safeSubtract, compareAmounts } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
 import { onExpenseApproved, onPettyCashCreated } from "@/lib/hooks/accounting.hook"
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook"
@@ -75,9 +76,9 @@ export async function createJournal(formData: FormData) {
     throw new Error("Journal harus memiliki minimal 2 entri dengan akun dan nominal valid")
   }
 
-  const totalDebit = validEntries.reduce((sum, e) => sum + (e.debit || 0), 0)
-  const totalCredit = validEntries.reduce((sum, e) => sum + (e.credit || 0), 0)
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  const totalDebit = validEntries.reduce((sum, e) => safeAdd(sum, e.debit || 0, 0), 0)
+  const totalCredit = validEntries.reduce((sum, e) => safeAdd(sum, e.credit || 0, 0), 0)
+  if (!compareAmounts(totalDebit, totalCredit, 0)) {
     throw new Error(`Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`)
   }
 
@@ -161,10 +162,10 @@ export async function postJournal(journalId: number) {
   await assertPeriodOpen(journal.transactionDate)
 
   // Validate double-entry balance
-  const totalDebit = journal.entries.reduce((sum, e) => sum + Number(e.debit), 0)
-  const totalCredit = journal.entries.reduce((sum, e) => sum + Number(e.credit), 0)
+  const totalDebit = journal.entries.reduce((sum, e) => safeAdd(sum, Number(e.debit), 0), 0)
+  const totalCredit = journal.entries.reduce((sum, e) => safeAdd(sum, Number(e.credit), 0), 0)
 
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  if (!compareAmounts(totalDebit, totalCredit, 0)) {
     throw new Error(`Journal tidak balance: Debit ${totalDebit} vs Credit ${totalCredit}`)
   }
 
@@ -366,14 +367,19 @@ async function recalcPettyCashChain(
 
   const balances = computePettyCashChain(records)
   const existing = new Map(all.map((r) => [r.id, r]))
-  for (const b of balances) {
+  const updates = balances.map((b) => {
     const rec = existing.get(b.id)!
     if (Number(rec.balanceBefore) !== b.balanceBefore || Number(rec.balanceAfter) !== b.balanceAfter) {
-      await tx.pettyCash.update({
+      return tx.pettyCash.update({
         where: { id: b.id },
         data: { balanceBefore: b.balanceBefore, balanceAfter: b.balanceAfter },
       })
     }
+    return null
+  }).filter(Boolean) as Promise<unknown>[]
+  
+  if (updates.length > 0) {
+    await Promise.all(updates)
   }
 }
 
@@ -413,7 +419,7 @@ export async function createPettyCash(formData: FormData) {
     throw new Error(`Saldo kas kecil tidak cukup: tersedia ${balanceBefore}, dibutuhkan ${amount}`)
   }
 
-  const balanceAfter = type === "IN" ? balanceBefore + amount : balanceBefore - amount
+  const balanceAfter = type === "IN" ? safeAdd(balanceBefore, amount, 0) : safeSubtract(balanceBefore, amount, 0)
 
   const pettyCash = await prisma.$transaction(async (tx) => {
     const created = await tx.pettyCash.create({
@@ -831,9 +837,9 @@ export async function updateJournal(id: number, formData: FormData) {
     throw new Error("Journal harus memiliki minimal 2 entri dengan akun dan nominal valid")
   }
 
-  const totalDebit = validEntries.reduce((sum, e) => sum + (e.debit || 0), 0)
-  const totalCredit = validEntries.reduce((sum, e) => sum + (e.credit || 0), 0)
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  const totalDebit = validEntries.reduce((sum, e) => safeAdd(sum, e.debit || 0, 0), 0)
+  const totalCredit = validEntries.reduce((sum, e) => safeAdd(sum, e.credit || 0, 0), 0)
+  if (!compareAmounts(totalDebit, totalCredit, 0)) {
     throw new Error(`Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`)
   }
   for (const entry of validEntries) {

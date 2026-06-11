@@ -52,6 +52,8 @@ const columns = [
         viewHref={`/produksi/perintah-kerja/${info.row.original.id}`}
         deleteAction={deleteWorkOrder}
         deleteId={info.row.original.id}
+        editPermission="edit_work_orders"
+        deletePermission="delete_work_orders"
       />
     ),
   }),

@@ -38,6 +38,8 @@ const columns = [
         editHref={`/master/jabatan/${info.row.original.id}/ubah`}
         deleteAction={deletePosition}
         deleteId={info.row.original.id}
+        editPermission="edit_positions"
+        deletePermission="delete_positions"
       />
     ),
   }),

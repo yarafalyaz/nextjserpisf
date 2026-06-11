@@ -47,6 +47,8 @@ const columns = [
         editHref={`/master/gudang/${info.row.original.id}/ubah`}
         deleteAction={deleteWarehouse}
         deleteId={info.row.original.id}
+        editPermission="edit_warehouses"
+        deletePermission="delete_warehouses"
       />
     ),
   }),

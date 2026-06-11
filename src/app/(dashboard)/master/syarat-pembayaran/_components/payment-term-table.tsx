@@ -51,6 +51,8 @@ const columns = [
         editHref={`/master/syarat-pembayaran/${info.row.original.id}/ubah`}
         deleteAction={deletePaymentTerm}
         deleteId={info.row.original.id}
+        editPermission="edit_payment_terms"
+        deletePermission="delete_payment_terms"
       />
     ),
   }),

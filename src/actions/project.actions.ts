@@ -358,6 +358,7 @@ export async function getProjectProgress(projectId: number) {
  */
 export async function getProjectStageProgress(projectId: number) {
   try {
+  await requirePermission("view_projects")
   // Auto-initialize if needed
   await initializeProjectStages(projectId)
 

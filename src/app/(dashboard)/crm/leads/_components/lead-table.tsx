@@ -59,6 +59,8 @@ const columns = [
       <ActionDropdown
         viewHref={`/crm/leads/${info.row.original.id}`}
         editHref={`/crm/leads/${info.row.original.id}/ubah`}
+        editPermission="edit_leads"
+        deletePermission="delete_leads"
       />
     ),
   }),

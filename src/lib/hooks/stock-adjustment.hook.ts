@@ -1,9 +1,17 @@
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { InventoryStatus, Status } from "@/lib/constants";
+
+
+const executeInTx = async (
+  txClient: TxClient | undefined,
+  callback: (tx: TxClient) => Promise<unknown>
+) => {
+  return txClient ? callback(txClient) : prisma.$transaction(callback);
+};
 
 /**
  * Stock Adjustment Hook - Observer pattern replacement.
@@ -15,8 +23,8 @@ import { InventoryStatus, Status } from "@/lib/constants";
 export async function onStockAdjustmentProcessed(
   adjustmentId: number,
   userId?: number
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+, txClient?: TxClient): Promise<void> {
+  await executeInTx(txClient, async (tx) => {
     // Serialize concurrent calls for the same adjustment.
     await tx.$queryRaw`SELECT id FROM stock_adjustments WHERE id = ${adjustmentId} FOR UPDATE`;
     const adjustment = await tx.stockAdjustment.findUniqueOrThrow({

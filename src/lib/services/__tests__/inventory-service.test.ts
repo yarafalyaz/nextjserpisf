@@ -20,7 +20,7 @@ const singletonMocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    $transaction: (fn: (t: unknown) => Promise<unknown>) => singletonMocks.transaction(fn),
+    $transaction: (fn: (t: any) => Promise<any>) => singletonMocks.transaction(fn),
   },
 }));
 
@@ -52,7 +52,7 @@ function buildService(txSpies: Record<string, any> = {}) {
   };
 
   const prismaLike = {
-    $transaction: (fn: (t: unknown) => Promise<unknown>) => fn(tx),
+    $transaction: (fn: (t: any) => Promise<any>) => fn(tx),
   } as never;
 
   return { service: new InventoryService(prismaLike), spies };
@@ -139,7 +139,7 @@ describe("InventoryService", () => {
       await expect(service.postMove(1)).rejects.toThrow("Stok tidak mencukupi");
     });
 
-    it("throws on unknown impact type", async () => {
+    it("throws on any impact type", async () => {
       const { service, spies } = buildService();
       spies.moveFindUniqueOrThrow.mockResolvedValue({
         id: 1, documentNo: "SM-3", status: "draft", impact: "SIDEWAYS",

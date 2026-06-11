@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
@@ -564,7 +565,7 @@ export async function disposeAsset(formData: FormData) {
 
   const grossCost = Number(asset.purchaseCost)
   const bookValue = Number(asset.currentValue)
-  const gainLoss = proceeds - bookValue // positive = gain, negative = loss
+  const gainLoss = safeSubtract(proceeds, bookValue, 0) // positive = gain, negative = loss
   const gl = getAssetGlAccounts()
 
   await prisma.$transaction(async (tx) => {
@@ -619,8 +620,8 @@ export async function disposeAsset(formData: FormData) {
         accounts: gl,
       })
 
-      const totalDebit = built.reduce((s, e) => s + e.debit, 0)
-      const totalCredit = built.reduce((s, e) => s + e.credit, 0)
+      const totalDebit = built.reduce((s, e) => safeAdd(s, e.debit, 0), 0)
+      const totalCredit = built.reduce((s, e) => safeAdd(s, e.credit, 0), 0)
 
       const journalNumber = await nextAssetJournalNumber(tx, disposalDate)
       await tx.journal.create({

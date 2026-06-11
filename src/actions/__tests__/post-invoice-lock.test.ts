@@ -22,8 +22,9 @@ const invoiceAggregateMock = vi.fn()
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const mockPrisma = {
+    $transaction: vi.fn((cb) => cb(mockPrisma)),
     salesInvoice: {
       findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a),
       updateMany: (...a: unknown[]) => invoiceUpdateManyMock(...a),
@@ -31,8 +32,9 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     salesInvoiceItem: { count: (...a: unknown[]) => invoiceItemCountMock(...a) },
     customer: { findUnique: (...a: unknown[]) => customerFindUniqueMock(...a) },
-  },
-}))
+  }
+  return { prisma: mockPrisma }
+})
 vi.mock("@/lib/hooks/accounting.hook", () => ({
   onSalesInvoicePosted: (...a: unknown[]) => onSalesInvoicePostedMock(...a),
   onSalesPaymentCreated: vi.fn(),

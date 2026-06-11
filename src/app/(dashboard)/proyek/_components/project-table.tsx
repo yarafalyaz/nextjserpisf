@@ -70,6 +70,8 @@ const columns = [
         editHref={`/proyek/${info.row.original.id}/ubah`}
         deleteAction={deleteProject}
         deleteId={info.row.original.id}
+        editPermission="edit_projects"
+        deletePermission="delete_projects"
       />
     ),
   }),

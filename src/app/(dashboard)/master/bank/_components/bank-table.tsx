@@ -37,6 +37,8 @@ const columns = [
         editHref={`/master/bank/${info.row.original.id}/ubah`}
         deleteAction={deleteBank}
         deleteId={info.row.original.id}
+        editPermission="edit_banks"
+        deletePermission="delete_banks"
       />
     ),
   }),

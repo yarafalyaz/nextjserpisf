@@ -65,6 +65,8 @@ const columns = [
         viewHref={`/inventaris/pengeluaran-material/${info.row.original.id}`}
         deleteAction={deleteMaterialIssue}
         deleteId={info.row.original.id}
+        editPermission="edit_material_issues"
+        deletePermission="delete_material_issues"
       />
     ),
   }),

@@ -49,6 +49,7 @@ const columns = [
         editHref={`/aset/kategori/${info.row.original.id}/ubah`}
         deleteAction={deleteAssetCategory}
         deleteId={info.row.original.id}
+        deletePermission="delete_asset_categories"
       />
     ),
   }),

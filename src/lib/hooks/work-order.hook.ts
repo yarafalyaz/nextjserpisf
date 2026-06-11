@@ -1,9 +1,17 @@
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { WorkOrderStatus } from "@/lib/constants";
+
+
+const executeInTx = async (
+  txClient: TxClient | undefined,
+  callback: (tx: TxClient) => Promise<unknown>
+) => {
+  return txClient ? callback(txClient) : prisma.$transaction(callback);
+};
 
 /**
  * Work Order Hook - Observer pattern replacement.
@@ -15,8 +23,8 @@ import { WorkOrderStatus } from "@/lib/constants";
 export async function onWorkOrderCompleted(
   workOrderId: number,
   userId?: number
-): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+, txClient?: TxClient): Promise<void> {
+  await executeInTx(txClient, async (tx) => {
     // Serialize concurrent calls for the same work order.
     await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
     const workOrder = await tx.workOrder.findUniqueOrThrow({

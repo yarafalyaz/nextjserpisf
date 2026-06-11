@@ -15,6 +15,7 @@ function isInternalImageSource(src: string): boolean {
 
 export function SafeImage({ src, alt, width, height, className, ...rest }: SafeImageProps) {
   if (isInternalImageSource(src)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return <Image src={src} alt={alt} width={width} height={height} className={className} unoptimized {...(rest as any)} />
   }
 

@@ -49,6 +49,7 @@ const columns = [
         viewHref={`/aset/transfer/${info.row.original.id}`}
         deleteAction={deleteAssetTransfer}
         deleteId={info.row.original.id}
+        deletePermission="delete_asset_transfers"
       />
     ),
   }),
