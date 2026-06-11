@@ -37,6 +37,7 @@ vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unkn
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }))
 vi.mock("@/lib/finance/asset-disposal", () => ({ buildAssetDisposalEntries: vi.fn(() => []) }))
+vi.mock("@/lib/services/approval-workflow.service", () => ({ assertApproved: vi.fn(async () => undefined) }))
 
 import { disposeAsset } from "../asset.actions"
 

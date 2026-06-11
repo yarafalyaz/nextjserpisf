@@ -8,6 +8,7 @@ import { redirect } from "next/navigation"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { assertApproved } from "@/lib/services/approval-workflow.service"
 import {
   assetCategorySchema,
   assetBrandSchema,
@@ -556,6 +557,10 @@ export async function disposeAsset(formData: FormData) {
   if (asset.status === "disposed") {
     throw new Error("Aset sudah dilepas (disposed)")
   }
+
+  // Security Guard: Fail-closed approval gate.
+  // If an "Asset" workflow is configured, this document must be approved before disposal.
+  await assertApproved("Asset", data.assetId)
 
   const grossCost = Number(asset.purchaseCost)
   const bookValue = Number(asset.currentValue)

@@ -877,7 +877,22 @@ export async function createLead(formData: FormData) {
 
 export async function updateLead(id: number, formData: FormData) {
   try {
-  await requirePermission("edit_leads")
+  const actor = await requirePermission("edit_leads")
+  const isAdmin = actor.permissions.includes("manage_leads")
+
+  const existing = await prisma.lead.findUniqueOrThrow({ where: { id } })
+  
+  // Security Guard: Sales can only edit their own leads unless they have manage_leads permission.
+  if (!isAdmin && existing.assignedTo !== Number(actor.id)) {
+    throw new Error("Anda hanya dapat mengubah lead yang ditugaskan kepada Anda.")
+  }
+
+  const newAssignedTo = safeId(formData.get("assignedTo"))
+  
+  // Security Guard: Only admins can re-assign leads to others.
+  if (!isAdmin && newAssignedTo !== existing.assignedTo) {
+    throw new Error("Anda tidak memiliki izin untuk mengubah penugasan (assignee) lead.")
+  }
 
   await prisma.lead.update({
     where: { id },
@@ -894,7 +909,7 @@ export async function updateLead(id: number, formData: FormData) {
       address: formData.get("address") as string || null,
       source: formData.get("source") as string || null,
       notes: formData.get("notes") as string || null,
-      assignedTo: safeId(formData.get("assignedTo")),
+      assignedTo: newAssignedTo,
     },
   })
 
