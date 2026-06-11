@@ -51,9 +51,10 @@ export function takeRateLimit(key: string, config: RateLimitConfig): RateLimitRe
  * Priority:
  *   1. `req.ip` — NextRequest's TCP connection IP (always trustworthy)
  *   2. `cf-connecting-ip` — Cloudflare, tamper-proof (set by CF edge)
- *   3. `x-real-ip` — nginx / reverse proxy
- *   4. `x-forwarded-for` — last (rightmost) IP, i.e. the closest proxy.
- *      The leftmost is client-controlled and trivial to spoof.
+ *   3. `x-real-ip` — nginx / reverse proxy (only if TRUSTED_PROXY is set)
+ *   4. `x-forwarded-for` — rightmost IP, i.e. the closest proxy.
+ *      Only read when TRUSTED_PROXY=1 is set in env; otherwise an attacker
+ *      can spoof the header and rotate the rate-limit key.
  *   5. `"unknown"` — nothing available
  */
 export function getClientIp(req: Request & { ip?: string }): string {
@@ -64,16 +65,21 @@ export function getClientIp(req: Request & { ip?: string }): string {
   const cf = req.headers.get("cf-connecting-ip")
   if (cf) return cf
 
-  // 3. X-Real-IP (nginx / reverse proxy)
-  const xri = req.headers.get("x-real-ip")
-  if (xri) return xri.trim()
+  // 3-4: Only trust reverse-proxy headers when explicitly gated
+  const trusted = process.env.TRUSTED_PROXY === "1"
 
-  // 4. X-Forwarded-For — take the RIGHTMOST IP (last proxy in chain)
-  const xff = req.headers.get("x-forwarded-for")
-  if (xff) {
-    const ips = xff.split(",").map((s) => s.trim()).filter(Boolean)
-    const rightmost = ips[ips.length - 1]
-    if (rightmost) return rightmost
+  if (trusted) {
+    // 3. X-Real-IP (nginx / reverse proxy)
+    const xri = req.headers.get("x-real-ip")
+    if (xri) return xri.trim()
+
+    // 4. X-Forwarded-For — take the RIGHTMOST IP (last proxy in chain)
+    const xff = req.headers.get("x-forwarded-for")
+    if (xff) {
+      const ips = xff.split(",").map((s) => s.trim()).filter(Boolean)
+      const rightmost = ips[ips.length - 1]
+      if (rightmost) return rightmost
+    }
   }
 
   // 5. Nothing

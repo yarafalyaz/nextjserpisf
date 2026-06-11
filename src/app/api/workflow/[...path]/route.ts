@@ -60,10 +60,28 @@ export async function POST(
   const newStatus = action === "approve" ? Status.APPROVED : Status.REJECTED
 
   try {
-    await (prisma as any)[config.model].update({
-      where: { id },
+    // Fix C2: state-transition guard — only allow transitions from pending/draft
+    // (or "sent" for sales). Use updateMany to detect concurrent updates — if
+    // count === 0 the row was already moved by another approver (race) and we
+    // return 409 Conflict. Prevents re-approval of finalized records and
+    // resurrecting rejected items.
+    const allowedFrom = ["pending", "draft", "sent"]
+    const result = await (prisma as any)[config.model].updateMany({
+      where: { id, status: { in: allowedFrom } },
       data: { status: newStatus },
     })
+
+    if (result.count === 0) {
+      // Either the row doesn't exist, or it's already past pending/draft/sent
+      const exists = await (prisma as any)[config.model].findUnique({ where: { id }, select: { id: true, status: true } })
+      if (!exists) {
+        return NextResponse.json({ error: "Data tidak ditemukan" }, { status: 404 })
+      }
+      return NextResponse.json(
+        { error: `Tidak dapat mengubah status dari '${exists.status}' menjadi '${newStatus}'` },
+        { status: 409 }
+      )
+    }
 
     revalidatePath(config.revalidate)
     return NextResponse.json({ success: true, status: newStatus })

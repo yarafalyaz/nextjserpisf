@@ -16,8 +16,14 @@ export async function POST(
     if (!Number.isInteger(notificationId) || notificationId <= 0) return NextResponse.json({ error: "Invalid notification id" }, { status: 400 })
     if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user" }, { status: 400 })
 
+    // Fix H1: verify ownership first — `id` is the PK so Prisma ignores the
+    // userId filter in the update where-clause (IDOR). Use findFirst to assert
+    // ownership, then update by PK.
+    const own = await prisma.notification.findFirst({ where: { id: notificationId, userId }, select: { id: true } })
+    if (!own) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
     await prisma.notification.update({
-      where: { id: notificationId, userId },
+      where: { id: notificationId },
       data: { readAt: new Date() },
     })
 

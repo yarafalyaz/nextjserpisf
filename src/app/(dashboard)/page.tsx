@@ -12,7 +12,7 @@ import {
   ProjectPipelineChart,
   RevenueChart,
   SalesStatusChart,
-} from "@/components/dashboard/charts"
+} from "@/components/lazy/dashboard-charts"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/shadcn/button"
 import {

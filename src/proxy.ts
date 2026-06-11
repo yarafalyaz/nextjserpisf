@@ -108,8 +108,10 @@ export async function proxy(req: NextRequest) {
     }
 
     // All other API routes: check auth at proxy level
+    // Fix C1: also enforce isActive — deactivated users must be blocked here so
+    // they cannot use a still-valid JWT to hit routes that only call auth().
     const token = await getToken({ req, secret: process.env.AUTH_SECRET })
-    if (!token) {
+    if (!token || (token as { isActive?: boolean }).isActive === false) {
       return addSecurityHeaders(
         NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
       )

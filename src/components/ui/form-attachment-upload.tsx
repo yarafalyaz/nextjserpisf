@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef } from "react"
+import { SafeImage } from "./safe-image"
 import { Upload, X, FileText } from "lucide-react"
 import { showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -95,7 +96,7 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
               <div key={file.id} className="form-attachment-item">
                 <div className="form-attachment-icon">
                   {file.mimeType.startsWith("image/") ? (
-                    <img src={file.fileUrl} alt={file.originalName} className="form-attachment-thumb" />
+                    <SafeImage src={file.fileUrl} alt={file.originalName} width={20} height={20} className="form-attachment-thumb" />
                   ) : (
                     <FileText className="size-5 text-muted-foreground" />
                   )}

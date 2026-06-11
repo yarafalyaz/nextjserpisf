@@ -4,6 +4,7 @@
 import { useCallback, useState, useEffect, useRef } from "react"
 import { Upload, FileText, Download, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { SafeImage } from "./safe-image"
 import { Button } from "@/components/ui/page-header"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
@@ -161,7 +162,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
             <div key={att.id} className="attachment-card">
               {isImage(att.mimeType) ? (
                 <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="attachment-preview">
-                  <img src={att.fileUrl} alt={att.originalName} className="attachment-img" />
+                  <SafeImage src={att.fileUrl} alt={att.originalName} width={96} height={96} className="attachment-img" />
                 </a>
               ) : (
                 <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="attachment-preview attachment-file">
