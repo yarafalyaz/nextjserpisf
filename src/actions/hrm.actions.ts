@@ -475,9 +475,11 @@ export async function approveOvertime(overtimeId: number) {
 
 // ==================== PAYROLL ACTIONS ====================
 
-export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string) {
+export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string, skipPermissionCheck = false) {
   try {
-  const sessionUser = await requirePermission("view_payroll")
+  const sessionUser = skipPermissionCheck 
+    ? { id: "0", roles: ["super_admin"] } // System internal context
+    : await requirePermission("view_payroll")
   const startDate = new Date(startDateStr)
   const endDate = new Date(endDateStr)
 
@@ -595,7 +597,7 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
     if (existingSet.has(emp.id)) continue
 
     {
-      const est = await getPayrollEstimation(emp.id, startDateStr, endDateStr)
+      const est = await getPayrollEstimation(emp.id, startDateStr, endDateStr, true)
       if (!est || 'success' in est) { continue } // skip failed estimation
       const documentNo = await generateDocumentNumber("PAYROLL")
       
