@@ -1,5 +1,7 @@
 import { createPool } from "mariadb"
 import bcrypt from "bcryptjs"
+import fs from "fs"
+import path from "path"
 
 function buildPoolConfig() {
   const fallback = {
@@ -333,6 +335,39 @@ async function main() {
       )
     }
     console.log("✅ Document sequences created")
+
+    // Create vehicle brands, models, and variants from vehicles.json
+    const vehiclesDataPath = path.resolve(__dirname, "vehicles.json")
+    if (fs.existsSync(vehiclesDataPath)) {
+      console.log("🌱 Seeding vehicle brands, models, and variants...")
+      const { brands, models, variants } = JSON.parse(fs.readFileSync(vehiclesDataPath, "utf8"))
+
+      for (const b of brands) {
+        await conn.query(
+          "INSERT IGNORE INTO vehicle_brands (id, name, created_at, updated_at) VALUES (?, ?, NOW(), NOW())",
+          [b.id, b.name]
+        )
+      }
+      console.log(`✅ ${brands.length} vehicle brands seeded/checked`)
+
+      for (const m of models) {
+        await conn.query(
+          "INSERT IGNORE INTO vehicle_models (id, vehicle_brand_id, name, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
+          [m.id, m.brandId, m.name]
+        )
+      }
+      console.log(`✅ ${models.length} vehicle models seeded/checked`)
+
+      for (const v of variants) {
+        await conn.query(
+          "INSERT IGNORE INTO vehicle_variants (id, vehicle_model_id, name, drivetrain, transmission, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())",
+          [v.id, v.modelId, v.name, v.drivetrain || null, v.transmission || null]
+        )
+      }
+      console.log(`✅ ${variants.length} vehicle variants seeded/checked`)
+    } else {
+      console.log("⚠️ vehicles.json not found, skipping vehicle seeding")
+    }
 
     console.log("\n🎉 Seeding completed!")
   } finally {

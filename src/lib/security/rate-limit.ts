@@ -45,10 +45,37 @@ export function takeRateLimit(key: string, config: RateLimitConfig): RateLimitRe
   }
 }
 
-export function getClientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for")
-  if (xff) return xff.split(",")[0]?.trim() || "unknown"
+/**
+ * Resolve the actual client IP from a request.
+ *
+ * Priority:
+ *   1. `req.ip` — NextRequest's TCP connection IP (always trustworthy)
+ *   2. `cf-connecting-ip` — Cloudflare, tamper-proof (set by CF edge)
+ *   3. `x-real-ip` — nginx / reverse proxy
+ *   4. `x-forwarded-for` — last (rightmost) IP, i.e. the closest proxy.
+ *      The leftmost is client-controlled and trivial to spoof.
+ *   5. `"unknown"` — nothing available
+ */
+export function getClientIp(req: Request & { ip?: string }): string {
+  // 1. NextRequest.ip — direct TCP address, can't be spoofed
+  if (req.ip) return req.ip
+
+  // 2. Cloudflare
+  const cf = req.headers.get("cf-connecting-ip")
+  if (cf) return cf
+
+  // 3. X-Real-IP (nginx / reverse proxy)
   const xri = req.headers.get("x-real-ip")
   if (xri) return xri.trim()
+
+  // 4. X-Forwarded-For — take the RIGHTMOST IP (last proxy in chain)
+  const xff = req.headers.get("x-forwarded-for")
+  if (xff) {
+    const ips = xff.split(",").map((s) => s.trim()).filter(Boolean)
+    const rightmost = ips[ips.length - 1]
+    if (rightmost) return rightmost
+  }
+
+  // 5. Nothing
   return "unknown"
 }

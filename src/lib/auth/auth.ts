@@ -3,6 +3,11 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
+import { takeRateLimit } from "@/lib/security/rate-limit";
+
+// Per-email rate limit: prevents password-spray across many IPs.
+// IP-based limit (10/5min) is handled by proxy.ts middleware.
+const EMAIL_LIMIT = { windowMs: 30 * 60 * 1000, max: 15 } as const
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
@@ -18,9 +23,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const email = credentials.email as string;
+
+        // Per-email backstop: returns null regardless (same as wrong password)
+        const emailLimit = takeRateLimit(`login:email:${email}`, EMAIL_LIMIT)
+        if (!emailLimit.allowed) return null
+
         const user = await prisma.user.findUnique({
           where: {
-            email: credentials.email as string,
+            email,
             isActive: true,
           },
           include: {

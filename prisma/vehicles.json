@@ -1,0 +1,1742 @@
+{
+  "brands": [
+    {
+      "id": 9,
+      "name": "Toyota"
+    },
+    {
+      "id": 19,
+      "name": "Mitsubishi"
+    },
+    {
+      "id": 20,
+      "name": "Isuzu"
+    },
+    {
+      "id": 21,
+      "name": "Suzuki"
+    },
+    {
+      "id": 22,
+      "name": "GWM"
+    },
+    {
+      "id": 23,
+      "name": "Ford"
+    },
+    {
+      "id": 24,
+      "name": "Jeep"
+    },
+    {
+      "id": 25,
+      "name": "Subaru"
+    },
+    {
+      "id": 26,
+      "name": "Hyundai"
+    }
+  ],
+  "models": [
+    {
+      "id": 2,
+      "brandId": 9,
+      "name": "Fortuner"
+    },
+    {
+      "id": 5,
+      "brandId": 9,
+      "name": "Land Cruiser VX-80"
+    },
+    {
+      "id": 6,
+      "brandId": 9,
+      "name": "Land Cruiser VX-100"
+    },
+    {
+      "id": 7,
+      "brandId": 9,
+      "name": "Land Cruiser VX-105"
+    },
+    {
+      "id": 10,
+      "brandId": 9,
+      "name": "Hilux Double Cabin"
+    },
+    {
+      "id": 11,
+      "brandId": 9,
+      "name": "Hilux Single Cabin"
+    },
+    {
+      "id": 12,
+      "brandId": 9,
+      "name": "Hilux Rangga"
+    },
+    {
+      "id": 13,
+      "brandId": 19,
+      "name": "Pajero Sport"
+    },
+    {
+      "id": 14,
+      "brandId": 19,
+      "name": "Triton Double Cabin"
+    },
+    {
+      "id": 15,
+      "brandId": 19,
+      "name": "Triton Single Cabin"
+    },
+    {
+      "id": 16,
+      "brandId": 20,
+      "name": "MU-X"
+    },
+    {
+      "id": 17,
+      "brandId": 20,
+      "name": "Traga"
+    },
+    {
+      "id": 18,
+      "brandId": 20,
+      "name": "D-Max Double Cabin"
+    },
+    {
+      "id": 19,
+      "brandId": 20,
+      "name": "D-Max Single Cabin"
+    },
+    {
+      "id": 20,
+      "brandId": 21,
+      "name": "Jimny 3-door"
+    },
+    {
+      "id": 22,
+      "brandId": 21,
+      "name": "Jimny 5-door"
+    },
+    {
+      "id": 23,
+      "brandId": 22,
+      "name": "Tank 300"
+    },
+    {
+      "id": 24,
+      "brandId": 22,
+      "name": "Tank 500"
+    },
+    {
+      "id": 25,
+      "brandId": 23,
+      "name": "Ranger"
+    },
+    {
+      "id": 26,
+      "brandId": 24,
+      "name": "Wrangler"
+    },
+    {
+      "id": 27,
+      "brandId": 24,
+      "name": "Rubicon"
+    },
+    {
+      "id": 28,
+      "brandId": 25,
+      "name": "Forester AWD"
+    },
+    {
+      "id": 29,
+      "brandId": 25,
+      "name": "Outback AWD"
+    },
+    {
+      "id": 30,
+      "brandId": 25,
+      "name": "Crosstrek AWD"
+    },
+    {
+      "id": 31,
+      "brandId": 26,
+      "name": "Santa Fe"
+    },
+    {
+      "id": 32,
+      "brandId": 26,
+      "name": "Palisade"
+    }
+  ],
+  "variants": [
+    {
+      "id": 110,
+      "modelId": 5,
+      "name": "4.2 Diesel 1HD-T MT (1990-1995)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 111,
+      "modelId": 5,
+      "name": "4.2 Diesel 1HD-FT AT (1995-1997)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 112,
+      "modelId": 5,
+      "name": "4.5 Bensin 1FZ-FE MT (1992-1997)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 113,
+      "modelId": 5,
+      "name": "4.5 Bensin 1FZ-FE AT (1992-1997)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 114,
+      "modelId": 5,
+      "name": "4.2 Diesel 1HZ MT (1990-1997)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 115,
+      "modelId": 6,
+      "name": "4.2 Diesel 1HD-FTE AT VX (1998-2007)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 116,
+      "modelId": 6,
+      "name": "4.7 V8 Bensin 2UZ-FE AT VX (1998-2007)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 117,
+      "modelId": 6,
+      "name": "4.2 Diesel 1HD-FTE AT Sahara (2005-2007)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 118,
+      "modelId": 7,
+      "name": "4.2 Diesel 1HZ MT STD (1998-2007)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 119,
+      "modelId": 7,
+      "name": "4.5 Bensin 1FZ-FE MT (1998-2002)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 120,
+      "modelId": 13,
+      "name": "Gen 1 2.5 GLX 4x4 MT (2009-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 121,
+      "modelId": 13,
+      "name": "Gen 1 2.5 Exceed 4x2 MT (2009-2012)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 122,
+      "modelId": 13,
+      "name": "Gen 1 2.5 Exceed 4x2 AT (2009-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 123,
+      "modelId": 13,
+      "name": "Gen 1 2.5 Dakar 4x2 AT (2011-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 124,
+      "modelId": 13,
+      "name": "Gen 1 2.5 Dakar VGT 4x2 AT (2013-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 125,
+      "modelId": 13,
+      "name": "Gen 2 2.4 GLX 4x4 MT (2016-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 126,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Exceed 4x2 MT (2016-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 127,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Exceed 4x2 AT (2016-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 128,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Dakar 4x2 AT (2016-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 129,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Dakar 4x4 AT (2016-2018)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 130,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Dakar Ultimate 4x2 AT (2018-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 131,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Dakar Ultimate 4x4 AT (2018-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 132,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Dakar Ultimate Rockford Fosgate 4x2 AT (2021-2024)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 133,
+      "modelId": 13,
+      "name": "Gen 2 2.4 Dakar Ultimate Rockford Fosgate 4x4 AT (2021-2024)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 154,
+      "modelId": 16,
+      "name": "Gen 1 2.5 4x2 MT (2014-2020)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 155,
+      "modelId": 16,
+      "name": "Gen 1 2.5 4x2 AT (2014-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 156,
+      "modelId": 16,
+      "name": "Gen 1 2.5 Royale 4x2 AT (2017-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 157,
+      "modelId": 16,
+      "name": "Gen 1 2.5 4x4 AT (2015-2020)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 158,
+      "modelId": 16,
+      "name": "Gen 2 1.9 4x2 AT (2021-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 159,
+      "modelId": 16,
+      "name": "Gen 2 1.9 4x4 AT (2021-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 160,
+      "modelId": 18,
+      "name": "Gen 1 2.5 Rodeo 4x4 MT (2005-2011)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 161,
+      "modelId": 18,
+      "name": "Gen 1 3.0 Rodeo 4x4 AT (2005-2011)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 162,
+      "modelId": 18,
+      "name": "Gen 2 2.5 Rodeo 4x4 MT (2012-2019)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 163,
+      "modelId": 18,
+      "name": "Gen 2 2.5 Rodeo 4x4 AT (2012-2019)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 164,
+      "modelId": 18,
+      "name": "Gen 2 2.5 4x2 MT (2012-2019)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 165,
+      "modelId": 18,
+      "name": "Gen 3 1.9 4x4 MT (2021-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 166,
+      "modelId": 18,
+      "name": "Gen 3 1.9 4x2 MT (2021-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 167,
+      "modelId": 19,
+      "name": "Gen 1 2.5 4x2 MT (2005-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 168,
+      "modelId": 19,
+      "name": "Gen 1 2.5 4x4 MT (2005-2011)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 169,
+      "modelId": 19,
+      "name": "Gen 2 2.5 4x2 MT (2012-2019)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 170,
+      "modelId": 19,
+      "name": "Gen 2 2.5 4x4 MT (2012-2019)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 171,
+      "modelId": 19,
+      "name": "Gen 3 1.9 4x2 MT (2021-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 172,
+      "modelId": 19,
+      "name": "Gen 3 1.9 4x4 MT (2021-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 173,
+      "modelId": 17,
+      "name": "2.5 Pick Up Flat Deck MT (2018-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 174,
+      "modelId": 17,
+      "name": "2.5 Box MT (2018-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 179,
+      "modelId": 23,
+      "name": "HEV Ultra (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 180,
+      "modelId": 23,
+      "name": "2.0T Diesel (2025-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 181,
+      "modelId": 24,
+      "name": "HEV Ultra (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 185,
+      "modelId": 31,
+      "name": "TM 2.2 CRDi Signature AT (2019-2023)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 186,
+      "modelId": 31,
+      "name": "TM 2.5 Bensin AT (2021-2023)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 187,
+      "modelId": 31,
+      "name": "MX5 2.5T Prime (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 188,
+      "modelId": 31,
+      "name": "MX5 2.5T Signature (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 189,
+      "modelId": 31,
+      "name": "MX5 2.5T Signature AWD (2024-now)",
+      "drivetrain": "AWD",
+      "transmission": "AT"
+    },
+    {
+      "id": 206,
+      "modelId": 26,
+      "name": "JK Sport 2-door 3.6 AT (2008-2018)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 207,
+      "modelId": 26,
+      "name": "JK Sahara 4-door 3.6 AT (2008-2018)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 208,
+      "modelId": 26,
+      "name": "JL Sport 2-door 2.0T AT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 209,
+      "modelId": 26,
+      "name": "JL Sahara 4-door 2.0T AT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 210,
+      "modelId": 27,
+      "name": "JK Rubicon 4-door 3.6 AT (2008-2018)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 211,
+      "modelId": 27,
+      "name": "JL Rubicon 4-door 2.0T AT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 212,
+      "modelId": 27,
+      "name": "JL Rubicon 392 4-door 6.4 V8 AT (2022-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 213,
+      "modelId": 28,
+      "name": "SH 2.0 X AWD AT (2008-2012)",
+      "drivetrain": "AWD",
+      "transmission": "AT"
+    },
+    {
+      "id": 214,
+      "modelId": 28,
+      "name": "SH 2.0 XS AWD AT (2008-2012)",
+      "drivetrain": "AWD",
+      "transmission": "AT"
+    },
+    {
+      "id": 215,
+      "modelId": 28,
+      "name": "SH 2.5 XT AWD AT (2008-2012)",
+      "drivetrain": "AWD",
+      "transmission": "AT"
+    },
+    {
+      "id": 216,
+      "modelId": 28,
+      "name": "SJ 2.0i AWD CVT (2013-2018)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 217,
+      "modelId": 28,
+      "name": "SJ 2.0i-P AWD CVT (2013-2018)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 218,
+      "modelId": 28,
+      "name": "SJ 2.0 XT AWD CVT (2013-2018)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 219,
+      "modelId": 28,
+      "name": "SK 2.0i-L EyeSight AWD CVT (2019-now)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 220,
+      "modelId": 28,
+      "name": "SK 2.0i-S EyeSight AWD CVT (2019-now)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 221,
+      "modelId": 30,
+      "name": "XV GP 2.0i AWD CVT (2013-2017)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 222,
+      "modelId": 30,
+      "name": "XV GP 2.0i-S AWD CVT (2013-2017)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 223,
+      "modelId": 30,
+      "name": "XV GT 2.0i-S EyeSight AWD CVT (2018-2022)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 224,
+      "modelId": 30,
+      "name": "Crosstrek 2.0L EyeSight AWD CVT (2023-now)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 225,
+      "modelId": 29,
+      "name": "BS 2.5i-S AWD CVT (2015-2020)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 226,
+      "modelId": 29,
+      "name": "BT 2.5i-T EyeSight AWD CVT (2021-now)",
+      "drivetrain": "AWD",
+      "transmission": "CVT"
+    },
+    {
+      "id": 243,
+      "modelId": 26,
+      "name": "JK Unlimited Sport 4-door 3.8 AT (2008-2012)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 244,
+      "modelId": 26,
+      "name": "JK Unlimited Overland 4-door 3.6 AT (2012-2018)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 245,
+      "modelId": 26,
+      "name": "JL Unlimited Sport 4-door 2.0T AT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 246,
+      "modelId": 31,
+      "name": "DM 2.4 Bensin AT (2012-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 247,
+      "modelId": 31,
+      "name": "DM 2.2 CRDi AT (2012-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 248,
+      "modelId": 31,
+      "name": "DM FL 2.4 Limited Bensin AT (2016-2018)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 249,
+      "modelId": 31,
+      "name": "DM FL 2.2 CRDi Limited AT (2016-2018)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 250,
+      "modelId": 31,
+      "name": "TM 2.2 CRDi Prime AT (2019-2023)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 251,
+      "modelId": 13,
+      "name": "Gen 1 2.5 Exceed Limited 4x2 AT (2013-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 252,
+      "modelId": 13,
+      "name": "Gen 1 2.5 Dakar 4x4 AT (2012-2015)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 253,
+      "modelId": 18,
+      "name": "Gen 2 2.5 Hi-Lander 4x2 AT (2014-2019)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 254,
+      "modelId": 18,
+      "name": "Gen 3 1.9 4x2 AT (2022-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 255,
+      "modelId": 16,
+      "name": "Gen 1 2.5 Premier 4x2 AT (2017-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 256,
+      "modelId": 28,
+      "name": "SG 2.0 X AWD AT (2005-2007)",
+      "drivetrain": "AWD",
+      "transmission": "AT"
+    },
+    {
+      "id": 258,
+      "modelId": 27,
+      "name": "JK Rubicon 2-door 3.6 MT (2008-2018)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 259,
+      "modelId": 27,
+      "name": "JL Rubicon 2-door 2.0T AT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 299,
+      "modelId": 10,
+      "name": "Double Cabin 2.5L MT (2005-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 300,
+      "modelId": 10,
+      "name": "D-Cab E 2.5L MT (2008-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 301,
+      "modelId": 10,
+      "name": "D-Cab E 3.0L MT (2008-2012)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 302,
+      "modelId": 10,
+      "name": "D-Cab G 2.5L MT (2005-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 303,
+      "modelId": 10,
+      "name": "D-Cab G 3.0L MT (2008-2012)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 304,
+      "modelId": 10,
+      "name": "D-Cab V 2.5L MT (2008-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 305,
+      "modelId": 10,
+      "name": "2.4L D-Cab E MT (2016-2023)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 306,
+      "modelId": 10,
+      "name": "2.4L D-Cab G MT (2016-2023)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 307,
+      "modelId": 10,
+      "name": "2.4L D-Cab V AT (2016-2023)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 308,
+      "modelId": 10,
+      "name": "2.4L D-Cab E 4x4 MT (2020-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 309,
+      "modelId": 10,
+      "name": "2.4L D-Cab E-RTS MT (2022-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 310,
+      "modelId": 10,
+      "name": "2.4L D-Cab G 4x4 MT (2020-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 311,
+      "modelId": 10,
+      "name": "2.8L GR-Sport D-Cab 4X4 AT (2022-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 312,
+      "modelId": 11,
+      "name": "2.5L Single Cab 4x2 MT (2005-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 313,
+      "modelId": 11,
+      "name": "Pick Up 2.5L MT (2005-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 314,
+      "modelId": 11,
+      "name": "2.0L Single Cab 4x2 MT (2016-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 315,
+      "modelId": 11,
+      "name": "2.4L DSL Single Cab 4x2 MT (2016-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 316,
+      "modelId": 11,
+      "name": "2.4L DSL Single Cab 4x4 MT (2016-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 317,
+      "modelId": 11,
+      "name": "2.4L Extra Cabin E M/T (2020-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 318,
+      "modelId": 12,
+      "name": "2.0 Bensin Chassis Cab MT (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 319,
+      "modelId": 12,
+      "name": "2.4 Diesel Chassis Cab MT (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 320,
+      "modelId": 12,
+      "name": "2.0 Bensin Pick Up MT (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 321,
+      "modelId": 12,
+      "name": "2.4 Diesel Pick Up MT (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 322,
+      "modelId": 25,
+      "name": "SC 4X2 2.5L MT (2001-2006)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 323,
+      "modelId": 25,
+      "name": "DC XL RAS 4x2 2.5L MT (2001-2006)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 324,
+      "modelId": 25,
+      "name": "DC XL RAS 4x4 2.5L MT (2001-2006)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 325,
+      "modelId": 25,
+      "name": "DC XLT TDCi 4x4 2.5L MT (2004-2006)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 326,
+      "modelId": 25,
+      "name": "DC XLT 4x4 3.0L MT (2004-2006)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 327,
+      "modelId": 25,
+      "name": "DC XLT Limited 4x4 3.0L MT (2005-2006)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 328,
+      "modelId": 25,
+      "name": "SC 4x4 2.5L MT (2007-2011)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 329,
+      "modelId": 25,
+      "name": "SC 4x2 2.5L MT (2007-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 330,
+      "modelId": 25,
+      "name": "DC Hi-Rider 4x2 2.5L MT (2007-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 331,
+      "modelId": 25,
+      "name": "DC XLT 4x4 2.5L MT (2007-2011)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 332,
+      "modelId": 25,
+      "name": "DC XLT 4x4 2.5L AT (2007-2011)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 333,
+      "modelId": 25,
+      "name": "DC XLTD 4x4 2.5L MT (2007-2011)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 334,
+      "modelId": 25,
+      "name": "DC Hurricane 4x4 2.5L MT (2007-2011)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 335,
+      "modelId": 25,
+      "name": "DC Hurricane 4x4 2.5L AT (2007-2011)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 336,
+      "modelId": 25,
+      "name": "DC RAS 4x4 2.5L MT (2009-2011)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 337,
+      "modelId": 25,
+      "name": "DC 2.5 Limited 4x2 MT (2009-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 338,
+      "modelId": 25,
+      "name": "DC 2.5 Limited 4x2 AT (2009-2011)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 339,
+      "modelId": 25,
+      "name": "SC Base 2.2L 4x2 MT (2012-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 340,
+      "modelId": 25,
+      "name": "SC Base 2.2L 4x4 MT (2012-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 341,
+      "modelId": 25,
+      "name": "DC 2.2 XLS 4x2 MT (2012-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 342,
+      "modelId": 25,
+      "name": "DC 2.2 XLS 4x4 MT (2012-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 343,
+      "modelId": 25,
+      "name": "DC 2.2 XLT 4x2 MT (2012-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 344,
+      "modelId": 25,
+      "name": "DC 2.2 XLT 4x4 MT (2012-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 345,
+      "modelId": 25,
+      "name": "DC XLT 3.2L 4x4 MT (2012-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 346,
+      "modelId": 25,
+      "name": "DC Wildtrak 3.2L 4x4 AT (2012-2015)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 347,
+      "modelId": 25,
+      "name": "RAS XL 2.2L 4x4 MT (2013-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 348,
+      "modelId": 25,
+      "name": "DC 2.2 XLS 4x4 5-Star Safety MT (2014-2015)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 349,
+      "modelId": 25,
+      "name": "SC Base Plus 2.2L 4x4 MT (2015-2022)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 350,
+      "modelId": 25,
+      "name": "DC XLS Plus 2.2L 4x4 MT (2015-2022)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 351,
+      "modelId": 25,
+      "name": "DC XLT 2.2L Hi-Rider 4x2 MT (2015-2022)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 352,
+      "modelId": 25,
+      "name": "DC XLT 2.2L Hi-Rider 4x2 AT (2015-2022)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 353,
+      "modelId": 25,
+      "name": "DC XLT 2.2L 4x4 AT (2015-2022)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 354,
+      "modelId": 25,
+      "name": "DC Wildtrak 3.2L 4x4 AT (2015-2018)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 355,
+      "modelId": 25,
+      "name": "DC Wildtrak 2.0L Bi-Turbo 4x4 AT (2018-2022)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 356,
+      "modelId": 25,
+      "name": "DC Wildtrak 2.0L Bi-Turbo 4x4 AT Limited Edition (2020)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 357,
+      "modelId": 25,
+      "name": "DC Raptor 2.0L Bi-Turbo 4x4 AT (2019-2022)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 358,
+      "modelId": 25,
+      "name": "Next-Gen 2.0 XL Base DC 4x4 6MT (2022-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 359,
+      "modelId": 25,
+      "name": "Next-Gen 2.0 XLT DC 4x4 10AT (2022-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 360,
+      "modelId": 25,
+      "name": "Next-Gen 2.0 Wildtrak DC 4x4 10AT (2022-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 361,
+      "modelId": 25,
+      "name": "Next-Gen 3.0 V6 Raptor DC 4x4 10AT (2022-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 362,
+      "modelId": 20,
+      "name": "Katana GX 1.0 MT (1984-1996)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 363,
+      "modelId": 20,
+      "name": "JB43 1.3 MT (2005-2018)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 364,
+      "modelId": 20,
+      "name": "JB74 1.5 Single Tone MT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 365,
+      "modelId": 20,
+      "name": "JB74 1.5 Two Tone MT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 366,
+      "modelId": 20,
+      "name": "JB74 1.5 Single Tone AT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 367,
+      "modelId": 20,
+      "name": "JB74 1.5 Two Tone AT (2019-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 368,
+      "modelId": 22,
+      "name": "JB74 5-door 1.5 Single Tone MT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 369,
+      "modelId": 22,
+      "name": "JB74 5-door 1.5 Two Tone MT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 370,
+      "modelId": 22,
+      "name": "JB74 5-door 1.5 Single Tone AT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 371,
+      "modelId": 22,
+      "name": "JB74 5-door 1.5 Two Tone AT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 372,
+      "modelId": 32,
+      "name": "Prime 2.2 CRDi 4x2 AT (2022-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 373,
+      "modelId": 32,
+      "name": "Signature 2.2 CRDi 4x2 AT (2022-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 374,
+      "modelId": 32,
+      "name": "XRT 2.2 CRDi 4x2 AT (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 375,
+      "modelId": 32,
+      "name": "Signature AWD 2.2 CRDi AT (2022-now)",
+      "drivetrain": "AWD",
+      "transmission": "AT"
+    },
+    {
+      "id": 376,
+      "modelId": 32,
+      "name": "XRT AWD 2.2 CRDi AT (2024-now)",
+      "drivetrain": "AWD",
+      "transmission": "AT"
+    },
+    {
+      "id": 377,
+      "modelId": 14,
+      "name": "Strada Gen 4 2.5 GLX 4x4 MT (2007-2014)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 378,
+      "modelId": 14,
+      "name": "Strada Gen 4 2.5 GLS 4x4 MT (2007-2014)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 379,
+      "modelId": 14,
+      "name": "Strada Gen 4 2.5 Exceed 4x4 AT (2009-2014)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 380,
+      "modelId": 14,
+      "name": "All New Gen 5 2.5 GLS 4x4 MT (2015-2018)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 381,
+      "modelId": 14,
+      "name": "All New Gen 5 2.5 Exceed 4x4 AT (2015-2018)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 382,
+      "modelId": 14,
+      "name": "Gen 5 FL 2.4 GLS 4x4 MT (2019-2023)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 383,
+      "modelId": 14,
+      "name": "Gen 5 FL 2.4 Exceed 4x4 AT (2019-2023)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 384,
+      "modelId": 14,
+      "name": "Gen 5 FL 2.4 Ultimate 4x4 AT (2019-2023)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 385,
+      "modelId": 14,
+      "name": "Gen 6 Double Cab HDX 4x4 MT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 386,
+      "modelId": 14,
+      "name": "Gen 6 Double Cab GLS 4x4 MT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 387,
+      "modelId": 14,
+      "name": "Gen 6 Double Cab Exceed 4x4 MT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 388,
+      "modelId": 14,
+      "name": "Gen 6 Double Cab Ultimate 4x4 AT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 389,
+      "modelId": 15,
+      "name": "Strada Gen 4 2.5 GLX Single Cab 4x4 MT (2007-2014)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 390,
+      "modelId": 15,
+      "name": "Strada Gen 4 2.5 HDX Single Cab 4x2 MT (2009-2014)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 391,
+      "modelId": 15,
+      "name": "Gen 5 2.5 GLX Single Cab 4x4 MT (2015-2018)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 392,
+      "modelId": 15,
+      "name": "Gen 5 2.5 HDX Single Cab 4x4 MT (2015-2018)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 393,
+      "modelId": 15,
+      "name": "Gen 5 FL 2.4 GLX Single Cab 4x4 MT (2019-2023)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 394,
+      "modelId": 15,
+      "name": "Gen 5 FL 2.4 HDX Single Cab 4x4 MT (2019-2023)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 395,
+      "modelId": 15,
+      "name": "Gen 6 Single Cab GLX 4x2 MT (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 396,
+      "modelId": 15,
+      "name": "Gen 6 Single Cab HDX 4x4 MT (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "MT"
+    },
+    {
+      "id": 397,
+      "modelId": 2,
+      "name": "Gen 1 2.7 G Bensin (2005-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 398,
+      "modelId": 2,
+      "name": "Gen 1 2.7 G Bensin (2005-2011)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 399,
+      "modelId": 2,
+      "name": "Gen 1 2.7 V Bensin (2005-2011)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 400,
+      "modelId": 2,
+      "name": "Gen 1 2.5 G Diesel (2005-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 401,
+      "modelId": 2,
+      "name": "Gen 1 2.5 G Diesel (2005-2011)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 402,
+      "modelId": 2,
+      "name": "Gen 1 2.5 G Diesel TRD Sportivo (2009-2011)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 403,
+      "modelId": 2,
+      "name": "Gen 1 2.5 G Diesel TRD Sportivo (2009-2011)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 404,
+      "modelId": 2,
+      "name": "Gen 1 VNT 2.5 G Diesel (2011-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 405,
+      "modelId": 2,
+      "name": "Gen 1 VNT 2.5 G Diesel (2011-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 406,
+      "modelId": 2,
+      "name": "Gen 1 VNT 2.7 G Luxury Bensin (2011-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 407,
+      "modelId": 2,
+      "name": "Gen 1 VNT 2.7 V Bensin (2011-2015)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 408,
+      "modelId": 2,
+      "name": "Gen 1 VNT 2.5 G Diesel TRD Sportivo (2012-2015)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 409,
+      "modelId": 2,
+      "name": "Gen 1 VNT 2.5 G Diesel TRD Sportivo (2012-2015)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 410,
+      "modelId": 2,
+      "name": "Gen 2 2.4 G Diesel (2016-2020)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 411,
+      "modelId": 2,
+      "name": "Gen 2 2.4 G Diesel (2016-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 412,
+      "modelId": 2,
+      "name": "Gen 2 2.4 VRZ Diesel (2016-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 413,
+      "modelId": 2,
+      "name": "Gen 2 2.4 VRZ Diesel (2016-2020)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 414,
+      "modelId": 2,
+      "name": "Gen 2 2.7 SRZ Bensin (2016-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 415,
+      "modelId": 2,
+      "name": "Gen 2 2.4 VRZ Diesel TRD Sportivo (2017-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 416,
+      "modelId": 2,
+      "name": "Gen 2 2.7 SRZ Bensin TRD Sportivo (2017-2020)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 417,
+      "modelId": 2,
+      "name": "Gen 2 FL 2.4 G Diesel (2020-2024)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 418,
+      "modelId": 2,
+      "name": "Gen 2 FL 2.4 G Diesel (2020-2024)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 419,
+      "modelId": 2,
+      "name": "Gen 2 FL 2.4 VRZ Diesel (2020-2021)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 420,
+      "modelId": 2,
+      "name": "Gen 2 FL 2.7 SRZ Bensin (2020-2021)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 421,
+      "modelId": 2,
+      "name": "Gen 2 FL 2.4 GR Sport Diesel (2021-2024)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 422,
+      "modelId": 2,
+      "name": "Gen 2 FL 2.7 GR Sport Bensin (2021-2024)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 423,
+      "modelId": 2,
+      "name": "Gen 2 FL 2.8 GR Sport Diesel (2021-2024)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 424,
+      "modelId": 2,
+      "name": "New 2.4 G Diesel (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "MT"
+    },
+    {
+      "id": 425,
+      "modelId": 2,
+      "name": "New 2.4 G Diesel (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 426,
+      "modelId": 2,
+      "name": "New 2.7 SRZ Bensin (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 427,
+      "modelId": 2,
+      "name": "New 2.7 SRZ Bensin GR Aeropackage (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 428,
+      "modelId": 2,
+      "name": "New 2.8 VRZ Diesel (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 429,
+      "modelId": 2,
+      "name": "New 2.8 VRZ Diesel TSS (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 430,
+      "modelId": 2,
+      "name": "New 2.8 VRZ Diesel TSS GR Aeropackage (2024-now)",
+      "drivetrain": "4x2",
+      "transmission": "AT"
+    },
+    {
+      "id": 431,
+      "modelId": 2,
+      "name": "New 2.8 VRZ Diesel (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    },
+    {
+      "id": 432,
+      "modelId": 2,
+      "name": "New 2.8 VRZ Diesel GR Sport (2024-now)",
+      "drivetrain": "4x4",
+      "transmission": "AT"
+    }
+  ]
+}

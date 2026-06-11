@@ -70,11 +70,24 @@ describe("takeRateLimit", () => {
 })
 
 describe("getClientIp", () => {
-  it("extracts IP from x-forwarded-for (first entry)", () => {
+  it("extracts direct TCP IP from req.ip if present", () => {
+    const req = new Request("http://localhost") as any
+    req.ip = "127.0.0.1"
+    expect(getClientIp(req)).toBe("127.0.0.1")
+  })
+
+  it("extracts IP from cf-connecting-ip (Cloudflare)", () => {
     const req = new Request("http://localhost", {
-      headers: { "x-forwarded-for": "1.2.3.4, 10.0.0.1" },
+      headers: { "cf-connecting-ip": "8.8.8.8" },
     })
-    expect(getClientIp(req)).toBe("1.2.3.4")
+    expect(getClientIp(req)).toBe("8.8.8.8")
+  })
+
+  it("extracts IP from x-forwarded-for (RIGHTMOST proxy entry, not leftmost spoofed)", () => {
+    const req = new Request("http://localhost", {
+      headers: { "x-forwarded-for": "spoofed, 1.2.3.4, 10.0.0.1" },
+    })
+    expect(getClientIp(req)).toBe("10.0.0.1")
   })
 
   it("extracts IP from x-real-ip", () => {
@@ -84,14 +97,15 @@ describe("getClientIp", () => {
     expect(getClientIp(req)).toBe("5.6.7.8")
   })
 
-  it("prefers x-forwarded-for over x-real-ip", () => {
+  it("prefers cf-connecting-ip over x-real-ip and x-forwarded-for", () => {
     const req = new Request("http://localhost", {
       headers: {
+        "cf-connecting-ip": "9.9.9.9",
         "x-forwarded-for": "1.1.1.1",
         "x-real-ip": "2.2.2.2",
       },
     })
-    expect(getClientIp(req)).toBe("1.1.1.1")
+    expect(getClientIp(req)).toBe("9.9.9.9")
   })
 
   it("returns 'unknown' when no headers present", () => {
