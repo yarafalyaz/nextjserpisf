@@ -73,20 +73,24 @@ describe("utils/document-number", () => {
   });
 
   describe("generateDocumentNumber (simple)", () => {
-    it("formats as PREFIX-NNNN and is data-driven (max+1)", async () => {
+    it("formats as PREFIX-NNNN and uses atomic sequence with floor (max+1)", async () => {
       // CUST maps to customer model, field "code"; resolvePrefix falls back to "CUST"
       mocks.customerFindMany.mockResolvedValue([{ code: "CUST-0007" }]);
+      mocks.next.mockResolvedValue(8);
 
       const result = await generateDocumentNumber("CUST", "simple");
 
+      expect(mocks.next).toHaveBeenCalledWith("CUST", 7);
       expect(result).toBe("CUST-0008");
     });
 
     it("starts at 0001 when no existing records", async () => {
       mocks.customerFindMany.mockResolvedValue([]);
+      mocks.next.mockResolvedValue(1);
 
       const result = await generateDocumentNumber("CUST", "simple");
 
+      expect(mocks.next).toHaveBeenCalledWith("CUST", 0);
       expect(result).toBe("CUST-0001");
     });
   });

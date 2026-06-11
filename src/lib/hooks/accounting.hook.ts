@@ -95,10 +95,14 @@ export async function onSalesInvoicePosted(
   await assertPeriodOpen(invoice.date);
 
   await prisma.$transaction(async (tx) => {
-    // Serialize concurrent postings of the same invoice and re-check idempotency
-    // under the row lock so two parallel postInvoice calls cannot both create a
-    // journal + double the stock-out.
-    await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`;
+    // Fix: Re-fetch the invoice inside the transaction under a lock to prevent
+    // stale data from being used in the journal.
+    const inv = await tx.salesInvoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true, totalAmount: true, taxAmount: true, date: true, documentNo: true },
+    });
+    if (!inv) throw new Error("Invoice tidak ditemukan");
+
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesInvoice", referenceId: invoiceId },
     });
@@ -109,32 +113,32 @@ export async function onSalesInvoicePosted(
     const journal = await tx.journal.create({
       data: {
         journalNumber,
-        transactionDate: invoice.date,
+        transactionDate: inv.date,
         referenceType: "SalesInvoice",
-        referenceId: invoice.id,
-        description: `Invoice Posting ${invoice.documentNo}`,
+        referenceId: inv.id,
+        description: `Invoice Posting ${inv.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: invoice.totalAmount,
-        totalCredit: invoice.totalAmount,
+        totalDebit: inv.totalAmount,
+        totalCredit: inv.totalAmount,
         createdBy: userId ?? null,
       },
     });
 
-    const taxAmount = Number(invoice.taxAmount ?? 0);
+    const taxAmount = Number(inv.taxAmount ?? 0);
     const hasTaxAccount = taxAmount > 0 && !!settings.salesTaxAccountId;
     // Keep the journal balanced: only split out tax when a tax account exists,
     // otherwise revenue absorbs the full amount (credit total == debit total).
     const revenueCredit = hasTaxAccount
-      ? Number(invoice.totalAmount) - taxAmount
-      : Number(invoice.totalAmount);
+      ? Number(inv.totalAmount) - taxAmount
+      : Number(inv.totalAmount);
 
     // Dr. Piutang Usaha
     await tx.journalEntry.create({
       data: {
         journalId: journal.id,
         accountId: settings.salesReceivableAccountId!,
-        debit: invoice.totalAmount,
+        debit: inv.totalAmount,
         credit: 0,
         memo: "Piutang Usaha",
       },
@@ -1199,24 +1203,49 @@ export async function onVendorBillPosted(
   }
 
   await prisma.$transaction(async (tx) => {
+    // Fix: Re-fetch the bill inside the transaction under a lock to prevent
+    // stale data from being used in the journal.
+    const b = await tx.vendorBill.findUnique({
+      where: { id: billId },
+      select: { id: true, grandTotal: true, tax: true, date: true, documentNo: true },
+    });
+    if (!b) throw new Error("Bill tidak ditemukan");
+
+    const latestGrandTotal = Number(b.grandTotal);
+    const latestTaxAmount = settings.purchaseTaxAccountId ? Number(b.tax ?? 0) : 0;
+
     const journalNumber = await generateJournalNumber(tx, "BILL", billId);
+
+    const latestDebitEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [];
+    if (goodsBased) {
+      const clearingAmount = latestGrandTotal - latestTaxAmount;
+      latestDebitEntries.push({ accountId: settings.purchaseInventoryAccountId!, debit: clearingAmount, credit: 0, memo: "Clearing penerimaan barang" });
+      if (latestTaxAmount > 0) {
+        latestDebitEntries.push({ accountId: settings.purchaseTaxAccountId!, debit: latestTaxAmount, credit: 0, memo: "PPN Masukan" });
+      }
+    } else {
+      if (!settings.purchaseExpenseAccountId) {
+        throw new Error("Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya")
+      }
+      latestDebitEntries.push({ accountId: settings.purchaseExpenseAccountId, debit: latestGrandTotal, credit: 0, memo: "Purchase expense" });
+    }
 
     await tx.journal.create({
       data: {
         journalNumber,
-        transactionDate: bill.date,
+        transactionDate: b.date,
         referenceType: "VendorBill",
-        referenceId: bill.id,
-        description: `Vendor Bill ${bill.documentNo}`,
+        referenceId: b.id,
+        description: `Vendor Bill ${b.documentNo}`,
         type: "AUTO",
         status: "POSTED",
-        totalDebit: bill.grandTotal,
-        totalCredit: bill.grandTotal,
+        totalDebit: b.grandTotal,
+        totalCredit: b.grandTotal,
         createdBy: userId,
         entries: {
           create: [
-            ...debitEntries,
-            { accountId: settings.purchasePayableAccountId!, debit: 0, credit: grandTotal, memo: "Accounts Payable" },
+            ...latestDebitEntries,
+            { accountId: settings.purchasePayableAccountId!, debit: 0, credit: latestGrandTotal, memo: "Accounts Payable" },
           ],
         },
       },

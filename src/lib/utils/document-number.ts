@@ -173,12 +173,10 @@ export async function generateDocumentNumber(
     const companyCode = settings.companyName?.substring(0, 3).toUpperCase() ?? 'YRA'
     return `${String(seq).padStart(3, '0')}/${prefix}/${companyCode}/${month}/${year}`
   } else {
-    // Master-data codes (CUST/VND/ITM/EMP/POS/WH/ACC/...) are DATA-DRIVEN:
-    // next = (highest sequence currently in the table) + 1. This reflects the
-    // actual records — deleting rows lowers the next number — instead of using a
-    // monotonic counter that never decrements. The unique code column + caller
-    // retry loop handle the rare concurrent-create collision.
-    const seq = (await findMaxSequence(key, prefix, format, month, year)) + 1
+    // Master-data codes (CUST/VND/ITM/EMP/POS/WH/ACC/...) are now ATOMIC:
+    // next = atomic counter with floor sync.
+    const floor = await findMaxSequence(key, prefix, format, month, year)
+    const seq = await DocumentSequenceService.next(prefix, floor)
     return `${prefix}-${String(seq).padStart(4, '0')}`
   }
 }

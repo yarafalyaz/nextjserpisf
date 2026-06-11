@@ -47,9 +47,12 @@ describe("onVendorBillPosted - service/expense branch", () => {
     mocks.journalFindFirst.mockResolvedValue(null) // not yet posted
     mocks.goodsReceiptCount.mockResolvedValue(0)
     mocks.assertPeriodOpen.mockResolvedValue(undefined)
-    // $transaction invokes its callback with a tx exposing journal.create
-    mocks.transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
-      cb({ journal: { create: mocks.journalCreate } })
+    // $transaction invokes its callback with a tx exposing model delegates
+    mocks.transaction.mockImplementation(async (cb: (tx: any) => any) =>
+      cb({
+        journal: { create: mocks.journalCreate },
+        vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
+      })
     )
     mocks.journalCreate.mockResolvedValue({ id: 1 })
   })
