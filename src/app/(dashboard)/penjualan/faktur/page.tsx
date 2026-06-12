@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import { InvoiceTable } from "./_components/invoice-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -10,12 +11,20 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Faktur" }
 
-export default async function InvoicesPage() {
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("view_sales_invoices")
+
+  const params = await searchParams
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const rawInvoices = await prisma.salesInvoice.findMany({
     include: { customer: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

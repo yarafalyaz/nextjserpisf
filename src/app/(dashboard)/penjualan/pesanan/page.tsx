@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
@@ -15,11 +16,15 @@ export const metadata: Metadata = { title: "Pesanan" }
 export default async function SalesOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_sales_orders")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -36,7 +41,8 @@ export default async function SalesOrdersPage({
   const rawOrders = await prisma.salesOrder.findMany({
     where,
     include: { customer: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

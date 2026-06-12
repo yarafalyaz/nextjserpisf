@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppSearchField } from "@/components/ui/search-field"
 import Link from "next/link"
@@ -14,11 +15,15 @@ export const metadata: Metadata = { title: "Mutasi Stok" }
 export default async function StockMovesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; dampak?: string }>
+  searchParams: Promise<{ cari?: string; dampak?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_stock_moves")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -33,7 +38,8 @@ export default async function StockMovesPage({
   const rawMoves = await prisma.stockMove.findMany({
     where,
     include: { item: true, warehouse: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

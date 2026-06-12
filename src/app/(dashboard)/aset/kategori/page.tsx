@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AssetCategoryTable } from "./_components/asset-category-table"
@@ -13,11 +14,15 @@ export const metadata: Metadata = { title: "Kategori" }
 export default async function AssetCategoriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_assets")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -29,7 +34,8 @@ export default async function AssetCategoriesPage({
     where,
     orderBy: { name: "asc" },
     select: { id: true, name: true, depreciationRate: true, usefulLife: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const data = categories.map((cat) => ({

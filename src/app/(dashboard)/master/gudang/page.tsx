@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { WarehouseTable } from "./_components/warehouse-table"
@@ -13,11 +14,15 @@ export const metadata: Metadata = { title: "Gudang" }
 export default async function WarehousesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_warehouses")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     isActive: true,
@@ -34,7 +39,8 @@ export default async function WarehousesPage({
     where,
     include: { racks: true },
     orderBy: { name: "asc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const tableData = JSON.parse(JSON.stringify(warehouses))

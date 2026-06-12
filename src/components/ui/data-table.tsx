@@ -26,7 +26,7 @@ import {
   ChevronsRight,
   Search,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Table,
   TableBody,
@@ -56,10 +56,21 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showError } from "@/lib/utils/toast"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 
 /** Heuristic: is this an actions/buttons column (kept visible on mobile)? */
 function isActionsColumn(id: string): boolean {
   return /aksi|action|opsi|menu/i.test(id)
+}
+
+/** Server-side pagination state (1-based). */
+export interface ServerPagination {
+  /** Current 1-based page number. */
+  page: number
+  /** Number of rows per page. */
+  pageSize: number
+  /** Total number of rows matching the query. */
+  total: number
 }
 
 interface DataTableProps<TData> {
@@ -86,6 +97,8 @@ interface DataTableProps<TData> {
    *  column is always kept; the leading columns fill the rest. Set per-column
    *  meta.mobile=true to force-show or meta.mobile=false to force-hide. */
   mobileColumns?: number
+  /** When provided, the table uses URL-based pagination (?halaman=N) instead of client-side. */
+  serverPagination?: ServerPagination
 }
 
 /** Resolve a human-friendly label for a column (used in the visibility menu). */
@@ -93,6 +106,9 @@ function columnLabel(column: { id: string; columnDef: { header?: unknown } }): s
   const header = column.columnDef.header
   return typeof header === "string" && header.trim() ? header : column.id
 }
+
+/** Allowed page-size options (always shown in the page-size selector). */
+const PAGE_SIZE_OPTIONS = [10, 20, 30, 50, 100]
 
 export function DataTable<TData extends { id: number | string }>({
   data,
@@ -109,6 +125,7 @@ export function DataTable<TData extends { id: number | string }>({
   toolbar,
   filters,
   mobileColumns = 3,
+  serverPagination,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -118,6 +135,44 @@ export function DataTable<TData extends { id: number | string }>({
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([])
 
+  // Server-side pagination helpers
+  const isServer = Boolean(serverPagination)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  function navigateWithParams(params: Record<string, string | number | undefined>) {
+    const sp = new URLSearchParams(searchParams.toString())
+    for (const [k, v] of Object.entries(params)) {
+      if (v === "" || v === undefined || v === null) sp.delete(k)
+      else sp.set(k, String(v))
+    }
+    router.push(`${pathname}?${sp.toString()}`)
+  }
+
+  /** Navigate to a specific 1-based page number. */
+  function goToPage(newPage: number) {
+    navigateWithParams({ halaman: newPage > 1 ? newPage : undefined })
+  }
+
+  /** Change page size (resets to page 1). */
+  function goToPageSize(newSize: number) {
+    navigateWithParams({ pageSize: newSize, halaman: undefined })
+  }
+
+  const serverPageCount = useMemo(
+    () => (isServer ? Math.max(1, Math.ceil((serverPagination!.total || 0) / serverPagination!.pageSize)) : 1),
+    [isServer, serverPagination?.total, serverPagination?.pageSize],
+  )
+
+  // Compute effective pagination state
+  const effectivePagination = useMemo(() => {
+    if (isServer) {
+      return { pageIndex: (serverPagination!.page - 1), pageSize: serverPagination!.pageSize }
+    }
+    return { pageIndex: 0, pageSize }
+  }, [isServer, serverPagination?.page, serverPagination?.pageSize, pageSize])
+
   // React Compiler cannot memoize TanStack Table's useReactTable (it returns
   // functions by design); this is a known, expected incompatibility, not a bug.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -126,8 +181,10 @@ export function DataTable<TData extends { id: number | string }>({
     data,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getPaginationRowModel: isServer ? undefined : getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    pageCount: isServer ? serverPageCount : undefined,
+    manualPagination: isServer,
     initialState: { pagination: { pageSize } },
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
@@ -135,7 +192,13 @@ export function DataTable<TData extends { id: number | string }>({
     onColumnVisibilityChange: setColumnVisibility,
     enableRowSelection: selectable,
     getRowId: (row) => String(row.id),
-    state: { sorting, rowSelection, columnFilters, columnVisibility },
+    state: {
+      sorting,
+      rowSelection,
+      columnFilters,
+      columnVisibility,
+      ...(isServer ? { pagination: effectivePagination } : {}),
+    },
   })
 
   useEffect(() => {
@@ -171,10 +234,11 @@ export function DataTable<TData extends { id: number | string }>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile, mobileColumns])
 
-  const currentPageSize = table.getState().pagination.pageSize
-  const pageIndex = table.getState().pagination.pageIndex
-  const pageCount = table.getPageCount()
-  const filteredRowCount = table.getFilteredRowModel().rows.length
+  // --- Pagination display values ---
+  const currentPageSize = isServer ? serverPagination!.pageSize : table.getState().pagination.pageSize
+  const pageIndex = isServer ? serverPagination!.page - 1 : table.getState().pagination.pageIndex
+  const pageCount = isServer ? serverPageCount : table.getPageCount()
+  const totalRows = isServer ? serverPagination!.total : table.getFilteredRowModel().rows.length
   const selectedCount = table.getFilteredSelectedRowModel().rows.length
   const selectedIds = Object.keys(rowSelection).filter((k) => rowSelection[k])
   const headers = table.getHeaderGroups()[0]?.headers ?? []
@@ -208,6 +272,20 @@ export function DataTable<TData extends { id: number | string }>({
     if (!ids.length) return
     setPendingDeleteIds(ids)
     setConfirmOpen(true)
+  }
+
+  /** Handler for server-side page change. */
+  function handleServerPreviousPage() {
+    if (pageIndex > 0) goToPage(pageIndex) // pageIndex is 0-based; goToPage is 1-based
+  }
+  function handleServerNextPage() {
+    if (pageIndex < pageCount - 1) goToPage(pageIndex + 2)
+  }
+  function handleServerFirstPage() {
+    goToPage(1)
+  }
+  function handleServerLastPage() {
+    goToPage(pageCount)
   }
 
   return (
@@ -359,21 +437,23 @@ export function DataTable<TData extends { id: number | string }>({
         <div className="flex flex-col items-start gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="text-sm text-muted-foreground sm:flex-1">
             {selectable
-              ? `${selectedCount} dari ${filteredRowCount} baris dipilih.`
-              : `${filteredRowCount} baris.`}
+              ? `${selectedCount} dari ${totalRows} baris dipilih.`
+              : `${totalRows} baris.`}
           </div>
           <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-3 sm:w-auto sm:justify-end lg:gap-8">
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium whitespace-nowrap">Baris per halaman</p>
               <Select
                 value={String(currentPageSize)}
-                onValueChange={(v) => table.setPageSize(Number(v) || 20)}
+                onValueChange={(v) =>
+                  isServer ? goToPageSize(Number(v) || 100) : table.setPageSize(Number(v) || 20)
+                }
               >
                 <SelectTrigger className="h-8 w-[70px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent side="top">
-                  {[10, 20, 30, 50, 100].map((n) => (
+                  {PAGE_SIZE_OPTIONS.map((n) => (
                     <SelectItem key={n} value={String(n)}>
                       {n}
                     </SelectItem>
@@ -389,8 +469,8 @@ export function DataTable<TData extends { id: number | string }>({
                 variant="outline"
                 size="icon"
                 className="hidden size-8 lg:flex"
-                onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
+                onClick={isServer ? handleServerFirstPage : () => table.setPageIndex(0)}
+                disabled={pageIndex <= 0}
               >
                 <span className="sr-only">Ke halaman pertama</span>
                 <ChevronsLeft className="size-4" />
@@ -399,8 +479,8 @@ export function DataTable<TData extends { id: number | string }>({
                 variant="outline"
                 size="icon"
                 className="size-8"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
+                onClick={isServer ? handleServerPreviousPage : () => table.previousPage()}
+                disabled={pageIndex <= 0}
               >
                 <span className="sr-only">Halaman sebelumnya</span>
                 <ChevronLeft className="size-4" />
@@ -409,8 +489,8 @@ export function DataTable<TData extends { id: number | string }>({
                 variant="outline"
                 size="icon"
                 className="size-8"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
+                onClick={isServer ? handleServerNextPage : () => table.nextPage()}
+                disabled={pageIndex >= pageCount - 1}
               >
                 <span className="sr-only">Halaman berikutnya</span>
                 <ChevronRight className="size-4" />
@@ -419,8 +499,8 @@ export function DataTable<TData extends { id: number | string }>({
                 variant="outline"
                 size="icon"
                 className="hidden size-8 lg:flex"
-                onClick={() => table.setPageIndex(pageCount - 1)}
-                disabled={!table.getCanNextPage()}
+                onClick={isServer ? handleServerLastPage : () => table.setPageIndex(pageCount - 1)}
+                disabled={pageIndex >= pageCount - 1}
               >
                 <span className="sr-only">Ke halaman terakhir</span>
                 <ChevronsRight className="size-4" />

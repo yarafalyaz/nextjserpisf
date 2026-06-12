@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -16,11 +17,15 @@ export const metadata: Metadata = { title: "Barang" }
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; category?: string }>
+  searchParams: Promise<{ cari?: string; category?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_items")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     isActive: true,
@@ -39,7 +44,8 @@ export default async function ItemsPage({
       where,
       include: { category: true },
       orderBy: { createdAt: "desc" },
-      take: 1000,
+      take,
+    skip: (page - 1) * pageSize,
     }),
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
   ])

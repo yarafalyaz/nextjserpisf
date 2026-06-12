@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BarcodeTable } from "./_components/barcode-table"
@@ -10,13 +11,21 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Barcode" }
 
-export default async function BarcodesPage() {
+export default async function BarcodesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("view_barcodes")
+
+  const params = await searchParams
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const barcodes = await prisma.barcode.findMany({
     orderBy: { createdAt: "desc" },
     include: { item: { select: { name: true } } },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const tableData = JSON.parse(JSON.stringify(barcodes))

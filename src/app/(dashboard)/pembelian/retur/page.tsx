@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
@@ -15,11 +16,15 @@ export const metadata: Metadata = { title: "Retur" }
 export default async function PurchaseReturnsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_purchase_returns")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -34,7 +39,8 @@ export default async function PurchaseReturnsPage({
   const returns = await prisma.purchaseReturn.findMany({
     where,
     include: { purchaseOrder: { include: { vendor: true } }, items: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

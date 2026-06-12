@@ -2,6 +2,7 @@ import { Info } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
@@ -10,15 +11,23 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Satuan" }
 
-export default async function UomPage() {
+export default async function UomPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("view_units")
+
+  const params = await searchParams
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const items = await prisma.item.findMany({
     where: { deletedAt: null },
     select: { unitOfMeasure: true },
     distinct: ["unitOfMeasure"],
     orderBy: { unitOfMeasure: "asc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const uomList = items.map((i) => i.unitOfMeasure)

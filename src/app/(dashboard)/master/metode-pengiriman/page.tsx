@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { ShippingMethodTable } from "./_components/shipping-method-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -13,11 +14,15 @@ export const metadata: Metadata = { title: "Metode Pengiriman" }
 export default async function ShippingMethodsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_shipping_methods")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -28,7 +33,8 @@ export default async function ShippingMethodsPage({
     }),
   }
 
-  const rows = await prisma.shippingMethod.findMany({ where, orderBy: { name: "asc" }, take: 1000 })
+  const rows = await prisma.shippingMethod.findMany({ where, orderBy: { name: "asc" }, take,
+    skip: (page - 1) * pageSize })
   const tableData = JSON.parse(JSON.stringify(rows))
 
   return (

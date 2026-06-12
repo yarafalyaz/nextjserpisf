@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { PaymentTermTable } from "./_components/payment-term-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -13,11 +14,12 @@ export const metadata: Metadata = { title: "Syarat Pembayaran" }
 export default async function PaymentTermsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_payment_terms")
 
   const params = await searchParams
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -28,11 +30,15 @@ export default async function PaymentTermsPage({
     }),
   }
 
-  const paymentTerms = await prisma.paymentTerm.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 1000,
-  })
+  const [paymentTerms, total] = await Promise.all([
+    prisma.paymentTerm.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+    }),
+    prisma.paymentTerm.count({ where }),
+  ])
 
   const tableData = JSON.parse(JSON.stringify(paymentTerms))
 

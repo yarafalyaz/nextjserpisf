@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { CurrencyTable } from "./_components/currency-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -13,11 +14,15 @@ export const metadata: Metadata = { title: "Mata Uang" }
 export default async function CurrenciesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_currencies")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -28,7 +33,8 @@ export default async function CurrenciesPage({
   const rawCurrencies = await prisma.currency.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const currencies = rawCurrencies.map((c) => ({

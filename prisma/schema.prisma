@@ -201,6 +201,7 @@ model Notification {
   user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId], map: "notifications_user_id_fkey")
+  @@index([userId, readAt])
   @@index([createdAt])
   @@map("notifications")
 }
@@ -1992,6 +1993,7 @@ model CrmTicket {
   @@index([status])
   @@index([customerId])
   @@index([assignedTo])
+  @@index([status, assignedTo])
   @@index([createdBy])
   @@index([createdAt])
   @@map("crm_tickets")

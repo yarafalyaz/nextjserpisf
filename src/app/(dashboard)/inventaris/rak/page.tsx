@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { RackTable } from "./_components/rack-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -13,11 +14,15 @@ export const metadata: Metadata = { title: "Rak" }
 export default async function RacksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_inventory")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -28,7 +33,8 @@ export default async function RacksPage({
   const racks = await prisma.rack.findMany({
     where,
     include: { warehouse: true, rows: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

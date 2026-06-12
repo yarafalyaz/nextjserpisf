@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
@@ -15,11 +16,15 @@ export const metadata: Metadata = { title: "Tagihan" }
 export default async function VendorBillsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_vendor_bills")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -35,7 +40,8 @@ export default async function VendorBillsPage({
   const rawBills = await prisma.vendorBill.findMany({
     where,
     include: { vendor: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

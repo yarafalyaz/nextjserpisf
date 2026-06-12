@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { PositionTable } from "./_components/position-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -10,13 +11,21 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Jabatan" }
 
-export default async function PositionsPage() {
+export default async function PositionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("view_positions")
+
+  const params = await searchParams
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const positions = await prisma.position.findMany({
     include: { department: true },
     orderBy: { createdAt: "desc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const tableData = JSON.parse(JSON.stringify(positions))

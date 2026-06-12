@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
@@ -15,11 +16,15 @@ export const metadata: Metadata = { title: "Uang Muka" }
 export default async function DownPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_down_payments")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -35,7 +40,8 @@ export default async function DownPaymentsPage({
   const rawDps = await prisma.downPayment.findMany({
     where,
     include: { quotation: { include: { customer: true } } },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

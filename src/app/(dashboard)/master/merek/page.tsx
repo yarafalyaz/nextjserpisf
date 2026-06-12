@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { BrandTable } from "./_components/brand-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -13,11 +14,15 @@ export const metadata: Metadata = { title: "Merek Kendaraan" }
 export default async function BrandsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_brands")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -29,7 +34,8 @@ export default async function BrandsPage({
     where,
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { items: true } } },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const tableData = JSON.parse(JSON.stringify(brands))

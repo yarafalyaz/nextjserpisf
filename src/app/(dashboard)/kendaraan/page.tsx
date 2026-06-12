@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { VehicleTable } from "./_components/vehicle-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -13,12 +14,16 @@ export const metadata: Metadata = { title: "Kendaraan" }
 export default async function VehiclesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_vehicles")
 
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -42,7 +47,8 @@ export default async function VehiclesPage({
       },
     },
     orderBy: { createdAt: "desc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const tableData = JSON.parse(JSON.stringify(vehicles))

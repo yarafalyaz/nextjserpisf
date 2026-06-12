@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AssetTransferTable } from "./_components/asset-transfer-table"
@@ -13,11 +14,15 @@ export const metadata: Metadata = { title: "Transfer Stok" }
 export default async function AssetTransfersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_assets")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -29,7 +34,8 @@ export default async function AssetTransfersPage({
     where,
     include: { asset: { select: { name: true } } },
     orderBy: { transferDate: "desc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const data = JSON.parse(JSON.stringify(transfers))

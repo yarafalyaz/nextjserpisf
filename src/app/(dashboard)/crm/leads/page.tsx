@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -15,11 +16,15 @@ export const metadata: Metadata = { title: "Leads" }
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_leads")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -36,7 +41,8 @@ export default async function LeadsPage({
   const leads = await prisma.lead.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const data = JSON.parse(JSON.stringify(leads))

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { PaymentTable } from "./_components/payment-table"
@@ -14,11 +15,15 @@ export const metadata: Metadata = { title: "Pembayaran" }
 export default async function SalesPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_sales_payments")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -32,7 +37,8 @@ export default async function SalesPaymentsPage({
   const rawPayments = await prisma.salesPayment.findMany({
     where,
     include: { salesInvoice: { include: { customer: true } } },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

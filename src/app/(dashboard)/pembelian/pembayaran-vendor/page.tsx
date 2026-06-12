@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { VendorPaymentTable } from "./_components/vendor-payment-table"
@@ -14,11 +15,15 @@ export const metadata: Metadata = { title: "Pembayaran Vendor" }
 export default async function VendorPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_vendor_payments")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -32,7 +37,8 @@ export default async function VendorPaymentsPage({
   const rawPayments = await prisma.vendorPayment.findMany({
     where,
     include: { vendor: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

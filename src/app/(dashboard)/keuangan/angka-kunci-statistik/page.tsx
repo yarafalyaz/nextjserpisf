@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { StatisticalKeyFigureTable } from "./_components/statistical-key-figure-table"
 
@@ -12,11 +13,15 @@ export const metadata: Metadata = { title: "Angka Kunci Statistik" }
 export default async function StatisticalKeyFiguresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_statistical_key_figures")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -27,7 +32,8 @@ export default async function StatisticalKeyFiguresPage({
   const figures = await prisma.statisticalKeyFigure.findMany({
     where,
     orderBy: { name: "asc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const data = JSON.parse(JSON.stringify(figures))

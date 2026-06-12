@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { BudgetTable } from "./_components/budget-table"
@@ -13,11 +14,12 @@ export const metadata: Metadata = { title: "Anggaran" }
 export default async function BudgetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_budgets")
 
   const params = await searchParams
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -25,11 +27,15 @@ export default async function BudgetsPage({
     }),
   }
 
-  const budgets = await prisma.budget.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 1000,
-  })
+  const [budgets, total] = await Promise.all([
+    prisma.budget.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+    }),
+    prisma.budget.count({ where }),
+  ])
 
   const data = JSON.parse(JSON.stringify(budgets))
 

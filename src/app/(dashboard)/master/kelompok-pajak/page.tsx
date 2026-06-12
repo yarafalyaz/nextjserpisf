@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxGroupTable } from "./_components/tax-group-table"
@@ -10,14 +11,22 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Kelompok Pajak" }
 
-export default async function TaxGroupsPage() {
+export default async function TaxGroupsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("view_tax_groups")
+
+  const params = await searchParams
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const [taxGroups, allTaxes] = await Promise.all([
     prisma.taxGroup.findMany({
       include: { taxes: true },
       orderBy: { createdAt: "desc" },
-      take: 1000,
+      take,
+    skip: (page - 1) * pageSize,
     }),
     prisma.tax.findMany({ where: { isActive: true } }),
   ])

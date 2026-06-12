@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -15,11 +16,15 @@ export const metadata: Metadata = { title: "Permintaan Pembelian" }
 export default async function PurchaseRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_purchase_requests")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -34,7 +39,8 @@ export default async function PurchaseRequestsPage({
   const requests = await prisma.purchaseRequest.findMany({
     where,
     include: { items: true },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
 

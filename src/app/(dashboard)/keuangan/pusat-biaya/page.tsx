@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { CostCenterTable } from "./_components/cost-center-table"
@@ -12,11 +13,15 @@ export const metadata: Metadata = { title: "Pusat Biaya" }
 export default async function CostCentersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_cost_centers")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -29,7 +34,8 @@ export default async function CostCentersPage({
 
   const costCenters = await prisma.costCenter.findMany({
     where,
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { name: "asc" },
   })
 

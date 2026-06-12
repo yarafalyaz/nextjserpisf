@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import Link from "next/link"
@@ -31,11 +32,15 @@ const indoToStatus: Record<string, string> = {
 export default async function PayrollPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string; bulan?: string; tahun?: string }>
+  searchParams: Promise<{ status?: string; cari?: string; bulan?: string; tahun?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   const user = await requirePermission("view_payroll")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const month = params.bulan ? Number(params.bulan) : undefined
@@ -68,7 +73,8 @@ export default async function PayrollPage({
 
   const payrolls = await prisma.payroll.findMany({
     where,
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
     include: { employee: true },
   })

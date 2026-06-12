@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
@@ -16,11 +17,15 @@ export const metadata: Metadata = { title: "Proyek" }
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string 
+  halaman?: string
+  pageSize?: string}>
 }) {
   await requirePermission("view_projects")
 
   const params = await searchParams
+
+  const { page, pageSize, skip, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -37,7 +42,8 @@ export default async function ProjectsPage({
       _count: { select: { items: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 1000,
+    take,
+    skip: (page - 1) * pageSize,
   })
 
   const tableData = JSON.parse(JSON.stringify(projects))
