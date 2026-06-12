@@ -4,8 +4,10 @@ import {
   requireNumber,
   safeId,
   requireId,
+  requireString,
   safeJsonParse,
   requireJsonParse,
+  parseValidItems,
 } from "../safe-parse"
 
 describe("safeNumber", () => {
@@ -96,5 +98,67 @@ describe("requireJsonParse", () => {
   it("throws for invalid JSON", () => {
     expect(() => requireJsonParse("bad", "config")).toThrow("config")
     expect(() => requireJsonParse(null, "config")).toThrow("config")
+  })
+})
+
+describe("requireString", () => {
+  it("returns the trimmed string for valid input", () => {
+    expect(requireString("  hello  ", "name")).toBe("hello")
+    expect(requireString("world", "name")).toBe("world")
+  })
+
+  it("throws when the value is empty or whitespace-only", () => {
+    expect(() => requireString("", "name")).toThrow(/name.*wajib diisi/)
+    expect(() => requireString("   ", "name")).toThrow(/name.*wajib diisi/)
+  })
+
+  it("throws when the value is null, undefined, or a non-string (File)", () => {
+    expect(() => requireString(null, "name")).toThrow("name")
+    expect(() => requireString(undefined, "name")).toThrow("name")
+    const file = new File([new Uint8Array(4)], "x.png", { type: "image/png" })
+    expect(() => requireString(file, "name")).toThrow("name")
+  })
+})
+
+describe("parseValidItems", () => {
+  it("parses and keeps only items with a positive itemId and qty", () => {
+    const json = JSON.stringify([
+      { itemId: 1, qty: 2 },
+      { itemId: 3, qty: 4.5 },
+    ])
+    expect(parseValidItems(json)).toEqual([
+      { itemId: 1, qty: 2 },
+      { itemId: 3, qty: 4.5 },
+    ])
+  })
+
+  it("filters out items with non-positive or non-finite itemId/qty", () => {
+    const json = JSON.stringify([
+      { itemId: 1, qty: 2 },
+      { itemId: 0, qty: 5 },
+      { itemId: -3, qty: 5 },
+      { itemId: 4, qty: 0 },
+      { itemId: 5, qty: -1 },
+    ])
+    expect(parseValidItems(json)).toEqual([{ itemId: 1, qty: 2 }])
+  })
+
+  it("filters out non-object entries and entries missing fields", () => {
+    const json = JSON.stringify([
+      { itemId: 1, qty: 2 },
+      null,
+      42,
+      "nope",
+      { itemId: 9 },
+      { qty: 9 },
+      { itemId: "7", qty: 1 },
+    ])
+    expect(parseValidItems(json)).toEqual([{ itemId: 1, qty: 2 }])
+  })
+
+  it("returns an empty array for malformed JSON, null, or a non-array payload", () => {
+    expect(parseValidItems("{bad json")).toEqual([])
+    expect(parseValidItems(null)).toEqual([])
+    expect(parseValidItems(undefined)).toEqual([])
   })
 })
