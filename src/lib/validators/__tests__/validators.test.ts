@@ -9,6 +9,11 @@ import {
   quotationItemSchema,
   accountSchema,
   employeeSchema,
+  purchaseOrderSchema,
+  purchaseOrderItemSchema,
+  goodsReceiptSchema,
+  stockAdjustmentSchema,
+  stockAdjustmentItemSchema,
 } from "../index"
 
 describe("loginSchema", () => {
@@ -234,5 +239,66 @@ describe("employeeSchema", () => {
       joinDate: "",
     })
     expect(result.success).toBe(false)
+  })
+
+  it("accepts valid employee with login account flags", () => {
+    const result = employeeSchema.safeParse({
+      name: "Budi",
+      joinDate: "2026-01-01",
+      createLoginAccount: true,
+      email: "budi@example.com",
+      loginPassword: "password123",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects login account if email is missing", () => {
+    const result = employeeSchema.safeParse({
+      name: "Budi",
+      joinDate: "2026-01-01",
+      createLoginAccount: true,
+      email: "",
+      loginPassword: "password123",
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe("purchaseOrderSchema", () => {
+  it("accepts valid PO", () => {
+    const result = purchaseOrderSchema.safeParse({ vendorId: 1, date: "2026-01-01" })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe("purchaseOrderItemSchema", () => {
+  it("accepts valid PO item", () => {
+    const result = purchaseOrderItemSchema.safeParse({ itemId: 1, qty: 10, unitPrice: 1000 })
+    expect(result.success).toBe(true)
+  })
+  it("rejects zero qty", () => {
+    const result = purchaseOrderItemSchema.safeParse({ itemId: 1, qty: 0, unitPrice: 1000 })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe("goodsReceiptSchema", () => {
+  it("accepts valid GR", () => {
+    const result = goodsReceiptSchema.safeParse({ purchaseOrderId: 1, warehouseId: 2, date: "2026-01-01" })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe("stockAdjustmentSchema", () => {
+  it("accepts valid stock adjustment", () => {
+    const result = stockAdjustmentSchema.safeParse({ warehouseId: 1, date: "2026-01-01" })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe("stockAdjustmentItemSchema", () => {
+  it("accepts valid adjustment item", () => {
+    const result = stockAdjustmentItemSchema.safeParse({ itemId: 1, systemQty: 5, actualQty: 6 })
+    expect(result.success).toBe(true)
   })
 })
