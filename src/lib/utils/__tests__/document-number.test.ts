@@ -49,6 +49,13 @@ describe("utils/document-number", () => {
       expect(result).toBe(`005/QUO/YAR/${mm}/${yyyy}`);
     });
 
+    it("formats master-data codes as PREFIX-NNNN when format=simple", async () => {
+      mocks.next.mockResolvedValue(7);
+      const result = await generateDocumentNumber("CUST", "simple");
+      // CUST has no field in PREFIX_FIELD_MAP, falls back to key itself
+      expect(result).toBe(`CUST-0007`);
+    });
+
     it("uses YRA fallback when companyName is missing", async () => {
       mocks.getSystemSettings.mockResolvedValue({ companyName: null });
       mocks.next.mockResolvedValue(1);
