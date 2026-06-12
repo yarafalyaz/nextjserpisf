@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     salesRevenueAccountId: 410 as number | null,
     cogsAccountId: 510 as number | null,
     inventoryAccountId: 130 as number | null,
+    salesTaxAccountId: 160 as number | null,
     cashBankAccountId: 100 as number | null,
     purchasePayableAccountId: 210 as number | null,
     purchaseTaxAccountId: 150 as number | null,
@@ -46,6 +47,10 @@ const mocks = vi.hoisted(() => ({
   purchaseReturnFindUniqueOrThrow: vi.fn(),
   downPaymentFindUniqueOrThrow: vi.fn(),
   stockMoveFindMany: vi.fn(),
+  queryRaw: vi.fn(),
+  executeRaw: vi.fn(),
+  stockMoveCreate: vi.fn(),
+  itemFindMany: vi.fn(),
   materialIssueFindUniqueOrThrow: vi.fn(),
   vendorBillFindUniqueOrThrow: vi.fn(),
   vendorBillFindUnique: vi.fn(),
@@ -154,9 +159,16 @@ describe("onSalesInvoicePosted", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       salesInvoice: { findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow, findUnique: mocks.invoiceFindUnique },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { createMany: mocks.journalEntryCreateMany },
-      item: { findUnique: mocks.itemFindUnique, update: mocks.itemUpdate },
+      journalEntry: { createMany: mocks.journalEntryCreateMany, create: mocks.journalEntryCreate },
+      item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
+      stockMove: { create: mocks.stockMoveCreate },
+      $queryRaw: mocks.queryRaw,
+      $executeRaw: mocks.executeRaw,
     }))
+    mocks.fifoConsume.mockResolvedValue({ consumedCost: 0, shortfall: 0 })
+    mocks.queryRaw.mockResolvedValue([])
+    mocks.executeRaw.mockResolvedValue(0)
+    mocks.stockMoveCreate.mockResolvedValue({ id: 1 })
   })
 
   it("returns early if system settings are missing account mappings", async () => {
@@ -170,6 +182,92 @@ describe("onSalesInvoicePosted", () => {
     mocks.journalFindFirst.mockResolvedValue({ id: 99 }) // Existing journal
     await onSalesInvoicePosted(1)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("throws if inner invoice is missing", async () => {
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ id: 1, date: new Date() })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.invoiceFindUnique.mockResolvedValue(null)
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow("Invoice tidak ditemukan")
+  })
+
+  it("creates Dr. AR / Cr. Revenue + Cr. PPN when tax account configured", async () => {
+    const inner = { id: 1, totalAmount: 1100, taxAmount: 100, date: new Date(), documentNo: "INV-1" }
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inner, items: [] })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.invoiceFindUnique.mockResolvedValue(inner)
+    mocks.journalCreate.mockResolvedValue({ id: 50 })
+
+    await onSalesInvoicePosted(1, 999)
+
+    expect(mocks.journalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ referenceType: "SalesInvoice", totalDebit: 1100, totalCredit: 1100 })
+    }))
+    // 3 entries: Dr. AR 1100, Cr. Revenue 1000, Cr. PPN 100
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3)
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 110, debit: 1100, credit: 0 })
+    }))
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 410, debit: 0, credit: 1000 })
+    }))
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 160, debit: 0, credit: 100 })
+    }))
+  })
+
+  it("skips PPN entry when no salesTaxAccountId (revenue absorbs full amount)", async () => {
+    (mocks.systemSettings as any).salesTaxAccountId = null
+    const inner = { id: 1, totalAmount: 1100, taxAmount: 100, date: new Date(), documentNo: "INV-1" }
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inner, items: [] })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.invoiceFindUnique.mockResolvedValue(inner)
+    mocks.journalCreate.mockResolvedValue({ id: 50 })
+
+    await onSalesInvoicePosted(1)
+
+    // 2 entries: Dr. AR 1100, Cr. Revenue 1100 (no PPN split)
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 410, debit: 0, credit: 1100 })
+    }))
+  })
+
+  it("creates Dr. COGS / Cr. Inventory for product items with non-zero COGS", async () => {
+    const inner = { id: 1, totalAmount: 1000, taxAmount: 0, date: new Date(), documentNo: "INV-1" }
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
+      ...inner,
+      items: [{ itemId: 50, qty: 2, cost: 100 }],
+    })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.invoiceFindUnique.mockResolvedValue(inner)
+    mocks.itemFindMany.mockResolvedValue([{ id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 }])
+    mocks.fifoConsume.mockResolvedValue({ consumedCost: 200, shortfall: 0 })
+    mocks.journalCreate.mockResolvedValue({ id: 50 })
+
+    await onSalesInvoicePosted(1, 999)
+
+    // Two journals: AR/Revenue + COGS
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.journalCreate).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      data: expect.objectContaining({ referenceType: "SalesInvoiceCOGS", totalDebit: 200, totalCredit: 200 })
+    }))
+    expect(mocks.stockMoveCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ itemId: 50, impact: "OUT", referenceType: "SalesInvoice" })
+    }))
+  })
+
+  it("skips COGS journal when cogsAmount is 0 (no product items)", async () => {
+    const inner = { id: 1, totalAmount: 500, taxAmount: 0, date: new Date(), documentNo: "INV-1" }
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inner, items: [] })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.invoiceFindUnique.mockResolvedValue(inner)
+    mocks.journalCreate.mockResolvedValue({ id: 50 })
+
+    await onSalesInvoicePosted(1)
+
+    // Only 1 journal (AR/Revenue), no COGS
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -522,6 +620,35 @@ describe("onPettyCashCreated", () => {
       data: expect.objectContaining({ accountId: 115, debit: 0, credit: 200 })
     }))
   })
+
+  it("throws error for OUT type when expense account is missing", async () => {
+    (mocks.systemSettings as any).generalExpenseAccountId = null
+    mocks.pettyCashFindUniqueOrThrow.mockResolvedValue({
+      id: 1, amount: 200, type: "OUT", transactionDate: new Date(), documentNo: "PC-1",
+      expenseAccountId: null,
+    })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 9 })
+
+    await expect(onPettyCashCreated(1)).rejects.toThrow("generalExpenseAccountId")
+  })
+
+  it("creates OUT journal entries when expense account configured", async () => {
+    mocks.pettyCashFindUniqueOrThrow.mockResolvedValue({
+      id: 1, amount: 300, type: "OUT", transactionDate: new Date(), documentNo: "PC-2",
+      expenseAccountId: null,
+    })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 10 })
+    await onPettyCashCreated(1)
+
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 610, debit: 300, credit: 0 })
+    }))
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 115, debit: 0, credit: 300 })
+    }))
+  })
 })
 
 describe("onSalesReturnCompleted", () => {
@@ -859,11 +986,20 @@ describe("onVendorBillPosted", () => {
     (mocks.systemSettings as any).purchaseExpenseAccountId = null
     mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
       id: 1, grandTotal: 500, tax: 0, date: new Date(), documentNo: "BILL-1",
-      // no purchaseOrderId → service/expense bill
     })
     mocks.goodsReceiptCount.mockResolvedValue(0)
     mocks.journalFindFirst.mockResolvedValue(null)
     await expect(onVendorBillPosted(1)).rejects.toThrow("purchaseExpenseAccountId")
+  })
+
+  it("throws error if bill not found inside transaction lock", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      id: 1, grandTotal: 500, tax: 0, date: new Date(), documentNo: "BILL-1",
+    })
+    mocks.goodsReceiptCount.mockResolvedValue(0)
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.vendorBillFindUnique.mockResolvedValue(null) // inner tx returns null
+    await expect(onVendorBillPosted(1)).rejects.toThrow("Bill tidak ditemukan")
   })
 
   it("creates expense-based journal (Dr. Expense / Cr. AP) for service bill", async () => {
