@@ -377,6 +377,8 @@ model Warehouse {
   stockAdjustments StockAdjustment[]
   stockMoves       StockMove[]
 
+  @@index([isActive, deletedAt])
+  @@index([name])
   @@index([createdAt])
   @@map("warehouses")
 }
@@ -553,6 +555,7 @@ model ShippingMethod {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([isActive])
   @@index([createdAt])
   @@map("shipping_methods")
 }
@@ -593,6 +596,7 @@ model Quotation {
   @@index([projectId])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("quotations")
 }
 
@@ -707,6 +711,7 @@ model SalesOrder {
   @@index([customerVehicleId])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("sales_orders")
 }
 
@@ -766,6 +771,8 @@ model SalesInvoice {
   @@index([projectId])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
+  @@index([paymentStatus])
   @@map("sales_invoices")
 }
 
@@ -924,6 +931,7 @@ model PurchaseOrder {
   @@index([approvedBy])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("purchase_orders")
 }
 
@@ -1117,7 +1125,8 @@ model VendorPayment {
   @@index([confirmedBy])
   @@index([accountId])
   @@index([createdBy])
-  @@index([createdAt])
+  @@index([paymentDate])
+  @@index([deletedAt])
   @@map("vendor_payments")
 }
 
@@ -1251,6 +1260,7 @@ model StockAdjustment {
   @@index([journalId])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("stock_adjustments")
 }
 
@@ -1669,6 +1679,7 @@ model Journal {
   @@index([status], map: "idx_journals_status")
   @@index([transactionDate], map: "idx_journals_transaction_date")
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("journals")
 }
 
@@ -1884,6 +1895,7 @@ model BankReconciliation {
   @@index([completedBy])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("bank_reconciliations")
 }
 
@@ -1942,6 +1954,7 @@ model Lead {
   @@index([assignedTo])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("leads")
 }
 
@@ -1996,6 +2009,7 @@ model CrmTicket {
   @@index([status, assignedTo])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("crm_tickets")
 }
 

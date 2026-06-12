@@ -50,9 +50,17 @@ export async function DELETE(
   }
 
   // Delete from database
-  await prisma.transactionAttachment.delete({
-    where: { id: attachmentId },
-  })
+  try {
+    await prisma.transactionAttachment.delete({
+      where: { id: attachmentId },
+    })
+  } catch (err) {
+    console.error("Failed to delete attachment from database:", err)
+    return NextResponse.json(
+      { error: "Gagal menghapus attachment dari database" },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ success: true })
 }

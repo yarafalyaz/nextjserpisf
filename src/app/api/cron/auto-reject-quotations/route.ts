@@ -15,47 +15,55 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
   }
 
-  const days = 14
-  const cutoffDate = new Date()
-  cutoffDate.setDate(cutoffDate.getDate() - days)
+  try {
+    const days = 14
+    const cutoffDate = new Date()
+    cutoffDate.setDate(cutoffDate.getDate() - days)
 
-  // Find quotations that are in 'sent' status and haven't been updated in 14 days
-  const staleQuotations = await prisma.quotation.findMany({
-    where: {
-      status: SalesStatus.SENT,
-      deletedAt: null,
-      updatedAt: { lt: cutoffDate },
-    },
-  })
-
-  if (staleQuotations.length === 0) {
-    return NextResponse.json({ rejected: 0, message: "No stale quotations found." })
-  }
-
-  // Idempotent: only update quotations that are STILL in SENT status at the
-  // moment of writing. If another cron tick or a user already rejected this
-  // quotation before we reach it, `count` is 0 and we skip without error.
-  let rejectedCount = 0
-
-  for (const quotation of staleQuotations) {
-    const res = await prisma.quotation.updateMany({
-      where: { id: quotation.id, status: SalesStatus.SENT },
-      data: { status: Status.REJECTED },
-    })
-    if (res.count === 0) continue
-
-    await prisma.quotationHistory.create({
-      data: {
-        quotationId: quotation.id,
-        action: "auto_rejected",
-        description: `Auto-rejected by system (expired after ${days} days without response)`,
+    // Find quotations that are in 'sent' status and haven't been updated in 14 days
+    const staleQuotations = await prisma.quotation.findMany({
+      where: {
+        status: SalesStatus.SENT,
+        deletedAt: null,
+        updatedAt: { lt: cutoffDate },
       },
     })
-    rejectedCount++
-  }
 
-  return NextResponse.json({
-    rejected: rejectedCount,
-    message: `Successfully rejected ${rejectedCount} stale quotations.`,
-  })
+    if (staleQuotations.length === 0) {
+      return NextResponse.json({ rejected: 0, message: "No stale quotations found." })
+    }
+
+    // Idempotent: only update quotations that are STILL in SENT status at the
+    // moment of writing. If another cron tick or a user already rejected this
+    // quotation before we reach it, `count` is 0 and we skip without error.
+    let rejectedCount = 0
+
+    for (const quotation of staleQuotations) {
+      const res = await prisma.quotation.updateMany({
+        where: { id: quotation.id, status: SalesStatus.SENT },
+        data: { status: Status.REJECTED },
+      })
+      if (res.count === 0) continue
+
+      await prisma.quotationHistory.create({
+        data: {
+          quotationId: quotation.id,
+          action: "auto_rejected",
+          description: `Auto-rejected by system (expired after ${days} days without response)`,
+        },
+      })
+      rejectedCount++
+    }
+
+    return NextResponse.json({
+      rejected: rejectedCount,
+      message: `Successfully rejected ${rejectedCount} stale quotations.`,
+    })
+  } catch (err) {
+    console.error("Auto-reject quotations cron failed:", err)
+    return NextResponse.json(
+      { error: "Cron job failed", rejected: 0 },
+      { status: 500 }
+    )
+  }
 }

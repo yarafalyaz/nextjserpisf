@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/auth/permissions"
 import { readBackupFile } from "@/lib/db/backup"
+import { logActivity } from "@/lib/services/activity-log.service"
 import { createReadStream } from "fs"
 import { Readable } from "stream"
 
@@ -18,6 +19,16 @@ export async function GET(req: NextRequest) {
 
   try {
     const { path: filepath, size } = await readBackupFile(filename)
+
+    // Audit log: who downloaded which backup, when (compliance)
+    await logActivity("download", "Backup", 0, `Downloaded backup: ${filename}`, {
+      filename,
+      size,
+    }).catch((err) => {
+      // Logging must never break the download flow
+      console.error("Backup audit log failed:", err)
+    })
+
     const nodeStream = createReadStream(filepath)
     // Convert Node stream to Web ReadableStream for the Response
     const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream
@@ -31,6 +42,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (e) {
     console.error("Backup download failed:", e)
-    return NextResponse.json({ error: "Gagal mengunduh backup" }, { status: 400 })
+    return NextResponse.json({ error: "Gagal mengunduh backup" }, { status: 500 })
   }
 }

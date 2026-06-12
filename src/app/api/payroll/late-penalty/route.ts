@@ -37,6 +37,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
     }
 
+    // Cap date range to 90 days to prevent DoS (full-table attendance scan)
+    const MAX_RANGE_DAYS = 90
+    const rangeMs = endDate.getTime() - startDate.getTime()
+    if (rangeMs < 0) {
+      return NextResponse.json({ error: "startDate must be before endDate" }, { status: 400 })
+    }
+    if (rangeMs > MAX_RANGE_DAYS * 24 * 60 * 60 * 1000) {
+      return NextResponse.json(
+        { error: `Date range cannot exceed ${MAX_RANGE_DAYS} days` },
+        { status: 400 }
+      )
+    }
+
     const result = await calculateLatePenalty(employeeId, startDate, endDate)
 
     return NextResponse.json({
