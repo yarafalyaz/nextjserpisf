@@ -19,7 +19,7 @@ export default async function PaymentTermsPage({
   await requirePermission("view_payment_terms")
 
   const params = await searchParams
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -30,7 +30,7 @@ export default async function PaymentTermsPage({
     }),
   }
 
-  const [paymentTerms, total] = await Promise.all([
+  const [paymentTerms] = await Promise.all([
     prisma.paymentTerm.findMany({
       where,
       orderBy: { createdAt: "desc" },

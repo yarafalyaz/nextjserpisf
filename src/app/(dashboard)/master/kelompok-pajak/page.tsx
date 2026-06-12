@@ -19,7 +19,7 @@ export default async function TaxGroupsPage({
   await requirePermission("view_tax_groups")
 
   const params = await searchParams
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { page, pageSize, take } = parsePagination(params)
 
   const [taxGroups, allTaxes] = await Promise.all([
     prisma.taxGroup.findMany({

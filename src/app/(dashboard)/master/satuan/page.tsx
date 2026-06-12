@@ -19,7 +19,7 @@ export default async function UomPage({
   await requirePermission("view_units")
 
   const params = await searchParams
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { page, pageSize, take } = parsePagination(params)
 
   const items = await prisma.item.findMany({
     where: { deletedAt: null },

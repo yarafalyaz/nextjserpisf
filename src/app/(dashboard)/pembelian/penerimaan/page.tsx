@@ -24,7 +24,7 @@ export default async function GoodsReceiptsPage({
 
   const params = await searchParams
 
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {

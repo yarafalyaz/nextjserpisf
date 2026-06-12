@@ -21,7 +21,7 @@ export default async function StatisticalKeyFiguresPage({
 
   const params = await searchParams
 
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { page, pageSize, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {

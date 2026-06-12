@@ -61,6 +61,7 @@ export default async function ActivityLogPage({
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000)
 
   const [logs, total, users, modelTypes, actions, statsToday, statsMonth, activeUsersCount] =
     await Promise.all([
@@ -109,7 +110,7 @@ export default async function ActivityLogPage({
       }),
       // Active users (7 days)
       prisma.activityLog.findMany({
-        where: { createdAt: { gte: new Date(Date.now() - 7 * 86400000) } },
+        where: { createdAt: { gte: sevenDaysAgo } },
         select: { userId: true },
         distinct: ["userId"],
       }).then((r) => r.filter((x) => x.userId != null).length),

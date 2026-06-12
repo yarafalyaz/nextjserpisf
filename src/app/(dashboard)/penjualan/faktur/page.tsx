@@ -19,7 +19,7 @@ export default async function InvoicesPage({
   await requirePermission("view_sales_invoices")
 
   const params = await searchParams
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { page, pageSize, take } = parsePagination(params)
 
   const rawInvoices = await prisma.salesInvoice.findMany({
     include: { customer: true },

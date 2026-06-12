@@ -19,7 +19,7 @@ export default async function PositionsPage({
   await requirePermission("view_positions")
 
   const params = await searchParams
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { page, pageSize, take } = parsePagination(params)
 
   const positions = await prisma.position.findMany({
     include: { department: true },

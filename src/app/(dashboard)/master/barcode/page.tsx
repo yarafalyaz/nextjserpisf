@@ -19,7 +19,7 @@ export default async function BarcodesPage({
   await requirePermission("view_barcodes")
 
   const params = await searchParams
-  const { page, pageSize, skip, take } = parsePagination(params)
+  const { page, pageSize, take } = parsePagination(params)
 
   const barcodes = await prisma.barcode.findMany({
     orderBy: { createdAt: "desc" },
