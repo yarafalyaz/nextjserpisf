@@ -26,7 +26,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const email = credentials.email as string;
 
         // Per-email backstop: returns null regardless (same as wrong password)
-        const emailLimit = takeRateLimit(`login:email:${email}`, EMAIL_LIMIT)
+        const emailLimit = await takeRateLimit(`login:email:${email}`, EMAIL_LIMIT)
         if (!emailLimit.allowed) return null
 
         const user = await prisma.user.findUnique({

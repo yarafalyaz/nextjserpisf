@@ -1,71 +1,137 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { takeRateLimit, getClientIp } from "../rate-limit"
 
-describe("takeRateLimit", () => {
+describe("takeRateLimit (in-memory fallback)", () => {
   beforeEach(() => {
+    // Ensure Upstash env is unset so we exercise the in-memory path.
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
     // Reset module state between tests by advancing time far enough
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"))
   })
 
-  it("allows requests within the limit", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("allows requests within the limit", async () => {
     const config = { windowMs: 60_000, max: 3 }
-    const r1 = takeRateLimit("test-allow", config)
+    const r1 = await takeRateLimit("test-allow", config)
     expect(r1.allowed).toBe(true)
     expect(r1.remaining).toBe(2)
 
-    const r2 = takeRateLimit("test-allow", config)
+    const r2 = await takeRateLimit("test-allow", config)
     expect(r2.allowed).toBe(true)
     expect(r2.remaining).toBe(1)
 
-    const r3 = takeRateLimit("test-allow", config)
+    const r3 = await takeRateLimit("test-allow", config)
     expect(r3.allowed).toBe(true)
     expect(r3.remaining).toBe(0)
   })
 
-  it("blocks requests exceeding the limit", () => {
+  it("blocks requests exceeding the limit", async () => {
     const config = { windowMs: 60_000, max: 2 }
-    takeRateLimit("test-block", config)
-    takeRateLimit("test-block", config)
+    await takeRateLimit("test-block", config)
+    await takeRateLimit("test-block", config)
 
-    const r3 = takeRateLimit("test-block", config)
+    const r3 = await takeRateLimit("test-block", config)
     expect(r3.allowed).toBe(false)
     expect(r3.remaining).toBe(0)
   })
 
-  it("resets after window expires", () => {
+  it("resets after window expires", async () => {
     const config = { windowMs: 10_000, max: 1 }
-    const r1 = takeRateLimit("test-reset", config)
+    const r1 = await takeRateLimit("test-reset", config)
     expect(r1.allowed).toBe(true)
 
-    const r2 = takeRateLimit("test-reset", config)
+    const r2 = await takeRateLimit("test-reset", config)
     expect(r2.allowed).toBe(false)
 
     // Advance past the window
     vi.advanceTimersByTime(10_001)
 
-    const r3 = takeRateLimit("test-reset", config)
+    const r3 = await takeRateLimit("test-reset", config)
     expect(r3.allowed).toBe(true)
     expect(r3.remaining).toBe(0)
   })
 
-  it("tracks keys independently", () => {
+  it("tracks keys independently", async () => {
     const config = { windowMs: 60_000, max: 1 }
-    const r1 = takeRateLimit("key-a", config)
+    const r1 = await takeRateLimit("key-a", config)
     expect(r1.allowed).toBe(true)
 
-    const r2 = takeRateLimit("key-b", config)
+    const r2 = await takeRateLimit("key-b", config)
     expect(r2.allowed).toBe(true)
 
-    const r3 = takeRateLimit("key-a", config)
+    const r3 = await takeRateLimit("key-a", config)
     expect(r3.allowed).toBe(false)
   })
 
-  it("returns correct resetAt timestamp", () => {
+  it("returns correct resetAt timestamp", async () => {
     const config = { windowMs: 30_000, max: 5 }
     const now = Date.now()
-    const result = takeRateLimit("test-reset-at", config)
+    const result = await takeRateLimit("test-reset-at", config)
     expect(result.resetAt).toBe(now + 30_000)
+  })
+})
+
+describe("takeRateLimit (Upstash Redis path)", () => {
+  beforeEach(() => {
+    vi.resetModules()
+    process.env.UPSTASH_REDIS_REST_URL = "https://example.upstash.io"
+    process.env.UPSTASH_REDIS_REST_TOKEN = "test-token"
+  })
+
+  afterEach(() => {
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("uses Redis eval when env vars are present and maps the result", async () => {
+    const evalMock = vi.fn().mockResolvedValue([1, 4, 1_700_000_030_000])
+    vi.doMock("@upstash/redis", () => ({
+      Redis: vi.fn().mockImplementation(function () { return { eval: evalMock } }),
+    }))
+
+    const { takeRateLimit: take } = await import("../rate-limit")
+    const result = await take("redis-key", { windowMs: 30_000, max: 5 })
+
+    expect(evalMock).toHaveBeenCalledTimes(1)
+    expect(result.allowed).toBe(true)
+    expect(result.remaining).toBe(4)
+    expect(result.resetAt).toBe(1_700_000_030_000)
+  })
+
+  it("maps a blocked Redis result (allowed=0)", async () => {
+    const evalMock = vi.fn().mockResolvedValue([0, 0, 1_700_000_030_000])
+    vi.doMock("@upstash/redis", () => ({
+      Redis: vi.fn().mockImplementation(function () { return { eval: evalMock } }),
+    }))
+
+    const { takeRateLimit: take } = await import("../rate-limit")
+    const result = await take("redis-key", { windowMs: 30_000, max: 5 })
+
+    expect(result.allowed).toBe(false)
+    expect(result.remaining).toBe(0)
+  })
+
+  it("falls back to in-memory when Redis throws", async () => {
+    const evalMock = vi.fn().mockRejectedValue(new Error("redis down"))
+    vi.doMock("@upstash/redis", () => ({
+      Redis: vi.fn().mockImplementation(function () { return { eval: evalMock } }),
+    }))
+    // Silence the expected error log
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const { takeRateLimit: take } = await import("../rate-limit")
+    const result = await take("redis-fallback-key", { windowMs: 60_000, max: 3 })
+
+    // In-memory fallback grants the first hit.
+    expect(result.allowed).toBe(true)
+    expect(result.remaining).toBe(2)
   })
 })
 

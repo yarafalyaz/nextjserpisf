@@ -1,3 +1,5 @@
+import { Redis } from "@upstash/redis"
+
 type Bucket = {
   count: number
   resetAt: number
@@ -37,7 +39,51 @@ function nowMs() {
   return Date.now()
 }
 
-export function takeRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
+// ── Upstash Redis (lazy singleton) ──────────────────────────────────────────
+let redisInstance: Redis | null = null
+
+function getRedisClient(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN
+  if (!url || !token) return null
+  if (!redisInstance) {
+    redisInstance = new Redis({ url, token })
+  }
+  return redisInstance
+}
+
+/**
+ * Lua script that runs atomically inside Redis:
+ *   1. INCR key
+ *   2. On first hit (count == 1) set PX (TTL) = windowMs
+ *   3. Read current TTL to compute resetAt
+ *   4. Return [allowed (0|1), remaining, resetAt]
+ */
+const RATE_LIMIT_LUA = `
+local key = KEYS[1]
+local window = tonumber(ARGV[1])
+local limit = tonumber(ARGV[2])
+local now   = tonumber(ARGV[3])
+
+local count = redis.call('INCR', key)
+if count == 1 then
+  redis.call('PEXPIRE', key, window)
+end
+
+local ttl = redis.call('PTTL', key)
+if ttl < 0 then ttl = 0 end
+
+local resetAt = now + ttl
+local allowed = 1
+local remaining = limit - count
+if remaining < 0 then remaining = 0 end
+if count > limit then allowed = 0 end
+
+return { allowed, remaining, resetAt }
+`
+
+// ── In-memory fallback ──────────────────────────────────────────────────────
+function takeInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
   registerCleanup()
   const now = nowMs()
   const current = buckets.get(key)
@@ -61,6 +107,44 @@ export function takeRateLimit(key: string, config: RateLimitConfig): RateLimitRe
     remaining: Math.max(0, config.max - current.count),
     resetAt: current.resetAt,
   }
+}
+
+// ── Public API ──────────────────────────────────────────────────────────────
+/**
+ * Single entry point. When Upstash Redis env vars are set, runs an atomic
+ * Lua INCR+EXPIRE script for cross-instance accuracy. Otherwise falls back
+ * to the in-process Map (suitable for single-instance / dev). The signature
+ * is always async so callers don't need to branch.
+ */
+export async function takeRateLimit(
+  key: string,
+  config: RateLimitConfig,
+): Promise<RateLimitResult> {
+  const client = getRedisClient()
+  if (!client) {
+    return takeInMemRateLimit(key, config)
+  }
+
+  const now = nowMs()
+  const windowMs = config.windowMs
+  const max = config.max
+
+  return client
+    .eval(RATE_LIMIT_LUA, [key], [windowMs.toString(), max.toString(), now.toString()])
+    .then((res) => {
+      // res is [allowed, remaining, resetAt]
+      const [allowed, remaining, resetAt] = res as [number, number, number]
+      return {
+        allowed: allowed === 1,
+        remaining,
+        resetAt,
+      }
+    })
+    .catch((err) => {
+      // Graceful degradation: if Redis is unreachable, fall back to in-memory
+      console.error("[rate-limit] Redis error, falling back to in-memory:", err)
+      return takeInMemRateLimit(key, config)
+    })
 }
 
 /**
