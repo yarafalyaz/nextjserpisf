@@ -45,7 +45,7 @@ export default async function TicketsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const data = toPlain(tickets) as any
+  const data = toPlain(tickets)
 
   const statusChips = ["", "open", "in_progress", "resolved", "closed"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

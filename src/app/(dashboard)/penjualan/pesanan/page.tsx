@@ -56,7 +56,7 @@ export default async function SalesOrdersPage({
     status: so.status,
   }))
 
-  const tableData = toPlain(orders) as any
+  const tableData = toPlain(orders)
 
 
   return (

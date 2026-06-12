@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -30,11 +31,11 @@ export default async function TimesheetsPage({
   const timesheets = await prisma.timesheet.findMany({
     where,
     include: { employee: { select: { name: true } } },
-    take: 1000,
+    take: MAX_LIST_ROWS,
     orderBy: { date: "desc" },
   })
 
-  const data = toPlain(timesheets) as any
+  const data = toPlain(timesheets)
 
   return (
     <div className="flex flex-col gap-6">

@@ -46,7 +46,7 @@ export default async function RackRowsPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(rackRows) as any
+  const tableData = toPlain(rackRows)
 
   return (
     <div className="flex flex-col gap-6">

@@ -44,7 +44,7 @@ export default async function OvertimePage({
     orderBy: { createdAt: "desc" },
   })
 
-  const data = toPlain(overtimes) as any
+  const data = toPlain(overtimes)
 
   const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

@@ -46,7 +46,7 @@ export default async function LeadsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const data = toPlain(leads) as any
+  const data = toPlain(leads)
 
   const statusChips = ["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

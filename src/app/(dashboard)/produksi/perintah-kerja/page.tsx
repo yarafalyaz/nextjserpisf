@@ -46,7 +46,7 @@ export default async function WorkOrdersPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(workOrders) as any
+  const tableData = toPlain(workOrders)
 
   const statusChips = ["", "draft", "in_progress", "completed"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

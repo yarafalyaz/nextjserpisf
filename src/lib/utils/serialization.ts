@@ -1,4 +1,22 @@
 /**
+ * Type that recursively converts Prisma-specific types (Decimal, Date, BigInt)
+ * into their plain JSON-serialisable equivalents.
+ */
+type PlainValue<T> = T extends { toFixed: () => unknown } // Prisma.Decimal
+  ? number
+  : T extends Date
+  ? string
+  : T extends bigint
+  ? string
+  : T extends Array<infer U>
+  ? Array<Plain<U>>
+  : T extends object
+  ? { [K in keyof T]: Plain<T[K]> }
+  : T;
+
+export type Plain<T> = PlainValue<T>;
+
+/**
  * Deep-clone a Prisma result into a plain JSON-serialisable object.
  *
  * Prisma returns `Decimal` (Prisma.Decimal) and `Date` instances. Server
@@ -14,11 +32,12 @@
  * This helper recursively converts Decimal → number, Date → ISO string,
  * and preserves everything else.
  */
-export function toPlain<T>(value: T): T {
+export function toPlain<T>(value: T): Plain<T> {
+  if (value === null || value === undefined) return value as Plain<T>;
   return JSON.parse(
     JSON.stringify(value, (_key, v) => {
-      if (v === null || v === undefined) return v
-      if (typeof v === "bigint") return v.toString()
+      if (v === null || v === undefined) return v;
+      if (typeof v === "bigint") return v.toString();
       // Prisma.Decimal — duck-type check
       if (
         typeof v === "object" &&
@@ -27,10 +46,10 @@ export function toPlain<T>(value: T): T {
         typeof (v as { toFixed: unknown }).toFixed === "function" &&
         "d" in v
       ) {
-        return Number((v as { toString(): string }).toString())
+        return Number((v as { toString(): string }).toString());
       }
-      if (v instanceof Date) return v.toISOString()
-      return v
+      if (v instanceof Date) return v.toISOString();
+      return v;
     }),
-  ) as T
+  ) as Plain<T>;
 }

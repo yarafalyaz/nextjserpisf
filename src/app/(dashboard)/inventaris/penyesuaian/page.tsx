@@ -45,7 +45,7 @@ export default async function StockAdjustmentsPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(adjustments) as any
+  const tableData = toPlain(adjustments)
 
   const statusChips = ["", "draft", "processed"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

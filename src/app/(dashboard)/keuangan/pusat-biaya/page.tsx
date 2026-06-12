@@ -40,7 +40,7 @@ export default async function CostCentersPage({
     orderBy: { name: "asc" },
   })
 
-  const data = toPlain(costCenters) as any
+  const data = toPlain(costCenters)
 
   return (
     <div className="flex flex-col gap-6">

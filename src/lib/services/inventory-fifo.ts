@@ -103,15 +103,19 @@ export async function consumeFifoLayers(
   const consumedQty = qty - Math.max(0, toConsume)
   if (consumedQty > 0) {
     // Decrement matching batch lots by the consumed amount.
-    for (const [batchNumber, qtyOut] of batchConsumption) {
-      const batch = await tx.itemBatch.findFirst({
-        where: { itemId, batchNumber, ...(warehouseId != null ? { warehouseId } : {}) },
+    if (batchConsumption.size > 0) {
+      const batchNumbers = [...batchConsumption.keys()]
+      const batches = await tx.itemBatch.findMany({
+        where: { itemId, batchNumber: { in: batchNumbers }, ...(warehouseId != null ? { warehouseId } : {}) },
       })
-      if (batch) {
-        await tx.itemBatch.update({
-          where: { id: batch.id },
-          data: { qty: { decrement: Math.min(qtyOut, Number(batch.qty)) } },
-        })
+      for (const batch of batches) {
+        const qtyOut = batchConsumption.get(batch.batchNumber) ?? 0
+        if (qtyOut > 0) {
+          await tx.itemBatch.update({
+            where: { id: batch.id },
+            data: { qty: { decrement: Math.min(qtyOut, Number(batch.qty)) } },
+          })
+        }
       }
     }
     // Mark serials as used for serial-tracked items.

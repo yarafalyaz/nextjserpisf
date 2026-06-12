@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -32,7 +33,7 @@ export default async function AppreciationsPage({
   const appreciations = await prisma.appreciation.findMany({
     where,
     include: { employee: true },
-    take: 1000,
+    take: MAX_LIST_ROWS,
     orderBy: { date: "desc" },
   })
 

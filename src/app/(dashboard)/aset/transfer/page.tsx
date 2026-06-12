@@ -39,7 +39,7 @@ export default async function AssetTransfersPage({
     skip: (page - 1) * pageSize,
   })
 
-  const data = toPlain(transfers) as any
+  const data = toPlain(transfers)
 
   return (
     <div className="flex flex-col gap-6">

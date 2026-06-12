@@ -42,7 +42,7 @@ export default async function DepartmentsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(departments) as any
+  const tableData = toPlain(departments)
 
 
   return (

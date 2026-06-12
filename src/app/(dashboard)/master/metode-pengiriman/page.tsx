@@ -36,7 +36,7 @@ export default async function ShippingMethodsPage({
 
   const rows = await prisma.shippingMethod.findMany({ where, orderBy: { name: "asc" }, take,
     skip: (page - 1) * pageSize })
-  const tableData = toPlain(rows) as any
+  const tableData = toPlain(rows)
 
   return (
     <div className="flex flex-col gap-6">

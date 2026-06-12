@@ -49,7 +49,7 @@ export default async function StockMovesPage({
     qty: Number(m.qty),
   }))
 
-  const tableData = toPlain(moves) as any
+  const tableData = toPlain(moves)
 
   const statusChips = (
     <>

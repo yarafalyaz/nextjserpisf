@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -27,7 +28,7 @@ export default async function HolidaysPage({
 
   const holidays = await prisma.holiday.findMany({
     where,
-    take: 1000,
+    take: MAX_LIST_ROWS,
     orderBy: { date: "desc" },
   })
 

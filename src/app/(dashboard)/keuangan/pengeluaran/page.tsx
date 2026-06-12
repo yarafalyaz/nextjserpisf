@@ -39,7 +39,7 @@ export default async function ExpensesPage({
   ])
 
   const totalPages = Math.ceil(total / perPage)
-  const data = toPlain(expenses) as any
+  const data = toPlain(expenses)
 
   const statusChips = ["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

@@ -47,7 +47,7 @@ export default async function TasksPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(tasks) as any
+  const tableData = toPlain(tasks)
 
   const statusChips = ["", "pending", "in_progress", "completed", "cancelled"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

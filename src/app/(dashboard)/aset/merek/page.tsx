@@ -39,7 +39,7 @@ export default async function AssetBrandsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(brands) as any
+  const tableData = toPlain(brands)
 
 
   return (

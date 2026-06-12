@@ -162,7 +162,7 @@ export function DataTable<TData extends { id: number | string }>({
 
   const serverPageCount = useMemo(
     () => (isServer ? Math.max(1, Math.ceil((serverPagination!.total || 0) / serverPagination!.pageSize)) : 1),
-    [isServer, serverPagination?.total, serverPagination?.pageSize],
+    [isServer, serverPagination],
   )
 
   // Compute effective pagination state
@@ -171,7 +171,7 @@ export function DataTable<TData extends { id: number | string }>({
       return { pageIndex: (serverPagination!.page - 1), pageSize: serverPagination!.pageSize }
     }
     return { pageIndex: 0, pageSize }
-  }, [isServer, serverPagination?.page, serverPagination?.pageSize, pageSize])
+  }, [isServer, serverPagination, pageSize])
 
   // React Compiler cannot memoize TanStack Table's useReactTable (it returns
   // functions by design); this is a known, expected incompatibility, not a bug.

@@ -39,7 +39,7 @@ export default async function RacksPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(racks) as any
+  const tableData = toPlain(racks)
 
 
   return (

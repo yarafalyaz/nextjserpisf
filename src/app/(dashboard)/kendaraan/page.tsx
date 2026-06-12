@@ -52,7 +52,7 @@ export default async function VehiclesPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(vehicles) as any
+  const tableData = toPlain(vehicles)
 
   return (
     <div className="flex flex-col gap-6">

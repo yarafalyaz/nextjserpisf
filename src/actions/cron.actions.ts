@@ -24,7 +24,7 @@ export async function runCronTask(task: string) {
     throw new Error("Credential cron belum di-set")
   }
 
-  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "http://localhost:3000"
   const res = await fetch(`${baseUrl}/api/cron?task=${encodeURIComponent(task)}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cronEnv}` },

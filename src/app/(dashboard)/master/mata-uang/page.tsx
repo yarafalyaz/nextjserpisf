@@ -45,7 +45,7 @@ export default async function CurrenciesPage({
     rate: Number(c.rate),
   }))
 
-  const tableData = toPlain(currencies) as any
+  const tableData = toPlain(currencies)
 
 
   return (

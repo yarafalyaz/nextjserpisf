@@ -41,7 +41,7 @@ export default async function PaymentTermsPage({
     prisma.paymentTerm.count({ where }),
   ])
 
-  const tableData = toPlain(paymentTerms) as any
+  const tableData = toPlain(paymentTerms)
 
   return (
     <div className="flex flex-col gap-6">

@@ -61,7 +61,7 @@ export default async function ItemsPage({
     price: Number(item.price),
   }))
 
-  const tableData = toPlain(items) as any
+  const tableData = toPlain(items)
 
 
   return (

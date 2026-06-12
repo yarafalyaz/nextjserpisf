@@ -45,7 +45,7 @@ export default async function InventoryTransfersPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(transfers) as any
+  const tableData = toPlain(transfers)
 
   const statusChips = ["", "draft", "in_transit", "completed"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -33,11 +34,11 @@ export default async function DeliveryOrdersPage({
   const orders = await prisma.deliveryOrder.findMany({
     where,
     include: { salesOrder: { include: { customer: true } } },
-    take: 1000,
+    take: MAX_LIST_ROWS,
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(orders) as any
+  const tableData = toPlain(orders)
 
 
   return (

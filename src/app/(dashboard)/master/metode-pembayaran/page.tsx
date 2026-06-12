@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -29,8 +30,8 @@ export default async function PaymentMethodsPage({
     }),
   }
 
-  const rows = await prisma.paymentMethod.findMany({ where, orderBy: { name: "asc" }, take: 1000 })
-  const tableData = toPlain(rows) as any
+  const rows = await prisma.paymentMethod.findMany({ where, orderBy: { name: "asc" }, take: MAX_LIST_ROWS })
+  const tableData = toPlain(rows)
 
   return (
     <div className="flex flex-col gap-6">

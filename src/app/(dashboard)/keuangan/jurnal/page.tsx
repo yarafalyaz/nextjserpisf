@@ -49,7 +49,7 @@ export default async function JournalsPage({
   ])
 
   const totalPages = Math.ceil(total / perPage)
-  const data = toPlain(journals) as any
+  const data = toPlain(journals)
 
   const statusChips = (
     <>

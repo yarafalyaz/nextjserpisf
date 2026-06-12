@@ -38,7 +38,7 @@ export default async function ItemCategoriesPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(categories) as any
+  const tableData = toPlain(categories)
 
 
   return (

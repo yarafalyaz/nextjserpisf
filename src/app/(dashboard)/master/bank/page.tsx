@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -32,10 +33,10 @@ export default async function BanksPage({
   const banks = await prisma.bank.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    take: 1000,
+    take: MAX_LIST_ROWS,
   })
 
-  const tableData = toPlain(banks) as any
+  const tableData = toPlain(banks)
 
 
   return (

@@ -47,7 +47,7 @@ export default async function ProjectsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(projects) as any
+  const tableData = toPlain(projects)
 
   const statusChips = ["", "active", "completed", "cancelled"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

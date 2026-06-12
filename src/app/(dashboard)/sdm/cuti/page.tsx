@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -34,11 +35,11 @@ export default async function LeaveRequestsPage({
   const leaves = await prisma.leaveRequest.findMany({
     where,
     include: { employee: { select: { name: true } } },
-    take: 1000,
+    take: MAX_LIST_ROWS,
     orderBy: { createdAt: "desc" },
   })
 
-  const data = toPlain(leaves) as any
+  const data = toPlain(leaves)
 
   const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

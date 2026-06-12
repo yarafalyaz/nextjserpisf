@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 import { Pencil } from "lucide-react"
 export const dynamic = "force-dynamic"
 
@@ -34,7 +35,7 @@ export default async function AccountsPage({
   const accounts = await prisma.account.findMany({
     where,
     orderBy: { code: "asc" },
-    take: 1000,
+    take: MAX_LIST_ROWS,
   })
 
   // Group by type

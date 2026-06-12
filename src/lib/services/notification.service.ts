@@ -107,6 +107,38 @@ export const notificationService = {
   },
 
   /**
+   * Batched version: notify admins about multiple low-stock items in one round-trip.
+   * Replaces N×(admin findMany + notification createMany) with 1+1 queries.
+   * Admin lookup is done once, then a single `createMany` creates all notifications.
+   */
+  async checkAndNotifyLowStockBatch(items: LowStockItem[]): Promise<number> {
+    const low = items.filter((i) => i.minStock > 0 && i.qtyOnHand <= i.minStock)
+    if (low.length === 0) return 0
+
+    const admins = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        roles: { some: { name: { in: ['super_admin', 'admin'] } } },
+      },
+      select: { id: true },
+    })
+    if (admins.length === 0) return 0
+
+    const notifications = admins.flatMap((admin) =>
+      low.map((item) => ({
+        userId: admin.id,
+        title: `Stok ${item.name} Menipis`,
+        body: `Stok saat ini: ${item.qtyOnHand} (Minimum: ${item.minStock}). Segera lakukan pembelian.`,
+        type: 'warning' as const,
+        readAt: null,
+      })),
+    )
+
+    await prisma.notification.createMany({ data: notifications })
+    return notifications.length
+  },
+
+  /**
    * Notify admins when an invoice is overdue (past due date, not fully paid).
    * Mirrors Laravel: NotificationService::notifyInvoiceAlmostDue
    */

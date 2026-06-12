@@ -77,3 +77,22 @@ export function requireJsonParse<T = unknown>(value: string | null | undefined, 
   }
   return result
 }
+
+interface BasicItem {
+  itemId: number
+  qty: number
+}
+
+/**
+ * Safely parse JSON array of items, filter out invalid itemIds/quantities,
+ * and return typed, cleaned item objects.
+ */
+export function parseValidItems(itemsJson: string | null | undefined): BasicItem[] {
+  const items = safeJsonParse<any[]>(itemsJson) ?? []
+  return items
+    .filter((item: any) => item && typeof item === "object" && item.itemId > 0 && item.qty > 0)
+    .map((item: any) => ({
+      itemId: Number(item.itemId),
+      qty: Number(item.qty),
+    }))
+}

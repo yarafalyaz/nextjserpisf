@@ -44,7 +44,7 @@ export default async function WarehousesPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(warehouses) as any
+  const tableData = toPlain(warehouses)
 
 
   return (

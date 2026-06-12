@@ -46,7 +46,7 @@ export default async function AssetsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(assets) as any
+  const tableData = toPlain(assets)
 
   return (
     <div className="flex flex-col gap-6">

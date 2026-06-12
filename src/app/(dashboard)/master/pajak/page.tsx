@@ -44,7 +44,7 @@ export default async function TaxesPage({
     rate: Number(t.rate),
   }))
 
-  const tableData = toPlain(taxes) as any
+  const tableData = toPlain(taxes)
 
 
   return (

@@ -29,7 +29,7 @@ export default async function PositionsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(positions) as any
+  const tableData = toPlain(positions)
 
 
   return (

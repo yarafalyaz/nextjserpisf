@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { hasPermission } from "@/lib/auth/permissions"
 import { NextResponse } from "next/server"
-import { apiError, apiOk } from "@/lib/api-response"
+import { apiError } from "@/lib/api-response"
 
 export async function GET(request: Request) {
   try {

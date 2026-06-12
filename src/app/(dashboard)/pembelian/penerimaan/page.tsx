@@ -45,7 +45,7 @@ export default async function GoodsReceiptsPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(receipts) as any
+  const tableData = toPlain(receipts)
 
 
   return (

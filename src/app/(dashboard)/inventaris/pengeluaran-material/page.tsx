@@ -45,7 +45,7 @@ export default async function MaterialIssuesPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(issues) as any
+  const tableData = toPlain(issues)
 
   const statusChips = ["", "draft", "issued"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

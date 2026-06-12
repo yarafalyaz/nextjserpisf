@@ -50,7 +50,7 @@ export default async function VendorPaymentsPage({
     paymentMethod: resolvePaymentMethodName(p.paymentMethod, pmMap),
   }))
 
-  const tableData = toPlain(payments) as any
+  const tableData = toPlain(payments)
 
 
   return (

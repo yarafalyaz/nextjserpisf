@@ -773,6 +773,7 @@ model SalesInvoice {
   @@index([createdAt])
   @@index([deletedAt])
   @@index([paymentStatus])
+  @@index([deletedAt, paymentStatus, dueDate])
   @@map("sales_invoices")
 }
 
@@ -1067,6 +1068,7 @@ model VendorBill {
   @@index([approvedBy])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([vendorId, status, balanceDue])
   @@map("vendor_bills")
 }
 
@@ -1210,6 +1212,8 @@ model StockMove {
   @@index([rackRowId])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([itemId, date])
+  @@index([moveType, date])
   @@map("stock_moves")
 }
 
@@ -1232,6 +1236,8 @@ model InventoryLayer {
   @@index([stockMoveId], map: "inventory_layers_stock_move_id_fkey")
   @@index([itemId, warehouseId], map: "inventory_layers_item_warehouse_idx")
   @@index([createdAt])
+  @@index([remaining])
+  @@index([warehouseId, remaining])
   @@map("inventory_layers")
 }
 
@@ -1699,6 +1705,7 @@ model JournalEntry {
   @@index([journalId], map: "journal_entries_journal_id_fkey")
   @@index([costCenterId])
   @@index([profitCenterId])
+  @@index([accountId, journalId])
   @@map("journal_entries")
 }
 
@@ -2478,6 +2485,7 @@ model Holiday {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@index([createdAt])
+  @@index([date])
   @@map("holidays")
 }
 
@@ -2637,6 +2645,7 @@ model ItemBatch {
   @@index([itemId], map: "item_batches_item_id_fkey")
   @@index([warehouseId], map: "item_batches_warehouse_id_fkey")
   @@index([createdAt])
+  @@index([itemId, batchNumber])
   @@map("item_batches")
 }
 
@@ -2824,6 +2833,7 @@ model DepartmentHoliday {
 
   @@index([departmentId], map: "department_holidays_department_id_fkey")
   @@index([createdAt])
+  @@index([date])
   @@map("department_holidays")
 }
 

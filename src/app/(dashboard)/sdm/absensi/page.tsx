@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -55,7 +56,7 @@ export default async function AttendancePage({
   const attendances = await prisma.attendance.findMany({
     where,
     include: { employee: true },
-    take: 1000,
+    take: MAX_LIST_ROWS,
     orderBy: { checkIn: "desc" },
   })
 

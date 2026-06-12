@@ -22,7 +22,9 @@ function mockTx(opts: {
     },
     $queryRaw: vi.fn().mockResolvedValue(opts.layers ?? []),
     itemBatch: {
-      findFirst: vi.fn().mockResolvedValue(opts.itemBatch ?? null),
+      findMany: vi.fn().mockResolvedValue(
+        opts.itemBatch ? [{ id: opts.itemBatch.id, batchNumber: "BATCH-A", qty: opts.itemBatch.qty }] : [],
+      ),
       update: batchUpdate,
     },
     item: {

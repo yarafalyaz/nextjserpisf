@@ -1,3 +1,4 @@
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -43,10 +44,10 @@ export default async function EmployeesPage({
       },
     },
     orderBy: { name: "asc" },
-    take: 1000,
+    take: MAX_LIST_ROWS,
   })
 
-  const tableData = toPlain(employees) as any
+  const tableData = toPlain(employees)
 
 
   return (

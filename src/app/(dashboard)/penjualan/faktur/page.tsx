@@ -40,7 +40,7 @@ export default async function InvoicesPage({
     customer: inv.customer,
   }))
 
-  const tableData = toPlain(invoices) as any
+  const tableData = toPlain(invoices)
 
   return (
     <div className="flex flex-col gap-6">

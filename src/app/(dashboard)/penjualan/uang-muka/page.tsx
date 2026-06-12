@@ -54,7 +54,7 @@ export default async function DownPaymentsPage({
     createdAt: dp.createdAt,
   }))
 
-  const tableData = toPlain(dps) as any
+  const tableData = toPlain(dps)
 
 
   return (

@@ -53,7 +53,7 @@ export default async function PurchaseOrdersPage({
     grandTotal: Number(o.grandTotal),
   }))
 
-  const tableData = toPlain(orders) as any
+  const tableData = toPlain(orders)
 
   const statusOptions = ["", "draft", "approved", "ordered", "received", "cancelled"]
   const statusChips = statusOptions.map((dbStatus) => {

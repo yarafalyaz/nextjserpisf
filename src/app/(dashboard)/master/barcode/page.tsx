@@ -29,7 +29,7 @@ export default async function BarcodesPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(barcodes) as any
+  const tableData = toPlain(barcodes)
 
   return (
     <div className="flex flex-col gap-6">

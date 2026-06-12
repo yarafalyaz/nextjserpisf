@@ -37,7 +37,7 @@ export default async function StatisticalKeyFiguresPage({
     skip: (page - 1) * pageSize,
   })
 
-  const data = toPlain(figures) as any
+  const data = toPlain(figures)
 
   return (
     <div className="flex flex-col gap-6">

@@ -53,7 +53,7 @@ export default async function SalesPaymentsPage({
     amount: Number(p.amount),
   }))
 
-  const tableData = toPlain(payments) as any
+  const tableData = toPlain(payments)
 
 
   return (

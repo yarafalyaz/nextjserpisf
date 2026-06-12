@@ -38,7 +38,7 @@ export default async function BudgetsPage({
     prisma.budget.count({ where }),
   ])
 
-  const data = toPlain(budgets) as any
+  const data = toPlain(budgets)
 
   return (
     <div className="flex flex-col gap-6">

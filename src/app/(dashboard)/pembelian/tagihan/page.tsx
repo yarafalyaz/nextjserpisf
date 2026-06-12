@@ -51,7 +51,7 @@ export default async function VendorBillsPage({
     grandTotal: Number(b.grandTotal),
   }))
 
-  const tableData = toPlain(bills) as any
+  const tableData = toPlain(bills)
 
 
   return (

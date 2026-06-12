@@ -45,7 +45,7 @@ export default async function SalesReturnsPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = toPlain(returns) as any
+  const tableData = toPlain(returns)
 
 
   return (

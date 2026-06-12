@@ -144,14 +144,14 @@ async function taskLowStockAlert(): Promise<string> {
     return "Semua stok aman"
   }
 
-  for (const item of items) {
-    await notificationService.checkAndNotifyLowStock({
+  await notificationService.checkAndNotifyLowStockBatch(
+    items.map((item) => ({
       id: item.id,
       name: item.name,
       qtyOnHand: Number(item.qty_on_hand),
       minStock: Number(item.min_stock),
-    })
-  }
+    })),
+  )
 
   return `${items.length} item di bawah stok minimum — notifikasi dikirim ke admin`
 }
