@@ -3,12 +3,6 @@ import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { takeRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
-// Next.js proxy always runs on the Node.js runtime by default (unlike
-// middleware in older Next.js versions), so the in-memory rate-limiter
-// Map is preserved across requests. For true multi-region production,
-// swap takeRateLimit for Upstash/Redis — the function signature stays
-// identical.
-
 // Fix #24: Only allow actual static file extensions, not any URL with a dot
 const STATIC_EXTENSIONS = /\.(ico|png|jpg|jpeg|gif|svg|webp|css|js|woff2?|ttf|eot|map)$/i
 
@@ -19,63 +13,39 @@ const RATE_LIMITS = {
   auth: { windowMs: 300_000, max: 10 },     // 10 login attempts/5min
 } as const
 
-function addSecurityHeaders(req: NextRequest, response: NextResponse): NextResponse {
-  // Generate per-request nonce. Next.js auto-injects it on <script> tags it emits
-  // when it sees the matching CSP header on the request, so we can drop
-  // 'unsafe-inline' from script-src in production.
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64")
-  const isDev = process.env.NODE_ENV === "development"
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  // CSP keeps 'unsafe-inline' for scripts because Next.js emits inline
+  // bootstrap <script> tags that are NOT nonce-tagged unless the nonce is
+  // plumbed through `NextResponse.next({ request: { headers }})` AND verified
+  // against a production build. A misconfigured nonce/strict-dynamic policy
+  // silently blocks hydration (login form never submits). 'unsafe-eval' is
+  // dropped in production. Tighten to nonce-based CSP only after verifying a
+  // prod build end-to-end (login + hydration).
+  const isProd = process.env.NODE_ENV === "production"
+  const scriptSrc = isProd
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
 
-  const csp = isDev
-    ? [
-        // Dev: keep unsafe-inline + unsafe-eval so Next.js HMR / devtools work.
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: blob: https:",
-        "font-src 'self' data:",
-        "connect-src 'self' https: ws:",
-        "frame-ancestors 'self'",
-        "base-uri 'self'",
-        "form-action 'self'",
-      ].join("; ")
-    : [
-        // Prod: nonce + strict-dynamic blocks 'unsafe-inline' for scripts.
-        "default-src 'self'",
-        `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-        // style-src keeps 'unsafe-inline' (Tailwind / Next.js style streaming).
-        // Tighten further by adopting a CSS-in-JS nonce flow.
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: blob: https:",
-        "font-src 'self' data:",
-        "connect-src 'self' https:",
-        "frame-ancestors 'self'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "object-src 'none'",
-        "upgrade-insecure-requests",
-      ].join("; ")
+  const csp = [
+    "default-src 'self'",
+    scriptSrc,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    isProd ? "connect-src 'self' https:" : "connect-src 'self' https: ws:",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    ...(isProd ? ["upgrade-insecure-requests"] : []),
+  ].join("; ")
 
-  const cspHeader = csp.replace(/\s{2,}/g, " ").trim()
-
-  // Headers that are static and also set in next.config.ts — kept here for
-  // defense-in-depth so any path that bypasses the static matcher still gets them.
   response.headers.set("X-Content-Type-Options", "nosniff")
   response.headers.set("X-Frame-Options", "SAMEORIGIN")
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
   response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-  response.headers.set("Content-Security-Policy", cspHeader)
-
-  // Expose nonce so server components / route handlers can read it via headers().
-  response.headers.set("x-nonce", nonce)
-  // Make nonce available to the downstream render via the request headers Next.js sees.
-  // We mutate a copy on req so getToken / server components can still read it.
-  try {
-    req.headers.set("x-nonce", nonce)
-  } catch {
-    // headers may be read-only on some runtimes; the response header still works
-  }
+  response.headers.set("Content-Security-Policy", csp)
 
   return response
 }
@@ -100,7 +70,6 @@ export async function proxy(req: NextRequest) {
     const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth)
     if (!result.allowed) {
       return addSecurityHeaders(
-        req,
         NextResponse.json({ error: "Too many attempts, coba lagi nanti" }, { status: 429 })
       )
     }
@@ -115,22 +84,23 @@ export async function proxy(req: NextRequest) {
         const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth)
         if (!result.allowed) {
           return addSecurityHeaders(
-            req,
             NextResponse.json({ error: "Too many attempts, coba lagi nanti" }, { status: 429 })
           )
         }
       }
-      return addSecurityHeaders(req, NextResponse.next())
+      return addSecurityHeaders(NextResponse.next())
     }
 
     // Cron routes use their own CRON_SECRET verification
     if (pathname.startsWith("/api/cron")) {
-      return addSecurityHeaders(req, NextResponse.next())
+      return addSecurityHeaders(NextResponse.next())
     }
 
-    // Health check must be reachable without a session
+    // Health check must be reachable without a session — it's the liveness
+    // probe for monitors / load balancers / k8s / CI. It exposes no sensitive
+    // data (DB SELECT 1 + status) and returns 200/503 by design.
     if (pathname === "/api/health") {
-      return addSecurityHeaders(req, NextResponse.next())
+      return addSecurityHeaders(NextResponse.next())
     }
 
     // Rate limit upload endpoints more strictly
@@ -138,7 +108,6 @@ export async function proxy(req: NextRequest) {
       const result = await takeRateLimit(`upload:${ip}`, RATE_LIMITS.upload)
       if (!result.allowed) {
         return addSecurityHeaders(
-          req,
           NextResponse.json({ error: "Upload rate limit exceeded" }, { status: 429 })
         )
       }
@@ -147,21 +116,21 @@ export async function proxy(req: NextRequest) {
       const result = await takeRateLimit(`api:${ip}`, RATE_LIMITS.api)
       if (!result.allowed) {
         return addSecurityHeaders(
-          req,
           NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 })
         )
       }
     }
 
     // All other API routes: check auth at proxy level
+    // Fix C1: also enforce isActive — deactivated users must be blocked here so
+    // they cannot use a still-valid JWT to hit routes that only call auth().
     const token = await getToken({ req, secret: process.env.AUTH_SECRET })
     if (!token || (token as { isActive?: boolean }).isActive === false) {
       return addSecurityHeaders(
-        req,
         NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
       )
     }
-    return addSecurityHeaders(req, NextResponse.next())
+    return addSecurityHeaders(NextResponse.next())
   }
 
   const token = await getToken({ req, secret: process.env.AUTH_SECRET })
@@ -202,7 +171,7 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  return addSecurityHeaders(req, NextResponse.next())
+  return addSecurityHeaders(NextResponse.next())
 }
 
 export const config = {
