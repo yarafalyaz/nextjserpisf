@@ -70,6 +70,12 @@ describe("takeRateLimit", () => {
 })
 
 describe("getClientIp", () => {
+  // H3 fix: x-real-ip and x-forwarded-for are only honored when behind a
+  // trusted reverse proxy. Tests below run in trusted-proxy mode.
+  beforeEach(() => {
+    process.env.TRUSTED_PROXY = "1"
+  })
+
   it("extracts direct TCP IP from req.ip if present", () => {
     const req = new Request("http://localhost") as any
     req.ip = "127.0.0.1"
@@ -110,6 +116,22 @@ describe("getClientIp", () => {
 
   it("returns 'unknown' when no headers present", () => {
     const req = new Request("http://localhost")
+    expect(getClientIp(req)).toBe("unknown")
+  })
+
+  it("ignores x-forwarded-for when TRUSTED_PROXY is unset (H3 spoofing prevention)", () => {
+    delete process.env.TRUSTED_PROXY
+    const req = new Request("http://localhost", {
+      headers: { "x-forwarded-for": "10.0.0.1" },
+    })
+    expect(getClientIp(req)).toBe("unknown")
+  })
+
+  it("ignores x-real-ip when TRUSTED_PROXY is unset (H3 spoofing prevention)", () => {
+    delete process.env.TRUSTED_PROXY
+    const req = new Request("http://localhost", {
+      headers: { "x-real-ip": "5.6.7.8" },
+    })
     expect(getClientIp(req)).toBe("unknown")
   })
 

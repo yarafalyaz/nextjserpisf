@@ -12,6 +12,14 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
+// Bypass unstable_cache wrapper so the prisma mocks above still receive the call.
+// (unstable_cache in test environments hits Next.js's internal cache, which doesn't
+// replay mocked args — the wrapper makes the original function uncallable in tests.)
+vi.mock("next/cache", () => ({
+  unstable_cache: <T extends (...args: never[]) => unknown>(fn: T) => fn,
+}));
+
+
 import {
   getActivePaymentMethods,
   getActiveShippingMethods,
