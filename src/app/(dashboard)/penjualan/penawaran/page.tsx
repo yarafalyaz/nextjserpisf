@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -57,7 +58,7 @@ export default async function QuotationsPage({
     status: q.status,
   }))
 
-  const tableData = JSON.parse(JSON.stringify(quotations))
+  const tableData = toPlain(quotations) as any
 
   const statusChips = ["", "draft", "sent", "accepted", "converted", "cancelled"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

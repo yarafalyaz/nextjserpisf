@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -44,7 +45,7 @@ export default async function MaterialIssuesPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = JSON.parse(JSON.stringify(issues))
+  const tableData = toPlain(issues) as any
 
   const statusChips = ["", "draft", "issued"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

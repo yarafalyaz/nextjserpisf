@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -48,7 +49,7 @@ export default async function StockMovesPage({
     qty: Number(m.qty),
   }))
 
-  const tableData = JSON.parse(JSON.stringify(moves))
+  const tableData = toPlain(moves) as any
 
   const statusChips = (
     <>

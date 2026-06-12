@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
@@ -36,7 +37,7 @@ export default async function DeliveryOrdersPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const tableData = JSON.parse(JSON.stringify(orders))
+  const tableData = toPlain(orders) as any
 
 
   return (

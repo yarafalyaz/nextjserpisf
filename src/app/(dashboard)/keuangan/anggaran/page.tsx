@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -37,7 +38,7 @@ export default async function BudgetsPage({
     prisma.budget.count({ where }),
   ])
 
-  const data = JSON.parse(JSON.stringify(budgets))
+  const data = toPlain(budgets) as any
 
   return (
     <div className="flex flex-col gap-6">

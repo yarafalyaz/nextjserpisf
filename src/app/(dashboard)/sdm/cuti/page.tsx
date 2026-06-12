@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
@@ -37,7 +38,7 @@ export default async function LeaveRequestsPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const data = JSON.parse(JSON.stringify(leaves))
+  const data = toPlain(leaves) as any
 
   const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

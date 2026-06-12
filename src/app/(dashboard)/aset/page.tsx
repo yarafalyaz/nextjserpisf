@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -45,7 +46,7 @@ export default async function AssetsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = JSON.parse(JSON.stringify(assets))
+  const tableData = toPlain(assets) as any
 
   return (
     <div className="flex flex-col gap-6">

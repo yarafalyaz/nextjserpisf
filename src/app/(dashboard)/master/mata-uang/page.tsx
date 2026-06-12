@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
@@ -44,7 +45,7 @@ export default async function CurrenciesPage({
     rate: Number(c.rate),
   }))
 
-  const tableData = JSON.parse(JSON.stringify(currencies))
+  const tableData = toPlain(currencies) as any
 
 
   return (

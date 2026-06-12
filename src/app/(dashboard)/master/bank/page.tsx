@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
 import { BankTable } from "./_components/bank-table"
@@ -34,7 +35,7 @@ export default async function BanksPage({
     take: 1000,
   })
 
-  const tableData = JSON.parse(JSON.stringify(banks))
+  const tableData = toPlain(banks) as any
 
 
   return (

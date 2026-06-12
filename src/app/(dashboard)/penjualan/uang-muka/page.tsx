@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -53,7 +54,7 @@ export default async function DownPaymentsPage({
     createdAt: dp.createdAt,
   }))
 
-  const tableData = JSON.parse(JSON.stringify(dps))
+  const tableData = toPlain(dps) as any
 
 
   return (

@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import Link from "next/link"
 import { PaymentMethodTable } from "./_components/payment-method-table"
@@ -29,7 +30,7 @@ export default async function PaymentMethodsPage({
   }
 
   const rows = await prisma.paymentMethod.findMany({ where, orderBy: { name: "asc" }, take: 1000 })
-  const tableData = JSON.parse(JSON.stringify(rows))
+  const tableData = toPlain(rows) as any
 
   return (
     <div className="flex flex-col gap-6">

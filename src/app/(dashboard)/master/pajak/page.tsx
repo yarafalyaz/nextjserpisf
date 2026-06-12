@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
@@ -43,7 +44,7 @@ export default async function TaxesPage({
     rate: Number(t.rate),
   }))
 
-  const tableData = JSON.parse(JSON.stringify(taxes))
+  const tableData = toPlain(taxes) as any
 
 
   return (

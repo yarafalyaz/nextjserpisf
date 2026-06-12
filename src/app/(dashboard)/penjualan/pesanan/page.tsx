@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -55,7 +56,7 @@ export default async function SalesOrdersPage({
     status: so.status,
   }))
 
-  const tableData = JSON.parse(JSON.stringify(orders))
+  const tableData = toPlain(orders) as any
 
 
   return (

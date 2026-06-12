@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -39,7 +40,7 @@ export default async function CostCentersPage({
     orderBy: { name: "asc" },
   })
 
-  const data = JSON.parse(JSON.stringify(costCenters))
+  const data = toPlain(costCenters) as any
 
   return (
     <div className="flex flex-col gap-6">

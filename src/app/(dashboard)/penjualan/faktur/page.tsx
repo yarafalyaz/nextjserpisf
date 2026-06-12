@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
@@ -39,7 +40,7 @@ export default async function InvoicesPage({
     customer: inv.customer,
   }))
 
-  const tableData = JSON.parse(JSON.stringify(invoices))
+  const tableData = toPlain(invoices) as any
 
   return (
     <div className="flex flex-col gap-6">

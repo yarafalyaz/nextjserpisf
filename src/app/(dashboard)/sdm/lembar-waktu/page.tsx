@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
@@ -33,7 +34,7 @@ export default async function TimesheetsPage({
     orderBy: { date: "desc" },
   })
 
-  const data = JSON.parse(JSON.stringify(timesheets))
+  const data = toPlain(timesheets) as any
 
   return (
     <div className="flex flex-col gap-6">

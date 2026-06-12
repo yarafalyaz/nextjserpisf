@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -43,7 +44,7 @@ export default async function OvertimePage({
     orderBy: { createdAt: "desc" },
   })
 
-  const data = JSON.parse(JSON.stringify(overtimes))
+  const data = toPlain(overtimes) as any
 
   const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

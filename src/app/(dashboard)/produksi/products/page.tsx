@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
@@ -38,7 +39,7 @@ export default async function ProductsPage({
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = JSON.parse(JSON.stringify(products))
+  const tableData = toPlain(products) as any
 
 
   return (

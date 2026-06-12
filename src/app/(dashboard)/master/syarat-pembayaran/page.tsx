@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
@@ -40,7 +41,7 @@ export default async function PaymentTermsPage({
     prisma.paymentTerm.count({ where }),
   ])
 
-  const tableData = JSON.parse(JSON.stringify(paymentTerms))
+  const tableData = toPlain(paymentTerms) as any
 
   return (
     <div className="flex flex-col gap-6">

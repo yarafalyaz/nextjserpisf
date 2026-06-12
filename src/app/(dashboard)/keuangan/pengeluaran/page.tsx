@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
@@ -38,7 +39,7 @@ export default async function ExpensesPage({
   ])
 
   const totalPages = Math.ceil(total / perPage)
-  const data = JSON.parse(JSON.stringify(expenses))
+  const data = toPlain(expenses) as any
 
   const statusChips = ["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
@@ -48,7 +49,7 @@ export default async function JournalsPage({
   ])
 
   const totalPages = Math.ceil(total / perPage)
-  const data = JSON.parse(JSON.stringify(journals))
+  const data = toPlain(journals) as any
 
   const statusChips = (
     <>

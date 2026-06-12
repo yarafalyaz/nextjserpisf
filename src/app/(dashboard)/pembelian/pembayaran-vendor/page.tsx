@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -49,7 +50,7 @@ export default async function VendorPaymentsPage({
     paymentMethod: resolvePaymentMethodName(p.paymentMethod, pmMap),
   }))
 
-  const tableData = JSON.parse(JSON.stringify(payments))
+  const tableData = toPlain(payments) as any
 
 
   return (
