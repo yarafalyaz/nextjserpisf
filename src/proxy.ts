@@ -3,6 +3,14 @@ import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { takeRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
+// Pin to Node.js runtime: in-memory rate limiter (Map-based) requires persistent
+// process state. Edge runtime spins a fresh isolate per request, so the Map is
+// wiped on every cold start and rate limits are non-functional in production.
+// Node runtime keeps the same process across requests on long-lived servers.
+// (For true multi-region production, swap takeRateLimit for Upstash/Redis —
+//  the function signature stays identical.)
+export const runtime = "nodejs"
+
 // Fix #24: Only allow actual static file extensions, not any URL with a dot
 const STATIC_EXTENSIONS = /\.(ico|png|jpg|jpeg|gif|svg|webp|css|js|woff2?|ttf|eot|map)$/i
 
@@ -16,22 +24,40 @@ const RATE_LIMITS = {
 function addSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set("X-Content-Type-Options", "nosniff")
   response.headers.set("X-Frame-Options", "SAMEORIGIN")
-  response.headers.set("X-XSS-Protection", "1; mode=block")
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
   response.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-  // CSP: allow self, inline styles (Tailwind), and data: for images
-  const csp = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data:",
-    "connect-src 'self' https:",
-    "frame-ancestors 'self'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join("; ")
+  // CSP: production tightens script-src (removes unsafe-eval; uses nonce for inline).
+  // Development keeps unsafe-inline + unsafe-eval for Next.js HMR.
+  const isProd = process.env.NODE_ENV === "production"
+  const csp = isProd
+    ? [
+        "default-src 'self'",
+        // 'unsafe-inline' is still required for some Next.js inline <script> tags
+        // emitted by the framework itself; tighten further with nonces when the
+        // app supports per-request nonce injection.
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https:",
+        "frame-ancestors 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "object-src 'none'",
+        "upgrade-insecure-requests",
+      ].join("; ")
+    : [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https: ws:",
+        "frame-ancestors 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+      ].join("; ")
   response.headers.set("Content-Security-Policy", csp)
   return response
 }

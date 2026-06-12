@@ -338,9 +338,9 @@ model Item {
   itemSerials        ItemSerial[]
   brand              Brand?              @relation(fields: [brandId], references: [id])
   category           ItemCategory?       @relation(fields: [categoryId], references: [id])
-  rack               Rack?               @relation(fields: [defaultRackId], references: [id])
-  rackRow            RackRow?            @relation(fields: [defaultRackRowId], references: [id])
-  warehouse          Warehouse?          @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id])
+  rack               Rack?               @relation(fields: [defaultRackId], references: [id], onDelete: SetNull)
+  rackRow            RackRow?            @relation(fields: [defaultRackRowId], references: [id], onDelete: SetNull)
+  warehouse          Warehouse?          @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
   vendor             Vendor?             @relation(fields: [vendorId], references: [id])
   stockMoves         StockMove[]
   uomConversions     UomConversion[]
@@ -392,7 +392,7 @@ model Rack {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   items       Item[]
   rows        RackRow[]
-  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@index([warehouseId], map: "racks_warehouse_id_fkey")
   @@index([createdAt])
@@ -407,7 +407,7 @@ model RackRow {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   items     Item[]
-  rack      Rack     @relation(fields: [rackId], references: [id])
+  rack      Rack     @relation(fields: [rackId], references: [id], onDelete: Cascade)
 
   @@index([rackId], map: "rack_rows_rack_id_fkey")
   @@index([createdAt])
@@ -511,7 +511,7 @@ model Account {
   deletedAt      DateTime?      @map("deleted_at")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
-  parent         Account?       @relation("AccountTree", fields: [parentId], references: [id])
+  parent         Account?       @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
   children       Account[]      @relation("AccountTree")
   journalEntries JournalEntry[]
 
@@ -1226,7 +1226,7 @@ model InventoryLayer {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   item        Item      @relation(fields: [itemId], references: [id])
-  stockMove   StockMove @relation(fields: [stockMoveId], references: [id])
+  stockMove   StockMove @relation(fields: [stockMoveId], references: [id], onDelete: Cascade)
 
   @@index([itemId], map: "inventory_layers_item_id_fkey")
   @@index([stockMoveId], map: "inventory_layers_stock_move_id_fkey")
@@ -1370,8 +1370,8 @@ model Product {
   materials            ProductMaterial[]
   productVehicleModels ProductVehicleModel[]
   productionOrders     ProductionOrder[]
-  vehicleBrand         VehicleBrand?         @relation(fields: [vehicleBrandId], references: [id])
-  vehicleModel         VehicleModel?         @relation(fields: [vehicleModelId], references: [id])
+  vehicleBrand         VehicleBrand?         @relation(fields: [vehicleBrandId], references: [id], onDelete: Cascade)
+  vehicleModel         VehicleModel?         @relation(fields: [vehicleModelId], references: [id], onDelete: Cascade)
 
   @@index([vehicleBrandId], map: "products_vehicle_brand_id_fkey")
   @@index([vehicleModelId], map: "products_vehicle_model_id_fkey")
@@ -2509,7 +2509,7 @@ model Barcode {
   type      String   @default("EAN13")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  item      Item     @relation(fields: [itemId], references: [id])
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([itemId], map: "barcodes_item_id_fkey")
   @@index([createdAt])
@@ -2631,8 +2631,8 @@ model ItemBatch {
   notes             String?
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
-  item              Item      @relation(fields: [itemId], references: [id])
-  warehouse         Warehouse @relation(fields: [warehouseId], references: [id])
+  item              Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse         Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
 
   @@index([itemId], map: "item_batches_item_id_fkey")
   @@index([warehouseId], map: "item_batches_warehouse_id_fkey")
@@ -2649,8 +2649,8 @@ model ItemSerial {
   notes        String?
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
-  item         Item      @relation(fields: [itemId], references: [id])
-  warehouse    Warehouse @relation(fields: [warehouseId], references: [id])
+  item         Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse    Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
 
   @@index([itemId], map: "item_serials_item_id_fkey")
   @@index([warehouseId], map: "item_serials_warehouse_id_fkey")
@@ -2682,8 +2682,8 @@ model ExchangeRate {
   effectiveDate  DateTime @map("effective_date")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
-  fromCurrency   Currency @relation("ExchangeRateFrom", fields: [fromCurrencyId], references: [id])
-  toCurrency     Currency @relation("ExchangeRateTo", fields: [toCurrencyId], references: [id])
+  fromCurrency   Currency @relation("ExchangeRateFrom", fields: [fromCurrencyId], references: [id], onDelete: Cascade)
+  toCurrency     Currency @relation("ExchangeRateTo", fields: [toCurrencyId], references: [id], onDelete: Cascade)
 
   @@index([fromCurrencyId], map: "exchange_rates_from_currency_id_fkey")
   @@index([toCurrencyId], map: "exchange_rates_to_currency_id_fkey")

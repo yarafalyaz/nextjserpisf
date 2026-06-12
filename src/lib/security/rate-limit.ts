@@ -5,6 +5,23 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>()
 
+// Periodic cleanup of expired buckets to prevent unbounded memory growth in
+// long-lived Node.js processes. Only registered once per process.
+let cleanupRegistered = false
+function registerCleanup() {
+  if (cleanupRegistered) return
+  cleanupRegistered = true
+  // Use unref so the timer doesn't keep the event loop alive
+  const timer = setInterval(() => {
+    const now = Date.now()
+    for (const [key, bucket] of buckets) {
+      if (now >= bucket.resetAt) buckets.delete(key)
+    }
+  }, 60_000) // every minute
+  // unref() so the timer doesn't keep the event loop alive
+  if (typeof timer.unref === "function") timer.unref()
+}
+
 export type RateLimitConfig = {
   windowMs: number
   max: number
@@ -21,6 +38,7 @@ function nowMs() {
 }
 
 export function takeRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
+  registerCleanup()
   const now = nowMs()
   const current = buckets.get(key)
 
