@@ -12,11 +12,16 @@ const permissionFindManyMock = vi.fn()
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
+const roleDeleteMock = vi.fn()
+const roleFindUniqueMock = vi.fn()
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     role: {
       create: (...a: unknown[]) => roleCreateMock(...a),
       update: (...a: unknown[]) => roleUpdateMock(...a),
+      delete: (...a: unknown[]) => roleDeleteMock(...a),
+      findUnique: (...a: unknown[]) => roleFindUniqueMock(...a),
     },
     permission: {
       findMany: (...a: unknown[]) => permissionFindManyMock(...a),
@@ -46,7 +51,7 @@ vi.mock("@/lib/utils/error", () => ({
     e instanceof Error && (e as unknown as { digest?: string }).digest?.startsWith("NEXT_REDIRECT") === true,
 }))
 
-import { createRole, updateRole } from "../roles.actions"
+import { createRole, updateRole, deleteRole } from "../roles.actions"
 
 function fd(entries: Record<string, string | string[]>): FormData {
   const f = new FormData()
@@ -61,6 +66,7 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, redirectMock, logActivityMock,
     roleCreateMock, roleUpdateMock, permissionFindManyMock,
+    roleDeleteMock, roleFindUniqueMock,
   ]) m.mockReset()
   roleCreateMock.mockResolvedValue({ id: 1 })
   roleUpdateMock.mockResolvedValue({ id: 1 })
@@ -69,6 +75,12 @@ beforeEach(() => {
     id: "1",
     roles: ["admin"],
     permissions: ["manage_settings"],
+  })
+})
+
+describe("createRole validation", () => {
+  it("throws error when schema validation fails", async () => {
+    await expect(createRole(fd({}))).rejects.toThrow()
   })
 })
 
@@ -111,6 +123,12 @@ describe("createRole least-privilege guard", () => {
   })
 })
 
+describe("updateRole validation", () => {
+  it("throws error when schema validation fails", async () => {
+    await expect(updateRole(3, fd({}))).rejects.toThrow()
+  })
+})
+
 describe("updateRole least-privilege guard", () => {
   it("blocks attaching a permission the actor does not hold", async () => {
     permissionFindManyMock.mockResolvedValue([{ name: "approve_workflows" }])
@@ -133,3 +151,37 @@ describe("updateRole least-privilege guard", () => {
     expect(roleUpdateMock).toHaveBeenCalled()
   })
 })
+
+describe("deleteRole", () => {
+  it("throws error when role not found", async () => {
+    roleFindUniqueMock.mockResolvedValue(null)
+    await expect(deleteRole(99)).rejects.toThrow("Role tidak ditemukan")
+    expect(roleDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("throws error when role is still in use by users", async () => {
+    roleFindUniqueMock.mockResolvedValue({
+      id: 1,
+      name: "Staff",
+      users: [{ id: 101 }],
+    })
+    await expect(deleteRole(1)).rejects.toThrow(/masih digunakan/)
+    expect(roleDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("deletes role and redirects on success", async () => {
+    roleFindUniqueMock.mockResolvedValue({
+      id: 1,
+      name: "Staff",
+      users: [],
+    })
+    roleDeleteMock.mockResolvedValue({})
+
+    await expect(deleteRole(1)).rejects.toThrow("NEXT_REDIRECT")
+    expect(roleDeleteMock).toHaveBeenCalledWith({ where: { id: 1 } })
+    expect(revalidateMock).toHaveBeenCalledWith("/pengaturan/peran")
+    expect(logActivityMock).toHaveBeenCalledWith("delete", "Role", 1, "Menghapus peran")
+    expect(redirectMock).toHaveBeenCalledWith("/pengaturan/peran")
+  })
+})
+
