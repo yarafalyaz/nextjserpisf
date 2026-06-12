@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 /* eslint-disable react-hooks/incompatible-library */
 
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useTransition, useMemo, useState, useRef } from "react"
-import { useForm, Controller } from "react-hook-form"
+import { useForm, Controller, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { itemSchema, type ItemInput } from "@/lib/validators"
 import { createItem, updateItem } from "@/actions/master.actions"
@@ -89,7 +88,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
   }
 
   const { register, handleSubmit, control, watch, setValue, formState: { errors } } = useForm<ItemInput>({
-    resolver: zodResolver(itemSchema) as any,
+    resolver: zodResolver(itemSchema) as Resolver<ItemInput>,
     defaultValues: {
       sku: item?.sku || (enableAutoCode ? generatedCode : "") || "",
       name: item?.name || "",

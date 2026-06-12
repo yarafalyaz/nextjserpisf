@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -44,19 +43,19 @@ export default async function DetailPage({
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nama</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).name ?? "-")}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{String(data.name ?? "-")}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Satuan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).unit ?? "-")}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{String(data.unit ?? "-")}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nilai</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).value ?? "-")}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{String(data.value ?? "-")}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Periode</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).period ?? "-")}</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tipe</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{String(data.type ?? "-")}</span>
           </div>
         </div>
       </div>

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -45,11 +44,11 @@ export default async function DetailPage({
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Kode</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).code ?? "-")}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{String(data.barcode ?? "-")}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tipe</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{String((data as any).type ?? "-")}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{String(data.type ?? "-")}</span>
           </div>
         </div>
       </div>

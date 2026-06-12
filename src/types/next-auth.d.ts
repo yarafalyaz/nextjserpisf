@@ -6,6 +6,7 @@ declare module "next-auth" {
     roles: string[];
     permissions: string[];
     isActive?: boolean;
+    passwordHash?: string;
   }
 
   interface Session {
@@ -24,5 +25,8 @@ declare module "next-auth/jwt" {
     roles: string[];
     permissions: string[];
     isActive: boolean;
+    passwordHash?: string;
+    avatar?: string | null;
+    _avatarFetchedAt?: number;
   }
 }

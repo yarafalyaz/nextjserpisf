@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -45,9 +44,9 @@ export default async function UomDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="Nama" value={(uom as any).name ?? "-"} />
-        <DetailField label="Kode" value={(uom as any).code ?? "-"} mono />
-        <DetailField label="Deskripsi" value={(uom as any).description ?? "-"} colSpan="full" />
+        <DetailField label="Nama" value={uom.name ?? "-"} />
+        <DetailField label="Simbol" value={uom.symbol ?? "-"} mono />
+        <DetailField label="Kategori" value={uom.category ?? "-"} colSpan="full" />
       </DetailCard>
     </div>
   )

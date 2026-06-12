@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
@@ -73,10 +73,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id ?? "";
         token.name = user.name;
-        token.isActive = (user as any).isActive !== false;
-        token.passwordHash = (user as any).passwordHash;
-        token.roles = (user as any).roles;
-        token.permissions = (user as any).permissions;
+        token.isActive = user.isActive !== false;
+        token.passwordHash = user.passwordHash;
+        token.roles = user.roles;
+        token.permissions = user.permissions;
       }
       
       // Handle client-side update() calls
@@ -85,7 +85,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (session.email) token.email = session.email;
         if (session.image || session.avatar) token.avatar = session.image || session.avatar;
         // Reset cache timer to force DB sync if needed
-        (token as any)._avatarFetchedAt = 0;
+        token._avatarFetchedAt = 0;
         return token;
       }
 
@@ -93,7 +93,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // so role/permission revocations (and deactivation) take effect without
       // requiring the user to log out.
       const now = Date.now();
-      const lastFetch = (token as any)._avatarFetchedAt as number | undefined;
+      const lastFetch = token._avatarFetchedAt as number | undefined;
       if (token.id && (!lastFetch || now - lastFetch > 5 * 60 * 1000)) {
         try {
           const dbUser = await prisma.user.findUnique({
@@ -126,7 +126,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.roles = [];
             token.permissions = [];
           }
-          (token as any)._avatarFetchedAt = now;
+          token._avatarFetchedAt = now;
         } catch {
           // Silently fail - don't break auth flow
         }

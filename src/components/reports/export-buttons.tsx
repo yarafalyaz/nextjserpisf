@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 'use client'
 
 import { FileDown, Printer, FileText } from 'lucide-react'
@@ -144,8 +144,8 @@ export function ExportButtons({ title }: { title: string }) {
           },
         })
 
-        // Get final Y position after table
-        startY = (doc as any).lastAutoTable?.finalY || startY + 20
+    const lastAutoTable = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
+        startY = lastAutoTable?.finalY || startY + 20
       }
     })
 

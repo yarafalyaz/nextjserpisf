@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
 import { useTransition, useState, type FormEvent } from "react"
-import { useForm, Controller } from "react-hook-form"
+import { useForm, Controller, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { employeeSchema, type EmployeeInput } from "@/lib/validators"
 import { createEmployee, updateEmployee } from "@/actions/master.actions"
@@ -78,18 +77,18 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
   }
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<EmployeeInput>({
-    resolver: zodResolver(employeeSchema) as any,
+    resolver: zodResolver(employeeSchema) as Resolver<EmployeeInput>,
     defaultValues: {
       employeeNo: employee?.employeeNo || (enableAutoCode ? generatedCode : "") || "",
       name: employee?.name || "",
       email: employee?.email || "",
       phone: employee?.phone || "",
       gender: employee?.gender || "",
-      dateOfBirth: toDateInputValue(employee?.dateOfBirth as any),
+      dateOfBirth: toDateInputValue(employee?.dateOfBirth),
       maritalStatus: employee?.maritalStatus || "",
       departmentId: employee?.departmentId || undefined,
       positionId: employee?.positionId || undefined,
-      joinDate: toDateInputValue(employee?.joinDate as any) || new Date().toISOString().split("T")[0],
+      joinDate: toDateInputValue(employee?.joinDate) || new Date().toISOString().split("T")[0],
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
     },

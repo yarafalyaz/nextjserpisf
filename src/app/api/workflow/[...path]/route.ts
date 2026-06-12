@@ -67,14 +67,15 @@ export async function POST(
     // return 409 Conflict. Prevents re-approval of finalized records and
     // resurrecting rejected items.
     const allowedFrom = ["pending", "draft", "sent"]
-    const result = await (prisma as any)[config.model].updateMany({
+    const delegate = prisma[config.model as keyof typeof prisma] as any
+    const result = await delegate.updateMany({
       where: { id, status: { in: allowedFrom } },
       data: { status: newStatus },
     })
 
     if (result.count === 0) {
       // Either the row doesn't exist, or it's already past pending/draft/sent
-      const exists = await (prisma as any)[config.model].findUnique({ where: { id }, select: { id: true, status: true } })
+      const exists = await delegate.findUnique({ where: { id }, select: { id: true, status: true } })
       if (!exists) {
         return apiError("NOT_FOUND", "Data tidak ditemukan")
       }
