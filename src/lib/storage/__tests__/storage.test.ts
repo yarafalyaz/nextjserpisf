@@ -1,5 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+const sendMock = vi.fn()
+const transformToByteArrayMock = vi.fn()
+
+vi.mock("@aws-sdk/client-s3", () => {
+  return {
+    S3Client: class {
+      send = sendMock
+    },
+    PutObjectCommand: class {
+      constructor(params: any) { Object.assign(this, params) }
+    },
+    ListObjectsV2Command: class {
+      constructor(params: any) { Object.assign(this, params) }
+    },
+    GetObjectCommand: class {
+      constructor(params: any) { Object.assign(this, params) }
+    },
+    DeleteObjectCommand: class {
+      constructor(params: any) { Object.assign(this, params) }
+    },
+  }
+})
+
 const findFirstMock = vi.fn()
 const writeFileMock = vi.fn()
 const mkdirMock = vi.fn()
@@ -23,6 +46,7 @@ import {
   uploadToStorage,
   uploadToCloudIfEnabled,
   listCloudKeys,
+  downloadFromCloud,
   deleteFromCloud,
 } from "../storage"
 
@@ -35,6 +59,8 @@ beforeEach(() => {
   findFirstMock.mockReset()
   writeFileMock.mockReset()
   mkdirMock.mockReset()
+  sendMock.mockReset()
+  transformToByteArrayMock.mockReset()
   writeFileMock.mockResolvedValue(undefined)
   mkdirMock.mockResolvedValue(undefined)
   delete process.env.NEXT_PUBLIC_ASSET_BASE_URL
@@ -203,5 +229,108 @@ describe("cloud helpers are no-ops on the local driver", () => {
 
   it("deleteFromCloud resolves without throwing", async () => {
     await expect(deleteFromCloud("logos/x.png")).resolves.toBeUndefined()
+  })
+})
+
+function mockR2Config(overrides: Partial<{ fallbackLocal: boolean; assetBaseUrl: string | null }> = {}) {
+  findFirstMock.mockResolvedValue({
+    storageDriver: "r2",
+    storageFallbackLocal: overrides.fallbackLocal ?? true,
+    assetBaseUrl: overrides.assetBaseUrl ?? "https://r2.test",
+    r2AccountId: "acct-123",
+    r2AccessKeyId: "ak",
+    r2SecretAccessKey: "sk",
+    r2Bucket: "my-bucket",
+  })
+}
+
+describe("uploadToStorage on the r2 driver", () => {
+  it("uploads to R2 and returns an absolute CDN URL", async () => {
+    mockR2Config({ assetBaseUrl: "https://cdn.example.com/" })
+    sendMock.mockResolvedValue({})
+    const file = makeFile("photo.png", "image/png", 50)
+    const res = await uploadToStorage(file, { category: "logos" })
+    expect(res.key).toMatch(/^logos\/logos-\d+-[a-z0-9]+\.png$/)
+    expect(res.url).toBe(`https://cdn.example.com/${res.key}`)
+    expect(writeFileMock).not.toHaveBeenCalled()
+    expect(sendMock).toHaveBeenCalledOnce()
+  })
+
+  it("falls back to local disk when R2 throws and fallbackLocal is true", async () => {
+    mockR2Config({ fallbackLocal: true, assetBaseUrl: "https://cdn.example.com" })
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    sendMock.mockRejectedValue(new Error("R2 down"))
+    const file = makeFile("photo.png", "image/png", 50)
+    const res = await uploadToStorage(file, { category: "logos" })
+    expect(res.key).toMatch(/^logos\//)
+    // Local fallback must NOT use the CDN base — /uploads is same-origin only.
+    expect(res.url).toBe(`/uploads/${res.key}`)
+    expect(writeFileMock).toHaveBeenCalledOnce()
+    expect(consoleWarn).toHaveBeenCalled()
+    consoleWarn.mockRestore()
+  })
+
+  it("rethrows the R2 error when fallbackLocal is false", async () => {
+    mockR2Config({ fallbackLocal: false })
+    sendMock.mockRejectedValue(new Error("R2 hard fail"))
+    const file = makeFile("photo.png", "image/png", 50)
+    await expect(uploadToStorage(file, { category: "logos" })).rejects.toThrow("R2 hard fail")
+    expect(writeFileMock).not.toHaveBeenCalled()
+  })
+
+  it("throws a clear error when R2 config is incomplete", async () => {
+    findFirstMock.mockResolvedValue({
+      storageDriver: "r2",
+      storageFallbackLocal: false,
+      assetBaseUrl: null,
+      r2AccountId: null,
+      r2AccessKeyId: "ak",
+      r2SecretAccessKey: "sk",
+      r2Bucket: "bucket",
+    })
+    const file = makeFile("photo.png", "image/png", 50)
+    await expect(uploadToStorage(file, { category: "logos" })).rejects.toThrow(
+      /Cloudflare R2 belum dikonfigurasi lengkap/,
+    )
+  })
+})
+
+describe("R2 cloud helpers on the r2 driver", () => {
+  beforeEach(() => {
+    mockR2Config({ assetBaseUrl: "https://cdn.example.com" })
+  })
+
+  it("uploadToCloudIfEnabled sends a PutObject to R2", async () => {
+    sendMock.mockResolvedValue({})
+    const ok = await uploadToCloudIfEnabled("backups/db.sql", Buffer.from("x"), "application/sql")
+    expect(ok).toBe(true)
+    expect(sendMock).toHaveBeenCalledOnce()
+  })
+
+  it("listCloudKeys returns keys from R2 ListObjectsV2", async () => {
+    sendMock.mockResolvedValue({ Contents: [{ Key: "logos/a.png" }, { Key: "logos/b.png" }, {}] })
+    const keys = await listCloudKeys("logos/")
+    expect(keys).toEqual(["logos/a.png", "logos/b.png"])
+    expect(sendMock).toHaveBeenCalledOnce()
+  })
+
+  it("listCloudKeys returns empty array when R2 lists no contents", async () => {
+    sendMock.mockResolvedValue({})
+    expect(await listCloudKeys("logos/")).toEqual([])
+  })
+
+  it("downloadFromCloud reads bytes from R2 and returns a Buffer", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    transformToByteArrayMock.mockResolvedValue(bytes)
+    sendMock.mockResolvedValue({ Body: { transformToByteArray: transformToByteArrayMock } })
+    const buf = await downloadFromCloud("logos/a.png")
+    expect(Buffer.isBuffer(buf)).toBe(true)
+    expect([...buf]).toEqual([1, 2, 3, 4])
+  })
+
+  it("deleteFromCloud sends a DeleteObject to R2", async () => {
+    sendMock.mockResolvedValue({})
+    await deleteFromCloud("logos/a.png")
+    expect(sendMock).toHaveBeenCalledOnce()
   })
 })
