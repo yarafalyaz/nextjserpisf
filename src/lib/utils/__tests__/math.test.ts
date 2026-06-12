@@ -29,6 +29,13 @@ describe("Precise Math Utility", () => {
       expect(safeRound("abc")).toBe(0)
       expect(safeRound(Infinity)).toBe(0)
     });
+
+    it("handles objects with toString or toNumber methods (like Prisma.Decimal)", () => {
+      const obj1 = { toString: () => "5.5" }
+      const obj2 = { toNumber: () => 10.123, toString: () => "10.123" }
+      expect(safeRound(obj1, 0)).toBe(6)
+      expect(safeRound(obj2, 2)).toBe(10.12)
+    });
   });
 
   describe("safeAdd / safeSubtract / safeMultiply / safeDivide", () => {
