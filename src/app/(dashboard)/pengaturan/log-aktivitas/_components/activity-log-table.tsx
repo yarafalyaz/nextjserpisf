@@ -10,7 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/shadcn/select"
+import { Button } from "@/components/ui/page-header"
 import { useState } from "react"
+import { Download, Eye } from "lucide-react"
+import { DetailDrawer } from "@/components/activity-log/detail-drawer"
 
 interface LogRow {
   id: number
@@ -22,6 +25,8 @@ interface LogRow {
   description: string
   createdAt: string
   ipAddress: string
+  oldValues?: unknown
+  newValues?: unknown
 }
 
 const actionBadge: Record<string, string> = {
@@ -109,151 +114,224 @@ const modelLabel: Record<string, string> = {
   BOM: "BOM Produk",
 }
 
-const columns: ColumnDef<LogRow, unknown>[] = [
-  {
-    accessorKey: "createdAt",
-    header: "Waktu",
-    cell: ({ row }) => {
-      const d = new Date(row.original.createdAt)
-      return (
-        <span className="whitespace-nowrap text-xs tabular-nums">
-          {d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}{" "}
-          {d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-        </span>
-      )
-    },
-  },
-  {
-    accessorKey: "userName",
-    header: "Pengguna",
-    cell: ({ row }) => (
-      <span className="max-w-[140px] truncate">{row.original.userName}</span>
-    ),
-  },
-  {
-    accessorKey: "action",
-    header: "Aksi",
-    cell: ({ row }) => (
-      <Badge variant="outline" className={actionBadge[row.original.action] || ""}>
-        {actionLabel[row.original.action] || row.original.action}
-      </Badge>
-    ),
-    filterFn: "equals",
-  },
-  {
-    accessorKey: "modelType",
-    header: "Model",
-    cell: ({ row }) => (
-      <span className="text-xs">{modelLabel[row.original.modelType] || row.original.modelType}</span>
-    ),
-    filterFn: "equals",
-  },
-  {
-    accessorKey: "modelId",
-    header: "ID",
-    cell: ({ row }) => (
-      <span className="font-mono text-xs text-muted-foreground">
-        {row.original.modelId ? `#${row.original.modelId}` : "-"}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "description",
-    header: "Deskripsi",
-    cell: ({ row }) => (
-      <span className="max-w-[280px] truncate text-muted-foreground">
-        {row.original.description}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "ipAddress",
-    header: "IP",
-    cell: ({ row }) => (
-      <span className="font-mono text-xs text-muted-foreground">
-        {row.original.ipAddress}
-      </span>
-    ),
-  },
-]
-
 interface ActivityLogTableProps {
   data: LogRow[]
+  total: number
+  page: number
+  pageSize: number
   users: { id: number; name: string }[]
   modelTypes: string[]
   actions: string[]
+  filterUser: string
+  filterAction: string
+  filterModel: string
+  filterDateFrom: string
+  filterDateTo: string
+  onFilterChange: (key: string, value: string) => void
 }
 
 export function ActivityLogTable({
   data,
+  total,
+  page,
+  pageSize,
   users,
   modelTypes,
-  actions,
+  actions: actionList,
+  filterUser,
+  filterAction,
+  filterModel,
+  filterDateFrom,
+  filterDateTo,
+  onFilterChange,
 }: ActivityLogTableProps) {
-  const [filterUser, setFilterUser] = useState<string>("all")
-  const [filterAction, setFilterAction] = useState<string>("all")
-  const [filterModel, setFilterModel] = useState<string>("all")
+  const [detailRow, setDetailRow] = useState<LogRow | null>(null)
 
-  const filtered = data.filter((row) => {
-    if (filterUser !== "all" && String(row.userId) !== filterUser) return false
-    if (filterAction !== "all" && row.action !== filterAction) return false
-    if (filterModel !== "all" && row.modelType !== filterModel) return false
-    return true
-  })
+  function buildExportUrl() {
+    const params = new URLSearchParams()
+    if (filterUser !== "all") params.set("userId", filterUser)
+    if (filterAction !== "all") params.set("action", filterAction)
+    if (filterModel !== "all") params.set("modelType", filterModel)
+    if (filterDateFrom) params.set("dateFrom", filterDateFrom)
+    if (filterDateTo) params.set("dateTo", filterDateTo)
+    return `/api/activity-logs/export?${params.toString()}`
+  }
+
+  const columns: ColumnDef<LogRow, unknown>[] = [
+    {
+      accessorKey: "createdAt",
+      header: "Waktu",
+      cell: ({ row }) => {
+        const d = new Date(row.original.createdAt)
+        return (
+          <span className="whitespace-nowrap text-xs tabular-nums">
+            {d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}{" "}
+            {d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )
+      },
+    },
+    {
+      accessorKey: "userName",
+      header: "Pengguna",
+      cell: ({ row }) => (
+        <span className="max-w-[140px] truncate">{row.original.userName}</span>
+      ),
+    },
+    {
+      accessorKey: "action",
+      header: "Aksi",
+      cell: ({ row }) => (
+        <Badge variant="outline" className={actionBadge[row.original.action] || ""}>
+          {actionLabel[row.original.action] || row.original.action}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "modelType",
+      header: "Model",
+      cell: ({ row }) => (
+        <span className="text-xs">{modelLabel[row.original.modelType] || row.original.modelType}</span>
+      ),
+    },
+    {
+      accessorKey: "modelId",
+      header: "ID",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {row.original.modelId ? `#${row.original.modelId}` : "-"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "description",
+      header: "Deskripsi",
+      cell: ({ row }) => (
+        <span className="max-w-[280px] truncate text-muted-foreground">
+          {row.original.description}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "ipAddress",
+      header: "IP",
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {row.original.ipAddress}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => {
+        const hasChanges =
+          row.original.oldValues != null || row.original.newValues != null
+        return hasChanges ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => setDetailRow(row.original)}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+        ) : null
+      },
+    },
+  ]
 
   return (
-    <DataTable
-      data={filtered}
-      columns={columns}
-      searchColumn="description"
-      searchPlaceholder="Cari deskripsi..."
-      selectable={false}
-      pageSize={25}
-      filters={
-        <div className="flex flex-wrap gap-2">
-          <Select value={filterUser} onValueChange={setFilterUser}>
-            <SelectTrigger className="w-[160px]" size="sm">
-              <SelectValue placeholder="Semua pengguna" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua pengguna</SelectItem>
-              {users.map((u) => (
-                <SelectItem key={u.id} value={String(u.id)}>
-                  {u.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={filterAction} onValueChange={setFilterAction}>
-            <SelectTrigger className="w-[130px]" size="sm">
-              <SelectValue placeholder="Semua aksi" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua aksi</SelectItem>
-              {actions.map((a) => (
-                <SelectItem key={a} value={a}>
-                  {actionLabel[a] || a}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={filterModel} onValueChange={setFilterModel}>
-            <SelectTrigger className="w-[160px]" size="sm">
-              <SelectValue placeholder="Semua model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua model</SelectItem>
-              {modelTypes.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {modelLabel[m] || m}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <>
+      <div className="flex items-center gap-2">
+        {/* Date range */}
+        <div className="flex items-center gap-1">
+          <input
+            type="date"
+            value={filterDateFrom}
+            onChange={(e) => onFilterChange("dateFrom", e.target.value)}
+            className="h-8 rounded-md border bg-background px-2 text-xs"
+          />
+          <span className="text-xs text-muted-foreground">–</span>
+          <input
+            type="date"
+            value={filterDateTo}
+            onChange={(e) => onFilterChange("dateTo", e.target.value)}
+            className="h-8 rounded-md border bg-background px-2 text-xs"
+          />
         </div>
-      }
-    />
+
+        {/* User filter */}
+        <Select value={filterUser} onValueChange={(v) => onFilterChange("userId", v)}>
+          <SelectTrigger className="w-[140px]" size="sm">
+            <SelectValue placeholder="Semua pengguna" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua pengguna</SelectItem>
+            {users.map((u) => (
+              <SelectItem key={u.id} value={String(u.id)}>
+                {u.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Action filter */}
+        <Select value={filterAction} onValueChange={(v) => onFilterChange("action", v)}>
+          <SelectTrigger className="w-[120px]" size="sm">
+            <SelectValue placeholder="Semua aksi" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua aksi</SelectItem>
+            {actionList.map((a) => (
+              <SelectItem key={a} value={a}>
+                {actionLabel[a] || a}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Model filter */}
+        <Select value={filterModel} onValueChange={(v) => onFilterChange("modelType", v)}>
+          <SelectTrigger className="w-[150px]" size="sm">
+            <SelectValue placeholder="Semua model" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Semua model</SelectItem>
+            {modelTypes.map((m) => (
+              <SelectItem key={m} value={m}>
+                {modelLabel[m] || m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Export */}
+        <a
+          href={buildExportUrl()}
+          download
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+        >
+          <Download className="h-3.5 w-3.5" />
+          CSV
+        </a>
+      </div>
+
+      <DataTable
+        data={data}
+        columns={columns}
+        searchColumn="description"
+        searchPlaceholder="Cari deskripsi..."
+        selectable={false}
+        pageSize={pageSize}
+        serverPagination={{ total, page, pageSize }}
+      />
+
+      <DetailDrawer
+        open={detailRow !== null}
+        onClose={() => setDetailRow(null)}
+        row={detailRow}
+      />
+    </>
   )
 }
