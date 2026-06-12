@@ -87,4 +87,22 @@ describe("env validation", () => {
     const mod = await import("@/lib/env")
     expect(mod.env).toBeDefined()
   })
+
+  it("throws Error if client validation fails", async () => {
+    process.env = { ...originalEnv, DATABASE_URL: DB_VAL }
+    process.env[CRED_ENV] = CRED_VAL
+    // Injecting a number directly into process.env bypasses TypeScript in tests,
+    // causing the z.string() validator in clientSchema to fail.
+    process.env.NEXT_PUBLIC_ASSET_BASE_URL = 123 as any
+    // Force CI/NODE_ENV false/non-test to run validateClientEnv
+    delete (process.env as unknown as Record<string, unknown>).CI
+    const penv = process.env as Record<string, string>
+    penv.NODE_ENV = "production"
+
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    await expect(import("@/lib/env")).rejects.toThrow("Invalid public environment variables")
+
+    expect(consoleSpy).toHaveBeenCalledWith("❌ Invalid public environment variables:")
+    consoleSpy.mockRestore()
+  })
 })
