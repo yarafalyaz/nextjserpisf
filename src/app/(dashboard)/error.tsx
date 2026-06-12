@@ -1,38 +1,41 @@
-"use client"
+'use client';
 
-import { useEffect } from "react"
-import Link from "next/link"
-import { AlertTriangle } from "lucide-react"
-import { Button } from "@/components/ui/page-header"
+import { useEffect } from 'react';
+import { Button } from '@/components/ui/shadcn/button';
+import { AlertTriangle } from 'lucide-react';
 
 export default function DashboardError({
   error,
   reset,
 }: {
-  error: Error & { digest?: string }
-  reset: () => void
+  error: Error & { digest?: string };
+  reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Dashboard error:", error)
-  }, [error])
+    console.error(error);
+  }, [error]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-12 text-center">
-        <div className="mb-4 flex justify-center"><AlertTriangle className="size-12 text-danger" /></div>
-        <h2 className="m-0 mb-2 text-xl">Terjadi Kesalahan</h2>
-        <p className="text-muted-foreground mb-6">
-          {error.message || "Terjadi kesalahan saat memuat halaman. Silakan coba lagi."}
+    <div className="h-[calc(100vh-4rem)] flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white p-8 rounded-xl border border-gray-100 text-center shadow-sm">
+        <div className="flex justify-center mb-4">
+          <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-8 h-8 text-amber-500" />
+          </div>
+        </div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">Gagal Memuat Halaman</h2>
+        <p className="text-gray-500 mb-6 text-sm">
+          Terjadi kesalahan saat memuat data di modul ini. Silakan coba muat ulang atau kembali ke dashboard utama.
         </p>
-        <div className="flex gap-3 justify-center">
-          <Button onPress={reset} >
-            Coba Lagi
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button onClick={() => reset()}>
+            Muat Ulang Modul
           </Button>
-          <Link href="/" >
-            Ke Dasbor
-          </Link>
+          <Button variant="outline" onClick={() => window.location.href = '/dashboard'}>
+            Ke Dashboard
+          </Button>
         </div>
       </div>
     </div>
-  )
+  );
 }

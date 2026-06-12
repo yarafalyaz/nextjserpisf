@@ -1,31 +1,45 @@
-"use client"
+'use client';
+
+import { Inter } from 'next/font/google';
+import { Button } from '@/components/ui/shadcn/button';
+import { AlertCircle } from 'lucide-react';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export default function GlobalError({
   error,
   reset,
 }: {
-  error: Error & { digest?: string }
-  reset: () => void
+  error: Error & { digest?: string };
+  reset: () => void;
 }) {
   return (
     <html lang="id">
-      <body className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-semibold text-foreground">Terjadi Kesalahan</h1>
-          <p className="text-muted-foreground text-sm max-w-md">
-            Aplikasi mengalami masalah yang tidak terduga. Silakan coba lagi.
-          </p>
-          {error.digest && (
-            <p className="text-xs text-muted-foreground font-mono">Ref: {error.digest}</p>
-          )}
-          <button
-            onClick={reset}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Coba Lagi
-          </button>
+      <body className={inter.className}>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-sm border border-red-100 text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-500" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Terjadi Kesalahan Fatal</h2>
+            <p className="text-gray-500 mb-6 text-sm">
+              Sistem mendeteksi kesalahan yang tidak terduga. Tim teknis telah diberitahu.
+              <br />
+              {error.digest ? <span className="text-xs text-gray-400 mt-2 block">Kode Ref: {error.digest}</span> : null}
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button onClick={() => reset()} className="w-full">
+                Coba Lagi
+              </Button>
+              <Button variant="outline" onClick={() => window.location.href = '/'} className="w-full">
+                Kembali ke Beranda
+              </Button>
+            </div>
+          </div>
         </div>
       </body>
     </html>
-  )
+  );
 }
