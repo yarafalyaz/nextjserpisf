@@ -137,7 +137,48 @@ describe("InventoryService", () => {
       });
       spies.queryRaw.mockResolvedValueOnce([{ id: 5, sku: "ITM-5", qty_on_hand: 100 }]);
 
-      await expect(service.postMove(1)).rejects.toThrow("Stok tidak mencukupi");
+      await expect(service.postMove(1)).rejects.toThrow("Stok tidak mencukupi untuk item ITM-5. Tersedia: 100, Dibutuhkan: 200");
+    });
+
+    it("throws on OUT when stock insufficient (layer-level guard, warehouseId null)", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-2", status: "draft", impact: "OUT",
+        itemId: 5, warehouseId: null, qty: 30,
+      });
+      // item has enough globally (or lock succeeds), but layers fall short
+      spies.queryRaw
+        .mockResolvedValueOnce([{ id: 5, sku: "ITM-5", qty_on_hand: 100 }])
+        .mockResolvedValueOnce([
+          { id: 1, remaining: 10, unit_cost: 5 }, // Only 10 available across layers
+        ]);
+
+      await expect(service.postMove(1)).rejects.toThrow("Stok tidak mencukupi untuk item ITM-5. Kurang 20.");
+    });
+
+    it("notifies asynchronously if item qtyOnHand falls to or below minStock", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-3", status: "draft", impact: "OUT",
+        itemId: 5, warehouseId: 2, qty: 10, cost: 0,
+      });
+      spies.queryRaw
+        .mockResolvedValueOnce([{ id: 5, sku: "ITM-5", qty_on_hand: 100 }])
+        .mockResolvedValueOnce([{ id: 1, remaining: 100, unit_cost: 5 }]);
+      
+      // Simulate that after decrement, qtyOnHand = 4, minStock = 5
+      spies.itemFindUnique.mockResolvedValue({
+        id: 5, sku: "ITM-5", qtyOnHand: 4, minStock: 5,
+      });
+
+      await service.postMove(1);
+
+      // We must wait for the setTimeout(..., 0) inside postMove to execute
+      await new Promise((r) => setTimeout(r, 10));
+
+      expect(mocks.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 5, qtyOnHand: 4, minStock: 5 })
+      );
     });
 
     it("throws on any impact type", async () => {
@@ -274,5 +315,35 @@ describe("InventoryService", () => {
 
       expect(result).toEqual([]);
     });
+
+    it("creates moves for new materials and returns their IDs along with existing ones", async () => {
+      const customTx = {
+        $executeRaw: vi.fn().mockResolvedValue(1),
+        project: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: 99, items: [{ itemId: 1, qty: 5 }, { itemId: 2, qty: 10 }]
+          })
+        },
+        stockMove: {
+          findFirst: vi.fn()
+            .mockResolvedValueOnce({ id: 100 }) // item 1 already exists
+            .mockResolvedValueOnce(null),       // item 2 needs creation
+          create: vi.fn().mockResolvedValue({ id: 101 }),
+        }
+      };
+
+      singletonMocks.transaction.mockImplementationOnce(async (fn: any) => {
+        const { inventoryService } = await import('@/lib/services/inventory.service');
+        const postSpy = vi.spyOn(inventoryService, 'postMove').mockResolvedValue(undefined as any);
+        const res = await fn(customTx);
+        postSpy.mockRestore();
+        return res;
+      });
+
+      const res = await issueProjectMaterials(99, 1);
+      expect(res).toEqual([100, 101]);
+      expect(customTx.stockMove.create).toHaveBeenCalledOnce();
+    });
   });
 });
+
