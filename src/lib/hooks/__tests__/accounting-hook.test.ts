@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { deleteJournalByReference, deleteJournalByReferenceTx, onSalesInvoicePosted } from "../accounting.hook"
+import { deleteJournalByReference, deleteJournalByReferenceTx, onSalesInvoicePosted, onSalesPaymentCreated, onPurchaseOrderReceived } from "../accounting.hook"
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
     salesRevenueAccountId: 410 as number | null,
     cogsAccountId: 510 as number | null,
     inventoryAccountId: 130 as number | null,
+    cashBankAccountId: 100 as number | null,
+    purchasePayableAccountId: 210 as number | null,
+    purchaseTaxAccountId: 150 as number | null,
   },
   assertPeriodOpen: vi.fn(),
   fifoConsume: vi.fn(),
@@ -18,8 +21,11 @@ const mocks = vi.hoisted(() => ({
   invoiceFindUnique: vi.fn(),
   journalFindFirst: vi.fn(),
   journalCreate: vi.fn(),
+  journalEntryCreate: vi.fn(),
   journalEntryCreateMany: vi.fn(),
   itemFindUnique: vi.fn(),
+  paymentFindUniqueOrThrow: vi.fn(),
+  orderFindUniqueOrThrow: vi.fn(),
   itemUpdate: vi.fn(),
 }))
 
@@ -28,6 +34,8 @@ vi.mock("@/lib/db/prisma", () => ({
     $transaction: (fn: any) => mocks.transaction(fn),
     systemSetting: { findFirst: () => mocks.systemSettings },
     salesInvoice: { findUniqueOrThrow: (...a: unknown[]) => mocks.invoiceFindUniqueOrThrow(...a) },
+    salesPayment: { findUniqueOrThrow: (...a: unknown[]) => mocks.paymentFindUniqueOrThrow(...a) },
+    purchaseOrder: { findUniqueOrThrow: (...a: unknown[]) => mocks.orderFindUniqueOrThrow(...a) },
     journal: { findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a) },
   },
 }))
@@ -123,5 +131,119 @@ describe("onSalesInvoicePosted", () => {
     mocks.journalFindFirst.mockResolvedValue({ id: 99 }) // Existing journal
     await onSalesInvoicePosted(1)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("onSalesPaymentCreated", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.systemSettings.salesReceivableAccountId = 110
+    mocks.systemSettings.cashBankAccountId = 100
+    mocks.transaction.mockImplementation((fn: any) => fn({
+      systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+      salesPayment: { findUniqueOrThrow: mocks.paymentFindUniqueOrThrow },
+      journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+      journalEntry: { create: mocks.journalEntryCreate },
+    }))
+  })
+
+  it("returns early if no salesReceivableAccountId", async () => {
+    (mocks.systemSettings as any).salesReceivableAccountId = null
+    await onSalesPaymentCreated(1)
+    expect(mocks.paymentFindUniqueOrThrow).not.toHaveBeenCalled()
+  })
+
+  it("returns early if idempotency check finds journal", async () => {
+    mocks.paymentFindUniqueOrThrow.mockResolvedValue({ id: 1, amount: 500 })
+    mocks.journalFindFirst.mockResolvedValue({ id: 88 })
+    await onSalesPaymentCreated(1)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("returns early if cash account cannot be determined", async () => {
+    (mocks.systemSettings as any).cashBankAccountId = null
+    mocks.paymentFindUniqueOrThrow.mockResolvedValue({ id: 1, amount: 500, accountId: null })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    await onSalesPaymentCreated(1)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("creates journal and entries for valid payment", async () => {
+    mocks.paymentFindUniqueOrThrow.mockResolvedValue({ id: 1, amount: 500, paymentDate: new Date(), accountId: 101, salesInvoice: { documentNo: "INV-1" } })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 99 })
+    await onSalesPaymentCreated(1, 999)
+
+    expect(mocks.journalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ referenceType: "SalesPayment", totalDebit: 500, totalCredit: 500 })
+    }))
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 101, debit: 500, credit: 0 })
+    }))
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 110, debit: 0, credit: 500 })
+    }))
+  })
+})
+
+describe("onPurchaseOrderReceived", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.systemSettings.inventoryAccountId = 130
+    mocks.systemSettings.purchasePayableAccountId = 210
+    mocks.systemSettings.purchaseTaxAccountId = 150
+    mocks.transaction.mockImplementation((fn: any) => fn({
+      systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+      purchaseOrder: { findUniqueOrThrow: mocks.orderFindUniqueOrThrow },
+      journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+      journalEntry: { create: mocks.journalEntryCreate },
+    }))
+  })
+
+  it("returns early if required account mappings are missing", async () => {
+    (mocks.systemSettings as any).inventoryAccountId = null
+    await onPurchaseOrderReceived(1)
+    expect(mocks.orderFindUniqueOrThrow).not.toHaveBeenCalled()
+  })
+
+  it("returns early if journal already exists (idempotency)", async () => {
+    mocks.orderFindUniqueOrThrow.mockResolvedValue({ id: 1, totalAmount: 1000, documentNo: "PO-1" })
+    mocks.journalFindFirst.mockResolvedValue({ id: 7 })
+    await onPurchaseOrderReceived(1)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("creates journal with PPN Masukan when tax account is configured and tax > 0", async () => {
+    mocks.orderFindUniqueOrThrow.mockResolvedValue({ id: 1, totalAmount: 1100, tax: 100, documentNo: "PO-1" })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 9 })
+    await onPurchaseOrderReceived(1, 999)
+
+    expect(mocks.journalCreate).toHaveBeenCalled()
+    // 3 entries: Dr. Inventory, Dr. PPN, Cr. Hutang
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3)
+    // PPN
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 150, debit: 100, credit: 0 })
+    }))
+    // Hutang full
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 210, debit: 0, credit: 1100 })
+    }))
+  })
+
+  it("absorbs tax into inventory when no input-tax account is configured", async () => {
+    (mocks.systemSettings as any).purchaseTaxAccountId = null
+    mocks.orderFindUniqueOrThrow.mockResolvedValue({ id: 1, totalAmount: 1100, tax: 100, documentNo: "PO-1" })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 9 })
+    await onPurchaseOrderReceived(1)
+
+    // Only 2 entries: Dr. Inventory (absorbs tax), Cr. Hutang
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(2)
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ accountId: 130, debit: 1100, credit: 0 })
+    }))
   })
 })
