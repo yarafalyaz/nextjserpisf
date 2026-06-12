@@ -25,9 +25,9 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: { $transaction: (fn: (t: unknown) => Promise<unknown>) => mocks.transaction(fn) },
 }))
 
-import { onTransferProcessed } from "@/lib/hooks/inventory-transfer.hook"
+import { onTransferProcessed, onTransferReceived } from "@/lib/hooks/inventory-transfer.hook"
 
-function wireTx(transferItems: Array<{ itemId: number; qty: number }>) {
+function wireTx(transferItems: Array<{ itemId: number; qty: number }>, status = "draft") {
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
     transferFindUniqueOrThrow: vi.fn().mockResolvedValue({
@@ -35,10 +35,10 @@ function wireTx(transferItems: Array<{ itemId: number; qty: number }>) {
       documentNo: "TRF-001",
       sourceWarehouseId: 1,
       destinationWarehouseId: 2,
-      status: "draft",
+      status: status,
       items: transferItems,
     }),
-    moveFindFirst: vi.fn().mockResolvedValue(null), // no existing OUT moves (not yet processed)
+    moveFindFirst: vi.fn().mockResolvedValue(null), // no existing moves
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
     executeRaw: vi.fn().mockResolvedValue(1),
   }
@@ -49,7 +49,7 @@ function wireTx(transferItems: Array<{ itemId: number; qty: number }>) {
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
-  return spies
+  return { spies, tx }
 }
 
 beforeEach(() => {
@@ -63,7 +63,7 @@ beforeEach(() => {
 describe("onTransferProcessed item aggregation", () => {
   it("creates exactly one OUT move per item when an item is listed on duplicate rows", async () => {
     // Item 7 appears twice (qty 3 + qty 2 = 5); item 8 once (qty 4).
-    const spies = wireTx([
+    const { spies, tx } = wireTx([
       { itemId: 7, qty: 3 },
       { itemId: 7, qty: 2 },
       { itemId: 8, qty: 4 },
@@ -92,10 +92,73 @@ describe("onTransferProcessed item aggregation", () => {
   })
 
   it("returns silently (idempotent) when OUT moves already exist", async () => {
-    const spies = wireTx([{ itemId: 7, qty: 3 }])
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }])
     spies.moveFindFirst.mockResolvedValue({ id: 1 }) // existing OUT move
     await onTransferProcessed(100, 1)
     expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
     expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("bypasses $transaction when txClient is provided", async () => {
+    const { spies, tx } = wireTx([{ itemId: 7, qty: 3 }])
+    mocks.transaction.mockClear()
+    await onTransferProcessed(100, 1, tx as any)
+    expect(mocks.transaction).not.toHaveBeenCalled()
+    expect(spies.moveCreate).toHaveBeenCalled()
+  })
+})
+
+describe("onTransferReceived", () => {
+  it("rejects if transfer is not processed", async () => {
+    wireTx([{ itemId: 7, qty: 3 }], "draft")
+    await expect(onTransferReceived(100)).rejects.toThrow(/Transfer harus berstatus 'processed'/)
+  })
+
+  it("returns silently (idempotent) when IN moves already exist", async () => {
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }], "processed")
+    // First findFirst call is the idempotency check
+    spies.moveFindFirst.mockResolvedValueOnce({ id: 1 })
+    await onTransferReceived(100, 1)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("aggregates items and preserves exact cost basis from OUT moves", async () => {
+    const { spies } = wireTx([
+      { itemId: 7, qty: 3 },
+      { itemId: 7, qty: 2 }, // Duplicate row -> 5 total
+      { itemId: 8, qty: 4 },
+    ], "processed")
+
+    // 1st check: idempotency (null = no existing IN moves)
+    // 2nd check: item 7 OUT move findFirst (returns cost: 15)
+    // 3rd check: item 7 newly created IN move findFirst (returns id: 900 for createInLayer)
+    // 4th check: item 8 OUT move findFirst (returns cost: 20)
+    // 5th check: item 8 newly created IN move findFirst (returns id: 901 for createInLayer)
+    spies.moveFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ cost: 15 })
+      .mockResolvedValueOnce({ id: 900 })
+      .mockResolvedValueOnce({ cost: 20 })
+      .mockResolvedValueOnce({ id: 901 })
+
+    await onTransferReceived(100, 1)
+
+    expect(spies.moveCreate).toHaveBeenCalledTimes(2)
+    
+    // Check item 7 aggregated OUT move match
+    const in7 = spies.moveCreate.mock.calls.find(
+      (c) => (c[0] as { data: { itemId: number } }).data.itemId === 7,
+    )
+    expect((in7![0] as { data: { qty: number; impact: string, cost: number } }).data.qty).toBe(5)
+    expect((in7![0] as { data: { impact: string } }).data.impact).toBe("IN")
+    expect((in7![0] as { data: { cost: number } }).data.cost).toBe(15) // Preserved cost
+
+    expect(mocks.createInLayer).toHaveBeenCalledTimes(2)
+    const layer7 = mocks.createInLayer.mock.calls.find(
+      (c) => (c[1] as { itemId: number }).itemId === 7,
+    )
+    expect((layer7![1] as { unitCost: number }).unitCost).toBe(15)
+    expect((layer7![1] as { stockMoveId: number }).stockMoveId).toBe(900)
+    expect((layer7![1] as { warehouseId: number }).warehouseId).toBe(2) // destination
   })
 })
