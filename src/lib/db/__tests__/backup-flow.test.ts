@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
+import { EventEmitter } from "events"
 
 vi.mock("server-only", () => ({}))
 
@@ -54,8 +55,7 @@ import {
 } from "../backup"
 
 function makeChildProcess(code: number | null, stderrData = "") {
-  const { EventEmitter } = require("events") as typeof import("events")
-  const stdout = new EventEmitter() as any
+    const stdout = new EventEmitter() as any
   const stderr = new EventEmitter()
   const child = new EventEmitter() as any
   // Real ChildProcess.stdout is a Readable with .pipe(); createBackup uses it.
@@ -72,8 +72,7 @@ function makeChildProcess(code: number | null, stderrData = "") {
 
 // Builds a child that emits an "error" event (e.g. binary not found) instead of closing.
 function makeErroringChild(message: string) {
-  const { EventEmitter } = require("events") as typeof import("events")
-  const stdout = new EventEmitter() as any
+    const stdout = new EventEmitter() as any
   const stderr = new EventEmitter()
   const child = new EventEmitter() as any
   stdout.pipe = vi.fn()

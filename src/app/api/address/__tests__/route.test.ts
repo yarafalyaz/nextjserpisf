@@ -55,4 +55,39 @@ describe("GET /api/address — kodeInduk validation", () => {
     const res = await GET(req("tipe=galaxy"))
     expect(res.status).toBe(400)
   })
+
+  it("handles districts type with parentCode", async () => {
+    readFileMock.mockResolvedValue("1101010,1101,BAKONGAN,0,0\n1101020,1101,KLUET UTARA,0,0")
+    const res = await GET(req("tipe=districts&kodeInduk=1101"))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toEqual([
+      { code: "1101010", name: "Bakongan" },
+      { code: "1101020", name: "Kluet Utara" },
+    ])
+  })
+
+  it("handles villages type with parentCode derived province", async () => {
+    readFileMock.mockResolvedValue("1101010001,1101010,KEUDE BAKONGAN,0,0,23711")
+    const res = await GET(req("tipe=villages&kodeInduk=1101010"))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toEqual([
+      { code: "1101010001", name: "Keude Bakongan", postalCode: "23711" },
+    ])
+    // derive filename from first 2 digits of parentCode (11)
+    expect(readFileMock).toHaveBeenCalledWith(expect.stringContaining("villages/11.csv"), "utf-8")
+  })
+
+  it("returns 500 when filesystem read fails", async () => {
+    // Reset module registry so the route's in-memory CSV cache (Map at module
+    // level) is wiped — previous tests successfully cached their files, and
+    // we need a fresh read on this one to exercise the catch block.
+    vi.resetModules()
+    readFileMock.mockReset()
+    readFileMock.mockRejectedValue(new Error("Disk error"))
+    const { GET: FreshGET } = await import("../route")
+    const res = await FreshGET(req("tipe=provinces"))
+    expect(res.status).toBe(500)
+  })
 })
