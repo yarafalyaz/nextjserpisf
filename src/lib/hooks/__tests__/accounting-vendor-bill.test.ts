@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import type { Prisma } from "@prisma/client"
+
+type TxClient = Prisma.TransactionClient
 
 const mocks = vi.hoisted(() => ({
   systemSettingFindFirst: vi.fn(),
@@ -48,14 +51,14 @@ describe("onVendorBillPosted - service/expense branch", () => {
     mocks.goodsReceiptCount.mockResolvedValue(0)
     mocks.assertPeriodOpen.mockResolvedValue(undefined)
     // $transaction invokes its callback with a tx exposing model delegates
-    mocks.transaction.mockImplementation(async (cb: (tx: any) => any) =>
+    mocks.transaction.mockImplementation(async (cb: (tx: TxClient) => unknown) =>
       cb({
         journal: {
           create: mocks.journalCreate,
           findFirst: mocks.journalFindFirst,
         },
         vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
-      })
+      } as unknown as TxClient)
     )
     mocks.journalCreate.mockResolvedValue({ id: 1 })
   })

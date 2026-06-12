@@ -44,31 +44,34 @@ async function handleCron(request: Request) {
       const duration = Date.now() - start
       results[task] = { status: "success", message: result, duration }
 
-      await prisma.cronLog.create({
-        data: {
-          task,
-          status: "success",
-          message: result,
-          duration,
-        },
-      })
+      await logCronResult(task, "success", result, duration)
     } catch (e) {
       const duration = Date.now() - start
       const message = e instanceof Error ? e.message : "Unknown error"
       results[task] = { status: "error", message, duration }
+      console.error(`Cron task "${task}" failed:`, e)
 
-      await prisma.cronLog.create({
-        data: {
-          task,
-          status: "error",
-          message,
-          duration,
-        },
-      })
+      await logCronResult(task, "error", message, duration)
     }
   }
 
   return NextResponse.json({ results })
+}
+
+async function logCronResult(
+  task: Task,
+  status: "success" | "error",
+  message: string,
+  duration: number
+) {
+  try {
+    await prisma.cronLog.create({
+      data: { task, status, message, duration },
+    })
+  } catch (e) {
+    // Logging must never break the cron handler
+    console.error(`Failed to write cronLog for task "${task}":`, e)
+  }
 }
 
 async function runTask(task: Task): Promise<string> {

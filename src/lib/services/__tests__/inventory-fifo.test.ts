@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { availableQty, consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import type { Prisma } from "@prisma/client";
 
 // Build a mock transaction client. `$queryRaw` returns the locked layer rows.
 function mockTx(opts: {
@@ -35,8 +36,19 @@ function mockTx(opts: {
       updateMany: serialUpdateMany,
     },
     _spies: { layerUpdate, batchUpdate, serialUpdateMany, layerCreate },
-  } as any;
-  return tx;
+  };
+  return tx as unknown as Prisma.TransactionClient & {
+    inventoryLayer: {
+      aggregate: typeof tx.inventoryLayer.aggregate
+    };
+    $queryRaw: typeof tx.$queryRaw;
+    _spies: {
+      layerUpdate: typeof layerUpdate;
+      batchUpdate: typeof batchUpdate;
+      serialUpdateMany: typeof serialUpdateMany;
+      layerCreate: typeof layerCreate;
+    };
+  };
 }
 
 describe("inventory-fifo", () => {
@@ -67,7 +79,7 @@ describe("inventory-fifo", () => {
 
     it("handles null _sum gracefully", async () => {
       const tx = mockTx({});
-      tx.inventoryLayer.aggregate.mockResolvedValue({ _sum: { remaining: null } });
+      (tx.inventoryLayer.aggregate as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ _sum: { remaining: null } });
       expect(await availableQty(tx, 1)).toBe(0);
     });
   });

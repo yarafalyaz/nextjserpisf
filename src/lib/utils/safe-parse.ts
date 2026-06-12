@@ -87,11 +87,24 @@ interface BasicItem {
  * Safely parse JSON array of items, filter out invalid itemIds/quantities,
  * and return typed, cleaned item objects.
  */
+function isValidItem(item: unknown): item is Record<string, unknown> {
+  if (typeof item !== "object" || item === null) return false
+  const record = item as Record<string, unknown>
+  return (
+    typeof record.itemId === "number" &&
+    Number.isFinite(record.itemId) &&
+    record.itemId > 0 &&
+    typeof record.qty === "number" &&
+    Number.isFinite(record.qty) &&
+    record.qty > 0
+  )
+}
+
 export function parseValidItems(itemsJson: string | null | undefined): BasicItem[] {
-  const items = safeJsonParse<any[]>(itemsJson) ?? []
+  const items = safeJsonParse<unknown[]>(itemsJson) ?? []
   return items
-    .filter((item: any) => item && typeof item === "object" && item.itemId > 0 && item.qty > 0)
-    .map((item: any) => ({
+    .filter(isValidItem)
+    .map((item) => ({
       itemId: Number(item.itemId),
       qty: Number(item.qty),
     }))

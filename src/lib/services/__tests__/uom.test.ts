@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { toBaseFactor, toBaseQty } from "@/lib/services/uom.service";
+import type { Prisma } from "@prisma/client";
 
 // Mock transaction client
 function mockTx(opts: {
@@ -13,7 +14,7 @@ function mockTx(opts: {
     uomConversion: {
       findUnique: vi.fn().mockResolvedValue(opts.conversion ?? null),
     },
-  } as any;
+  } as unknown as Prisma.TransactionClient;
 }
 
 describe("uom.service", () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
@@ -20,13 +21,13 @@ const singletonMocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    $transaction: (fn: (t: any) => Promise<any>) => singletonMocks.transaction(fn),
+    $transaction: (fn: (t: Prisma.TransactionClient) => Promise<unknown>) => singletonMocks.transaction(fn),
   },
 }));
 
 import { InventoryService, issueProjectMaterials } from "@/lib/services/inventory.service";
 
-function buildService(txSpies: Record<string, any> = {}) {
+function buildService(txSpies: Record<string, unknown> = {}) {
   const spies = {
     moveFindUniqueOrThrow: vi.fn(),
     moveUpdate: vi.fn().mockResolvedValue({}),
@@ -52,8 +53,8 @@ function buildService(txSpies: Record<string, any> = {}) {
   };
 
   const prismaLike = {
-    $transaction: (fn: (t: any) => Promise<any>) => fn(tx),
-  } as never;
+    $transaction: (fn: (t: Prisma.TransactionClient) => Promise<unknown>) => fn(tx as unknown as Prisma.TransactionClient),
+  } as unknown as PrismaClient;
 
   return { service: new InventoryService(prismaLike), spies };
 }

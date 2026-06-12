@@ -20,48 +20,48 @@ export async function DELETE(
   if (!Number.isInteger(attachmentId) || attachmentId <= 0) return apiError("BAD_REQUEST", "Invalid attachment id")
   if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
 
-  const attachment = await prisma.transactionAttachment.findUnique({
-    where: { id: attachmentId },
-  })
-
-  if (!attachment) {
-    return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
-  }
-
-  // Ownership guard: only uploader can delete
-  if (attachment.uploadedBy !== userId) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
-
-  // Delete file from disk (normalize path)
-  // Files are stored under private/uploads/attachments/ but fileUrl is the API
-  // route path (/api/attachments/<ref>/<filename>). Resolve actual disk path.
   try {
-    const filename = attachment.fileUrl.split("/").pop()
-    const refType = attachment.referenceType || "general"
-    const privateRoot = path.join(process.cwd(), "private", "uploads", "attachments", refType)
-    const filepath = path.resolve(privateRoot, filename || "")
-    const relative = path.relative(path.join(process.cwd(), "private", "uploads"), filepath)
+    const attachment = await prisma.transactionAttachment.findUnique({
+      where: { id: attachmentId },
+    })
 
-    if (filename && !relative.startsWith("..") && !path.isAbsolute(relative)) {
-      await unlink(filepath)
+    if (!attachment) {
+      return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
     }
-  } catch {
-    // File might already be deleted or on R2, continue
-  }
 
-  // Delete from database
-  try {
+    // Ownership guard: only uploader can delete
+    if (attachment.uploadedBy !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // Delete file from disk (normalize path)
+    // Files are stored under private/uploads/attachments/ but fileUrl is the API
+    // route path (/api/attachments/<ref>/<filename>). Resolve actual disk path.
+    try {
+      const filename = attachment.fileUrl.split("/").pop()
+      const refType = attachment.referenceType || "general"
+      const privateRoot = path.join(process.cwd(), "private", "uploads", "attachments", refType)
+      const filepath = path.resolve(privateRoot, filename || "")
+      const relative = path.relative(path.join(process.cwd(), "private", "uploads"), filepath)
+
+      if (filename && !relative.startsWith("..") && !path.isAbsolute(relative)) {
+        await unlink(filepath)
+      }
+    } catch {
+      // File might already be deleted or on R2, continue
+    }
+
+    // Delete from database
     await prisma.transactionAttachment.delete({
       where: { id: attachmentId },
     })
-  } catch (err) {
-    console.error("Failed to delete attachment from database:", err)
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error(error)
     return NextResponse.json(
-      { error: "Gagal menghapus attachment dari database" },
+      { error: "Gagal menghapus attachment" },
       { status: 500 }
     )
   }
-
-  return NextResponse.json({ success: true })
 }

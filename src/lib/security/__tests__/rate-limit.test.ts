@@ -143,7 +143,7 @@ describe("getClientIp", () => {
   })
 
   it("extracts direct TCP IP from req.ip if present", () => {
-    const req = new Request("http://localhost") as any
+    const req = new Request("http://localhost") as Request & { ip?: string }
     req.ip = "127.0.0.1"
     expect(getClientIp(req)).toBe("127.0.0.1")
   })
