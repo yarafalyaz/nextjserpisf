@@ -43,12 +43,21 @@ describe("GET /api/address — kodeInduk validation", () => {
     expect(res.status).toBe(200)
   })
 
-  it("allows requests with no kodeInduk (provinces list)", async () => {
+  it("allows requests with no kodeInduk (provinces list) and caches the response", async () => {
     readFileMock.mockResolvedValue("11,ACEH,0,0")
     const res = await GET(req("tipe=provinces"))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body[0]).toMatchObject({ code: "11" })
+
+    // Call again to exercise the cache.has(filePath) branch in loadCSV
+    const resCached = await GET(req("tipe=provinces"))
+    expect(resCached.status).toBe(200)
+    const bodyCached = await resCached.json()
+    expect(bodyCached[0]).toMatchObject({ code: "11" })
+    
+    // File system should only be read once
+    expect(readFileMock).toHaveBeenCalledTimes(1)
   })
 
   it("returns 400 for an unknown tipe", async () => {
@@ -68,12 +77,13 @@ describe("GET /api/address — kodeInduk validation", () => {
   })
 
   it("handles villages type with parentCode derived province", async () => {
-    readFileMock.mockResolvedValue("1101010001,1101010,KEUDE BAKONGAN,0,0,23711")
+    readFileMock.mockResolvedValue("1101010001,1101010,KEUDE BAKONGAN,0,0,23711\n1101010002,1101010,DESA DUA,0,0,")
     const res = await GET(req("tipe=villages&kodeInduk=1101010"))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toEqual([
       { code: "1101010001", name: "Keude Bakongan", postalCode: "23711" },
+      { code: "1101010002", name: "Desa Dua", postalCode: "" },
     ])
     // derive filename from first 2 digits of parentCode (11)
     expect(readFileMock).toHaveBeenCalledWith(expect.stringContaining("villages/11.csv"), "utf-8")

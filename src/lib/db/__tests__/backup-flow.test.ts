@@ -183,6 +183,19 @@ describe("createBackup", () => {
     )
   })
 
+  it("handles cloud upload errors gracefully and reports cloud=false", async () => {
+    fsMocks.existsSync.mockReturnValue(false)
+    spawnMock.mockReturnValue(makeChildProcess(0))
+    storageMocks.uploadToCloudIfEnabled.mockRejectedValue(new Error("Network failure"))
+    // Swallow warn log
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const res = await createBackup()
+    expect(res.cloud).toBe(false)
+    expect(warnSpy).toHaveBeenCalledWith("[backup] Upload ke cloud gagal:", "Network failure")
+    warnSpy.mockRestore()
+  })
+
   it("rejects with a clear error when mysqldump exits non-zero and cleans up the file", async () => {
     fsMocks.existsSync.mockReturnValue(false)
     spawnMock.mockReturnValue(makeChildProcess(1, "mysqldump: access denied"))
@@ -196,6 +209,13 @@ describe("createBackup", () => {
     spawnMock.mockReturnValueOnce(makeErroringChild("ENOENT: mysqldump"))
 
     await expect(createBackup()).rejects.toThrow(/Gagal menjalankan mysqldump: ENOENT/)
+  })
+
+  it("rejects synchronously when DATABASE_URL is unparseable", async () => {
+    const originalUrl = process.env.DATABASE_URL
+    process.env.DATABASE_URL = "not-a-url"
+    await expect(createBackup()).rejects.toThrow()
+    process.env.DATABASE_URL = originalUrl
   })
 })
 
