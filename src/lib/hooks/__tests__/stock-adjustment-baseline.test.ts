@@ -128,4 +128,69 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
     const outMove = spies.moveCreate.mock.calls[0][0] as { data: { qty: number; impact: string } }
     expect(outMove.data.impact).toBe("OUT")
   })
+
+  it("uses shortfall unit cost when FIFO layers are insufficient (zero-qty edge)", async () => {
+    // actualQty=0, live=10 -> delta -10, FIFO has shortfall=10, enteredUnitCost=200
+    // effectiveUnitCost = (consumedCost=0 + shortfall*enteredUnitCost) / qty
+    mocks.consumeFifoLayers.mockResolvedValueOnce({ consumedCost: 0, shortfall: 10 })
+    const spies = wireTx({
+      items: [{ itemId: 13, systemQty: 10, actualQty: 0, difference: -10, unitCost: 200 }],
+      liveQty: { 13: 10 },
+    })
+    await onStockAdjustmentProcessed(50, 1)
+    const outMove = spies.moveCreate.mock.calls[0][0] as { data: { cost: number; impact: string; qty: number } }
+    expect(outMove.data.impact).toBe("OUT")
+    // qty=10, consumedCost=0, shortfall=10, enteredUnitCost=200
+    // effectiveUnitCost = (0 + 10*200) / 10 = 200
+    expect(outMove.data.cost).toBe(200)
+    expect(outMove.data.qty).toBe(10)
+  })
+
+  it("posts journal entry and updates adjustment status on success", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 15, systemQty: 5, actualQty: 8, difference: 3, unitCost: 100 }],
+      liveQty: { 15: 5 },
+    })
+    await onStockAdjustmentProcessed(50, 7)
+    expect(mocks.onStockAdjustment).toHaveBeenCalledTimes(1)
+    const journalCall = mocks.onStockAdjustment.mock.calls[0]
+    expect(journalCall[2]).toBe("ADJ-001") // documentNo
+    expect(journalCall[3]).toBe(50) // adjustmentId
+    expect(journalCall[4]).toBe(7) // userId
+    // Status update
+    expect(spies.adjUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 50 },
+        data: expect.objectContaining({ status: "processed", approvedBy: 7 }),
+      })
+    )
+  })
+})
+
+describe("onStockAdjustmentProcessed idempotency", () => {
+  it("returns silently (idempotent no-op) when adjustment is already processed", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 5, actualQty: 6, difference: 1, unitCost: 1000 }],
+      liveQty: { 7: 5 },
+    })
+    spies.adjFindUniqueOrThrow.mockResolvedValueOnce({
+      id: 50, documentNo: "ADJ-001", warehouseId: 1, status: "processed", // processed
+      items: [{ itemId: 7, systemQty: 5, actualQty: 6, difference: 1, unitCost: 1000 }],
+    })
+    await onStockAdjustmentProcessed(50, 1)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+
+  it("returns silently (idempotent no-op) when adjustment is cancelled", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 5, actualQty: 6, difference: 1, unitCost: 1000 }],
+      liveQty: { 7: 5 },
+    })
+    spies.adjFindUniqueOrThrow.mockResolvedValueOnce({
+      id: 50, documentNo: "ADJ-001", warehouseId: 1, status: "cancelled", // cancelled
+      items: [{ itemId: 7, systemQty: 5, actualQty: 6, difference: 1, unitCost: 1000 }],
+    })
+    await onStockAdjustmentProcessed(50, 1)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
 })

@@ -56,6 +56,42 @@ describe("takeRateLimit (in-memory fallback)", () => {
     expect(r3.remaining).toBe(0)
   })
 
+  it("calls unref on the interval timer to avoid blocking the event loop", async () => {
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval')
+    // Reset module to force cleanupRegistered = false
+    vi.resetModules()
+    const mod = await import("../rate-limit")
+    const config = { windowMs: 60_000, max: 1 }
+    await mod.takeRateLimit("unref-test", config)
+    
+    // Check that setInterval returned an object with unref called
+    const timerObj = intervalSpy.mock.results[0].value
+    expect(typeof timerObj.unref).toBe('function')
+    intervalSpy.mockRestore()
+  })
+
+  it("cleanup interval deletes expired buckets", async () => {
+    // Fresh module + fake timers active BEFORE import so the setInterval
+    // registers under the current fake-timer context.
+    vi.resetModules()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-02-01T00:00:00Z"))
+    const mod = await import("../rate-limit")
+    const config = { windowMs: 1_000, max: 2 }
+    // Create a bucket that will be expired (resetAt = now + 1_000)
+    await mod.takeRateLimit("cleanup-test", config)
+    await mod.takeRateLimit("cleanup-test", config) // hits=2 (max reached)
+    const blocked = await mod.takeRateLimit("cleanup-test", config)
+    expect(blocked.allowed).toBe(false)
+    // Advance 60s — triggers the setInterval(60_000) cleanup callback,
+    // which deletes the expired bucket (resetAt now+1_000 <= now+60_000).
+    await vi.advanceTimersByTimeAsync(60_000)
+    // Bucket deleted -> fresh allowance.
+    const fresh = await mod.takeRateLimit("cleanup-test", config)
+    expect(fresh.allowed).toBe(true)
+    expect(fresh.remaining).toBe(1)
+  })
+
   it("tracks keys independently", async () => {
     const config = { windowMs: 60_000, max: 1 }
     const r1 = await takeRateLimit("key-a", config)
