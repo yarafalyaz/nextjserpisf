@@ -67,8 +67,17 @@ export function ProductForm({
   const [selectedModelId, setSelectedModelId] = useState<number | null>(product?.vehicleModelId ?? null)
 
   useEffect(() => {
-    fetch("/api/vehicle-brands").then(r => r.json()).then(setVehicleBrands).catch(() => {})
-    fetch("/api/vehicle-models").then(r => r.json()).then(setVehicleModels).catch(() => {})
+    // The /api/vehicle-brands and /api/vehicle-models endpoints return
+    // paginated results: { data, total, page, pageSize }. We need the
+    // .data array for the Combobox options.
+    fetch("/api/vehicle-brands")
+      .then((r) => r.json())
+      .then((d) => setVehicleBrands(d.data ?? []))
+      .catch(() => setVehicleBrands([]))
+    fetch("/api/vehicle-models")
+      .then((r) => r.json())
+      .then((d) => setVehicleModels(d.data ?? []))
+      .catch(() => setVehicleModels([]))
   }, [])
 
   const filteredModels = useMemo(() => {
