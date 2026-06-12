@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { computeMonthlyDepreciation } from "@/lib/finance/asset-depreciation"
+import { apiError } from "@/lib/api-response"
 
 /**
  * Cron: Run monthly asset depreciation for all active assets.
@@ -20,7 +21,7 @@ import { computeMonthlyDepreciation } from "@/lib/finance/asset-depreciation"
 export async function GET(request: Request) {
   // Verify cron secret
   if (!isValidCronRequest(request)) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const now = new Date()

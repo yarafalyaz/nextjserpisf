@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { hasPermission, requireAuth } from "@/lib/auth/permissions"
+import { apiError } from "@/lib/api-response"
 
 export async function GET() {
   try {
@@ -90,6 +91,6 @@ export async function GET() {
       })),
     })
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Unauthorized")
   }
 }

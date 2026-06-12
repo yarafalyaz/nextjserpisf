@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth"
 import { canAccessAttachment } from "@/lib/auth/attachment-permissions"
 import { readFile, stat } from "fs/promises"
 import path from "path"
+import { apiError } from "@/lib/api-response"
 
 const MIME_MAP: Record<string, string> = {
   jpg: "image/jpeg",
@@ -24,18 +25,18 @@ export async function GET(
 ) {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const segments = (await params).path
   if (!segments || segments.length < 2) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 })
+    return apiError("NOT_FOUND", "Not found")
   }
 
   // Prevent path traversal
   for (const seg of segments) {
     if (seg === ".." || seg.includes("/") || seg.includes("\\")) {
-      return NextResponse.json({ error: "Invalid path" }, { status: 400 })
+      return apiError("BAD_REQUEST", "Invalid path")
     }
   }
 
@@ -43,7 +44,7 @@ export async function GET(
   // in is not enough — the caller must be allowed to view that document type
   // (closes IDOR — reading any attachment file by guessing its path).
   if (!(await canAccessAttachment(segments[0]))) {
-    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   const relativePath = segments.join("/")
@@ -52,13 +53,13 @@ export async function GET(
   // Ensure the resolved path is still within the private directory
   const privateDir = path.join(process.cwd(), "private", "uploads", "attachments")
   if (!absolutePath.startsWith(privateDir)) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid path")
   }
 
   try {
     await stat(absolutePath)
   } catch {
-    return NextResponse.json({ error: "File tidak ditemukan" }, { status: 404 })
+    return apiError("NOT_FOUND", "File tidak ditemukan")
   }
 
   const ext = path.extname(absolutePath).slice(1).toLowerCase()

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { hasPermission } from "@/lib/auth/permissions"
+import { apiError } from "@/lib/api-response"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 
 /**
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+      return apiError("UNAUTHORIZED", "Tidak terotorisasi")
     }
     // Payroll/salary-derived data — restrict to users who can view payroll.
     if (!(await hasPermission("view_payroll"))) {

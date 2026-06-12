@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/auth/permissions"
 import { uploadToStorage } from "@/lib/storage/storage"
+import { apiError } from "@/lib/api-response"
 
 export async function POST(req: NextRequest) {
   const canUpload = (await hasPermission("create_items")) || (await hasPermission("edit_items"))
   if (!canUpload) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    return apiError("FORBIDDEN", "Forbidden")
   }
 
   const formData = await req.formData()
   const file = (formData.get("image") || formData.get("file")) as File | null
 
   if (!file) {
-    return NextResponse.json({ error: "Tidak ada file diunggah" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Tidak ada file diunggah")
   }
 
   try {
@@ -24,6 +25,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url })
   } catch (e) {
     console.error("Item upload failed:", e)
-    return NextResponse.json({ error: "Upload gagal" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Upload gagal")
   }
 }

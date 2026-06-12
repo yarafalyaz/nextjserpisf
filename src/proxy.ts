@@ -3,13 +3,11 @@ import type { NextRequest } from "next/server"
 import { getToken } from "next-auth/jwt"
 import { takeRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
-// Pin to Node.js runtime: in-memory rate limiter (Map-based) requires persistent
-// process state. Edge runtime spins a fresh isolate per request, so the Map is
-// wiped on every cold start and rate limits are non-functional in production.
-// Node runtime keeps the same process across requests on long-lived servers.
-// (For true multi-region production, swap takeRateLimit for Upstash/Redis —
-//  the function signature stays identical.)
-export const runtime = "nodejs"
+// Next.js proxy always runs on the Node.js runtime by default (unlike
+// middleware in older Next.js versions), so the in-memory rate-limiter
+// Map is preserved across requests. For true multi-region production,
+// swap takeRateLimit for Upstash/Redis — the function signature stays
+// identical.
 
 // Fix #24: Only allow actual static file extensions, not any URL with a dot
 const STATIC_EXTENSIONS = /\.(ico|png|jpg|jpeg|gif|svg|webp|css|js|woff2?|ttf|eot|map)$/i

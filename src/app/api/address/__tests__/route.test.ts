@@ -22,7 +22,7 @@ describe("GET /api/address — kodeInduk validation", () => {
     const res = await GET(req("tipe=villages&kodeInduk=../../etc/passwd"))
     expect(res.status).toBe(400)
     const body = await res.json()
-    expect(body.error).toMatch(/tidak valid/)
+    expect(body.error.message).toMatch(/tidak valid/)
     // never touched the filesystem
     expect(readFileMock).not.toHaveBeenCalled()
   })

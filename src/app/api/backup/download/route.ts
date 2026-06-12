@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/auth/permissions"
+import { apiError } from "@/lib/api-response"
 import { readBackupFile } from "@/lib/db/backup"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { createReadStream } from "fs"
@@ -7,14 +8,14 @@ import { Readable } from "stream"
 
 export async function GET(req: NextRequest) {
   if (!(await hasPermission("manage_settings"))) {
-    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   const rawFilename = req.nextUrl.searchParams.get("file") || ""
   // Sanitize: strip path components to prevent traversal
   const filename = rawFilename.replace(/^.*[\\/]/, "").replace(/\.\./g, "")
   if (!filename || filename !== rawFilename) {
-    return NextResponse.json({ error: "Nama file tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Nama file tidak valid")
   }
 
   try {

@@ -2,12 +2,13 @@ import { NextResponse, type NextRequest } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { auth } from "@/lib/auth/auth"
 import { parsePagination } from "@/lib/utils/pagination"
+import { apiError } from "@/lib/api-response"
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user)
-      return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+      return apiError("UNAUTHORIZED", "Tidak terotorisasi")
 
     const sp = req.nextUrl.searchParams
     const { page, pageSize, skip, take } = parsePagination({

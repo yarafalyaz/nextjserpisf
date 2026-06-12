@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { auth } from "@/lib/auth/auth"
 import { revalidatePath } from "next/cache"
 import { Status } from "@/lib/constants"
+import { apiError } from "@/lib/api-response"
 
 const MODULE_MAP: Record<string, { model: string; revalidate: string; permission: string }> = {
   "penjualan/penawaran": { model: "quotation", revalidate: "/penjualan/penawaran", permission: "approve_quotations" },
@@ -23,38 +24,38 @@ export async function POST(
   // Auth check — reject unauthenticated requests
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const { path } = await params
   // path = ["sales", "quotations", "123", "approve"]
   if (!Array.isArray(path) || path.length < 3) {
-    return NextResponse.json({ error: "Path tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Path tidak valid")
   }
 
   const action = path[path.length - 1] // "approve" or "reject"
   const idRaw = path[path.length - 2]
   const id = Number.parseInt(idRaw, 10)
   if (!Number.isInteger(id) || id <= 0) {
-    return NextResponse.json({ error: "ID tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "ID tidak valid")
   }
 
   const moduleKey = path.slice(0, path.length - 2).join("/")
 
   const config = MODULE_MAP[moduleKey]
   if (!config) {
-    return NextResponse.json({ error: "Modul tidak ditemukan" }, { status: 404 })
+    return apiError("NOT_FOUND", "Modul tidak ditemukan")
   }
 
   // Permission check — super_admin bypasses
   const userRoles = session.user.roles as string[] | undefined
   const userPermissions = session.user.permissions as string[] | undefined
   if (!userRoles?.includes("super_admin") && !userPermissions?.includes(config.permission)) {
-    return NextResponse.json({ error: "Forbidden: Anda tidak memiliki izin untuk aksi ini" }, { status: 403 })
+    return apiError("FORBIDDEN", "Anda tidak memiliki izin untuk aksi ini")
   }
 
   if (action !== "approve" && action !== "reject") {
-    return NextResponse.json({ error: "Aksi tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Aksi tidak valid")
   }
 
   const newStatus = action === "approve" ? Status.APPROVED : Status.REJECTED
@@ -75,20 +76,17 @@ export async function POST(
       // Either the row doesn't exist, or it's already past pending/draft/sent
       const exists = await (prisma as any)[config.model].findUnique({ where: { id }, select: { id: true, status: true } })
       if (!exists) {
-        return NextResponse.json({ error: "Data tidak ditemukan" }, { status: 404 })
+        return apiError("NOT_FOUND", "Data tidak ditemukan")
       }
-      return NextResponse.json(
-        { error: `Tidak dapat mengubah status dari '${exists.status}' menjadi '${newStatus}'` },
-        { status: 409 }
-      )
+      return apiError("CONFLICT", `Tidak dapat mengubah status dari '${exists.status}' menjadi '${newStatus}'`)
     }
 
     revalidatePath(config.revalidate)
     return NextResponse.json({ success: true, status: newStatus })
   } catch (error) {
     if (error instanceof Error && "code" in error && (error as { code?: string }).code === "P2025") {
-      return NextResponse.json({ error: "Data tidak ditemukan" }, { status: 404 })
+      return apiError("NOT_FOUND", "Data tidak ditemukan")
     }
-    return NextResponse.json({ error: "Failed to update status" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Failed to update status")
   }
 }

@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/db/prisma"
 import { hasPermission } from "@/lib/auth/permissions"
 import { NextResponse } from "next/server"
+import { apiError, apiOk } from "@/lib/api-response"
 
 export async function GET(request: Request) {
   try {
     if (!(await hasPermission("view_vehicles"))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return apiError("FORBIDDEN", "Forbidden")
     }
 
     const { searchParams } = new URL(request.url)
@@ -29,6 +30,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: brands, total, page: halaman, pageSize })
   } catch {
-    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
+import { apiError } from "@/lib/api-response"
 import { unlink } from "fs/promises"
 import path from "path"
 
@@ -10,14 +11,14 @@ export async function DELETE(
 ) {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const { id } = await params
   const attachmentId = Number.parseInt(id, 10)
   const userId = Number.parseInt(String(session.user.id), 10)
-  if (!Number.isInteger(attachmentId) || attachmentId <= 0) return NextResponse.json({ error: "Invalid attachment id" }, { status: 400 })
-  if (!Number.isInteger(userId) || userId <= 0) return NextResponse.json({ error: "Invalid user" }, { status: 400 })
+  if (!Number.isInteger(attachmentId) || attachmentId <= 0) return apiError("BAD_REQUEST", "Invalid attachment id")
+  if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
 
   const attachment = await prisma.transactionAttachment.findUnique({
     where: { id: attachmentId },

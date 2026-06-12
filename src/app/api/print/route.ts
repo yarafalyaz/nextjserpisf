@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { auth } from "@/lib/auth/auth"
 import { hasPermission } from "@/lib/auth/permissions"
+import { apiError } from "@/lib/api-response"
 import { paymentMethodLabel, shippingMethodLabel } from "@/lib/utils/method-labels"
 
 const PRINT_PERMISSION: Record<string, string> = {
@@ -15,7 +16,7 @@ const PRINT_PERMISSION: Record<string, string> = {
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const { searchParams } = new URL(request.url)
@@ -23,18 +24,18 @@ export async function GET(request: Request) {
   const idStr = searchParams.get("id")
 
   if (!type || !idStr) {
-    return NextResponse.json({ error: "Tipe atau ID tidak ditemukan" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Tipe atau ID tidak ditemukan")
   }
 
   // Permission check per document type (prevents IDOR — any user reading any doc by id)
   const requiredPerm = PRINT_PERMISSION[type]
   if (requiredPerm && !(await hasPermission(requiredPerm))) {
-    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   const id = Number(idStr)
   if (isNaN(id)) {
-    return NextResponse.json({ error: "ID tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "ID tidak valid")
   }
 
   try {
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
         where: { id },
         include: { customer: true, items: true },
       })
-      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
+      if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
       return NextResponse.json({
         company: companyInfo,
@@ -102,7 +103,7 @@ export async function GET(request: Request) {
           sections: { include: { items: true } },
         },
       })
-      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
+      if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
       // Flatten items from all sections
       const allItems = doc.sections.flatMap(sec => sec.items)
@@ -159,7 +160,7 @@ export async function GET(request: Request) {
         where: { id },
         include: { customer: true, items: true },
       })
-      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
+      if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
       return NextResponse.json({
         company: companyInfo,
@@ -198,7 +199,7 @@ export async function GET(request: Request) {
           items: true,
         },
       })
-      if (!doc) return NextResponse.json({ error: "Dokumen tidak ditemukan" }, { status: 404 })
+      if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
       return NextResponse.json({
         company: companyInfo,
@@ -229,9 +230,9 @@ export async function GET(request: Request) {
       })
     }
 
-    return NextResponse.json({ error: "Tipe tidak didukung" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Tipe tidak didukung")
   } catch (error) {
     console.error("Print API error:", error)
-    return NextResponse.json({ error: "Kesalahan Server Internal" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }

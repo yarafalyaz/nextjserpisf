@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { notificationService } from "@/lib/services/notification.service"
+import { apiError } from "@/lib/api-response"
 
 /**
  * Cron: Send daily notifications to admins.
@@ -19,7 +20,7 @@ import { notificationService } from "@/lib/services/notification.service"
 export async function GET(request: Request) {
   try {
   if (!isValidCronRequest(request)) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const today = new Date()
@@ -189,6 +190,6 @@ export async function GET(request: Request) {
     results,
   })
   } catch {
-    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
 import { uploadToStorage } from "@/lib/storage/storage"
+import { apiError } from "@/lib/api-response"
 
 /**
  * Avatar upload — stores to the "avatars" category AND updates the current
@@ -11,19 +12,19 @@ import { uploadToStorage } from "@/lib/storage/storage"
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const formData = await req.formData()
   const file = (formData.get("avatar") || formData.get("file")) as File | null
 
   if (!file) {
-    return NextResponse.json({ error: "Tidak ada file diunggah" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Tidak ada file diunggah")
   }
 
   const userId = Number.parseInt(String(session.user.id), 10)
   if (!Number.isInteger(userId) || userId <= 0) {
-    return NextResponse.json({ error: "User tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "User tidak valid")
   }
 
   try {
@@ -41,6 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url })
   } catch (e) {
     console.error("Avatar upload failed:", e)
-    return NextResponse.json({ error: "Upload gagal" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Upload gagal")
   }
 }

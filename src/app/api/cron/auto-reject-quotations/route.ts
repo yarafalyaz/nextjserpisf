@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
+import { apiError } from "@/lib/api-response"
 import { SalesStatus, Status } from "@/lib/constants"
 
 /**
@@ -12,7 +13,7 @@ import { SalesStatus, Status } from "@/lib/constants"
 export async function GET(request: Request) {
   // Verify cron secret
   if (!isValidCronRequest(request)) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   try {

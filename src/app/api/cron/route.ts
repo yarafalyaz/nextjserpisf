@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { notificationService } from "@/lib/services/notification.service"
+import { apiError } from "@/lib/api-response"
 
 const TASKS = [
   "lock-period",
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
 
 async function handleCron(request: Request) {
   if (!isValidCronRequest(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Unauthorized")
   }
 
   const url = new URL(request.url)

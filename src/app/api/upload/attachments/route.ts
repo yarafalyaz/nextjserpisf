@@ -4,12 +4,13 @@ import { prisma } from "@/lib/db/prisma"
 import { canAccessAttachment } from "@/lib/auth/attachment-permissions"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import { apiError } from "@/lib/api-response"
 
 export async function POST(req: NextRequest) {
   try {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const formData = await req.formData()
@@ -18,11 +19,11 @@ export async function POST(req: NextRequest) {
   const referenceId = formData.get("referenceId") as string | null
 
   if (!file) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 })
+    return apiError("BAD_REQUEST", "No file uploaded")
   }
 
   if (!referenceType || !referenceId) {
-    return NextResponse.json({ error: "referenceType and referenceId are required" }, { status: 400 })
+    return apiError("BAD_REQUEST", "referenceType and referenceId are required")
   }
 
   // Validate file type
@@ -31,24 +32,24 @@ export async function POST(req: NextRequest) {
     "application/pdf",
   ]
   if (!allowedTypes.includes(file.type)) {
-    return NextResponse.json({ error: "Format file tidak didukung. Gunakan JPG, PNG, WebP, GIF, atau PDF." }, { status: 400 })
+    return apiError("BAD_REQUEST", "Format file tidak didukung. Gunakan JPG, PNG, WebP, GIF, atau PDF.")
   }
 
   // Validate file size (max 50MB)
   if (file.size > 50 * 1024 * 1024) {
-    return NextResponse.json({ error: "Ukuran file maksimal 50MB" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Ukuran file maksimal 50MB")
   }
 
   if (!/^\d+$/.test(referenceId)) {
-    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid referenceId")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
   const userId = Number.parseInt(String(session.user.id), 10)
   if (!Number.isInteger(referenceIdNum) || referenceIdNum < 0) {
-    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid referenceId")
   }
   if (!Number.isInteger(userId) || userId <= 0) {
-    return NextResponse.json({ error: "Invalid user" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid user")
   }
 
   const bytes = await file.arrayBuffer()
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
   // Sanitize referenceType to prevent path traversal
   const safeRefType = referenceType.replace(/[^a-zA-Z0-9_-]/g, "")
   if (!safeRefType || safeRefType !== referenceType) {
-    return NextResponse.json({ error: "Invalid referenceType" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid referenceType")
   }
 
   // Whitelist allowed reference types (same as GET)
@@ -69,13 +70,13 @@ export async function POST(req: NextRequest) {
     "delivery_order", "inventory_transfer", "stock_adjustment",
   ]
   if (!allowedRefTypes.includes(safeRefType)) {
-    return NextResponse.json({ error: "Tipe referensi tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
 
   // Resource-level authz: must be allowed to view this document type, not just
   // be logged in (closes IDOR — attaching files to any document by id).
   if (!(await canAccessAttachment(safeRefType))) {
-    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   // Save to private/uploads/attachments/{referenceType} (NOT public/ — served via authenticated route)
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
   // Final path traversal guard
   const relativePath = path.relative(uploadDir, filepath)
   if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-    return NextResponse.json({ error: "Invalid file path" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid file path")
   }
 
   await writeFile(filepath, buffer)
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(attachment)
   } catch {
-    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }
 
@@ -122,7 +123,7 @@ export async function GET(req: NextRequest) {
   try {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const { searchParams } = new URL(req.url)
@@ -130,7 +131,7 @@ export async function GET(req: NextRequest) {
   const referenceId = searchParams.get("referensiId")
 
   if (!referenceType || !referenceId) {
-    return NextResponse.json({ error: "referenceType and referenceId are required" }, { status: 400 })
+    return apiError("BAD_REQUEST", "referenceType and referenceId are required")
   }
 
   // Whitelist allowed reference types to prevent enumeration of arbitrary tables
@@ -142,21 +143,21 @@ export async function GET(req: NextRequest) {
     "delivery_order", "inventory_transfer", "stock_adjustment",
   ]
   if (!allowedRefTypes.includes(referenceType)) {
-    return NextResponse.json({ error: "Tipe referensi tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
 
   // Resource-level authz: must be allowed to view this document type, not just
   // be logged in (closes IDOR — listing attachment metadata of any document).
   if (!(await canAccessAttachment(referenceType))) {
-    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   if (!/^\d+$/.test(referenceId)) {
-    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid referenceId")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
   if (!Number.isInteger(referenceIdNum) || referenceIdNum <= 0) {
-    return NextResponse.json({ error: "Invalid referenceId" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid referenceId")
   }
 
   const attachments = await prisma.transactionAttachment.findMany({
@@ -169,6 +170,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(attachments)
   } catch {
-    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }

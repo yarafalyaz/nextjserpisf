@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { uploadToStorage, type UploadCategory } from "@/lib/storage/storage"
 import { requirePermission } from "@/lib/auth/permissions"
+import { apiError } from "@/lib/api-response"
 
 const VALID_CATEGORIES: UploadCategory[] = ["avatars", "logos", "signatures", "items", "attachments"]
 
@@ -24,7 +25,7 @@ const CATEGORY_PERMISSIONS: Record<UploadCategory, string | null> = {
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 })
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const formData = await req.formData()
@@ -32,10 +33,10 @@ export async function POST(req: NextRequest) {
   const category = String(formData.get("category") || "attachments") as UploadCategory
 
   if (!file) {
-    return NextResponse.json({ error: "Tidak ada file diunggah" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Tidak ada file diunggah")
   }
   if (!VALID_CATEGORIES.includes(category)) {
-    return NextResponse.json({ error: "Kategori upload tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Kategori upload tidak valid")
   }
 
   // Enforce per-category permission
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     try {
       await requirePermission(requiredPerm)
     } catch {
-      return NextResponse.json({ error: "Tidak memiliki izin untuk kategori ini" }, { status: 403 })
+      return apiError("FORBIDDEN", "Tidak memiliki izin untuk kategori ini")
     }
   }
 
@@ -57,6 +58,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ url })
   } catch (e) {
     console.error("Upload failed:", e)
-    return NextResponse.json({ error: "Upload gagal" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Upload gagal")
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readFile } from "fs/promises"
 import { join } from "path"
+import { apiError } from "@/lib/api-response"
 
 const DATA_DIR = join(process.cwd(), "src/data/address")
 
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
   // user-supplied kodeInduk can never influence the CSV file path (the village
   // lookup derives a filename from it). Defense-in-depth against path traversal.
   if (parentCode !== null && !/^\d+$/.test(parentCode)) {
-    return NextResponse.json({ error: "Kode induk tidak valid" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Kode induk tidak valid")
   }
 
   try {
@@ -67,8 +68,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data, { headers: CACHE_HEADERS })
     }
 
-    return NextResponse.json({ error: "Invalid type" }, { status: 400 })
+    return apiError("BAD_REQUEST", "Invalid type")
   } catch {
-    return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Failed to fetch data")
   }
 }
