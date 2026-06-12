@@ -166,6 +166,7 @@ export async function GET(req: NextRequest) {
       referenceId: referenceIdNum,
     },
     orderBy: { createdAt: "desc" },
+    take: 200,
   })
 
   return NextResponse.json(attachments)

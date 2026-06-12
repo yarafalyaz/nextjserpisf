@@ -45,7 +45,16 @@ export default async function ProductionOrdersPage({
     skip: (page - 1) * pageSize,
   })
 
-  const data = toPlain(orders)
+  const data = toPlain(
+    orders.map((o) => ({
+      id: o.id,
+      documentNo: o.documentNo,
+      product: { name: o.product.name },
+      quantity: Number(o.qty),
+      createdAt: o.createdAt,
+      status: o.status,
+    })),
+  )
 
   const statusChips = ["", "draft", "in_progress", "completed"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
