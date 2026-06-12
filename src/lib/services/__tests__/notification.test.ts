@@ -131,6 +131,70 @@ describe("notification.service", () => {
     });
   });
 
+  describe("checkAndNotifyLowStockBatch", () => {
+    it("returns 0 and skips DB calls when no items are low", async () => {
+      const result = await notificationService.checkAndNotifyLowStockBatch([
+        { id: 1, name: "A", qtyOnHand: 50, minStock: 5 },
+        { id: 2, name: "B", qtyOnHand: 0, minStock: 0 },
+      ]);
+      expect(result).toBe(0);
+      expect(mocks.findManyUsers).not.toHaveBeenCalled();
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+
+    it("returns 0 when there are admins but no low-stock items", async () => {
+      const result = await notificationService.checkAndNotifyLowStockBatch([
+        { id: 1, name: "A", qtyOnHand: 100, minStock: 5 },
+      ]);
+      expect(result).toBe(0);
+      expect(mocks.findManyUsers).not.toHaveBeenCalled();
+    });
+
+    it("returns 0 when there are low-stock items but no admins", async () => {
+      mocks.findManyUsers.mockResolvedValue([]);
+      const result = await notificationService.checkAndNotifyLowStockBatch([
+        { id: 1, name: "A", qtyOnHand: 1, minStock: 5 },
+      ]);
+      expect(result).toBe(0);
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+
+    it("creates one notification per (admin, low-item) pair in a single createMany", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 4 });
+      const result = await notificationService.checkAndNotifyLowStockBatch([
+        { id: 10, name: "Oli", qtyOnHand: 1, minStock: 5 },
+        { id: 11, name: "Filter", qtyOnHand: 0, minStock: 2 },
+      ]);
+      expect(result).toBe(4);
+      expect(mocks.createManyNotif).toHaveBeenCalledOnce();
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ userId: 1, title: "Stok Oli Menipis", type: "warning", readAt: null }),
+          expect.objectContaining({ userId: 1, title: "Stok Filter Menipis" }),
+          expect.objectContaining({ userId: 2, title: "Stok Oli Menipis" }),
+          expect.objectContaining({ userId: 2, title: "Stok Filter Menipis" }),
+        ]),
+      });
+    });
+
+    it("treats qtyOnHand == minStock as low (uses <= boundary, inclusive)", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 2 });
+      const result = await notificationService.checkAndNotifyLowStockBatch([
+        { id: 1, name: "Edge", qtyOnHand: 5, minStock: 5 },
+        { id: 2, name: "Below", qtyOnHand: 1, minStock: 5 },
+      ]);
+      expect(result).toBe(2);
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ title: "Stok Edge Menipis" }),
+          expect.objectContaining({ title: "Stok Below Menipis" }),
+        ]),
+      });
+    });
+  });
+
   describe("notifyOverdueInvoice", () => {
     it("notifies with correct formatted message", async () => {
       mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
