@@ -10,7 +10,7 @@ import { bulkDelete } from "@/actions/bulk.actions"
 interface Product {
   id: number
   name: string
-  materials: { id: number }[]
+  materialsCount: number
 }
 
 const columnHelper = createColumnHelper<Product>()
@@ -24,8 +24,7 @@ const columns = [
       </Link>
     ),
   }),
-  columnHelper.accessor((row) => row.materials.length, {
-    id: "materialsCount",
+  columnHelper.accessor("materialsCount", {
     header: "Material",
     cell: (info) => `${info.getValue()} material`,
   }),

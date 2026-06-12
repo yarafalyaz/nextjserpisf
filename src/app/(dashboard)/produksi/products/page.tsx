@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic"
 
-import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
@@ -31,16 +30,26 @@ export default async function ProductsPage({
     }),
   }
 
+  // Use select (not include) to avoid pulling Decimal fields (standardCost)
+  // into the RSC→client boundary. Decimal instances crash react-table's
+  // internal .map() with "w.map is not a function".
   const products = await prisma.product.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { materials: { select: { id: true } } },
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { materials: true } },
+    },
     take,
     skip: (page - 1) * pageSize,
   })
 
-  const tableData = toPlain(products) as any
-
+  const tableData = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    materialsCount: p._count.materials,
+  }))
 
   return (
     <div className="flex flex-col gap-6">
