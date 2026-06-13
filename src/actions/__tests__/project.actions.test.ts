@@ -75,7 +75,20 @@ describe("Project Actions", () => {
     const res = await actions.deleteProject(1)
     expect(res?.success).toBe(true)
   })
-  it("initializeProjectStages succeeds", async () => {
+  it("deleteProject fails if has dependents", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue({
+      id: 1, _count: { workOrders: 1, timesheets: 0, tasks: 0, overtimeRequests: 0 }
+    })
+    const res = await actions.deleteProject(1)
+    expect(res?.success).toBe(false)
+  })
+  it("deleteProject fails if not found", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(null)
+    const res = await actions.deleteProject(1)
+    expect(res?.success).toBe(false)
+  })
+  it("initializeProjectStages skips if already exists", async () => {
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ id: 1 }])
     const res = await actions.initializeProjectStages(1)
     expect(res?.success).toBe(true)
   })
