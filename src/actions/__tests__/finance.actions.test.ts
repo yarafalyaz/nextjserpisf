@@ -1,3 +1,4 @@
+import { findFirstNegativeBalance, computePettyCashChain } from "@/lib/finance/petty-cash-chain"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
@@ -93,8 +94,36 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 
 beforeEach(() => {
   vi.clearAllMocks()
+  
+  // Reset model mocks and transaction
+  Object.values(mocks.prismaMock).forEach((m: any) => {
+    if (typeof m === "function") return
+    if (m && typeof m === "object" && typeof m.findFirst === "function") {
+      m.findFirst.mockReset().mockResolvedValue(null)
+      m.findUnique.mockReset().mockResolvedValue(null)
+      m.findUniqueOrThrow.mockReset().mockResolvedValue(null)
+      m.findMany.mockReset().mockResolvedValue([])
+      m.create.mockReset().mockResolvedValue({ id: 1 })
+      m.createMany.mockReset().mockResolvedValue({ count: 1 })
+      m.update.mockReset().mockResolvedValue({})
+      m.updateMany.mockReset().mockResolvedValue({ count: 1 })
+      m.delete.mockReset().mockResolvedValue({})
+      m.deleteMany.mockReset().mockResolvedValue({ count: 1 })
+      m.count.mockReset().mockResolvedValue(0)
+      m.upsert.mockReset().mockResolvedValue({})
+      m.aggregate.mockReset().mockResolvedValue({ _sum: {} })
+    }
+  })
+  
+  mocks.prismaMock.$transaction.mockReset().mockImplementation(async (ops: any) => {
+    if (typeof ops === "function") return ops(mocks.prismaMock)
+    return Promise.all(ops)
+  })
+
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
   mocks.generateDocNumMock.mockResolvedValue("DOC-001")
+  vi.mocked(findFirstNegativeBalance).mockReset().mockReturnValue(null)
+  vi.mocked(computePettyCashChain).mockReset().mockReturnValue([])
 })
 
 describe("Bank Statement Actions", () => {
@@ -455,5 +484,215 @@ describe('Finance Actions Error Paths', () => {
     const res = await (actions as any).deleteStatisticalKeyFigure(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
+  })
+})
+
+
+describe("Additional Branches", () => {
+  it("deleteExpense rejects approved or paid", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.deleteExpense(1)
+    expect(res.success).toBe(false)
+  })
+
+  it("updateExpense rejects non-draft", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const fd = fdMap({ amount: 100, date: "2024-01-01", accountId: 1 })
+    const res = await actions.updateExpense(1, fd)
+    expect(res.success).toBe(false)
+  })
+
+  it("reverseJournal recovers from error inside tx", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
+    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 1 })
+    mocks.prismaMock.$transaction.mockImplementationOnce(async () => { throw new Error("Tx fail") })
+    const res = await actions.reverseJournal(1)
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.journal.updateMany).toHaveBeenCalledTimes(2)
+  })
+
+  it("createBankStatement validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.createBankStatement(new FormData())).success).toBe(false)
+  })
+
+  it("createJournal validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.createJournal(new FormData())).success).toBe(false)
+  })
+
+  it("updateJournal validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.updateJournal(1, new FormData())).success).toBe(false)
+  })
+
+  it("createExpense validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.createExpense(new FormData())).success).toBe(false)
+  })
+
+  it("createPettyCash validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.createPettyCash(new FormData())).success).toBe(false)
+  })
+
+  it("createBudget validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.createBudget(new FormData())).success).toBe(false)
+  })
+
+  it("updateBudget validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.updateBudget(1, new FormData())).success).toBe(false)
+  })
+
+  it("createCostCenter validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.createCostCenter(new FormData())).success).toBe(false)
+  })
+
+  it("updateCostCenter validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    expect((await actions.updateCostCenter(1, new FormData())).success).toBe(false)
+  })
+
+  it("postJournal rejects unbalanced entries", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ 
+      id: 1, status: "DRAFT", entries: [{ debit: 100, credit: 0 }, { debit: 0, credit: 50 }] 
+    })
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(false)
+  })
+
+  it("createJournal covers attachment update", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.create.mockResolvedValue({ id: 1 })
+    const fd = fdMap({ transactionDate: "2024-01-01", entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 100 }]), attachmentIds: "[1, 2]" })
+    const res = await actions.createJournal(fd)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
+  })
+
+  it("createExpense covers attachment update", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.create.mockResolvedValue({ id: 1 })
+    const fd = fdMap({ amount: 100, date: "2024-01-01", accountId: 1, attachmentIds: "[3, 4]" })
+    const res = await actions.createExpense(fd)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
+  })
+
+  it("createPettyCash covers attachment update", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.create.mockResolvedValue({ id: 1 })
+    const fd = fdMap({ amount: 100, type: "IN", date: "2024-01-01", accountId: 1, attachmentIds: "[5, 6]" })
+    const res = await actions.createPettyCash(fd)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
+  })
+
+  it("updateJournal covers attachment update", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.update.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01") })
+    const fd = fdMap({ transactionDate: "2024-01-01", entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 100 }]), attachmentIds: "[7, 8]" })
+    const res = await actions.updateJournal(1, fd)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
+  })
+
+  it("updatePettyCash covers attachment update", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.update.mockResolvedValue({ id: 1 })
+    const fd = fdMap({ amount: 100, type: "IN", date: "2024-01-01", accountId: 1, attachmentIds: "[9, 10]" })
+    const res = await actions.updatePettyCash(1, fd)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
+  })
+
+  it("recalcPettyCashChain triggers negative balance error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValue([{ id: 1, documentNo: "PC-01", type: "OUT", amount: 100, balanceBefore: 0, balanceAfter: -100 }])
+    vi.mocked(findFirstNegativeBalance).mockReturnValueOnce({ record: { id: 1, documentNo: "PC-01" }, balanceAfter: -100 } as any)
+    const fd = fdMap({ amount: 50, type: "OUT", date: "2024-01-01", accountId: 1 })
+    const res = await actions.createPettyCash(fd)
+    expect(res.success).toBe(false)
+  })
+
+  it("recalcPettyCashChain updates balance chain when differs", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValue([{ id: 1, documentNo: "PC-01", type: "IN", amount: 100, balanceBefore: 0, balanceAfter: 100 }])
+    vi.mocked(computePettyCashChain).mockReturnValueOnce([{ id: 1, balanceBefore: 0, balanceAfter: 150 }] as any)
+    mocks.prismaMock.pettyCash.update.mockResolvedValue({ id: 1 })
+    const fd = fdMap({ amount: 100, type: "IN", date: "2024-01-01", accountId: 1 })
+    const res = await actions.createPettyCash(fd)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.pettyCash.update).toHaveBeenCalled()
+  })
+
+  it("deletePettyCash deletes existing journals", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findMany.mockResolvedValue([{ id: 100 }])
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", documentNo: "PC-01" })
+    const res = await actions.deletePettyCash(1)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.journalEntry.deleteMany).toHaveBeenCalled()
+  })
+})
+
+
+describe("More Action Branches", () => {
+  it("updateExpense success path with attachments", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.expense.update.mockResolvedValue({ id: 1 })
+    const fd = fdMap({ amount: 100, date: "2024-01-01", accountId: 1, attachmentIds: "[10, 20]" })
+    const res = await actions.updateExpense(1, fd)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
+  })
+
+  it("reverseJournal concurrent claim rejection (REVERSED)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
+    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 0 })
+    mocks.prismaMock.journal.findUnique.mockResolvedValue({ status: "REVERSED" })
+    const res = await actions.reverseJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Jurnal sudah pernah dibalik/i)
+  })
+
+  it("reverseJournal concurrent claim rejection (DRAFT)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
+    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 0 })
+    mocks.prismaMock.journal.findUnique.mockResolvedValue({ status: "DRAFT" })
+    const res = await actions.reverseJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Jurnal tidak bisa dibalik/i)
+  })
+
+  it("matchReconciliationLine existing item update", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ status: "draft" })
+    mocks.prismaMock.bankReconciliationItem.findFirst.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliationItem.update.mockResolvedValue({ id: 1 })
+    const res = await actions.matchReconciliationLine(1, 1, 1)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.bankReconciliationItem.update).toHaveBeenCalled()
+  })
+
+  it("completeReconciliation unmatched items rejection", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ 
+      id: 1, status: "draft", items: [{ matched: false }] 
+    })
+    const res = await actions.completeReconciliation(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Semua baris harus di-match/i)
   })
 })
