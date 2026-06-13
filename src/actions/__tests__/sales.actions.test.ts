@@ -78,6 +78,9 @@ const mocks = vi.hoisted(() => {
     workOrder: buildModelMock(),
     workOrderItem: buildModelMock(),
     project: buildModelMock(),
+    stockMove: buildModelMock(),
+    inventoryLayer: buildModelMock(),
+    transactionAttachment: buildModelMock(),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") {
         return ops(prismaMock)
@@ -310,9 +313,45 @@ describe("Sales Invoice Actions", () => {
     const res = await actions.updateSalesInvoice(1, fdMap({ customerId: "1", date: "2026-06-12", dueDate: "2026-06-20" }))
     expect(res?.success).toBe(true)
   })
+  it("postInvoice succeeds", async () => {
+    mocks.prismaMock.salesInvoiceItem.count.mockResolvedValueOnce(1)
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft", customerId: 1, grandTotal: 100, paidAmount: 0
+    })
+    mocks.prismaMock.customer.findUnique.mockResolvedValueOnce({ creditLimit: 0, name: "CUST" })
+    const res = await actions.postInvoice(1)
+    expect(res?.success).toBe(true)
+  })
+  it("deleteSalesInvoice succeeds", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft", customerId: 1
+    })
+    mocks.prismaMock.salesPayment.findMany.mockResolvedValueOnce([])
+    const res = await actions.deleteSalesInvoice(1)
+    expect(res?.success).toBe(true)
+  })
+  it("voidSalesInvoice succeeds", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "posted", customerId: 1, grandTotal: 100, paidAmount: 0, payments: []
+    })
+    mocks.prismaMock.customer.findUnique.mockResolvedValueOnce({ creditLimit: 0, name: "CUST" })
+    const res = await actions.voidSalesInvoice(1)
+    expect(res?.success).toBe(true)
+  })
 })
 
 describe("Sales Payment Actions", () => {
+  it("createSalesPayment succeeds", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, grandTotal: 1000, status: "posted", customerId: 1, paidAmount: 0 })
+    const res = await actions.createSalesPayment(fdMap({ salesInvoiceId: "1", paymentDate: "2026-06-12", paymentMethod: "cash", amount: "100" }))
+    expect(res?.success).toBe(true)
+  })
+  it("updateSalesPayment succeeds", async () => {
+    mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, grandTotal: 1000 })
+    const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: "1", paymentDate: "2026-06-12", paymentMethod: "cash", amount: "100" }))
+    expect(res?.success).toBe(true)
+  })
   it("deleteSalesPayment succeeds", async () => {
     mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({ id: 1 })
     const res = await actions.deleteSalesPayment(1)
@@ -324,6 +363,19 @@ describe("Sales Return Actions", () => {
   beforeEach(() => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1 })
     mocks.prismaMock.salesInvoice.findFirst.mockResolvedValue({ id: 1, customerId: 1 })
+  })
+  it("createSalesReturn succeeds", async () => {
+    mocks.findOverReturnMock.mockReturnValue(null)
+    mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([{ itemId: 1, unitPrice: 100, qty: 10 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: "1", salesInvoiceId: "1", date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }))
+    expect(res?.success).toBe(true)
+  })
+  it("updateSalesReturn succeeds", async () => {
+    mocks.findOverReturnMock.mockReturnValue(null)
+    mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([{ itemId: 1, unitPrice: 100, qty: 10 }])
+    const res = await actions.updateSalesReturn(1, fdMap({ customerId: "1", salesInvoiceId: "1", date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }))
+    expect(res?.success).toBe(true)
   })
   it("completeSalesReturn succeeds", async () => {
     mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
@@ -353,6 +405,10 @@ describe("Delivery Order Actions", () => {
 })
 
 describe("Down Payment Actions", () => {
+  it("createDownPayment succeeds", async () => {
+    const res = await actions.createDownPayment(fdMap({ quotationId: "1", amount: "100", paymentDate: "2026-06-12" }))
+    expect(res?.success).toBe(true)
+  })
   it("updateDownPayment succeeds", async () => {
     mocks.prismaMock.downPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.updateDownPayment(1, fdMap({ quotationId: "1", amount: "100", paymentDate: "2026-06-12" }))
