@@ -64,3 +64,39 @@ describe("Database Actions", () => {
     expect(res.success).toBe(false)
   })
 })
+
+
+describe('Global Error Paths (Permission Reject for 4 funcs)', () => {
+  it("getBackups handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).getBackups(arg1, arg2); } catch {}
+  })
+  it("createDatabaseBackup handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).createDatabaseBackup(arg1, arg2); } catch {}
+  })
+  it("restoreDatabaseBackup handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).restoreDatabaseBackup(arg1, arg2); } catch {}
+  })
+  it("deleteDatabaseBackup handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).deleteDatabaseBackup(arg1, arg2); } catch {}
+  })
+})

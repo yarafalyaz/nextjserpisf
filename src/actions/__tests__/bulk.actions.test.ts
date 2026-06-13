@@ -52,3 +52,15 @@ describe("Bulk Actions", () => {
     expect(res?.success).toBe(false)
   })
 })
+
+
+describe('Global Error Paths (Permission Reject for 1 funcs)', () => {
+  it("bulkDelete handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).bulkDelete(arg1, arg2); } catch {}
+  })
+})

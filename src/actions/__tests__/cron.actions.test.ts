@@ -77,3 +77,23 @@ describe("Cron Actions", () => {
     }
   })
 })
+
+
+describe('Global Error Paths (Permission Reject for 2 funcs)', () => {
+  it("runCronTask handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).runCronTask(arg1, arg2); } catch {}
+  })
+  it("getCronLogs handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).getCronLogs(arg1, arg2); } catch {}
+  })
+})

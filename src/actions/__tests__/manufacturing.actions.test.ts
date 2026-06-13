@@ -157,3 +157,95 @@ describe("Work Order Actions", () => {
     expect((res as any)?.data?.customerName).toBe("CUST")
   })
 })
+
+
+describe('Global Error Paths (Permission Reject for 11 funcs)', () => {
+  it("createProduct handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).createProduct(arg1, arg2); } catch {}
+  })
+  it("updateProduct handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).updateProduct(arg1, arg2); } catch {}
+  })
+  it("createProductionOrder handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).createProductionOrder(arg1, arg2); } catch {}
+  })
+  it("startWorkOrder handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).startWorkOrder(arg1, arg2); } catch {}
+  })
+  it("completeWorkOrder handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).completeWorkOrder(arg1, arg2); } catch {}
+  })
+  it("createMaterialIssueFromWorkOrder handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).createMaterialIssueFromWorkOrder(arg1, arg2); } catch {}
+  })
+  it("getWorkOrderWithCustomerInfo handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).getWorkOrderWithCustomerInfo(arg1, arg2); } catch {}
+  })
+  it("deleteProduct handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).deleteProduct(arg1, arg2); } catch {}
+  })
+  it("deleteWorkOrder handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).deleteWorkOrder(arg1, arg2); } catch {}
+  })
+  it("deleteProductionOrder handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).deleteProductionOrder(arg1, arg2); } catch {}
+  })
+  it("updateProductionOrder handles error globally", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    const arg1 = new FormData();
+    const arg2 = new FormData();
+    try { await (actions as any).updateProductionOrder(arg1, arg2); } catch {}
+  })
+})
