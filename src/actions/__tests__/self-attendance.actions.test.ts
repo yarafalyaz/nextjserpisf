@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
       systemSetting: buildModelMock(),
       workSchedule: buildModelMock(),
       companyLocation: buildModelMock(),
+      overtimeRequest: buildModelMock(),
       $transaction: vi.fn(async (ops: any) => {
         if (typeof ops === "function") return ops(mocks.prismaMock)
         return Promise.all(ops)
@@ -99,6 +100,18 @@ describe("Self Attendance Actions", () => {
     mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce({ id: 1, employeeId: 1, date: new Date(), checkIn: new Date(), status: "present" })
     mocks.prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 0 })
     await expect(actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))).rejects.toThrow("Sudah check-out")
+  })
+  it("selfCheckOut calculates overtime with rest break overlap (line 182-194 branch)", async () => {
+    // Overtime check-out
+    mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce({
+      id: 1, employeeId: 1, date: new Date(),
+      checkIn: new Date(new Date().getTime() - 4 * 3600 * 1000), // 4 hours ago
+      status: "overtime"
+    })
+    mocks.prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 1 })
+    
+    const res = await actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))
+    expect(res?.success).toBe(true)
   })
   it("getTodayAttendance returns null if no employee", async () => {
     mocks.prismaMock.employee.findFirst.mockResolvedValueOnce(null)
