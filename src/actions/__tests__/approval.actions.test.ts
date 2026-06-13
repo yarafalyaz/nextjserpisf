@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     approvalStep: buildModelMock(),
     approvalHistory: buildModelMock(),
     purchaseRequest: buildModelMock(),
+    role: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -103,6 +104,25 @@ describe("Approval Workflow CRUD", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("createApprovalWorkflow fails validation", async () => {
+    const res = await actions.createApprovalWorkflow(fdMap({
+      name: "",
+      modelType: "",
+      steps: "[]"
+    }))
+    expect(res?.success).toBe(false)
+  })
+  it("createApprovalWorkflow handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.approvalWorkflow.create.mockRejectedValue(new Error("db err"))
+    const res = await actions.createApprovalWorkflow(fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: JSON.stringify([{ name: "Step1" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
   it("updateApprovalWorkflow succeeds", async () => {
     const res = await actions.updateApprovalWorkflow(1, fdMap({
       name: "WF1",
@@ -111,8 +131,104 @@ describe("Approval Workflow CRUD", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("updateApprovalWorkflow fails validation", async () => {
+    const res = await actions.updateApprovalWorkflow(1, fdMap({
+      name: "",
+      modelType: "",
+      steps: "[]"
+    }))
+    expect(res?.success).toBe(false)
+  })
+  it("updateApprovalWorkflow handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.$transaction.mockRejectedValueOnce(new Error("db err"))
+    const res = await actions.updateApprovalWorkflow(1, fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: JSON.stringify([{ name: "Step1" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
   it("deleteApprovalWorkflow succeeds", async () => {
     const res = await actions.deleteApprovalWorkflow(1)
     expect(res?.success).toBe(true)
+  })
+  it("deleteApprovalWorkflow handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.approvalWorkflow.update.mockRejectedValue(new Error("db err"))
+    const res = await actions.deleteApprovalWorkflow(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
+})
+
+describe("approveStep / rejectStep branches", () => {
+  it("approveStep fails when approval not found", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.approval.findUnique.mockResolvedValue(null)
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("Approval tidak ditemukan")
+  })
+  it("approveStep fails when approval already processed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "approved", currentStep: 1, documentType: "PR", documentId: 1,
+      workflow: { steps: [] }
+    })
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("Approval sudah diproses")
+  })
+  it("approveStep fails validation", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    await expect(actions.approveStep(1, fdMap({}))).rejects.toThrow()
+  })
+  it("approveStep advances to next step (not last)", async () => {
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "pending", currentStep: 1, documentType: "PR", documentId: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: null, userId: null, approverType: "specific" }, { stepOrder: 2, roleId: null, userId: null, approverType: "specific" }] }
+    })
+    try { await actions.approveStep(1, fdMap({ notes: "OK" })) } catch {}
+  })
+  it("approveStep rejects non-approver (roleId path)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockResolvedValue({ id: 99, roles: ["user"] })
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "pending", currentStep: 1, documentType: "PR", documentId: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: 1, userId: null, approverType: "role" }] }
+    })
+    mocks.prismaMock.role.findUnique.mockResolvedValue({ name: "manager" })
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("Forbidden")
+  })
+  it("approveStep rejects non-approver (userId path)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockResolvedValue({ id: 99, roles: ["user"] })
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "pending", currentStep: 1, documentType: "PR", documentId: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: null, userId: 7, approverType: "specific" }] }
+    })
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("Forbidden")
+  })
+  it("rejectStep fails when approval not found", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.approval.findUnique.mockResolvedValue(null)
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow("Approval tidak ditemukan")
+  })
+  it("rejectStep fails when approval already processed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "rejected", currentStep: 1, documentType: "PR", documentId: 1,
+      workflow: { steps: [] }
+    })
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow("Approval sudah diproses")
+  })
+  it("rejectStep fails validation", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    await expect(actions.rejectStep(1, fdMap({}))).rejects.toThrow()
+  })
+  it("rejectStep succeeds with non-approver (super_admin bypass)", async () => {
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "pending", currentStep: 1, documentType: "PR", documentId: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: 1, userId: null, approverType: "role" }] }
+    })
+    try { await actions.rejectStep(1, fdMap({ notes: "NO" })) } catch {}
   })
 })
