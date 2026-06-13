@@ -140,8 +140,19 @@ function fd(entries: Record<string, string | string[]>): FormData {
 describe("Asset Brand Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.assetBrand.create.mockResolvedValue({ id: 20 })
+  })
+
+  it("fails validation on create with empty form", async () => {
+    const res = await createAssetBrand(fd({}))
+    expect(res?.success).toBe(false)
+  })
+
+  it("fails validation on update with empty form", async () => {
+    const res = await updateAssetBrand(20, fd({}))
+    expect(res?.success).toBe(false)
   })
 
   it("creates brand and redirects", async () => {
@@ -160,10 +171,23 @@ describe("Asset Brand Actions", () => {
     expect(prismaMock.assetBrand.delete).toHaveBeenCalledWith({ where: { id: 20 } })
   })
 
+  it("handles error on create brand", async () => {
+    prismaMock.assetBrand.create.mockRejectedValue(new Error("db err"))
+    const res = await createAssetBrand(fd({ name: "Dell" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
+
   it("handles error on update brand", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
     prismaMock.assetBrand.update.mockRejectedValue(new Error("db err"))
     const res = await updateAssetBrand(20, fd({ name: "HP" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
+
+  it("handles error on delete brand", async () => {
+    prismaMock.assetBrand.delete.mockRejectedValue(new Error("db err"))
+    const res = await deleteAssetBrand(20)
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
@@ -172,12 +196,18 @@ describe("Asset Brand Actions", () => {
 describe("Asset Category Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.assetCategory.create.mockResolvedValue({ id: 10 })
   })
 
   it("fails validation with empty form", async () => {
     const res = await createAssetCategory(fd({}))
+    expect(res?.success).toBe(false)
+  })
+
+  it("fails validation on update with empty form", async () => {
+    const res = await updateAssetCategory(10, fd({}))
     expect(res?.success).toBe(false)
   })
 
@@ -197,8 +227,14 @@ describe("Asset Category Actions", () => {
     expect(prismaMock.assetCategory.update).toHaveBeenCalled()
   })
 
+  it("handles error on create category", async () => {
+    prismaMock.assetCategory.create.mockRejectedValue(new Error("db err"))
+    const res = await createAssetCategory(fd({ name: "Computers", code: "CMP" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
+
   it("handles error on update category", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
     prismaMock.assetCategory.update.mockRejectedValue(new Error("db err"))
     const res = await updateAssetCategory(10, fd({ name: "IT", code: "IT" }))
     expect(res?.success).toBe(false)
@@ -210,15 +246,55 @@ describe("Asset Category Actions", () => {
     await expect(deleteAssetCategory(10)).rejects.toThrow("NEXT_REDIRECT")
     expect(prismaMock.assetCategory.delete).toHaveBeenCalledWith({ where: { id: 10 } })
   })
+
+  it("handles error on delete category", async () => {
+    prismaMock.assetCategory.delete.mockRejectedValue(new Error("db err"))
+    const res = await deleteAssetCategory(10)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
 })
 
 
 describe("Asset Transfer Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.assetTransfer.create.mockResolvedValue({ id: 30 })
     prismaMock.asset.update.mockResolvedValue({})
+  })
+
+  it("fails validation with empty form on create", async () => {
+    const res = await createAssetTransfer(fd({}))
+    expect(res?.success).toBe(false)
+  })
+
+  it("fails validation with empty form on update", async () => {
+    const res = await updateAssetTransfer(30, fd({}))
+    expect(res?.success).toBe(false)
+  })
+
+  it("handles error on create transfer", async () => {
+    prismaMock.assetTransfer.create.mockRejectedValue(new Error("db err"))
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-06-12",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
+
+  it("rethrows redirect error on create transfer", async () => {
+    const redirectErr = new Error("redirect")
+    ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+    prismaMock.assetTransfer.create.mockRejectedValue(redirectErr)
+    await expect(createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-06-12",
+    }))).rejects.toThrow(redirectErr)
   })
 
   it("creates transfer and updates asset location", async () => {
@@ -252,6 +328,23 @@ describe("Asset Transfer Actions", () => {
     })
   })
 
+  it("deletes transfer and reverts to latest transfer destination if one exists", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      assetId: 5,
+      fromLocation: "OldLoc",
+      toLocation: "HQ",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue({ location: "HQ" })
+    prismaMock.assetTransfer.findFirst.mockResolvedValue({ toLocation: "OtherBranch" })
+
+    const res = await deleteAssetTransfer(30)
+    expect(res.success).toBe(true)
+    expect(prismaMock.asset.update).toHaveBeenCalledWith({
+      where: { id: 5 },
+      data: { location: "OtherBranch" },
+    })
+  })
+
   it("deletes transfer and skips revert when asset location differs", async () => {
     prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
       assetId: 5,
@@ -264,6 +357,33 @@ describe("Asset Transfer Actions", () => {
     expect(res.success).toBe(true)
     // Should not call asset.update
     expect(prismaMock.asset.update).not.toHaveBeenCalled()
+  })
+
+  it("deletes transfer and skips revert when asset not found", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      assetId: 5,
+      fromLocation: "OldLoc",
+      toLocation: "HQ",
+    })
+    prismaMock.asset.findUnique.mockResolvedValue(null)
+
+    const res = await deleteAssetTransfer(30)
+    expect(res.success).toBe(true)
+    expect(prismaMock.asset.update).not.toHaveBeenCalled()
+  })
+
+  it("handles error on delete transfer", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockRejectedValue(new Error("db err"))
+    const res = await deleteAssetTransfer(30)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
+
+  it("rethrows redirect error on delete transfer", async () => {
+    const redirectErr = new Error("redirect")
+    ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+    prismaMock.assetTransfer.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    await expect(deleteAssetTransfer(30)).rejects.toThrow(redirectErr)
   })
 
   it("updates transfer with same assetId (no revert)", async () => {
@@ -301,8 +421,28 @@ describe("Asset Transfer Actions", () => {
     })
   })
 
+  it("updates transfer with different assetId and no fromLocation (no revert)", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 30,
+      assetId: 5,
+      fromLocation: null,
+    })
+    prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
+
+    await updateAssetTransfer(30, fd({
+      assetId: "7",
+      toLocation: "Branch2",
+      transferDate: "2026-06-12",
+    }))
+    expect(prismaMock.assetTransfer.update).toHaveBeenCalled()
+    // Should not call asset.update with revert
+    const revertCalls = prismaMock.asset.update.mock.calls.filter(
+      (c: any[]) => c[0]?.data?.location === "OldLoc"
+    )
+    expect(revertCalls).toHaveLength(0)
+  })
+
   it("handles error on update transfer", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
     prismaMock.assetTransfer.findUniqueOrThrow.mockRejectedValue(new Error("db err"))
     const res = await updateAssetTransfer(30, fd({
       assetId: "7",
@@ -312,17 +452,52 @@ describe("Asset Transfer Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
+
+  it("rethrows redirect error on update transfer", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 30,
+      assetId: 5,
+      fromLocation: "OldLoc",
+    })
+    const redirectErr = new Error("redirect")
+    ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+    prismaMock.assetTransfer.update.mockRejectedValue(redirectErr)
+    await expect(updateAssetTransfer(30, fd({
+      assetId: "5",
+      toLocation: "Branch2",
+      transferDate: "2026-06-12",
+    }))).rejects.toThrow(redirectErr)
+  })
 })
 
 describe("createAsset / updateAsset", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.asset.create.mockResolvedValue({ id: 100, name: "Laptop", code: "AST-001" })
     prismaMock.documentSequence.upsert.mockResolvedValue({ currentValue: 1 })
     generateDocNumMock.mockResolvedValue("AST-001")
     process.env.FIXED_ASSET_ACCOUNT_ID = "0"
     process.env.ASSET_CASH_ACCOUNT_ID = "0"
+  })
+
+  it("fails validation with empty form on create", async () => {
+    const res = await createAsset(fd({}))
+    expect(res?.success).toBe(false)
+  })
+
+  it("fails validation with empty form on update", async () => {
+    const res = await updateAsset(100, fd({}))
+    expect(res?.success).toBe(false)
+  })
+
+  it("generates code when none provided", async () => {
+    await createAsset(fd({
+      name: "Laptop",
+      purchasePrice: "1000",
+    }))
+    expect(generateDocNumMock).toHaveBeenCalled()
   })
 
   it("creates asset without GL posting when env vars missing", async () => {
@@ -333,6 +508,18 @@ describe("createAsset / updateAsset", () => {
     }))
     expect(res.success).toBe(true)
     expect(prismaMock.asset.create).toHaveBeenCalled()
+    expect(prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
+  it("skips GL posting when purchaseCost is 0", async () => {
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ASSET_CASH_ACCOUNT_ID = "201"
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-01",
+      purchasePrice: "0",
+    }))
+    expect(res.success).toBe(true)
     expect(prismaMock.journal.create).not.toHaveBeenCalled()
   })
 
@@ -356,6 +543,17 @@ describe("createAsset / updateAsset", () => {
     }))
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/DB down/)
+  })
+
+  it("rethrows redirect error on create asset", async () => {
+    const redirectErr = new Error("redirect")
+    ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+    prismaMock.$transaction.mockRejectedValueOnce(redirectErr)
+    await expect(createAsset(fd({
+      name: "Laptop",
+      code: "LAP-01",
+      purchasePrice: "1000",
+    }))).rejects.toThrow(redirectErr)
   })
 
   it("uses provided code when present (skips generateDocumentNumber)", async () => {
@@ -408,11 +606,23 @@ describe("createAsset / updateAsset", () => {
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/DB down/)
   })
+
+  it("rethrows redirect error on update asset", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({ purchaseCost: 1000 })
+    const redirectErr = new Error("redirect")
+    ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+    prismaMock.asset.update.mockRejectedValue(redirectErr)
+    await expect(updateAsset(100, fd({
+      name: "X",
+      purchasePrice: "1000",
+    }))).rejects.toThrow(redirectErr)
+  })
 })
 
 describe("deleteAsset", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.journal.count.mockResolvedValue(0)
     prismaMock.asset.delete.mockResolvedValue({})
@@ -432,18 +642,32 @@ describe("deleteAsset", () => {
     expect(prismaMock.asset.delete).not.toHaveBeenCalled()
   })
 
-  it("handles error on delete asset (caught error path)", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
+  it("handles error on journal count (caught error path)", async () => {
     prismaMock.journal.count.mockRejectedValue(new Error("db err"))
     const res = await deleteAsset(100)
     expect(res.success).toBe(false)
     expect(res.error).toBe("db err")
+  })
+
+  it("handles error on asset delete (caught error path)", async () => {
+    prismaMock.asset.delete.mockRejectedValue(new Error("delete err"))
+    const res = await deleteAsset(100)
+    expect(res.success).toBe(false)
+    expect(res.error).toBe("delete err")
+  })
+
+  it("rethrows redirect error on delete asset", async () => {
+    const redirectErr = new Error("redirect")
+    ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+    prismaMock.journal.count.mockRejectedValue(redirectErr)
+    await expect(deleteAsset(100)).rejects.toThrow(redirectErr)
   })
 })
 
 describe("disposeAsset", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
       id: 100,
@@ -461,6 +685,11 @@ describe("disposeAsset", () => {
     process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID = "0"
     process.env.ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID = "0"
     process.env.ASSET_CASH_ACCOUNT_ID = "0"
+  })
+
+  it("fails validation with empty form", async () => {
+    const res = await disposeAsset(fd({}))
+    expect(res?.success).toBe(false)
   })
 
   it("disposes asset and records gain (proceeds > book value)", async () => {
@@ -524,5 +753,19 @@ describe("disposeAsset", () => {
     const res = await disposeAsset(fd({ assetId: "100", proceeds: "700" }))
     expect(res.success).toBe(true)
     expect(prismaMock.journal.create).toHaveBeenCalled()
+  })
+
+  it("handles error on dispose asset", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockRejectedValue(new Error("db err"))
+    const res = await disposeAsset(fd({ assetId: "100" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
+
+  it("rethrows redirect error on dispose asset", async () => {
+    const redirectErr = new Error("redirect")
+    ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+    prismaMock.asset.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    await expect(disposeAsset(fd({ assetId: "100" }))).rejects.toThrow(redirectErr)
   })
 })
