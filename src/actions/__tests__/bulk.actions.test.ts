@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => {
   return {
     requirePermissionMock: vi.fn(),
     revalidateMock: vi.fn(),
+    buildModelMock,
     prismaMock: {
       customer: buildModelMock(),
       item: buildModelMock(),
       purchaseRequest: buildModelMock(), // Needs individual
+      employee: buildModelMock(), // Used for hasSoftDelete test
     }
   }
 })
@@ -27,6 +29,25 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
 })
+
+// We need to mock Prisma DMMF to control hasSoftDelete logic
+vi.mock("@prisma/client", () => ({
+  Prisma: {
+    dmmf: {
+      datamodel: {
+        models: [
+          { name: "Customer", fields: [{ name: "id" }, { name: "name" }] },
+          { name: "Item", fields: [{ name: "id" }] },
+          { name: "Employee", fields: [{ name: "id" }, { name: "deletedAt" }] },
+          { name: "Journal", fields: [{ name: "id" }] },
+          { name: "PurchaseRequest", fields: [{ name: "id" }] },
+          { name: "Bank", fields: [{ name: "id" }] },
+          // Intentionally omitting 'asset' to test dmmfModelMap missing case
+        ]
+      }
+    }
+  }
+}))
 
 describe("Bulk Actions", () => {
   it("bulkDelete succeeds (hard delete model)", async () => {
@@ -50,6 +71,41 @@ describe("Bulk Actions", () => {
   it("bulkDelete fails on unknown model", async () => {
     const res = await bulkDelete("unknownModel" as any, [1])
     expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/tidak diizinkan/)
+  })
+  it("bulkDelete fails when > 500 ids provided", async () => {
+    const manyIds = Array.from({ length: 501 }, (_, i) => i + 1)
+    const res = await bulkDelete("customer", manyIds)
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/Maksimal 500 data/)
+  })
+  it("bulkDelete fails when prisma model not found", async () => {
+    // Pass a valid model name that is missing from prismaMock
+    const res = await bulkDelete("bank", [1])
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/tidak ditemukan/)
+  })
+  it("bulkDelete fails when dmmf schema not found", async () => {
+    // asset is a valid model, we'll add it to prismaMock but NOT to dmmf mock above
+    (mocks.prismaMock as any)["asset"] = mocks.buildModelMock()
+    const res = await bulkDelete("asset", [1])
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/Skema model asset tidak ditemukan/)
+  })
+  it("bulkDelete uses soft delete when deletedAt exists", async () => {
+    const res = await bulkDelete("employee", [1])
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.employee.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [1] } },
+      data: { deletedAt: expect.any(Date) }
+    })
+  })
+  it("bulkDelete catches and logs errors during deletion", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.customer.deleteMany.mockRejectedValueOnce(new Error("DB error"))
+    const res = await bulkDelete("customer", [1])
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/Gagal menghapus data/)
   })
 })
 
