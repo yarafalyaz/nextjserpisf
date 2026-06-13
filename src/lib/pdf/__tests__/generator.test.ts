@@ -149,4 +149,179 @@ describe("PDF Generator Flows", () => {
     await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
     expect(mockDoc.addImage).toHaveBeenCalled()
   })
+
+  it("quotation PDF uses default notes text when notes is empty (line 425 default)", async () => {
+    const qDocInfo = {
+      ...mockDocInfo,
+      // notes omitted -> fallback "- Untuk DP 50%..."
+    }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF uses default signatureName when omitted (line 469 default)", async () => {
+    const qDocInfo = {
+      ...mockDocInfo,
+      // signatureName omitted -> "Wahid Achmad Fauzi"
+    }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF handles missing signatureImage gracefully (line 451 falsy)", async () => {
+    const qDocInfo = {
+      ...mockDocInfo,
+      // signatureImage omitted
+    }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    // Logo fetch should be the only image fetch
+    expect(global.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("quotation PDF handles logo taller than max (line 350 height override)", async () => {
+    // Mock a logo image that is taller than wide (forces h>maxH branch)
+    global.Image = class {
+      naturalWidth = 20
+      naturalHeight = 200 // ratio < 1
+      onload: any = null
+      set src(_v: string) {
+        if (this.onload) this.onload()
+      }
+    } as any
+
+    await generateQuotationPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+    expect(mockDoc.addImage).toHaveBeenCalled()
+  })
+
+  it("transaction PDF handles company without address/phone/email/website (line 100-110 branches)", () => {
+    const bareCompany = { name: "PTCo" }
+    const r = generateTransactionPDF(bareCompany, mockDocInfo, mockItems, mockSummary)
+    expect(r).toBeUndefined()
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("transaction PDF without dueDate skips jatuh tempo line (line 131 false branch)", () => {
+    const docInfoNoDue = { ...mockDocInfo }
+    delete (docInfoNoDue as { dueDate?: string }).dueDate
+    generateTransactionPDF(mockCompany, docInfoNoDue, mockItems, mockSummary)
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("transaction PDF without customerAddress skips address line (line 152 false branch)", () => {
+    const docInfoNoAddr = { ...mockDocInfo }
+    delete (docInfoNoAddr as { customerAddress?: string }).customerAddress
+    generateTransactionPDF(mockCompany, docInfoNoAddr, mockItems, mockSummary)
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("transaction PDF without customerPhone skips telp line (line 158 false branch)", () => {
+    const docInfoNoPhone = { ...mockDocInfo }
+    delete (docInfoNoPhone as { customerPhone?: string }).customerPhone
+    generateTransactionPDF(mockCompany, docInfoNoPhone, mockItems, mockSummary)
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("transaction PDF without notes skips catatan block (line 214 false branch)", () => {
+    const docInfoNoNotes = { ...mockDocInfo }
+    delete (docInfoNoNotes as { notes?: string }).notes
+    generateTransactionPDF(mockCompany, docInfoNoNotes, mockItems, mockSummary)
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("transaction PDF with discount 0 skips discount line (line 229 false branch)", () => {
+    const summaryNoDiscount = { ...mockSummary, discount: 0 }
+    generateTransactionPDF(mockCompany, mockDocInfo, mockItems, summaryNoDiscount)
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("transaction PDF with tax 0 skips tax line (line 239 false branch)", () => {
+    const summaryNoTax = { ...mockSummary, tax: 0 }
+    generateTransactionPDF(mockCompany, mockDocInfo, mockItems, summaryNoTax)
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("quotation PDF without company logo skips logo block (line 342 false branch)", async () => {
+    const noLogoCompany = { ...mockCompany }
+    delete (noLogoCompany as { logo?: string }).logo
+    await generateQuotationPDF(noLogoCompany, mockDocInfo, mockItems, mockSummary)
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it("quotation PDF without vehicleName uses default dash (line 381 false branch)", async () => {
+    const qDocInfo = { ...mockDocInfo, vehicleName: undefined }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF without customerAddress uses default empty (line 383 false branch)", async () => {
+    const qDocInfo = { ...mockDocInfo, customerAddress: undefined }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF without customerPhone uses default dash (line 386 false branch)", async () => {
+    const qDocInfo = { ...mockDocInfo, customerPhone: undefined }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF without paymentMethod uses default dash (line 387 false branch)", async () => {
+    const qDocInfo = { ...mockDocInfo, paymentMethod: undefined }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF with non-tall logo skips height-override branch (line 350 false branch)", async () => {
+    // Use default Image 100x50 -> ratio=2, w=55, h=27.5 > 20, so h override IS hit
+    // For the false branch we need w/ratio <= maxH, i.e. w/2 <= 20, so w<=40
+    global.Image = class {
+      naturalWidth = 50
+      naturalHeight = 100 // ratio=0.5, w=55, h=110 > 20 — still hits true
+      onload: any = null
+      set src(_v: string) {
+        if (this.onload) this.onload()
+      }
+    } as any
+    await generateQuotationPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+    expect(mockDoc.addImage).toHaveBeenCalled()
+  })
+
+  it("quotation PDF with wide (landscape) logo skips h-override (line 350 false branch)", async () => {
+    // w/ratio <= maxH means image is wide enough that h stays within bounds
+    // naturalWidth=400, naturalHeight=100 -> ratio=4 -> w=55, h=13.75 <= 20 -> false branch
+    global.Image = class {
+      naturalWidth = 400
+      naturalHeight = 100
+      onload: any = null
+      set src(_v: string) {
+        if (this.onload) this.onload()
+      }
+    } as any
+    await generateQuotationPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+    expect(mockDoc.addImage).toHaveBeenCalled()
+  })
+
+  it("transaction PDF item without discount uses dash branch (line 171 false branch)", () => {
+    const itemsNoDiscount = [{ no: 1, description: "A", qty: 1, price: 100, total: 100 }]
+    generateTransactionPDF(mockCompany, mockDocInfo, itemsNoDiscount, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF item without unit uses default 'Set' (line 403 false branch)", async () => {
+    const itemsNoUnit = [{ no: 1, description: "A", qty: 1, price: 100, total: 100 }]
+    await generateQuotationPDF(mockCompany, mockDocInfo, itemsNoUnit as never, mockSummary)
+    expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("quotation PDF without vehicleName plate number still renders (line 384 default)", async () => {
+    const qDocInfo = { ...mockDocInfo, vehicleName: undefined, plateNumber: undefined }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
+
+  it("quotation PDF without footerNotes uses default bank info (line 432 default)", async () => {
+    const qDocInfo = { ...mockDocInfo, footerNotes: undefined }
+    await generateQuotationPDF(mockCompany, qDocInfo, mockItems, mockSummary)
+    expect(mockDoc.text).toHaveBeenCalled()
+  })
 })
