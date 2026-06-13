@@ -58,13 +58,42 @@ describe("CRM Ticket Actions", () => {
     const res = await actions.createTicket(fdMap({ subject: "Ticket Subject" }))
     expect(res?.success).toBe(true)
   })
+  it("createTicket fails validation", async () => {
+    const res = await actions.createTicket(fdMap({}))
+    expect(res?.success).toBe(false)
+  })
+  it("createTicket handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.crmTicket.create.mockRejectedValueOnce(new Error("db err"))
+    const res = await actions.createTicket(fdMap({ subject: "Ticket Subject" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
   it("updateTicket succeeds", async () => {
     const res = await actions.updateTicket(1, fdMap({ subject: "Ticket Subject" }))
     expect(res?.success).toBe(true)
   })
+  it("updateTicket fails validation", async () => {
+    const res = await actions.updateTicket(1, fdMap({}))
+    expect(res?.success).toBe(false)
+  })
+  it("updateTicket handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.crmTicket.update.mockRejectedValueOnce(new Error("db err"))
+    const res = await actions.updateTicket(1, fdMap({ subject: "Ticket Subject" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
   it("deleteTicket succeeds", async () => {
     const res = await actions.deleteTicket(1)
     expect(res?.success).toBe(true)
+  })
+  it("deleteTicket handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.crmTicket.delete.mockRejectedValueOnce(new Error("db err"))
+    const res = await actions.deleteTicket(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
   })
 })
 
@@ -72,5 +101,12 @@ describe("CRM Lead Actions", () => {
   it("deleteLead succeeds", async () => {
     const res = await actions.deleteLead(1)
     expect(res?.success).toBe(true)
+  })
+  it("deleteLead handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.lead.delete.mockRejectedValueOnce(new Error("db err"))
+    const res = await actions.deleteLead(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
   })
 })
