@@ -405,245 +405,245 @@ describe("Purchase Return Actions", () => {
 describe('Global Error Paths (Permission Reject)', () => {
   it("createPurchaseRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.createPurchaseRequest(arg1, arg2); } catch {} 
+    try { await (actions as any).createPurchaseRequest(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("approvePurchaseRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.approvePurchaseRequest(arg1, arg2); } catch {} 
+    try { await (actions as any).approvePurchaseRequest(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createPurchaseOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.createPurchaseOrder(arg1, arg2); } catch {} 
+    try { await (actions as any).createPurchaseOrder(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("approvePurchaseOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.approvePurchaseOrder(arg1, arg2); } catch {} 
+    try { await (actions as any).approvePurchaseOrder(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("markPurchaseOrderOrdered handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.markPurchaseOrderOrdered(arg1, arg2); } catch {} 
+    try { await (actions as any).markPurchaseOrderOrdered(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("cancelPurchaseOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.cancelPurchaseOrder(arg1, arg2); } catch {} 
+    try { await (actions as any).cancelPurchaseOrder(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createGoodsReceipt handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.createGoodsReceipt(arg1, arg2); } catch {} 
+    try { await (actions as any).createGoodsReceipt(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("verifyGoodsReceipt handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.verifyGoodsReceipt(arg1, arg2); } catch {} 
+    try { await (actions as any).verifyGoodsReceipt(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createVendorBill handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.createVendorBill(arg1, arg2); } catch {} 
+    try { await (actions as any).createVendorBill(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createVendorPayment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.createVendorPayment(arg1, arg2); } catch {} 
+    try { await (actions as any).createVendorPayment(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("confirmVendorBill handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.confirmVendorBill(arg1, arg2); } catch {} 
+    try { await (actions as any).confirmVendorBill(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("confirmVendorPayment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.confirmVendorPayment(arg1, arg2); } catch {} 
+    try { await (actions as any).confirmVendorPayment(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createPurchaseReturn handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.createPurchaseReturn(arg1, arg2); } catch {} 
+    try { await (actions as any).createPurchaseReturn(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("processPurchaseReturn handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.processPurchaseReturn(arg1, arg2); } catch {} 
+    try { await (actions as any).processPurchaseReturn(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deletePurchaseRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.deletePurchaseRequest(arg1, arg2); } catch {} 
+    try { await (actions as any).deletePurchaseRequest(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deletePurchaseOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.deletePurchaseOrder(arg1, arg2); } catch {} 
+    try { await (actions as any).deletePurchaseOrder(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteGoodsReceipt handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.deleteGoodsReceipt(arg1, arg2); } catch {} 
+    try { await (actions as any).deleteGoodsReceipt(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteVendorBill handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.deleteVendorBill(arg1, arg2); } catch {} 
+    try { await (actions as any).deleteVendorBill(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteVendorPayment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.deleteVendorPayment(arg1, arg2); } catch {} 
+    try { await (actions as any).deleteVendorPayment(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updatePurchaseRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.updatePurchaseRequest(arg1, arg2); } catch {} 
+    try { await (actions as any).updatePurchaseRequest(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updatePurchaseOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.updatePurchaseOrder(arg1, arg2); } catch {} 
+    try { await (actions as any).updatePurchaseOrder(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateVendorBill handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.updateVendorBill(arg1, arg2); } catch {} 
+    try { await (actions as any).updateVendorBill(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateGoodsReceipt handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.updateGoodsReceipt(arg1, arg2); } catch {} 
+    try { await (actions as any).updateGoodsReceipt(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updatePurchaseReturn handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.updatePurchaseReturn(arg1, arg2); } catch {} 
+    try { await (actions as any).updatePurchaseReturn(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateVendorPayment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.updateVendorPayment(arg1, arg2); } catch {} 
+    try { await (actions as any).updateVendorPayment(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("voidVendorBill handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.voidVendorBill(arg1, arg2); } catch {} 
+    try { await (actions as any).voidVendorBill(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deletePurchaseReturn handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if (mocks.requirePermissionMock) mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if (mocks.requireAuthMock) mocks.requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await actions.deletePurchaseReturn(arg1, arg2); } catch {} 
+    try { await (actions as any).deletePurchaseReturn(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
 })

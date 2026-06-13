@@ -99,7 +99,7 @@ beforeEach(() => {
 
 describe("Bank Statement Actions", () => {
   it("createBankStatement succeeds", async () => {
-    const res = await actions.createBankStatement(fdMap({
+    const res = await (actions as any).createBankStatement(fdMap({
       accountId: 1,
       date: "2026-06-13",
       openingBalance: 1000,
@@ -111,7 +111,7 @@ describe("Bank Statement Actions", () => {
 
 describe("Journal Actions", () => {
   it("createJournal succeeds", async () => {
-    const res = await actions.createJournal(fdMap({
+    const res = await (actions as any).createJournal(fdMap({
       transactionDate: "2026-06-13",
       entries: JSON.stringify([{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }])
     }))
@@ -119,7 +119,7 @@ describe("Journal Actions", () => {
   })
   it("updateJournal succeeds", async () => {
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
-    const res = await actions.updateJournal(1, fdMap({
+    const res = await (actions as any).updateJournal(1, fdMap({
       transactionDate: "2026-06-13",
       entries: JSON.stringify([{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }])
     }))
@@ -127,24 +127,24 @@ describe("Journal Actions", () => {
   })
   it("postJournal succeeds", async () => {
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
-    const res = await actions.postJournal(1)
+    const res = await (actions as any).postJournal(1)
     expect(res?.success).toBe(true)
   })
   it("reverseJournal succeeds", async () => {
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED", isReversed: false, entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
-    const res = await actions.reverseJournal(1)
+    const res = await (actions as any).reverseJournal(1)
     expect(res?.success).toBe(true)
   })
   it("deleteJournal succeeds", async () => {
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT" })
-    const res = await actions.deleteJournal(1)
+    const res = await (actions as any).deleteJournal(1)
     expect(res?.success).toBe(true)
   })
 })
 
 describe("Expense Actions", () => {
   it("createExpense succeeds", async () => {
-    const res = await actions.createExpense(fdMap({
+    const res = await (actions as any).createExpense(fdMap({
       accountId: 1,
       amount: 1000,
       date: "2026-06-13"
@@ -153,7 +153,7 @@ describe("Expense Actions", () => {
   })
   it("updateExpense succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
-    const res = await actions.updateExpense(1, fdMap({
+    const res = await (actions as any).updateExpense(1, fdMap({
       accountId: 1,
       amount: 1200,
       date: "2026-06-13"
@@ -162,17 +162,17 @@ describe("Expense Actions", () => {
   })
   it("approveExpense succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
-    const res = await actions.approveExpense(1)
+    const res = await (actions as any).approveExpense(1)
     expect(res?.success).toBe(true)
   })
   it("markExpensePaid succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
-    const res = await actions.markExpensePaid(1)
+    const res = await (actions as any).markExpensePaid(1)
     expect(res?.success).toBe(true)
   })
   it("deleteExpense succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, isPosted: false })
-    const res = await actions.deleteExpense(1)
+    const res = await (actions as any).deleteExpense(1)
     expect(res?.success).toBe(true)
   })
 })
@@ -186,7 +186,7 @@ describe("Petty Cash Actions", () => {
   })
 
   it("createPettyCash succeeds", async () => {
-    const res = await actions.createPettyCash(fdMap({
+    const res = await (actions as any).createPettyCash(fdMap({
       type: "IN",
       amount: 1000,
       date: "2026-06-13"
@@ -194,7 +194,7 @@ describe("Petty Cash Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("updatePettyCash succeeds", async () => {
-    const res = await actions.updatePettyCash(1, fdMap({
+    const res = await (actions as any).updatePettyCash(1, fdMap({
       type: "OUT",
       amount: 500,
       date: "2026-06-13"
@@ -202,14 +202,14 @@ describe("Petty Cash Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("deletePettyCash succeeds", async () => {
-    const res = await actions.deletePettyCash(1)
+    const res = await (actions as any).deletePettyCash(1)
     expect(res?.success).toBe(true)
   })
 })
 
 describe("Bank Reconciliation Actions", () => {
   it("createBankReconciliation succeeds", async () => {
-    const res = await actions.createBankReconciliation(fdMap({
+    const res = await (actions as any).createBankReconciliation(fdMap({
       accountId: 1,
       statementDate: "2026-06-13",
       statementBalance: 5000
@@ -218,19 +218,19 @@ describe("Bank Reconciliation Actions", () => {
   })
   it("matchReconciliationLine succeeds", async () => {
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
-    const res = await actions.matchReconciliationLine(1, 1, 1)
+    const res = await (actions.matchReconciliationLine as any)(1, 1, 1)
     expect(res?.success).toBe(true)
   })
   it("completeReconciliation succeeds", async () => {
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
-    const res = await actions.completeReconciliation(1)
+    const res = await (actions as any).completeReconciliation(1)
     expect(res?.success).toBe(true)
   })
 })
 
 describe("Budget Actions", () => {
   it("createBudget succeeds", async () => {
-    const res = await actions.createBudget(fdMap({
+    const res = await (actions as any).createBudget(fdMap({
       name: "Budget 2026",
       accountId: 1,
       amount: 100000,
@@ -241,7 +241,7 @@ describe("Budget Actions", () => {
   })
   it("updateBudget succeeds", async () => {
     mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({ id: 1 })
-    const res = await actions.updateBudget(1, fdMap({
+    const res = await (actions as any).updateBudget(1, fdMap({
       name: "Budget 2026 v2",
       accountId: 1,
       amount: 120000,
@@ -251,14 +251,14 @@ describe("Budget Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("deleteBudget succeeds", async () => {
-    const res = await actions.deleteBudget(1)
+    const res = await (actions as any).deleteBudget(1)
     expect(res?.success).toBe(true)
   })
 })
 
 describe("Cost Center Actions", () => {
   it("createCostCenter succeeds", async () => {
-    const res = await actions.createCostCenter(fdMap({
+    const res = await (actions as any).createCostCenter(fdMap({
       code: "CC-001",
       name: "Cost Center 1",
       isActive: "true"
@@ -267,21 +267,21 @@ describe("Cost Center Actions", () => {
   })
   it("updateCostCenter succeeds", async () => {
     mocks.prismaMock.costCenter.findUniqueOrThrow.mockResolvedValue({ id: 1 })
-    const res = await actions.updateCostCenter(1, fdMap({
+    const res = await (actions as any).updateCostCenter(1, fdMap({
       code: "CC-001",
       name: "Cost Center 1 Updated"
     }))
     expect(res?.success).toBe(true)
   })
   it("deleteCostCenter succeeds", async () => {
-    const res = await actions.deleteCostCenter(1)
+    const res = await (actions as any).deleteCostCenter(1)
     expect(res?.success).toBe(true)
   })
 })
 
 describe("Statistical Key Figure Actions", () => {
   it("deleteStatisticalKeyFigure succeeds", async () => {
-    const res = await actions.deleteStatisticalKeyFigure(1)
+    const res = await (actions as any).deleteStatisticalKeyFigure(1)
     expect(res?.success).toBe(true)
   })
 })
@@ -291,168 +291,168 @@ describe('Finance Actions Error Paths', () => {
   it("createBankStatement handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.bankStatement.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createBankStatement(1, fdMap({}))
+    const res = await (actions as any).createBankStatement(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("createJournal handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.journal.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createJournal(1, fdMap({}))
+    const res = await (actions as any).createJournal(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("updateJournal handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.journal.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.updateJournal(1, fdMap({}))
+    const res = await (actions as any).updateJournal(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("postJournal handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.journal.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.postJournal(1)
+    const res = await (actions as any).postJournal(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("reverseJournal handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.journal.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.reverseJournal(1)
+    const res = await (actions as any).reverseJournal(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("deleteJournal handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.journal.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.deleteJournal(1)
+    const res = await (actions as any).deleteJournal(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("createExpense handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.expense.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createExpense(1, fdMap({}))
+    const res = await (actions as any).createExpense(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("updateExpense handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.expense.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.updateExpense(1, fdMap({}))
+    const res = await (actions as any).updateExpense(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("approveExpense handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.expense.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.approveExpense(1)
+    const res = await (actions as any).approveExpense(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("markExpensePaid handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.expense.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.markExpensePaid(1)
+    const res = await (actions as any).markExpensePaid(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("deleteExpense handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.expense.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.deleteExpense(1)
+    const res = await (actions as any).deleteExpense(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("createPettyCash handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.pettyCash.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createPettyCash(1, fdMap({}))
+    const res = await (actions as any).createPettyCash(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("updatePettyCash handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.pettyCash.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.updatePettyCash(1, fdMap({}))
+    const res = await (actions as any).updatePettyCash(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("deletePettyCash handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.pettyCash.delete.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.deletePettyCash(1)
+    const res = await (actions as any).deletePettyCash(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("createBankReconciliation handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.bankReconciliation.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createBankReconciliation(1, fdMap({}))
+    const res = await (actions as any).createBankReconciliation(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("matchReconciliationLine handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.matchReconciliationLine(1, 1, 1)
+    const res = await (actions.matchReconciliationLine as any)(1, 1, 1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("completeReconciliation handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.completeReconciliation(1)
+    const res = await (actions as any).completeReconciliation(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("createBudget handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.budget.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createBudget(1, fdMap({}))
+    const res = await (actions as any).createBudget(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("updateBudget handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.budget.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.updateBudget(1, fdMap({}))
+    const res = await (actions as any).updateBudget(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("deleteBudget handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.budget.delete.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.deleteBudget(1)
+    const res = await (actions as any).deleteBudget(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("createCostCenter handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.costCenter.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createCostCenter(1, fdMap({}))
+    const res = await (actions as any).createCostCenter(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("updateCostCenter handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.costCenter.update.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.updateCostCenter(1, fdMap({}))
+    const res = await (actions as any).updateCostCenter(1, fdMap({}))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("deleteCostCenter handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.costCenter.delete.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.deleteCostCenter(1)
+    const res = await (actions as any).deleteCostCenter(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
   it("deleteStatisticalKeyFigure handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.statisticalKeyFigure.delete.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.deleteStatisticalKeyFigure(1)
+    const res = await (actions as any).deleteStatisticalKeyFigure(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
