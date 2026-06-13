@@ -61,6 +61,6 @@ describe('Global Error Paths (Permission Reject for 1 funcs)', () => {
     if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
     const arg1 = new FormData();
     const arg2 = new FormData();
-    try { await (actions as any).bulkDelete(arg1, arg2); } catch {}
+    try { await bulkDelete(arg1 as any, arg2 as any); } catch {}
   })
 })
