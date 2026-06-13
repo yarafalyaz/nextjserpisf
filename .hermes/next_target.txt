@@ -1,2 +1,2 @@
-/Users/yarasoft/Project/silengkap/src/actions/inventory.actions.ts
-100
+/Users/yarasoft/Project/silengkap/src/actions/self-attendance.actions.ts
+85.59
