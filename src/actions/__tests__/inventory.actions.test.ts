@@ -198,8 +198,22 @@ describe("Rack & WorkOrder & Others", () => {
     const res = await actions.updateRackRow(1, fdMap({ rackId: 1, code: "RR1", name: "Row 1", level: 1 }))
     expect(res?.success).toBe(true)
   })
+  it("updateRackRow handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.rackRow.update.mockRejectedValue(new Error("db err"))
+    const res = await actions.updateRackRow(1, fdMap({ rackId: 1, code: "RR1", name: "Row 1", level: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
   it("deleteRackRow succeeds", async () => {
     const res = await actions.deleteRackRow(1)
     expect(res?.success).toBe(true)
+  })
+  it("deleteRackRow handles error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.rackRow.delete.mockRejectedValue(new Error("db err"))
+    const res = await actions.deleteRackRow(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
   })
 })
