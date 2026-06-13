@@ -983,3 +983,303 @@ describe('Global Error Paths (Permission Reject)', () => {
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
 })
+
+describe("HRM Actions Extra Coverage Inline", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1 })
+    prismaMock.attendance.findFirst.mockResolvedValue(null)
+    prismaMock.attendance.create.mockResolvedValue({ id: 1 })
+    prismaMock.attendance.updateMany.mockResolvedValue({ count: 1 })
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 1, departmentId: 1 })
+    prismaMock.workSchedule.findMany.mockResolvedValue([])
+    prismaMock.systemSetting.findFirst.mockResolvedValue({
+      restBreakStart: "12:00",
+      restBreakEnd: "13:00"
+    })
+  })
+
+  it("checkIn/checkOut breakOverlapMinutes coverage & branches", async () => {
+    // 1. checkIn with P2002 error
+    prismaMock.attendance.create.mockRejectedValueOnce({ code: "P2002" })
+    await expect(actions.checkIn(1)).rejects.toThrow("Sudah check-in hari ini")
+
+    // 2. checkOut with no attendance
+    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
+    const resNoAtt = await actions.checkOut(1)
+    expect(resNoAtt.success).toBe(false)
+    expect(resNoAtt.error).toContain("Belum check-in")
+
+    // 3. checkOut claim count 0 (race condition branch)
+    prismaMock.attendance.findFirst.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      checkIn: new Date(),
+      checkOut: null,
+      status: "present",
+      date: new Date()
+    })
+    prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 0 })
+    const resClaim0 = await actions.checkOut(1)
+    expect(resClaim0.success).toBe(false)
+    expect(resClaim0.error).toBe("Sudah check-out")
+
+    // 4. checkOut on Overtime Day with break overlapping
+    const checkInTime = new Date()
+    checkInTime.setHours(8, 0, 0, 0) // 08:00 WIB-ish
+    prismaMock.attendance.findFirst.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      checkIn: checkInTime,
+      checkOut: null,
+      status: "overtime",
+      date: new Date()
+    })
+    prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 1 })
+    const resOvertimeBreak = await actions.checkOut(1)
+    expect(resOvertimeBreak.success).toBe(true)
+  })
+})
+
+describe("generateBulkPayroll edge cases", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1 })
+    prismaMock.employee.findMany.mockResolvedValue([{ id: 1 }])
+    prismaMock.payroll.findMany.mockResolvedValue([])
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 1 })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    generateDocNumMock.mockResolvedValue("PAY-2026")
+  })
+
+  it("handles getPayrollEstimation returning failure or null", async () => {
+    // If est fails, loop continues
+    prismaMock.attendance.findMany.mockResolvedValue([])
+    prismaMock.employee.findUnique.mockResolvedValue(null) // estimation will fail
+    const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(res?.success).toBe(true)
+    expect(res?.count).toBe(0)
+  })
+
+  it("handles P2002 error in payroll.create", async () => {
+    // est succeeds
+    prismaMock.employee.findUnique.mockResolvedValue({
+      id: 1, baseSalary: 100, employeeLoan: []
+    })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    prismaMock.payroll.create.mockRejectedValueOnce({ code: "P2002" })
+    const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(res?.success).toBe(true)
+    expect(res?.count).toBe(0)
+  })
+})
+
+describe("markPayrollPaid edge cases", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1 })
+  })
+
+  it("amortizes active loans", async () => {
+    const payroll = {
+      id: 1, status: "approved", netPay: 5000000, employeeId: 1, period: "2026-05",
+      loanDeduction: 500000,
+    }
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce(payroll)
+    prismaMock.employeeLoan.findMany.mockResolvedValueOnce([
+      { id: 1, employeeId: 1, status: "active", loanDate: new Date(2020,0,1), monthlyInstallment: 200000, remainingAmount: 1000000 },
+      { id: 2, employeeId: 1, status: "active", loanDate: new Date(2020,1,1), monthlyInstallment: 300000, remainingAmount: 50 },
+    ])
+
+    // Override $transaction to execute the callback with prismaMock
+    prismaMock.$transaction.mockImplementationOnce(async (ops: any) => {
+      return ops(prismaMock)
+    })
+
+    const res = await actions.markPayrollPaid(1)
+    expect(res?.success).toBe(true)
+  })
+})
+
+describe("breakOverlapMinutes / resolveWorkSchedule paths", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1 })
+    prismaMock.systemSetting.findFirst.mockResolvedValue({
+      restBreakStart: "13:00",
+      restBreakEnd: "12:00" // be <= bs
+    })
+  })
+
+  it("handles be <= bs in breakOverlapMinutes", async () => {
+    const today = new Date();
+    today.setHours(8, 0, 0, 0); 
+    prismaMock.attendance.findFirst.mockResolvedValue({
+      id: 1, employeeId: 1, checkIn: today, checkOut: null, status: "overtime", date: today,
+    })
+    prismaMock.employee.findUnique.mockResolvedValue({ departmentId: 1 })
+    prismaMock.workSchedule.findMany.mockResolvedValue([])
+    prismaMock.attendance.updateMany.mockResolvedValue({ count: 1 })
+    
+    // Now call checkout, breakOverlapMinutes is hit with 13:00 and 12:00
+    const res = await actions.checkOut(1)
+    expect(res.success).toBe(true)
+  })
+
+  it("handles resolveWorkSchedule with department match and global match", async () => {
+    const today = new Date();
+    // department match
+    prismaMock.workSchedule.findMany.mockResolvedValueOnce([
+      { workDays: "0,1,2,3,4,5,6", employees: [], departments: [{ id: 1 }], startTime: "08:00", lateToleranceMinutes: 10 }
+    ])
+    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
+    prismaMock.employee.findUnique.mockResolvedValueOnce({ departmentId: 1 })
+    
+    const res = await actions.checkIn(1)
+    expect(res.success).toBe(true)
+
+    // global match
+    prismaMock.workSchedule.findMany.mockResolvedValueOnce([
+      { workDays: "0,1,2,3,4,5,6", employees: [], departments: [], startTime: "09:00", lateToleranceMinutes: 10 }
+    ])
+    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
+    prismaMock.employee.findUnique.mockResolvedValueOnce({ departmentId: 1 })
+    
+    const res2 = await actions.checkIn(1)
+    expect(res2.success).toBe(true)
+  })
+
+  it("checkIn rejects if employee not found", async () => {
+    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
+    prismaMock.employee.findUnique.mockResolvedValueOnce(null)
+    await expect(actions.checkIn(1)).rejects.toThrow("Karyawan tidak ditemukan")
+  })
+
+  it("checkIn rejects if employee is on approved leave", async () => {
+    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
+    prismaMock.employee.findUnique.mockResolvedValueOnce({ departmentId: 1 })
+    
+    // The second call to findFirst is for leaveRequest. We need to mock implementation properly
+    prismaMock.leaveRequest.findFirst.mockResolvedValueOnce({ id: 1, status: "approved" })
+    
+    await expect(actions.checkIn(1)).rejects.toThrow("Anda sedang dalam masa cuti")
+  })
+})
+
+describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["employee"] }) // Non-admin for IDOR coverage
+  })
+
+  it("getPayrollEstimation with IDOR paths and employeeLoans reduction", async () => {
+    // 1. IDOR: user is employee, matches requested employeeId
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 1 })
+    
+    // employee mock with active loans to cover the map/reduce in getPayrollEstimation
+    prismaMock.employee.findUnique.mockResolvedValueOnce({
+      baseSalary: 5000000,
+      maritalStatus: "single",
+      employeeLoans: [
+        { monthlyInstallment: 200000, remainingAmount: 1000000 },
+        { monthlyInstallment: 500000, remainingAmount: 100 }
+      ]
+    })
+
+    prismaMock.overtimeRequest.findMany.mockResolvedValueOnce([
+      { calculatedValue: 150000 },
+      { calculatedValue: 200000 }
+    ])
+
+    prismaMock.appreciation.findMany.mockResolvedValueOnce([
+      { amount: 50000 },
+      { amount: 100000 }
+    ])
+
+    const res = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
+    expect(res).toBeDefined()
+
+    // 2. IDOR: user is employee, but does NOT match employeeId
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 2 })
+    const resIdor = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
+    expect(resIdor?.success).toBe(false)
+    expect(resIdor?.error).toContain("Anda hanya bisa melihat estimasi gaji Anda sendiri")
+  })
+
+  it("create/update workSchedule with arrays of departments and employees", async () => {
+    const f = new FormData()
+    f.set("name", "Sched X")
+    f.set("startTime", "08:00")
+    f.set("endTime", "17:00")
+    f.append("days", "1")
+    f.append("days", "2")
+    f.append("departmentId", "10")
+    f.append("departmentId", "20")
+    f.append("employeeId", "100")
+    f.append("employeeId", "200")
+
+    const resCreate = await actions.createWorkSchedule(f)
+    expect(resCreate?.success).toBe(true)
+
+    const resUpdate = await actions.updateWorkSchedule(1, f)
+    expect(resUpdate?.success).toBe(true)
+  })
+})
+
+describe("Payroll extra branches", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1 })
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+  })
+
+  it("updatePayroll on non-draft rejects", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved" })
+    const r = await actions.updatePayroll(1, new FormData())
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("Hanya penggajian status draft")
+  })
+
+  it("approvePayroll on non-draft rejects", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved" })
+    const r = await actions.approvePayroll(1)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("Payroll hanya bisa di-approve dari status draft")
+  })
+
+  it("markPayrollPaid on non-approved rejects", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "paid" })
+    const r = await actions.markPayrollPaid(1)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("Payroll hanya bisa ditandai dibayar dari status approved")
+  })
+
+  it("updatePayroll branches (recalc late)", async () => {
+    const f = new FormData()
+    f.set("recalcLate", "true") // branch 815 -> true
+    f.set("employeeId", "1")
+    f.set("startDate", "2026-05-01")
+    f.set("endDate", "2026-05-31")
+    const res = await actions.updatePayroll(1, f)
+    expect(res?.success).toBe(true)
+  })
+})
+
+describe("Payroll errors and limits", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1 })
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 1 })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+  })
+
+  it("processPayroll throws if payroll already exists for period", async () => {
+    const f = new FormData()
+    f.set("employeeId", "1")
+    f.set("period", "2026-05")
+    prismaMock.payroll.findFirst.mockResolvedValueOnce({ id: 1 })
+    const res = await actions.processPayroll(f)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah ada")
+  })
+})
