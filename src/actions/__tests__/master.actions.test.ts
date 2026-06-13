@@ -40,6 +40,8 @@ const mocks = vi.hoisted(() => {
     brand: buildModelMock(),
     stockMovement: buildModelMock(),
     itemStock: buildModelMock(),
+    user: buildModelMock(),
+    uomConversion: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -64,12 +66,26 @@ vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("DOC-001") }))
 vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: vi.fn().mockResolvedValue({ enableAutoCustomerCode: true }) }))
-vi.mock("bcryptjs", () => ({
-  hash: vi.fn().mockResolvedValue("hash"),
-  compare: vi.fn().mockResolvedValue(true),
-}))
+vi.mock("bcryptjs", () => {
+  const m = {
+    hash: vi.fn().mockResolvedValue("hash"),
+    compare: vi.fn().mockResolvedValue(true),
+  }
+  return {
+    ...m,
+    default: m
+  }
+})
 
 import * as actions from "../master.actions"
+import { Prisma as RealPrisma } from "@prisma/client"
+
+function makeP2003(): unknown {
+  return new RealPrisma.PrismaClientKnownRequestError("FK violation", {
+    code: "P2003",
+    clientVersion: "test",
+  })
+}
 
 function fdMap(payload: Record<string, string | number | null | undefined>): FormData {
   const f = new FormData()
@@ -790,4 +806,294 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg2 = new FormData();
     try { await (actions as any).deleteBrand(arg1, arg2); } catch {}
   })
+})
+
+describe('Coverage Hardening Edge Cases', () => {
+  it('deleteCustomer - soft delete via P2003', async () => {
+    mocks.prismaMock.customer.delete.mockRejectedValueOnce(makeP2003())
+    const res = await actions.deleteCustomer(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customer.update).toHaveBeenCalled()
+  })
+
+  it('createCustomer - invalid validation', async () => {
+    const res = await actions.createCustomer(fdMap({ name: "" })) // empty name
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+  })
+
+  it('updateCustomer - invalid validation', async () => {
+    const res = await actions.updateCustomer(1, fdMap({ name: "" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('createVendor - invalid validation', async () => {
+    const res = await actions.createVendor(fdMap({ name: "" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('updateVendor - invalid validation', async () => {
+    const res = await actions.updateVendor(1, fdMap({ name: "" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('createItem - validation failure', async () => {
+    const res = await actions.createItem(fdMap({ name: "" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('createItem - cost > price', async () => {
+    const res = await actions.createItem(fdMap({ name: "A", cost: "200", price: "100" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Harga jual tidak boleh lebih rendah")
+  })
+
+  it('createItem - with uom conversions', async () => {
+    const fd = fdMap({ name: "A", cost: "100", price: "200" })
+    fd.append("uomConversions", JSON.stringify([{ code: "BOX", factorToBase: 10 }]))
+    const res = await actions.createItem(fd)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.uomConversion.createMany).toHaveBeenCalled()
+  })
+
+  it('updateItem - validation failure', async () => {
+    const res = await actions.updateItem(1, fdMap({ name: "" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('updateItem - cost > price', async () => {
+    const res = await actions.updateItem(1, fdMap({ name: "A", cost: "200", price: "100" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('updateItem - with uom conversions', async () => {
+    const fd = fdMap({ name: "A", cost: "100", price: "200" })
+    fd.append("uomConversions", JSON.stringify([{ code: "BOX", factorToBase: 10 }]))
+    const res = await actions.updateItem(1, fd)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.uomConversion.deleteMany).toHaveBeenCalled()
+    expect(mocks.prismaMock.uomConversion.createMany).toHaveBeenCalled()
+  })
+
+  it('createEmployee - with wantsLogin missing email', async () => {
+    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Email wajib diisi")
+  })
+
+  it('createEmployee - with wantsLogin short password', async () => {
+    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "123" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Kata sandi minimal")
+  })
+
+  it('createEmployee - with wantsLogin existing user', async () => {
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
+    const res = await actions.createEmployee(fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Email sudah terdaftar")
+  })
+
+  it('createEmployee - with wantsLogin success', async () => {
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    fd.append("loginRoleIds", "1")
+    const res = await actions.createEmployee(fd)
+    if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }
+    expect(res?.success).toBe(true)
+  })
+
+  it('updateEmployee - wantsLogin but existing user', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 1 })
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah memiliki akun login")
+  })
+
+  it('updateEmployee - wantsLogin no email', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Email wajib diisi")
+  })
+
+  it('updateEmployee - wantsLogin short password', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "123" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('updateEmployee - wantsLogin email exists', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('updateEmployee - update synced user email exists clash', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 1 })
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce({ id: 2 })
+    const res = await actions.updateEmployee(1, fdMap({ name: "A", joinDate: "2026-06-13", email: "a@a.com" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Email sudah terdaftar sebagai pengguna lain")
+  })
+
+  it('updateEmployee - wantsLogin success', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: null })
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null)
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", createLoginAccount: "true", email: "a@a.com", loginPassword: "password123" })
+    fd.append("loginRoleIds", "1")
+    const res = await actions.updateEmployee(1, fd)
+    if (!res?.success) { throw new Error("DEBUG: " + JSON.stringify(res)) }
+    expect(res?.success).toBe(true)
+  })
+
+  it('updateEmployee - update synced user success', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 1 })
+    mocks.prismaMock.user.findUnique.mockResolvedValueOnce(null) // no clash
+    const fd = fdMap({ name: "A", joinDate: "2026-06-13", email: "a@a.com" })
+    fd.append("loginRoleIds", "1")
+    const res = await actions.updateEmployee(1, fd)
+    expect(res?.success).toBe(true)
+  })
+
+  it('createDepartment - missing code', async () => {
+    const res = await actions.createDepartment(fdMap({ name: "test" }))
+    expect(res?.success).toBe(true)
+  })
+
+  it('createPosition - P2002 conflict fallback', async () => {
+    let callCount = 0
+    mocks.prismaMock.position.create.mockImplementation(() => {
+      callCount++
+      if (callCount < 3) {
+        throw { code: "P2002", meta: { target: ["code"] } }
+      }
+      return Promise.resolve({ id: 1 })
+    })
+    const res = await actions.createPosition(fdMap({ name: "test" }))
+    expect(res?.success).toBe(true)
+  })
+
+  it('createPosition - P2002 failure', async () => {
+    mocks.prismaMock.position.create.mockImplementation(() => {
+      throw { code: "P2002", meta: { target: ["code"] } }
+    })
+    const res = await actions.createPosition(fdMap({ name: "test" }))
+    expect(res?.success).toBe(false)
+  })
+
+  it('updateLead - not assigned to user and not admin', async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 2, permissions: [], roles: [] })
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, assignedTo: 3 })
+    const res = await actions.updateLead(1, fdMap({ name: "test" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Anda hanya dapat mengubah lead")
+  })
+
+  it('updateLead - reassigning without admin', async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 2, permissions: [], roles: [] })
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, assignedTo: 2 })
+    const res = await actions.updateLead(1, fdMap({ name: "test", assignedTo: "3" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Anda tidak memiliki izin untuk mengubah penugasan")
+  })
+
+  it('createCurrency - with isBase=true', async () => {
+    const res = await actions.createCurrency(fdMap({ name: "A", code: "A", isBase: "on" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.currency.updateMany).toHaveBeenCalled()
+  })
+
+  it('updateCurrency - with isBase=true', async () => {
+    const res = await actions.updateCurrency(1, fdMap({ name: "A", code: "A", isBase: "on" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.currency.updateMany).toHaveBeenCalled()
+  })
+
+  it('lookupItemByScan - by sku', async () => {
+    mocks.prismaMock.barcode.findUnique.mockResolvedValueOnce(null)
+    mocks.prismaMock.item.findFirst.mockResolvedValueOnce({ id: 1 })
+    const res = await actions.lookupItemByScan("test")
+    expect(res?.success).toBe(true)
+    expect(res?.id).toBe(1)
+  })
+
+  it('lookupItemByScan - empty', async () => {
+    const res = await actions.lookupItemByScan("")
+    expect(res?.success).toBe(false)
+  })
+
+  it('lookupItemByScan - not found', async () => {
+    mocks.prismaMock.barcode.findUnique.mockResolvedValueOnce(null)
+    mocks.prismaMock.item.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.lookupItemByScan("test")
+    expect(res?.success).toBe(false)
+  })
+
+  it('createTaxGroup - mapping taxIds', async () => {
+    const fd = fdMap({ name: "A" })
+    fd.append("taxIds", "1")
+    fd.append("taxIds", "2")
+    const res = await actions.createTaxGroup(fd)
+    expect(res?.success).toBe(true)
+  })
+
+  it('updateTaxGroup - mapping taxIds', async () => {
+    const fd = fdMap({ name: "A" })
+    fd.append("taxIds", "1")
+    fd.append("taxIds", "2")
+    const res = await actions.updateTaxGroup(1, fd)
+    expect(res?.success).toBe(true)
+  })
+
+  it('deleteVendor - soft delete', async () => {
+    mocks.prismaMock.vendor.delete.mockRejectedValueOnce(makeP2003())
+    const res = await actions.deleteVendor(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendor.update).toHaveBeenCalled()
+  })
+
+  it('deleteItem - soft delete', async () => {
+    mocks.prismaMock.item.delete.mockRejectedValueOnce(makeP2003())
+    const res = await actions.deleteItem(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.item.update).toHaveBeenCalled()
+  })
+
+  it('deleteWarehouse - soft delete', async () => {
+    mocks.prismaMock.warehouse.delete.mockRejectedValueOnce(makeP2003())
+    const res = await actions.deleteWarehouse(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.warehouse.update).toHaveBeenCalled()
+  })
+
+  it('deleteEmployee - soft delete with userId', async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValueOnce({ userId: 2 })
+    mocks.prismaMock.employee.delete.mockRejectedValueOnce(makeP2003())
+    const res = await actions.deleteEmployee(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.employee.update).toHaveBeenCalled()
+    expect(mocks.prismaMock.user.update).toHaveBeenCalled()
+  })
+
+  it('deleteDepartment - active employees guard', async () => {
+    mocks.prismaMock.employee.count.mockResolvedValueOnce(1)
+    const res = await actions.deleteDepartment(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Departemen masih memiliki")
+  })
+
+  it('updateAccount - missing submittedCode loads current', async () => {
+    mocks.prismaMock.account.findUnique.mockResolvedValueOnce({ code: "OLD" })
+    const res = await actions.updateAccount(1, fdMap({ name: "A", type: "ASSET" }))
+    expect(res?.success).toBe(true)
+  })
+
+  it('updateAccount - missing submittedCode not found', async () => {
+    mocks.prismaMock.account.findUnique.mockResolvedValueOnce(null)
+    const res = await actions.updateAccount(1, fdMap({ name: "A", type: "ASSET" }))
+    expect(res?.success).toBe(false)
+  })
+
 })
