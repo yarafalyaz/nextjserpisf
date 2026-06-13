@@ -35,11 +35,21 @@ describe("validations/crm.schemas", () => {
   });
   it("createTicketSchema accepts optional customer details", () => {
     expect(createTicketSchema.safeParse({
-      subject: "X", customerId: 1, customerName: "Budi", priority: "high",
+      subject: "X", customerId: 1, customerName: "Budi", priority: "high", customerEmail: "a@b.com", customerPhone: "123", type: "T", assignedTo: 2
+    }).success).toBe(true);
+  });
+  it("createTicketSchema handles empty strings", () => {
+    expect(createTicketSchema.safeParse({
+      subject: "X", customerName: "", customerEmail: "", customerPhone: "", type: "", priority: ""
     }).success).toBe(true);
   });
   it("updateTicketSchema accepts resolutionNotes", () => {
-    expect(updateTicketSchema.safeParse({ subject: "X", resolutionNotes: "Sudah diperbaiki" }).success).toBe(true);
+    expect(updateTicketSchema.safeParse({ subject: "X", resolutionNotes: "Sudah diperbaiki", customerName: "A", customerEmail: "B", customerPhone: "C", type: "D", priority: "E", assignedTo: 1, customerId: 1 }).success).toBe(true);
+  });
+  it("updateTicketSchema handles empty strings", () => {
+    expect(updateTicketSchema.safeParse({
+      subject: "X", customerName: "", customerEmail: "", customerPhone: "", type: "", priority: "", resolutionNotes: ""
+    }).success).toBe(true);
   });
 });
 

@@ -22,16 +22,38 @@ describe("validations/method.schemas", () => {
   it("createPaymentMethodSchema rejects empty name", () => {
     expect(createPaymentMethodSchema.safeParse({ name: "" }).success).toBe(false);
   });
+  it("createPaymentMethodSchema accepts code and isActive true", () => {
+    const r = createPaymentMethodSchema.safeParse({ code: "BANK", name: "Transfer Bank", isActive: true });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.isActive).toBe(true);
+  });
+  it("createPaymentMethodSchema handles empty code (passes as empty string)", () => {
+    const r = createPaymentMethodSchema.safeParse({ code: "", name: "X" });
+    expect(r.success).toBe(true);
+  });
   it("updatePaymentMethodSchema requires code", () => {
     expect(updatePaymentMethodSchema.safeParse({ code: "cash", name: "Tunai" }).success).toBe(true);
     expect(updatePaymentMethodSchema.safeParse({ code: "", name: "Tunai" }).success).toBe(false);
   });
+  it("updatePaymentMethodSchema rejects empty name", () => {
+    expect(updatePaymentMethodSchema.safeParse({ code: "cash", name: "" }).success).toBe(false);
+  });
   it("createShippingMethodSchema accepts valid", () => {
     expect(createShippingMethodSchema.safeParse({ name: "Kurir" }).success).toBe(true);
+  });
+  it("createShippingMethodSchema handles empty code", () => {
+    const r = createShippingMethodSchema.safeParse({ code: "", name: "Kurir" });
+    expect(r.success).toBe(true);
+  });
+  it("createShippingMethodSchema rejects empty name", () => {
+    expect(createShippingMethodSchema.safeParse({ name: "" }).success).toBe(false);
   });
   it("updateShippingMethodSchema requires code", () => {
     expect(updateShippingMethodSchema.safeParse({ code: "pickup", name: "Ambil Sendiri" }).success).toBe(true);
     expect(updateShippingMethodSchema.safeParse({ name: "Ambil Sendiri" }).success).toBe(false);
+  });
+  it("updateShippingMethodSchema rejects empty name", () => {
+    expect(updateShippingMethodSchema.safeParse({ code: "pickup", name: "" }).success).toBe(false);
   });
 });
 
