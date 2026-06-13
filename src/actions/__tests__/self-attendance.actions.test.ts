@@ -68,17 +68,69 @@ describe("Self Attendance Actions", () => {
     const res = await actions.selfCheckIn(fdMap({ latitude: "0", longitude: "0" }))
     expect(res?.success).toBe(true)
   })
+  it("selfCheckIn fails if geofence enabled but no GPS provided", async () => {
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValueOnce({
+      companyLatitude: -6.2, companyLongitude: 106.8, attendanceRadiusKm: 1
+    })
+    await expect(actions.selfCheckIn(fdMap({}))).rejects.toThrow("Gagal mendapatkan lokasi GPS")
+  })
+  it("selfCheckIn fails if employee not found", async () => {
+    mocks.prismaMock.employee.findFirst.mockResolvedValueOnce(null)
+    await expect(actions.selfCheckIn(fdMap({ latitude: "0", longitude: "0" }))).rejects.toThrow("tidak terhubung")
+  })
+  it("selfCheckIn fails if duplicate", async () => {
+    mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce({ id: 1 })
+    await expect(actions.selfCheckIn(fdMap({ latitude: "0", longitude: "0" }))).rejects.toThrow("sudah check-in")
+  })
+  it("selfCheckIn fails if on approved leave", async () => {
+    mocks.prismaMock.leaveRequest.findFirst.mockResolvedValueOnce({ id: 1 })
+    await expect(actions.selfCheckIn(fdMap({ latitude: "0", longitude: "0" }))).rejects.toThrow("cuti")
+  })
   it("selfCheckOut succeeds", async () => {
     mocks.prismaMock.attendance.findFirst.mockResolvedValue({ id: 1, employeeId: 1, date: new Date(), checkIn: new Date(), status: "present" })
     const res = await actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))
     expect(res?.success).toBe(true)
   })
-  it("getTodayAttendance succeeds", async () => {
-    const res = await actions.getTodayAttendance()
-    expect(res).toBeDefined()
+  it("selfCheckOut fails if no open attendance", async () => {
+    mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
+    await expect(actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))).rejects.toThrow("check-in")
   })
-  it("getCompanyLocation succeeds", async () => {
+  it("selfCheckOut fails if already checked out (claim.count === 0)", async () => {
+    mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce({ id: 1, employeeId: 1, date: new Date(), checkIn: new Date(), status: "present" })
+    mocks.prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 0 })
+    await expect(actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))).rejects.toThrow("Sudah check-out")
+  })
+  it("getTodayAttendance returns null if no employee", async () => {
+    mocks.prismaMock.employee.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.getTodayAttendance()
+    expect(res).toBeNull()
+  })
+  it("getTodayAttendance returns null on error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.employee.findFirst.mockRejectedValueOnce(new Error("db"))
+    const res = await actions.getTodayAttendance()
+    expect(res).toBeNull()
+  })
+  it("getTodayAttendance returns null if no attendance", async () => {
+    mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.getTodayAttendance()
+    expect(res).toBeNull()
+  })
+  it("getCompanyLocation returns null if no settings", async () => {
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValueOnce(null)
     const res = await actions.getCompanyLocation()
-    expect(res).toBeDefined()
+    expect(res).toBeNull()
+  })
+  it("getCompanyLocation returns coordinates (even if null) when configured", async () => {
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValueOnce({})
+    const res = await actions.getCompanyLocation()
+    expect(res?.latitude).toBeNull()
+  })
+  it("getCompanyLocation returns coordinates when configured", async () => {
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValueOnce({
+      companyLatitude: 0, companyLongitude: 0, attendanceRadiusKm: 1
+    })
+    const res = await actions.getCompanyLocation()
+    expect(res?.radius).toBe(1)
   })
 })
