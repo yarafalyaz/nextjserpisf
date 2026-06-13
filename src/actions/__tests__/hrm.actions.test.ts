@@ -107,7 +107,8 @@ vi.mock("@/lib/utils/document-number", () => ({
 vi.mock("@/lib/utils/error", () => ({
   getErrorMessage: (e: unknown, fallback?: string) =>
     e instanceof Error ? e.message : fallback ?? "error",
-  isNextRedirectError: () => false,
+  isNextRedirectError: (e: unknown) =>
+    e instanceof Error && (e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT") === true,
 }))
 
 function fd(entries: Record<string, string | string[]>): FormData {
@@ -1283,3 +1284,56 @@ describe("Payroll errors and limits", () => {
     expect(res?.error).toContain("sudah ada")
   })
 })
+
+
+describe("Next.js redirect error handling", () => {
+  const redirectErr = new Error("redirect")
+  ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+
+  const fnsToTest = [
+    { name: "checkIn", fn: () => actions.checkIn(1) },
+    { name: "checkOut", fn: () => actions.checkOut(1) },
+    { name: "createAttendance", fn: () => actions.createAttendance(new FormData()) },
+    { name: "updateAttendance", fn: () => actions.updateAttendance(1, new FormData()) },
+    { name: "createLeaveRequest", fn: () => actions.createLeaveRequest(new FormData()) },
+    { name: "approveLeave", fn: () => actions.approveLeave(1) },
+    { name: "rejectLeave", fn: () => actions.rejectLeave(1) },
+    { name: "createOvertimeRequest", fn: () => actions.createOvertimeRequest(new FormData()) },
+    { name: "approveOvertime", fn: () => actions.approveOvertime(1) },
+    { name: "processPayroll", fn: () => actions.processPayroll(new FormData()) },
+    { name: "updatePayroll", fn: () => actions.updatePayroll(1, new FormData()) },
+    { name: "approvePayroll", fn: () => actions.approvePayroll(1) },
+    { name: "markPayrollPaid", fn: () => actions.markPayrollPaid(1) },
+    { name: "createEmployeeLoan", fn: () => actions.createEmployeeLoan(new FormData()) },
+    { name: "createTimesheet", fn: () => actions.createTimesheet(new FormData()) },
+    { name: "createWorkSchedule", fn: () => actions.createWorkSchedule(new FormData()) },
+    { name: "createHoliday", fn: () => actions.createHoliday(new FormData()) },
+    { name: "updateHoliday", fn: () => actions.updateHoliday(1, new FormData()) },
+    { name: "deleteLeaveRequest", fn: () => actions.deleteLeaveRequest(1) },
+    { name: "deleteOvertimeRequest", fn: () => actions.deleteOvertimeRequest(1) },
+    { name: "deleteTimesheet", fn: () => actions.deleteTimesheet(1) },
+    { name: "deleteEmployeeLoan", fn: () => actions.deleteEmployeeLoan(1) },
+    { name: "deleteWorkSchedule", fn: () => actions.deleteWorkSchedule(1) },
+    { name: "deleteHoliday", fn: () => actions.deleteHoliday(1) },
+    { name: "syncNationalHolidays", fn: () => actions.syncNationalHolidays() },
+    { name: "updateLeaveRequest", fn: () => actions.updateLeaveRequest(1, new FormData()) },
+    { name: "updateOvertimeRequest", fn: () => actions.updateOvertimeRequest(1, new FormData()) },
+    { name: "updateEmployeeLoan", fn: () => actions.updateEmployeeLoan(1, new FormData()) },
+    { name: "updateTimesheet", fn: () => actions.updateTimesheet(1, new FormData()) },
+    { name: "updateWorkSchedule", fn: () => actions.updateWorkSchedule(1, new FormData()) },
+    { name: "createDepartmentHoliday", fn: () => actions.createDepartmentHoliday(new FormData()) },
+    { name: "updateDepartmentHoliday", fn: () => actions.updateDepartmentHoliday(new FormData()) },
+    { name: "deleteDepartmentHoliday", fn: () => actions.deleteDepartmentHoliday(1) },
+    { name: "createAppreciation", fn: () => actions.createAppreciation(new FormData()) },
+    { name: "updateAppreciation", fn: () => actions.updateAppreciation(new FormData()) },
+    { name: "deleteAppreciation", fn: () => actions.deleteAppreciation(1) },
+  ]
+
+  it("should rethrow NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue(redirectErr)
+    for (const { fn } of fnsToTest) {
+      await expect(fn()).rejects.toThrow(redirectErr)
+    }
+  })
+})
+
