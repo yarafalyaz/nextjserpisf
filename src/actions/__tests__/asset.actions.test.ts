@@ -159,6 +159,14 @@ describe("Asset Brand Actions", () => {
     await expect(deleteAssetBrand(20)).rejects.toThrow("NEXT_REDIRECT")
     expect(prismaMock.assetBrand.delete).toHaveBeenCalledWith({ where: { id: 20 } })
   })
+
+  it("handles error on update brand", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    prismaMock.assetBrand.update.mockRejectedValue(new Error("db err"))
+    const res = await updateAssetBrand(20, fd({ name: "HP" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
+  })
 })
 
 describe("Asset Category Actions", () => {
@@ -187,6 +195,14 @@ describe("Asset Category Actions", () => {
       updateAssetCategory(10, fd({ name: "IT", code: "IT" }))
     ).rejects.toThrow("NEXT_REDIRECT")
     expect(prismaMock.assetCategory.update).toHaveBeenCalled()
+  })
+
+  it("handles error on update category", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    prismaMock.assetCategory.update.mockRejectedValue(new Error("db err"))
+    const res = await updateAssetCategory(10, fd({ name: "IT", code: "IT" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
   })
 
   it("deletes category and redirects", async () => {
@@ -283,6 +299,18 @@ describe("Asset Transfer Actions", () => {
       where: { id: 5 },
       data: { location: "OldLoc" },
     })
+  })
+
+  it("handles error on update transfer", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    prismaMock.assetTransfer.findUniqueOrThrow.mockRejectedValue(new Error("db err"))
+    const res = await updateAssetTransfer(30, fd({
+      assetId: "7",
+      toLocation: "Branch2",
+      transferDate: "2026-06-12",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("db err")
   })
 })
 
@@ -402,6 +430,14 @@ describe("deleteAsset", () => {
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/pelepasan\/disposal/)
     expect(prismaMock.asset.delete).not.toHaveBeenCalled()
+  })
+
+  it("handles error on delete asset (caught error path)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    prismaMock.journal.count.mockRejectedValue(new Error("db err"))
+    const res = await deleteAsset(100)
+    expect(res.success).toBe(false)
+    expect(res.error).toBe("db err")
   })
 })
 
