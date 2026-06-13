@@ -122,6 +122,16 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: mocks.prismaMock,
 }))
 
+
+vi.mock("@/lib/utils/error", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/utils/error")>()
+  return {
+    ...actual,
+    isNextRedirectError: (e: unknown) =>
+      e instanceof Error && (e as any).digest?.startsWith("NEXT_REDIRECT") === true,
+  }
+})
+
 vi.mock("next/cache", () => ({
   revalidatePath: (...a: unknown[]) => mocks.revalidateMock(...a),
 }))
@@ -1156,5 +1166,66 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData()
     const arg2 = new FormData()
     try { await (actions as any).deleteSalesReturn(arg1, arg2); } catch {}
+  })
+})
+
+
+describe("Next.js redirect error handling", () => {
+  const redirectErr = new Error("redirect")
+  ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+
+  const fnsToTest = [
+    { name: "createQuotation", fn: () => actions.createQuotation(new FormData()) },
+    { name: "sendQuotation", fn: () => actions.sendQuotation(1) },
+    { name: "acceptQuotation", fn: () => actions.acceptQuotation(1) },
+    { name: "rejectQuotation", fn: () => actions.rejectQuotation(1) },
+    { name: "reviseQuotation", fn: () => actions.reviseQuotation(1, "reason") },
+    { name: "convertQuotationToOrder", fn: () => actions.convertQuotationToOrder(1) },
+    { name: "updateQuotation", fn: () => actions.updateQuotation(1, new FormData()) },
+    { name: "createDownPayment", fn: () => actions.createDownPayment(new FormData()) },
+    { name: "confirmDownPayment", fn: () => actions.confirmDownPayment(1) },
+    { name: "createSalesOrder", fn: () => actions.createSalesOrder(new FormData()) },
+    { name: "confirmSalesOrder", fn: () => actions.confirmSalesOrder(1) },
+    { name: "processSalesOrder", fn: () => actions.processSalesOrder(1) },
+    { name: "completeSalesOrder", fn: () => actions.completeSalesOrder(1) },
+    { name: "postInvoice", fn: () => actions.postInvoice(1) },
+    { name: "createSalesInvoice", fn: () => actions.createSalesInvoice(new FormData()) },
+    { name: "createSalesPayment", fn: () => actions.createSalesPayment(new FormData()) },
+    { name: "completeSalesReturn", fn: () => actions.completeSalesReturn(1) },
+    { name: "createSalesReturn", fn: () => actions.createSalesReturn(new FormData()) },
+    { name: "createDeliveryOrder", fn: () => actions.createDeliveryOrder(new FormData()) },
+    { name: "deleteQuotation", fn: () => actions.deleteQuotation(1) },
+    { name: "deleteSalesPayment", fn: () => actions.deleteSalesPayment(1) },
+    { name: "deleteDeliveryOrder", fn: () => actions.deleteDeliveryOrder(1) },
+    { name: "deleteDownPayment", fn: () => actions.deleteDownPayment(1) },
+    { name: "updateSalesOrder", fn: () => actions.updateSalesOrder(1, new FormData()) },
+    { name: "updateSalesInvoice", fn: () => actions.updateSalesInvoice(1, new FormData()) },
+    { name: "updateSalesPayment", fn: () => actions.updateSalesPayment(1, new FormData()) },
+    { name: "updateSalesReturn", fn: () => actions.updateSalesReturn(1, new FormData()) },
+    { name: "updateDeliveryOrder", fn: () => actions.updateDeliveryOrder(1, new FormData()) },
+    { name: "updateDownPayment", fn: () => actions.updateDownPayment(1, new FormData()) },
+    { name: "deleteSalesOrder", fn: () => actions.deleteSalesOrder(1) },
+    { name: "deleteSalesInvoice", fn: () => actions.deleteSalesInvoice(1) },
+    { name: "voidSalesInvoice", fn: () => actions.voidSalesInvoice(1) },
+    { name: "deleteSalesReturn", fn: () => actions.deleteSalesReturn(1) },
+  ]
+
+  it("should rethrow NEXT_REDIRECT errors", async () => {
+    // Setup a hook that throws the redirect error on permission check
+    mocks.requirePermissionMock.mockRejectedValue(redirectErr)
+    // For functions that don't call requirePermission, we can throw from findUniqueOrThrow
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    mocks.prismaMock.salesPayment.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    mocks.prismaMock.salesReturn.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    mocks.prismaMock.downPayment.findUniqueOrThrow.mockRejectedValue(redirectErr)
+    // For actions like createX that parse schema first
+    mocks.safeJsonParseMock.mockImplementation(() => { throw redirectErr })
+    
+    for (const { name, fn } of fnsToTest) {
+      await expect(fn()).rejects.toThrow(redirectErr)
+    }
   })
 })
