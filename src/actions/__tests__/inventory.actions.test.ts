@@ -389,3 +389,214 @@ describe('Global Error Paths (Permission Reject for 21 funcs)', () => {
     try { await (actions as any).deleteRackRow(arg1, arg2); } catch {}
   })
 })
+
+
+describe('Inventory Transfer Error & Edge Paths', () => {
+  it("processInventoryTransfer fails if not found or status not draft", async () => {
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    mocks.prismaMock.inventoryTransfer.updateMany.mockResolvedValue({ count: 0 })
+    mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValue({ status: "processed" })
+    const res = await (actions as any).processInventoryTransfer(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Transfer sudah berstatus processed")
+    
+    mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValue(null)
+    const res2 = await (actions as any).processInventoryTransfer(1)
+    expect(res2?.success).toBe(false)
+    expect(res2?.error).toContain("Transfer tidak ditemukan")
+    
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed", items: [] })
+    const res3 = await (actions as any).processInventoryTransfer(1)
+    expect(res3?.success).toBe(false)
+    expect(res3?.error).toContain("Transfer hanya bisa diproses dari status draft")
+  })
+
+  it("receiveInventoryTransfer fails if not found or status not processed", async () => {
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed", items: [] })
+    mocks.prismaMock.inventoryTransfer.updateMany.mockResolvedValue({ count: 0 })
+    mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValue({ status: "receiving" })
+    const res = await (actions as any).receiveInventoryTransfer(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Transfer sudah berstatus receiving")
+    
+    mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValue(null)
+    const res2 = await (actions as any).receiveInventoryTransfer(1)
+    expect(res2?.success).toBe(false)
+    expect(res2?.error).toContain("Transfer tidak ditemukan")
+    
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    const res3 = await (actions as any).receiveInventoryTransfer(1)
+    expect(res3?.success).toBe(false)
+    expect(res3?.error).toContain("Transfer hanya bisa di-receive dari status processed")
+  })
+})
+
+describe('Stock Adjustment Error & Edge Paths', () => {
+  it("createStockAdjustment throws on negative actual qty", async () => {
+    const res = await (actions as any).createStockAdjustment(fdMap({ warehouseId: 1, date: "2026-06-13", reason: "Test", items: JSON.stringify([{ itemId: 1, newQty: -10, cost: 100 }]) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Kuantitas fisik (actual) tidak boleh negatif")
+  })
+
+  it("updateStockAdjustment throws on negative actual qty", async () => {
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await (actions as any).updateStockAdjustment(1, fdMap({ warehouseId: 1, date: "2026-06-13", reason: "Test", items: JSON.stringify([{ itemId: 1, newQty: -10, cost: 100 }]) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Kuantitas fisik (actual) tidak boleh negatif")
+  })
+  
+  it("updateStockAdjustment fails if status changed inside transaction", async () => {
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).updateStockAdjustment(1, fdMap({ warehouseId: 1, date: "2026-06-13", items: JSON.stringify([{ itemId: 1, newQty: 10, cost: 100 }]) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya stock adjustment draft yang dapat diedit")
+  })
+
+  it("updateStockAdjustment fails if not draft initially", async () => {
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).updateStockAdjustment(1, fdMap({ warehouseId: 1, date: "2026-06-13" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya stock adjustment draft yang dapat diedit")
+  })
+
+  it("processStockAdjustment fails if not found or not draft", async () => {
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    mocks.prismaMock.stockAdjustment.updateMany.mockResolvedValue({ count: 0 })
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({ status: "processed" })
+    const res = await (actions as any).processStockAdjustment(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Penyesuaian stok sudah berstatus processed")
+    
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue(null)
+    const res2 = await (actions as any).processStockAdjustment(1)
+    expect(res2?.success).toBe(false)
+    expect(res2?.error).toContain("Penyesuaian stok tidak ditemukan")
+    
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed", items: [] })
+    const res3 = await (actions as any).processStockAdjustment(1)
+    expect(res3?.success).toBe(false)
+    expect(res3?.error).toContain("Adjustment hanya bisa diproses dari status draft")
+  })
+  
+  it("deleteStockAdjustment fails if not draft", async () => {
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).deleteStockAdjustment(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya stock adjustment draft yang dapat dihapus")
+  })
+})
+
+describe('Material Issue Error & Edge Paths', () => {
+  it("createMaterialIssue fails if no valid items", async () => {
+    const res = await (actions as any).createMaterialIssue(fdMap({ warehouseId: 1, projectId: 1, date: "2026-06-13", items: JSON.stringify([]) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Material Issue harus memiliki minimal 1 item dengan qty > 0")
+  })
+
+  it("updateMaterialIssue succeeds with empty valid items (no items create)", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.materialIssue.update.mockResolvedValue({ id: 1 })
+    const res = await (actions as any).updateMaterialIssue(1, fdMap({ warehouseId: 1, projectId: 1, date: "2026-06-13", items: JSON.stringify([{ itemId: -1, qty: 0 }]) }))
+    expect(res?.success).toBe(true)
+  })
+
+  it("updateMaterialIssue fails if not draft initially", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).updateMaterialIssue(1, fdMap({ warehouseId: 1, projectId: 1, date: "2026-06-13" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya material issue draft yang dapat diedit")
+  })
+
+  it("updateMaterialIssue fails if status changed inside transaction", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).updateMaterialIssue(1, fdMap({ warehouseId: 1, projectId: 1, date: "2026-06-13", items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya material issue draft yang dapat diedit")
+  })
+
+  it("completeMaterialIssue fails if not found or not draft", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    mocks.prismaMock.materialIssue.updateMany.mockResolvedValue({ count: 0 })
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({ status: "processed" })
+    const res = await (actions as any).completeMaterialIssue(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Material Issue sudah berstatus processed")
+    
+    mocks.prismaMock.materialIssue.findUnique.mockResolvedValue(null)
+    const res2 = await (actions as any).completeMaterialIssue(1)
+    expect(res2?.success).toBe(false)
+    expect(res2?.error).toContain("Material Issue tidak ditemukan")
+    
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed", items: [] })
+    const res3 = await (actions as any).completeMaterialIssue(1)
+    expect(res3?.success).toBe(false)
+    expect(res3?.error).toContain("Material Issue hanya bisa di-complete dari status draft")
+  })
+  
+  it("deleteMaterialIssue fails if not draft", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).deleteMaterialIssue(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya material issue draft yang dapat dihapus")
+  })
+})
+
+describe('Other Delete Errors', () => {
+  it("deleteInventoryTransfer fails if not draft", async () => {
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).deleteInventoryTransfer(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya transfer draft yang dapat dihapus")
+  })
+  
+  it("deleteRack returns error if in use", async () => {
+    mocks.prismaMock.item.count.mockResolvedValue(1)
+    const res = await (actions as any).deleteRack(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Rak masih digunakan oleh")
+  })
+})
+
+
+describe('Inventory Transfer Remaining Coverage', () => {
+  it("updateInventoryTransfer fails if status changed inside transaction", async () => {
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).updateInventoryTransfer(1, fdMap({ sourceWarehouseId: 1, destinationWarehouseId: 2, date: "2026-06-13", items: JSON.stringify([{ itemId: 1, qty: 10 }]) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya transfer draft yang dapat diedit")
+  })
+
+  it("updateInventoryTransfer fails if not draft initially", async () => {
+    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed" })
+    const res = await (actions as any).updateInventoryTransfer(1, fdMap({ sourceWarehouseId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Hanya transfer draft yang dapat diedit")
+  })
+})
+
+describe('WorkOrder Coverage', () => {
+  it("updateWorkOrder handles item creation with negative/invalid data being filtered", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await (actions as any).updateWorkOrder(1, fdMap({ customerId: 1, projectId: 1, date: "2026-06-13", items: JSON.stringify([{ itemId: -1, qty: 10, cost: 100 }]) }))
+    expect(res?.success).toBe(true)
+  })
+})
+
+
+describe('WorkOrder Item Map Coverage', () => {
+  it("createWorkOrder creates items when valid itemId provided", async () => {
+    const res = await (actions as any).createWorkOrder(fdMap({ customerId: 1, projectId: 1, date: "2026-06-13", items: JSON.stringify([{ itemId: 5, qty: 3, cost: 200, description: "d", status: "pending" }]) }))
+    expect(res?.success).toBe(true)
+  })
+
+  it("updateWorkOrder creates items when valid itemId provided", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await (actions as any).updateWorkOrder(1, fdMap({ customerId: 1, projectId: 1, date: "2026-06-13", items: JSON.stringify([{ itemId: 5, qty: 3, cost: 200 }]) }))
+    expect(res?.success).toBe(true)
+  })
+})

@@ -1,2 +1,2 @@
-/Users/yarasoft/Project/silengkap/src/actions/master.actions.ts
-84.86
+/Users/yarasoft/Project/silengkap/src/actions/inventory.actions.ts
+100
