@@ -155,6 +155,15 @@ describe("changePassword", () => {
       expect.objectContaining({ where: { id: 7 } }),
     )
   })
+
+  it("returns generic error on exception", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    userFindMock.mockRejectedValue(new Error("DB Connection Error"))
+    const res = await changePassword(fd({ [SECRET_KEY]: "oldvalue1", [NEW_KEY]: "brandnewval" }))
+    expect(res).toEqual({ error: "Terjadi kesalahan saat mengubah password" })
+    expect(consoleSpy).toHaveBeenCalled()
+    consoleSpy.mockRestore()
+  })
 })
 
 describe("createUser", () => {
@@ -185,6 +194,26 @@ describe("createUser", () => {
     userCreateMock.mockRejectedValue(new Error("Unique constraint failed on email"))
     const res = await createUser(fd({ name: "X", email: "x@y.z", password: "passval12" }))
     expect(res).toEqual({ error: "Email sudah terdaftar" })
+  })
+
+  it("enforces minimum password length", async () => {
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "short" }))
+    expect(res).toEqual({ error: "Password minimal 8 karakter" })
+  })
+
+  it("blocks privilege escalation if actor tries to grant super_admin", async () => {
+    roleFindManyMock.mockResolvedValue([{ name: "super_admin" }])
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["9"] }))
+    expect(res).toEqual({ error: "Hanya super admin yang dapat memberikan role super admin" })
+  })
+
+  it("returns generic error on database exception", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    userCreateMock.mockRejectedValue(new Error("DB Down"))
+    const res = await createUser(fd({ name: "X", email: "x@y.z", password: "passval12" }))
+    expect(res).toEqual({ error: "Terjadi kesalahan saat membuat pengguna" })
+    expect(consoleSpy).toHaveBeenCalled()
+    consoleSpy.mockRestore()
   })
 })
 
@@ -234,6 +263,12 @@ describe("updateUserRoles", () => {
     expect(userUpdateMock).not.toHaveBeenCalled()
   })
 
+  it("returns error if target user is not found", async () => {
+    userFindUniqueMock.mockResolvedValue(null)
+    const res = await updateUserRoles(3, [5])
+    expect(res).toEqual({ error: "Pengguna tidak ditemukan" })
+  })
+
   it("allows a super_admin actor to alter another super_admin's roles", async () => {
     requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
     userFindUniqueMock.mockResolvedValue({ id: 3, roles: [{ name: "super_admin" }] })
@@ -274,6 +309,15 @@ describe("toggleUserActive", () => {
     expect(res).toEqual({ success: true })
     expect(userUpdateMock).toHaveBeenCalled()
   })
+
+  it("returns generic error on database exception", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    userFindMock.mockRejectedValue(new Error("DB Down"))
+    const res = await toggleUserActive(4)
+    expect(res).toEqual({ error: "Terjadi kesalahan saat mengubah status pengguna" })
+    expect(consoleSpy).toHaveBeenCalled()
+    consoleSpy.mockRestore()
+  })
 })
 
 describe("updateProfile", () => {
@@ -291,5 +335,21 @@ describe("updateProfile", () => {
     expect(userUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 9 } }),
     )
+  })
+
+  it("returns generic error on non-unique constraint exception", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    userUpdateMock.mockRejectedValue(new Error("Database offline"))
+    const res = await updateProfile(fd({ name: "Y", email: "y@z.c" }))
+    expect(res).toEqual({ error: "Terjadi kesalahan saat memperbarui profil" })
+    consoleSpy.mockRestore()
+  })
+
+  it("returns success on valid update", async () => {
+    userUpdateMock.mockResolvedValue({ id: 9 })
+    const res = await updateProfile(fd({ name: "Y", email: "y@z.c" }))
+    expect(res).toEqual({ success: true })
+    expect(revalidateMock).toHaveBeenCalledWith("/profil")
+    expect(revalidateMock).toHaveBeenCalledWith("/")
   })
 })
