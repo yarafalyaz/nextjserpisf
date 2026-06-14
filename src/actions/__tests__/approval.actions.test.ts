@@ -231,4 +231,53 @@ describe("approveStep / rejectStep branches", () => {
     })
     try { await actions.rejectStep(1, fdMap({ notes: "NO" })) } catch {}
   })
+
+  it("approveStep succeeds when userId matches (assertStepApprover)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["user"] })
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "pending", currentStep: 1, documentType: "PR", documentId: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: null, userId: 7, approverType: "specific" }] }
+    })
+    try { await actions.approveStep(1, fdMap({ notes: "OK" })) } catch {}
+  })
+
+  it("approveStep succeeds when stepDef not found (assertStepApprover)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["user"] })
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1, status: "pending", currentStep: 99, documentType: "PR", documentId: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: null, userId: null, approverType: "specific" }] }
+    })
+    try { await actions.approveStep(1, fdMap({ notes: "OK" })) } catch {}
+  })
+
+  it("approveStep fails real validation when notes > 2000 chars", async () => {
+    const longNotes = "a".repeat(2001)
+    await expect(actions.approveStep(1, fdMap({ notes: longNotes }))).rejects.toThrow()
+  })
+
+  it("rejectStep fails real validation when notes > 2000 chars", async () => {
+    const longNotes = "a".repeat(2001)
+    await expect(actions.rejectStep(1, fdMap({ notes: longNotes }))).rejects.toThrow()
+  })
+})
+
+describe("Next.js redirect error handling", () => {
+  const redirectErr = new Error("redirect")
+  ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
+
+  const fnsToTest = [
+    { name: "approveStep", fn: () => actions.approveStep(1, new FormData()) },
+    { name: "rejectStep", fn: () => actions.rejectStep(1, new FormData()) },
+    { name: "createApprovalWorkflow", fn: () => actions.createApprovalWorkflow(new FormData()) },
+    { name: "updateApprovalWorkflow", fn: () => actions.updateApprovalWorkflow(1, new FormData()) },
+    { name: "deleteApprovalWorkflow", fn: () => actions.deleteApprovalWorkflow(1) },
+  ]
+
+  it("should rethrow NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue(redirectErr)
+
+    for (const { fn } of fnsToTest) {
+      await expect(fn()).rejects.toThrow(redirectErr)
+    }
+  })
 })
