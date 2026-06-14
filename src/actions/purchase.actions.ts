@@ -361,16 +361,24 @@ export async function createGoodsReceipt(formData: FormData) {
     }
     const poQtyMap = new Map(po.items.map(i => [i.itemId, Number(i.qty)]))
 
+    // Pre-aggregate this submission's qty per itemId so duplicate lines in the
+    // same payload (e.g. two rows for the same item) can't each pass the
+    // over-receive check independently and together exceed the ordered qty.
+    const submittedQtyByItem = new Map<number, number>()
     for (const item of items) {
       if (item.itemId <= 0 || item.qty <= 0) continue
-      const ordered = poQtyMap.get(item.itemId) ?? 0
-      const totalAfterThis = (alreadyReceived.get(item.itemId) ?? 0) + Number(item.qty)
-      
+      submittedQtyByItem.set(item.itemId, (submittedQtyByItem.get(item.itemId) ?? 0) + Number(item.qty))
+    }
+
+    for (const [itemId, submittedQty] of submittedQtyByItem) {
+      const ordered = poQtyMap.get(itemId) ?? 0
+      const totalAfterThis = (alreadyReceived.get(itemId) ?? 0) + submittedQty
+
       if (ordered === 0) {
-        throw new Error(`Item #${item.itemId} tidak ada dalam pesanan pembelian (PO).`)
+        throw new Error(`Item #${itemId} tidak ada dalam pesanan pembelian (PO).`)
       }
       if (totalAfterThis > ordered) {
-        throw new Error(`Kuantitas item #${item.itemId} melebihi pesanan. Sisa yang bisa diterima: ${ordered - (alreadyReceived.get(item.itemId) ?? 0)}.`)
+        throw new Error(`Kuantitas item #${itemId} melebihi pesanan. Sisa yang bisa diterima: ${ordered - (alreadyReceived.get(itemId) ?? 0)}.`)
       }
     }
 
