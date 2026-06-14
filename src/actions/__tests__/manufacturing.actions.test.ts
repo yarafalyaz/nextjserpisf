@@ -213,6 +213,19 @@ describe("Production Order Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  it("updateProductionOrder fails when not draft/pending", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed" })
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
+    const res = await actions.updateProductionOrder(1, fdMap({
+      productId: 1,
+      qty: 10,
+      startDate: "2026-06-13",
+      endDate: "2026-06-15",
+      notes: "Test"
+    }))
+    expect(res?.success).toBe(false)
+  })
+
   it("deleteProductionOrder succeeds", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteProductionOrder(1)

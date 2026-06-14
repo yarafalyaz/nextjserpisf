@@ -4,3 +4,13 @@ src/lib/services/attendance-summary.service.ts
 src/actions/finance.actions.ts
 src/actions/hrm.actions.ts
 src/lib/services/inventory.service.ts
+src/actions/sales.actions.ts
+src/actions/approval.actions.ts
+src/actions/crm.actions.ts
+src/actions/cron.actions.ts
+src/actions/database.actions.ts
+src/actions/settings.actions.ts
+src/actions/method.actions.ts
+src/actions/bulk.actions.ts
+src/actions/auth.actions.ts
+src/actions/manufacturing.actions.ts

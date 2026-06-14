@@ -567,6 +567,14 @@ export async function updateProductionOrder(id: number, formData: FormData) {
   const v = parsed.data
 
   // Fix #34: Recalculate materials based on new qty
+  const po = await prisma.productionOrder.findUniqueOrThrow({ where: { id } })
+  if (po.status !== "draft" && po.status !== "pending") {
+    return {
+      success: false,
+      error: `Tidak bisa memperbarui Production Order dengan status '${po.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
+    }
+  }
+
   const product = await prisma.product.findUniqueOrThrow({
     where: { id: v.productId },
     include: { materials: true },
