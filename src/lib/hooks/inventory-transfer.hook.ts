@@ -127,8 +127,12 @@ export async function onTransferReceived(
     });
     if (existingInMoves) return;
 
-    // Guard: must be processed (OUT already posted) before receiving
-    if (transfer.status !== "processed") {
+    // Guard: must be processed (OUT already posted) before receiving. The
+    // action also accepts the transient "receiving" claim state — it flips
+    // processed -> receiving as an atomic claim BEFORE calling this hook
+    // (without a txClient), so the hook re-reads committed "receiving" state.
+    // Mirrors onTransferProcessed, which has no guard and relies on idempotency.
+    if (transfer.status !== "processed" && transfer.status !== "receiving") {
       throw new Error("Transfer harus berstatus 'processed' untuk diterima.");
     }
 

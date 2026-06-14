@@ -122,6 +122,24 @@ describe("onTransferReceived", () => {
     expect(spies.moveCreate).not.toHaveBeenCalled()
   })
 
+  it("succeeds when status is 'receiving' (the transient claim set by receiveInventoryTransfer)", async () => {
+    // Regression: receiveInventoryTransfer atomically claims the transfer by
+    // flipping status processed -> receiving BEFORE invoking this hook (and
+    // passes no txClient, so the hook re-reads the committed "receiving" state).
+    // The old guard rejected anything !== "processed", so receive ALWAYS threw
+    // and left the transfer permanently stuck at "receiving". The guard must
+    // accept the transient "receiving" claim state too.
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }], "receiving")
+    spies.moveFindFirst
+      .mockResolvedValueOnce(null) // idempotency: no existing IN move
+      .mockResolvedValueOnce({ cost: 15 }) // item 7 OUT move (cost basis)
+      .mockResolvedValueOnce({ id: 900 }) // newly created IN move (for createInLayer)
+
+    await expect(onTransferReceived(100, 1)).resolves.not.toThrow()
+    expect(spies.moveCreate).toHaveBeenCalledTimes(1)
+    expect((spies.moveCreate.mock.calls[0]![0] as { data: { impact: string } }).data.impact).toBe("IN")
+  })
+
   it("aggregates items and preserves exact cost basis from OUT moves", async () => {
     const { spies } = wireTx([
       { itemId: 7, qty: 3 },
