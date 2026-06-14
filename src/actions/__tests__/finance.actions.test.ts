@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => {
     transactionAttachment: buildModelMock(),
     bankReconciliationItem: buildModelMock(),
     user: buildModelMock(),
+    paymentMethod: buildModelMock(),
     
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -199,6 +200,25 @@ describe("Expense Actions", () => {
     const res = await (actions as any).markExpensePaid(1)
     expect(res?.success).toBe(true)
   })
+  it("markExpensePaid succeeds with unchanged balance (line 378)", async () => {
+    // Return expense in approved state
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, amount: 100, status: "approved",
+      paymentMethodId: 1
+    })
+    mocks.prismaMock.paymentMethod.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, type: "PETTY_CASH"
+    })
+    
+    // For recalculate chain logic, simulate no change needed:
+    mocks.prismaMock.pettyCash.findFirst.mockResolvedValueOnce({ id: 1, balanceAfter: 1000 })
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValueOnce([
+      { id: 2, amount: 100, balanceBefore: 1000, balanceAfter: 900 }
+    ])
+    
+    const res = await (actions as any).markExpensePaid(1)
+    expect(res?.success).toBe(true)
+  })
   it("deleteExpense succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, isPosted: false })
     const res = await (actions as any).deleteExpense(1)
@@ -219,6 +239,23 @@ describe("Petty Cash Actions", () => {
       type: "IN",
       amount: 1000,
       date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(true)
+  })
+  it("updatePettyCash succeeds with unchanged balance (line 378)", async () => {
+    // 1) Find existing record to pass schema check
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, type: "OUT", amount: 500, date: new Date("2026-06-13"), balanceBefore: 1000, balanceAfter: 500
+    })
+    
+    // 2) During recalculation, findMany returns identical values to computed chain (re-run starts running from 0)
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValueOnce([
+      { id: 1, amount: 1000, type: "IN", balanceBefore: 0, balanceAfter: 1000 },
+      { id: 2, amount: 500, type: "OUT", balanceBefore: 1000, balanceAfter: 500 }
+    ])
+    
+    const res = await (actions as any).updatePettyCash(1, fdMap({
+      type: "OUT", amount: 500, date: "2026-06-13"
     }))
     expect(res?.success).toBe(true)
   })
