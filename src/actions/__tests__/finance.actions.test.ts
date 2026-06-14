@@ -467,7 +467,11 @@ describe('Finance Actions Error Paths', () => {
   it("updateCostCenter handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.costCenter.update.mockRejectedValueOnce(new Error("db err"))
-    const res = await (actions as any).updateCostCenter(1, fdMap({}))
+    const res = await (actions as any).updateCostCenter(1, fdMap({
+      code: "CC-001",
+      name: "Cost Center 1 Updated",
+      isActive: "true"
+    }))
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
@@ -688,11 +692,57 @@ describe("More Action Branches", () => {
 
   it("completeReconciliation unmatched items rejection", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ 
-      id: 1, status: "draft", items: [{ matched: false }] 
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [{ matched: false }]
     })
     const res = await actions.completeReconciliation(1)
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Semua baris harus di-match/i)
+  })
+
+  it("deleteJournal rejects POSTED journal", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
+    const res = await actions.deleteJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Tidak bisa menghapus journal yang sudah POSTED/i)
+  })
+
+  it("updateJournal rejects negative debit/credit", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01") })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([
+        { accountId: 1, debit: -100, credit: 100 },
+        { accountId: 2, debit: 100, credit: -100 }
+      ])
+    })
+    const res = await actions.updateJournal(1, fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Nominal debit\/credit tidak boleh negatif/i)
+  })
+
+  it("updateJournal rejects line with both debit and credit", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01") })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([
+        { accountId: 1, debit: 50, credit: 50 },
+        { accountId: 2, debit: 50, credit: 50 }
+      ])
+    })
+    const res = await actions.updateJournal(1, fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Satu baris tidak boleh memiliki debit dan credit sekaligus/i)
+  })
+
+  it("reverseJournal rejects non-POSTED journal", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT" })
+    const res = await actions.reverseJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Hanya journal yang sudah POSTED yang bisa di-reverse/i)
   })
 })
