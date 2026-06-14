@@ -110,3 +110,39 @@ describe("CRM Lead Actions", () => {
     expect(res?.error).toBe("db err")
   })
 })
+
+describe("CRM Actions - Next redirect errors are re-thrown", () => {
+  const redirectError = () => {
+    const err: any = new Error("NEXT_REDIRECT")
+    err.digest = "NEXT_REDIRECT;replace;/login;307;"
+    return err
+  }
+
+  it("createTicket re-throws redirect errors instead of swallowing them", async () => {
+    mocks.requirePermissionMock.mockRejectedValueOnce(redirectError())
+    await expect(actions.createTicket(fdMap({ subject: "Ticket Subject" }))).rejects.toMatchObject({
+      digest: expect.stringContaining("NEXT_REDIRECT"),
+    })
+  })
+
+  it("updateTicket re-throws redirect errors instead of swallowing them", async () => {
+    mocks.requirePermissionMock.mockRejectedValueOnce(redirectError())
+    await expect(actions.updateTicket(1, fdMap({ subject: "Ticket Subject" }))).rejects.toMatchObject({
+      digest: expect.stringContaining("NEXT_REDIRECT"),
+    })
+  })
+
+  it("deleteTicket re-throws redirect errors instead of swallowing them", async () => {
+    mocks.requirePermissionMock.mockRejectedValueOnce(redirectError())
+    await expect(actions.deleteTicket(1)).rejects.toMatchObject({
+      digest: expect.stringContaining("NEXT_REDIRECT"),
+    })
+  })
+
+  it("deleteLead re-throws redirect errors instead of swallowing them", async () => {
+    mocks.requirePermissionMock.mockRejectedValueOnce(redirectError())
+    await expect(actions.deleteLead(1)).rejects.toMatchObject({
+      digest: expect.stringContaining("NEXT_REDIRECT"),
+    })
+  })
+})
