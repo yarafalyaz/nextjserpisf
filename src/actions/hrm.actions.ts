@@ -307,6 +307,14 @@ export async function createLeaveRequest(formData: FormData) {
   const startDate = new Date(v.startDate)
   const endDate = new Date(v.endDate)
 
+  // Guard: a leave period must not start after it ends. Without this, an
+  // inverted range (startDate > endDate) silently bypasses the overlap check
+  // below (both date predicates evaluate false), persisting a nonsensical
+  // record and letting a second overlapping leave slip through.
+  if (startDate > endDate) {
+    throw new Error("Tanggal mulai tidak boleh melebihi tanggal selesai")
+  }
+
   // Guard: overlap — no pending/approved leave can overlap [startDate, endDate].
   const overlap = await prisma.leaveRequest.findFirst({
     where: {
@@ -1289,13 +1297,35 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
     throw new Error("Hanya pengajuan cuti berstatus menunggu yang dapat diedit")
   }
 
+  const employeeId = requireId(formData.get("employeeId"), "employeeId")
+  const startDate = new Date(formData.get("startDate") as string)
+  const endDate = new Date(formData.get("endDate") as string)
+
+  if (startDate > endDate) {
+    throw new Error("Tanggal mulai tidak boleh melebihi tanggal selesai")
+  }
+
+  const overlap = await prisma.leaveRequest.findFirst({
+    where: {
+      employeeId,
+      status: { in: ["pending", "approved"] },
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+      id: { not: id },
+    },
+    select: { id: true },
+  })
+  if (overlap) {
+    throw new Error("Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.")
+  }
+
   const leave = await prisma.leaveRequest.update({
     where: { id },
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
+      employeeId,
       type: formData.get("type") as string,
-      startDate: new Date(formData.get("startDate") as string),
-      endDate: new Date(formData.get("endDate") as string),
+      startDate,
+      endDate,
       reason: formData.get("reason") as string | null,
     },
   })

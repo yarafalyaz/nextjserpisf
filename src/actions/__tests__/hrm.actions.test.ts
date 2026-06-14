@@ -274,6 +274,43 @@ describe("Leave Request Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createLeaveRequest fails if startDate is after endDate", async () => {
+    const res = await actions.createLeaveRequest(fd({
+      employeeId: "1",
+      startDate: "2026-06-20",
+      endDate: "2026-06-15",
+      type: "annual",
+      reason: "vacation",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Tanggal mulai tidak boleh melebihi tanggal selesai")
+  })
+
+  it("updateLeaveRequest fails if startDate is after endDate", async () => {
+    const res = await actions.updateLeaveRequest(1, fd({
+      employeeId: "1",
+      startDate: "2026-06-20",
+      endDate: "2026-06-15",
+      type: "annual",
+      reason: "vacation",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Tanggal mulai tidak boleh melebihi tanggal selesai")
+  })
+
+  it("updateLeaveRequest fails if there is an overlap", async () => {
+    prismaMock.leaveRequest.findFirst.mockResolvedValueOnce({ id: 99 })
+    const res = await actions.updateLeaveRequest(1, fd({
+      employeeId: "1",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+      type: "annual",
+      reason: "vacation",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("bentrok")
+  })
+
   it("approveLeave updates status", async () => {
     const res = await actions.approveLeave(1)
     expect(res?.success).toBe(true)
