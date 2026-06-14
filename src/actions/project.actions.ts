@@ -270,7 +270,11 @@ export async function syncProjectStatus(projectId: number) {
   if (stages.length === 0) return
 
   const total = stages.length
-  const completed = stages.filter((s) => s.status === "completed").length
+  // Fix: a `skipped` stage is a terminal "done" state (mirrors the previous-stage
+  // guard in updateProjectStageProgress which allows a stage to start when prior
+  // stages are `completed` OR `skipped`). Without counting skipped as done, a
+  // project with any skipped stage would never auto-transition to `completed`.
+  const completed = stages.filter((s) => s.status === "completed" || s.status === "skipped").length
   const inProgress = stages.filter((s) => s.status === "in_progress").length
 
 

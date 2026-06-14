@@ -220,6 +220,20 @@ describe("Project Stages Extended Branches", () => {
       data: expect.objectContaining({ status: "completed" })
     }))
   })
+  it("syncProjectStatus sets completed when remaining stages are skipped", async () => {
+    // A `skipped` stage is terminal/done (mirrors the prior-stage guard in
+    // updateProjectStageProgress that treats completed/skipped equivalently).
+    // The project must still auto-complete when the only non-completed stages
+    // were skipped, not stall forever in_progress.
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { status: "completed" }, { status: "completed" }, { status: "skipped" }, { status: "completed" }
+    ])
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: "completed" })
+    }))
+  })
   it("syncProjectStatus sets in_progress when some stages completed/in_progress", async () => {
     mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "pending", workOrderId: null })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([
