@@ -74,7 +74,7 @@ const baseFields = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  requirePermissionMock.mockResolvedValue({ id: "1" })
+  requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"] })
   getSystemSettingsMock.mockResolvedValue({ enableAutoEmployeeCode: true })
   generateDocMock.mockResolvedValue("EMP-0001")
   bcryptHashMock.mockResolvedValue("hashed-pw")

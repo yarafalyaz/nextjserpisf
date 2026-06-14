@@ -15,6 +15,71 @@ import { parseFormData } from "@/lib/validations/parse-form"
 import bcrypt from "bcryptjs"
 
 /**
+ * Privilege-escalation guard for Employee → User creation/sync flows.
+ *
+ * `createEmployee` and `updateEmployee` both let a caller mint a brand-new
+ * login account (or sync roles onto an existing one) by submitting a list of
+ * role IDs in the form. Without this guard, anyone holding `create_employees`
+ * or `edit_employees` — even an HR manager with no role-management rights —
+ * could pass the `super_admin` role ID and grant themselves (or anyone) full
+ * system access, completely bypassing the
+ * `assertNoSuperAdminGrant` gate that `auth.actions.ts` enforces for the
+ * dedicated user-management path. That would defeat the principle of least
+ * privilege and allow a single HR-permission holder to escalate to super admin
+ * by editing a single employee record.
+ *
+ * Returns an error message when the assignment is disallowed, otherwise null.
+ * Kept local to this file (not exported) on purpose: it is a server-action
+ * helper and must not be reachable from client components.
+ */
+async function assertNoSuperAdminGrant(
+  actorRoles: string[],
+  roleIds: number[]
+): Promise<string | null> {
+  if (actorRoles.includes("super_admin")) return null
+  if (roleIds.length === 0) return null
+  const requested = await prisma.role.findMany({
+    where: { id: { in: roleIds } },
+    select: { name: true },
+  })
+  if (requested.some((r) => r.name === "super_admin")) {
+    return "Hanya super admin yang dapat memberikan role super admin"
+  }
+  return null
+}
+
+/**
+ * Target-escalation guard for Employee → User update flows.
+ *
+ * A non-super-admin must not be able to alter the record (or its synced login
+ * account) of an employee whose user is super_admin. Without this guard, an
+ * `edit_employees` holder could rewrite the super admin's name/email/phone, or
+ * — via the `loginRoleIds` sync branch — strip the super_admin role and grant
+ * themselves arbitrary elevated permissions, all under the guise of a normal
+ * HR edit.
+ *
+ * Returns an error message when the modification is disallowed, otherwise
+ * null. Resolves to null when `targetUserId` is null (employee has no login
+ * account yet — the create path covers that case via `assertNoSuperAdminGrant`).
+ */
+async function assertCanModifyEmployeeTarget(
+  actorRoles: string[],
+  targetUserId: number | null
+): Promise<string | null> {
+  if (targetUserId === null) return null
+  if (actorRoles.includes("super_admin")) return null
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    include: { roles: { select: { name: true } } },
+  })
+  if (!target) return null
+  if (target.roles.some((r) => r.name === "super_admin")) {
+    return "Hanya super admin yang dapat mengubah atau menonaktifkan akun super admin"
+  }
+  return null
+}
+
+/**
  * Smart delete for master records that carry a `deletedAt` soft-delete column.
  * Attempts a HARD delete first; if the row is still referenced by other records
  * the database raises a foreign-key violation (P2003), in which case we fall
@@ -437,7 +502,7 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
 
 export async function createEmployee(formData: FormData) {
   try {
-  await requirePermission("create_employees")
+  const actor = await requirePermission("create_employees")
 
   const settings = await getSystemSettings()
   let employeeNo = (formData.get("employeeNo") as string) || null
@@ -461,6 +526,14 @@ export async function createEmployee(formData: FormData) {
     const existing = await prisma.user.findUnique({ where: { email: email.trim() } })
     if (existing) {
       return { success: false, error: "Email sudah terdaftar sebagai pengguna" }
+    }
+    // Privilege-escalation guard: never let a non-super-admin mint a
+    // login account carrying the super_admin role from the Employee form.
+    // Mirrors `assertNoSuperAdminGrant` in auth.actions.ts so an HR-permission
+    // holder cannot bypass the dedicated user-management gate.
+    const grantErr = await assertNoSuperAdminGrant(actor.roles, loginRoleIds)
+    if (grantErr) {
+      return { success: false, error: grantErr }
     }
   }
 
@@ -526,7 +599,7 @@ export async function createEmployee(formData: FormData) {
 
 export async function updateEmployee(employeeId: number, formData: FormData) {
   try {
-  await requirePermission("edit_employees")
+  const actor = await requirePermission("edit_employees")
 
   // Optional: create a login account for an employee that does not have one yet.
   const wantsLogin = formData.get("createLoginAccount") === "true" || formData.get("createLoginAccount") === "on"
@@ -537,6 +610,14 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
   // Look up whether this employee already has a linked login account.
   const current = await prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } })
   const trimmedEmail = email?.trim() || null
+
+  // Target-escalation guard: a non-super-admin must not be able to alter the
+  // record/login account of an employee whose user is super_admin (rewrite its
+  // name/email, or strip/replace its roles via the sync branch below).
+  const targetErr = await assertCanModifyEmployeeTarget(actor.roles, current?.userId ?? null)
+  if (targetErr) {
+    return { success: false, error: targetErr }
+  }
 
   if (wantsLogin) {
     if (current?.userId) {
@@ -552,6 +633,14 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
     if (existing) {
       return { success: false, error: "Email sudah terdaftar sebagai pengguna" }
     }
+  }
+
+  // Privilege-escalation guard: block granting the super_admin role from the
+  // Employee form on BOTH the "create new login" and the "sync existing login"
+  // branches. Applies whenever role IDs are submitted, regardless of wantsLogin.
+  const grantErr = await assertNoSuperAdminGrant(actor.roles, loginRoleIds)
+  if (grantErr) {
+    return { success: false, error: grantErr }
   }
 
   // If the employee already has a login account and the email is changing,
