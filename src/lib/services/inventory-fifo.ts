@@ -124,6 +124,16 @@ export async function consumeFifoLayers(
       const picked = (serialNumbers ?? []).map((s) => String(s).trim()).filter((s) => s.length > 0)
       if (picked.length > 0) {
         // Manual selection: mark exactly the chosen serials (must be available).
+        const need = Math.round(consumedQty)
+        if (picked.length !== need) {
+          throw new Error(`Jumlah nomor seri yang dipilih (${picked.length}) tidak sesuai dengan kuantitas yang dikeluarkan (${need}).`)
+        }
+        
+        const uniquePicked = new Set(picked)
+        if (uniquePicked.size !== picked.length) {
+          throw new Error(`Terdapat duplikasi pada nomor seri yang diinput.`)
+        }
+
         const found = await tx.itemSerial.findMany({
           where: { itemId, serialNumber: { in: picked }, status: "available", ...(warehouseId != null ? { warehouseId } : {}) },
           select: { id: true },

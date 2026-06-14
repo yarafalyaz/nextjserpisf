@@ -207,6 +207,30 @@ describe("inventory-fifo", () => {
       });
     });
 
+    it("throws when manual serial count does not match consumed quantity", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
+        trackSerial: true,
+        availableSerials: [{ id: 21 }],
+      });
+
+      await expect(
+        consumeFifoLayers(tx, { itemId: 1, qty: 5, serialNumbers: ["SN-1"] }) // qty=5 but 1 serial
+      ).rejects.toThrow(/tidak sesuai dengan kuantitas/);
+    });
+
+    it("throws when chosen serials have duplicates", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
+        trackSerial: true,
+        availableSerials: [{ id: 21 }, { id: 22 }],
+      });
+
+      await expect(
+        consumeFifoLayers(tx, { itemId: 1, qty: 2, serialNumbers: ["SN-1", "SN-1"] }) // duplicate
+      ).rejects.toThrow(/Terdapat duplikasi/);
+    });
+
     it("throws when chosen serials are not all available", async () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
