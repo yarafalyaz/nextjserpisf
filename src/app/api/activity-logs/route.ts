@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { auth } from "@/lib/auth/auth"
+import { hasPermission } from "@/lib/auth/permissions"
 import { parsePagination } from "@/lib/utils/pagination"
 import { apiError } from "@/lib/api-response"
 
@@ -9,6 +10,10 @@ export async function GET(req: NextRequest) {
     const session = await auth()
     if (!session?.user)
       return apiError("UNAUTHORIZED", "Tidak terotorisasi")
+
+    if (!(await hasPermission("manage_settings"))) {
+      return apiError("FORBIDDEN", "Anda tidak memiliki izin untuk melihat log aktivitas")
+    }
 
     const sp = req.nextUrl.searchParams
     const { page, pageSize, skip, take } = parsePagination({

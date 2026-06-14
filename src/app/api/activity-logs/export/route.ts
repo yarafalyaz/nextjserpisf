@@ -1,12 +1,17 @@
 import { type NextRequest } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { auth } from "@/lib/auth/auth"
+import { hasPermission } from "@/lib/auth/permissions"
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user)
       return new Response("Unauthorized", { status: 401 })
+
+    if (!(await hasPermission("manage_settings"))) {
+      return new Response("Forbidden", { status: 403 })
+    }
 
     const sp = req.nextUrl.searchParams
     const where: Record<string, unknown> = {}
