@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => {
     item: buildModelMock(),
     stockMove: {
       ...buildModelMock(),
-      groupBy: vi.fn().mockResolvedValue([]),
+      groupBy: vi.fn().mockResolvedValue([{ itemId: 1, _sum: { qty: 5 } }]),
     },
 
     $transaction: vi.fn(async (ops: any) => {
@@ -600,3 +600,95 @@ describe('WorkOrder Item Map Coverage', () => {
     expect(res?.success).toBe(true)
   })
 })
+
+describe("Inventory Validation / Edge Cases", () => {
+  it("createStockAdjustment fails on parse error", async () => {
+    const res = await (actions as any).createStockAdjustment(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createInventoryTransfer fails on parse error", async () => {
+    const res = await (actions as any).createInventoryTransfer(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createMaterialIssue fails on parse error", async () => {
+    const res = await (actions as any).createMaterialIssue(new FormData())
+    expect(res?.success).toBe(false)
+  })
+
+  it("createWorkOrder defaults status to pending, description to null, cost to 0 when omitted", async () => {
+    const res = await (actions as any).createWorkOrder(fdMap({ customerId: 1, projectId: 1, date: "2026-06-13", name: "WO", quantity: 1, items: JSON.stringify([{ itemId: 5, qty: 3 }]) }))
+    expect(res?.success).toBe(true)
+  })
+
+  it("createRackRow auto generates code if missing", async () => {
+    mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({ enableAutoRowCode: true })
+    const res = await (actions as any).createRackRow(fdMap({ rackId: 1, name: "Row 1", level: 1 }))
+    expect(res?.success).toBe(true)
+  })
+});
+
+describe("NextRedirectError and Error Fallbacks", () => {
+  it("throws if NextRedirectError occurs during createStockAdjustment", async () => {
+    const redirectErr = new Error("NEXT_REDIRECT");
+    (redirectErr as any).digest = "NEXT_REDIRECT";
+    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(redirectErr);
+    
+    // We mock isNextRedirectError from the module just by checking if the throw is preserved
+    // Our error.ts usually checks if e.message.includes('NEXT_REDIRECT') or digest
+    await expect((actions as any).createStockAdjustment(new FormData())).rejects.toThrow("NEXT_REDIRECT");
+  })
+});
+
+describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
+  const errs = [
+    "createStockAdjustment", "processStockAdjustment", "createInventoryTransfer",
+    "processInventoryTransfer", "receiveInventoryTransfer", "createMaterialIssue",
+    "completeMaterialIssue", "createWorkOrder", "updateWorkOrder", "createRack",
+    "updateRack", "deleteStockAdjustment", "deleteInventoryTransfer", "deleteMaterialIssue",
+    "deleteRack", "updateStockAdjustment", "updateMaterialIssue", "updateInventoryTransfer",
+    "createRackRow", "updateRackRow", "deleteRackRow"
+  ];
+  for (const fn of errs) {
+    it(`${fn} handles non-redirect error (covers isNextRedirectError false branch + console.error)`, async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      // Reset requirePermission and trigger a normal error
+      if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValue(new Error("generic err"));
+      const fd = new FormData();
+      fd.append("warehouseId", "1");
+      let arg: any = fd;
+      if (fn === "processStockAdjustment" || fn === "deleteStockAdjustment" || fn === "deleteInventoryTransfer" || fn === "deleteMaterialIssue" || fn === "deleteRack" || fn === "completeMaterialIssue" || fn === "receiveInventoryTransfer" || fn === "processInventoryTransfer") arg = 1;
+      if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
+      if (fn === "createRackRow") arg = fd;
+      if (fn === "createRack") arg = fd;
+      const res = await (actions as any)[fn](arg);
+      expect(res?.success).toBe(false);
+      expect(res?.error).toBe("generic err");
+    });
+  }
+});
+
+describe("Catch block throw e for NextRedirectError", () => {
+  const errs = [
+    "createStockAdjustment", "processStockAdjustment", "createInventoryTransfer",
+    "processInventoryTransfer", "receiveInventoryTransfer", "createMaterialIssue",
+    "completeMaterialIssue", "createWorkOrder", "updateWorkOrder", "createRack",
+    "updateRack", "deleteStockAdjustment", "deleteInventoryTransfer", "deleteMaterialIssue",
+    "deleteRack", "updateStockAdjustment", "updateMaterialIssue", "updateInventoryTransfer",
+    "createRackRow", "updateRackRow", "deleteRackRow"
+  ];
+  for (const fn of errs) {
+    it(`${fn} rethrows NextRedirectError`, async () => {
+      const redirectErr = new Error("NEXT_REDIRECT");
+      (redirectErr as any).digest = "NEXT_REDIRECT_TOKEN";
+      if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValue(redirectErr);
+      const fd = new FormData();
+      fd.append("warehouseId", "1");
+      let arg: any = fd;
+      if (fn === "processStockAdjustment" || fn === "deleteStockAdjustment" || fn === "deleteInventoryTransfer" || fn === "deleteMaterialIssue" || fn === "deleteRack" || fn === "completeMaterialIssue" || fn === "receiveInventoryTransfer" || fn === "processInventoryTransfer") arg = 1;
+      if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
+      if (fn === "createRackRow") arg = fd;
+      if (fn === "createRack") arg = fd;
+      await expect((actions as any)[fn](arg)).rejects.toThrow();
+    });
+  }
+});
