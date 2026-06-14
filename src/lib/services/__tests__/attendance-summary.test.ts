@@ -132,6 +132,23 @@ describe("attendance-summary.service", () => {
     expect(result.workingDays).toBe(5);
   });
 
+  it("treats Sunday as a working day when configured in workDays", async () => {
+    mocks.employeeFindUnique.mockResolvedValue({ id: 1, departmentId: null, baseSalary: 7000000 });
+    // All 7 days (0=Sun..6=Sat) are working days, e.g. a retail/hospitality schedule.
+    mocks.workScheduleFindMany.mockResolvedValue([
+      { workDays: "0,1,2,3,4,5,6", employees: [], departments: [] },
+    ]);
+
+    const result = await calculateAttendanceSummary(1, START, END);
+
+    // Jan 1(Thu)..Jan 7(Wed) is 7 calendar days. Jan 4 is Sunday.
+    // With Sunday configured as a working day, it MUST be counted.
+    // The bug: `d.getDay() === 0` hardcodes Sunday as holiday, so it
+    // gets skipped even when explicitly in workDays.
+    expect(result.workingDays).toBe(7);
+    expect(result.absentDays).toBe(7);
+  });
+
   it("matches department-scoped schedule", async () => {
     mocks.employeeFindUnique.mockResolvedValue({ id: 7, departmentId: 3, baseSalary: 0 });
     mocks.workScheduleFindMany.mockResolvedValue([

@@ -128,7 +128,6 @@ export async function calculateAttendanceSummary(
   let absentDays = 0
 
   for (let d = new Date(rangeStart); d <= evalEnd; d.setDate(d.getDate() + 1)) {
-    if (d.getDay() === 0) continue // Minggu selalu libur
     if (!workingWeekdays.has(d.getDay())) continue // weekend / non-working weekday
     const key = dateKey(d)
     if (holidaySet.has(key)) {
