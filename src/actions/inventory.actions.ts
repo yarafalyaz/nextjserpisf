@@ -36,11 +36,16 @@ export async function createStockAdjustment(formData: FormData) {
   // Since Silengkap calculates stock dynamically from StockMove:
   const itemIds = adjItems.map((it) => it.itemId)
   const stockMoves = await prisma.stockMove.groupBy({
-    by: ['itemId'],
-    where: { warehouseId: v.warehouseId, itemId: { in: itemIds } },
+    by: ['itemId', 'impact'],
+    where: { warehouseId: v.warehouseId, itemId: { in: itemIds }, status: "posted" },
     _sum: { qty: true },
   })
-  const stockMap = new Map(stockMoves.map((s) => [s.itemId, Number(s._sum.qty || 0)]))
+  const stockMap = new Map<number, number>()
+  for (const s of stockMoves) {
+    const current = stockMap.get(s.itemId) || 0
+    const change = Number(s._sum.qty || 0)
+    stockMap.set(s.itemId, s.impact === "IN" ? current + change : current - change)
+  }
 
   const adjustment = await prisma.stockAdjustment.create({
     data: {
@@ -663,6 +668,20 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     formData.get("items") as string | null
   ) ?? []).filter((it) => Number(it.itemId) > 0)
 
+  const warehouseId = requireId(formData.get("warehouseId"), "warehouseId")
+  const itemIds = adjItems.map((it) => it.itemId)
+  const stockMoves = await prisma.stockMove.groupBy({
+    by: ['itemId', 'impact'],
+    where: { warehouseId, itemId: { in: itemIds }, status: "posted" },
+    _sum: { qty: true },
+  })
+  const stockMap = new Map<number, number>()
+  for (const s of stockMoves) {
+    const current = stockMap.get(s.itemId) || 0
+    const change = Number(s._sum.qty || 0)
+    stockMap.set(s.itemId, s.impact === "IN" ? current + change : current - change)
+  }
+
   const adjustment = await prisma.$transaction(async (tx) => {
     await tx.stockAdjustmentItem.deleteMany({ where: { stockAdjustmentId: id } })
 
@@ -675,14 +694,14 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     return tx.stockAdjustment.update({
       where: { id },
       data: {
-        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+        warehouseId,
         date: new Date(formData.get("date") as string),
         reason: formData.get("reason") as string | null,
         type: formData.get("type") as string || "increase",
         notes: formData.get("notes") as string | null,
         items: {
           create: adjItems.map((it) => {
-            const systemQty = Number(it.currentQty || 0)
+            const systemQty = Number(stockMap.get(Number(it.itemId)) || 0)
             const actualQty = Number(it.newQty || 0)
             if (actualQty < 0) throw new Error("Kuantitas fisik (actual) tidak boleh negatif")
             const difference = safeSubtract(actualQty, systemQty, 0)

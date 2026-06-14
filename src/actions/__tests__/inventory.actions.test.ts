@@ -97,6 +97,43 @@ describe("Stock Adjustment Actions", () => {
     const res = await actions.createStockAdjustment(fdMap({ warehouseId: 1, date: "2026-06-13", reason: "Test", items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]) }))
     expect(res?.success).toBe(true)
   })
+  it("createStockAdjustment computes systemQty as IN - OUT (not gross sum)", async () => {
+    // Simulate historical posted moves: 15 IN + 5 OUT in this warehouse => real stock = 10.
+    // The OLD bug summed IN and OUT together, so systemQty was reported as 20 instead of 10.
+    mocks.prismaMock.stockMove.groupBy.mockResolvedValueOnce([
+      { itemId: 1, impact: "IN", _sum: { qty: 15 } },
+      { itemId: 1, impact: "OUT", _sum: { qty: 5 } },
+    ])
+    mocks.prismaMock.stockAdjustment.create.mockImplementationOnce(({ data }: any) => {
+      const item = data.items.create[0]
+      // systemQty MUST be 10 (15 - 5), NOT 20.
+      expect(item.systemQty).toBe(10)
+      // With actualQty=12 the difference is +2, not -8.
+      expect(item.difference).toBe(2)
+      return { id: 1 }
+    })
+    const res = await actions.createStockAdjustment(fdMap({
+      warehouseId: 1,
+      date: "2026-06-13",
+      reason: "Test",
+      items: JSON.stringify([{ itemId: 1, currentQty: 999, newQty: 12, unitCost: 100, reason: "" }]),
+    }))
+    expect(res?.success).toBe(true)
+  })
+  it("createStockAdjustment filters by status: posted only (drafts must not inflate systemQty)", async () => {
+    mocks.prismaMock.stockMove.groupBy.mockResolvedValueOnce([]) // no posted moves
+    mocks.prismaMock.stockAdjustment.create.mockImplementationOnce(({ data }: any) => {
+      expect(data.items.create[0].systemQty).toBe(0)
+      return { id: 1 }
+    })
+    const res = await actions.createStockAdjustment(fdMap({
+      warehouseId: 1,
+      date: "2026-06-13",
+      reason: "Test",
+      items: JSON.stringify([{ itemId: 1, newQty: 0, unitCost: 100, reason: "" }]),
+    }))
+    expect(res?.success).toBe(true)
+  })
   it("updateStockAdjustment succeeds", async () => {
     mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.updateStockAdjustment(1, fdMap({ warehouseId: 1, date: "2026-06-13", reason: "Test", items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]) }))
