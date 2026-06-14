@@ -65,13 +65,22 @@ export async function GET(
   const ext = path.extname(absolutePath).slice(1).toLowerCase()
   const contentType = MIME_MAP[ext] || "application/octet-stream"
 
+  // Only allow rendering inline for safe, previewable formats.
+  // Other formats (like binary, CSV, etc.) should be forced to download
+  // to prevent browser MIME-sniffing or execution.
+  const previewable = new Set(["jpg", "jpeg", "png", "gif", "webp", "pdf"])
+  const dispositionMode = previewable.has(ext) ? "inline" : "attachment"
+
   const buffer = await readFile(absolutePath)
   return new NextResponse(buffer, {
     status: 200,
     headers: {
       "Content-Type": contentType,
-      "Content-Disposition": `inline; filename="${segments[segments.length - 1]}"`,
+      "Content-Disposition": `${dispositionMode}; filename="${segments[segments.length - 1]}"`,
       "Cache-Control": "private, max-age=3600",
+      "X-Content-Type-Options": "nosniff",
+      // Restrict script execution inside PDF/images
+      "Content-Security-Policy": "default-src 'none'; sandbox",
     },
   })
 }
