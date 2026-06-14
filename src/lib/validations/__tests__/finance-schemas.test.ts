@@ -97,6 +97,16 @@ describe("validations/finance.schemas", () => {
         name: "B", accountId: 1, amount: 0, startDate: "2026-07-01", endDate: "2026-09-30",
       }).success).toBe(false);
     });
+    it("rejects endDate before startDate", () => {
+      expect(budgetSchema.safeParse({
+        name: "B", accountId: 1, amount: 100, startDate: "2026-09-30", endDate: "2026-07-01",
+      }).success).toBe(false);
+    });
+    it("accepts endDate equal to startDate", () => {
+      expect(budgetSchema.safeParse({
+        name: "B", accountId: 1, amount: 100, startDate: "2026-07-01", endDate: "2026-07-01",
+      }).success).toBe(true);
+    });
   });
 
   describe("costCenterSchema", () => {

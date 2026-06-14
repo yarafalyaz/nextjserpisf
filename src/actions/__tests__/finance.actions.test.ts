@@ -305,6 +305,17 @@ describe("Budget Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("createBudget fails if endDate is before startDate", async () => {
+    const res = await (actions as any).createBudget(fdMap({
+      name: "Budget 2026",
+      accountId: 1,
+      amount: 100000,
+      startDate: "2026-12-31",
+      endDate: "2026-01-01"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/endDate harus sama atau setelah startDate/i)
+  })
   it("updateBudget succeeds", async () => {
     mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({ id: 1 })
     const res = await (actions as any).updateBudget(1, fdMap({
@@ -315,6 +326,18 @@ describe("Budget Actions", () => {
       endDate: "2026-12-31"
     }))
     expect(res?.success).toBe(true)
+  })
+  it("updateBudget fails if endDate is before startDate", async () => {
+    mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({ id: 1 })
+    const res = await (actions as any).updateBudget(1, fdMap({
+      name: "Budget 2026 v2",
+      accountId: 1,
+      amount: 120000,
+      startDate: "2026-12-31",
+      endDate: "2026-01-01"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/endDate harus sama atau setelah startDate/i)
   })
   it("deleteBudget succeeds", async () => {
     const res = await (actions as any).deleteBudget(1)

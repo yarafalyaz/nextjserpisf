@@ -1118,15 +1118,19 @@ export async function updateBudget(id: number, formData: FormData) {
 
   const user = await requirePermission("create_budgets")
 
+  const parsed = parseFormData(budgetSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const budget = await prisma.budget.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
-      accountId: requireId(formData.get("accountId"), "accountId"),
-      costCenterId: safeId(formData.get("costCenterId")),
-      amount: requireNumber(formData.get("amount"), "amount"),
-      startDate: new Date(formData.get("startDate") as string),
-      endDate: new Date(formData.get("endDate") as string),
+      name: v.name,
+      accountId: v.accountId,
+      costCenterId: v.costCenterId ?? null,
+      amount: v.amount,
+      startDate: v.startDate,
+      endDate: v.endDate,
       createdBy: Number(user.id),
     },
   })

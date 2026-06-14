@@ -78,14 +78,19 @@ export const bankReconciliationSchema = z.object({
 
 // ==================== BUDGET ====================
 
-export const budgetSchema = z.object({
-  name: z.string().min(1, "Nama wajib diisi").max(200),
-  accountId: z.coerce.number({ message: "accountId wajib diisi" }).int().positive(),
-  costCenterId: optionalNumber(),
-  amount: z.coerce.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
-  startDate: requiredDate,
-  endDate: requiredDate,
-})
+export const budgetSchema = z
+  .object({
+    name: z.string().min(1, "Nama wajib diisi").max(200),
+    accountId: z.coerce.number({ message: "accountId wajib diisi" }).int().positive(),
+    costCenterId: optionalNumber(),
+    amount: z.coerce.number({ message: "amount wajib diisi" }).positive("amount harus lebih dari 0"),
+    startDate: requiredDate,
+    endDate: requiredDate,
+  })
+  .refine((v) => v.endDate.getTime() >= v.startDate.getTime(), {
+    message: "endDate harus sama atau setelah startDate",
+    path: ["endDate"],
+  })
 
 // ==================== COST CENTER ====================
 
