@@ -14,35 +14,48 @@ export class InventoryService {
   /**
    * Post a stock move — creates inventory layers (IN) or consumes FIFO layers (OUT).
    * Uses Serializable isolation to prevent race conditions.
+   *
+   * If `tx` is provided, the work runs in that transaction (used when callers
+   * already hold a project/document lock and need posting to share the same
+   * transaction context — otherwise the uncommitted move would be invisible
+   * to the inner transaction opened on a different connection).
    */
-  async postMove(moveId: number): Promise<void> {
-    await this.prisma.$transaction(
-      async (tx) => {
-        const move = await tx.stockMove.findUniqueOrThrow({
-          where: { id: moveId },
-        })
+  async postMove(moveId: number, tx?: TxClient): Promise<void> {
+    const run = async (t: TxClient): Promise<void> => {
+      const move = await t.stockMove.findUniqueOrThrow({
+        where: { id: moveId },
+      })
 
-        if (move.status === 'posted') {
-          throw new Error(`Stock move ${move.documentNo} is already posted.`)
-        }
-
-        if (move.impact === 'IN') {
-          await this.handleIn(tx, move)
-        } else if (move.impact === 'OUT') {
-          await this.handleOut(tx, move)
-        } else {
-          throw new Error(`Unknown impact type: ${move.impact}`)
-        }
-
-        await tx.stockMove.update({
-          where: { id: moveId },
-          data: { status: 'posted' },
-        })
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      if (move.status === 'posted') {
+        throw new Error(`Stock move ${move.documentNo} is already posted.`)
       }
-    )
+
+      if (move.impact === 'IN') {
+        await this.handleIn(t, move)
+      } else if (move.impact === 'OUT') {
+        await this.handleOut(t, move)
+      } else {
+        throw new Error(`Unknown impact type: ${move.impact}`)
+      }
+
+      await t.stockMove.update({
+        where: { id: moveId },
+        data: { status: 'posted' },
+      })
+    }
+
+    if (tx) {
+      await run(tx)
+    } else {
+      await this.prisma.$transaction(
+        async (t) => {
+          await run(t)
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        }
+      )
+    }
   }
 
   /**
@@ -270,7 +283,9 @@ export async function issueProjectMaterials(
       })
 
       // Post the move (FIFO consumption + qty update) within same tx
-      await inventoryService.postMove(move.id)
+      // so the just-created move is visible to the posting logic and the
+      // outer project-row lock protects the whole sequence.
+      await inventoryService.postMove(move.id, tx)
       results.push(move.id)
     }
 

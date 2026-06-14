@@ -2,3 +2,5 @@ src/lib/hooks/inventory-transfer.hook.ts
 src/actions/roles.actions.ts
 src/lib/services/attendance-summary.service.ts
 src/actions/finance.actions.ts
+src/actions/hrm.actions.ts
+src/lib/services/inventory.service.ts

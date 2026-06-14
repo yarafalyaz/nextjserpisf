@@ -336,6 +336,7 @@ describe("InventoryService", () => {
         const { inventoryService } = await import('@/lib/services/inventory.service');
         const postSpy = vi.spyOn(inventoryService, 'postMove').mockResolvedValue(undefined as any);
         const res = await fn(customTx);
+        expect(postSpy).toHaveBeenCalledWith(101, customTx);
         postSpy.mockRestore();
         return res;
       });
