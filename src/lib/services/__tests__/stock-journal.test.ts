@@ -149,6 +149,24 @@ describe("stockJournalService", () => {
         })
       );
     });
+
+    it("returns null when stockAdjustmentAccountId and inventoryAdjustmentAccountId are both null", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        stockAdjustmentAccountId: null,
+        inventoryAdjustmentAccountId: null,
+      });
+
+      const result = await stockJournalService.onStockAdjustment(
+        tx,
+        [{ qty: 10, cost: 5, difference: 2 }],
+        "ADJ-1",
+        1
+      );
+
+      expect(result).toBeNull();
+      expect(mocks.createJournal).not.toHaveBeenCalled();
+    });
   });
 
   describe("onMaterialIssue", () => {
@@ -196,6 +214,29 @@ describe("stockJournalService", () => {
       const result = await stockJournalService.onMaterialIssue(tx, [{ qty: 5, cost: 8 }], "MI-1", 1);
       expect(result).toBeNull();
     });
+
+    it("falls back to materialExpense when materialIssueExpense is null", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        materialIssueExpenseAccountId: null,
+      });
+
+      await stockJournalService.onMaterialIssue(tx, [{ qty: 5, cost: 8 }], "MI-1", 1);
+
+      expect(mocks.createJournal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entries: expect.arrayContaining([
+            expect.objectContaining({ accountId: 500, debit: 40 }),
+          ]),
+        })
+      );
+    });
+
+    it("returns null when total value is zero", async () => {
+      const result = await stockJournalService.onMaterialIssue(tx, [{ qty: 0, cost: 8 }], "MI-1", 1);
+      expect(result).toBeNull();
+      expect(mocks.createJournal).not.toHaveBeenCalled();
+    });
   });
 
   describe("onSalesReturn", () => {
@@ -217,6 +258,12 @@ describe("stockJournalService", () => {
       mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, salesReturnAccountId: null });
       const result = await stockJournalService.onSalesReturn(tx, [{ qty: 2, cost: 100 }], "SR-1", 1);
       expect(result).toBeNull();
+    });
+
+    it("returns null when total value is zero", async () => {
+      const result = await stockJournalService.onSalesReturn(tx, [{ qty: 0, cost: 100 }], "SR-1", 1);
+      expect(result).toBeNull();
+      expect(mocks.createJournal).not.toHaveBeenCalled();
     });
   });
 
@@ -240,6 +287,12 @@ describe("stockJournalService", () => {
       const result = await stockJournalService.onPurchaseReturn(tx, [{ qty: 3, cost: 20 }], "PR-1", 1);
       expect(result).toBeNull();
     });
+
+    it("returns null when total value is zero", async () => {
+      const result = await stockJournalService.onPurchaseReturn(tx, [{ qty: 0, cost: 20 }], "PR-1", 1);
+      expect(result).toBeNull();
+      expect(mocks.createJournal).not.toHaveBeenCalled();
+    });
   });
 
   describe("onWorkOrderCompleted", () => {
@@ -261,6 +314,12 @@ describe("stockJournalService", () => {
       mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, wipAccountId: null });
       const result = await stockJournalService.onWorkOrderCompleted(tx, [{ qty: 4, cost: 25 }], "WO-1", 1);
       expect(result).toBeNull();
+    });
+
+    it("returns null when total value is zero", async () => {
+      const result = await stockJournalService.onWorkOrderCompleted(tx, [{ qty: 0, cost: 25 }], "WO-1", 1);
+      expect(result).toBeNull();
+      expect(mocks.createJournal).not.toHaveBeenCalled();
     });
   });
 });
