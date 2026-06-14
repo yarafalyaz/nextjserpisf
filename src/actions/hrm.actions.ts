@@ -934,10 +934,18 @@ export async function markPayrollPaid(payrollId: number) {
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.payroll.update({
-      where: { id: payrollId },
+    // Atomic conditional claim: only the request that flips status away from
+    // "approved" wins. Without this, two concurrent "bayar gaji" clicks could
+    // both pass the status guard above and each run loan amortization, double
+    // -deducting the employee's loans for the same payroll (mirrors the
+    // completeWorkOrder race fix). The conditional updateMany serializes it.
+    const claim = await tx.payroll.updateMany({
+      where: { id: payrollId, status: "approved" },
       data: { status: "paid", paymentDate: new Date() },
     })
+    if (claim.count === 0) {
+      throw new Error("Penggajian sudah dibayar atau status tidak valid")
+    }
 
     // Amortize active employee loans using the amount actually withheld this
     // payroll (payroll.loanDeduction). Distribute oldest-first, capping each loan

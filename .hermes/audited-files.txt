@@ -15,3 +15,4 @@ src/actions/bulk.actions.ts
 src/actions/auth.actions.ts
 src/actions/manufacturing.actions.ts
 src/actions/master.actions.ts
+src/actions/purchase.actions.ts
