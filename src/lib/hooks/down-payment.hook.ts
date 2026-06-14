@@ -87,30 +87,77 @@ export async function onDownPaymentConfirmed(
       throw new Error("Quotation tidak ditemukan untuk Down Payment ini.");
     }
 
-    if (quotation.status !== SalesStatus.ACCEPTED) {
+    if (quotation.status !== SalesStatus.ACCEPTED && quotation.status !== SalesStatus.CONVERTED) {
       throw new Error("Quotation belum di-accept.");
     }
 
-    // ─── Idempotency Check ────────────────────────────────────────────
-    // Laravel observer: skip silently if WO/SO/Invoice already exist
-    const existingWO = await tx.workOrder.findFirst({
-      where: { quotationId: quotation.id },
-    });
-    if (existingWO) {
-      return;
-    }
-    const existingSO = await tx.salesOrder.findFirst({
-      where: { quotationId: quotation.id },
-    });
-    if (existingSO) {
-      return;
-    }
+    // ─── Multi-DP & Idempotency Check ─────────────────────────────────
+    // If the invoice already exists, this quotation has already been converted
+    // (e.g. by a previous DP). This is a subsequent down payment.
     const existingInv = await tx.salesInvoice.findFirst({
       where: { quotationId: quotation.id },
     });
+
     if (existingInv) {
-      return;
+      // Create SalesPayment for this subsequent DP linked to the existing invoice
+      if (Number(dp.amount) > 0) {
+        const payDocNo = await generateDocumentNumber("PAY");
+        await tx.salesPayment.create({
+          data: {
+            documentNo: payDocNo,
+            salesInvoiceId: existingInv.id,
+            customerId: quotation.customerId,
+            amount: dp.amount,
+            paymentDate: new Date(),
+            paymentMethod: "down_payment",
+            notes: `Uang muka dari DP ${dp.documentNo}`,
+            createdBy: userId ?? null,
+          },
+        });
+
+        // Recalculate invoice paid amount & status inside the same transaction
+        const payments = await tx.salesPayment.findMany({
+          where: { salesInvoiceId: existingInv.id },
+          select: { amount: true },
+        });
+        const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+        const grandTotal = Number(existingInv.grandTotal ?? 0);
+        
+        let invStatus: "posted" | "partial" | "paid" = "posted";
+        let paymentStatus: "posted" | "partial" | "paid" = "posted";
+        if (totalPaid >= grandTotal) {
+          invStatus = "paid";
+          paymentStatus = "paid";
+        } else if (totalPaid > 0) {
+          invStatus = "partial";
+          paymentStatus = "partial";
+        }
+
+        await tx.salesInvoice.update({
+          where: { id: existingInv.id },
+          data: { paidAmount: totalPaid, status: invStatus, paymentStatus },
+        });
+      }
+
+      // Mark this DP as confirmed
+      await tx.downPayment.update({
+        where: { id: dpId },
+        data: { status: SalesStatus.CONFIRMED },
+      });
+
+      return; // Stop here; do not re-create WO/SO/Invoice!
     }
+
+    // Otherwise, this is the FIRST DP: we need to create the WO/SO/Invoice.
+    // Idempotency: skip silently if WO/SO already exist without an invoice (shouldn't happen, but guards against partial state).
+    const existingWO = await tx.workOrder.findFirst({
+      where: { quotationId: quotation.id },
+    });
+    if (existingWO) return;
+    const existingSO = await tx.salesOrder.findFirst({
+      where: { quotationId: quotation.id },
+    });
+    if (existingSO) return;
 
     // Flatten all items from quotation sections
     const allItems: FlatItem[] = quotation.sections.flatMap((section) =>

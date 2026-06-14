@@ -18,3 +18,5 @@ src/actions/master.actions.ts
 src/actions/purchase.actions.ts
 src/actions/hrm.actions.ts
 src/actions/inventory.actions.ts
+src/app/api/activity-logs/route.ts
+src/app/api/activity-logs/export/route.ts
