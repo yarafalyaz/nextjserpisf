@@ -437,12 +437,26 @@ export async function createDownPayment(formData: FormData) {
   let proofImage: string | null = null
   const proofFile = formData.get("proofImage")
   if (proofFile && proofFile instanceof File && proofFile.size > 0) {
+    // Cap proof uploads at 5 MB — these are payment screenshots/photos, not raw
+    // images. Without a cap, a hostile client can OOM the server by streaming
+    // an arbitrarily large file before we ever look at the type.
+    const MAX_PROOF_BYTES = 5 * 1024 * 1024
+    if (proofFile.size > MAX_PROOF_BYTES) {
+      throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
+    }
+
+    // Whitelist safe extensions for files served from `public/`. If a raw
+    // attacker-renamed `.html`/`.svg` lands here, Next will serve it from
+    // `public/uploads/proofs/` and execute its JS in the user's session
+    // (Stored XSS in the app's own origin).
+    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
+    const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
+    const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
+
     const { writeFile, mkdir } = await import("fs/promises")
     const path = await import("path")
     const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
     await mkdir(uploadDir, { recursive: true })
-    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-    const ext = rawExt.slice(0, 10) || "jpg"
     const filename = `proof-dp-${Date.now()}.${ext}`
     const filepath = path.join(uploadDir, filename)
     const bytes = await proofFile.arrayBuffer()
@@ -1522,12 +1536,20 @@ export async function updateDownPayment(id: number, formData: FormData) {
   let proofImage: string | null | undefined = undefined
   const proofFile = formData.get("proofImage")
   if (proofFile && proofFile instanceof File && proofFile.size > 0) {
+    // Same cap as the down-payment proof path above. See comment there.
+    const MAX_PROOF_BYTES = 5 * 1024 * 1024
+    if (proofFile.size > MAX_PROOF_BYTES) {
+      throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
+    }
+
+    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
+    const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
+    const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
+
     const { writeFile, mkdir } = await import("fs/promises")
     const path = await import("path")
     const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
     await mkdir(uploadDir, { recursive: true })
-    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-    const ext = rawExt.slice(0, 10) || "jpg"
     const filename = `proof-dp-${Date.now()}.${ext}`
     const filepath = path.join(uploadDir, filename)
     const bytes = await proofFile.arrayBuffer()
