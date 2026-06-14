@@ -45,8 +45,15 @@ vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => moc
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("DOC-001") }))
+vi.mock("@/lib/validations/parse-form", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/validations/parse-form")>()
+  return {
+    parseFormData: vi.fn(actual.parseFormData),
+  }
+})
 
 import * as actions from "../project.actions"
+import { parseFormData } from "@/lib/validations/parse-form"
 
 function fdMap(payload: Record<string, string | number | null | undefined>): FormData {
   const f = new FormData()
@@ -637,5 +644,91 @@ describe("Missing/Default fields coverage", () => {
     ])
     await actions.syncProjectStatus(1)
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+})
+
+describe("Fallback error message coverage (getErrorMessage(e) || e)", () => {
+  const emptyErr = new Error("")
+  
+  it("createProject fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.createProject(fdMap({ name: "A", customerId: 1 }))
+  })
+  it("updateProject fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.updateProject(1, fdMap({ name: "A", customerId: 1 }))
+  })
+  it("deleteProject fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.deleteProject(1)
+  })
+  it("initializeProjectStages fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.initializeProjectStages(1)
+  })
+  it("updateProjectStageProgress fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.updateProjectStageProgress(1, 1, "in_progress")
+  })
+  it("getProjectProgress fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.getProjectProgress(1)
+  })
+  it("getProjectStageProgress fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.getProjectStageProgress(1)
+  })
+  it("createTask fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.createTask(fdMap({ name: "A", projectId: 1 }))
+  })
+  it("updateTask fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.updateTask(fdMap({ id: 1, name: "A", projectId: 1 }))
+  })
+  it("deleteTask fallback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValueOnce(emptyErr)
+    await actions.deleteTask(1)
+  })
+})
+
+describe("Task status ?? pending coverage", () => {
+  it("createTask with missing status from parser", async () => {
+    vi.mocked(parseFormData).mockReturnValueOnce({
+      success: true,
+      data: { projectId: 1, name: "Task without status" }
+    } as any)
+    const res = await actions.createTask(new FormData())
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "pending" }),
+      })
+    )
+  })
+
+  it("updateTask with missing status from parser", async () => {
+    mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, assignedTo: 1 })
+    vi.mocked(parseFormData).mockReturnValueOnce({
+      success: true,
+      data: { id: 1, projectId: 1, name: "Task without status" }
+    } as any)
+    const res = await actions.updateTask(new FormData())
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "pending" }),
+      })
+    )
   })
 })
