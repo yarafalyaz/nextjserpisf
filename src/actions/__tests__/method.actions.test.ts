@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-
 import { getSystemSettings } from "@/lib/utils/settings"
 
 const mocks = vi.hoisted(() => {
@@ -75,6 +74,15 @@ describe("Payment Method Actions", () => {
     )
   })
 
+  it("createPaymentMethod accepts explicit code when auto setting is false", async () => {
+    mocks.settingsMock.mockResolvedValue({ enableAutoPaymentMethodCode: false })
+    const res = await actions.createPaymentMethod(fdMap({ name: "Cash", code: "MANUAL" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.paymentMethod.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ code: "MANUAL" }) })
+    )
+  })
+
   it("createPaymentMethod fails validation", async () => {
     const res = await actions.createPaymentMethod(fdMap({ name: "" }))
     expect(res?.success).toBe(false)
@@ -84,6 +92,11 @@ describe("Payment Method Actions", () => {
     mocks.requirePermissionMock.mockRejectedValue(new Error("auth err"))
     const res = await actions.createPaymentMethod(fdMap({ name: "Cash" }))
     expect(res?.success).toBe(false)
+  })
+
+  it("createPaymentMethod throws NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue({ digest: "NEXT_REDIRECT_123" })
+    await expect(actions.createPaymentMethod(fdMap({ name: "Cash" }))).rejects.toEqual({ digest: "NEXT_REDIRECT_123" })
   })
 
   it("updatePaymentMethod succeeds", async () => {
@@ -97,9 +110,14 @@ describe("Payment Method Actions", () => {
   })
 
   it("updatePaymentMethod handles error", async () => {
-    mocks.requirePermissionMock.mockRejectedValue(new Error("auth err"))
+    mocks.requirePermissionMock.mockRejectedValue("string error")
     const res = await actions.updatePaymentMethod(1, fdMap({ name: "Cash", code: "CASH" }))
     expect(res?.success).toBe(false)
+  })
+
+  it("updatePaymentMethod throws NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue({ digest: "NEXT_REDIRECT_123" })
+    await expect(actions.updatePaymentMethod(1, fdMap({ name: "Cash", code: "CASH" }))).rejects.toEqual({ digest: "NEXT_REDIRECT_123" })
   })
 
   it("deletePaymentMethod succeeds", async () => {
@@ -108,9 +126,14 @@ describe("Payment Method Actions", () => {
   })
 
   it("deletePaymentMethod handles error", async () => {
-    mocks.requirePermissionMock.mockRejectedValue(new Error("auth err"))
+    mocks.requirePermissionMock.mockRejectedValue(null)
     const res = await actions.deletePaymentMethod(1)
     expect(res?.success).toBe(false)
+  })
+
+  it("deletePaymentMethod throws NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue({ digest: "NEXT_REDIRECT_123" })
+    await expect(actions.deletePaymentMethod(1)).rejects.toEqual({ digest: "NEXT_REDIRECT_123" })
   })
 })
 
@@ -149,6 +172,17 @@ describe("Shipping Method Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  it("createShippingMethod throws NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue({ digest: "NEXT_REDIRECT_123" })
+    await expect(actions.createShippingMethod(fdMap({ name: "JNE" }))).rejects.toEqual({ digest: "NEXT_REDIRECT_123" })
+  })
+
+  it("createShippingMethod logs raw error when message is empty", async () => {
+    mocks.requirePermissionMock.mockRejectedValue(new Error(""))
+    const res = await actions.createShippingMethod(fdMap({ name: "JNE" }))
+    expect(res?.success).toBe(false)
+  })
+
   it("updateShippingMethod succeeds", async () => {
     const res = await actions.updateShippingMethod(1, fdMap({ name: "JNE", code: "JNE" }))
     expect(res?.success).toBe(true)
@@ -165,6 +199,11 @@ describe("Shipping Method Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  it("updateShippingMethod throws NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue({ digest: "NEXT_REDIRECT_123" })
+    await expect(actions.updateShippingMethod(1, fdMap({ name: "JNE", code: "JNE" }))).rejects.toEqual({ digest: "NEXT_REDIRECT_123" })
+  })
+
   it("deleteShippingMethod succeeds", async () => {
     const res = await actions.deleteShippingMethod(1)
     expect(res?.success).toBe(true)
@@ -174,5 +213,10 @@ describe("Shipping Method Actions", () => {
     mocks.requirePermissionMock.mockRejectedValue(new Error("auth err"))
     const res = await actions.deleteShippingMethod(1)
     expect(res?.success).toBe(false)
+  })
+
+  it("deleteShippingMethod throws NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue({ digest: "NEXT_REDIRECT_123" })
+    await expect(actions.deleteShippingMethod(1)).rejects.toEqual({ digest: "NEXT_REDIRECT_123" })
   })
 })
