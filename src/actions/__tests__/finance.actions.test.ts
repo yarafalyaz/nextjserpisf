@@ -746,3 +746,263 @@ describe("More Action Branches", () => {
     expect(res.error).toMatch(/Hanya journal yang sudah POSTED yang bisa di-reverse/i)
   })
 })
+
+describe("Next.js redirect error handling", () => {
+  const redirectErr = new Error("NEXT_REDIRECT")
+  ;(redirectErr as any).digest = "NEXT_REDIRECT;replace;/login;307;"
+
+  const fnsToTest = [
+    { name: "createBankStatement", fn: () => actions.createBankStatement(new FormData()) },
+    { name: "createJournal", fn: () => actions.createJournal(new FormData()) },
+    { name: "postJournal", fn: () => actions.postJournal(1) },
+    { name: "createExpense", fn: () => actions.createExpense(new FormData()) },
+    { name: "approveExpense", fn: () => actions.approveExpense(1) },
+    { name: "markExpensePaid", fn: () => actions.markExpensePaid(1) },
+    { name: "createPettyCash", fn: () => actions.createPettyCash(new FormData()) },
+    { name: "createBankReconciliation", fn: () => actions.createBankReconciliation(new FormData()) },
+    { name: "matchReconciliationLine", fn: () => actions.matchReconciliationLine(1, 1, 1) },
+    { name: "completeReconciliation", fn: () => actions.completeReconciliation(1) },
+    { name: "createBudget", fn: () => actions.createBudget(new FormData()) },
+    { name: "createCostCenter", fn: () => actions.createCostCenter(new FormData()) },
+    { name: "updateCostCenter", fn: () => actions.updateCostCenter(1, new FormData()) },
+    { name: "deleteJournal", fn: () => actions.deleteJournal(1) },
+    { name: "deleteExpense", fn: () => actions.deleteExpense(1) },
+    { name: "deletePettyCash", fn: () => actions.deletePettyCash(1) },
+    { name: "deleteBudget", fn: () => actions.deleteBudget(1) },
+    { name: "deleteCostCenter", fn: () => actions.deleteCostCenter(1) },
+    { name: "deleteStatisticalKeyFigure", fn: () => actions.deleteStatisticalKeyFigure(1) },
+    { name: "updateJournal", fn: () => actions.updateJournal(1, new FormData()) },
+    { name: "reverseJournal", fn: () => actions.reverseJournal(1) },
+    { name: "updateExpense", fn: () => actions.updateExpense(1, new FormData()) },
+    { name: "updatePettyCash", fn: () => actions.updatePettyCash(1, new FormData()) },
+    { name: "updateBudget", fn: () => actions.updateBudget(1, new FormData()) },
+  ]
+
+  it("should rethrow NEXT_REDIRECT errors", async () => {
+    vi.mocked(mocks.requirePermissionMock).mockRejectedValue(redirectErr)
+    
+    for (const { fn } of fnsToTest) {
+      await expect(fn()).rejects.toMatchObject({ digest: expect.stringContaining("NEXT_REDIRECT") })
+    }
+  })
+  
+  it("should fallback to error object when getErrorMessage returns empty", async () => {
+    vi.mocked(mocks.requirePermissionMock).mockRejectedValue("")
+    
+    for (const { fn } of fnsToTest) {
+      const res = await fn()
+      expect(res.success).toBe(false)
+    }
+  })
+})
+
+describe("Status guard branches", () => {
+  it("approveExpense rejects non-draft status", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.approveExpense(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Expense hanya bisa di-approve dari status draft/i)
+  })
+
+  it("markExpensePaid rejects non-approved status", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await actions.markExpensePaid(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Hanya pengeluaran yang sudah disetujui/i)
+  })
+
+  it("matchReconciliationLine rejects non-draft reconciliation", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ status: "completed" })
+    const res = await actions.matchReconciliationLine(1, 1, 1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Hanya rekonsiliasi dengan status draft/i)
+  })
+
+  it("completeReconciliation rejects non-draft status", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed", items: [] })
+    const res = await actions.completeReconciliation(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Hanya rekonsiliasi dengan status draft/i)
+  })
+
+  it("postJournal rejects non-DRAFT status", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED", entries: [] })
+    const res = await actions.postJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Journal hanya bisa di-post dari status DRAFT/i)
+  })
+})
+
+describe("Journal validation edge cases", () => {
+  it("createJournal rejects fewer than 2 valid entries", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }])
+    })
+    const res = await actions.createJournal(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/minimal 2 entri/i)
+  })
+
+  it("createJournal rejects unbalanced entries", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 50 }])
+    })
+    const res = await actions.createJournal(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/tidak balance/i)
+  })
+
+  it("createJournal rejects negative debit/credit", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: -100, credit: 100 }, { accountId: 2, debit: 100, credit: -100 }])
+    })
+    const res = await actions.createJournal(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/tidak boleh negatif/i)
+  })
+
+  it("createJournal rejects both debit and credit on same line", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: 50, credit: 50 }, { accountId: 2, debit: 50, credit: 50 }])
+    })
+    const res = await actions.createJournal(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Satu baris tidak boleh memiliki debit dan credit sekaligus/i)
+  })
+
+  it("createJournal handles parse failure of entries JSON", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: "{not valid json"
+    })
+    const res = await actions.createJournal(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/minimal 2 entri/i)
+  })
+
+  it("updateJournal rejects fewer than 2 valid entries", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01") })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }])
+    })
+    const res = await actions.updateJournal(1, fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/minimal 2 entri/i)
+  })
+
+  it("updateJournal rejects unbalanced entries", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01") })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 50 }])
+    })
+    const res = await actions.updateJournal(1, fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/tidak balance/i)
+  })
+})
+
+describe("Petty Cash & Reconciliation edge cases", () => {
+  it("createPettyCash rejects OUT exceeding balance", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findFirst.mockResolvedValue({ balanceAfter: 50 })
+    const fd = fdMap({ type: "OUT", amount: 200, date: "2024-01-01" })
+    const res = await actions.createPettyCash(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Saldo kas kecil tidak cukup/i)
+  })
+
+  it("recalcPettyCashChain updates balances (triggers tx.pettyCash.update)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValue([
+      { id: 1, documentNo: "PC-01", type: "IN", amount: 100, balanceBefore: 0, balanceAfter: 50 }
+    ])
+    vi.mocked(computePettyCashChain).mockReturnValueOnce([
+      { id: 1, balanceBefore: 0, balanceAfter: 100 }
+    ] as any)
+    mocks.prismaMock.pettyCash.update.mockResolvedValue({ id: 1 })
+    const fd = fdMap({ type: "IN", amount: 100, date: "2024-01-01" })
+    const res = await actions.createPettyCash(fd)
+    expect(res.success).toBe(true)
+  })
+
+  it("createBankReconciliation validation error", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const res = await actions.createBankReconciliation(new FormData())
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Validasi gagal/i)
+  })
+
+  it("reverseJournal findUnique returns null (not found)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
+    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 0 })
+    mocks.prismaMock.journal.findUnique.mockResolvedValue(null)
+    const res = await actions.reverseJournal(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Jurnal tidak ditemukan/i)
+  })
+
+  it("recalcPettyCashChain negative balance error covers full message", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValue([
+      { id: 1, documentNo: "PC-01", type: "OUT", amount: 100, balanceBefore: 0, balanceAfter: -100 }
+    ])
+    vi.mocked(findFirstNegativeBalance).mockReturnValueOnce({
+      record: { id: 1, documentNo: "PC-01" },
+      balanceAfter: -100
+    } as any)
+    const fd = fdMap({ type: "IN", amount: 50, date: "2024-01-01" })
+    const res = await actions.createPettyCash(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Saldo kas kecil menjadi negatif/i)
+    expect(res.error).toMatch(/Periksa urutan tanggal/i)
+  })
+
+  it("recalcPettyCashChain negative balance with null documentNo", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.pettyCash.findMany.mockResolvedValue([
+      { id: 99, documentNo: null, type: "OUT", amount: 50, balanceBefore: 0, balanceAfter: -50 }
+    ])
+    vi.mocked(findFirstNegativeBalance).mockReturnValueOnce({
+      record: { id: 99, documentNo: null },
+      balanceAfter: -50
+    } as any)
+    const fd = fdMap({ type: "IN", amount: 50, date: "2024-01-01" })
+    const res = await actions.createPettyCash(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/#99/)
+  })
+
+  it("updateJournal rejects non-DRAFT status", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED", transactionDate: new Date("2024-01-01") })
+    const fd = fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 100 }])
+    })
+    const res = await actions.updateJournal(1, fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Journal yang sudah diposting tidak dapat diubah/i)
+  })
+})
