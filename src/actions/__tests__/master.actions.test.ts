@@ -1196,7 +1196,7 @@ describe('Next Redirect Error Handling', () => {
       const e = new Error("redirect");
       (e as any).digest = "NEXT_REDIRECT_test";
       mocks.requirePermissionMock.mockRejectedValueOnce(e);
-      await expect(method(new FormData(), new FormData())).rejects.toThrow();
+      await expect((method as any)(new FormData(), new FormData())).rejects.toThrow();
     });
   }
 });
