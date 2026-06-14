@@ -316,3 +316,326 @@ describe("Task Actions", () => {
     expect(res?.success).toBe(true)
   })
 })
+
+describe("Project Actions Optional-Field Branches", () => {
+  it("createProject succeeds with all optional fields populated", async () => {
+    const res = await actions.createProject(
+      fdMap({
+        customerId: 1,
+        name: "Full Project",
+        description: "A description",
+        customerVehicleId: 5,
+        workOrderId: 9,
+        startDate: "2026-01-01",
+        endDate: "2026-02-01",
+        notes: "some notes",
+      })
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.project.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          description: "A description",
+          customerVehicleId: 5,
+          workOrderId: 9,
+          notes: "some notes",
+        }),
+      })
+    )
+  })
+  it("updateProject succeeds with all optional fields populated", async () => {
+    const res = await actions.updateProject(
+      1,
+      fdMap({
+        customerId: 1,
+        name: "Full Project",
+        description: "A description",
+        customerVehicleId: 5,
+        workOrderId: 9,
+        startDate: "2026-01-01",
+        endDate: "2026-02-01",
+        notes: "some notes",
+      })
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          description: "A description",
+          customerVehicleId: 5,
+          workOrderId: 9,
+          notes: "some notes",
+        }),
+      })
+    )
+  })
+})
+
+describe("Task Actions Optional-Field Branches", () => {
+  it("createTask succeeds with all optional fields populated", async () => {
+    const res = await actions.createTask(
+      fdMap({
+        projectId: 1,
+        name: "Full Task",
+        description: "task desc",
+        status: "in_progress",
+        assignedTo: 7,
+        startDate: "2026-01-01",
+        dueDate: "2026-01-15",
+      })
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          description: "task desc",
+          status: "in_progress",
+          assignedTo: 7,
+        }),
+      })
+    )
+  })
+  it("createTask handles error in catch (covers createTask catch path)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.task.create.mockRejectedValueOnce(new Error("create boom"))
+    const res = await actions.createTask(fdMap({ projectId: 1, name: "Task X" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toBe("create boom")
+  })
+  it("updateTask succeeds as manager with all optional fields populated", async () => {
+    mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 99 })
+    const res = await actions.updateTask(
+      fdMap({
+        id: 1,
+        projectId: 2,
+        name: "Full Task",
+        description: "task desc",
+        status: "completed",
+        assignedTo: 4,
+        startDate: "2026-01-01",
+        dueDate: "2026-01-15",
+      })
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          description: "task desc",
+          status: "completed",
+          assignedTo: 4,
+        }),
+      })
+    )
+  })
+  it("updateTask succeeds for non-manager on own task (manage_projects absent, super_admin absent)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, permissions: ["edit_projects"], roles: ["staff"] })
+    mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 7 })
+    const res = await actions.updateTask(fdMap({ id: 1, projectId: 1, name: "Mine", status: "pending" }))
+    expect(res?.success).toBe(true)
+  })
+})
+
+describe("updateProjectStageProgress status-transition branches", () => {
+  beforeEach(() => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 1, sortOrder: 1 })
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([])
+  })
+  it("sets completedAt when status is completed", async () => {
+    const res = await actions.updateProjectStageProgress(1, 1, "completed")
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.projectStage.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ completedAt: expect.any(Date) }) })
+    )
+  })
+  it("does not set timestamps for pending and omits notes when undefined", async () => {
+    // previous incomplete but status pending is allowed
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue({ id: 0, name: "Prev" })
+    const res = await actions.updateProjectStageProgress(1, 1, "pending")
+    expect(res?.success).toBe(true)
+    const callArg = mocks.prismaMock.projectStage.update.mock.calls.at(-1)?.[0]
+    expect(callArg.data.startedAt).toBeUndefined()
+    expect(callArg.data.completedAt).toBeUndefined()
+    expect(callArg.data.notes).toBeUndefined()
+  })
+})
+
+describe("syncProjectStatus extended branches", () => {
+  it("all completed but workOrder has no issued material issue -> WO not updated", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "completed" }, { status: "completed" }])
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "completed" }) })
+    )
+    expect(mocks.prismaMock.workOrder.update).not.toHaveBeenCalled()
+  })
+  it("returns early when there are no stages", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, workOrderId: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([])
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+  it("in_progress branch skips project.update when status already in_progress/other and WO not pending/draft", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "in_progress" }, { status: "pending" }])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "in_progress" })
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.workOrder.update).not.toHaveBeenCalled()
+  })
+  it("in_progress branch syncs WO when status is draft", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "active", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "completed" }, { status: "pending" }])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "draft" })
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.workOrder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "in_progress" }) })
+    )
+  })
+  it("in_progress branch where WO lookup returns null (no WO update)", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "active", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "in_progress" }, { status: "pending" }])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue(null)
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.workOrder.update).not.toHaveBeenCalled()
+  })
+})
+
+describe("getProjectStageProgress with stage data", () => {
+  it("maps stages and falls back to raw status when label missing", async () => {
+    // initializeProjectStages call -> findMany returns existing so skip create
+    mocks.prismaMock.projectStage.findMany.mockReset()
+    mocks.prismaMock.projectStage.findMany
+      .mockResolvedValueOnce([{ id: 1 }]) // initializeProjectStages: already exists
+      .mockResolvedValueOnce([
+        { id: 1, name: "Persiapan", sortOrder: 1, status: "completed", startedAt: null, completedAt: null, notes: null },
+        { id: 2, name: "Custom", sortOrder: 2, status: "unknown_status", startedAt: null, completedAt: null, notes: "n" },
+      ])
+    const res = await actions.getProjectStageProgress(1)
+    expect(res?.success).toBe(true)
+    expect(res?.data?.[0]?.statusLabel).toBe("Selesai")
+    expect(res?.data?.[1]?.statusLabel).toBe("unknown_status")
+  })
+})
+
+describe("NEXT_REDIRECT Error Catch Paths", () => {
+  it("createProject re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.project.create.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_1" })
+    await expect(
+      actions.createProject(fdMap({ customerId: 1, name: "Test" }))
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_1" })
+  })
+
+  it("updateProject re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.project.update.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_2" })
+    await expect(
+      actions.updateProject(1, fdMap({ customerId: 1, name: "Test" }))
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_2" })
+  })
+
+  it("deleteProject re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.project.findUnique.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_3" })
+    await expect(
+      actions.deleteProject(1)
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_3" })
+  })
+
+  it("initializeProjectStages re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.projectStage.findMany.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_4" })
+    await expect(
+      actions.initializeProjectStages(1)
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_4" })
+  })
+
+  it("updateProjectStageProgress re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_5" })
+    await expect(
+      actions.updateProjectStageProgress(1, 1, "in_progress")
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_5" })
+  })
+
+  it("getProjectProgress re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.task.count.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_6" })
+    await expect(
+      actions.getProjectProgress(1)
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_6" })
+  })
+
+  it("getProjectStageProgress re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.projectStage.findMany.mockReset()
+    mocks.prismaMock.projectStage.findMany.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_7" })
+    await expect(
+      actions.getProjectStageProgress(1)
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_7" })
+  })
+
+  it("createTask re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.task.create.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_8" })
+    await expect(
+      actions.createTask(fdMap({ projectId: 1, name: "Test" }))
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_8" })
+  })
+
+  it("updateTask re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 1 })
+    mocks.prismaMock.task.update.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_9" })
+    await expect(
+      actions.updateTask(fdMap({ id: 1, projectId: 1, name: "Test" }))
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_9" })
+  })
+
+  it("deleteTask re-throws NEXT_REDIRECT error", async () => {
+    mocks.prismaMock.task.delete.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_10" })
+    await expect(
+      actions.deleteTask(1)
+    ).rejects.toEqual({ digest: "NEXT_REDIRECT_10" })
+  })
+})
+
+describe("Missing/Default fields coverage", () => {
+  it("createTask status defaults to pending if omitted", async () => {
+    const f = new FormData()
+    f.append("projectId", "1")
+    f.append("name", "Default Task")
+    // omit status
+    const res = await actions.createTask(f)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "pending",
+        }),
+      })
+    )
+  })
+
+  it("updateTask status defaults to pending if omitted", async () => {
+    mocks.prismaMock.task.findUniqueOrThrow.mockResolvedValue({ id: 1, assignedTo: 1 })
+    const f = new FormData()
+    f.append("id", "1")
+    f.append("projectId", "1")
+    f.append("name", "Default Task")
+    // omit status
+    const res = await actions.updateTask(f)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.task.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "pending",
+        }),
+      })
+    )
+  })
+
+  it("syncProjectStatus handles when inProgress = 0 and completed = 0 (no-op status)", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "active", workOrderId: null })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { status: "pending" }, { status: "pending" }
+    ])
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+})
