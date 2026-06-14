@@ -185,3 +185,45 @@ describe("deleteRole", () => {
   })
 })
 
+describe("super_admin role protection", () => {
+  it("updateRole refuses to edit super_admin when actor is not super_admin", async () => {
+    // Resolve the target role as super_admin
+    roleFindUniqueMock.mockResolvedValue({ id: 1, name: "super_admin", users: [] })
+    // Actor: manage_settings holder, NOT super_admin
+    requirePermissionMock.mockResolvedValue({
+      id: "1",
+      roles: ["admin"],
+      permissions: ["manage_settings"],
+    })
+    await expect(
+      updateRole(1, fd({ name: "still-super" })),
+    ).rejects.toThrow(/super_admin/i)
+    expect(roleUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("updateRole lets a super_admin actor edit super_admin", async () => {
+    roleFindUniqueMock.mockResolvedValue({ id: 1, name: "super_admin", users: [] })
+    requirePermissionMock.mockResolvedValue({
+      id: "1",
+      roles: ["super_admin"],
+      permissions: ["manage_settings"],
+    })
+    permissionFindManyMock.mockResolvedValue([])
+    await expect(
+      updateRole(1, fd({ name: "still-super" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    expect(roleUpdateMock).toHaveBeenCalled()
+  })
+
+  it("deleteRole refuses to delete super_admin for any non-super_admin caller", async () => {
+    roleFindUniqueMock.mockResolvedValue({ id: 1, name: "super_admin", users: [] })
+    requirePermissionMock.mockResolvedValue({
+      id: "1",
+      roles: ["admin"],
+      permissions: ["manage_settings"],
+    })
+    await expect(deleteRole(1)).rejects.toThrow(/super_admin/i)
+    expect(roleDeleteMock).not.toHaveBeenCalled()
+  })
+})
+

@@ -83,6 +83,16 @@ export async function updateRole(id: number, formData: FormData) {
   const { name } = parsed.data
   const permissionIds = formData.getAll("permissions").map((pid) => Number(pid)).filter(Boolean)
 
+  // Protect the built-in super_admin role: only a super_admin may modify it.
+  // Otherwise a manage_settings holder could strip its permissions or rename it,
+  // locking the real admins out — a privilege escalation via denial-of-service
+  // that bypasses assertCanGrantPermissions (which only guards the granted set,
+  // not edits to the all-powerful role itself).
+  const existing = await prisma.role.findUnique({ where: { id }, select: { name: true } })
+  if (existing?.name === "super_admin" && !actor.roles.includes("super_admin")) {
+    throw new Error("Hanya super_admin yang dapat mengubah peran super_admin")
+  }
+
   const grantErr = await assertCanGrantPermissions(actor, permissionIds)
   if (grantErr) {
     throw new Error(grantErr)
@@ -119,6 +129,12 @@ export async function deleteRole(id: number) {
   })
 
   if (!role) throw new Error("Role tidak ditemukan")
+
+  // Protect the built-in super_admin role: must never be deleted.
+  if (role.name === "super_admin") {
+    throw new Error("Peran super_admin adalah peran sistem dan tidak dapat dihapus")
+  }
+
   if (role.users.length > 0) {
     throw new Error(`Role "${role.name}" masih digunakan oleh ${role.users.length} user. Hapus assignment terlebih dahulu.`)
   }
