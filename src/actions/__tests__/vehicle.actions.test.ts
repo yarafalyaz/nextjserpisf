@@ -354,3 +354,56 @@ describe("Vehicle Actions Error Paths", () => {
     expect(res?.error).toBe("db err")
   })
 })
+
+describe("Vehicle Actions Remaining Branches", () => {
+  it("createVehicleBrand fails validation (empty name, line 24)", async () => {
+    const res = await actions.createVehicleBrand(fdMap({ name: "" }))
+    expect(res?.success).toBe(false)
+  })
+  it("createVehicleModel fails if duplicate name (line 57)", async () => {
+    mocks.prismaMock.vehicleModel.findFirst.mockResolvedValueOnce({ id: 2 })
+    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", brandId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah ada")
+  })
+  it("createVehicle uses existing fallback variant (line 99 branch)", async () => {
+    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 42 })
+    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", modelId: 1 }))
+    expect(res?.success).toBe(true)
+  })
+  it("deleteVehicleVariant revalidates when variant exists (line 217 branch)", async () => {
+    mocks.prismaMock.vehicleVariant.findUnique.mockResolvedValueOnce({ id: 1, vehicleModelId: 3 })
+    const res = await actions.deleteVehicleVariant(1)
+    expect(res?.success).toBe(true)
+  })
+})
+
+describe("Next.js redirect error handling", () => {
+  const redirectErr = new Error("redirect")
+  ;(redirectErr as unknown as { digest: string }).digest = "NEXT_REDIRECT_TEST"
+
+  const fnsToTest = [
+    { name: "createVehicleBrand", fn: () => actions.createVehicleBrand(fdMap({ name: "Toyota" })) },
+    { name: "createVehicleModel", fn: () => actions.createVehicleModel(fdMap({ name: "Avanza", brandId: 1 })) },
+    { name: "createVehicle", fn: () => actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 })) },
+    { name: "deleteVehicleBrand", fn: () => actions.deleteVehicleBrand(1) },
+    { name: "deleteVehicleModel", fn: () => actions.deleteVehicleModel(1) },
+    { name: "createVehicleVariant", fn: () => actions.createVehicleVariant(fdMap({ name: "1.5 G", modelId: 1 })) },
+    { name: "deleteVehicleVariant", fn: () => actions.deleteVehicleVariant(1) },
+    { name: "updateVehicleBrand", fn: () => actions.updateVehicleBrand(1, fdMap({ name: "Toyota" })) },
+    { name: "updateVehicleModel", fn: () => actions.updateVehicleModel(1, fdMap({ name: "Avanza", brandId: 1 })) },
+    { name: "updateVehicle", fn: () => actions.updateVehicle(1, fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 })) },
+    { name: "deleteVehicle", fn: () => actions.deleteVehicle(1) },
+    { name: "createCustomerVehicle", fn: () => actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1, vehicleId: 1 })) },
+    { name: "updateCustomerVehicle", fn: () => actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 1, vehicleId: 1 })) },
+    { name: "deleteCustomerVehicle", fn: () => actions.deleteCustomerVehicle(1) },
+  ]
+
+  it("should rethrow NEXT_REDIRECT errors", async () => {
+    mocks.requirePermissionMock.mockRejectedValue(redirectErr)
+
+    for (const { fn } of fnsToTest) {
+      await expect(fn()).rejects.toThrow(redirectErr)
+    }
+  })
+})
