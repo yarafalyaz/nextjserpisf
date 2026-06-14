@@ -1097,3 +1097,75 @@ describe('Coverage Hardening Edge Cases', () => {
   })
 
 })
+
+
+describe("Coverage completion tests for validation errors", () => {
+  it("createAccount validation error", async () => {
+    const res = await actions.createAccount(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createItemCategory validation error", async () => {
+    const res = await actions.createItemCategory(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updateItemCategory validation error", async () => {
+    const res = await actions.updateItemCategory(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createDepartment validation error", async () => {
+    const res = await actions.createDepartment(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updateDepartment validation error", async () => {
+    const res = await actions.updateDepartment(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createPosition validation error", async () => {
+    const res = await actions.createPosition(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updatePosition validation error", async () => {
+    const res = await actions.updatePosition(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createCurrency validation error", async () => {
+    const res = await actions.createCurrency(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updateCurrency validation error", async () => {
+    const res = await actions.updateCurrency(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createBarcode validation error", async () => {
+    const res = await actions.createBarcode(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updateBarcode validation error", async () => {
+    const res = await actions.updateBarcode(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createTaxGroup validation error", async () => {
+    const res = await actions.createTaxGroup(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updateTaxGroup validation error", async () => {
+    const res = await actions.updateTaxGroup(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createStatisticalKeyFigure validation error", async () => {
+    const res = await actions.createStatisticalKeyFigure(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updateStatisticalKeyFigure validation error", async () => {
+    const res = await actions.updateStatisticalKeyFigure(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("createPaymentTerm validation error", async () => {
+    const res = await actions.createPaymentTerm(new FormData())
+    expect(res?.success).toBe(false)
+  })
+  it("updatePaymentTerm validation error", async () => {
+    const res = await actions.updatePaymentTerm(1, new FormData())
+    expect(res?.success).toBe(false)
+  })
+})
