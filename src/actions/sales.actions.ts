@@ -1572,12 +1572,16 @@ export async function updateDownPayment(id: number, formData: FormData) {
     throw new Error("Nominal uang muka harus lebih dari 0")
   }
 
-  // Cumulative cap (mirrors createDownPayment), excluding THIS DP's own id since
-  // it is being edited (counting it would double-count its current amount).
-  // Without this, a valid DP could be edited to exceed the quotation grandTotal.
-  const otherDPs = await prisma.downPayment.aggregate({
-    where: { quotationId, status: { not: "cancelled" }, id: { not: id } },
-    _sum: { amount: true },
+  // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
+  // two concurrent updates (or a create + an update) on the same quotation can't
+  // each pass the cap (TOCTOU) and together over-pay the quotation grandTotal.
+  // Mirrors the createDownPayment / convertQuotationToOrder lock pattern.
+  const otherDPs = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+    return tx.downPayment.aggregate({
+      where: { quotationId, status: { not: "cancelled" }, id: { not: id } },
+      _sum: { amount: true },
+    })
   })
   const totalOther = Number(otherDPs._sum.amount ?? 0)
   if (totalOther + amount > Number(quotation.grandTotal)) {
