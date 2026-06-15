@@ -1511,12 +1511,20 @@ export async function updateHoliday(id: number, formData: FormData) {
   try {
   await requirePermission("create_holidays")
 
+  // Validation parity with createHoliday: route through Zod schema so blank
+  // names / missing dates / 500+ char descriptions are rejected on the edit
+  // path, not just on create. Without this, the form layer can store
+  // unvalidated holiday rows.
+  const parsed = parseFormData(holidaySchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   await prisma.holiday.update({
     where: { id },
     data: {
-      name: formData.get("name") as string,
-      date: new Date(formData.get("date") as string),
-      description: formData.get("description") as string | null,
+      name: v.name,
+      date: new Date(v.date),
+      description: v.description ?? null,
     },
   })
 
@@ -1820,17 +1828,26 @@ export async function updateTimesheet(id: number, formData: FormData) {
 
   await requirePermission("create_timesheets")
 
+  // Validation parity with createTimesheet: route the same Zod schema so the
+  // edit path cannot be used to write values the create-guard rejects (e.g.
+  // negative/zero hours, blank employees, 1000+ char descriptions). Without
+  // this, a draft timesheet could be edited to hours = -5 and corrupt project
+  // costing / billing. See: hrm-update-timesheet-negative regression test.
+  const parsed = parseFormData(timesheetSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const timesheet = await prisma.timesheet.update({
     where: { id },
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      projectId: requireId(formData.get("projectId"), "projectId"),
-      taskId: safeNumber(formData.get("taskId")),
-      date: new Date(formData.get("date") as string),
-      startTime: formData.get("startTime") as string | null,
-      endTime: formData.get("endTime") as string | null,
-      hours: requireNumber(formData.get("hours"), "hours"),
-      description: formData.get("description") as string | null,
+      employeeId: v.employeeId,
+      projectId: v.projectId,
+      taskId: v.taskId ?? null,
+      date: new Date(v.date),
+      startTime: v.startTime ?? null,
+      endTime: v.endTime ?? null,
+      hours: v.hours,
+      description: v.description ?? null,
     },
   })
 
@@ -1852,18 +1869,25 @@ export async function updateWorkSchedule(id: number, formData: FormData) {
 
   await requirePermission("create_work_schedules")
 
-  const name = formData.get("name") as string
+  // Validation parity with createWorkSchedule: route through Zod schema.
+  // The edit path bypassed this, allowing blank names or malformed times
+  // that crashed downstream payroll scheduling and formatting logic.
+  const parsed = parseFormData(workScheduleSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
+  const name = v.name
   const days = formData.getAll("days") as string[]
-  const startTime = formData.get("startTime") as string
-  const endTime = formData.get("endTime") as string
+  const startTime = v.startTime
+  const endTime = v.endTime
   const departmentIds = (formData.getAll("departmentId") as string[])
     .map((d) => safeNumber(d))
     .filter((n): n is number => n != null)
   const employeeIds = (formData.getAll("employeeId") as string[])
     .map((d) => safeNumber(d))
     .filter((n): n is number => n != null)
-  const lateToleranceMinutes = safeNumber(formData.get("lateToleranceMinutes")) ?? 0
-  const isActive = formData.get("isActive") === "true"
+  const lateToleranceMinutes = v.lateToleranceMinutes ?? 0
+  const isActive = v.isActive ?? false
 
   await prisma.workSchedule.update({
     where: { id },
@@ -1924,15 +1948,23 @@ export async function updateDepartmentHoliday(formData: FormData) {
   try {
   await requirePermission("create_holidays")
 
-  const id = requireId(formData.get("id"), "id")
+  // Validation parity with createDepartmentHoliday: route through Zod schema.
+  // The edit path was reading raw formData values with no length / required /
+  // type guards, allowing blank names, missing dates, or non-numeric
+  // departmentId values to be persisted.
+  const parsed = parseFormData(departmentHolidaySchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
+  const id = v.id ?? requireId(formData.get("id"), "id")
 
   const holiday = await prisma.departmentHoliday.update({
     where: { id },
     data: {
-      departmentId: requireId(formData.get("departmentId"), "departmentId"),
-      name: formData.get("name") as string,
-      date: new Date(formData.get("date") as string),
-      isRecurring: formData.get("isRecurring") === "on" || formData.get("isRecurring") === "true",
+      departmentId: v.departmentId,
+      name: v.name,
+      date: new Date(v.date),
+      isRecurring: v.isRecurring ?? false,
     },
   })
 
@@ -1999,16 +2031,23 @@ export async function updateAppreciation(formData: FormData) {
   try {
   await requirePermission("create_appreciations")
 
-  const id = requireId(formData.get("id"), "id")
+  // Validation parity with createAppreciation: route through Zod schema so
+  // the edit path enforces required employee/date, non-negative amount, and
+  // string-length caps — previously it read raw formData with no guards.
+  const parsed = parseFormData(appreciationSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
+  const id = v.id ?? requireId(formData.get("id"), "id")
 
   const appreciation = await prisma.appreciation.update({
     where: { id },
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      date: new Date(formData.get("date") as string),
-      type: (formData.get("type") as string) || "bonus",
-      amount: safeNumber(formData.get("amount")) ?? 0,
-      notes: formData.get("notes") as string | null,
+      employeeId: v.employeeId,
+      date: new Date(v.date),
+      type: v.type,
+      amount: v.amount ?? 0,
+      notes: v.notes ?? null,
     },
   })
 

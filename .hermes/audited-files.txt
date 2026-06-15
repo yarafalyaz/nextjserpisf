@@ -108,3 +108,4 @@ src/actions/master.actions.ts (fix: deletePosition unguarded employee data-loss 
 src/actions/finance.actions.ts (fix: updateBudget called requirePermission("create_budgets") instead of "edit_budgets"; edit_budgets missing from prisma/seed.ts so no non-super-admin could ever edit a budget)
 prisma/seed.ts (fix: added missing "edit_budgets" permission to admin role's permission list)
 src/actions/__tests__/finance.actions.test.ts (new: +1 test asserting updateBudget calls requirePermission with "edit_budgets")
+src/actions/hrm.actions.ts (fix: create-vs-update validation asymmetry — updateTimesheet/updateWorkSchedule/updateHoliday/updateDepartmentHoliday/updateAppreciation bypassed Zod, allowing negative/zero hours & blank/oversized fields the create-guard rejects)
