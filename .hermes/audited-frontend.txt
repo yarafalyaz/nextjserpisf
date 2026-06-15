@@ -17,3 +17,4 @@ src/components/reports/export-buttons.tsx (a11y: added role='group'+aria-label='
 src/components/reports/report-date-filter.tsx (a11y: role='search'+aria-label on both date-range and single-date filter containers, aria-label on Generate button)
 src/components/ui/detail-tabs.tsx (responsive: wrapped TabsList in overflow-x-auto container with justify-start on mobile / justify-center on sm+; focus-visible ring on TabsContent for keyboard a11y)
 src/components/forms/vendor-bill-form.tsx (fix: date/dueDate state hydration on edit overriding stored DB values and GL posting date with today/null)
+src/components/ui/page-header.tsx (promoted to Server Component by extracting interactive Button to its own client module)
