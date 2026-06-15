@@ -76,8 +76,8 @@ export async function createJournal(formData: FormData) {
     throw new Error("Journal harus memiliki minimal 2 entri dengan akun dan nominal valid")
   }
 
-  const totalDebit = validEntries.reduce((sum, e) => safeAdd(sum, e.debit || 0, 0), 0)
-  const totalCredit = validEntries.reduce((sum, e) => safeAdd(sum, e.credit || 0, 0), 0)
+  const totalDebit = validEntries.reduce((sum, e) => safeAdd(sum, e.debit || 0, 2), 0)
+  const totalCredit = validEntries.reduce((sum, e) => safeAdd(sum, e.credit || 0, 2), 0)
   if (!compareAmounts(totalDebit, totalCredit, 0)) {
     throw new Error(`Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`)
   }
@@ -162,8 +162,8 @@ export async function postJournal(journalId: number) {
   await assertPeriodOpen(journal.transactionDate)
 
   // Validate double-entry balance
-  const totalDebit = journal.entries.reduce((sum, e) => safeAdd(sum, Number(e.debit), 0), 0)
-  const totalCredit = journal.entries.reduce((sum, e) => safeAdd(sum, Number(e.credit), 0), 0)
+  const totalDebit = journal.entries.reduce((sum, e) => safeAdd(sum, Number(e.debit), 2), 0)
+  const totalCredit = journal.entries.reduce((sum, e) => safeAdd(sum, Number(e.credit), 2), 0)
 
   if (!compareAmounts(totalDebit, totalCredit, 0)) {
     throw new Error(`Journal tidak balance: Debit ${totalDebit} vs Credit ${totalCredit}`)
@@ -837,8 +837,8 @@ export async function updateJournal(id: number, formData: FormData) {
     throw new Error("Journal harus memiliki minimal 2 entri dengan akun dan nominal valid")
   }
 
-  const totalDebit = validEntries.reduce((sum, e) => safeAdd(sum, e.debit || 0, 0), 0)
-  const totalCredit = validEntries.reduce((sum, e) => safeAdd(sum, e.credit || 0, 0), 0)
+  const totalDebit = validEntries.reduce((sum, e) => safeAdd(sum, e.debit || 0, 2), 0)
+  const totalCredit = validEntries.reduce((sum, e) => safeAdd(sum, e.credit || 0, 2), 0)
   if (!compareAmounts(totalDebit, totalCredit, 0)) {
     throw new Error(`Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`)
   }
