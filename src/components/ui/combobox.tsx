@@ -21,6 +21,7 @@ interface ComboboxProps {
   id?: string
   className?: string
   emptyText?: string
+  "aria-label"?: string
 }
 
 /**
@@ -38,6 +39,7 @@ export function Combobox({
   id,
   className,
   emptyText = "Tidak ada data",
+  "aria-label": ariaLabel,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -84,6 +86,7 @@ export function Combobox({
         <input
           id={id}
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"

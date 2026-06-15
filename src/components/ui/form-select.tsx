@@ -38,6 +38,7 @@ export function FormSelect({
   name,
   disabled,
   className,
+  "aria-label": ariaLabel,
 }: FormSelectProps) {
   const isControlled = value !== undefined
   const [internal, setInternal] = useState<string | null>(defaultValue ?? null)
@@ -56,6 +57,7 @@ export function FormSelect({
       placeholder={placeholder}
       disabled={disabled}
       className={className}
+      aria-label={ariaLabel}
     />
   )
 }
