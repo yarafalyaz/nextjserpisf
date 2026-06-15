@@ -64,12 +64,18 @@ export function DatePresets() {
   }
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap print:hidden">
+    <div
+      role="group"
+      aria-label="Rentang waktu cepat"
+      className="flex items-center gap-1.5 flex-wrap print:hidden"
+    >
       {presets.map((p) => (
         <button
           key={p.key}
+          type="button"
           onClick={() => handlePreset(p.key)}
-          className="px-2.5 py-1 text-xs font-medium rounded-md border border-default bg-surface hover:bg-default/50 transition-colors"
+          aria-label={`Atur rentang ke ${p.label}`}
+          className="px-2.5 py-1 text-xs font-medium rounded-md border border-default bg-surface hover:bg-default/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           {p.label}
         </button>

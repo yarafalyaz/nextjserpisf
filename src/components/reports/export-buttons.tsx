@@ -153,26 +153,36 @@ export function ExportButtons({ title }: { title: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2 print:hidden">
+    <div
+      role="group"
+      aria-label="Export dokumen"
+      className="flex items-center gap-2 print:hidden"
+    >
       <button
+        type="button"
         onClick={handleExportPDF}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-default/50 transition-colors"
+        aria-label="Unduh sebagai PDF"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-default/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       >
-        <FileText size={16} />
+        <FileText size={16} aria-hidden="true" />
         PDF
       </button>
       <button
+        type="button"
         onClick={handleExportCSV}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-default/50 transition-colors"
+        aria-label="Unduh sebagai CSV"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-default/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       >
-        <FileDown size={16} />
+        <FileDown size={16} aria-hidden="true" />
         CSV
       </button>
       <button
+        type="button"
         onClick={handlePrint}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-default/50 transition-colors"
+        aria-label="Cetak halaman"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-default bg-surface hover:bg-default/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       >
-        <Printer size={16} />
+        <Printer size={16} aria-hidden="true" />
         Print
       </button>
     </div>
