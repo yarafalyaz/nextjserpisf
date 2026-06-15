@@ -1435,6 +1435,62 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
     : []
   const updPrCostMap = new Map(updPrCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
 
+  // Over-return guard (mirrors createPurchaseReturn). Without this, a small valid
+  // draft return could be EDITED to a qty far exceeding what was received, and
+  // on processPurchaseReturn would over-reduce inventory and over-credit the
+  // vendor. Prior non-cancelled returns must EXCLUDE this return's own id
+  // because its existing rows are about to be deleted/replaced below (counting
+  // them would double-count). Mirrors the updateSalesReturn guard.
+  if (updPrIds.length && v.purchaseOrderId) {
+    const grItems = await prisma.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: {
+          purchaseOrderId: v.purchaseOrderId,
+          status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+        },
+        itemId: { in: updPrIds },
+      },
+      select: { itemId: true, qty: true },
+    })
+    const receivedQtyByItem = new Map<number, number>()
+    for (const it of grItems) {
+      receivedQtyByItem.set(it.itemId, (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
+    }
+
+    const priorReturns = await prisma.purchaseReturnItem.findMany({
+      where: {
+        purchaseReturn: {
+          purchaseOrderId: v.purchaseOrderId,
+          status: { not: "cancelled" },
+          id: { not: id },
+        },
+        itemId: { in: updPrIds },
+      },
+      select: { itemId: true, qty: true },
+    })
+    const alreadyReturnedByItem = new Map<number, number>()
+    for (const r of priorReturns) {
+      alreadyReturnedByItem.set(r.itemId, (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
+    }
+
+    const violation = findOverReturn(
+      validPrItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+      receivedQtyByItem,
+      alreadyReturnedByItem
+    )
+    if (violation) {
+      if (violation.type === "not_on_invoice") {
+        return { success: false, error: `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.` }
+      }
+      return {
+        success: false,
+        error:
+          `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
+          `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
+      }
+    }
+  }
+
   // Keep existing documentNo (do not regenerate), and replace items atomically.
   const purchaseReturn = await prisma.$transaction(async (tx) => {
     const latestPr = await tx.purchaseReturn.findUnique({ where: { id }, select: { status: true } })
