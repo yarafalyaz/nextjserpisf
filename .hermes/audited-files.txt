@@ -54,5 +54,6 @@ src/lib/services/inventory.service.ts (fix: float precision in FIFO OUT consumpt
 src/lib/hooks/inventory-transfer.hook.ts (fix: float drift in duplicate-row qty aggregation)
 src/actions/sales.actions.ts (fix: negative taxRate/qty drove invoice grandTotal negative)
 
-src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)
-src/lib/services/attendance-summary.service.ts (fix: schedule precedence — global schedule wrongly unioned with department/employee schedules, over-counting working days and absentees)
+57|src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)
+58|src/lib/services/attendance-summary.service.ts (fix: schedule precedence — global schedule wrongly unioned with department/employee schedules, over-counting working days and absentees)
+59|src/actions/bulk.actions.ts (fix: asset/vehicle bulk deletion integrity guard bypass)
