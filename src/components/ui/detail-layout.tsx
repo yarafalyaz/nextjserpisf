@@ -1,5 +1,3 @@
-"use client"
-
 import { cn } from "@/lib/utils"
 
 export function DetailCard({ children, className }: { children: React.ReactNode; className?: string }) {

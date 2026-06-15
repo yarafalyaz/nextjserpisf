@@ -1,5 +1,3 @@
-"use client"
-
 import { cn } from "@/lib/utils"
 
 interface DetailTableProps extends React.TableHTMLAttributes<HTMLTableElement> {
