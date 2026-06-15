@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db/prisma"
 
 export interface AttendanceSummary {
-  /** Expected working days in period (has schedule, not a holiday), counted up to today. */
+  /** Total expected working days in the period (has schedule, not a holiday). */
+  totalWorkingDays: number
+  /** Working days that have elapsed in the period (up to today, has schedule, not a holiday). */
   workingDays: number
   presentDays: number
   leaveDays: number
@@ -9,7 +11,7 @@ export interface AttendanceSummary {
   holidayDays: number
   /** Scheduled working days with no attendance and no approved leave = bolos. */
   absentDays: number
-  /** baseSalary / workingDays (0 if no working days). */
+  /** baseSalary / totalWorkingDays (0 if no working days). */
   dailyRate: number
   /** absentDays * dailyRate. */
   absentDeduction: number
@@ -37,6 +39,7 @@ export async function calculateAttendanceSummary(
   endDate: Date
 ): Promise<AttendanceSummary> {
   const empty: AttendanceSummary = {
+    totalWorkingDays: 0,
     workingDays: 0,
     presentDays: 0,
     leaveDays: 0,
@@ -128,19 +131,33 @@ export async function calculateAttendanceSummary(
     }
   }
 
+  let totalWorkingDays = 0
   let workingDays = 0
   let presentDays = 0
   let leaveDays = 0
   let holidayDays = 0
   let absentDays = 0
 
-  for (let d = new Date(rangeStart); d <= evalEnd; d.setDate(d.getDate() + 1)) {
+  for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
     if (!workingWeekdays.has(d.getDay())) continue // weekend / non-working weekday
     const key = dateKey(d)
     if (holidaySet.has(key)) {
-      holidayDays++
-      continue // tanggal merah on a working day = day off, not counted
+      // tanggal merah on a working day = day off, not counted as a working day.
+      // Only count it in holidayDays for the elapsed portion of the period.
+      if (d <= evalEnd) holidayDays++
+      continue
     }
+
+    // Total expected working days span the WHOLE period — this is the divisor
+    // for a fixed monthly salary's daily rate. Using only elapsed working days
+    // would inflate the daily rate when the summary is generated mid-period
+    // (e.g. dividing a month's salary by the few days worked so far), grossly
+    // overstating each absent day's deduction.
+    totalWorkingDays++
+
+    // Present/leave/absent are only meaningful for days that have elapsed;
+    // future working days are not "absent" yet.
+    if (d > evalEnd) continue
     workingDays++
     if (presentSet.has(key)) presentDays++
     else if (leaveSet.has(key)) leaveDays++
@@ -148,8 +165,8 @@ export async function calculateAttendanceSummary(
   }
 
   const baseSalary = Number(employee.baseSalary || 0)
-  const dailyRate = workingDays > 0 ? baseSalary / workingDays : 0
+  const dailyRate = totalWorkingDays > 0 ? baseSalary / totalWorkingDays : 0
   const absentDeduction = Math.round(absentDays * dailyRate)
 
-  return { workingDays, presentDays, leaveDays, holidayDays, absentDays, dailyRate, absentDeduction }
+  return { totalWorkingDays, workingDays, presentDays, leaveDays, holidayDays, absentDays, dailyRate, absentDeduction }
 }
