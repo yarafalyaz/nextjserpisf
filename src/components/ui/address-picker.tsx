@@ -46,6 +46,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
   const [postalCode, setPostalCode] = useState(initPostalCode)
 
   const fieldName = (field: string) => prefix ? `${prefix}${field.charAt(0).toUpperCase() + field.slice(1)}` : field
+  const idPrefix = prefix ? `${prefix}-` : ""
   const provinceCode = provinces.find((p) => p.name === selectedProvince)?.code || ""
   const cityCode = cities.find((c) => c.name === selectedCity)?.code || ""
   const districtCode = districts.find((d) => d.name === selectedDistrict)?.code || ""
@@ -98,8 +99,9 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Provinsi */}
         <div className="flex flex-col gap-1.5">
-          <Label>Provinsi</Label>
+          <Label htmlFor={`${idPrefix}province-select`}>Provinsi</Label>
           <Combobox
+            id={`${idPrefix}province-select`}
             options={toOptions(provinces)}
             value={selectedProvince || null}
             placeholder="Cari provinsi..."
@@ -118,8 +120,9 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
 
         {/* Kota/Kabupaten */}
         <div className="flex flex-col gap-1.5">
-          <Label>Kota/Kabupaten</Label>
+          <Label htmlFor={`${idPrefix}city-select`}>Kota/Kabupaten</Label>
           <Combobox
+            id={`${idPrefix}city-select`}
             options={toOptions(cities)}
             value={selectedCity || null}
             placeholder="Cari kota..."
@@ -137,8 +140,9 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
 
         {/* Kecamatan */}
         <div className="flex flex-col gap-1.5">
-          <Label>Kecamatan</Label>
+          <Label htmlFor={`${idPrefix}district-select`}>Kecamatan</Label>
           <Combobox
+            id={`${idPrefix}district-select`}
             options={toOptions(districts)}
             value={selectedDistrict || null}
             placeholder="Cari kecamatan..."
@@ -154,8 +158,9 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
 
         {/* Kelurahan/Desa */}
         <div className="flex flex-col gap-1.5">
-          <Label>Kelurahan/Desa</Label>
+          <Label htmlFor={`${idPrefix}village-select`}>Kelurahan/Desa</Label>
           <Combobox
+            id={`${idPrefix}village-select`}
             options={toOptions(villages, true)}
             value={selectedVillage || null}
             placeholder="Cari kelurahan..."
@@ -171,8 +176,9 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
 
         {/* Kode Pos (auto-filled) */}
         <div className="flex flex-col gap-1.5">
-          <Label>Kode Pos</Label>
+          <Label htmlFor={`${idPrefix}postal-code`}>Kode Pos</Label>
           <Input
+            id={`${idPrefix}postal-code`}
             name={fieldName("postalCode")}
             value={postalCode}
             readOnly
