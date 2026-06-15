@@ -63,8 +63,11 @@ export async function onExpenseApprovedSyncPettyCash(
     // INs) must be rejected — otherwise the negative balance would be
     // silently saved by the recompute loop below, breaking the invariant
     // enforced everywhere else.
+    // Batch updates to avoid N+1 sequential round-trips while still enforcing
+    // the same negative-balance guard as recalcPettyCashChain in finance.actions.
     const all = await tx.pettyCash.findMany({ orderBy: [{ date: "asc" }, { id: "asc" }] });
     let running = 0;
+    const updates: Promise<unknown>[] = [];
     for (const rec of all) {
       const before = running;
       const after = rec.type === "IN" ? before + Number(rec.amount) : before - Number(rec.amount);
@@ -75,9 +78,12 @@ export async function onExpenseApprovedSyncPettyCash(
         );
       }
       if (Number(rec.balanceBefore) !== before || Number(rec.balanceAfter) !== after) {
-        await tx.pettyCash.update({ where: { id: rec.id }, data: { balanceBefore: before, balanceAfter: after } });
+        updates.push(tx.pettyCash.update({ where: { id: rec.id }, data: { balanceBefore: before, balanceAfter: after } }));
       }
       running = after;
+    }
+    if (updates.length > 0) {
+      await Promise.all(updates);
     }
   });
 }
