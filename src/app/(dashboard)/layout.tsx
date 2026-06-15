@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth/auth"
 import { redirect } from "next/navigation"
 import { SessionProvider } from "next-auth/react"
-import { AppSidebar } from "@/components/app-sidebar"
-import { SiteHeader } from "@/components/site-header"
+import { AppSidebar } from "@/components/layout/sidebar"
+import { Header } from "@/components/layout/header"
 import { CommandPalette } from "@/components/lazy/command-palette"
 import { SidebarInset, SidebarProvider } from "@/components/ui/shadcn/sidebar"
 import type { Metadata } from "next"
@@ -46,7 +46,7 @@ export default async function DashboardLayout({
       >
         <AppSidebar companyName={settings.companyName ?? undefined} companyLogo={settings.companyLogo ?? undefined} />
         <SidebarInset>
-          <SiteHeader companyLogo={settings.companyLogo ?? undefined} />
+          <Header companyLogo={settings.companyLogo ?? undefined} />
           <main className="app-content">{children}</main>
         </SidebarInset>
       </SidebarProvider>
