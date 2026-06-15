@@ -51,7 +51,7 @@ export function VoidButton({ id, action, label = "Batalkan", title, body, onSucc
         size="sm"
         className="text-danger border-danger/40 hover:bg-danger/10"
       >
-        <Ban size={15} className="mr-1.5" />
+        <Ban size={15} className="mr-1.5" aria-hidden="true" />
         {label}
       </Button>
 

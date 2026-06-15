@@ -54,7 +54,7 @@ export function DeleteButton({ id, action, onSuccess }: DeleteButtonProps) {
         size="sm"
         aria-label="Hapus"
       >
-        <Trash2 size={15} />
+        <Trash2 size={15} aria-hidden="true" />
       </Button>
 
       <ConfirmDialog

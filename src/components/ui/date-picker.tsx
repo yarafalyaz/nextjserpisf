@@ -96,7 +96,7 @@ export function AppDatePicker({
               !current && "text-muted-foreground"
             )}
           >
-            <CalendarIcon className="size-4 opacity-70" />
+            <CalendarIcon className="size-4 opacity-70" aria-hidden="true" />
             {selectedDate
               ? format(selectedDate, "d MMMM yyyy", { locale: idLocale })
               : placeholder}

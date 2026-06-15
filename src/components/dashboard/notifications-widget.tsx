@@ -58,7 +58,14 @@ export function NotificationsWidget() {
           </CardTitle>
           <CardDescription>Memuat sinyal operasional terbaru</CardDescription>
         </CardHeader>
-        <CardContent className="py-10 text-center text-sm text-muted-foreground">Memuat...</CardContent>
+        <CardContent
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+          className="py-10 text-center text-sm text-muted-foreground"
+        >
+          Memuat...
+        </CardContent>
       </Card>
     )
   }
@@ -110,39 +117,55 @@ export function NotificationsWidget() {
         <CardDescription>Ringkasan alert, notifikasi, dan aktivitas terbaru</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="grid grid-cols-2 divide-x divide-y border-t md:grid-cols-4 md:divide-y-0">
+        <div
+          role="region"
+          aria-label="Alert operasional"
+          className="grid grid-cols-2 divide-x divide-y border-t md:grid-cols-4 md:divide-y-0"
+        >
           {alerts.map((alert) => (
             <Link
               key={alert.label}
               href={alert.href}
-              className="flex min-h-28 flex-col items-center justify-center gap-1.5 px-3 py-4 text-center transition-colors hover:bg-accent/60"
+              aria-label={`${alert.label}: ${alert.count}`}
+              className="flex min-h-28 flex-col items-center justify-center gap-1.5 px-3 py-4 text-center transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <div className={`flex size-10 items-center justify-center rounded-lg ${alert.bg}`}>
+              <div
+                className={`flex size-10 items-center justify-center rounded-lg ${alert.bg}`}
+                aria-hidden="true"
+              >
                 <alert.icon className={`size-4 ${alert.color}`} />
               </div>
-              <span className={`text-xl font-semibold tabular-nums ${alert.count > 0 ? alert.color : "text-muted-foreground"}`}>
+              <span
+                className={`text-xl font-semibold tabular-nums ${alert.count > 0 ? alert.color : "text-muted-foreground"}`}
+                aria-hidden="true"
+              >
                 {alert.count}
               </span>
-              <span className="text-xs leading-tight text-muted-foreground">{alert.label}</span>
+              <span className="text-xs leading-tight text-muted-foreground" aria-hidden="true">
+                {alert.label}
+              </span>
             </Link>
           ))}
         </div>
 
         {data.latestNotifications && data.latestNotifications.length > 0 && (
-          <div className="border-t">
+          <div className="border-t" role="region" aria-label="Notifikasi terbaru">
             <div className="flex items-center gap-1.5 px-5 py-3">
-              <Bell className="size-3.5 text-muted-foreground" />
+              <Bell className="size-3.5 text-muted-foreground" aria-hidden="true" />
               <span className="text-xs font-semibold uppercase text-muted-foreground">Notifikasi Terbaru</span>
             </div>
             <div className="divide-y">
               {data.latestNotifications.slice(0, 3).map((notif) => (
                 <div key={notif.id} className={`flex items-start gap-3 px-5 py-3 ${!notif.readAt ? "bg-primary/5" : ""}`}>
-                  <div className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
-                    notif.type === "danger" ? "bg-danger" :
-                    notif.type === "warning" ? "bg-warning" :
-                    notif.type === "success" ? "bg-success" :
-                    "bg-info"
-                  }`} />
+                  <div
+                    className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
+                      notif.type === "danger" ? "bg-danger" :
+                      notif.type === "warning" ? "bg-warning" :
+                      notif.type === "success" ? "bg-success" :
+                      "bg-info"
+                    }`}
+                    aria-hidden="true"
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-foreground">{notif.title}</p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">{notif.body}</p>
@@ -156,9 +179,9 @@ export function NotificationsWidget() {
           </div>
         )}
 
-        <div className="border-t">
+        <div className="border-t" role="region" aria-label="Aktivitas terbaru">
           <div className="flex items-center gap-1.5 px-5 py-3">
-            <Clock className="size-3.5 text-muted-foreground" />
+            <Clock className="size-3.5 text-muted-foreground" aria-hidden="true" />
             <span className="text-xs font-semibold uppercase text-muted-foreground">Aktivitas Terbaru</span>
           </div>
           {data.recentActivities.length === 0 ? (
@@ -167,7 +190,7 @@ export function NotificationsWidget() {
             <div className="divide-y">
               {data.recentActivities.map((act) => (
                 <div key={act.id} className="flex items-start gap-3 px-5 py-3">
-                  <div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
+                  <div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-foreground">
                       {act.description || `${act.action} ${act.modelType}`}

@@ -30,8 +30,8 @@ export function ThemeToggle() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Ganti tema" className="relative">
-          <Sun className="size-5 rotate-0 scale-100 transition-all duration-300 dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute size-5 rotate-90 scale-0 transition-all duration-300 dark:rotate-0 dark:scale-100" />
+          <Sun className="size-5 rotate-0 scale-100 transition-all duration-300 dark:-rotate-90 dark:scale-0" aria-hidden="true" />
+          <Moon className="absolute size-5 rotate-90 scale-0 transition-all duration-300 dark:rotate-0 dark:scale-100" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
@@ -44,9 +44,9 @@ export function ThemeToggle() {
               onSelect={() => setTheme(opt.value)}
               className="gap-2"
             >
-              <Icon className="size-4" />
+              <Icon className="size-4" aria-hidden="true" />
               <span className="flex-1">{opt.label}</span>
-              {isActive && <Check className="size-4 text-primary" />}
+              {isActive && <Check className="size-4 text-primary" aria-hidden="true" />}
             </DropdownMenuItem>
           )
         })}

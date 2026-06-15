@@ -88,7 +88,7 @@ export function MultiCombobox({
                 toggle(o.value)
               }}
             >
-              <X className="size-3" />
+              <X className="size-3" aria-hidden="true" />
             </button>
           </span>
         ))}
@@ -114,7 +114,7 @@ export function MultiCombobox({
             }
           }}
         />
-        <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden />
+        <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden="true" />
       </div>
 
       {open && !disabled && (
@@ -143,7 +143,7 @@ export function MultiCombobox({
                   }}
                 >
                   {opt.label}
-                  {isSelected && <Check className="size-4" />}
+                  {isSelected && <Check className="size-4" aria-hidden="true" />}
                 </li>
               )
             })

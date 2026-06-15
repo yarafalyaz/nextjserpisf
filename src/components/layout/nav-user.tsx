@@ -46,7 +46,7 @@ export function NavUser() {
                 <span className="truncate font-medium">{name}</span>
                 <span className="truncate text-xs text-sidebar-foreground/70">{email}</span>
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <ChevronsUpDown className="ml-auto size-4" aria-hidden="true" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -71,7 +71,7 @@ export function NavUser() {
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
                 <Link href="/profil">
-                  <User />
+                  <User aria-hidden="true" />
                   Ubah Profil
                 </Link>
               </DropdownMenuItem>
@@ -81,7 +81,7 @@ export function NavUser() {
               variant="destructive"
               onSelect={() => signOut({ callbackUrl: "/login" })}
             >
-              <LogOut />
+              <LogOut aria-hidden="true" />
               Keluar
             </DropdownMenuItem>
           </DropdownMenuContent>

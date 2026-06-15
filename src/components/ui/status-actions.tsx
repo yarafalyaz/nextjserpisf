@@ -57,10 +57,10 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-muted-foreground">Status:</span>
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${colorClass}`}>
-          {status === "draft" && <Clock size={12} />}
-          {status === "pending" && <Clock size={12} />}
-          {status === "approved" && <CheckCircle size={12} />}
-          {status === "rejected" && <XCircle size={12} />}
+          {status === "draft" && <Clock size={12} aria-hidden="true" />}
+          {status === "pending" && <Clock size={12} aria-hidden="true" />}
+          {status === "approved" && <CheckCircle size={12} aria-hidden="true" />}
+          {status === "rejected" && <XCircle size={12} aria-hidden="true" />}
           {statusLabel(status)}
         </span>
       </div>
@@ -72,7 +72,7 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
               isDisabled={isPending}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-success text-white hover:bg-success/90 transition-all disabled:opacity-50"
             >
-              <CheckCircle size={14} />
+              <CheckCircle size={14} aria-hidden="true" />
               Setujui
             </Button>
           )}
@@ -82,7 +82,7 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
               isDisabled={isPending}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-danger text-white hover:bg-danger/90 transition-all disabled:opacity-50"
             >
-              <XCircle size={14} />
+              <XCircle size={14} aria-hidden="true" />
               Tolak
             </Button>
           )}

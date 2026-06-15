@@ -64,7 +64,7 @@ export function Header({ companyLogo }: HeaderProps = {}) {
               document.dispatchEvent(event)
             }}
           >
-            <Search className="size-4" />
+            <Search className="size-4" aria-hidden="true" />
             <span className="truncate text-xs">Tekan Cmd K untuk cari</span>
           </Button>
           <Button
@@ -78,7 +78,7 @@ export function Header({ companyLogo }: HeaderProps = {}) {
               document.dispatchEvent(event)
             }}
           >
-            <Search className="size-4" />
+            <Search className="size-4" aria-hidden="true" />
           </Button>
 
           <ThemeToggle />
@@ -115,19 +115,19 @@ export function Header({ companyLogo }: HeaderProps = {}) {
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
                   <Link href="/profil">
-                    <User />
+                    <User aria-hidden="true" />
                     Profil
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/notifikasi">
-                    <Bell />
+                    <Bell aria-hidden="true" />
                     Notifikasi
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/pengaturan">
-                    <Settings />
+                    <Settings aria-hidden="true" />
                     Pengaturan
                   </Link>
                 </DropdownMenuItem>
@@ -140,7 +140,7 @@ export function Header({ companyLogo }: HeaderProps = {}) {
                   void signOut({ callbackUrl: "/login" })
                 }}
               >
-                <LogOut />
+                <LogOut aria-hidden="true" />
                 Keluar
               </DropdownMenuItem>
             </DropdownMenuContent>

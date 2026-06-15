@@ -147,7 +147,7 @@ export function Combobox({
                   onMouseEnter={() => setActiveIndex(i)}
                 >
                   {opt.label}
-                  {isSelected && <Check className="size-4" />}
+                  {isSelected && <Check className="size-4" aria-hidden="true" />}
                 </li>
               )
             })
