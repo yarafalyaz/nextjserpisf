@@ -53,3 +53,5 @@ src/actions/finance.actions.ts (fix: decimal precision balance check bug)
 src/lib/services/inventory.service.ts (fix: float precision in FIFO OUT consumption)
 src/lib/hooks/inventory-transfer.hook.ts (fix: float drift in duplicate-row qty aggregation)
 src/actions/sales.actions.ts (fix: negative taxRate/qty drove invoice grandTotal negative)
+
+src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)

@@ -389,7 +389,7 @@ describe("Work Order Actions", () => {
     }))
   })
 
-  it("completeWorkOrder auto-creates DeliveryOrder with null quotationId", async () => {
+  it("completeWorkOrder skips DeliveryOrder when quotationId is null", async () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow
       .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }] })
       .mockResolvedValueOnce({
@@ -404,7 +404,9 @@ describe("Work Order Actions", () => {
 
     const res = await actions.completeWorkOrder(1)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.deliveryOrderItem.createMany).toHaveBeenCalled()
+    expect(mocks.prismaMock.salesOrder.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.deliveryOrder.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.deliveryOrderItem.createMany).not.toHaveBeenCalled()
   })
 
   it("completeWorkOrder syncs project status - all stages pending (no update)", async () => {

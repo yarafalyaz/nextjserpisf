@@ -300,9 +300,16 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number) {
   const deliverableItems = wo.items.filter((i) => Number(i.qty) > 0)
   if (deliverableItems.length === 0) return
 
+  // Guard: a DeliveryOrder must be attached to a SalesOrder derived from the WO's
+  // quotation. If the WO has no linked quotation we cannot safely pick an SO
+  // (Prisma treats `where: { quotationId: undefined }` as "no filter", which
+  // would silently attach the DO to the first SalesOrder in the table). Refuse
+  // to create a DO in that case rather than corrupt the linkage.
+  if (!wo.quotationId) return
+
   // Find linked SalesOrder to attach DO to
   const salesOrder = await prisma.salesOrder.findFirst({
-    where: { quotationId: wo.quotationId ?? undefined },
+    where: { quotationId: wo.quotationId },
   })
   if (!salesOrder) return
 
