@@ -412,8 +412,15 @@ export function DataTable<TData extends { id: number | string }>({
                   {headers.map((header) => {
                     const canSort = header.column.getCanSort()
                     const sorted = header.column.getIsSorted()
+                    const ariaSort = canSort
+                      ? sorted === "asc"
+                        ? "ascending"
+                        : sorted === "desc"
+                          ? "descending"
+                          : "none"
+                      : undefined
                     return (
-                      <TableHead key={header.id}>
+                      <TableHead key={header.id} aria-sort={ariaSort}>
                         {header.isPlaceholder ? null : canSort ? (
                           <Button
                             variant="ghost"
@@ -423,11 +430,11 @@ export function DataTable<TData extends { id: number | string }>({
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
                             {sorted === "asc" ? (
-                              <ChevronUp className="size-4" />
+                              <ChevronUp className="size-4" aria-hidden="true" />
                             ) : sorted === "desc" ? (
-                              <ChevronDown className="size-4" />
+                              <ChevronDown className="size-4" aria-hidden="true" />
                             ) : (
-                              <ArrowUpDown className="size-4 opacity-50" />
+                              <ArrowUpDown className="size-4 opacity-50" aria-hidden="true" />
                             )}
                           </Button>
                         ) : (

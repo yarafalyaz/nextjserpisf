@@ -5,14 +5,14 @@ export function DetailCard({ children, className }: { children: React.ReactNode;
 }
 
 export function DetailGrid({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4", className)}>{children}</div>
+  return <dl className={cn("grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4", className)}>{children}</dl>
 }
 
 export function DetailItem({ label, value, className }: { label: string; value: React.ReactNode; className?: string }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</span>
-      <span className="text-[0.9375rem] text-foreground font-medium">{value || "-"}</span>
+      <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</dt>
+      <dd className="text-[0.9375rem] text-foreground font-medium m-0">{value || "-"}</dd>
     </div>
   )
 }
