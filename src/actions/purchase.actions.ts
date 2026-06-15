@@ -744,7 +744,7 @@ export async function confirmVendorPayment(paymentId: number) {
           data: {
             paidAmount: nextPaid,
             balanceDue: nextBalance,
-            status: nextBalance <= 0 ? "paid" : "posted",
+            status: nextBalance <= 0 ? "paid" : (nextPaid > 0 ? "partial" : "posted"),
           },
         })
       })

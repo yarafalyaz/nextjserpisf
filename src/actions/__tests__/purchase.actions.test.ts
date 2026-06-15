@@ -1058,6 +1058,25 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
     expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalled()
   })
 
+  it("confirmVendorPayment updates vendor bill status to partial on partial allocation", async () => {
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", vendorId: 1, amount: 300 })
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([{ id: 10, balanceDue: 1000, paidAmount: 0, grandTotal: 1000 }])
+    
+    const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
+    vi.mocked(allocatePaymentToBills).mockReturnValueOnce([{ vendorBillId: 10, amount: 300 }])
+
+    const res = await actions.confirmVendorPayment(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorBill.update).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: { id: 10 },
+      data: expect.objectContaining({
+        status: "partial",
+        paidAmount: 300,
+        balanceDue: 700
+      })
+    }))
+  })
+
   it("deletePurchaseOrder continues if stockMove has no referenceId", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
       id: 1, purchaseRequestId: 10, goodsReceipts: [{ id: 101 }]
