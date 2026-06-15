@@ -73,3 +73,5 @@ src/lib/services/payroll-statutory.service.ts (fix: BPJS math rounding discrepan
 70|src/components/ui/data-table.tsx (fix: serverPagination + searchColumn silently filtered only the current page; now debounced URL push on ?cari= so the server re-queries the whole dataset — affects src/app/(dashboard)/pengaturan/log-aktivitas)
 71|src/components/ui/data-table-utils.ts (new: pure URL helpers extracted for testability)
 72|src/components/ui/__tests__/data-table-url.test.ts (new: 5 tests covering buildServerSearchUrl — empty/whitespace input keeps halaman, non-empty sets searchParam + resets halaman, custom searchParam name, trims surrounding whitespace, preserves unrelated params)
+src/lib/utils/math.ts (fix: safeRound returned NaN when input was already in exponential notation, e.g. 1e-7 or 1e+21 — broke any money/inventory calculation whose intermediate result was < 1e-6 or >= 1e21)
+src/lib/utils/__tests__/math.test.ts (new: 2 tests covering tiny and huge exponential-notation inputs)
