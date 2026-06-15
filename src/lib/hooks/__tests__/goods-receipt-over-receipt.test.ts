@@ -44,6 +44,7 @@ function wireTx(opts: {
   priorGrItems: Array<{ itemId: number; qty: number }>
   itemMeta?: { unitOfMeasure?: string; trackBatch?: boolean; trackSerial?: boolean }
 }) {
+  const meta = opts.itemMeta ?? { unitOfMeasure: "pcs", trackBatch: false, trackSerial: false }
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
     executeRaw: vi.fn().mockResolvedValue(1),
@@ -62,9 +63,14 @@ function wireTx(opts: {
     poItemFindMany: vi.fn().mockResolvedValue(opts.poItems),
     grItemFindMany: vi.fn().mockResolvedValue(opts.priorGrItems),
     poUpdate: vi.fn().mockResolvedValue({}),
-    itemFindUnique: vi.fn().mockResolvedValue(
-      opts.itemMeta ?? { unitOfMeasure: "pcs", trackBatch: false, trackSerial: false }
+    itemFindUnique: vi.fn().mockResolvedValue(meta),
+    // New: bulk pre-fetch hoisted out of the per-item loop.
+    itemFindMany: vi.fn().mockResolvedValue(
+      // Match the per-itemId dedup the hook builds. Return one entry per unique
+      // grItems itemId, each with the shared `meta` from opts.
+      [...new Set(opts.grItems.map((g) => g.itemId))].map((id) => ({ id, ...meta }))
     ),
+    uomConversionFindMany: vi.fn().mockResolvedValue([]),
     itemBatchFindFirst: vi.fn().mockResolvedValue(null),
     itemBatchCreate: vi.fn().mockResolvedValue({}),
     itemBatchUpdate: vi.fn().mockResolvedValue({}),
@@ -78,7 +84,8 @@ function wireTx(opts: {
     purchaseOrderItem: { findMany: spies.poItemFindMany },
     goodsReceiptItem: { findMany: spies.grItemFindMany },
     purchaseOrder: { update: spies.poUpdate },
-    item: { findUnique: spies.itemFindUnique },
+    item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany },
+    uomConversion: { findMany: spies.uomConversionFindMany },
     itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
     itemSerial: { create: spies.itemSerialCreate },
   }

@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { createInLayer } from "@/lib/services/inventory-fifo";
-import { toBaseFactor } from "@/lib/services/uom.service";
 import { PurchaseStatus, Status } from "@/lib/constants";
 
 /**
@@ -126,15 +125,40 @@ export async function onGoodsReceiptVerified(
     }
 
     // ─── 3. Create Stock Move IN per item ────────────────────────────────
+    // Pre-fetch all item meta (multi-UoM conversion factors, batch/serial config)
+    // outside the loop. Hoisting the findUnique+toBaseFactor queries out collapses
+    // up to 3×N sequential read round-trips into just 2 round-trips total.
+    const grItemIds = [...new Set(goodsReceipt.items.map((it) => it.itemId))];
+    const grItemMetas = grItemIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: grItemIds } },
+          select: { id: true, unitOfMeasure: true, trackBatch: true, trackSerial: true },
+        })
+      : [];
+    const metaByItem = new Map(grItemMetas.map((it) => [it.id, it]));
+
+    // Bulk-load UoM conversions (equivalent to what toBaseFactor does per item).
+    // The goodsReceipt items carry the alternate UoM they were received in.
+    const enteredUoms = [...new Set(goodsReceipt.items.map((it) => it.uom).filter(Boolean))] as string[];
+    const conversions = (grItemIds.length && enteredUoms.length)
+      ? await tx.uomConversion.findMany({
+          where: { itemId: { in: grItemIds }, code: { in: enteredUoms } },
+          select: { itemId: true, code: true, factorToBase: true },
+        })
+      : [];
+    const factorMap = new Map(
+      conversions.map((c) => [`${c.itemId}:${c.code}`, Number(c.factorToBase)])
+    );
+
     for (const item of goodsReceipt.items) {
       const smDocNo = await generateDocumentNumber("SM");
 
       // Multi-UoM: convert entered qty/cost to the item's BASE unit for stock.
-      const itemMeta = await tx.item.findUnique({
-        where: { id: item.itemId },
-        select: { unitOfMeasure: true, trackBatch: true, trackSerial: true },
-      });
-      const factor = await toBaseFactor(tx, item.itemId, item.uom);
+      const itemMeta = metaByItem.get(item.itemId);
+      const isBaseUom = !itemMeta || !item.uom || item.uom === itemMeta.unitOfMeasure;
+      // Mirror toBaseFactor's clamp: a missing or non-positive factor → 1.
+      const rawFactor = isBaseUom ? 1 : (factorMap.get(`${item.itemId}:${item.uom}`) ?? 1);
+      const factor = rawFactor > 0 ? rawFactor : 1;
       const baseQty = Number(item.qty) * factor;
       const enteredUnitCost = Number(item.unitCost ?? 0);
       const baseUnitCost = factor > 0 ? enteredUnitCost / factor : enteredUnitCost;

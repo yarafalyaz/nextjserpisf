@@ -48,13 +48,25 @@ export async function onSalesReturnCompleted(
     });
     if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
 
+    // Pre-fetch every item's default warehouse in ONE query instead of a
+    // findUnique per line (N+1). The lookup is a pure read with no ordering
+    // dependency, so hoisting it out of the loop is safe and collapses N
+    // round-trips into one.
+    const returnItemIds = [...new Set(salesReturn.items.map((it) => it.itemId))];
+    const itemDefaults = returnItemIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: returnItemIds } },
+          select: { id: true, defaultWarehouseId: true },
+        })
+      : [];
+    const warehouseByItem = new Map(itemDefaults.map((it) => [it.id, it.defaultWarehouseId]));
+
     // Create Stock Move IN per item (goods returned to warehouse)
     for (const item of salesReturn.items) {
       const smDocNo = await generateDocumentNumber("SM");
 
       // Resolve warehouse per item (chain: item default → fallback)
-      const itemData = await tx.item.findUnique({ where: { id: item.itemId }, select: { defaultWarehouseId: true } });
-      const resolvedWarehouseId = itemData?.defaultWarehouseId ?? fallbackWarehouse.id;
+      const resolvedWarehouseId = warehouseByItem.get(item.itemId) ?? fallbackWarehouse.id;
 
       const sm = await tx.stockMove.create({
         data: {
