@@ -22,3 +22,5 @@ src/components/ui/page-header.tsx (promoted to Server Component by extracting in
 23|src/components/ui/empty-state.tsx (a11y: collapsed StatCard nested aria-labels into single composite aria-label on the role='group' wrapper; aria-hidden inner text to avoid SR double-reads)
 24|src/components/ui/qr-code-display.tsx (a11y: added role='img'+aria-label='Kode QR ...' on wrapper, aria-hidden+focusable='false' on raw <QRCodeSVG/> so screen readers announce a single coherent label)
 25|src/components/ui/action-dropdown.tsx (a11y: aria-label='Buka menu aksi' on trigger, aria-hidden='true' on all decorative lucide icons inside DropdownMenuItem)
+src/components/ui/filter-drawer.tsx (added aria-label to open/close buttons, aria-hidden to decorative icon)
+src/components/ui/form-section.tsx (promoted div to semantic section, added aria-labelledby linking to a unique generated id on the section header)
