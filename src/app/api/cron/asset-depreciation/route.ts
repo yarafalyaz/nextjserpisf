@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { computeMonthlyDepreciation } from "@/lib/finance/asset-depreciation"
 import { apiError } from "@/lib/api-response"
+import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
 
 /**
  * Cron: Run monthly asset depreciation for all active assets.
@@ -59,58 +60,72 @@ export async function GET(request: Request) {
       }, { status: 500 })
     }
 
-    for (const asset of assets) {
-      try {
-        const category = asset.category
-        if (!category) continue
+    const periodStart = new Date(year, month - 1, 1)
+    const periodEndExclusive = new Date(year, month, 1)
 
-        // Fix #37: Check if already depreciated this period
-        const existingDepreciation = await prisma.assetHistory.findFirst({
+    // N+1 elimination: instead of one assetHistory.findFirst per asset to check
+    // "already depreciated this period", fetch ALL of this period's depreciation
+    // rows for the candidate assets in a single query and resolve via a Set.
+    const alreadyDepreciated = assets.length
+      ? await prisma.assetHistory.findMany({
           where: {
-            assetId: asset.id,
+            assetId: { in: assets.map((a) => a.id) },
             type: "depreciation",
-            date: {
-              gte: new Date(year, month - 1, 1),
-              lt: new Date(year, month, 1),
-            },
+            date: { gte: periodStart, lt: periodEndExclusive },
           },
+          select: { assetId: true },
         })
-        if (existingDepreciation) {
-          skipped++
-          continue
-        }
+      : []
+    const depreciatedAssetIds = new Set(alreadyDepreciated.map((r) => r.assetId))
 
-        const currentValue = Number(asset.currentValue)
+    // Pure pass: compute each asset's monthly depreciation and collect only the
+    // ones that will actually post a journal. No DB round-trips in this loop.
+    const toProcess: { asset: (typeof assets)[number]; monthlyDepreciation: number }[] = []
+    for (const asset of assets) {
+      const category = asset.category
+      if (!category) continue
 
-        // Calculate monthly depreciation (residual-aware, method-dependent).
-        // Pure math lives in computeMonthlyDepreciation (unit-tested); returns 0
-        // to signal "skip" (already at residual, or no usable method/rate).
-        const monthlyDepreciation = computeMonthlyDepreciation({
-          purchaseCost: Number(asset.purchaseCost),
-          currentValue,
-          residualValue: Number(asset.residualValue),
-          depreciationMethod: asset.depreciationMethod,
-          categoryDepreciationRate: category.depreciationRate
-            ? Number(category.depreciationRate)
-            : null,
-          categoryUsefulLife: category.usefulLife ?? null,
-        })
+      // Fix #37: skip assets already depreciated this period (idempotent re-run).
+      if (depreciatedAssetIds.has(asset.id)) {
+        skipped++
+        continue
+      }
 
-        if (monthlyDepreciation <= 0) { skipped++; continue }
+      // Calculate monthly depreciation (residual-aware, method-dependent).
+      // Pure math lives in computeMonthlyDepreciation (unit-tested); returns 0
+      // to signal "skip" (already at residual, or no usable method/rate).
+      const monthlyDepreciation = computeMonthlyDepreciation({
+        purchaseCost: Number(asset.purchaseCost),
+        currentValue: Number(asset.currentValue),
+        residualValue: Number(asset.residualValue),
+        depreciationMethod: asset.depreciationMethod,
+        categoryDepreciationRate: category.depreciationRate
+          ? Number(category.depreciationRate)
+          : null,
+        categoryUsefulLife: category.usefulLife ?? null,
+      })
 
-        const newValue = currentValue - monthlyDepreciation
+      if (monthlyDepreciation <= 0) { skipped++; continue }
+      toProcess.push({ asset, monthlyDepreciation })
+    }
+
+    // Reserve a contiguous block of journal numbers in ONE atomic round-trip,
+    // replacing the per-asset documentSequence.upsert (N counter bumps → 1).
+    // Same "JOURNAL" key the manual journal/asset acquisition paths use, so the
+    // JRN-YYYYMM-NNNNN run stays contiguous with the rest of the GL.
+    const journalSeqs = await DocumentSequenceService.nextBatch("JOURNAL", toProcess.length)
+
+    // Fire the per-asset posting transactions concurrently. Each is its own
+    // atomic $transaction (asset value + history + balanced journal), and the
+    // period-encoded referenceType keeps them idempotent against double runs.
+    const results = await Promise.allSettled(
+      toProcess.map(({ asset, monthlyDepreciation }, i) => {
+        const newValue = Number(asset.currentValue) - monthlyDepreciation
         const depreciationDecimal = new Prisma.Decimal(monthlyDepreciation.toFixed(2))
         const newValueDecimal = new Prisma.Decimal(newValue.toFixed(2))
+        const journalNumber = `JRN-${year}${String(month).padStart(2, "0")}-${String(journalSeqs[i]).padStart(5, "0")}`
 
-        // Generate journal number
-        const journalSeq = await prisma.documentSequence.upsert({
-          where: { key: "JOURNAL" },
-          update: { currentValue: { increment: 1 } },
-          create: { key: "JOURNAL", currentValue: 1 },
-        })
-        const journalNumber = `JRN-${year}${String(month).padStart(2, "0")}-${String(journalSeq.currentValue).padStart(5, "0")}`
-
-        await prisma.$transaction([
+        return prisma.$transaction([
           // Update asset current value
           prisma.asset.update({
             where: { id: asset.id },
@@ -123,14 +138,14 @@ export async function GET(request: Request) {
               type: "depreciation",
               description: `Penyusutan bulan ${month}/${year} - ${asset.name}`,
               amount: depreciationDecimal,
-              date: new Date(year, month - 1, 1),
+              date: periodStart,
             },
           }),
           // Create journal entry for depreciation
           prisma.journal.create({
             data: {
               journalNumber,
-              transactionDate: new Date(year, month - 1, 1),
+              transactionDate: periodStart,
               // Period-specific referenceType: journals are unique on
               // (referenceType, referenceId). Using a bare "ASSET_DEPRECIATION" with
               // referenceId=asset.id collides from the 2nd month onward (same pair),
@@ -147,14 +162,14 @@ export async function GET(request: Request) {
                 create: [
                   {
                     // Debit: Depreciation Expense
-                    accountId: parseInt(process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID || "0") || 0,
+                    accountId: depExpAccountId,
                     debit: depreciationDecimal,
                     credit: new Prisma.Decimal(0),
                     memo: `Beban penyusutan - ${asset.name}`,
                   },
                   {
                     // Credit: Accumulated Depreciation
-                    accountId: parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0") || 0,
+                    accountId: accDepAccountId,
                     debit: new Prisma.Decimal(0),
                     credit: depreciationDecimal,
                     memo: `Akumulasi penyusutan - ${asset.name}`,
@@ -164,14 +179,19 @@ export async function GET(request: Request) {
             },
           }),
         ])
+      })
+    )
 
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") {
         processed++
-      } catch (e) {
+      } else {
         errors++
-        const message = e instanceof Error ? e.message : "Unknown error"
+        const message = r.reason instanceof Error ? r.reason.message : "Unknown error"
+        const { asset } = toProcess[i]
         errorDetails.push(`Asset ${asset.id} (${asset.name}): ${message}`)
       }
-    }
+    })
 
     return NextResponse.json({
       period: `${month}/${year}`,

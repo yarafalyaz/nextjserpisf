@@ -4,13 +4,13 @@ import { GET } from "../route"
 const mocks = vi.hoisted(() => ({
   isValidCron: vi.fn(),
   assetFindMany: vi.fn(),
-  assetHistoryFindFirst: vi.fn(),
+  assetHistoryFindMany: vi.fn(),
   assetUpdate: vi.fn(),
   assetHistoryCreate: vi.fn(),
   journalCreate: vi.fn(),
-  documentSequenceUpsert: vi.fn(),
   transaction: vi.fn(),
   computeMonthlyDepreciation: vi.fn(),
+  docSeqNextBatch: vi.fn(),
 }))
 
 vi.mock("@/lib/security/cron", () => ({
@@ -21,6 +21,16 @@ vi.mock("@/lib/finance/asset-depreciation", () => ({
   computeMonthlyDepreciation: (...a: unknown[]) => mocks.computeMonthlyDepreciation(...a),
 }))
 
+vi.mock("@/lib/services/document-sequence.service", () => ({
+  DocumentSequenceService: {
+    nextBatch: (...a: unknown[]) => mocks.docSeqNextBatch(...a),
+    next: vi.fn(),
+    peek: vi.fn(),
+    reset: vi.fn(),
+    listByPrefix: vi.fn(),
+  },
+}))
+
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     asset: {
@@ -28,11 +38,10 @@ vi.mock("@/lib/db/prisma", () => ({
       update: (...a: unknown[]) => mocks.assetUpdate(...a),
     },
     assetHistory: {
-      findFirst: (...a: unknown[]) => mocks.assetHistoryFindFirst(...a),
+      findMany: (...a: unknown[]) => mocks.assetHistoryFindMany(...a),
       create: (...a: unknown[]) => mocks.assetHistoryCreate(...a),
     },
     journal: { create: (...a: unknown[]) => mocks.journalCreate(...a) },
-    documentSequence: { upsert: (...a: unknown[]) => mocks.documentSequenceUpsert(...a) },
     $transaction: (...a: unknown[]) => mocks.transaction(...a),
   },
 }))
@@ -52,7 +61,11 @@ describe("GET /api/cron/asset-depreciation", () => {
     process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID = "501"
     mocks.isValidCron.mockReturnValue(true)
     mocks.assetFindMany.mockResolvedValue([])
-    mocks.documentSequenceUpsert.mockResolvedValue({ currentValue: 1 })
+    mocks.assetHistoryFindMany.mockResolvedValue([])
+    // Default: 1-asset block reserves 1 sequence number
+    mocks.docSeqNextBatch.mockImplementation(async (_key: string, count: number) =>
+      Array.from({ length: count }, (_, i) => i + 1)
+    )
     mocks.transaction.mockImplementation(async (ops: any[]) => Promise.all(ops))
   })
 
@@ -96,19 +109,22 @@ describe("GET /api/cron/asset-depreciation", () => {
     mocks.assetFindMany.mockResolvedValue([
       { id: 1, name: "X", currentValue: 100, purchaseCost: 1000, residualValue: 0, depreciationMethod: null, category: { depreciationRate: 10, usefulLife: 0 } },
     ])
-    mocks.assetHistoryFindFirst.mockResolvedValue({ id: 1 })
+    // The pre-fetch returns this asset as already-depreciated this period
+    mocks.assetHistoryFindMany.mockResolvedValue([{ assetId: 1 }])
 
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.skipped).toBe(1)
     expect(json.processed).toBe(0)
+    // No sequence number was reserved (zero eligible assets).
+    expect(mocks.docSeqNextBatch).toHaveBeenCalledWith("JOURNAL", 0)
   })
 
   it("skips assets when computeMonthlyDepreciation returns 0", async () => {
     mocks.assetFindMany.mockResolvedValue([
       { id: 1, name: "X", currentValue: 0, purchaseCost: 1000, residualValue: 0, depreciationMethod: null, category: { depreciationRate: 10, usefulLife: 0 } },
     ])
-    mocks.assetHistoryFindFirst.mockResolvedValue(null)
+    mocks.assetHistoryFindMany.mockResolvedValue([])
     mocks.computeMonthlyDepreciation.mockReturnValue(0)
 
     const res = await GET(makeReq())
@@ -120,22 +136,25 @@ describe("GET /api/cron/asset-depreciation", () => {
     mocks.assetFindMany.mockResolvedValue([
       { id: 1, name: "Car", currentValue: 950, purchaseCost: 1000, residualValue: 0, depreciationMethod: null, category: { depreciationRate: 10, usefulLife: 0 } },
     ])
-    mocks.assetHistoryFindFirst.mockResolvedValue(null)
+    mocks.assetHistoryFindMany.mockResolvedValue([])
     mocks.computeMonthlyDepreciation.mockReturnValue(50)
 
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.processed).toBe(1)
     expect(mocks.transaction).toHaveBeenCalled()
-    expect(mocks.documentSequenceUpsert).toHaveBeenCalled()
+    // Replaces the old N serial documentSequence.upsert calls with a single batch reservation.
+    expect(mocks.docSeqNextBatch).toHaveBeenCalledWith("JOURNAL", 1)
   })
 
   it("captures per-asset errors and continues", async () => {
     mocks.assetFindMany.mockResolvedValue([
       { id: 1, name: "A", currentValue: 100, purchaseCost: 100, residualValue: 0, depreciationMethod: null, category: { depreciationRate: 10, usefulLife: 0 } },
     ])
-    mocks.assetHistoryFindFirst.mockResolvedValue(null)
+    mocks.assetHistoryFindMany.mockResolvedValue([])
     mocks.computeMonthlyDepreciation.mockReturnValue(50)
+    // Promise.allSettled wraps individual $transaction failures so the cron
+    // continues with the rest of the batch.
     mocks.transaction.mockRejectedValueOnce(new Error("tx fail"))
 
     const res = await GET(makeReq())
@@ -150,7 +169,7 @@ describe("GET /api/cron/asset-depreciation", () => {
       depreciationMethod: null, category: { depreciationRate: 10, usefulLife: 0 },
     }))
     mocks.assetFindMany.mockResolvedValue(assets)
-    mocks.assetHistoryFindFirst.mockResolvedValue(null)
+    mocks.assetHistoryFindMany.mockResolvedValue([])
     mocks.computeMonthlyDepreciation.mockReturnValue(50)
     mocks.transaction.mockRejectedValue(new Error("tx fail"))
 
