@@ -1,1 +1,5 @@
 320 dashboard page routes audited (loading+error coverage), src/app/(dashboard)/*/error.tsx
+src/app/error.tsx (removed invalid <html><body> wrapper from route-level error boundary, removed broken custom-Button onPress usage, added role="alert" + aria-live)
+src/app/(dashboard)/not-found.tsx (fixed broken 404 numeral class: text-center-code → text-6xl font-bold)
+src/app/(auth)/kebijakan-privasi/page.tsx (added aria-label + focus ring to back link)
+src/app/(auth)/ketentuan-layanan/page.tsx (added aria-label + focus ring to back link)

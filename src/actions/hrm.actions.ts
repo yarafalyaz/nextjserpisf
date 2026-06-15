@@ -590,10 +590,283 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
   }
 }
 
+/** Local copy of attendance-summary.dateKey to keep the bulk estimator self-contained. */
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+interface BulkPayrollEstimation {
+  baseSalary: number
+  overtimeTotal: number
+  appreciationTotal: number
+  loanDeduction: number
+  lateDeduction: number
+  lateMinutes: number
+  workingDays: number
+  presentDays: number
+  leaveDays: number
+  holidayDays: number
+  absentDays: number
+  dailyRate: number
+  absentDeduction: number
+  grossSalary: number
+  bpjsHealthEmployee: number
+  bpjsEmploymentEmployee: number
+  pph21: number
+}
+
+/**
+ * Batch payroll estimator: collapses the per-employee N+1 in
+ * `generateBulkPayroll` to a constant number of queries.
+ *
+ * The per-employee `getPayrollEstimation` fires 5 independent queries
+ * (employee+loans, overtimes, appreciations, latePenalty→attendances+settings,
+ * attendanceSummary→schedules+holidays+deptHolidays+attendances+leaves). When
+ * called inside a serial loop over N employees, that's 5×N round-trips even
+ * after the previous Promise.all micro-fix.
+ *
+ * This bulk version hoists all the "fan-out" reads (schedules, holidays,
+ * dept holidays, attendances, leaves, overtimes, appreciations, employees,
+ * settings) into a SINGLE Promise.all, then computes the estimation in
+ * memory. Net result: 9 queries total regardless of N.
+ */
+export async function getBulkPayrollEstimations(
+  employeeIds: number[],
+  startDateStr: string,
+  endDateStr: string
+): Promise<Map<number, BulkPayrollEstimation>> {
+  const result = new Map<number, BulkPayrollEstimation>()
+  if (employeeIds.length === 0) return result
+
+  const startDate = new Date(startDateStr)
+  const endDate = new Date(endDateStr)
+  const rangeStart = new Date(startDate)
+  rangeStart.setHours(0, 0, 0, 0)
+  const rangeEnd = new Date(endDate)
+  rangeEnd.setHours(23, 59, 59, 999)
+  const today = new Date()
+  today.setHours(23, 59, 59, 999)
+  const evalEnd = rangeEnd < today ? rangeEnd : today
+
+  // Fan-out: fetch EVERYTHING the per-employee estimator needs, once.
+  // Replaces 5×N round-trips with 9.
+  const [
+    settings,
+    workSchedules,
+    holidays,
+    departmentHolidays,
+    employees,
+    overtimes,
+    appreciations,
+    attendances,
+    leaves,
+  ] = await Promise.all([
+    getSystemSettings(),
+    prisma.workSchedule.findMany({
+      where: { isActive: true },
+      select: { workDays: true, employees: { select: { id: true } }, departments: { select: { id: true } } },
+    }),
+    prisma.holiday.findMany({
+      where: { date: { gte: rangeStart, lte: rangeEnd } },
+      select: { date: true },
+    }),
+    prisma.departmentHoliday.findMany({
+      where: { date: { gte: rangeStart, lte: rangeEnd } },
+      select: { date: true, departmentId: true },
+    }),
+    prisma.employee.findMany({
+      where: { id: { in: employeeIds } },
+      select: {
+        id: true,
+        baseSalary: true,
+        maritalStatus: true,
+        departmentId: true,
+        employeeLoans: { where: { status: "active" } },
+      },
+    }),
+    prisma.overtimeRequest.findMany({
+      where: { employeeId: { in: employeeIds }, status: "approved", date: { gte: startDate, lte: endDate } },
+    }),
+    prisma.appreciation.findMany({
+      where: { employeeId: { in: employeeIds }, date: { gte: startDate, lte: endDate } },
+    }),
+    prisma.attendance.findMany({
+      where: { employeeId: { in: employeeIds }, date: { gte: rangeStart, lte: rangeEnd } },
+      select: { employeeId: true, date: true, checkIn: true, lateMinutes: true },
+    }),
+    prisma.leaveRequest.findMany({
+      where: {
+        employeeId: { in: employeeIds },
+        status: "approved",
+        startDate: { lte: rangeEnd },
+        endDate: { gte: rangeStart },
+      },
+      select: { employeeId: true, startDate: true, endDate: true },
+    }),
+  ])
+
+  const rawPerMinute = Number(settings.latePenaltyPerMinute)
+  const penaltyPerMinute = Number.isFinite(rawPerMinute) && rawPerMinute > 0 ? rawPerMinute : 0
+  const rawMax = Number(settings.maxLatePenaltyMinutes)
+  const maxMinutes = Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null
+
+  // Index per-employee slices in O(N)
+  const overtimeMap = new Map<number, typeof overtimes>()
+  for (const ot of overtimes) {
+    const arr = overtimeMap.get(ot.employeeId) ?? []
+    arr.push(ot)
+    overtimeMap.set(ot.employeeId, arr)
+  }
+  const appreciationMap = new Map<number, typeof appreciations>()
+  for (const ap of appreciations) {
+    const arr = appreciationMap.get(ap.employeeId) ?? []
+    arr.push(ap)
+    appreciationMap.set(ap.employeeId, arr)
+  }
+  const attendanceMap = new Map<number, typeof attendances>()
+  for (const at of attendances) {
+    const arr = attendanceMap.get(at.employeeId) ?? []
+    arr.push(at)
+    attendanceMap.set(at.employeeId, arr)
+  }
+  const leaveMap = new Map<number, typeof leaves>()
+  for (const lv of leaves) {
+    const arr = leaveMap.get(lv.employeeId) ?? []
+    arr.push(lv)
+    leaveMap.set(lv.employeeId, arr)
+  }
+
+  const publicHolidaySet = new Set(holidays.map((h) => dateKey(new Date(h.date))))
+  const deptHolidaySet = new Map<number, Set<string>>()
+  for (const dh of departmentHolidays) {
+    if (dh.departmentId == null) continue
+    const set = deptHolidaySet.get(dh.departmentId) ?? new Set<string>()
+    set.add(dateKey(new Date(dh.date)))
+    deptHolidaySet.set(dh.departmentId, set)
+  }
+
+  for (const employee of employees) {
+    // 1. Base salary + loan deduction (capped at remaining balance).
+    const baseSalary = Number(employee.baseSalary)
+    const loanDeduction = employee.employeeLoans.reduce(
+      (sum, loan) => sum + safeAdd(0, Math.min(Number(loan.monthlyInstallment), Number(loan.remainingAmount)), 0),
+      0
+    )
+
+    // 2. Overtime total.
+    const empOvertimes = overtimeMap.get(employee.id) ?? []
+    const overtimeTotal = empOvertimes.reduce((sum, ot) => safeAdd(sum, ot.calculatedValue ?? 0, 0), 0)
+
+    // 3. Appreciation total.
+    const empAppreciations = appreciationMap.get(employee.id) ?? []
+    const appreciationTotal = empAppreciations.reduce((sum, ap) => safeAdd(sum, ap.amount ?? 0, 0), 0)
+
+    // 4. Late penalty (mirrors calculateLatePenalty, in-memory).
+    const empAttendances = attendanceMap.get(employee.id) ?? []
+    let totalLateMinutes = 0
+    let totalPenalty = 0
+    for (const attendance of empAttendances) {
+      let lateMinutes = Number(attendance.lateMinutes ?? 0)
+      if (lateMinutes <= 0) continue
+      if (maxMinutes !== null && lateMinutes > maxMinutes) lateMinutes = maxMinutes
+      totalLateMinutes += lateMinutes
+      totalPenalty += lateMinutes * penaltyPerMinute
+    }
+
+    // 5. Attendance summary (mirrors calculateAttendanceSummary, in-memory).
+    const employeeSchedule = workSchedules.find((s) => s.employees.some((e) => e.id === employee.id))
+    const deptSchedule = workSchedules.find(
+      (s) => s.employees.length === 0 && employee.departmentId != null && s.departments.some((d) => d.id === employee.departmentId)
+    )
+    const globalSchedule = workSchedules.find((s) => s.employees.length === 0 && s.departments.length === 0)
+    const relevantSchedule = employeeSchedule ?? deptSchedule ?? globalSchedule
+    const workingWeekdays = new Set(
+      (relevantSchedule?.workDays || "")
+        .split(",")
+        .map((d) => d.trim())
+        .filter((d) => d !== "")
+        .map((d) => Number(d))
+        .filter((n) => !Number.isNaN(n))
+    )
+
+    let totalWorkingDays = 0
+    let workingDays = 0
+    let presentDays = 0
+    let leaveDays = 0
+    let holidayDays = 0
+    let absentDays = 0
+    let dailyRate = 0
+    let absentDeduction = 0
+
+    if (workingWeekdays.size > 0) {
+      const presentSet = new Set(
+        empAttendances.filter((a) => a.checkIn != null).map((a) => dateKey(new Date(a.date)))
+      )
+      const empLeaves = leaveMap.get(employee.id) ?? []
+      const leaveSet = new Set<string>()
+      for (const lv of empLeaves) {
+        const s = new Date(lv.startDate)
+        s.setHours(0, 0, 0, 0)
+        const e = new Date(lv.endDate)
+        e.setHours(0, 0, 0, 0)
+        for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+          leaveSet.add(dateKey(d))
+        }
+      }
+      const empDeptHolidays =
+        employee.departmentId != null ? (deptHolidaySet.get(employee.departmentId) ?? new Set<string>()) : new Set<string>()
+
+      for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+        if (!workingWeekdays.has(d.getDay())) continue
+        const key = dateKey(d)
+        if (publicHolidaySet.has(key) || empDeptHolidays.has(key)) {
+          if (d <= evalEnd) holidayDays++
+          continue
+        }
+        totalWorkingDays++
+        if (d > evalEnd) continue
+        workingDays++
+        if (presentSet.has(key)) presentDays++
+        else if (leaveSet.has(key)) leaveDays++
+        else absentDays++
+      }
+      dailyRate = totalWorkingDays > 0 ? baseSalary / totalWorkingDays : 0
+      absentDeduction = Math.round(absentDays * dailyRate)
+    }
+
+    // 6. Statutory deductions.
+    const grossSalary = safeSum([baseSalary, overtimeTotal, appreciationTotal], 0)
+    const bpjs = computeBpjsEmployee(baseSalary)
+    const pph21 = computePph21Monthly(grossSalary, employee.maritalStatus, bpjs.total)
+
+    result.set(employee.id, {
+      baseSalary,
+      overtimeTotal,
+      appreciationTotal,
+      loanDeduction,
+      lateDeduction: totalPenalty,
+      lateMinutes: totalLateMinutes,
+      workingDays,
+      presentDays,
+      leaveDays,
+      holidayDays,
+      absentDays,
+      dailyRate,
+      absentDeduction,
+      grossSalary,
+      bpjsHealthEmployee: bpjs.health,
+      bpjsEmploymentEmployee: bpjs.employment,
+      pph21,
+    })
+  }
+
+  return result
+}
+
 export async function generateBulkPayroll(period: string, startDateStr: string, endDateStr: string) {
   try {
   const user = await requirePermission("create_payroll")
-  
+
   const employees = await prisma.employee.findMany({
     where: { isActive: true, deletedAt: null },
     select: { id: true },
@@ -605,67 +878,96 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
     select: { employeeId: true },
   })
   const existingSet = new Set(existingPayrolls.map(p => p.employeeId))
+  const targetIds = employees.filter(e => !existingSet.has(e.id)).map(e => e.id)
 
-  let count = 0
-  for (const emp of employees) {
-    if (existingSet.has(emp.id)) continue
+  // Bulk fan-out: instead of calling getPayrollEstimation once per employee
+  // (5 round-trips × N employees = 5×N), hoist every read into a single
+  // Promise.all via getBulkPayrollEstimations → constant 9 queries.
+  const estimations = await getBulkPayrollEstimations(targetIds, startDateStr, endDateStr)
 
-    {
-      const est = await getPayrollEstimation(emp.id, startDateStr, endDateStr, true)
-      if (!est || 'success' in est) { continue } // skip failed estimation
-      const documentNo = await generateDocumentNumber("PAYROLL")
-      
-      const statutory = (est.bpjsHealthEmployee ?? 0) + (est.bpjsEmploymentEmployee ?? 0) + (est.pph21 ?? 0)
-      // Allowances/deductions are manual per-payslip fields (not part of auto-estimation);
-      // they default to 0 and can be edited before approval. Formula mirrors processPayroll.
-      const allowances = 0
-      const deductions = 0
-      const gross = safeSum([est.baseSalary ?? 0, allowances, est.overtimeTotal ?? 0, est.appreciationTotal ?? 0], 0);
-      const deds = safeSum([deductions, est.loanDeduction ?? 0, est.lateDeduction ?? 0, est.absentDeduction ?? 0, statutory], 0);
-      const netSalary = safeSubtract(gross, deds, 0)
-      
-      try {
-        await prisma.payroll.create({
-          data: {
-            documentNo,
-            employeeId: emp.id,
-            period,
-            startDate: new Date(startDateStr),
-            endDate: new Date(endDateStr),
-            baseSalary: est.baseSalary ?? 0,
-            allowances,
-            deductions,
-            overtimeTotal: est.overtimeTotal ?? 0,
-            appreciationTotal: est.appreciationTotal ?? 0,
-            loanDeduction: est.loanDeduction ?? 0,
-            lateDeduction: est.lateDeduction,
-            lateMinutes: est.lateMinutes,
-            workingDays: est.workingDays ?? 0,
-            presentDays: est.presentDays ?? 0,
-            absentDays: est.absentDays ?? 0,
-            absentDeduction: est.absentDeduction ?? 0,
-            grossSalary: est.grossSalary ?? 0,
-            bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
-            bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
-            pph21: est.pph21 ?? 0,
-            netSalary: netSalary,
-            totalAmount: netSalary,
-            status: "draft",
-            createdBy: Number(user.id),
-          }
-        })
-        count++
-      } catch (err: unknown) {
-        // A concurrent batch/processPayroll won the race: the DB unique
-        // constraint (employeeId, period) rejected this duplicate. Skip this
-        // employee (already has a payroll for the period) instead of aborting
-        // the whole batch.
-        if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002") {
-          continue
-        }
-        throw err
-      }
-    }
+  // Build all payroll rows in memory, then createMany + skipDuplicates in
+  // ONE round-trip. The previous serial loop did N prisma.payroll.create
+  // calls; P2002 duplicates are still skipped (they were caught in the
+  // catch block of the old loop too).
+  const rows: {
+    documentNo: string
+    employeeId: number
+    period: string
+    startDate: Date
+    endDate: Date
+    baseSalary: number
+    allowances: number
+    deductions: number
+    overtimeTotal: number
+    appreciationTotal: number
+    loanDeduction: number
+    lateDeduction: number
+    lateMinutes: number
+    workingDays: number
+    presentDays: number
+    absentDays: number
+    absentDeduction: number
+    grossSalary: number
+    bpjsHealthEmployee: number
+    bpjsEmploymentEmployee: number
+    pph21: number
+    netSalary: number
+    totalAmount: number
+    status: string
+    createdBy: number
+  }[] = []
+  for (const empId of targetIds) {
+    const est = estimations.get(empId)
+    if (!est) continue
+    const documentNo = await generateDocumentNumber("PAYROLL")
+
+    const statutory = (est.bpjsHealthEmployee ?? 0) + (est.bpjsEmploymentEmployee ?? 0) + (est.pph21 ?? 0)
+    // Allowances/deductions are manual per-payslip fields (not part of auto-estimation);
+    // they default to 0 and can be edited before approval. Formula mirrors processPayroll.
+    const allowances = 0
+    const deductions = 0
+    const gross = safeSum([est.baseSalary ?? 0, allowances, est.overtimeTotal ?? 0, est.appreciationTotal ?? 0], 0);
+    const deds = safeSum([deductions, est.loanDeduction ?? 0, est.lateDeduction ?? 0, est.absentDeduction ?? 0, statutory], 0);
+    const netSalary = safeSubtract(gross, deds, 0)
+
+    rows.push({
+      documentNo,
+      employeeId: empId,
+      period,
+      startDate: new Date(startDateStr),
+      endDate: new Date(endDateStr),
+      baseSalary: est.baseSalary ?? 0,
+      allowances,
+      deductions,
+      overtimeTotal: est.overtimeTotal ?? 0,
+      appreciationTotal: est.appreciationTotal ?? 0,
+      loanDeduction: est.loanDeduction ?? 0,
+      lateDeduction: est.lateDeduction,
+      lateMinutes: est.lateMinutes,
+      workingDays: est.workingDays ?? 0,
+      presentDays: est.presentDays ?? 0,
+      absentDays: est.absentDays ?? 0,
+      absentDeduction: est.absentDeduction ?? 0,
+      grossSalary: est.grossSalary ?? 0,
+      bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
+      bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
+      pph21: est.pph21 ?? 0,
+      netSalary: netSalary,
+      totalAmount: netSalary,
+      status: "draft",
+      createdBy: Number(user.id),
+    })
+  }
+
+  const count = rows.length
+  if (count > 0) {
+    // createMany collapses N inserts into 1. skipDuplicates handles the
+    // (employeeId, period) and (documentNo) unique-constraint races that
+    // the previous loop caught per-row with a P2002 try/catch.
+    await prisma.payroll.createMany({
+      data: rows,
+      skipDuplicates: true,
+    })
   }
 
   await logActivity("generate", "Payroll", 0, `Generate massal penggajian periode ${period} (${count} karyawan)`)

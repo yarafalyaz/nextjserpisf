@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     delete: vi.fn().mockResolvedValue({}),
     deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    createMany: vi.fn().mockResolvedValue({ count: 1 }),
     count: vi.fn().mockResolvedValue(0),
     upsert: vi.fn().mockResolvedValue({}),
   })
@@ -628,10 +629,10 @@ describe("Payroll Actions", () => {
   })
 
   it("generateBulkPayroll succeeds", async () => {
-    prismaMock.employee.findUnique.mockResolvedValue({
-      baseSalary: 5000000, maritalStatus: "single",
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 5000000, maritalStatus: "single",
       employeeLoans: [],
-    })
+    }])
     prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
     const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
     expect(res?.success).toBe(true)
@@ -1083,32 +1084,37 @@ describe("generateBulkPayroll edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requirePermissionMock.mockResolvedValue({ id: 1 })
-    prismaMock.employee.findMany.mockResolvedValue([{ id: 1 }])
+    // Default employee shape now needs baseSalary/maritalStatus/employeeLoans
+    // because getBulkPayrollEstimations fetches them in a single findMany.
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 100, maritalStatus: "single", employeeLoans: []
+    }])
     prismaMock.payroll.findMany.mockResolvedValue([])
     prismaMock.employee.findUnique.mockResolvedValue({ id: 1 })
     prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
     generateDocNumMock.mockResolvedValue("PAY-2026")
   })
 
-  it("handles getPayrollEstimation returning failure or null", async () => {
-    // If est fails, loop continues
+  it("handles getBulkPayrollEstimations returning empty (no employees match)", async () => {
+    // If the bulk fetch returns no employees, no rows are inserted
     prismaMock.attendance.findMany.mockResolvedValue([])
-    prismaMock.employee.findUnique.mockResolvedValue(null) // estimation will fail
+    prismaMock.employee.findMany.mockResolvedValue([])
     const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
     expect(res?.success).toBe(true)
     expect(res?.count).toBe(0)
   })
 
-  it("handles P2002 error in payroll.create", async () => {
-    // est succeeds
-    prismaMock.employee.findUnique.mockResolvedValue({
-      id: 1, baseSalary: 100, employeeLoan: []
-    })
-    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
-    prismaMock.payroll.create.mockRejectedValueOnce({ code: "P2002" })
+  it("handles payroll.createMany skipDuplicates (P2002 silent skip)", async () => {
+    // createMany with skipDuplicates silently swallows unique-constraint
+    // races (replaces the old per-row try/catch P2002 path). count reflects
+    // the rows we built (1 eligible employee), and the insert is batched.
+    prismaMock.payroll.createMany.mockResolvedValueOnce({ count: 1 })
     const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
     expect(res?.success).toBe(true)
-    expect(res?.count).toBe(0)
+    expect(res?.count).toBe(1)
+    expect(prismaMock.payroll.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true })
+    )
   })
 })
 
