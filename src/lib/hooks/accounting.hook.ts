@@ -339,26 +339,24 @@ export async function onSalesPaymentCreated(
       },
     });
 
-    // Dr. Kas/Bank
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: cashAccountId,
-        debit: payment.amount,
-        credit: 0,
-        memo: "Penerimaan Kas/Bank",
-      },
-    });
-
-    // Cr. Piutang Usaha
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.salesReceivableAccountId!,
-        debit: 0,
-        credit: payment.amount,
-        memo: "Pelunasan Piutang",
-      },
+    // Dr. Kas/Bank + Cr. Piutang Usaha
+    await tx.journalEntry.createMany({
+      data: [
+        {
+          journalId: journal.id,
+          accountId: cashAccountId,
+          debit: payment.amount,
+          credit: 0,
+          memo: "Penerimaan Kas/Bank",
+        },
+        {
+          journalId: journal.id,
+          accountId: settings.salesReceivableAccountId!,
+          debit: 0,
+          credit: payment.amount,
+          memo: "Pelunasan Piutang",
+        },
+      ],
     });
   });
 }
@@ -414,40 +412,33 @@ export async function onPurchaseOrderReceived(
       },
     });
 
-    // Dr. Persediaan
-    await tx.journalEntry.create({
-      data: {
+    // Dr. Persediaan + Dr. PPN Masukan (only when configured) + Cr. Hutang Usaha
+    const purchaseOrderEntries: Prisma.JournalEntryCreateManyInput[] = [
+      {
         journalId: journal.id,
         accountId: settings.inventoryAccountId!,
         debit: inventoryDebit,
         credit: 0,
         memo: "Persediaan Masuk",
       },
-    });
-
-    // Dr. PPN Masukan (only when an input-tax account is configured)
+    ];
     if (hasTaxAccount) {
-      await tx.journalEntry.create({
-        data: {
-          journalId: journal.id,
-          accountId: settings.purchaseTaxAccountId!,
-          debit: taxAmount,
-          credit: 0,
-          memo: "PPN Masukan",
-        },
+      purchaseOrderEntries.push({
+        journalId: journal.id,
+        accountId: settings.purchaseTaxAccountId!,
+        debit: taxAmount,
+        credit: 0,
+        memo: "PPN Masukan",
       });
     }
-
-    // Cr. Hutang Usaha
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.purchasePayableAccountId!,
-        debit: 0,
-        credit: order.totalAmount,
-        memo: "Hutang Usaha",
-      },
+    purchaseOrderEntries.push({
+      journalId: journal.id,
+      accountId: settings.purchasePayableAccountId!,
+      debit: 0,
+      credit: order.totalAmount,
+      memo: "Hutang Usaha",
     });
+    await tx.journalEntry.createMany({ data: purchaseOrderEntries });
   });
 }
 
@@ -509,26 +500,24 @@ export async function onStockAdjustmentProcessed(
         },
       });
 
-      // Dr. Inventory
-      await tx.journalEntry.create({
-        data: {
-          journalId: journal.id,
-          accountId: settings.inventoryAccountId!,
-          debit: totalPositive,
-          credit: 0,
-          memo: "Penyesuaian Stok Masuk",
-        },
-      });
-
-      // Cr. Stock Adjustment
-      await tx.journalEntry.create({
-        data: {
-          journalId: journal.id,
-          accountId: settings.stockAdjustmentAccountId!,
-          debit: 0,
-          credit: totalPositive,
-          memo: "Selisih Penyesuaian Stok",
-        },
+      // Dr. Inventory + Cr. Stock Adjustment (batch — eliminates N+1)
+      await tx.journalEntry.createMany({
+        data: [
+          {
+            journalId: journal.id,
+            accountId: settings.inventoryAccountId!,
+            debit: totalPositive,
+            credit: 0,
+            memo: "Penyesuaian Stok Masuk",
+          },
+          {
+            journalId: journal.id,
+            accountId: settings.stockAdjustmentAccountId!,
+            debit: 0,
+            credit: totalPositive,
+            memo: "Selisih Penyesuaian Stok",
+          },
+        ],
       });
     }
 
@@ -551,26 +540,24 @@ export async function onStockAdjustmentProcessed(
         },
       });
 
-      // Dr. Stock Adjustment
-      await tx.journalEntry.create({
-        data: {
-          journalId: journal.id,
-          accountId: settings.stockAdjustmentAccountId!,
-          debit: totalNegative,
-          credit: 0,
-          memo: "Selisih Penyesuaian Stok",
-        },
-      });
-
-      // Cr. Inventory
-      await tx.journalEntry.create({
-        data: {
-          journalId: journal.id,
-          accountId: settings.inventoryAccountId!,
-          debit: 0,
-          credit: totalNegative,
-          memo: "Penyesuaian Stok Keluar",
-        },
+      // Dr. Stock Adjustment + Cr. Inventory (batch — eliminates N+1)
+      await tx.journalEntry.createMany({
+        data: [
+          {
+            journalId: journal.id,
+            accountId: settings.stockAdjustmentAccountId!,
+            debit: totalNegative,
+            credit: 0,
+            memo: "Selisih Penyesuaian Stok",
+          },
+          {
+            journalId: journal.id,
+            accountId: settings.inventoryAccountId!,
+            debit: 0,
+            credit: totalNegative,
+            memo: "Penyesuaian Stok Keluar",
+          },
+        ],
       });
     }
   });
@@ -629,26 +616,24 @@ export async function onWorkOrderCompleted(
       },
     });
 
-    // Dr. WIP / Barang Dalam Proses
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.wipAccountId!,
-        debit: totalCost,
-        credit: 0,
-        memo: "Barang Dalam Proses",
-      },
-    });
-
-    // Cr. Persediaan Bahan Baku
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.inventoryAccountId!,
-        debit: 0,
-        credit: totalCost,
-        memo: "Pemakaian Bahan Baku",
-      },
+    // Dr. WIP / Cr. Persediaan Bahan Baku (batch — eliminates N+1)
+    await tx.journalEntry.createMany({
+      data: [
+        {
+          journalId: journal.id,
+          accountId: settings.wipAccountId!,
+          debit: totalCost,
+          credit: 0,
+          memo: "Barang Dalam Proses",
+        },
+        {
+          journalId: journal.id,
+          accountId: settings.inventoryAccountId!,
+          debit: 0,
+          credit: totalCost,
+          memo: "Pemakaian Bahan Baku",
+        },
+      ],
     });
   });
 }
@@ -695,26 +680,24 @@ export async function onExpenseApproved(
       },
     });
 
-    // Dr. Akun Biaya
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: expense.accountId!,
-        debit: expense.amount,
-        credit: 0,
-        memo: `Biaya: ${expense.description ?? ""}`,
-      },
-    });
-
-    // Cr. Akun Sumber Dana
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: expense.paidFromAccountId!,
-        debit: 0,
-        credit: expense.amount,
-        memo: "Pembayaran dari Kas/Bank",
-      },
+    // Dr. Akun Biaya + Cr. Akun Sumber Dana (batch — eliminates N+1)
+    await tx.journalEntry.createMany({
+      data: [
+        {
+          journalId: journal.id,
+          accountId: expense.accountId!,
+          debit: expense.amount,
+          credit: 0,
+          memo: `Biaya: ${expense.description ?? ""}`,
+        },
+        {
+          journalId: journal.id,
+          accountId: expense.paidFromAccountId!,
+          debit: 0,
+          credit: expense.amount,
+          memo: "Pembayaran dari Kas/Bank",
+        },
+      ],
     });
   });
 }
@@ -772,6 +755,9 @@ export async function onPettyCashCreated(
       },
     });
 
+    // Build the petty-cash lines based on direction, then insert in a single
+    // batch — eliminates 2 sequential tx.journalEntry.create round-trips.
+    const pettyCashEntries: Prisma.JournalEntryCreateManyInput[] = [];
     if (isInflow) {
       // IN: Dr. PettyCash, Cr. Source Account
       const sourceAccountId =
@@ -780,25 +766,22 @@ export async function onPettyCashCreated(
         throw new Error("Akun sumber dana (sourceAccountId/cashBankAccountId) belum dikonfigurasi untuk pengisian kas kecil");
       }
 
-      await tx.journalEntry.create({
-        data: {
+      pettyCashEntries.push(
+        {
           journalId: journal.id,
           accountId: settings.pettyCashAccountId!,
           debit: pettyCash.amount,
           credit: 0,
           memo: "Pengisian Kas Kecil",
         },
-      });
-
-      await tx.journalEntry.create({
-        data: {
+        {
           journalId: journal.id,
           accountId: sourceAccountId,
           debit: 0,
           credit: pettyCash.amount,
           memo: "Sumber Dana Kas Kecil",
         },
-      });
+      );
     } else {
       // OUT: Dr. Expense Account, Cr. PettyCash
       const expenseAccountId =
@@ -807,26 +790,24 @@ export async function onPettyCashCreated(
         throw new Error("Akun beban (expenseAccountId/generalExpenseAccountId) belum dikonfigurasi untuk pengeluaran kas kecil");
       }
 
-      await tx.journalEntry.create({
-        data: {
+      pettyCashEntries.push(
+        {
           journalId: journal.id,
           accountId: expenseAccountId,
           debit: pettyCash.amount,
           credit: 0,
           memo: `Pengeluaran: ${pettyCash.description ?? ""}`,
         },
-      });
-
-      await tx.journalEntry.create({
-        data: {
+        {
           journalId: journal.id,
           accountId: settings.pettyCashAccountId!,
           debit: 0,
           credit: pettyCash.amount,
           memo: "Pengeluaran Kas Kecil",
         },
-      });
+      );
     }
+    await tx.journalEntry.createMany({ data: pettyCashEntries });
   });
 }
 
@@ -890,21 +871,16 @@ export async function onSalesReturnCompleted(
       },
     });
 
-    // Dr. Retur Penjualan (harga jual) — contra-revenue
-    await tx.journalEntry.create({
-      data: { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: priceTotal, credit: 0, memo: "Retur Penjualan" },
-    });
-    // Cr. Piutang Usaha (harga jual)
-    await tx.journalEntry.create({
-      data: { journalId: journal.id, accountId: settings.salesReceivableAccountId!, debit: 0, credit: priceTotal, memo: "Pengurangan Piutang (Retur)" },
-    });
-    // Dr. Persediaan (cost) — barang masuk kembali
-    await tx.journalEntry.create({
-      data: { journalId: journal.id, accountId: settings.inventoryAccountId!, debit: costTotal, credit: 0, memo: "Persediaan Masuk (Retur)" },
-    });
-    // Cr. Retur Penjualan (cost) — offset HPP keluar dari contra-revenue
-    await tx.journalEntry.create({
-      data: { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: 0, credit: costTotal, memo: "HPP Retur Masuk Kembali" },
+    // Dr. Retur Penjualan (harga jual) + Cr. Piutang (harga jual) +
+    // Dr. Persediaan (cost) + Cr. Retur Penjualan (cost) — batch eliminates 4
+    // sequential tx.journalEntry.create round-trips.
+    await tx.journalEntry.createMany({
+      data: [
+        { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: priceTotal, credit: 0, memo: "Retur Penjualan" },
+        { journalId: journal.id, accountId: settings.salesReceivableAccountId!, debit: 0, credit: priceTotal, memo: "Pengurangan Piutang (Retur)" },
+        { journalId: journal.id, accountId: settings.inventoryAccountId!, debit: costTotal, credit: 0, memo: "Persediaan Masuk (Retur)" },
+        { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: 0, credit: costTotal, memo: "HPP Retur Masuk Kembali" },
+      ],
     });
   });
 }
@@ -1112,26 +1088,24 @@ export async function onMaterialIssueCompleted(
       },
     });
 
-    // Dr. Biaya Material
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.materialExpenseAccountId!,
-        debit: totalCost,
-        credit: 0,
-        memo: "Biaya Pemakaian Material",
-      },
-    });
-
-    // Cr. Persediaan
-    await tx.journalEntry.create({
-      data: {
-        journalId: journal.id,
-        accountId: settings.inventoryAccountId!,
-        debit: 0,
-        credit: totalCost,
-        memo: "Pengeluaran Persediaan",
-      },
+    // Dr. Biaya Material + Cr. Persediaan (batch — eliminates N+1)
+    await tx.journalEntry.createMany({
+      data: [
+        {
+          journalId: journal.id,
+          accountId: settings.materialExpenseAccountId!,
+          debit: totalCost,
+          credit: 0,
+          memo: "Biaya Pemakaian Material",
+        },
+        {
+          journalId: journal.id,
+          accountId: settings.inventoryAccountId!,
+          debit: 0,
+          credit: totalCost,
+          memo: "Pengeluaran Persediaan",
+        },
+      ],
     });
   });
 }
