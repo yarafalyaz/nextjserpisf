@@ -1409,53 +1409,69 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   const resolveUpdPrice = (itemId: number) =>
     updInvoicePriceMap.get(itemId) ?? (updMasterPriceMap.get(itemId) || updReturnCostMap.get(itemId) || 0)
 
-  // Over-return guard (mirrors createSalesReturn). Without this, a small valid
-  // return could be EDITED to a qty far exceeding what was invoiced → on
-  // completeSalesReturn it over-restocks inventory and over-credits AR. Prior
-  // returns must EXCLUDE this return's own id, because its existing rows are
-  // about to be deleted/replaced below (counting them would double-count).
-  if (updInvoiceId) {
-    const updInvItemsQty = await prisma.salesInvoiceItem.findMany({
-      where: { salesInvoiceId: updInvoiceId, itemId: { in: updReturnIds.length ? updReturnIds : [-1] } },
-      select: { itemId: true, qty: true },
-    })
-    const updInvoicedQtyByItem = new Map<number, number>()
-    for (const it of updInvItemsQty) {
-      if (it.itemId == null) continue
-      updInvoicedQtyByItem.set(it.itemId, (updInvoicedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
-    }
-
-    const updPriorReturns = await prisma.salesReturnItem.findMany({
-      where: {
-        salesReturn: { salesInvoiceId: updInvoiceId, status: { not: "cancelled" }, id: { not: id } },
-        itemId: { in: updReturnIds.length ? updReturnIds : [-1] },
-      },
-      select: { itemId: true, qty: true },
-    })
-    const updAlreadyReturnedByItem = new Map<number, number>()
-    for (const r of updPriorReturns) {
-      updAlreadyReturnedByItem.set(r.itemId, (updAlreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
-    }
-
-    const updViolation = findOverReturn(
-      validReturnItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
-      updInvoicedQtyByItem,
-      updAlreadyReturnedByItem
-    )
-    if (updViolation) {
-      if (updViolation.type === "not_on_invoice") {
-        return { success: false, error: `Item #${updViolation.itemId} tidak ada pada faktur yang dipilih, tidak bisa diretur.` }
-      }
-      return {
-        success: false,
-        error:
-          `Jumlah retur item #${updViolation.itemId} melebihi yang difakturkan ` +
-          `(difakturkan: ${updViolation.invoiced}, sudah diretur: ${updViolation.alreadyReturned}, sisa: ${updViolation.remaining}).`,
-      }
-    }
-  }
-
+  // Over-return guard (mirrors createSalesReturn). Must run INSIDE the locked
+  // transaction to prevent TOCTOU: two concurrent draft edits (or an edit
+  // racing a concurrent create) could each read a stale `alreadyReturned`
+  // total, both pass the cap, and on completeSalesReturn over-restock
+  // inventory + over-credit AR. createSalesReturn was hardened to lock the
+  // invoice FOR UPDATE before re-querying prior returns; this update path
+  // mirrors that. Prior non-cancelled returns EXCLUDE this return's own id
+  // (its existing rows are about to be deleted/replaced; counting them would
+  // double-count).
   const salesReturn = await prisma.$transaction(async (tx) => {
+    if (updInvoiceId) {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${updInvoiceId} FOR UPDATE`
+
+      const txInvItems = await tx.salesInvoiceItem.findMany({
+        where: { salesInvoiceId: updInvoiceId, itemId: { in: updReturnIds.length ? updReturnIds : [-1] } },
+        select: { itemId: true, qty: true, unitPrice: true },
+      })
+      const txInvoicedQtyByItem = new Map<number, number>()
+      const txInvoicePriceMap = new Map<number, number>()
+      for (const it of txInvItems) {
+        if (it.itemId == null) continue
+        txInvoicedQtyByItem.set(it.itemId, (txInvoicedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
+        if (!txInvoicePriceMap.has(it.itemId)) txInvoicePriceMap.set(it.itemId, Number(it.unitPrice))
+      }
+      // Merge newly-fetched invoice price map (tx-snapshot) over the pre-tx
+      // map so the price resolution below reflects the locked state too.
+      for (const [k, v] of txInvoicePriceMap) updInvoicePriceMap.set(k, v)
+
+      const txPriorReturns = await tx.salesReturnItem.findMany({
+        where: {
+          salesReturn: { salesInvoiceId: updInvoiceId, status: { not: "cancelled" }, id: { not: id } },
+          itemId: { in: updReturnIds.length ? updReturnIds : [-1] },
+        },
+        select: { itemId: true, qty: true },
+      })
+      const txAlreadyReturnedByItem = new Map<number, number>()
+      for (const r of txPriorReturns) {
+        txAlreadyReturnedByItem.set(r.itemId, (txAlreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty))
+      }
+
+      const txViolation = findOverReturn(
+        validReturnItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+        txInvoicedQtyByItem,
+        txAlreadyReturnedByItem
+      )
+      if (txViolation) {
+        if (txViolation.type === "not_on_invoice") {
+          throw new Error(`Item #${txViolation.itemId} tidak ada pada faktur yang dipilih, tidak bisa diretur.`)
+        }
+        throw new Error(
+          `Jumlah retur item #${txViolation.itemId} melebihi yang difakturkan ` +
+          `(difakturkan: ${txViolation.invoiced}, sudah diretur: ${txViolation.alreadyReturned}, sisa: ${txViolation.remaining}).`
+        )
+      }
+    }
+
+    // Re-validate status under lock: prevents editing a return that another
+    // concurrent process just moved out of draft.
+    const latest = await tx.salesReturn.findUnique({ where: { id }, select: { status: true } })
+    if (!latest || latest.status !== "draft") {
+      throw new Error("Hanya retur berstatus draft yang dapat diedit")
+    }
+
     // Delete existing items to prevent duplicates
     await tx.salesReturnItem.deleteMany({
       where: { salesReturnId: id },
