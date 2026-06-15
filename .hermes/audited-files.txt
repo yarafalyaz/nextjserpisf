@@ -26,3 +26,4 @@ src/actions/asset.actions.ts (clean)
 src/actions/vehicle.actions.ts
 src/app/api/cron/route.ts
 src/lib/services/attendance-summary.service.ts
+src/app/api/dashboard/notifications/route.ts
