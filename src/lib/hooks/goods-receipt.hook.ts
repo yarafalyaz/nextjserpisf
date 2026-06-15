@@ -1,6 +1,7 @@
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { PurchaseStatus, Status } from "@/lib/constants";
@@ -150,8 +151,12 @@ export async function onGoodsReceiptVerified(
       conversions.map((c) => [`${c.itemId}:${c.code}`, Number(c.factorToBase)])
     );
 
+    const smDocNos = await generateDocumentNumberBatch("SM", goodsReceipt.items.length);
+    await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(grItemIds)}) FOR UPDATE`;
+
+    let docIdx = 0;
     for (const item of goodsReceipt.items) {
-      const smDocNo = await generateDocumentNumber("SM");
+      const smDocNo = smDocNos[docIdx++];
 
       // Multi-UoM: convert entered qty/cost to the item's BASE unit for stock.
       const itemMeta = metaByItem.get(item.itemId);

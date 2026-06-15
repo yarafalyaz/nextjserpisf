@@ -728,21 +728,27 @@ export async function confirmVendorPayment(paymentId: number) {
       })
     }
 
-    // 3. Update each bill's balance
-    for (const alloc of allocations) {
-      const bill = openBillMap.get(alloc.vendorBillId)!
-      const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0)
-      const nextBalance = safeSubtract(bill.grandTotal, nextPaid, 0)
+    // 3. Update each bill's balance — run concurrently. The validation pass
+    //    above (openBillMap + cap) guarantees each vendorBillId is distinct, so
+    //    there are no write-write conflicts between these updates. Mirrors the
+    //    parallel-update pattern used in onExpenseApprovedSyncPettyCash and the
+    //    inventory-fifo batch-update refactors.
+    await Promise.all(
+      allocations.map((alloc) => {
+        const bill = openBillMap.get(alloc.vendorBillId)!
+        const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0)
+        const nextBalance = safeSubtract(bill.grandTotal, nextPaid, 0)
 
-      await tx.vendorBill.update({
-        where: { id: bill.id },
-        data: {
-          paidAmount: nextPaid,
-          balanceDue: nextBalance,
-          status: nextBalance <= 0 ? "paid" : "posted",
-        },
+        return tx.vendorBill.update({
+          where: { id: bill.id },
+          data: {
+            paidAmount: nextPaid,
+            balanceDue: nextBalance,
+            status: nextBalance <= 0 ? "paid" : "posted",
+          },
+        })
       })
-    }
+    )
     // Trigger GL hook inside transaction
     await onVendorPaymentCreated(paymentId, Number(user.id), tx)
   })

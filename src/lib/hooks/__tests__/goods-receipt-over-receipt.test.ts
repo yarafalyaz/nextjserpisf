@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   generateDocumentNumber: vi.fn(),
+  generateDocumentNumberBatch: vi.fn(),
   createInLayer: vi.fn(),
   toBaseFactor: vi.fn(),
   onGoodsReceipt: vi.fn(),
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: mocks.generateDocumentNumber,
+  generateDocumentNumberBatch: mocks.generateDocumentNumberBatch,
 }))
 vi.mock("@/lib/services/inventory-fifo", () => ({ createInLayer: mocks.createInLayer }))
 vi.mock("@/lib/services/uom.service", () => ({ toBaseFactor: mocks.toBaseFactor }))
@@ -98,6 +100,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   let n = 0
   mocks.generateDocumentNumber.mockImplementation(async () => `SM-${++n}`)
+  mocks.generateDocumentNumberBatch.mockImplementation(async (_key: string, count: number) =>
+    Array.from({ length: count }, () => `SM-${++n}`)
+  )
   mocks.toBaseFactor.mockResolvedValue(1)
   mocks.createInLayer.mockResolvedValue(undefined)
   mocks.onGoodsReceipt.mockResolvedValue(undefined)

@@ -484,11 +484,42 @@ export async function approveOvertime(overtimeId: number) {
 
 // ==================== PAYROLL ACTIONS ====================
 
-export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string, skipPermissionCheck = false) {
-  try {
-  const sessionUser = skipPermissionCheck 
-    ? { id: "0", roles: ["super_admin"] } // System internal context
-    : await requirePermission("view_payroll")
+// Internal computation helper: NOT exported, so it's not reachable as a "use
+// server" action. The exported wrapper below is the only public entry point
+// and it ALWAYS calls requirePermission("view_payroll") first. Previously this
+// took a `skipPermissionCheck` boolean argument; that flag was controllable
+// over the wire (Next.js serialises args to server actions), so a remote
+// caller could pass `true` to forge a super_admin session and read any
+// employee's salary/loans/attendance. Mirrors the computeBulkPayrollEstimations
+// hardening.
+interface PayrollEstimationResult {
+  baseSalary: number
+  overtimeTotal: number
+  appreciationTotal: number
+  loanDeduction: number
+  lateDeduction: number
+  lateMinutes: number
+  workingDays: number
+  presentDays: number
+  leaveDays: number
+  holidayDays: number
+  absentDays: number
+  dailyRate: number
+  absentDeduction: number
+  grossSalary: number
+  bpjsHealthEmployee: number
+  bpjsEmploymentEmployee: number
+  pph21: number
+}
+
+type PayrollSessionUser = { id: number | string; roles: readonly string[] }
+
+async function computePayrollEstimation(
+  employeeId: number,
+  startDateStr: string,
+  endDateStr: string,
+  sessionUser: PayrollSessionUser
+): Promise<PayrollEstimationResult> {
   const startDate = new Date(startDateStr)
   const endDate = new Date(endDateStr)
 
@@ -582,7 +613,12 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     bpjsEmploymentEmployee: bpjs.employment,
     pph21,
   }
+}
 
+export async function getPayrollEstimation(employeeId: number, startDateStr: string, endDateStr: string) {
+  try {
+    const sessionUser = await requirePermission("view_payroll")
+    return await computePayrollEstimation(employeeId, startDateStr, endDateStr, sessionUser)
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[getPayrollEstimation]", getErrorMessage(e) || e)

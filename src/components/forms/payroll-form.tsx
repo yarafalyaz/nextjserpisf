@@ -61,6 +61,11 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
       getPayrollEstimation(employeeId, startDate, endDate)
         .then(data => {
           if (cancelled) return
+          if (data && "error" in data) {
+            showError("Gagal menarik data estimasi: " + data.error)
+            return
+          }
+          if (!data) return
           setBaseSalary(data.baseSalary ?? 0)
           setOvertime(data.overtimeTotal ?? 0)
           setAppreciation(data.appreciationTotal ?? 0)

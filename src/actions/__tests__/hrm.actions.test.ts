@@ -638,13 +638,15 @@ describe("Payroll Actions", () => {
   })
 
   it("getPayrollEstimation returns components", async () => {
+    requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["hr_admin"] } as any)
     prismaMock.employee.findUnique.mockResolvedValue({
       baseSalary: 5000000, maritalStatus: "single",
       employeeLoans: [],
     })
     prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
-    const res = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31", true)
+    const res = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
     expect(res).toBeDefined()
+    if (!res || "error" in res) throw new Error("Expected success, got error: " + (res && "error" in res ? res.error : "undefined"))
   })
 
   it("generateBulkPayroll succeeds", async () => {
@@ -1265,8 +1267,8 @@ describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
     // 2. IDOR: user is employee, but does NOT match employeeId
     prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 2 })
     const resIdor = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
-    expect(resIdor?.success).toBe(false)
-    expect(resIdor?.error).toContain("Anda hanya bisa melihat estimasi gaji Anda sendiri")
+    if (!resIdor || !("error" in resIdor)) throw new Error("expected error result")
+    expect(resIdor.error).toContain("Anda hanya bisa melihat estimasi gaji Anda sendiri")
   })
 
   it("create/update workSchedule with arrays of departments and employees", async () => {
