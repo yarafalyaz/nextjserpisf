@@ -6,7 +6,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 export function AssetBrandForm({ brand }: { brand?: { id: number; name: string } } = {}) {
   const router = useRouter()

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { disposeAsset } from "@/actions/asset.actions"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { showSuccess, showError } from "@/lib/utils/toast"
 

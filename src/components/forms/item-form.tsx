@@ -21,7 +21,7 @@ import { QrCodeDisplay } from "@/components/ui/qr-code-display"
 import { formatCurrency } from "@/lib/utils/format"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface ItemFormProps {
   item?: {

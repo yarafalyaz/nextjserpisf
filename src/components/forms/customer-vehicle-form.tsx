@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface Brand {
   id: number

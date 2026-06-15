@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface AppreciationFormProps {
   employees: { id: number; name: string }[]

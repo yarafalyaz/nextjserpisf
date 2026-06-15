@@ -9,7 +9,7 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 import type { Metadata } from "next"
 

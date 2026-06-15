@@ -4,7 +4,7 @@ import { useCallback, useState, useEffect, useRef } from "react"
 import { Upload, FileText, Download, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { SafeImage } from "./safe-image"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface Attachment {

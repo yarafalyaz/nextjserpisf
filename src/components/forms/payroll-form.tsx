@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { CheckCircle, Loader2 } from "lucide-react"
 
 interface PayrollFormProps {

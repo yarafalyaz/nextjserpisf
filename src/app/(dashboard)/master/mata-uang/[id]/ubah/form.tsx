@@ -5,7 +5,7 @@ import { useTransition } from "react"
 import { updateCurrency } from "@/actions/master.actions"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface CurrencyEditFormProps {
   currency: { id: number; code: string; name: string; rate: number }

@@ -6,7 +6,7 @@ import { createVehicleBrand, updateVehicleBrand } from "@/actions/vehicle.action
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 export function VehicleBrandForm({ brand }: { brand?: { id: number; name: string } } = {}) {
   const router = useRouter()

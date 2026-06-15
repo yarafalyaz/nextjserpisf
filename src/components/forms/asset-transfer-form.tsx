@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface AssetTransferFormProps {
   assets: { id: number; code: string; name: string; location: string | null }[]

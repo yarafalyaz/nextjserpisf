@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { AppDatePicker } from "@/components/ui/date-picker"
 
 interface Props {

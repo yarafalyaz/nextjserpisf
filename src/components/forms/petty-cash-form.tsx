@@ -11,7 +11,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 export function PettyCashForm({ accounts, pettyCash, currentBalance }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; balanceBefore?: number; balanceAfter?: number }; currentBalance?: number }) {
   const router = useRouter()

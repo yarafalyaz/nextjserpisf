@@ -5,7 +5,7 @@ import { useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 export function UomForm({ uom }: { uom?: { id?: number; name?: string | null; symbol?: string | null } } = {}) {
   const router = useRouter()

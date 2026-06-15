@@ -5,7 +5,7 @@ import { CheckCircle } from "lucide-react"
 import { approvePayroll } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"
-import { Button as PageHeaderButton } from "@/components/ui/page-header"
+import { Button as PageHeaderButton } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 export function ApprovePayrollButton({ payrollId }: { payrollId: number }) {

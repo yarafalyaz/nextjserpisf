@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 const downPaymentSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),

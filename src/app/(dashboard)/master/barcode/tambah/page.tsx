@@ -7,7 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { FormSelect } from "@/components/ui/form-select"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 
 export default function CreateBarcodePage() {

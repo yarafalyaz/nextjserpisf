@@ -11,7 +11,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface AssetFormProps {
   categories: { id: number; name: string }[]

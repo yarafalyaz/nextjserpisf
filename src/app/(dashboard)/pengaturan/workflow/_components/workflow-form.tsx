@@ -7,7 +7,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Switch } from "@/components/ui/shadcn/switch"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import {

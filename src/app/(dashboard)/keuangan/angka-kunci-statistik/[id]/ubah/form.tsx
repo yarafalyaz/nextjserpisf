@@ -6,7 +6,7 @@ import { updateStatisticalKeyFigure } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 export function KeyFigureEditForm({ id, name, unit, value }: { id: number; name: string; unit: string; value: number }) {
   const router = useRouter()

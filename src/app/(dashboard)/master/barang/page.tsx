@@ -8,7 +8,7 @@ import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ItemTable } from "./_components/item-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { FormSelect } from "@/components/ui/form-select"
 
 import type { Metadata } from "next"

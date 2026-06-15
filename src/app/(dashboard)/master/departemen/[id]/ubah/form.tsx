@@ -6,7 +6,7 @@ import { updateDepartment } from "@/actions/master.actions"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface EditDepartmentFormProps {
   department: {

@@ -5,7 +5,7 @@ import { getErrorMessage } from "@/lib/utils/error"
 import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react"
 import { Clock, MapPin, CheckCircle, LogIn, LogOut, Loader2, Navigation, AlertTriangle } from "lucide-react"
 import { getTodayAttendance, selfCheckIn, selfCheckOut, getCompanyLocation } from "@/actions/self-attendance.actions"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 // Haversine formula untuk menghitung jarak antara 2 koordinat
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

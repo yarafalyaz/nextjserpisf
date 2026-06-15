@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { generateBulkPayroll } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"

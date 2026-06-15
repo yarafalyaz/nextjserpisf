@@ -5,7 +5,7 @@ import { useTransition } from "react"
 import { updateItemCategory } from "@/actions/master.actions"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface ItemCategoryEditFormProps {
   category: { id: number; name: string; description: string | null; parentId: number | null }

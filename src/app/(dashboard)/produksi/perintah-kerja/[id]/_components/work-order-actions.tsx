@@ -3,7 +3,7 @@
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { startWorkOrder, completeWorkOrder, createMaterialIssueFromWorkOrder } from "@/actions/manufacturing.actions"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 
 interface Props {

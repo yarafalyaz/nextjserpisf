@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { MultiCombobox } from "@/components/ui/multi-combobox"
 import { AppTimePicker } from "@/components/ui/time-picker"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 const DAYS = [
   { value: 1, label: "Senin" },

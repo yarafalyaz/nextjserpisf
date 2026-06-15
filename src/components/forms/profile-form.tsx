@@ -8,7 +8,7 @@ import { changePassword, updateProfile } from "@/actions/auth.actions"
 import { User, Lock, Camera } from "lucide-react"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 
 interface ProfileFormProps {

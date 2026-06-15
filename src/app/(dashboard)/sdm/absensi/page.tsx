@@ -6,7 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { AttendanceTable } from "./_components/attendance-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { SelfAttendanceWidget } from "@/components/attendance/self-attendance-widget"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { auth } from "@/lib/auth/auth"
 

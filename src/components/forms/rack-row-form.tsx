@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface Warehouse {
   id: number

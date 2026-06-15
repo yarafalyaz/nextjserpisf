@@ -14,7 +14,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppTimePicker } from "@/components/ui/time-picker"
 import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { SafeImage } from "@/components/ui/safe-image"
 
 interface Account {

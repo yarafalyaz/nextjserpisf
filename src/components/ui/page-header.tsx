@@ -2,8 +2,6 @@ import { ReactNode } from "react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Button } from "@/components/ui/button"
 
-export { Button }
-
 interface BreadcrumbItem {
   label: string
   href?: string

@@ -6,7 +6,7 @@ import { createTaxGroup } from "@/actions/master.actions"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface Props {
   taxes: { id: number; name: string; rate: number }[]

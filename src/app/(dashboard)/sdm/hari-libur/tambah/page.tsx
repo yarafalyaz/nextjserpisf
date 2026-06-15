@@ -7,7 +7,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 
 export default function CreateHolidayPage() {

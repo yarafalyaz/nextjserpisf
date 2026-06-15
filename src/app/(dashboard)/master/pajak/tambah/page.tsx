@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { FormSelect } from "@/components/ui/form-select"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 
 export default function CreateTaxPage() {

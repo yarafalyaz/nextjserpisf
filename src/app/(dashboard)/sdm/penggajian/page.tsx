@@ -8,7 +8,7 @@ import Link from "next/link"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { PayrollTable } from "./_components/payroll-table"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { FormSelect } from "@/components/ui/form-select"
 
 import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button"

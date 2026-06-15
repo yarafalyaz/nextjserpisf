@@ -7,7 +7,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface ShippingMethodFormProps {
   method?: { id: number; code: string; name: string; isActive: boolean }

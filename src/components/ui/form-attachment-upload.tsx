@@ -5,7 +5,7 @@ import { SafeImage } from "./safe-image"
 import { Upload, X, FileText } from "lucide-react"
 import { showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface UploadedFile {
   id: number

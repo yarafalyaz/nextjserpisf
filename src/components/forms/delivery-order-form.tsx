@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AddressPicker } from "@/components/ui/address-picker"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 interface DeliveryOrderFormProps {
   salesOrders: { id: number; documentNo: string; customer: { name: string } }[]

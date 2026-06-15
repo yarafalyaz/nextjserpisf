@@ -7,7 +7,7 @@ import { lookupItemByScan } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { showError } from "@/lib/utils/toast"
 
 
