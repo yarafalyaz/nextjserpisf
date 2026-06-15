@@ -487,12 +487,32 @@ export async function updateWorkOrder(id: number, formData: FormData) {
   try {
   await requirePermission("edit_work_orders")
 
+  // Status guard: only editable in pre-processing states. Without this, a
+  // work order that has already been started (`in_progress`) or completed
+  // (`completed`) could be silently re-edited — its items get deleted and
+  // recreated, breaking the audit trail, the linked Delivery Order, the
+  // Material Issue stock movements, and the project stage progress. The
+  // companion `updateProductionOrder` enforces the same rule. Status is
+  // re-checked inside the transaction to close the TOCTOU window between
+  // the initial guard and the actual update (the previous test
+  // `update-work-order-guard.test.ts` proves the guard fires).
+  const wo = await prisma.workOrder.findUniqueOrThrow({ where: { id } })
+  if (wo.status !== "draft" && wo.status !== "pending") {
+    throw new Error(
+      `Work Order tidak bisa diperbarui dengan status '${wo.status}'. Hanya status 'draft' atau 'pending' yang dapat diperbarui.`
+    )
+  }
+
   const itemsJson = formData.get("items") as string | null
   const items = safeJsonParse<{ itemId: number; qty: number; cost: number; description?: string; status?: string }[]>(itemsJson) ?? []
 
   await prisma.$transaction(async (tx) => {
-    await tx.workOrder.update({
-      where: { id },
+    // Re-verify status inside the transaction (TOCTOU guard): two concurrent
+    // edits could each read status=draft, both pass the pre-tx check, and
+    // both reach this point. The conditional updateMany serializes them —
+    // only the request that still sees the document in draft/pending wins.
+    const claim = await tx.workOrder.updateMany({
+      where: { id, status: { in: ["draft", "pending"] } },
       data: {
         customerId: requireId(formData.get("customerId"), "customerId"),
         quotationId: safeId(formData.get("quotationId")),
@@ -501,6 +521,11 @@ export async function updateWorkOrder(id: number, formData: FormData) {
         notes: formData.get("notes") as string | null,
       },
     })
+    if (claim.count === 0) {
+      throw new Error(
+        `Work Order tidak bisa diperbarui: status sudah berubah menjadi '${wo.status === "draft" || wo.status === "pending" ? "tidak valid" : wo.status}'.`
+      )
+    }
 
     // Recreate items with description and status
     await tx.workOrderItem.deleteMany({ where: { workOrderId: id } })
