@@ -1,4 +1,5 @@
 
+import { Prisma } from "@prisma/client";
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -143,40 +144,37 @@ export async function onSalesInvoicePosted(
       ? Number(inv.totalAmount) - taxAmount
       : Number(inv.totalAmount);
 
-    // Dr. Piutang Usaha
-    await tx.journalEntry.create({
-      data: {
+    // Build the balanced journal lines and insert them in one batch instead of
+    // 2-3 sequential journalEntry.create round-trips:
+    //   Dr. Piutang Usaha (full invoice total)
+    //   Cr. Pendapatan Penjualan (revenue net of tax)
+    //   Cr. PPN Keluaran (only when a tax account is configured)
+    const invoiceEntries: Prisma.JournalEntryCreateManyInput[] = [
+      {
         journalId: journal.id,
         accountId: settings.salesReceivableAccountId!,
         debit: inv.totalAmount,
         credit: 0,
         memo: "Piutang Usaha",
       },
-    });
-
-    // Cr. Pendapatan Penjualan
-    await tx.journalEntry.create({
-      data: {
+      {
         journalId: journal.id,
         accountId: settings.salesRevenueAccountId!,
         debit: 0,
         credit: revenueCredit,
         memo: "Pendapatan Penjualan",
       },
-    });
-
-    // Cr. PPN Keluaran (only when a tax account is configured)
+    ];
     if (hasTaxAccount) {
-      await tx.journalEntry.create({
-        data: {
-          journalId: journal.id,
-          accountId: settings.salesTaxAccountId!,
-          debit: 0,
-          credit: taxAmount,
-          memo: "PPN Keluaran",
-        },
+      invoiceEntries.push({
+        journalId: journal.id,
+        accountId: settings.salesTaxAccountId!,
+        debit: 0,
+        credit: taxAmount,
+        memo: "PPN Keluaran",
       });
     }
+    await tx.journalEntry.createMany({ data: invoiceEntries });
 
     // Dr. HPP / Cr. Persediaan + physical stock-out for PRODUCT items.
     // Previously the COGS journal was posted but stock (qtyOnHand + FIFO layers)
@@ -260,24 +258,24 @@ export async function onSalesInvoicePosted(
         },
       });
 
-      await tx.journalEntry.create({
-        data: {
-          journalId: cogsJournal.id,
-          accountId: settings.cogsAccountId,
-          debit: cogsAmount,
-          credit: 0,
-          memo: "Harga Pokok Penjualan",
-        },
-      });
-
-      await tx.journalEntry.create({
-        data: {
-          journalId: cogsJournal.id,
-          accountId: settings.inventoryAccountId,
-          debit: 0,
-          credit: cogsAmount,
-          memo: "Pengeluaran Persediaan atas Penjualan",
-        },
+      // Batch create the two journal entries for the COGS journal (eliminates N+1)
+      await tx.journalEntry.createMany({
+        data: [
+          {
+            journalId: cogsJournal.id,
+            accountId: settings.cogsAccountId,
+            debit: cogsAmount,
+            credit: 0,
+            memo: "Harga Pokok Penjualan",
+          },
+          {
+            journalId: cogsJournal.id,
+            accountId: settings.inventoryAccountId,
+            debit: 0,
+            credit: cogsAmount,
+            memo: "Pengeluaran Persediaan atas Penjualan",
+          },
+        ],
       });
     }
   });

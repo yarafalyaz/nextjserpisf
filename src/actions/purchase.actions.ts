@@ -705,6 +705,7 @@ export async function confirmVendorPayment(paymentId: number) {
     // openBills via allocatePaymentToBills, so the map lookup always hits.
     const openBillMap = new Map(openBills.map((b) => [b.id, b]))
 
+    // 1. Validate allocations upfront
     for (const alloc of allocations) {
       const bill = openBillMap.get(alloc.vendorBillId)
       if (!bill) {
@@ -714,15 +715,24 @@ export async function confirmVendorPayment(paymentId: number) {
       if (nextPaid > Number(bill.grandTotal)) {
         throw new Error(`Alokasi melebihi sisa tagihan vendor bill #${bill.id}`)
       }
-      const nextBalance = safeSubtract(bill.grandTotal, nextPaid, 0)
+    }
 
-      await tx.vendorPaymentAllocation.create({
-        data: {
+    // 2. Collapse allocations creation into a single query
+    if (allocations.length > 0) {
+      await tx.vendorPaymentAllocation.createMany({
+        data: allocations.map((alloc) => ({
           vendorPaymentId: paymentId,
-          vendorBillId: bill.id,
+          vendorBillId: alloc.vendorBillId,
           amount: alloc.amount,
-        },
+        })),
       })
+    }
+
+    // 3. Update each bill's balance
+    for (const alloc of allocations) {
+      const bill = openBillMap.get(alloc.vendorBillId)!
+      const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0)
+      const nextBalance = safeSubtract(bill.grandTotal, nextPaid, 0)
 
       await tx.vendorBill.update({
         where: { id: bill.id },
@@ -733,7 +743,6 @@ export async function confirmVendorPayment(paymentId: number) {
         },
       })
     }
-
     // Trigger GL hook inside transaction
     await onVendorPaymentCreated(paymentId, Number(user.id), tx)
   })

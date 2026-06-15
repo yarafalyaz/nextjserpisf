@@ -1054,7 +1054,7 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
 
     const res = await actions.confirmVendorPayment(1)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.vendorPaymentAllocation.create).toHaveBeenCalled()
+    expect(mocks.prismaMock.vendorPaymentAllocation.createMany).toHaveBeenCalled()
     expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalled()
   })
 
