@@ -26,7 +26,7 @@ import {
   ChevronsRight,
   Search,
 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Table,
   TableBody,
@@ -57,6 +57,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showError } from "@/lib/utils/toast"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { buildSearchParamsString, buildServerSearchUrl } from "@/components/ui/data-table-utils"
 
 /** Heuristic: is this an actions/buttons column (kept visible on mobile)? */
 function isActionsColumn(id: string): boolean {
@@ -87,6 +88,16 @@ interface DataTableProps<TData> {
   searchColumn?: string
   /** Placeholder for the built-in search box. */
   searchPlaceholder?: string
+  /**
+   * URL query param the search box writes to when `serverPagination` is set
+   * (default "cari"). In server mode the search MUST drive the server query
+   * via the URL — a client-side column filter would only ever match the rows
+   * already on screen (the current page), silently ignoring every other
+   * server page. Ignored in client-paginated mode (the TanStack column filter
+   * is used instead). The owning page is responsible for reading this param
+   * and filtering its query accordingly.
+   */
+  searchParam?: string
   /** Show the "Kolom" column-visibility dropdown in the toolbar (default true). */
   enableColumnToggle?: boolean
   /** Extra controls rendered on the left of the toolbar row (e.g. server-side search). */
@@ -121,6 +132,7 @@ export function DataTable<TData extends { id: number | string }>({
   onBulkDelete,
   searchColumn,
   searchPlaceholder = "Cari...",
+  searchParam = "cari",
   enableColumnToggle = true,
   toolbar,
   filters,
@@ -141,13 +153,29 @@ export function DataTable<TData extends { id: number | string }>({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  function navigateWithParams(params: Record<string, string | number | undefined>) {
-    const sp = new URLSearchParams(searchParams.toString())
-    for (const [k, v] of Object.entries(params)) {
-      if (v === "" || v === undefined || v === null) sp.delete(k)
-      else sp.set(k, String(v))
+  // Sync server search term from URL query parameter
+  const initialSearch = isServer ? searchParams.get(searchParam) ?? "" : ""
+  const [serverSearch, setServerSearch] = useState(initialSearch)
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Sync local input value when URL changes (e.g. forward/backward navigation)
+  useEffect(() => {
+    if (isServer) {
+      setServerSearch(searchParams.get(searchParam) ?? "")
     }
-    router.push(`${pathname}?${sp.toString()}`)
+  }, [isServer, searchParams, searchParam])
+
+  // Cancel any pending debounced push on unmount so a late timer can't
+  // call router.push after the component is gone.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
+
+  function navigateWithParams(params: Record<string, string | number | undefined>) {
+    const qs = buildSearchParamsString(searchParams, params)
+    router.push(`${pathname}${qs ? `?${qs}` : ""}`)
   }
 
   /** Navigate to a specific 1-based page number. */
@@ -301,8 +329,20 @@ export function DataTable<TData extends { id: number | string }>({
                   <div className="relative min-w-0 flex-1 max-w-sm">
                     <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      value={(table.getColumn(searchColumn)?.getFilterValue() as string) ?? ""}
-                      onChange={(e) => table.getColumn(searchColumn)?.setFilterValue(e.target.value)}
+                      value={isServer ? serverSearch : ((table.getColumn(searchColumn)?.getFilterValue() as string) ?? "")}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        if (isServer) {
+                          setServerSearch(val)
+                          if (debounceRef.current) clearTimeout(debounceRef.current)
+                          debounceRef.current = setTimeout(() => {
+                            const qs = buildServerSearchUrl(searchParams, searchParam, val)
+                            router.push(`${pathname}${qs ? `?${qs}` : ""}`)
+                          }, 400)
+                        } else {
+                          table.getColumn(searchColumn)?.setFilterValue(val)
+                        }
+                      }}
                       placeholder={searchPlaceholder}
                       className="pl-9"
                       aria-label={searchPlaceholder}
