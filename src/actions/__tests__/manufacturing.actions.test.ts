@@ -429,6 +429,34 @@ describe("Work Order Actions", () => {
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
 
+  it("completeWorkOrder syncs project status - skipped stages count as completed (regression)", async () => {
+    // Regression: previously a project with a `skipped` stage would never
+    // auto-transition to `completed` because the local syncProjectStatus
+    // only counted literal `completed` status. Skipped is a terminal "done"
+    // state (mirrors the canonical fix in src/actions/project.actions.ts),
+    // so a project with all stages either completed or skipped must flip
+    // to `completed` once the last WO completes.
+    mocks.prismaMock.workOrder.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }], projectId: 50 })
+      .mockResolvedValueOnce({
+        id: 1, documentNo: "WO-1", customerId: 5, quotationId: null,
+        items: [{ id: 10, itemId: 1, qty: 0, description: null }],
+        customer: null
+      } as any)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { id: 1, status: "completed" },
+      { id: 2, status: "skipped" }
+    ])
+
+    const res = await actions.completeWorkOrder(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: "completed" })
+    }))
+  })
+
   it("completeWorkOrder skips sync when no stages", async () => {
     mocks.prismaMock.workOrder.findUniqueOrThrow
       .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }], projectId: 50 })

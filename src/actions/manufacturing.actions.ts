@@ -351,7 +351,7 @@ async function syncProjectStatus(projectId: number) {
   if (stages.length === 0) return
 
   const total = stages.length
-  const completed = stages.filter((s) => s.status === "completed").length
+  const completed = stages.filter((s) => s.status === "completed" || s.status === "skipped").length
   const inProgress = stages.filter((s) => s.status === "in_progress").length
 
   if (completed === total) {
@@ -362,7 +362,7 @@ async function syncProjectStatus(projectId: number) {
   } else if (inProgress > 0 || completed > 0) {
     await prisma.project.update({
       where: { id: projectId },
-      data: { status: "in_progress" },
+      data: { status: "in_progress", endDate: null },
     })
   }
 }
