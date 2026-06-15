@@ -1050,6 +1050,31 @@ export async function deleteGoodsReceipt(id: number) {
       })
     }
 
+    // 1b. Clean up ItemSerial rows that onGoodsReceiptVerified registered from this
+    // GR's serialNumbers. Without this, deleting a verified GR leaves orphan
+    // ItemSerial rows still flagged "available" — the next attempt to receive the
+    // same serials into a new GR crashes on the unique(serialNumber) constraint,
+    // and the inventory subledger silently disagrees with the GL/stock totals.
+    // ItemSerial has no FK back to GoodsReceipt, so we recover the serials from
+    // GoodsReceiptItem.serialNumbers (the source of truth captured at verification)
+    // and delete only the "available" ones — sold/used rows stay as the audit
+    // trail for the downstream sales invoice and are never recreated.
+    const grItemsWithSerials = await tx.goodsReceiptItem.findMany({
+      where: { goodsReceiptId: id, serialNumbers: { not: undefined } },
+      select: { serialNumbers: true },
+    })
+    const registeredSerials = grItemsWithSerials.flatMap((it) => {
+      const arr = (it.serialNumbers as unknown as unknown[]) ?? []
+      return arr
+        .map((s) => String(s ?? "").trim())
+        .filter((s) => s.length > 0)
+    })
+    if (registeredSerials.length > 0) {
+      await tx.itemSerial.deleteMany({
+        where: { serialNumber: { in: registeredSerials }, status: "available" },
+      })
+    }
+
     // 2. Delete GR items
     await tx.goodsReceiptItem.deleteMany({
       where: { goodsReceiptId: id },
