@@ -39,6 +39,7 @@ function wireTx(transferItems: Array<{ itemId: number; qty: number }>, status = 
       items: transferItems,
     }),
     moveFindFirst: vi.fn().mockResolvedValue(null), // no existing moves
+    moveFindMany: vi.fn().mockResolvedValue([]),
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
     executeRaw: vi.fn().mockResolvedValue(1),
   }
@@ -46,7 +47,7 @@ function wireTx(transferItems: Array<{ itemId: number; qty: number }>, status = 
     $queryRaw: spies.queryRaw,
     $executeRaw: spies.executeRaw,
     inventoryTransfer: { findUniqueOrThrow: spies.transferFindUniqueOrThrow },
-    stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
+    stockMove: { findFirst: spies.moveFindFirst, findMany: spies.moveFindMany, create: spies.moveCreate },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
   return { spies, tx }
@@ -153,10 +154,9 @@ describe("onTransferReceived", () => {
     // and left the transfer permanently stuck at "receiving". The guard must
     // accept the transient "receiving" claim state too.
     const { spies } = wireTx([{ itemId: 7, qty: 3 }], "receiving")
-    spies.moveFindFirst
-      .mockResolvedValueOnce(null) // idempotency: no existing IN move
-      .mockResolvedValueOnce({ cost: 15 }) // item 7 OUT move (cost basis)
-      .mockResolvedValueOnce({ id: 900 }) // newly created IN move (for createInLayer)
+    spies.moveFindFirst.mockResolvedValueOnce(null) // idempotency: no existing IN move
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }]) // item 7 OUT move (cost basis)
+    spies.moveCreate.mockResolvedValueOnce({ id: 900 }) // newly created IN move (mock return)
 
     await expect(onTransferReceived(100, 1)).resolves.not.toThrow()
     expect(spies.moveCreate).toHaveBeenCalledTimes(1)
@@ -171,15 +171,15 @@ describe("onTransferReceived", () => {
     ], "processed")
 
     // 1st check: idempotency (null = no existing IN moves)
-    // 2nd check: item 7 OUT move findFirst (returns cost: 15)
-    // 3rd check: item 7 newly created IN move findFirst (returns id: 900 for createInLayer)
-    // 4th check: item 8 OUT move findFirst (returns cost: 20)
-    // 5th check: item 8 newly created IN move findFirst (returns id: 901 for createInLayer)
-    spies.moveFindFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ cost: 15 })
+    // 2nd check: findMany for all OUT moves
+    spies.moveFindFirst.mockResolvedValueOnce(null)
+    spies.moveFindMany.mockResolvedValueOnce([
+      { itemId: 7, cost: 15 },
+      { itemId: 8, cost: 20 },
+    ])
+    // mock creations
+    spies.moveCreate
       .mockResolvedValueOnce({ id: 900 })
-      .mockResolvedValueOnce({ cost: 20 })
       .mockResolvedValueOnce({ id: 901 })
 
     await onTransferReceived(100, 1)

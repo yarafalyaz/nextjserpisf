@@ -1,6 +1,7 @@
 
 import { prisma, TxClient } from "@/lib/db/prisma";
-import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { Prisma } from "@prisma/client";
+import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { InventoryStatus, Status } from "@/lib/constants";
@@ -48,82 +49,89 @@ export async function onStockAdjustmentProcessed(
 
     // Create Stock Move per item based on difference
     const journalItems: { qty: number; cost: number; difference: number }[] = [];
-    for (const item of adjustment.items) {
-      const enteredUnitCost = Number(item.unitCost ?? 0);
-
-      // Lock the item row first so the qtyOnHand we read is the authoritative,
+    
+    if (adjustment.items.length > 0) {
+      // 1. Lock the item rows first so the qtyOnHand we read is the authoritative,
       // serialized baseline. The stored systemQty/difference were derived from a
       // client-supplied currentQty at create time and can be stale or forged.
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
-      const liveItem = await tx.item.findUnique({
-        where: { id: item.itemId },
-        select: { qtyOnHand: true },
+      const itemIds = adjustment.items.map((item) => item.itemId);
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
+      
+      // 2. Fetch live quantities
+      const liveItems = await tx.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, qtyOnHand: true },
       });
-      const liveQty = Number(liveItem?.qtyOnHand ?? 0);
+      const liveQtyMap = new Map(liveItems.map((i) => [i.id, Number(i.qtyOnHand ?? 0)]));
+      
+      // 3. Filter items with actual differences
+      const diffItems = adjustment.items.map((item) => {
+        const liveQty = liveQtyMap.get(item.itemId) ?? 0;
+        const actualQty = Number(item.actualQty);
+        return { item, liveQty, actualQty, qtyDiff: actualQty - liveQty };
+      }).filter((d) => d.qtyDiff !== 0);
 
-      // Stock-take semantics: actualQty is the physical count the user asserts.
-      // Compute the delta against the LIVE on-hand (not the client baseline) so
-      // the final qtyOnHand converges to actualQty exactly.
-      const actualQty = Number(item.actualQty);
-      const qtyDiff = actualQty - liveQty;
+      // 4. Batch document numbers
+      const smDocNos = await generateDocumentNumberBatch("SM", diffItems.length);
+      
+      let docIdx = 0;
+      for (const { item, liveQty, actualQty, qtyDiff } of diffItems) {
+        const enteredUnitCost = Number(item.unitCost ?? 0);
+        const impact = qtyDiff > 0 ? "IN" : "OUT";
+        const qty = Math.abs(qtyDiff);
 
-      // Skip if no difference
-      if (qtyDiff === 0) continue;
+        // Effective unit cost for the StockMove AND the GL journal:
+        //   • Positive (IN): the user-entered unit cost establishes the new layer.
+        //   • Negative (OUT): the ACTUAL FIFO cost consumed, so the GL Inventory
+        //     credit matches the stock subledger reduction instead of an entered
+        //     cost that may have drifted from the real layer costs.
+        let effectiveUnitCost = enteredUnitCost;
+        if (qtyDiff < 0) {
+          // Consume oldest layers in this warehouse and capture the real cost.
+          const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
+            itemId: item.itemId,
+            warehouseId: adjustment.warehouseId,
+            qty,
+            label: `penyesuaian ${adjustment.documentNo}`,
+          });
+          const totalCost = consumedCost + shortfall * enteredUnitCost;
+          effectiveUnitCost = qty > 0 ? totalCost / qty : enteredUnitCost;
+        }
 
-      const impact = qtyDiff > 0 ? "IN" : "OUT";
-      const qty = Math.abs(qtyDiff);
-
-      // Effective unit cost for the StockMove AND the GL journal:
-      //   • Positive (IN): the user-entered unit cost establishes the new layer.
-      //   • Negative (OUT): the ACTUAL FIFO cost consumed, so the GL Inventory
-      //     credit matches the stock subledger reduction instead of an entered
-      //     cost that may have drifted from the real layer costs.
-      let effectiveUnitCost = enteredUnitCost;
-      if (qtyDiff < 0) {
-        // Consume oldest layers in this warehouse and capture the real cost.
-        const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
-          itemId: item.itemId,
-          warehouseId: adjustment.warehouseId,
-          qty,
-          label: `penyesuaian ${adjustment.documentNo}`,
+        const smDocNo = smDocNos[docIdx++];
+        const sm = await tx.stockMove.create({
+          data: {
+            documentNo: smDocNo,
+            itemId: item.itemId,
+            warehouseId: adjustment.warehouseId,
+            qty,
+            cost: effectiveUnitCost,
+            impact,
+            status: "posted",
+            referenceType: "StockAdjustment",
+            referenceId: adjustment.id,
+            notes: `Penyesuaian Stok ${adjustment.documentNo} (${liveQty} → ${actualQty})`,
+            createdBy: userId ?? null,
+          },
         });
-        const totalCost = consumedCost + shortfall * enteredUnitCost;
-        effectiveUnitCost = qty > 0 ? totalCost / qty : enteredUnitCost;
+
+        // Update item qtyOnHand (global total)
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qtyDiff} WHERE id = ${item.itemId}`;
+
+        // Positive adjustment — create new FIFO layer at the entered cost.
+        // Negative adjustment already consumed FIFO layers above.
+        if (qtyDiff > 0) {
+          await createInLayer(tx, {
+            itemId: item.itemId,
+            warehouseId: adjustment.warehouseId,
+            stockMoveId: sm.id,
+            qty: qtyDiff,
+            unitCost: enteredUnitCost,
+          });
+        }
+
+        journalItems.push({ qty: Number(item.actualQty), cost: effectiveUnitCost, difference: qtyDiff });
       }
-
-      const smDocNo = await generateDocumentNumber("SM");
-      const sm = await tx.stockMove.create({
-        data: {
-          documentNo: smDocNo,
-          itemId: item.itemId,
-          warehouseId: adjustment.warehouseId,
-          qty,
-          cost: effectiveUnitCost,
-          impact,
-          status: "posted",
-          referenceType: "StockAdjustment",
-          referenceId: adjustment.id,
-          notes: `Penyesuaian Stok ${adjustment.documentNo} (${liveQty} → ${actualQty})`,
-          createdBy: userId ?? null,
-        },
-      });
-
-      // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qtyDiff} WHERE id = ${item.itemId}`;
-
-      // Positive adjustment — create new FIFO layer at the entered cost.
-      // Negative adjustment already consumed FIFO layers above.
-      if (qtyDiff > 0) {
-        await createInLayer(tx, {
-          itemId: item.itemId,
-          warehouseId: adjustment.warehouseId,
-          stockMoveId: sm.id,
-          qty: qtyDiff,
-          unitCost: enteredUnitCost,
-        });
-      }
-
-      journalItems.push({ qty: Number(item.actualQty), cost: effectiveUnitCost, difference: qtyDiff });
     }
 
     // Create Journal Entry (Dr/Cr Inventory, Cr/Dr Stock Adjustment).

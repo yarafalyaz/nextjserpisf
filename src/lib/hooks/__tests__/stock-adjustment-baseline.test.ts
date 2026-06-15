@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   generateDocumentNumber: vi.fn(),
+  generateDocumentNumberBatch: vi.fn(),
   consumeFifoLayers: vi.fn(),
   createInLayer: vi.fn(),
   onStockAdjustment: vi.fn(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: mocks.generateDocumentNumber,
+  generateDocumentNumberBatch: mocks.generateDocumentNumberBatch,
 }))
 vi.mock("@/lib/services/inventory-fifo", () => ({
   consumeFifoLayers: mocks.consumeFifoLayers,
@@ -58,7 +60,17 @@ function wireTx(opts: {
     $executeRaw: spies.executeRaw,
     stockAdjustment: { findUniqueOrThrow: spies.adjFindUniqueOrThrow, update: spies.adjUpdate },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
-    item: { findUnique: spies.itemFindUnique },
+    item: { findUnique: spies.itemFindUnique, findMany: vi.fn().mockImplementation(async ({ where }) => {
+      const ids: number[] = where?.id?.in ?? []
+      const results = []
+      for (const id of ids) {
+        const res = await spies.itemFindUnique({ where: { id } })
+        if (res) {
+          results.push({ ...res, id })
+        }
+      }
+      return results
+    }) },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
   return spies
@@ -68,6 +80,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   let n = 0
   mocks.generateDocumentNumber.mockImplementation(async () => `SM-${++n}`)
+  mocks.generateDocumentNumberBatch.mockImplementation(async (_: string, count: number) => {
+    return Array.from({ length: count }, () => `SM-${++n}`)
+  })
   mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 0, shortfall: 0 })
 })
 

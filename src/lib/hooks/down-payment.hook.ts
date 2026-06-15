@@ -177,43 +177,71 @@ export async function onDownPaymentConfirmed(
     );
 
     // ─── Generate BOM Material Stock Notes & Services ─────────────────
+    // Pass 1: batch-resolve all products and items in two queries (eliminates
+    // the N+1 of product.findFirst + productMaterial.findMany + item.findMany
+    // + item.findUnique per quotation line).
     let bomNotes = `Auto-generated dari DP ${dp.documentNo}\n`;
     let serviceList = "";
     let materialHeaderAdded = false;
-    
+
     try {
+      const validItemNames = Array.from(
+        new Set(
+          allItems
+            .map((i) => i.itemName.trim())
+            .filter((n) => n.length > 0)
+        )
+      );
+
+      // OR-contains on every distinct item name. We pick the first matching
+      // product per line below — same semantics as the old per-line
+      // product.findFirst({ name: { contains: item.itemName } }).
+      const matchedProducts = validItemNames.length === 0
+        ? []
+        : await tx.product.findMany({
+            where: { OR: validItemNames.map((n) => ({ name: { contains: n } })) },
+            include: { materials: true },
+          });
+      const productByName = new Map<string, typeof matchedProducts[number] | null>();
+      for (const n of validItemNames) {
+        productByName.set(
+          n,
+          matchedProducts.find((p) => p.name.includes(n)) ?? null
+        );
+      }
+
+      // Pre-collect every itemId we will need: BOM material itemIds + non-BOM
+      // direct itemIds. One findMany feeds both the material block and the
+      // non-BOM block below.
+      const neededItemIds = new Set<number>();
+      for (const item of allItems) {
+        if (item.itemId !== null) neededItemIds.add(item.itemId);
+      }
+      for (const p of matchedProducts) {
+        for (const m of p.materials) neededItemIds.add(m.itemId);
+      }
+      const stockItems =
+        neededItemIds.size === 0
+          ? []
+          : await tx.item.findMany({
+              where: { id: { in: Array.from(neededItemIds) } },
+              select: { id: true, name: true, qtyOnHand: true, unitOfMeasure: true },
+            });
+      const stockById = new Map(stockItems.map((s) => [s.id, s]));
+
+      // Pass 2: render notes using the pre-fetched maps. Zero DB round-trips.
       for (const item of allItems) {
         // Cari produk BOM berdasarkan nama item/deskripsi quotation. Lewati jika
         // nama kosong — `contains: ""` akan cocok dengan produk pertama mana pun
         // dan menghasilkan catatan BOM yang salah.
         const matchedProduct = item.itemName.trim() === ""
           ? null
-          : await tx.product.findFirst({
-          where: {
-            name: {
-              contains: item.itemName,
-            },
-          },
-          include: {
-            materials: {
-              include: {
-                product: true,
-              },
-            },
-          },
-        });
+          : productByName.get(item.itemName.trim()) ?? null;
 
         if (matchedProduct) {
-          // Ambil detail bahan penyusun dengan item (untuk stok)
-          const materialsWithStock = await tx.productMaterial.findMany({
-            where: { productId: matchedProduct.id },
-          });
-
-          // Fetch items for stock in parallel
-          const materialItems = await tx.item.findMany({
-            where: { id: { in: materialsWithStock.map(m => m.itemId) } },
-            select: { id: true, name: true, qtyOnHand: true, unitOfMeasure: true },
-          });
+          // materials are already eager-loaded via productByName; no second
+          // productMaterial.findMany needed.
+          const materialsWithStock = matchedProduct.materials;
 
           if (materialsWithStock.length > 0) {
             if (!materialHeaderAdded) {
@@ -222,7 +250,7 @@ export async function onDownPaymentConfirmed(
             }
             bomNotes += `\nProduk Perakitan: ${matchedProduct.name} (Qty: ${item.qty})\n`;
             materialsWithStock.forEach(mat => {
-              const dbItem = materialItems.find(i => i.id === mat.itemId);
+              const dbItem = stockById.get(mat.itemId);
               const qtyNeeded = Number(mat.qty) * item.qty;
               const stock = dbItem ? Number(dbItem.qtyOnHand) : 0;
               const uom = dbItem ? dbItem.unitOfMeasure : "PCS";
@@ -234,10 +262,7 @@ export async function onDownPaymentConfirmed(
         } else {
           // Non-BOM item: check stock if it has a valid itemId
           if (item.itemId !== null) {
-            const stockItem = await tx.item.findUnique({
-              where: { id: item.itemId },
-              select: { id: true, name: true, qtyOnHand: true, unitOfMeasure: true },
-            });
+            const stockItem = stockById.get(item.itemId);
             if (stockItem) {
               if (!materialHeaderAdded) {
                 bomNotes += `\n[RINCIAN KEBUTUHAN MATERIAL & CEK STOK]\n`;
