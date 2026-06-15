@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SalesInvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
+import { onSalesPaymentUpdated } from '@/lib/hooks/sales-payment.hook'
 
 interface QuotationItem {
   itemId: number | null
@@ -103,6 +104,12 @@ export async function resyncOnEdit(quotationId: number): Promise<void> {
             totalAmount: quotation.grandTotal,
           },
         })
+
+        // grandTotal just changed — the existing paidAmount may now exceed it
+        // (or fall further below it), so status / paymentStatus must be
+        // re-derived. Without this, a partially-paid invoice whose grandTotal
+        // is edited down below paidAmount stays stuck at "partial" forever.
+        await onSalesPaymentUpdated(inv.id, tx)
       }
     }
   })

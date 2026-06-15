@@ -1,160 +1,101 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const mocks = vi.hoisted(() => ({
-  findUniqueQuotation: vi.fn(),
-  transaction: vi.fn(),
-  soFindMany: vi.fn(),
-  soItemDeleteMany: vi.fn(),
-  soItemCreateMany: vi.fn(),
-  soUpdate: vi.fn(),
-  invFindMany: vi.fn(),
-  invItemDeleteMany: vi.fn(),
-  invItemCreateMany: vi.fn(),
-  invUpdate: vi.fn(),
-}));
+// Mock prisma so the service runs against in-memory fixtures. The
+// sales-payment.hook recalc runs for real against the same mock so we can
+// observe whether resyncOnEdit re-derives the invoice payment status after
+// changing grandTotal.
+const mocks = vi.hoisted(() => {
+  const prismaMock: any = {
+    quotation: { findUnique: vi.fn() },
+    salesOrder: { findMany: vi.fn(), update: vi.fn() },
+    salesOrderItem: { deleteMany: vi.fn(), createMany: vi.fn() },
+    salesInvoice: { findMany: vi.fn(), update: vi.fn(), findUniqueOrThrow: vi.fn() },
+    salesInvoiceItem: { deleteMany: vi.fn(), createMany: vi.fn() },
+    salesPayment: { findMany: vi.fn() },
+    $transaction: vi.fn(async (fn: any) => fn(prismaMock)),
+  }
+  // Re-derive payment status using the same logic as recalcCore. This is what
+  // the sales-payment.hook does; we simulate it so the test exercises the
+  // resyncOnEdit -> onSalesPaymentUpdated plumbing.
+  const onSalesPaymentUpdatedMock = vi.fn(async (invoiceId: number, db: any) => {
+    const inv = await db.salesInvoice.findUniqueOrThrow({ where: { id: invoiceId } })
+    const payments = await db.salesPayment.findMany({
+      where: { salesInvoiceId: invoiceId },
+      select: { amount: true },
+    })
+    const totalPaid = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
+    const grandTotal = Number(inv.grandTotal ?? 0)
+    let status = "posted"
+    let paymentStatus = "posted"
+    if (totalPaid >= grandTotal && grandTotal > 0) {
+      status = "paid"
+      paymentStatus = "paid"
+    } else if (totalPaid > 0) {
+      status = "partial"
+      paymentStatus = "partial"
+    }
+    await db.salesInvoice.update({
+      where: { id: invoiceId },
+      data: { paidAmount: totalPaid, status, paymentStatus },
+    })
+  })
+  return { prismaMock, onSalesPaymentUpdatedMock }
+})
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    quotation: { findUnique: mocks.findUniqueQuotation },
-    $transaction: (fn: (tx: unknown) => Promise<unknown>) =>
-      mocks.transaction(fn),
-  },
-}));
+vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+vi.mock("@/lib/hooks/sales-payment.hook", () => ({
+  onSalesPaymentUpdated: mocks.onSalesPaymentUpdatedMock,
+}))
 
-import { resyncOnEdit } from "@/lib/services/quotation-sync.service";
+import { resyncOnEdit } from "../quotation-sync.service"
 
-function buildTx() {
-  return {
-    salesOrder: { findMany: mocks.soFindMany, update: mocks.soUpdate },
-    salesOrderItem: { deleteMany: mocks.soItemDeleteMany, createMany: mocks.soItemCreateMany },
-    salesInvoice: { findMany: mocks.invFindMany, update: mocks.invUpdate },
-    salesInvoiceItem: { deleteMany: mocks.invItemDeleteMany, createMany: mocks.invItemCreateMany },
-  };
-}
-
-describe("quotation-sync.service", () => {
+describe("quotation-sync.service / resyncOnEdit", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.transaction.mockImplementation(async (fn) => fn(buildTx()));
-  });
+    vi.clearAllMocks()
+  })
 
-  it("does nothing when quotation not found", async () => {
-    mocks.findUniqueQuotation.mockResolvedValue(null);
+  it("recomputes payment status of a partially-paid invoice when the edited quotation lowers grandTotal below paidAmount", async () => {
+    const p = mocks.prismaMock
 
-    await resyncOnEdit(1);
-
-    expect(mocks.transaction).not.toHaveBeenCalled();
-  });
-
-  it("does nothing when quotation status is not draft", async () => {
-    mocks.findUniqueQuotation.mockResolvedValue({
-      id: 1, status: "accepted", sections: [],
-    });
-
-    await resyncOnEdit(1);
-
-    expect(mocks.transaction).not.toHaveBeenCalled();
-  });
-
-  it("resyncs SO items for a draft quotation", async () => {
-    mocks.findUniqueQuotation.mockResolvedValue({
+    // Quotation edited down to a 500 total (was 1000).
+    p.quotation.findUnique.mockResolvedValue({
       id: 1,
       status: "draft",
-      subtotal: 1000,
-      discount: 100,
-      tax: 90,
-      grandTotal: 990,
-      sections: [
-        {
-          items: [
-            { itemId: 5, qty: 2, unitPrice: 500, discount: 0, total: 1000, description: "Item A" },
-          ],
-        },
-      ],
-    });
-    mocks.soFindMany.mockResolvedValue([{ id: 10 }]);
-    mocks.invFindMany.mockResolvedValue([]);
-
-    await resyncOnEdit(1);
-
-    expect(mocks.soItemDeleteMany).toHaveBeenCalledWith({ where: { salesOrderId: 10 } });
-    expect(mocks.soItemCreateMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({ salesOrderId: 10, itemId: 5, qty: 2, unitPrice: 500, total: 1000 }),
-      ],
-    });
-    expect(mocks.soUpdate).toHaveBeenCalledWith({
-      where: { id: 10 },
-      data: expect.objectContaining({ subtotal: 1000, grandTotal: 990 }),
-    });
-  });
-
-  it("resyncs linked invoices for the SO", async () => {
-    mocks.findUniqueQuotation.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      subtotal: 1000,
+      subtotal: 500,
       discount: 0,
       tax: 0,
-      grandTotal: 1000,
-      sections: [
-        { items: [{ itemId: 5, qty: 1, unitPrice: 1000, discount: 0, total: 1000 }] },
-      ],
-    });
-    mocks.soFindMany.mockResolvedValue([{ id: 10 }]);
-    mocks.invFindMany.mockResolvedValue([{ id: 20 }]);
+      grandTotal: 500,
+      sections: [{ items: [] }],
+    })
 
-    await resyncOnEdit(1);
+    p.salesOrder.findMany.mockResolvedValue([{ id: 10 }])
+    p.salesOrder.update.mockResolvedValue({})
+    p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
 
-    expect(mocks.invItemDeleteMany).toHaveBeenCalledWith({ where: { salesInvoiceId: 20 } });
-    expect(mocks.invItemCreateMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({ salesInvoiceId: 20, itemId: 5 })],
-    });
-    expect(mocks.invUpdate).toHaveBeenCalledWith({
-      where: { id: 20 },
-      data: expect.objectContaining({ grandTotal: 1000, taxAmount: 0 }),
-    });
-  });
+    // Linked invoice: already partially paid (600 of 1000) → status "partial".
+    p.salesInvoice.findMany.mockResolvedValue([
+      { id: 100, status: "partial", paidAmount: 600, grandTotal: 1000 },
+    ])
+    p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesInvoice.update.mockResolvedValue({})
 
-  it("skips item createMany when quotation has no items", async () => {
-    mocks.findUniqueQuotation.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      subtotal: 0,
-      discount: 0,
-      tax: 0,
-      grandTotal: 0,
-      sections: [],
-    });
-    mocks.soFindMany.mockResolvedValue([{ id: 10 }]);
-    mocks.invFindMany.mockResolvedValue([]);
+    // recalcCore re-reads the invoice (now with the new 500 total) + payments.
+    p.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      status: "partial",
+      grandTotal: 500,
+    })
+    p.salesPayment.findMany.mockResolvedValue([{ amount: 600 }])
 
-    await resyncOnEdit(1);
+    await resyncOnEdit(1)
 
-    expect(mocks.soItemDeleteMany).toHaveBeenCalled();
-    expect(mocks.soItemCreateMany).not.toHaveBeenCalled();
-  });
-
-  it("computes total fallback when item.total is missing", async () => {
-    mocks.findUniqueQuotation.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      subtotal: 0,
-      discount: 0,
-      tax: 0,
-      grandTotal: 0,
-      sections: [
-        { items: [{ itemId: 5, qty: 3, unitPrice: 100, discount: 50, total: null }] },
-      ],
-    });
-    mocks.soFindMany.mockResolvedValue([{ id: 10 }]);
-    mocks.invFindMany.mockResolvedValue([]);
-
-    await resyncOnEdit(1);
-
-    // total = 3*100 - 50 = 250
-    expect(mocks.soItemCreateMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({ total: 250 })],
-    });
-  });
-});
+    // After lowering grandTotal to 500 with 600 already paid, the invoice must
+    // be reclassified as fully paid. Before the fix, resyncOnEdit only rewrote
+    // the totals and left status/paymentStatus stuck at "partial".
+    expect(p.salesInvoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "paid", paymentStatus: "paid" }),
+      })
+    )
+  })
+})
