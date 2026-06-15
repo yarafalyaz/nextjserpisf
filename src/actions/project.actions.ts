@@ -224,9 +224,19 @@ export async function updateProjectStageProgress(
   // Set timestamps based on status transition
   const updateData: Record<string, unknown> = { status }
   if (status === "in_progress") {
-    updateData.startedAt = new Date()
-  }
-  if (status === "completed") {
+    if (!stage.startedAt) {
+      updateData.startedAt = new Date()
+    }
+    updateData.completedAt = null
+  } else if (status === "completed") {
+    if (!stage.startedAt) {
+      updateData.startedAt = new Date()
+    }
+    updateData.completedAt = new Date()
+  } else if (status === "pending") {
+    updateData.startedAt = null
+    updateData.completedAt = null
+  } else if (status === "skipped") {
     updateData.completedAt = new Date()
   }
   if (notes !== undefined) {
@@ -305,23 +315,44 @@ export async function syncProjectStatus(projectId: number) {
     }
   } else if (inProgress > 0 || completed > 0) {
     // Some stages in progress or completed
-    if (project.status === "active" || project.status === "pending") {
+    if (project.status === "active" || project.status === "pending" || project.status === "completed") {
       await prisma.project.update({
         where: { id: projectId },
-        data: { status: "in_progress" },
+        data: { status: "in_progress", endDate: null },
       })
     }
-    // Sync linked WorkOrder to in_progress if still pending
+    // Sync linked WorkOrder to in_progress if still pending or completed
     if (project.workOrderId) {
       const wo = await prisma.workOrder.findUnique({ where: { id: project.workOrderId } })
-      if (wo && (wo.status === "pending" || wo.status === "draft")) {
+      if (wo && (wo.status === "pending" || wo.status === "draft" || wo.status === "completed")) {
         await prisma.workOrder.update({
           where: { id: project.workOrderId },
-          data: { status: "in_progress" },
+          data: { status: "in_progress", endDate: null },
         })
         await prisma.workOrderItem.updateMany({
-          where: { workOrderId: project.workOrderId, status: "pending" },
+          where: { workOrderId: project.workOrderId, status: { in: ["pending", "completed"] } },
           data: { status: "in_progress" },
+        })
+      }
+    }
+  } else {
+    // All stages pending
+    if (project.status === "in_progress" || project.status === "completed") {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: "active", endDate: null },
+      })
+    }
+    if (project.workOrderId) {
+      const wo = await prisma.workOrder.findUnique({ where: { id: project.workOrderId } })
+      if (wo && (wo.status === "in_progress" || wo.status === "completed")) {
+        await prisma.workOrder.update({
+          where: { id: project.workOrderId },
+          data: { status: "pending", endDate: null },
+        })
+        await prisma.workOrderItem.updateMany({
+          where: { workOrderId: project.workOrderId, status: { in: ["in_progress", "completed"] } },
+          data: { status: "pending" },
         })
       }
     }

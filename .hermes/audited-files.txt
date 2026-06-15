@@ -59,3 +59,4 @@ src/actions/sales.actions.ts (fix: negative taxRate/qty drove invoice grandTotal
 59|src/actions/bulk.actions.ts (fix: asset/vehicle bulk deletion integrity guard bypass)
 
 src/actions/inventory.actions.ts (fix: stuck-in-limbo state on tx failure — processStockAdjustment/processInventoryTransfer/receiveInventoryTransfer/completeMaterialIssue left doc in transient processing/receiving status forever; now roll claim back)
+src/actions/project.actions.ts (fix: project status progression and stage reverting)

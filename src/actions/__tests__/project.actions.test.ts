@@ -476,9 +476,34 @@ describe("updateProjectStageProgress status-transition branches", () => {
     const res = await actions.updateProjectStageProgress(1, 1, "pending")
     expect(res?.success).toBe(true)
     const callArg = mocks.prismaMock.projectStage.update.mock.calls.at(-1)?.[0]
-    expect(callArg.data.startedAt).toBeUndefined()
-    expect(callArg.data.completedAt).toBeUndefined()
+    expect(callArg.data.startedAt).toBeNull()
+    expect(callArg.data.completedAt).toBeNull()
     expect(callArg.data.notes).toBeUndefined()
+  })
+  it("preserves original startedAt when resuming an in_progress stage", async () => {
+    // Stage was previously started then completed; user now reverts to in_progress.
+    // The original startedAt must NOT be overwritten, and the stale completedAt
+    // must be cleared.
+    const originalStart = new Date("2026-01-01T08:00:00Z")
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({
+      id: 1, projectId: 1, sortOrder: 1, startedAt: originalStart, completedAt: new Date("2026-01-02T17:00:00Z"),
+    })
+    const res = await actions.updateProjectStageProgress(1, 1, "in_progress")
+    expect(res?.success).toBe(true)
+    const callArg = mocks.prismaMock.projectStage.update.mock.calls.at(-1)?.[0]
+    expect(callArg.data.startedAt).toBeUndefined() // preserved (not overwritten)
+    expect(callArg.data.completedAt).toBeNull()
+  })
+  it("clears completedAt when reverting a completed stage back to pending", async () => {
+    mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({
+      id: 1, projectId: 1, sortOrder: 1, startedAt: new Date(), completedAt: new Date(),
+    })
+    mocks.prismaMock.projectStage.findFirst.mockResolvedValue(null) // allow pending revert
+    const res = await actions.updateProjectStageProgress(1, 1, "pending")
+    expect(res?.success).toBe(true)
+    const callArg = mocks.prismaMock.projectStage.update.mock.calls.at(-1)?.[0]
+    expect(callArg.data.startedAt).toBeNull()
+    expect(callArg.data.completedAt).toBeNull()
   })
 })
 
@@ -499,8 +524,8 @@ describe("syncProjectStatus extended branches", () => {
     await actions.syncProjectStatus(1)
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
-  it("in_progress branch skips project.update when status already in_progress/other and WO not pending/draft", async () => {
-    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed", workOrderId: 99 })
+  it("in_progress branch skips project.update when status already in_progress and WO not pending/draft/completed", async () => {
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "in_progress" }, { status: "pending" }])
     mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "in_progress" })
     await actions.syncProjectStatus(1)
@@ -514,6 +539,35 @@ describe("syncProjectStatus extended branches", () => {
     await actions.syncProjectStatus(1)
     expect(mocks.prismaMock.workOrder.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "in_progress" }) })
+    )
+  })
+  it("reopens a completed project to in_progress and clears endDate when a stage reverts", async () => {
+    // Project was previously auto-completed (all stages completed earlier), then a
+    // stage was reverted to in_progress. The project must NOT remain stuck in
+    // "completed" with its old endDate. Reopen: status -> in_progress, endDate -> null.
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "in_progress" }, { status: "completed" }])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "completed" })
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "in_progress", endDate: null }) })
+    )
+    expect(mocks.prismaMock.workOrder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "in_progress", endDate: null }) })
+    )
+  })
+  it("reverts a fully-reset project (all stages pending) to active and WO to pending", async () => {
+    // Every stage is now pending: project should drop back to "active" with endDate null,
+    // and the linked WO should drop back to "pending" (was completed or in_progress).
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ status: "pending" }, { status: "pending" }])
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 99, status: "in_progress" })
+    await actions.syncProjectStatus(1)
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "active", endDate: null }) })
+    )
+    expect(mocks.prismaMock.workOrder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "pending", endDate: null }) })
     )
   })
   it("in_progress branch where WO lookup returns null (no WO update)", async () => {
