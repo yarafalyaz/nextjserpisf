@@ -9,3 +9,6 @@ src/components/attendance/self-attendance-widget.tsx (replaced broken UnoCSS i-l
 src/app/(auth)/error.tsx (added role='alert'+aria-live='assertive', focus ring on reset button)
 src/app/(auth)/not-found.tsx (added aria-label + focus-visible ring on back-to-login button)
 src/app/globals.css (added missing --color-info and --color-info-soft/-foreground/-600 tokens; fixed broken text-info/bg-info utilities used by notifications-widget)
+src/components/ui/status-chip.tsx (removed unnecessary 'use client' — no hooks/state/handlers; promotes component to React Server Component for smaller client bundle)
+src/components/ui/breadcrumbs.tsx (removed unnecessary 'use client' — pure presentational (Link + icon); now renders fully on the server)
+src/components/ui/search-field.tsx (a11y: added role='search' + aria-label to <form>, aria-label to <input>, and aria-hidden='true' to decorative search icon — landmark discovery + accessible name for screen readers)
