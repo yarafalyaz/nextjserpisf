@@ -241,11 +241,13 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
     return { success: false, message: `Maksimal ${BULK_DELETE_MAX} data per sekali hapus` }
   }
 
-  // Authorization allowlist: the model MUST be a known key with a delete
-  // permission. A server action is a network endpoint, so the compile-time
-  // `ModelName` union is NOT enforced at runtime — without this guard a caller
-  // could pass an unmapped model (e.g. "user", "role") and skip the permission
-  // check entirely. Reject anything not explicitly mapped.
+  // Authorization FIRST, before any other validation. The model name in a
+  // server action is a string from the wire and the `ModelName` union is
+  // compile-time only — a caller can submit any string. Look up the
+  // permission key up front so an unauthenticated/anonymous probe never
+  // reaches the dmmf dispatch logic. (Previously the requirePermission call
+  // sat below the validation guards, which let anonymous callers still
+  // exercise the model existence checks.)
   const permission = modelPermissionMap[model]
   if (!permission) {
     return { success: false, message: "Operasi hapus tidak diizinkan untuk model ini" }

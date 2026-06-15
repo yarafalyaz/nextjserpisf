@@ -630,7 +630,14 @@ interface BulkPayrollEstimation {
  * settings) into a SINGLE Promise.all, then computes the estimation in
  * memory. Net result: 9 queries total regardless of N.
  */
-export async function getBulkPayrollEstimations(
+// Module-scoped (NOT exported): in a "use server" file every `export async`
+// becomes a network endpoint. This helper is an internal building block for
+// generateBulkPayroll and must never be callable directly by a client —
+// the previous version was reachable as a live server action and would
+// return salary/loan/attendance data for any employee ID list with no
+// permission check. Public callers go through the `getBulkPayrollEstimations`
+// wrapper below, which enforces requirePermission("view_payroll").
+async function computeBulkPayrollEstimations(
   employeeIds: number[],
   startDateStr: string,
   endDateStr: string
@@ -863,6 +870,15 @@ export async function getBulkPayrollEstimations(
   return result
 }
 
+export async function getBulkPayrollEstimations(
+  employeeIds: number[],
+  startDateStr: string,
+  endDateStr: string
+): Promise<Map<number, BulkPayrollEstimation>> {
+  await requirePermission("view_payroll")
+  return computeBulkPayrollEstimations(employeeIds, startDateStr, endDateStr)
+}
+
 export async function generateBulkPayroll(period: string, startDateStr: string, endDateStr: string) {
   try {
   const user = await requirePermission("create_payroll")
@@ -882,8 +898,8 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
 
   // Bulk fan-out: instead of calling getPayrollEstimation once per employee
   // (5 round-trips × N employees = 5×N), hoist every read into a single
-  // Promise.all via getBulkPayrollEstimations → constant 9 queries.
-  const estimations = await getBulkPayrollEstimations(targetIds, startDateStr, endDateStr)
+  // Promise.all via computeBulkPayrollEstimations → constant 9 queries.
+  const estimations = await computeBulkPayrollEstimations(targetIds, startDateStr, endDateStr)
 
   // Hoist document number generation to eliminate the N+1 serial calls (N sequence bumps).
   const docNumbers = await generateDocumentNumberBatch("PAYROLL", targetIds.length)
