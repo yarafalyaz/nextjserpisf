@@ -66,3 +66,6 @@ src/lib/hooks/sales-payment.hook.ts (fix: float drift left fully-paid invoice st
 
 src/actions/sales.actions.ts (fix: updateSalesReturn TOCTOU — over-return guard ran OUTSIDE the tx while createSalesReturn was hardened to run it inside a FOR UPDATE lock; two concurrent draft edits could each read stale alreadyReturned totals, both pass the cap, and on completeSalesReturn over-restock inventory + over-credit AR. Now guard + status re-check run inside the locked tx. +1 test, 2506 pass)68|src/actions/hrm.actions.ts (fix: edit guard bypass on paid_off loans)
 src/lib/hooks/accounting.hook.ts (fix: petty-cash period-lock bypass via transactionDate??new Date() fallback)
+src/lib/validations/inventory.schemas.ts (fix: same-warehouse guard)
+src/actions/inventory.actions.ts (fix: updateInventoryTransfer skipped Zod validation)
+src/lib/validations/__tests__/inventory-transfer-same-warehouse.test.ts (new test)

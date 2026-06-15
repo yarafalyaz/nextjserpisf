@@ -31,6 +31,9 @@ export const inventoryTransferSchema = z.object({
   date: dateString,
   notes: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
+}).refine((data) => data.sourceWarehouseId !== data.destinationWarehouseId, {
+  message: "Gudang asal dan tujuan tidak boleh sama",
+  path: ["destinationWarehouseId"],
 })
 
 export type InventoryTransferInput = z.infer<typeof inventoryTransferSchema>

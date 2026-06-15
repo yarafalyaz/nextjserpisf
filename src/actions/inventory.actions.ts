@@ -835,6 +835,10 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
 
   await requirePermission("edit_inventory_transfers")
 
+  const parsed = parseFormData(inventoryTransferSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const tf = await prisma.inventoryTransfer.findUniqueOrThrow({ where: { id } })
   if (tf.status !== "draft") {
     throw new Error("Hanya transfer draft yang dapat diedit")
@@ -842,7 +846,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
 
   // Fix #2: Jangan generate documentNo baru saat update
   const transferItems = (safeJsonParse<{ itemId: number; qty: number }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
   const transfer = await prisma.$transaction(async (tx) => {
@@ -857,10 +861,10 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     return tx.inventoryTransfer.update({
       where: { id },
       data: {
-        sourceWarehouseId: requireId(formData.get("sourceWarehouseId"), "sourceWarehouseId"),
-        destinationWarehouseId: requireId(formData.get("destinationWarehouseId"), "destinationWarehouseId"),
-        date: new Date(formData.get("date") as string),
-        notes: formData.get("notes") as string | null,
+        sourceWarehouseId: v.sourceWarehouseId,
+        destinationWarehouseId: v.destinationWarehouseId,
+        date: new Date(v.date),
+        notes: v.notes ?? null,
         items: {
           create: transferItems.map((it) => ({
             itemId: Number(it.itemId),

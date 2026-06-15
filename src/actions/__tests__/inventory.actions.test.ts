@@ -631,7 +631,7 @@ describe('Inventory Transfer Remaining Coverage', () => {
 
   it("updateInventoryTransfer fails if not draft initially", async () => {
     mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processed" })
-    const res = await (actions as any).updateInventoryTransfer(1, fdMap({ sourceWarehouseId: 1 }))
+    const res = await (actions as any).updateInventoryTransfer(1, fdMap({ sourceWarehouseId: 1, destinationWarehouseId: 2, date: "2026-06-13" }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Hanya transfer draft yang dapat diedit")
   })
