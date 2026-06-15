@@ -30,3 +30,5 @@ src/app/api/dashboard/notifications/route.ts
 src/lib/hooks/expense.hook.ts (fix: balance guard)
 (clean)
 src/lib/services/inventory-fifo.ts
+src/actions/inventory.actions.ts (fix: double-journal transaction abort)
+src/app/api/cron/daily-notifications/route.ts (fix: local timezone logic bug)

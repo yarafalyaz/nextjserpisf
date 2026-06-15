@@ -23,11 +23,17 @@ export async function GET(request: Request) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayStr = today.toISOString().split("T")[0]
-  const dayStart = new Date(`${todayStr}T00:00:00`)
-  const dayEnd = new Date(`${todayStr}T23:59:59`)
+  // Build today's [dayStart, dayEnd) window in LOCAL time. The previous
+  // implementation did `toISOString().split("T")[0]` + `new Date('YYYY-MM-DDT...')`,
+  // which silently dropped a day in any timezone east of UTC (e.g. Asia/Jakarta
+  // = UTC+7): the ISO formatter returns the previous UTC date, and the
+  // zero-padded string is then re-interpreted as local time. Notifications
+  // about late/absent employees would be off by a full day.
+  const now = new Date()
+  const dayStart = new Date(now)
+  dayStart.setHours(0, 0, 0, 0)
+  const dayEnd = new Date(now)
+  dayEnd.setHours(23, 59, 59, 999)
 
   const admins = await prisma.user.findMany({
     where: {
@@ -72,7 +78,7 @@ export async function GET(request: Request) {
   // 2. Overdue invoices
   const overdueInvoices = await prisma.salesInvoice.findMany({
     where: {
-      dueDate: { lt: today },
+      dueDate: { lt: dayStart },
       paymentStatus: { not: "paid" },
       status: { not: "cancelled" },
       deletedAt: null,
@@ -144,8 +150,8 @@ export async function GET(request: Request) {
   }
 
   // 5. Absent employees (after 10 AM, skip holidays/leaves)
-  if (new Date().getHours() >= 10) {
-    const isHoliday = await prisma.holiday.findFirst({ where: { date: today }, select: { id: true } })
+  if (now.getHours() >= 10) {
+    const isHoliday = await prisma.holiday.findFirst({ where: { date: dayStart }, select: { id: true } })
 
     if (!isHoliday) {
       const [activeEmployees, allAttendances, leaves] = await Promise.all([
@@ -158,7 +164,7 @@ export async function GET(request: Request) {
           select: { employeeId: true },
         }),
         prisma.leaveRequest.findMany({
-          where: { status: "approved", startDate: { lte: today }, endDate: { gte: today } },
+          where: { status: "approved", startDate: { lte: dayStart }, endDate: { gte: dayStart } },
           select: { employeeId: true },
         }),
       ])
