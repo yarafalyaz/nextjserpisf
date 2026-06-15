@@ -68,8 +68,15 @@ export async function GET(req: NextRequest) {
         const d = new Date(l.createdAt).toLocaleString("id-ID")
         const user = l.userId ? (userMap.get(l.userId) ?? "-") : "Sistem"
         const act = actionLabel[l.action] || l.action
-        const desc = (l.description ?? "-").replace(/"/g, '""')
-        return `"${d}","${user}","${act}","${l.modelType}","${l.modelId ?? ""}","${desc}","${l.ipAddress ?? ""}"`
+        
+        const esc = (val: unknown) => {
+          if (val == null) return ""
+          let str = String(val).replace(/"/g, '""')
+          if (/^[=+\-@\t\r]/.test(str)) str = "'" + str
+          return str
+        }
+
+        return `"${esc(d)}","${esc(user)}","${esc(act)}","${esc(l.modelType)}","${esc(l.modelId)}","${esc(l.description ?? "-")}","${esc(l.ipAddress)}"`
       })
       .join("\n")
 

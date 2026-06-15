@@ -36,3 +36,10 @@ src/lib/hooks/accounting.hook.ts
 src/lib/services/attendance-summary.service.ts (fix: dailyRate divisor used elapsed days)
 src/lib/services/quotation-sync.service.ts (fix: invoice payment status stale after quotation edit)
 src/actions/self-attendance.actions.ts
+src/lib/services/journal.service.ts\nsrc/lib/services/document-sequence.service.ts\nsrc/lib/services/holiday-sync.service.ts\nsrc/lib/services/late-penalty.service.ts\nsrc/lib/services/method.service.ts\nsrc/lib/services/payroll-statutory.service.ts\nsrc/lib/services/period-lock.service.ts\nsrc/lib/services/stock-journal.service.ts\nsrc/lib/services/uom.service.ts\nsrc/lib/services/notification.service.ts\nsrc/lib/services/approval-workflow.service.ts\nsrc/lib/services/activity-log.service.ts
+src/lib/hooks/goods-receipt.hook.ts\nsrc/lib/hooks/material-issue.hook.ts\nsrc/lib/hooks/sales-payment.hook.ts\nsrc/lib/hooks/sales-return.hook.ts
+src/lib/hooks/purchase-order.hook.ts\nsrc/lib/hooks/purchase-return.hook.ts\nsrc/lib/hooks/stock-adjustment.hook.ts\nsrc/lib/hooks/work-order.hook.ts
+src/app/api/upload/route.ts\nsrc/app/api/upload/avatar/route.ts\nsrc/app/api/upload/items/route.ts\nsrc/app/api/upload/attachments/route.ts\nsrc/app/api/upload/attachments/[id]/route.ts\nsrc/app/api/attachments/[...path]/route.ts\nsrc/app/api/backup/download/route.ts\nsrc/app/api/notifications/[id]/read/route.ts\nsrc/app/api/workflow/[...path]/route.ts
+src/app/api/print/route.ts\nsrc/app/api/payroll/late-penalty/route.ts
+src/app/api/address/route.ts\nsrc/app/api/notifications/route.ts\nsrc/app/api/vehicle-brands/route.ts\nsrc/app/api/vehicle-models/route.ts
+src/app/api/activity-logs/export/route.ts

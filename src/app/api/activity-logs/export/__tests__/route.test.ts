@@ -53,4 +53,43 @@ describe("GET /api/activity-logs/export", () => {
     // Crucial: must NOT dump the activity log to unauthorized callers.
     expect(mocks.findManyLogs).not.toHaveBeenCalled()
   })
+
+  it("neutralises CSV formula-injection triggers in user-controlled fields", async () => {
+    // User-controlled fields: a malicious user name, action, modelType and
+    // description starting with a formula trigger (=/+/-/@/tab/CR). When an
+    // admin opens the exported CSV in Excel/LibreOffice, a leading `=`
+    // launches the formula. Cells MUST be prefixed (typically with a single
+    // quote) so spreadsheet apps treat them as literal text.
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },
+    })
+    mocks.findManyLogs.mockResolvedValue([
+      {
+        createdAt: new Date("2026-06-15T08:00:00Z"),
+        userId: 99,
+        action: "=cmd|'/c calc'!A1",
+        modelType: "+SUM(1+1)",
+        modelId: 1,
+        description: "-2+3",
+        ipAddress: "@evil",
+      },
+    ])
+    mocks.findManyUsers.mockResolvedValue([
+      { id: 99, name: "=2+5" },
+    ])
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    expect(res.status).toBe(200)
+    const body = await res.text()
+
+    // The header row uses known labels — sanity check the test got a real body.
+    expect(body.startsWith("Waktu,Pengguna,Aksi,Model,ID,Deskripsi,IP")).toBe(true)
+
+    // None of these formula triggers may appear unescaped as the first
+    // character inside a quoted cell (`,X"`,X in {=, +, -, @, \t, \r}).
+    // We scan the raw bytes: a leading `=`, `+`, `-`, `@`, `\t`, or `\r`
+    // inside a `"..."` cell is the formula-injection sink.
+    const dangerousCell = /,"([=+\-@\t\r])[^"]*",/
+    expect(body).not.toMatch(dangerousCell)
+  })
 })
