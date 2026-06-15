@@ -31,8 +31,8 @@ interface VendorBillFormProps {
 export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
-  const [dueDate, setDueDate] = useState("")
+  const [date, setDate] = useState(bill?.date ?? new Date().toISOString().split("T")[0])
+  const [dueDate, setDueDate] = useState(bill?.dueDate ?? "")
   const [vendorId, setVendorId] = useState<string | null>(bill?.vendorId ? String(bill.vendorId) : null)
   const [billItems, setBillItems] = useState<BillItem[]>([{ itemId: "", qty: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 }])
 

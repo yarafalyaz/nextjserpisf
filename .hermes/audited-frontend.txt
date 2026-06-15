@@ -16,3 +16,4 @@ src/components/reports/date-presets.tsx (a11y: added role='group'+aria-label='Re
 src/components/reports/export-buttons.tsx (a11y: added role='group'+aria-label='Export dokumen' wrapper, type='button', aria-label per action, aria-hidden on decorative lucide icons, focus-visible ring)
 src/components/reports/report-date-filter.tsx (a11y: role='search'+aria-label on both date-range and single-date filter containers, aria-label on Generate button)
 src/components/ui/detail-tabs.tsx (responsive: wrapped TabsList in overflow-x-auto container with justify-start on mobile / justify-center on sm+; focus-visible ring on TabsContent for keyboard a11y)
+src/components/forms/vendor-bill-form.tsx (fix: date/dueDate state hydration on edit overriding stored DB values and GL posting date with today/null)
