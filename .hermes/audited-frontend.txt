@@ -24,3 +24,11 @@ src/components/ui/page-header.tsx (promoted to Server Component by extracting in
 25|src/components/ui/action-dropdown.tsx (a11y: aria-label='Buka menu aksi' on trigger, aria-hidden='true' on all decorative lucide icons inside DropdownMenuItem)
 src/components/ui/filter-drawer.tsx (added aria-label to open/close buttons, aria-hidden to decorative icon)
 src/components/ui/form-section.tsx (promoted div to semantic section, added aria-labelledby linking to a unique generated id on the section header)
+
+26|src/components/ui/empty-state.tsx (formatted for visual a11y/clarity)
+27|src/components/ui/skeletons.tsx (a11y: added role=status+aria-label+Memuat ...+aria-busy=true to TableSkeleton/FormSkeleton/DetailSkeleton/DashboardSkeleton/ReportSkeleton/SimplePageSkeleton)
+28|src/components/dashboard/section-cards.tsx (promoted to RSC by removing unnecessary use client; pure presentational, no hooks/handlers)
+29|src/components/dashboard/recent-invoices-table.tsx (a11y: aria-label to search input + column dropdown, aria-label to pagination buttons, aria-hidden on decorative search/sliders/chevron icons)
+30|src/components/ui/print-button.tsx (import: switch from @/components/ui/page-header to @/components/ui/button for direct dependency)
+31|src/components/ui/status-actions.tsx (import: switch from @/components/ui/page-header to @/components/ui/button for direct dependency)
+32|src/components/layout/notification-dropdown.tsx (a11y: aria-haspopup=menu, aria-label on unread badge, aria-hidden on bell icon; import: switch from page-header to button)
