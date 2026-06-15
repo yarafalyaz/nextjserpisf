@@ -41,7 +41,40 @@ export function safeRound(
   
   // Use exponential notation to avoid JS floating-point inaccuracies
   // e.g. safeRound(1.005, 2) -> 1.01
-  return Number(Math.round(Number(num + "e" + decimals)) + "e-" + decimals);
+  const str = String(num);
+  const eIndex = str.indexOf("e");
+  
+  if (eIndex === -1) {
+    // Normal non-exponential numbers
+    const shifted = Number(num + "e" + decimals);
+    const rounded = Math.round(shifted);
+    const roundedStr = String(rounded);
+    
+    // Math.round on very large shifts can push the intermediate value into 
+    // exponential notation (e.g. 1e+21), so we must check roundedStr too.
+    if (roundedStr.indexOf("e") === -1) {
+      return Number(roundedStr + "e-" + decimals);
+    }
+    return rounded / Math.pow(10, decimals);
+  }
+
+  // Already in exponential form (e.g. 1e-7, 1e+21)
+  const base = str.slice(0, eIndex);
+  const exponent = parseInt(str.slice(eIndex + 1), 10);
+  const newExponent = exponent + decimals;
+  const shifted = Number(base + "e" + newExponent);
+  const rounded = Math.round(shifted);
+  
+  const roundedStr = String(rounded);
+  if (roundedStr.indexOf("e") === -1) {
+    return Number(roundedStr + "e-" + decimals);
+  }
+  
+  // The rounded value itself overflowed into exponential form
+  const rEIndex = roundedStr.indexOf("e");
+  const rBase = roundedStr.slice(0, rEIndex);
+  const rExponent = parseInt(roundedStr.slice(rEIndex + 1), 10);
+  return Number(rBase + "e" + (rExponent - decimals));
 }
 
 /**

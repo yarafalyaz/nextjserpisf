@@ -36,6 +36,22 @@ describe("Precise Math Utility", () => {
       expect(safeRound(obj1, 0)).toBe(6)
       expect(safeRound(obj2, 2)).toBe(10.12)
     });
+
+    it("rounds tiny numbers that stringify in scientific notation without producing NaN", () => {
+      // JS serializes magnitudes < 1e-6 in exponential form: (1e-7).toString() === "1e-7".
+      // The naive `num + "e" + decimals` shift then builds "1e-7e2" -> Number(...) === NaN,
+      // which silently poisons any money/inventory calculation downstream.
+      expect(safeRound(1e-7, 2)).toBe(0)
+      expect(safeRound(0.0000005, 2)).toBe(0)
+      expect(safeRound(1e-7, 8)).toBe(1e-7)
+      expect(safeRound(1.5e-7, 7)).toBe(2e-7)
+    });
+
+    it("rounds very large numbers that stringify in scientific notation without producing NaN", () => {
+      // (1e21).toString() === "1e+21" — same exponential-string trap on the high end.
+      expect(safeRound(1e21, 2)).toBe(1e21)
+      expect(safeRound(1.23e21, 0)).toBe(1.23e21)
+    });
   });
 
   describe("safeAdd / safeSubtract / safeMultiply / safeDivide", () => {
