@@ -1720,6 +1720,17 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
   // wiping amortization progress when editing other fields (notes, installment).
   // Status is NOT accepted from client — it's managed only by markPayrollPaid.
   const existing = await prisma.employeeLoan.findUniqueOrThrow({ where: { id }, select: { totalAmount: true, remainingAmount: true, status: true } })
+  // Integrity guard: a paid_off loan is a completed financial record (all
+  // installments already deducted from payroll runs). Allowing edits would
+  // silently mutate totalAmount/remainingAmount/instalment without restarting
+  // the amortization cycle, and could resurrect amortization on a settled loan
+  // by shifting remainingAmount back above 0 while keeping status='paid_off'
+  // (markPayrollPaid only touches 'active' loans, so the resurrected balance
+  // would never be deducted). Mirrors updateLeaveRequest / updateOvertimeRequest
+  // (both reject edits on non-pending statuses).
+  if (existing.status !== "active") {
+    throw new Error("Hanya pinjaman berstatus aktif yang dapat diedit")
+  }
   const oldTotal = Number(existing.totalAmount)
   const oldRemaining = Number(existing.remainingAmount)
   const delta = totalAmount - oldTotal

@@ -406,7 +406,7 @@ describe("Employee Loan Actions", () => {
     vi.clearAllMocks()
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.employeeLoan.create.mockResolvedValue({ id: 1 })
-    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending" })
+    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "active" })
   })
 
   it("createEmployeeLoan succeeds with valid data", async () => {
