@@ -1,6 +1,11 @@
 export function TableSkeleton({ columns = 5, rows = 8 }: { columns?: number; rows?: number } = {}) {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div
+      className="flex flex-col gap-6 animate-pulse"
+      role="status"
+      aria-label="Memuat data tabel"
+      aria-busy="true"
+    >
       {/* Breadcrumb skeleton */}
       <div className="h-4 w-48 bg-default/20 rounded" />
 
@@ -36,7 +41,12 @@ export function TableSkeleton({ columns = 5, rows = 8 }: { columns?: number; row
 
 export function FormSkeleton({ fields = 6 }: { fields?: number } = {}) {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div
+      className="flex flex-col gap-6 animate-pulse"
+      role="status"
+      aria-label="Memuat formulir"
+      aria-busy="true"
+    >
       {/* Breadcrumb skeleton */}
       <div className="h-4 w-48 bg-default/20 rounded" />
 
@@ -66,7 +76,12 @@ export function FormSkeleton({ fields = 6 }: { fields?: number } = {}) {
 
 export function DetailSkeleton() {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div
+      className="flex flex-col gap-6 animate-pulse"
+      role="status"
+      aria-label="Memuat detail data"
+      aria-busy="true"
+    >
       {/* Breadcrumb skeleton */}
       <div className="h-4 w-48 bg-default/20 rounded" />
 
@@ -113,7 +128,12 @@ export function DetailSkeleton() {
 
 export function DashboardSkeleton() {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div
+      className="flex flex-col gap-6 animate-pulse"
+      role="status"
+      aria-label="Memuat dasbor"
+      aria-busy="true"
+    >
       {/* Header skeleton */}
       <div className="h-8 w-48 bg-default/20 rounded" />
 
@@ -140,7 +160,12 @@ export function DashboardSkeleton() {
 
 export function ReportSkeleton() {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div
+      className="flex flex-col gap-6 animate-pulse"
+      role="status"
+      aria-label="Memuat laporan"
+      aria-busy="true"
+    >
       {/* Breadcrumb skeleton */}
       <div className="h-4 w-48 bg-default/20 rounded" />
 
@@ -181,7 +206,12 @@ export function ReportSkeleton() {
 
 export function SimplePageSkeleton() {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div
+      className="flex flex-col gap-6 animate-pulse"
+      role="status"
+      aria-label="Memuat halaman"
+      aria-busy="true"
+    >
       {/* Header skeleton */}
       <div className="h-8 w-48 bg-default/20 rounded" />
 

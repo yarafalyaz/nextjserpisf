@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 import { Printer, Loader2 } from "lucide-react"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { generateQuotationPDF, generateTransactionPDF } from "@/lib/pdf/generator"

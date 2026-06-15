@@ -285,18 +285,19 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
 
             <div className="flex items-center gap-2">
               <div className="relative w-full lg:w-[260px]">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Cari faktur atau pelanggan"
+                  aria-label="Cari faktur atau pelanggan"
                   className="h-8 pl-8"
                 />
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 shrink-0">
-                    <SlidersHorizontal className="size-4" />
+                  <Button variant="outline" size="sm" className="h-8 shrink-0" aria-label="Pilih kolom tabel">
+                    <SlidersHorizontal className="size-4" aria-hidden="true" />
                     Kolom
                   </Button>
                 </DropdownMenuTrigger>
@@ -371,8 +372,9 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                   className="size-7"
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
+                  aria-label="Halaman sebelumnya"
                 >
-                  <ChevronLeft className="size-4" />
+                  <ChevronLeft className="size-4" aria-hidden="true" />
                 </Button>
                 <Button
                   variant="outline"
@@ -380,8 +382,9 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                   className="size-7"
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
+                  aria-label="Halaman berikutnya"
                 >
-                  <ChevronRight className="size-4" />
+                  <ChevronRight className="size-4" aria-hidden="true" />
                 </Button>
               </div>
             </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 import { useState, useRef, useEffect } from "react"
 import { Bell } from "lucide-react"
@@ -79,12 +79,16 @@ export function NotificationDropdown() {
         onPress={handleToggle}
         variant="ghost" size="sm" isIconOnly className="header-notification-btn" aria-label="Buka notifikasi"
         aria-expanded={isOpen}
+        aria-haspopup="menu"
         id="notification-btn"
       >
         <span className="relative inline-flex">
-          <Bell size={20} />
+          <Bell size={20} aria-hidden="true" />
           {unreadCount > 0 && (
-            <span className="notification-badge absolute -top-1 -right-1 size-2.5 rounded-full bg-destructive ring-2 ring-background" />
+            <span
+              className="notification-badge absolute -top-1 -right-1 size-2.5 rounded-full bg-destructive ring-2 ring-background"
+              aria-label={`${unreadCount} notifikasi belum dibaca`}
+            />
           )}
         </span>
       </Button>
