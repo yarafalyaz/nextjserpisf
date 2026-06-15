@@ -1566,6 +1566,19 @@ export async function deletePosition(id: number) {
   try {
   await requirePermission("delete_positions")
 
+  // Guard: cannot delete a position with active employees. Mirrors
+  // deleteDepartment's guard — Employee.positionId is nullable and the FK has
+  // no explicit onDelete, so a raw delete would silently null the positionId
+  // on every active employee holding this title, erasing their job-title
+  // assignment with no warning. Same data-integrity rationale: refuse and let
+  // the operator move/reassign employees first.
+  const empCount = await prisma.employee.count({
+    where: { positionId: id, deletedAt: null },
+  })
+  if (empCount > 0) {
+    throw new Error(`Jabatan masih memiliki ${empCount} karyawan aktif`)
+  }
+
   await prisma.position.delete({ where: { id } })
 
   revalidatePath("/master/karyawan")
