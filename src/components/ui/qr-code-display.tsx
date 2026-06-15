@@ -17,9 +17,13 @@ export function QrCodeDisplay({ value, caption, size = 132, className }: QrCodeD
     return <span className="text-xs text-muted-foreground">QR belum tersedia</span>
   }
   return (
-    <div className={className}>
+    <div
+      className={className}
+      role="img"
+      aria-label={`Kode QR${caption ? ` untuk ${caption}` : ""}`}
+    >
       <div className="inline-block rounded-md bg-white p-3">
-        <QRCodeSVG value={value} size={size} level="M" marginSize={0} />
+        <QRCodeSVG value={value} size={size} level="M" marginSize={0} aria-hidden="true" focusable="false" />
       </div>
       {caption && (
         <div className="mt-1 text-center font-mono text-xs text-muted-foreground">{caption}</div>

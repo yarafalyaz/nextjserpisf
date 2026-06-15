@@ -14,16 +14,18 @@ const toneMap: Record<NonNullable<Stat["tone"]>, string> = {
 
 export function StatsCards({ stats }: { stats: Stat[] }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-4" role="region" aria-label="Statistik ringkasan">
       {stats.map((s) => (
         <div
           key={s.label}
           className={`rounded-lg border p-3 ${toneMap[s.tone ?? "default"]}`}
+          role="group"
+          aria-label={`${s.label}: ${s.value}${s.hint ? `, ${s.hint}` : ""}`}
         >
-          <div className="text-xs text-muted-foreground">{s.label}</div>
-          <div className="mt-1 text-2xl font-bold tabular-nums">{s.value}</div>
+          <div className="text-xs text-muted-foreground" aria-hidden="true">{s.label}</div>
+          <div className="mt-1 text-2xl font-bold tabular-nums" aria-hidden="true">{s.value}</div>
           {s.hint ? (
-            <div className="mt-0.5 text-xs text-muted-foreground">{s.hint}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground" aria-hidden="true">{s.hint}</div>
           ) : null}
         </div>
       ))}

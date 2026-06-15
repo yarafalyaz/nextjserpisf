@@ -59,27 +59,27 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button aria-label="Menu" variant="ghost" size="icon" disabled={isPending}>
-            <MoreVertical className="size-4" />
+          <Button aria-label="Buka menu aksi" variant="ghost" size="icon" disabled={isPending}>
+            <MoreVertical className="size-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuLabel>Aksi</DropdownMenuLabel>
           {viewHref && (
             <DropdownMenuItem onSelect={() => router.push(viewHref)}>
-              <Eye className="size-4 text-muted-foreground" />
+              <Eye className="size-4 text-muted-foreground" aria-hidden="true" />
               Lihat Detail
             </DropdownMenuItem>
           )}
           {editHref && canEdit && (
             <DropdownMenuItem onSelect={() => router.push(editHref)}>
-              <Pencil className="size-4 text-muted-foreground" />
+              <Pencil className="size-4 text-muted-foreground" aria-hidden="true" />
               Ubah
             </DropdownMenuItem>
           )}
           {printAction && (
             <DropdownMenuItem onSelect={() => printAction()}>
-              <Printer className="size-4 text-muted-foreground" />
+              <Printer className="size-4 text-muted-foreground" aria-hidden="true" />
               Cetak PDF
             </DropdownMenuItem>
           )}
@@ -93,7 +93,7 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
                   setIsDeleteOpen(true)
                 }}
               >
-                <Trash2 className="size-4" />
+                <Trash2 className="size-4" aria-hidden="true" />
                 Hapus
               </DropdownMenuItem>
             </>
