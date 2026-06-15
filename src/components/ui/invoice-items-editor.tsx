@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@/components/ui/page-header"
+import { Button } from "@/components/ui/button"
 
 
 import { useState, useTransition, Fragment } from "react"
@@ -109,7 +109,7 @@ export function InvoiceItemsEditor({
     setItems(updated)
   }
 
-  function updateSerialNumbers(index: number, raw: string) {
+  function updateItemSerialNumbers(index: number, raw: string) {
     const updated = [...items]
     const item = { ...updated[index] }
     item.serialNumbers = raw
@@ -190,11 +190,11 @@ export function InvoiceItemsEditor({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-default">
-                <th className="text-left py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Item</th>
-                <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Jml</th>
-                <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Harga</th>
-                <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Diskon</th>
-                <th className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Total</th>
+                <th scope="col" className="text-left py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Item</th>
+                <th scope="col" className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Jml</th>
+                <th scope="col" className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Harga</th>
+                <th scope="col" className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Diskon</th>
+                <th scope="col" className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -249,12 +249,12 @@ export function InvoiceItemsEditor({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-default">
-              <th className="text-left py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[35%]">Item</th>
-              <th className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[10%]">Jml</th>
-              <th className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[20%]">Harga</th>
-              <th className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[15%]">Diskon</th>
-              <th className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[15%]">Total</th>
-              <th className="w-[5%]"></th>
+              <th scope="col" className="text-left py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[35%]">Item</th>
+              <th scope="col" className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[10%]">Jml</th>
+              <th scope="col" className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[20%]">Harga</th>
+              <th scope="col" className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[15%]">Diskon</th>
+              <th scope="col" className="text-right py-2 px-1 text-xs font-medium text-muted-foreground uppercase w-[15%]">Total</th>
+              <th scope="col" className="w-[5%]"></th>
             </tr>
           </thead>
           <tbody>
@@ -296,7 +296,9 @@ export function InvoiceItemsEditor({
                   )}
                 </td>
                 <td className="py-2 px-1 align-top">
+                  <label className="sr-only" htmlFor={`invoice-item-qty-${i}`}>Jumlah item baris {i + 1}</label>
                   <input
+                    id={`invoice-item-qty-${i}`}
                     type="number"
                     min={1}
                     value={item.qty}
@@ -325,6 +327,7 @@ export function InvoiceItemsEditor({
                     onPress={() => removeItem(i)}
                     className="text-danger hover:text-danger/80 text-lg"
                     title="Hapus item"
+                    aria-label={`Hapus item baris ${i + 1}`}
                   >
                     ×
                   </Button>
@@ -333,12 +336,13 @@ export function InvoiceItemsEditor({
               {item.itemId && tracksSerial && (
                 <tr className="border-b border-default/50">
                   <td colSpan={6} className="py-2 px-1">
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    <label className="block text-xs font-medium text-muted-foreground mb-1" htmlFor={`invoice-item-serial-${i}`}>
                       Nomor Seri (satu per baris)
                     </label>
                     <textarea
+                      id={`invoice-item-serial-${i}`}
                       value={serialText}
-                      onChange={(e) => updateSerialNumbers(i, e.target.value)}
+                      onChange={(e) => updateItemSerialNumbers(i, e.target.value)}
                       rows={Math.max(2, Math.min(serialCount + 1, 6))}
                       placeholder="Kosongkan untuk pemilihan FIFO otomatis"
                       className="form-input w-full text-sm font-mono"
@@ -373,7 +377,8 @@ export function InvoiceItemsEditor({
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted-foreground">Pajak (%):</span>
-            <input type="number" min={0} max={100} step={0.5} value={tax} onChange={(e) => setTax(Number(e.target.value))} className="form-input w-20 text-right text-sm" />
+            <label className="sr-only" htmlFor="invoice-tax-rate">Pajak persen</label>
+            <input id="invoice-tax-rate" type="number" min={0} max={100} step={0.5} value={tax} onChange={(e) => setTax(Number(e.target.value))} className="form-input w-20 text-right text-sm" />
           </div>
           <div className="flex items-center gap-3 text-sm font-bold">
             <span>Total Keseluruhan:</span>
