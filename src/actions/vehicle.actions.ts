@@ -548,13 +548,28 @@ export async function deleteCustomerVehicle(id: number) {
     // (SetNull), so deleting a customer-vehicle with history silently NULLs the
     // vehicle reference on those documents, erasing service-history linkage.
     // Refuse when dependents exist (mirrors deleteVehicle / deleteRole).
-    const dependents =
+    const relationDependents =
       vehicle._count.workOrders + vehicle._count.quotations + vehicle._count.projects
+
+    // SalesOrder.customerVehicleId and SalesInvoice.customerVehicleId are plain
+    // (non-relation) Int columns — CustomerVehicle has no back-relation for them,
+    // so they cannot be counted via _count above. Without this, a customer-vehicle
+    // referenced ONLY by an SO/Invoice (no WO/quotation/project) would pass the
+    // guard and be deleted, orphaning their customer_vehicle_id (no FK = silent
+    // dangling reference on financial documents). Count them directly. Mirrors the
+    // same guard already present in deleteVehicle.
+    const [soCount, invCount] = await Promise.all([
+      prisma.salesOrder.count({ where: { customerVehicleId: id } }),
+      prisma.salesInvoice.count({ where: { customerVehicleId: id } }),
+    ])
+    const salesDependents = soCount + invCount
+
+    const dependents = relationDependents + salesDependents
     if (dependents > 0) {
       return {
         success: false,
         error:
-          `Kendaraan pelanggan ini punya ${dependents} dokumen terkait (perintah kerja/penawaran/proyek) ` +
+          `Kendaraan pelanggan ini punya ${dependents} dokumen terkait (perintah kerja/penawaran/proyek/penjualan) ` +
           `dan tidak bisa dihapus karena akan menghilangkan riwayat servis. Nonaktifkan kendaraan sebagai gantinya.`,
       }
     }

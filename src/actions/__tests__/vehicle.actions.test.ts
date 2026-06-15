@@ -202,6 +202,34 @@ describe("Customer Vehicle Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
+  // Bug: customerVehicleId on SalesOrder/SalesInvoice is a non-relation Int
+  // column, so the _count guard above silently misses SO/Invoice dependents.
+  // A customer-vehicle ONLY linked to a SalesInvoice (no WO/Quotation/Project)
+  // passes the guard and gets deleted, orphaning the financial document's
+  // vehicle reference. deleteVehicle already guards the same case; this is
+  // the missing twin in deleteCustomerVehicle.
+  it("deleteCustomerVehicle refuses if linked to a SalesOrder", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
+      id: 1, customerId: 1, _count: { workOrders: 0, quotations: 0, projects: 0 }
+    })
+    mocks.prismaMock.salesOrder.count.mockResolvedValueOnce(1)
+    mocks.prismaMock.salesInvoice.count.mockResolvedValueOnce(0)
+    const res = await actions.deleteCustomerVehicle(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("dokumen terkait")
+    expect(mocks.prismaMock.customerVehicle.delete).not.toHaveBeenCalled()
+  })
+  it("deleteCustomerVehicle refuses if linked to a SalesInvoice", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
+      id: 1, customerId: 1, _count: { workOrders: 0, quotations: 0, projects: 0 }
+    })
+    mocks.prismaMock.salesOrder.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.salesInvoice.count.mockResolvedValueOnce(1)
+    const res = await actions.deleteCustomerVehicle(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("dokumen terkait")
+    expect(mocks.prismaMock.customerVehicle.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Vehicle Actions Error Paths", () => {

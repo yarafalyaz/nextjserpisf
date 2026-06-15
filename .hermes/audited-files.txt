@@ -22,3 +22,5 @@ src/app/api/activity-logs/route.ts
 src/app/api/activity-logs/export/route.ts
 src/lib/hooks/down-payment.hook.ts
 src/actions/project.actions.ts
+src/actions/asset.actions.ts (clean)
+src/actions/vehicle.actions.ts
