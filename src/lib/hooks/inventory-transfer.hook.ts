@@ -1,6 +1,7 @@
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { safeAdd } from "@/lib/utils/math";
 
 
 const executeInTx = async (
@@ -57,7 +58,7 @@ export async function onTransferProcessed(
     const aggregated = new Map<number, number>();
     for (const it of transfer.items) {
       const q = Number(it.qty);
-      if (q > 0) aggregated.set(it.itemId, (aggregated.get(it.itemId) ?? 0) + q);
+      if (q > 0) aggregated.set(it.itemId, safeAdd(aggregated.get(it.itemId) ?? 0, q, 2));
     }
 
     // Create Stock Move OUT per item from source warehouse
@@ -142,7 +143,7 @@ export async function onTransferReceived(
     const aggregated = new Map<number, number>();
     for (const it of transfer.items) {
       const q = Number(it.qty);
-      if (q > 0) aggregated.set(it.itemId, (aggregated.get(it.itemId) ?? 0) + q);
+      if (q > 0) aggregated.set(it.itemId, safeAdd(aggregated.get(it.itemId) ?? 0, q, 2));
     }
 
     // Create Stock Move IN per item to destination warehouse

@@ -91,6 +91,29 @@ describe("onTransferProcessed item aggregation", () => {
     expect((out7![0] as { data: { impact: string } }).data.impact).toBe("OUT")
   })
 
+  it("aggregates fractional duplicate rows without float drift (exact qty to FIFO)", async () => {
+    // Item 7 on two rows: 0.1 + 0.2. Plain JS float addition yields
+    // 0.30000000000000004, which (a) writes a drifted value into the
+    // Decimal(15,2) qty_on_hand column and (b) falsely trips the
+    // consumeFifoLayers shortfall guard when the source warehouse holds
+    // exactly 0.3 available. Aggregation must round to the column scale (2dp).
+    const { spies } = wireTx([
+      { itemId: 7, qty: 0.1 },
+      { itemId: 7, qty: 0.2 },
+    ])
+
+    await onTransferProcessed(100, 1)
+
+    expect(mocks.consumeFifoLayers).toHaveBeenCalledTimes(1)
+    const qtyToFifo = (mocks.consumeFifoLayers.mock.calls[0]![1] as { qty: number }).qty
+    expect(qtyToFifo).toBe(0.3) // NOT 0.30000000000000004
+
+    const out7 = spies.moveCreate.mock.calls.find(
+      (c) => (c[0] as { data: { itemId: number } }).data.itemId === 7,
+    )
+    expect((out7![0] as { data: { qty: number } }).data.qty).toBe(0.3)
+  })
+
   it("returns silently (idempotent) when OUT moves already exist", async () => {
     const { spies } = wireTx([{ itemId: 7, qty: 3 }])
     spies.moveFindFirst.mockResolvedValue({ id: 1 }) // existing OUT move
