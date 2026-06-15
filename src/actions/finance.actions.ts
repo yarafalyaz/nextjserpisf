@@ -1016,6 +1016,15 @@ export async function updateExpense(id: number, formData: FormData) {
 
   const user = await requirePermission("edit_expenses")
 
+  // Validate input with the same Zod schema as createExpense — the edit path
+  // previously hand-parsed formData (safeId/requireNumber), bypassing the
+  // schema's positive-amount guard and max-length string constraints, so an
+  // edit could push a draft expense to a non-positive/overflowed amount that
+  // the create path would have rejected.
+  const parsed = parseFormData(expenseSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   // Laravel parity: only draft expenses can be edited
   const existingExpense = await prisma.expense.findUniqueOrThrow({ where: { id } })
   if (existingExpense.status !== "draft") {
@@ -1025,24 +1034,24 @@ export async function updateExpense(id: number, formData: FormData) {
   const expense = await prisma.expense.update({
     where: { id },
     data: {
-      employeeId: safeId(formData.get("employeeId")),
-      accountId: requireId(formData.get("accountId"), "accountId"),
-      paidFromAccountId: safeId(formData.get("paidFromAccountId")),
-      projectId: safeId(formData.get("projectId")),
-      costCenterId: safeId(formData.get("costCenterId")),
-      amount: requireNumber(formData.get("amount"), "amount"),
-      date: new Date(formData.get("date") as string),
-      referenceNo: formData.get("referenceNo") as string | null,
-      description: formData.get("description") as string | null,
-      category: formData.get("category") as string | null,
-      receiptImage: formData.get("receiptImage") as string | null,
+      employeeId: v.employeeId ?? null,
+      accountId: v.accountId,
+      paidFromAccountId: v.paidFromAccountId ?? null,
+      projectId: v.projectId ?? null,
+      costCenterId: v.costCenterId ?? null,
+      amount: v.amount,
+      date: v.date,
+      referenceNo: v.referenceNo ?? null,
+      description: v.description ?? null,
+      category: v.category ?? null,
+      receiptImage: v.receiptImage ?? null,
       status: "draft",
       createdBy: Number(user.id),
     },
   })
 
   // Associate uploaded attachments with the new expense
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds as string | undefined
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
@@ -1071,8 +1080,16 @@ export async function updatePettyCash(id: number, formData: FormData) {
 
   const user = await requirePermission("edit_petty_cash")
 
-  const type = formData.get("type") as string // IN or OUT
-  const amount = requireNumber(formData.get("amount"), "amount")
+  // Validate input with the same Zod schema as createPettyCash — the edit path
+  // previously hand-parsed formData, bypassing the schema's type enum (IN/OUT)
+  // validation and positive amount constraint, which could corrupt the chain
+  // or store invalid transaction type strings.
+  const parsed = parseFormData(pettyCashSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
+  const type = v.type
+  const amount = v.amount
 
   const pettyCash = await prisma.$transaction(async (tx) => {
     // Remove the stale journal so it can be rebuilt with the new amount/type
@@ -1084,9 +1101,9 @@ export async function updatePettyCash(id: number, formData: FormData) {
       data: {
         type,
         amount,
-        date: new Date(formData.get("date") as string),
-        accountId: safeId(formData.get("accountId")),
-        description: formData.get("description") as string | null,
+        date: v.date,
+        accountId: v.accountId ?? null,
+        description: v.description ?? null,
       },
     })
 
@@ -1099,7 +1116,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
   await onPettyCashCreated(pettyCash.id, Number(user.id))
 
   // Associate uploaded attachments with the new petty cash record
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds as string | undefined
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {

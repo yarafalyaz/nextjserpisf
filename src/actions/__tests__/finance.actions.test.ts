@@ -190,6 +190,18 @@ describe("Expense Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("updateExpense rejects non-positive amount (Zod parity with create)", async () => {
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await (actions as any).updateExpense(1, fdMap({
+      accountId: 1,
+      amount: -50,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Validasi gagal/)
+    // The invalid edit must never reach the DB.
+    expect(mocks.prismaMock.expense.update).not.toHaveBeenCalled()
+  })
   it("approveExpense succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await (actions as any).approveExpense(1)
@@ -266,6 +278,16 @@ describe("Petty Cash Actions", () => {
       date: "2026-06-13"
     }))
     expect(res?.success).toBe(true)
+  })
+  it("updatePettyCash rejects invalid type and non-positive amount (Zod parity)", async () => {
+    const res = await (actions as any).updatePettyCash(1, fdMap({
+      type: "INVALID_TYPE",
+      amount: -100,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Validasi gagal/)
+    expect(mocks.prismaMock.pettyCash.update).not.toHaveBeenCalled()
   })
   it("deletePettyCash succeeds", async () => {
     const res = await (actions as any).deletePettyCash(1)
