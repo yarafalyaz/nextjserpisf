@@ -69,3 +69,4 @@ src/lib/hooks/accounting.hook.ts (fix: petty-cash period-lock bypass via transac
 src/lib/validations/inventory.schemas.ts (fix: same-warehouse guard)
 src/actions/inventory.actions.ts (fix: updateInventoryTransfer skipped Zod validation)
 src/lib/validations/__tests__/inventory-transfer-same-warehouse.test.ts (new test)
+src/lib/services/payroll-statutory.service.ts (fix: BPJS math rounding discrepancy)
