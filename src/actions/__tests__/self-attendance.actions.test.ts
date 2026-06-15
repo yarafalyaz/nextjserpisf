@@ -41,7 +41,11 @@ const attendanceTimeMock = vi.hoisted(() => ({
     const d = new Date()
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()))
   }),
-  getWibTodayUtcDate: vi.fn((_now: Date) => new Date()),
+  getWibTodayUtcDate: vi.fn((now: Date) => {
+    // Real implementation: shift to WIB and floor to UTC midnight.
+    const wib = new Date(now.getTime() + 7 * 60 * 60 * 1000)
+    return new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate()))
+  }),
   getWibDayOfWeek: vi.fn(() => 1), // Monday
   parseStartMinutes: vi.fn((s: string) => {
     const [h, m] = s.split(":").map(Number)
@@ -353,7 +357,7 @@ describe("Self Attendance Actions", () => {
     })
     mocks.prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 1 })
     mocks.prismaMock.workSchedule.findMany.mockResolvedValueOnce([
-      { isActive: true, workDays: "1,2,3,4,5", employees: [{ id: 1 }], departments: [], endTime: "23:59" }
+      { isActive: true, workDays: "1,2,3,4,5", employees: [{ id: 1 }], departments: [], startTime: "08:00", endTime: "23:59" }
     ])
     attendanceTimeMock.getWibMinutes.mockReturnValueOnce(8 * 60) // 8:00, way before 23:59
     const res = await actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))
@@ -449,5 +453,131 @@ describe("Self Attendance Actions", () => {
     })
     const res = await actions.getCompanyLocation()
     expect(res?.radius).toBe(1)
+  })
+
+  // Regression tests: schedule-aware isOvertimeDay + half_day
+  // Previously, selfCheckIn only flagged Sunday (dayOfWeek 0) as overtime
+  // regardless of the employee's workDays, so a Mon-Fri employee checking in
+  // on Saturday was marked "present" instead of "overtime", and a Sunday-shift
+  // employee checking in on Sunday was marked "overtime" instead of "present".
+  it("selfCheckIn marks overtime when employee's schedule excludes today (e.g. Mon-Fri checking in Saturday)", async () => {
+    // Saturday (dayOfWeek 6)
+    attendanceTimeMock.getWibDayOfWeek.mockReturnValueOnce(6)
+    attendanceTimeMock.getWibNow.mockReturnValueOnce(new Date("2024-05-11T01:30:00Z")) // 08:30 WIB, on-time
+    mocks.prismaMock.workSchedule.findMany.mockResolvedValueOnce([
+      { isActive: true, workDays: "1,2,3,4,5", employees: [{ id: 1 }], departments: [], startTime: "08:00", endTime: "17:00", lateToleranceMinutes: 0 }
+    ])
+
+    let createdStatus: string | undefined
+    mocks.prismaMock.attendance.create.mockImplementationOnce((args: any) => {
+      createdStatus = args.data.status
+      return { id: 11 }
+    })
+
+    const res = await actions.selfCheckIn(fdMap({ latitude: "0", longitude: "0" }))
+    expect(res?.success).toBe(true)
+    // Saturday is not in the Mon-Fri schedule, so this is a non-working day
+    // and must be recorded as overtime (not "present").
+    expect(createdStatus).toBe("overtime")
+  })
+
+  it("selfCheckIn does NOT mark overtime when employee's schedule includes Sunday", async () => {
+    // Sunday (dayOfWeek 0) — but the employee has a Sun-shift schedule.
+    attendanceTimeMock.getWibDayOfWeek.mockReturnValueOnce(0)
+    attendanceTimeMock.getWibNow.mockReturnValueOnce(new Date("2024-05-12T01:30:00Z")) // 08:30 WIB, on-time
+    mocks.prismaMock.workSchedule.findMany.mockResolvedValueOnce([
+      { isActive: true, workDays: "0", employees: [{ id: 1 }], departments: [], startTime: "08:00", endTime: "17:00", lateToleranceMinutes: 0 }
+    ])
+
+    let createdStatus: string | undefined
+    mocks.prismaMock.attendance.create.mockImplementationOnce((args: any) => {
+      createdStatus = args.data.status
+      return { id: 12 }
+    })
+
+    const res = await actions.selfCheckIn(fdMap({ latitude: "0", longitude: "0" }))
+    expect(res?.success).toBe(true)
+    // Sunday is in the schedule, so it must NOT be auto-flagged as overtime.
+    expect(createdStatus).toBe("present")
+  })
+
+  // Regression: overnight shift (Mon 22:00 → Tue 06:00). Previously
+  // selfCheckOut used `now` (the check-out time) to look up the schedule,
+  // which resolved to Tuesday's day-shift (e.g. endTime 17:00) and
+  // incorrectly flagged a check-out at Tue 06:00 as half_day.
+  it("selfCheckOut does NOT mark half_day for an overnight shift that ends the next calendar day", async () => {
+    vi.useFakeTimers()
+    // Mon check-in at 22:00 WIB
+    const monCheckIn = new Date("2024-05-13T15:00:00Z") // 22:00 WIB
+    // Tue check-out at 06:00 WIB
+    const tueCheckOut = new Date("2024-05-13T23:00:00Z")
+    vi.setSystemTime(tueCheckOut)
+
+    mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce({
+      id: 1, employeeId: 1, date: monCheckIn,
+      checkIn: monCheckIn,
+      status: "present"
+    })
+    // Mon-Sat day-shift; an overnight Mon 22:00 → Tue 06:00 shift (separate
+    // schedule on Mon with endTime 06:00) is what the Mon schedule's endTime
+    // describes.
+    mocks.prismaMock.workSchedule.findMany.mockResolvedValueOnce([
+      { isActive: true, workDays: "1,2,3,4,5,6", employees: [{ id: 1 }], departments: [], startTime: "22:00", endTime: "06:00", lateToleranceMinutes: 0 }
+    ])
+    // current real time is Tue 06:00 WIB → 360 minutes
+    attendanceTimeMock.getWibNow.mockImplementation((d?: Date) => tueCheckOut)
+    attendanceTimeMock.getWibDayOfWeek.mockImplementation((d?: Date) => {
+      // Mon check-in = 1; Tue check-out = 2
+      if (d && d.getTime() === monCheckIn.getTime()) return 1
+      return 2
+    })
+    attendanceTimeMock.getWibMinutes.mockReturnValueOnce(6 * 60) // 06:00 on Tue
+
+    let updatedStatus: string | undefined
+    mocks.prismaMock.attendance.updateMany.mockImplementationOnce((args: any) => {
+      updatedStatus = args.data.status
+      return { count: 1 }
+    })
+
+    const res = await actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))
+    vi.useRealTimers()
+    expect(res?.success).toBe(true)
+    // 06:00 WIB is exactly the Mon overnight shift's endTime, so it must NOT
+    // be marked half_day. The previous code resolved the schedule on the
+    // check-out day (Tue) and compared Tue's day-shift endTime 17:00 against
+    // 06:00 WIB → incorrectly marked as half_day.
+    expect(updatedStatus).toBe("present")
+  })
+
+  it("selfCheckOut marks half_day when an overnight shift employee checks out on the same calendar day", async () => {
+    vi.useFakeTimers()
+    // Mon check-in at 22:00 WIB, but they leave at 23:00 same day — early
+    // for a shift ending Tue 06:00.
+    const monCheckIn = new Date("2024-05-13T15:00:00Z") // 22:00 WIB
+    const monCheckOut = new Date("2024-05-13T16:00:00Z") // 23:00 WIB
+    vi.setSystemTime(monCheckOut)
+
+    mocks.prismaMock.attendance.findFirst.mockResolvedValueOnce({
+      id: 1, employeeId: 1, date: monCheckIn,
+      checkIn: monCheckIn,
+      status: "present"
+    })
+    mocks.prismaMock.workSchedule.findMany.mockResolvedValueOnce([
+      { isActive: true, workDays: "1,2,3,4,5,6", employees: [{ id: 1 }], departments: [], startTime: "22:00", endTime: "06:00", lateToleranceMinutes: 0 }
+    ])
+    attendanceTimeMock.getWibNow.mockImplementation((d?: Date) => monCheckOut)
+    attendanceTimeMock.getWibDayOfWeek.mockImplementation((d?: Date) => 1) // Mon
+    attendanceTimeMock.getWibMinutes.mockReturnValueOnce(23 * 60) // 23:00
+
+    let updatedStatus: string | undefined
+    mocks.prismaMock.attendance.updateMany.mockImplementationOnce((args: any) => {
+      updatedStatus = args.data.status
+      return { count: 1 }
+    })
+
+    const res = await actions.selfCheckOut(fdMap({ latitude: "0", longitude: "0" }))
+    vi.useRealTimers()
+    expect(res?.success).toBe(true)
+    expect(updatedStatus).toBe("half_day")
   })
 })

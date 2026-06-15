@@ -40,15 +40,37 @@ async function resolveScheduleInfo(employeeId: number | null | undefined, employ
     where: { isActive: true },
     include: { employees: { select: { id: true } }, departments: { select: { id: true } } },
   })
-  const onDay = schedules.filter((s) =>
-    s.workDays.split(",").map((d) => Number(d.trim())).includes(dayOfWeek)
-  )
-  const picked =
-    onDay.find((s) => employeeId != null && s.employees.some((e) => e.id === employeeId)) ??
-    onDay.find((s) => s.employees.length === 0 && employeeDepartmentId != null && s.departments.some((d) => d.id === employeeDepartmentId)) ??
-    onDay.find((s) => s.employees.length === 0 && s.departments.length === 0)
 
-  return { startTime: picked?.startTime ?? "08:00", tolerance: picked?.lateToleranceMinutes ?? 0 }
+  const employeeSchedule = schedules.find((s) => employeeId != null && s.employees.some((e) => e.id === employeeId))
+  const deptSchedule = schedules.find((s) => s.employees.length === 0 && employeeDepartmentId != null && s.departments.some((d) => d.id === employeeDepartmentId))
+  const globalSchedule = schedules.find((s) => s.employees.length === 0 && s.departments.length === 0)
+
+  const relevantSchedule = employeeSchedule ?? deptSchedule ?? globalSchedule
+
+  if (relevantSchedule) {
+    const workingWeekdays = new Set(
+      relevantSchedule.workDays
+        .split(",")
+        .map((d) => d.trim())
+        .filter((d) => d !== "")
+        .map((d) => Number(d))
+        .filter((n) => !Number.isNaN(n))
+    )
+    return {
+      startTime: relevantSchedule.startTime,
+      endTime: relevantSchedule.endTime,
+      tolerance: relevantSchedule.lateToleranceMinutes,
+      hasSchedule: workingWeekdays.has(dayOfWeek),
+    }
+  }
+
+  // Fallback if no schedule configured at all
+  return {
+    startTime: "08:00",
+    endTime: "17:00",
+    tolerance: 0,
+    hasSchedule: dayOfWeek !== 0, // Sunday is day off by default
+  }
 }
 
 /**
@@ -72,8 +94,13 @@ export async function selfCheckIn(formData: FormData) {
   const now = new Date()
   const today = getWibTodayUtcDate(now)
 
-  // Hari libur (Minggu / libur nasional / libur departemen) → kerja dicatat
-  // sebagai lembur dan otomatis jadi pengajuan lembur saat check-out.
+  // Hari libur (hari yang tidak ada di jadwal karyawan / libur nasional /
+  // libur departemen) → kerja dicatat sebagai lembur dan otomatis jadi
+  // pengajuan lembur saat check-out. Sebelumnya hanya `Minggu` (dayOfWeek 0)
+  // yang dianggap non-kerja, sehingga karyawan dengan jadwal Mon–Fri yang
+  // check-in di hari Sabtu (yang sebenarnya bukan jadwalnya) ditandai
+  // "present" alih-alih "overtime", dan sebaliknya karyawan shift Minggu
+  // yang check-in di Minggu (hari kerjanya) otomatis ditandai "overtime".
   const holiday = await prisma.holiday.findFirst({ where: { date: today } })
   // Only query department holiday if the employee actually belongs to a
   // department. Passing `undefined` to a Prisma `where` filter is silently
@@ -85,7 +112,9 @@ export async function selfCheckIn(formData: FormData) {
           where: { departmentId: employee.departmentId, date: today },
         })
       : null
-  const isOvertimeDay = getWibDayOfWeek(now) === 0 || !!holiday || !!deptHoliday
+  const dayOfWeek = getWibDayOfWeek(now)
+  const { startTime: scheduleStart, tolerance, hasSchedule } = await resolveScheduleInfo(employee.id, employee.departmentId, dayOfWeek)
+  const isOvertimeDay = !hasSchedule || !!holiday || !!deptHoliday
 
   // Guard: approved leave
   const approvedLeave = await prisma.leaveRequest.findFirst({
@@ -102,9 +131,6 @@ export async function selfCheckIn(formData: FormData) {
 
   // Server-side geofence: reject if GPS is outside configured radius.
   await enforceGeofence(latitude, longitude)
-
-  const dayOfWeek = getWibDayOfWeek(now)
-  const { startTime: scheduleStart, tolerance } = await resolveScheduleInfo(employee.id, employee.departmentId, dayOfWeek)
   const wibNow = getWibNow(now)
   const nowMinutes = wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes()
   const startMinutes = parseStartMinutes(scheduleStart)
@@ -166,22 +192,41 @@ export async function selfCheckOut(formData: FormData) {
   })
   if (!attendance) throw new Error("Belum check-in atau sudah check-out")
 
-  const dayOfWeek = getWibDayOfWeek(now)
-  const candidateSchedules = await prisma.workSchedule.findMany({
-    where: { isActive: true },
-    include: { employees: { select: { id: true } }, departments: { select: { id: true } } },
-  })
-  const onDay = candidateSchedules.filter((s) =>
-    s.workDays.split(",").map((d) => Number(d.trim())).includes(dayOfWeek)
+  // For overnight shifts, the workEnd is defined by the CHECK-IN day's schedule
+  // (e.g. Mon 22:00 shift end is Mon's endTime, not Tue's). Resolving the
+  // schedule on the check-out day (now) would use Tuesday's day-shift
+  // endTime (e.g. 17:00) and incorrectly flag a check-out at Tue 06:00 as
+  // half_day even though the employee finished the Mon overnight shift on time.
+  const checkInReference = attendance.checkIn ?? attendance.date
+  const checkInDayOfWeek = getWibDayOfWeek(checkInReference)
+  const { startTime: workStart, endTime: workEnd, hasSchedule: hasScheduleOnCheckInDay } = await resolveScheduleInfo(
+    employee.id,
+    employee.departmentId,
+    checkInDayOfWeek
   )
-  const schedule =
-    onDay.find((s) => s.employees.some((e) => e.id === employee.id)) ??
-    onDay.find((s) => s.employees.length === 0 && employee.departmentId != null && s.departments.some((d) => d.id === employee.departmentId)) ??
-    onDay.find((s) => s.employees.length === 0 && s.departments.length === 0) ??
-    null
-  const workEnd = schedule?.endTime ?? "17:00"
   const isOvertimeDay = attendance.status === "overtime"
-  const isHalfDay = !isOvertimeDay && getWibMinutes(now) < parseStartMinutes(workEnd)
+
+  let isHalfDay = false
+  if (!isOvertimeDay && hasScheduleOnCheckInDay) {
+    const startMin = parseStartMinutes(workStart)
+    const endMin = parseStartMinutes(workEnd)
+    const isOvernight = endMin < startMin
+    
+    if (isOvernight) {
+      const checkInDateOnly = getWibTodayUtcDate(checkInReference)
+      const checkOutDateOnly = getWibTodayUtcDate(now)
+      if (checkOutDateOnly.getTime() === checkInDateOnly.getTime()) {
+        // Checked out on the same calendar day for a shift ending tomorrow -> early
+        isHalfDay = true
+      } else {
+        // Checked out on the next day -> compare against end time
+        isHalfDay = getWibMinutes(now) < endMin
+      }
+    } else {
+      // Normal daytime shift
+      isHalfDay = getWibMinutes(now) < endMin
+    }
+  }
 
   let overtimeMinutes: number | null = null
   let overtimeHours = 0
