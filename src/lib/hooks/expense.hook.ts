@@ -55,14 +55,25 @@ export async function onExpenseApprovedSyncPettyCash(
       },
     });
 
-    // Recompute the whole running-balance chain in chronological (date,id) order so
-    // a back-dated expense does not corrupt subsequent balances (matches the petty
-    // cash recompute used elsewhere; previously this used a fragile id-desc lookup).
+    // Validate the running-balance chain in chronological (date,id) order
+    // BEFORE persisting any updates, mirroring the negative-balance guard
+    // in `recalcPettyCashChain` (used by createPettyCash / updatePettyCash /
+    // deletePettyCash). Petty cash must not go negative, so approving an
+    // expense that overdraws the chain (e.g. a back-dated OUT after later
+    // INs) must be rejected — otherwise the negative balance would be
+    // silently saved by the recompute loop below, breaking the invariant
+    // enforced everywhere else.
     const all = await tx.pettyCash.findMany({ orderBy: [{ date: "asc" }, { id: "asc" }] });
     let running = 0;
     for (const rec of all) {
       const before = running;
       const after = rec.type === "IN" ? before + Number(rec.amount) : before - Number(rec.amount);
+      if (after < 0) {
+        throw new Error(
+          `Saldo kas kecil menjadi negatif pada transaksi ${rec.documentNo ?? `#${rec.id}`} ` +
+            `(saldo: ${after.toLocaleString("id-ID")}). Periksa urutan tanggal dan jumlah pengeluaran.`
+        );
+      }
       if (Number(rec.balanceBefore) !== before || Number(rec.balanceAfter) !== after) {
         await tx.pettyCash.update({ where: { id: rec.id }, data: { balanceBefore: before, balanceAfter: after } });
       }
