@@ -78,6 +78,9 @@ vi.mock("@/lib/hooks/material-issue.hook", () => ({
 }))
 
 import * as actions from "../inventory.actions"
+import { onStockAdjustmentProcessed as accStockAdj, onMaterialIssueCompleted as accMatIssue } from "@/lib/hooks/accounting.hook"
+import { onStockAdjustmentProcessed as stockAdjHook } from "@/lib/hooks/stock-adjustment.hook"
+import { onMaterialIssueCompleted as matIssueHook } from "@/lib/hooks/material-issue.hook"
 
 function fdMap(payload: Record<string, string | number | null | undefined>): FormData {
   const f = new FormData()
@@ -144,6 +147,15 @@ describe("Stock Adjustment Actions", () => {
     const res = await actions.processStockAdjustment(1)
     expect(res?.success).toBe(true)
   })
+  it("processStockAdjustment does not duplicate journal (stock hook owns it)", async () => {
+    vi.clearAllMocks()
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    const res = await actions.processStockAdjustment(1)
+    expect(res?.success).toBe(true)
+    expect(stockAdjHook).toHaveBeenCalledWith(1, 1, expect.any(Object))
+    expect(accStockAdj).not.toHaveBeenCalled()
+  })
+
   it("deleteStockAdjustment succeeds", async () => {
     mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteStockAdjustment(1)
@@ -193,6 +205,15 @@ describe("Material Issue Actions", () => {
     const res = await actions.completeMaterialIssue(1)
     expect(res?.success).toBe(true)
   })
+  it("completeMaterialIssue does not duplicate journal (stock hook owns it)", async () => {
+    vi.clearAllMocks()
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
+    const res = await actions.completeMaterialIssue(1)
+    expect(res?.success).toBe(true)
+    expect(matIssueHook).toHaveBeenCalledWith(1, 1, expect.any(Object))
+    expect(accMatIssue).not.toHaveBeenCalled()
+  })
+
   it("deleteMaterialIssue succeeds", async () => {
     mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteMaterialIssue(1)

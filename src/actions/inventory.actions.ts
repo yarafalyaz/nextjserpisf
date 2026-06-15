@@ -4,7 +4,6 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeSubtract, safeMultiply } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
-import { onStockAdjustmentProcessed, onMaterialIssueCompleted } from "@/lib/hooks/accounting.hook"
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook"
 import { onTransferProcessed as onInventoryTransferProcessed, onTransferReceived as onInventoryTransferReceived } from "@/lib/hooks/inventory-transfer.hook"
 import { onMaterialIssueCompleted as onMaterialIssueStock } from "@/lib/hooks/material-issue.hook"
@@ -122,7 +121,7 @@ export async function processStockAdjustment(adjustmentId: number) {
   }
 
   await prisma.$transaction(async (tx) => {
-    // Create Stock Moves IN/OUT per item
+    // Hook creates Stock Moves IN/OUT per item + Accounting journal
     await onStockAdjustmentStock(adjustmentId, Number(user.id), tx)
 
     // Update status from processing → processed
@@ -130,9 +129,6 @@ export async function processStockAdjustment(adjustmentId: number) {
       where: { id: adjustmentId },
       data: { status: "processed" },
     })
-
-    // Accounting journal
-    await onStockAdjustmentProcessed(adjustmentId, Number(user.id), tx)
   })
 
   await logActivity("process", "StockAdjustment", adjustmentId, `Memproses penyesuaian stok #${adjustmentId}`)
@@ -378,11 +374,8 @@ export async function completeMaterialIssue(issueId: number) {
   }
 
   await prisma.$transaction(async (tx) => {
-    // Hook creates stock moves, qty updates, journal, and sets status → completed (idempotent).
+    // Hook creates Stock Moves OUT per item + Accounting journal
     await onMaterialIssueStock(issueId, Number(user.id), tx)
-
-    // Accounting journal
-    await onMaterialIssueCompleted(issueId, Number(user.id), tx)
   })
 
   await logActivity("complete", "MaterialIssue", issueId, `Menyelesaikan pengeluaran material #${issueId}`)
