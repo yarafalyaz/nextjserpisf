@@ -19,15 +19,15 @@ export function FormSection({ title, description, children, columns = 2, classNa
   }
 
   return (
-    <div className={`${className}`}>
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">{title}</h3>
+    <section className={`${className}`} aria-labelledby={`section-${title.replace(/\s+/g, '-').toLowerCase()}`}>
+      <header className="mb-4">
+        <h3 id={`section-${title.replace(/\s+/g, '-').toLowerCase()}`} className="text-sm font-semibold text-foreground uppercase tracking-wide">{title}</h3>
         {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
-      </div>
+      </header>
       <div className={`grid ${colClass[columns]} gap-5`}>
         {children}
       </div>
-    </div>
+    </section>
   )
 }
 
