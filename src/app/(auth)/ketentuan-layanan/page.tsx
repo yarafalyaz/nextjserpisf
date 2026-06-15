@@ -12,7 +12,11 @@ export default function KetentuanLayananPage() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
       <div className="flex w-full max-w-2xl flex-col gap-6">
-        <Link href="/login" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors self-start">
+        <Link 
+          href="/login" 
+          aria-label="Kembali ke halaman login"
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+        >
           <ArrowLeft size={16} /> Kembali ke Login
         </Link>
         <Card className="border border-default/40 shadow-xl bg-card/90 backdrop-blur-sm">
