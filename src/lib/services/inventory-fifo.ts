@@ -62,8 +62,8 @@ export async function consumeFifoLayers(
   // driving layer.remaining negative). Reading the columns from this locked query
   // also avoids the snapshot issue a subsequent plain read would hit.
   const whCond = warehouseId != null ? Prisma.sql`AND warehouse_id = ${warehouseId}` : Prisma.empty
-  const layers = await tx.$queryRaw<{ id: number; remaining: unknown; unitCost: unknown; batchNumber: string | null }[]>(
-    Prisma.sql`SELECT id, remaining, unit_cost AS unitCost, batch_number AS batchNumber
+  const layers = await tx.$queryRaw<{ id: number; remaining: unknown; unitCost: unknown; batchNumber: string | null; warehouseId: number | null }[]>(
+    Prisma.sql`SELECT id, remaining, unit_cost AS unitCost, batch_number AS batchNumber, warehouse_id AS warehouseId
                FROM inventory_layers
                WHERE item_id = ${itemId} AND remaining > 0 ${whCond}
                ORDER BY created_at ASC, id ASC
@@ -94,7 +94,9 @@ export async function consumeFifoLayers(
       data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
     })
     if (layer.batchNumber) {
-      batchConsumption.set(layer.batchNumber, (batchConsumption.get(layer.batchNumber) ?? 0) + consume)
+      // Key by batchNumber|warehouseId to prevent double-decrement when warehouseId is null
+      const key = `${layer.batchNumber}|${layer.warehouseId ?? ""}`
+      batchConsumption.set(key, (batchConsumption.get(key) ?? 0) + consume)
     }
     toConsume -= consume
   }
@@ -104,17 +106,29 @@ export async function consumeFifoLayers(
   if (consumedQty > 0) {
     // Decrement matching batch lots by the consumed amount.
     if (batchConsumption.size > 0) {
-      const batchNumbers = [...batchConsumption.keys()]
-      const batches = await tx.itemBatch.findMany({
-        where: { itemId, batchNumber: { in: batchNumbers }, ...(warehouseId != null ? { warehouseId } : {}) },
-      })
-      for (const batch of batches) {
-        const qtyOut = batchConsumption.get(batch.batchNumber) ?? 0
-        if (qtyOut > 0) {
-          await tx.itemBatch.update({
-            where: { id: batch.id },
-            data: { qty: { decrement: Math.min(qtyOut, Number(batch.qty)) } },
-          })
+      for (const [key, qtyOut] of batchConsumption.entries()) {
+        const [batchNumber, whId] = key.split("|")
+        const batchWarehouseId = whId ? parseInt(whId, 10) : null
+        
+        const batches = await tx.itemBatch.findMany({
+          where: { 
+            itemId, 
+            batchNumber, 
+            ...(batchWarehouseId != null ? { warehouseId: batchWarehouseId } : {}) 
+          },
+        })
+        
+        let remainingToDecrement = qtyOut
+        for (const batch of batches) {
+          if (remainingToDecrement <= 0) break
+          const deduct = Math.min(remainingToDecrement, Number(batch.qty))
+          if (deduct > 0) {
+            await tx.itemBatch.update({
+              where: { id: batch.id },
+              data: { qty: { decrement: deduct } },
+            })
+            remainingToDecrement -= deduct
+          }
         }
       }
     }

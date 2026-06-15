@@ -168,6 +168,53 @@ describe("inventory-fifo", () => {
       });
     });
 
+    it("does not double-decrement same batch number across warehouses (warehouseId null)", async () => {
+      // Two FIFO layers share batch "B1" but live in different warehouses.
+      // Consuming 10 with warehouseId null draws 10 from the OLDEST (WH1) layer,
+      // so only the WH1 batch lot must be decremented — not every lot named "B1".
+      const batchUpdate = vi.fn().mockResolvedValue({});
+      const tx = {
+        inventoryLayer: {
+          aggregate: vi.fn().mockResolvedValue({ _sum: { remaining: 20 } }),
+          update: vi.fn().mockResolvedValue({}),
+          create: vi.fn().mockResolvedValue({}),
+        },
+        $queryRaw: vi.fn().mockResolvedValue([
+          { id: 1, remaining: 10, unitCost: 5, batchNumber: "B1", warehouseId: 1 },
+          { id: 2, remaining: 10, unitCost: 5, batchNumber: "B1", warehouseId: 2 },
+        ]),
+        itemBatch: {
+          findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+            const all = [
+              { id: 91, batchNumber: "B1", qty: 50, warehouseId: 1 },
+              { id: 92, batchNumber: "B1", qty: 30, warehouseId: 2 },
+            ];
+            const bn = where.batchNumber as string | { in: string[] } | undefined;
+            const matchesBatch = (b: { batchNumber: string }) =>
+              bn && typeof bn === "object" && "in" in bn
+                ? bn.in.includes(b.batchNumber)
+                : b.batchNumber === bn;
+            const wh = where.warehouseId as number | undefined;
+            const matchesWh = (b: { warehouseId: number }) =>
+              wh == null ? true : b.warehouseId === wh;
+            return all.filter((b) => matchesBatch(b) && matchesWh(b));
+          }),
+          update: batchUpdate,
+        },
+        item: { findUnique: vi.fn().mockResolvedValue({ trackSerial: false }) },
+        itemSerial: { findMany: vi.fn().mockResolvedValue([]), updateMany: vi.fn() },
+      } as unknown as Prisma.TransactionClient;
+
+      await consumeFifoLayers(tx, { itemId: 1, qty: 10 }); // warehouseId omitted (null)
+
+      // Total decrement must equal consumed qty (10), only on the WH1 lot.
+      expect(batchUpdate).toHaveBeenCalledTimes(1);
+      expect(batchUpdate).toHaveBeenCalledWith({
+        where: { id: 91 },
+        data: { qty: { decrement: 10 } },
+      });
+    });
+
     it("marks oldest serials as used (auto FIFO) for serial-tracked items", async () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
