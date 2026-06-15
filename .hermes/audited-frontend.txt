@@ -12,3 +12,7 @@ src/app/globals.css (added missing --color-info and --color-info-soft/-foregroun
 src/components/ui/status-chip.tsx (removed unnecessary 'use client' — no hooks/state/handlers; promotes component to React Server Component for smaller client bundle)
 src/components/ui/breadcrumbs.tsx (removed unnecessary 'use client' — pure presentational (Link + icon); now renders fully on the server)
 src/components/ui/search-field.tsx (a11y: added role='search' + aria-label to <form>, aria-label to <input>, and aria-hidden='true' to decorative search icon — landmark discovery + accessible name for screen readers)
+src/components/reports/date-presets.tsx (a11y: added role='group'+aria-label='Rentang waktu cepat' wrapper, type='button' to prevent form-submit, aria-label per preset for accessible name, focus-visible ring)
+src/components/reports/export-buttons.tsx (a11y: added role='group'+aria-label='Export dokumen' wrapper, type='button', aria-label per action, aria-hidden on decorative lucide icons, focus-visible ring)
+src/components/reports/report-date-filter.tsx (a11y: role='search'+aria-label on both date-range and single-date filter containers, aria-label on Generate button)
+src/components/ui/detail-tabs.tsx (responsive: wrapped TabsList in overflow-x-auto container with justify-start on mobile / justify-center on sm+; focus-visible ring on TabsContent for keyboard a11y)
