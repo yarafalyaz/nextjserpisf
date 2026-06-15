@@ -70,6 +70,32 @@ export const itemSchema = z.object({
   image: z.string().optional(),
 })
 
+// Server-action variants of the master data schemas. They mirror the form
+// schemas in @/lib/validators/index.ts but add z.coerce.number() for the
+// numeric fields, because FormData entries arrive as strings and the shared
+// form schemas assume react-hook-form has already coerced the values. Using
+// these in the server actions closes the Zod validation bypass (e.g. an
+// authenticated editor posting an arbitrary account `type` cast through
+// `as "ASSET" | "LIABILITY" | ...`, which would silently corrupt the chart
+// of accounts and the balance sheet / income statement / trial balance
+// grouping).
+export const warehouseServerSchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi").max(200),
+  code: optionalString(50),
+  address: optionalString(500),
+})
+
+export const accountServerSchema = z.object({
+  code: optionalString(50),
+  name: z.string().min(1, "Nama akun wajib diisi").max(200),
+  type: z.enum(["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"], {
+    message: "Tipe akun harus salah satu dari ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE",
+  }),
+  parentId: optionalNumber(),
+})
+
 export type CustomerInput = z.infer<typeof customerSchema>
 export type VendorInput = z.infer<typeof vendorSchema>
 export type ItemInput = z.infer<typeof itemSchema>
+export type WarehouseServerInput = z.infer<typeof warehouseServerSchema>
+export type AccountServerInput = z.infer<typeof accountServerSchema>

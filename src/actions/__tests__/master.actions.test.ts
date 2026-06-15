@@ -177,11 +177,11 @@ describe("Employee Actions", () => {
 
 describe("Account Actions", () => {
   it("createAccount succeeds", async () => {
-    const res = await actions.createAccount(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const res = await actions.createAccount(fdMap({ name: "test", code: "test", type: "ASSET", rate: "10" }))
     expect(res?.success).toBe(true)
   })
   it("updateAccount succeeds", async () => {
-    const res = await actions.updateAccount(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const res = await actions.updateAccount(1, fdMap({ name: "test", code: "test", type: "ASSET", rate: "10" }))
     expect(res?.success).toBe(true)
   })
 })
@@ -1219,3 +1219,41 @@ describe('hardDeleteOrSoftDelete Edge Cases', () => {
     expect(mocks.prismaMock.customer.update).toHaveBeenCalled();
   });
 });
+
+describe('Zod Validation Coverage in master.actions', () => {
+  it('createWarehouse blocks empty name', async () => {
+    const fd = new FormData()
+    const res = await actions.createWarehouse(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Validasi gagal/)
+    expect(mocks.prismaMock.warehouse.create).not.toHaveBeenCalled()
+  })
+
+  it('updateWarehouse blocks empty name', async () => {
+    const fd = new FormData()
+    const res = await actions.updateWarehouse(1, fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Validasi gagal/)
+    expect(mocks.prismaMock.warehouse.update).not.toHaveBeenCalled()
+  })
+
+  it('createAccount blocks invalid type', async () => {
+    const fd = new FormData()
+    fd.append('name', 'BOGUS')
+    fd.append('type', 'BOGUS_TYPE')
+    const res = await actions.createAccount(fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Validasi gagal/)
+    expect(mocks.prismaMock.account.create).not.toHaveBeenCalled()
+  })
+
+  it('updateAccount blocks invalid type', async () => {
+    const fd = new FormData()
+    fd.append('name', 'BOGUS')
+    fd.append('type', 'BOGUS_TYPE')
+    const res = await actions.updateAccount(1, fd)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/Validasi gagal/)
+    expect(mocks.prismaMock.account.update).not.toHaveBeenCalled()
+  })
+})

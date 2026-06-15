@@ -10,8 +10,9 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { safeId, requireNumber, safeNumber, safeJsonParse, requireString } from "@/lib/utils/safe-parse"
 import { logActivity } from "@/lib/services/activity-log.service"
-import { customerSchema, vendorSchema, itemSchema } from "@/lib/validations/schemas"
+import { customerSchema, vendorSchema, itemSchema, warehouseServerSchema, accountServerSchema } from "@/lib/validations/schemas"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { employeeSchema } from "@/lib/validators"
 import bcrypt from "bcryptjs"
 
 /**
@@ -448,17 +449,21 @@ export async function createWarehouse(formData: FormData) {
   try {
   await requirePermission("create_warehouses")
 
+  const parsed = parseFormData(warehouseServerSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const settings = await getSystemSettings()
-  let code = (formData.get("code") as string) || null
+  let code = v.code || null
   if (settings.enableAutoWarehouseCode !== false || !code) {
     code = await generateDocumentNumber("WH", "simple")
   }
 
   const warehouse = await prisma.warehouse.create({
     data: {
-      name: requireString(formData.get("name"), "name"),
+      name: v.name,
       code,
-      address: formData.get("address") as string | null,
+      address: v.address ?? null,
       isActive: true,
     },
   })
@@ -478,12 +483,16 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
   try {
   await requirePermission("edit_warehouses")
 
+  const parsed = parseFormData(warehouseServerSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   await prisma.warehouse.update({
     where: { id: warehouseId },
     data: {
-      name: requireString(formData.get("name"), "name"),
-      code: formData.get("code") as string,
-      address: formData.get("address") as string | null,
+      name: v.name,
+      code: v.code ?? "",
+      address: v.address ?? null,
     },
   })
 
@@ -730,7 +739,11 @@ export async function createAccount(formData: FormData) {
   try {
   await requirePermission("create_accounts")
 
-  let code = (formData.get("code") as string) || null
+  const parsed = parseFormData(accountServerSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
+  let code = v.code || null
   if (!code) {
     code = await generateDocumentNumber("ACC", "simple")
   }
@@ -738,9 +751,9 @@ export async function createAccount(formData: FormData) {
   const account = await prisma.account.create({
     data: {
       code,
-      name: requireString(formData.get("name"), "name"),
-      type: formData.get("type") as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE",
-      parentId: safeNumber(formData.get("parentId")),
+      name: v.name,
+      type: v.type,
+      parentId: v.parentId ?? null,
       isActive: true,
     },
   })
@@ -1702,11 +1715,15 @@ export async function updateAccount(id: number, formData: FormData) {
   try {
   await requirePermission("edit_accounts")
 
+  const parsed = parseFormData(accountServerSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   // Account code is an accounting identifier; silently regenerating it when the
   // user clears the field would corrupt the audit trail and break references
   // to this account in historical journal entries. Read the current code from
   // the DB and preserve it if the form sent nothing usable.
-  const submittedCode = (formData.get("code") as string)?.trim() || null
+  const submittedCode = v.code?.trim() || null
   let code: string
   if (!submittedCode) {
     const current = await prisma.account.findUnique({
@@ -1723,9 +1740,9 @@ export async function updateAccount(id: number, formData: FormData) {
     where: { id },
     data: {
       code,
-      name: requireString(formData.get("name"), "name"),
-      type: formData.get("type") as "ASSET" | "LIABILITY" | "EQUITY" | "REVENUE" | "EXPENSE",
-      parentId: safeNumber(formData.get("parentId")),
+      name: v.name,
+      type: v.type,
+      parentId: v.parentId ?? null,
       isActive: true,
     },
   })
