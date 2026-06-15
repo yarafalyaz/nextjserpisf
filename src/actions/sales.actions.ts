@@ -67,6 +67,7 @@ export async function createQuotation(formData: FormData) {
   const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
 
   const quotation = await prisma.$transaction(async (tx) => {
+    // Create sections and items in a single nested write (eliminates loop + N+1 inserts)
     const q = await tx.quotation.create({
       data: {
         documentNo,
@@ -83,39 +84,29 @@ export async function createQuotation(formData: FormData) {
         notes: data.notes || null,
         status: "draft",
         createdBy: Number(user.id),
+        sections: {
+          create: (data.sections || []).map((section: any, si: number) => ({
+            name: section.name || `Section ${si + 1}`,
+            sortOrder: si,
+            items: {
+              create: (section.items || []).map((item: any, ii: number) => {
+                const { discountAmount, total } = computeLine(item)
+                return {
+                  itemId: item.itemId || null,
+                  description: item.description || null,
+                  qty: Number(item.qty) || 1,
+                  uom: item.uom || null,
+                  unitPrice: Number(item.unitPrice) || 0,
+                  discount: discountAmount,
+                  total,
+                  sortOrder: ii,
+                }
+              }),
+            },
+          })),
+        },
       },
     })
-
-    // Create sections and items
-    for (let si = 0; si < (data.sections || []).length; si++) {
-      const section = data.sections[si]
-      const s = await tx.quotationSection.create({
-        data: {
-          quotationId: q.id,
-          name: section.name || `Section ${si + 1}`,
-          sortOrder: si,
-        },
-      })
-
-      // Batch create all items per section (eliminates N+1)
-      const itemsData = (section.items || []).map((item: any, ii: number) => {
-        const { discountAmount, total } = computeLine(item)
-        return {
-          sectionId: s.id,
-          itemId: item.itemId || null,
-          description: item.description || null,
-          qty: Number(item.qty) || 1,
-          uom: item.uom || null,
-          unitPrice: Number(item.unitPrice) || 0,
-          discount: discountAmount,
-          total,
-          sortOrder: ii,
-        }
-      })
-      if (itemsData.length > 0) {
-        await tx.quotationItem.createMany({ data: itemsData })
-      }
-    }
 
     return q
   })

@@ -7,8 +7,6 @@ const generateDocNumberMock = vi.fn()
 const transactionMock = vi.fn()
 
 const quotationCreateMock = vi.fn()
-const sectionCreateMock = vi.fn()
-const itemCreateManyMock = vi.fn()
 const vehicleFindFirstMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -50,23 +48,18 @@ function fdData(data: unknown): FormData {
 function wireTransaction() {
   const tx = {
     quotation: { create: quotationCreateMock },
-    quotationSection: { create: sectionCreateMock },
-    quotationItem: { createMany: itemCreateManyMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
 
 beforeEach(() => {
-  for (const m of [
-    requirePermissionMock, revalidateMock, logActivityMock, generateDocNumberMock,
-    transactionMock, quotationCreateMock, sectionCreateMock, itemCreateManyMock,
-    vehicleFindFirstMock,
-  ]) m.mockReset()
+for (const m of [
+  requirePermissionMock, revalidateMock, logActivityMock, generateDocNumberMock,
+  transactionMock, quotationCreateMock, vehicleFindFirstMock,
+]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   generateDocNumberMock.mockResolvedValue("QUO-0001")
   quotationCreateMock.mockResolvedValue({ id: 99 })
-  sectionCreateMock.mockResolvedValue({ id: 5 })
-  itemCreateManyMock.mockResolvedValue({ count: 1 })
   wireTransaction()
 })
 
@@ -95,18 +88,25 @@ describe("createQuotation server-side total recompute", () => {
     expect(result.success).toBe(true)
 
     // Header persisted with the RECOMPUTED grandTotal, not the client's 0.
+    // Line totals recomputed too (not the client-sent 0) through the nested writes.
     expect(quotationCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ subtotal: 250000, grandTotal: 250000 }),
-      }),
-    )
-    // Line totals recomputed too (not the client-sent 0).
-    expect(itemCreateManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.arrayContaining([
-          expect.objectContaining({ qty: 2, unitPrice: 100000, total: 200000 }),
-          expect.objectContaining({ qty: 1, unitPrice: 50000, total: 50000 }),
-        ]),
+        data: expect.objectContaining({
+          subtotal: 250000,
+          grandTotal: 250000,
+          sections: expect.objectContaining({
+            create: expect.arrayContaining([
+              expect.objectContaining({
+                items: expect.objectContaining({
+                  create: expect.arrayContaining([
+                    expect.objectContaining({ qty: 2, unitPrice: 100000, total: 200000 }),
+                    expect.objectContaining({ qty: 1, unitPrice: 50000, total: 50000 }),
+                  ]),
+                }),
+              }),
+            ]),
+          }),
+        }),
       }),
     )
   })
@@ -129,16 +129,26 @@ describe("createQuotation server-side total recompute", () => {
     const result = await createQuotation(fdData(data))
     expect(result.success).toBe(true)
     // subtotal 3600, header discount 100, tax 50 → grandTotal 3550
+    // Line discount 10% of 4 x 1000 = 400, line total 3600, asserted through the nested write.
     expect(quotationCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ subtotal: 3600, discount: 100, tax: 50, grandTotal: 3550 }),
-      }),
-    )
-    expect(itemCreateManyMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.arrayContaining([
-          expect.objectContaining({ discount: 400, total: 3600 }),
-        ]),
+        data: expect.objectContaining({
+          subtotal: 3600,
+          discount: 100,
+          tax: 50,
+          grandTotal: 3550,
+          sections: expect.objectContaining({
+            create: expect.arrayContaining([
+              expect.objectContaining({
+                items: expect.objectContaining({
+                  create: expect.arrayContaining([
+                    expect.objectContaining({ discount: 400, total: 3600 }),
+                  ]),
+                }),
+              }),
+            ]),
+          }),
+        }),
       }),
     )
   })

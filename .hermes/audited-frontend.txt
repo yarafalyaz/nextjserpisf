@@ -4,3 +4,4 @@ src/app/(dashboard)/not-found.tsx (fixed broken 404 numeral class: text-center-c
 src/app/(auth)/kebijakan-privasi/page.tsx (added aria-label + focus ring to back link)
 src/app/(auth)/ketentuan-layanan/page.tsx (added aria-label + focus ring to back link)
 335 module error boundaries (src/app/(dashboard)/**/error.tsx) hardened: added role='alert', aria-live='assertive', useEffect console.error, standard Shadcn Button and lucide-react AlertTriangle icons for accessibility.
+src/components/ui/{form-layout,detail-table,page-layout,detail-layout}.tsx (removed unnecessary 'use client' directive to leverage React Server Components)
