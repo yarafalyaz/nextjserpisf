@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
 import { onSalesInvoicePosted } from "@/lib/hooks/accounting.hook";
@@ -120,7 +121,10 @@ export async function onDownPaymentConfirmed(
           where: { salesInvoiceId: existingInv.id },
           select: { amount: true },
         });
-        const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+        
+        // safeSum avoids JavaScript floating point drift (e.g. 0.1 + 0.7 = 0.7999999)
+        // which would cause a fully paid invoice to stick at "partial" status.
+        const totalPaid = safeSum(payments.map((p) => p.amount), 2);
         const grandTotal = Number(existingInv.grandTotal ?? 0);
         
         let invStatus: "posted" | "partial" | "paid" = "posted";

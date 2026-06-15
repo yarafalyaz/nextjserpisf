@@ -1,5 +1,6 @@
 
 import { prisma } from "@/lib/db/prisma";
+import { safeSum } from "@/lib/utils/math";
 import { SalesInvoiceStatus, Prisma } from "@prisma/client";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -19,7 +20,14 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
     select: { amount: true },
   });
 
-  const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  // safeSum() runs each value through safeRound() and accumulates with
+  // safeAdd() (exponential-notation rounding). Without this, summing e.g.
+  // [0.1, 0.7] as raw JS numbers yields 0.7999999999999999, which fails the
+  // `totalPaid >= grandTotal` check below and leaves a fully-settled invoice
+  // stuck on "partial" forever (breaking AR aging + paymentStatus reports).
+  // Match the 2-decimal precision of `Decimal(15, 2)` on SalesPayment.amount /
+  // SalesInvoice.grandTotal in the Prisma schema.
+  const totalPaid = safeSum(payments.map((p) => p.amount), 2);
   const grandTotal = Number(invoice.grandTotal ?? 0);
 
   let status: SalesInvoiceStatus = "posted";
