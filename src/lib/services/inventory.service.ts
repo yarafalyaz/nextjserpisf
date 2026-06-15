@@ -239,7 +239,7 @@ export async function issueProjectMaterials(
   projectId: number,
   warehouseId: number
 ): Promise<number[]> {
-  const { generateDocumentNumber } = await import('@/lib/utils/document-number')
+  const { generateDocumentNumberBatch } = await import('@/lib/utils/document-number')
 
   return await prisma.$transaction(async (tx) => {
     // Lock the project row to prevent concurrent material issue
@@ -251,31 +251,40 @@ export async function issueProjectMaterials(
     })
     if (!project) throw new Error('Project not found')
 
-    const results: number[] = []
+    const validItems = project.items.filter((pi) => pi.itemId != null)
+    if (validItems.length === 0) return []
 
-    for (const pi of project.items) {
-      if (!pi.itemId) continue
+    // Idempotency: fetch all existing moves for this project in one query
+    const existingMoves = await tx.stockMove.findMany({
+      where: {
+        referenceType: 'project_material_issue',
+        referenceId: projectId,
+        itemId: { in: validItems.map((pi) => pi.itemId!) },
+      },
+      select: { id: true, itemId: true },
+    })
+    const existingMovesByItem = new Map(existingMoves.map((m) => [m.itemId, m.id]))
 
-      // Idempotency: skip items already issued for this project
-      const existing = await tx.stockMove.findFirst({
-        where: {
-          referenceType: 'project_material_issue',
-          referenceId: projectId,
-          itemId: pi.itemId,
-        },
-        select: { id: true },
-      })
-      if (existing) {
-        results.push(existing.id)
-        continue
-      }
+    const itemsToIssue = validItems.filter((pi) => !existingMovesByItem.has(pi.itemId!))
 
-      const documentNo = await generateDocumentNumber('SM')
+    let smDocNos: string[] = []
+    if (itemsToIssue.length > 0) {
+      smDocNos = await generateDocumentNumberBatch("SM", itemsToIssue.length)
+    }
+
+    const results: number[] = existingMoves.map((m) => m.id)
+
+    // We still have to loop for the moves because `postMove` must run serially 
+    // to maintain FIFO/qty invariants within the same transaction.
+    // However, we eliminated the N+1 on `findFirst` and `generateDocumentNumber`.
+    for (let i = 0; i < itemsToIssue.length; i++) {
+      const pi = itemsToIssue[i]
+      const documentNo = smDocNos[i]
 
       const move = await tx.stockMove.create({
         data: {
           documentNo,
-          itemId: pi.itemId,
+          itemId: pi.itemId!,
           warehouseId,
           qty: Number(pi.qty),
           cost: 0,
@@ -287,9 +296,6 @@ export async function issueProjectMaterials(
         },
       })
 
-      // Post the move (FIFO consumption + qty update) within same tx
-      // so the just-created move is visible to the posting logic and the
-      // outer project-row lock protects the whole sequence.
       await inventoryService.postMove(move.id, tx)
       results.push(move.id)
     }

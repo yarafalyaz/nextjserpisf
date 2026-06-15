@@ -4,6 +4,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   generateDocumentNumber: vi.fn(),
+  generateDocumentNumberBatch: vi.fn(),
 }));
 
 vi.mock("@/lib/services/notification.service", () => ({
@@ -12,6 +13,7 @@ vi.mock("@/lib/services/notification.service", () => ({
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: mocks.generateDocumentNumber,
+  generateDocumentNumberBatch: mocks.generateDocumentNumberBatch,
 }));
 
 // prisma singleton is imported by the module; expose a controllable $transaction
@@ -276,18 +278,18 @@ describe("InventoryService", () => {
   describe("issueProjectMaterials", () => {
     function buildIssueTx(opts: {
       project: { items: { itemId: number | null; qty: number }[] } | null;
-      existingMove?: { id: number } | null;
+      existingMoves?: { id: number; itemId: number }[];
     }) {
       const spies = {
         executeRaw: vi.fn().mockResolvedValue(1),
         projectFindUnique: vi.fn().mockResolvedValue(opts.project),
-        moveFindFirst: vi.fn().mockResolvedValue(opts.existingMove ?? null),
+        moveFindMany: vi.fn().mockResolvedValue(opts.existingMoves ?? []),
         moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
       };
       const tx = {
         $executeRaw: spies.executeRaw,
         project: { findUnique: spies.projectFindUnique },
-        stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
+        stockMove: { findMany: spies.moveFindMany, create: spies.moveCreate },
       };
       return { tx, spies };
     }
@@ -302,7 +304,7 @@ describe("InventoryService", () => {
     it("returns existing move ids when already issued (idempotent)", async () => {
       const { tx, spies } = buildIssueTx({
         project: { items: [{ itemId: 5, qty: 10 }] },
-        existingMove: { id: 777 },
+        existingMoves: [{ id: 777, itemId: 5 }],
       });
       singletonMocks.transaction.mockImplementation(async (fn) => fn(tx));
 
@@ -342,12 +344,12 @@ describe("InventoryService", () => {
           })
         },
         stockMove: {
-          findFirst: vi.fn()
-            .mockResolvedValueOnce({ id: 100 }) // item 1 already exists
-            .mockResolvedValueOnce(null),       // item 2 needs creation
+          findMany: vi.fn().mockResolvedValue([{ id: 100, itemId: 1 }]),
           create: vi.fn().mockResolvedValue({ id: 101 }),
         }
       };
+
+      mocks.generateDocumentNumberBatch.mockResolvedValueOnce(["SM-BATCH-1"]);
 
       singletonMocks.transaction.mockImplementationOnce(async (fn: any) => {
         const { inventoryService } = await import('@/lib/services/inventory.service');
