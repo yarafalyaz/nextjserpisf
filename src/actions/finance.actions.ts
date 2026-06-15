@@ -938,49 +938,59 @@ export async function reverseJournal(journalId: number) {
     )
   }
 
-  // Cannot reverse a journal that belongs to a closed period
-  await assertPeriodOpen(journal.transactionDate)
-
-  const documentNo = await generateDocumentNumber("JRN-RV")
-
+  // Wrap the period check, document-number allocation, and the reversal tx in
+  // a single rollback boundary. The claim flips POSTED -> REVERSING, and if
+  // anything after the claim throws (closed period, sequence generator down,
+  // unique collision on journalNumber, etc.) the journal must NOT be left
+  // stuck in REVERSING — that status is invisible to the GL (only POSTED
+  // journals are summed) and the claim requires POSTED, so the journal
+  // becomes permanently unrecoverable. Restore the claim so the user can
+  // retry.
+  let documentNo: string
   try {
+    // Cannot reverse a journal that belongs to a closed period
+    await assertPeriodOpen(journal.transactionDate)
+
+    documentNo = await generateDocumentNumber("JRN-RV")
+
     await prisma.$transaction(async (tx) => {
-    const reversalJournal = await tx.journal.create({
-      data: {
-        journalNumber: documentNo,
-        transactionDate: new Date(),
-        description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
-        type: journal.type,
-        status: "POSTED",
-        referenceType: "Journal",
-        referenceId: journal.id,
-        totalDebit: journal.totalDebit,
-        totalCredit: journal.totalCredit,
-        createdBy: Number(user.id),
-      },
-    })
+      const reversalJournal = await tx.journal.create({
+        data: {
+          journalNumber: documentNo,
+          transactionDate: new Date(),
+          description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
+          type: journal.type,
+          status: "POSTED",
+          referenceType: "Journal",
+          referenceId: journal.id,
+          totalDebit: journal.totalDebit,
+          totalCredit: journal.totalCredit,
+          createdBy: Number(user.id),
+        },
+      })
 
-    // Batch create reversal entries (eliminates N+1)
-    await tx.journalEntry.createMany({
-      data: journal.entries.map(entry => ({
-        journalId: reversalJournal.id,
-        accountId: entry.accountId,
-        debit: entry.credit,
-        credit: entry.debit,
-        memo: `Reversal: ${entry.memo ?? ""}`,
-        costCenterId: entry.costCenterId,
-        profitCenterId: entry.profitCenterId,
-      })),
-    })
+      // Batch create reversal entries (eliminates N+1)
+      await tx.journalEntry.createMany({
+        data: journal.entries.map(entry => ({
+          journalId: reversalJournal.id,
+          accountId: entry.accountId,
+          debit: entry.credit,
+          credit: entry.debit,
+          memo: `Reversal: ${entry.memo ?? ""}`,
+          costCenterId: entry.costCenterId,
+          profitCenterId: entry.profitCenterId,
+        })),
+      })
 
-    await tx.journal.update({
-      where: { id: journalId },
-      data: { status: "REVERSED" },
-    })
+      await tx.journal.update({
+        where: { id: journalId },
+        data: { status: "REVERSED" },
+      })
     })
   } catch (e) {
-    // Tx failed after the claim flipped status to REVERSING — roll back the
-    // claim so the journal can be retried instead of being stuck in limbo.
+    // Tx failed (or a pre-tx check failed) after the claim flipped status to
+    // REVERSING — roll back the claim so the journal can be retried instead of
+    // being stuck in limbo.
     await prisma.journal.updateMany({
       where: { id: journalId, status: "REVERSING" },
       data: { status: "POSTED" },
