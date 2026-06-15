@@ -81,6 +81,31 @@ describe("DocumentSequenceService", () => {
     });
   });
 
+  describe("nextBatch", () => {
+    it("returns empty array when count is <= 0", async () => {
+      const result = await DocumentSequenceService.nextBatch("TEST", 0);
+      expect(result).toEqual([]);
+    });
+
+    it("falls back to next when count is 1", async () => {
+      mocks.executeRaw.mockResolvedValue(1);
+      mocks.queryRaw.mockResolvedValue([{ current_value: 15 }]);
+
+      const result = await DocumentSequenceService.nextBatch("TEST", 1, 10);
+      expect(result).toEqual([15]);
+      expect(mocks.queryRaw).toHaveBeenCalled();
+    });
+
+    it("returns contiguous block of numbers when count > 1", async () => {
+      mocks.executeRaw.mockResolvedValue(1);
+      // Simulating what DB would return for 'end' after an insert where GREATEST resolves to 10
+      mocks.queryRaw.mockResolvedValue([{ current_value: 10 }]);
+
+      const result = await DocumentSequenceService.nextBatch("TEST", 3, 5);
+      expect(result).toEqual([8, 9, 10]);
+    });
+  });
+
   describe("peek", () => {
     it("returns current value when key exists", async () => {
       mocks.findUnique.mockResolvedValue({ key: "INV-2026-06", currentValue: 42 });

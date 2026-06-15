@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeSum } from "@/lib/utils/math"
 import { computeBpjsEmployee, computePph21Monthly } from "@/lib/services/payroll-statutory.service"
 import { prisma } from "@/lib/db/prisma"
-import { generateDocumentNumber } from "@/lib/utils/document-number"
+import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { requireId, safeId, requireNumber, safeNumber } from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
@@ -885,6 +885,9 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
   // Promise.all via getBulkPayrollEstimations → constant 9 queries.
   const estimations = await getBulkPayrollEstimations(targetIds, startDateStr, endDateStr)
 
+  // Hoist document number generation to eliminate the N+1 serial calls (N sequence bumps).
+  const docNumbers = await generateDocumentNumberBatch("PAYROLL", targetIds.length)
+
   // Build all payroll rows in memory, then createMany + skipDuplicates in
   // ONE round-trip. The previous serial loop did N prisma.payroll.create
   // calls; P2002 duplicates are still skipped (they were caught in the
@@ -916,10 +919,11 @@ export async function generateBulkPayroll(period: string, startDateStr: string, 
     status: string
     createdBy: number
   }[] = []
-  for (const empId of targetIds) {
+  for (let i = 0; i < targetIds.length; i++) {
+    const empId = targetIds[i]
     const est = estimations.get(empId)
     if (!est) continue
-    const documentNo = await generateDocumentNumber("PAYROLL")
+    const documentNo = docNumbers[i]
 
     const statutory = (est.bpjsHealthEmployee ?? 0) + (est.bpjsEmploymentEmployee ?? 0) + (est.pph21 ?? 0)
     // Allowances/deductions are manual per-payslip fields (not part of auto-estimation);

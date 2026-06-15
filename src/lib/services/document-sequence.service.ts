@@ -43,6 +43,43 @@ export class DocumentSequenceService {
   }
 
   /**
+   * Reserve a contiguous block of `count` sequence numbers in ONE atomic
+   * round-trip. Returns the assigned numbers in ascending order. Used by bulk
+   * operations (e.g. generateBulkPayroll) to replace N serial `next()` calls
+   * with a single counter bump. Same floor + GREATEST semantics as `next()`,
+   * so the block never collides with legacy/manual document numbers.
+   */
+  static async nextBatch(key: string, count: number, floor = 0): Promise<number[]> {
+    if (count <= 0) return []
+    if (count === 1) return [await this.next(key, floor)]
+
+    const floorPlusOne = Math.max(1, Math.floor(floor) + 1)
+    // If the row is created fresh, the highest assigned number must cover the
+    // whole block AND respect the floor: max(floor+1, 1) + (count-1).
+    const insertValue = floorPlusOne + count - 1
+    return await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        INSERT INTO document_sequences (\`key\`, current_value, created_at, updated_at)
+        VALUES (${key}, ${insertValue}, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE current_value = GREATEST(current_value + ${count}, ${insertValue}), updated_at = NOW()
+      `
+
+      const row = await tx.$queryRaw<{ current_value: number }[]>`
+        SELECT current_value FROM document_sequences
+        WHERE \`key\` = ${key} FOR UPDATE
+      `
+
+      if (!row || row.length === 0) {
+        throw new Error(`Failed to retrieve sequence for key: ${key}`)
+      }
+
+      const end = Number(row[0].current_value)
+      const start = end - count + 1
+      return Array.from({ length: count }, (_, i) => start + i)
+    })
+  }
+
+  /**
    * Peek at the current sequence value without incrementing.
    * Returns 0 if the key doesn't exist yet.
    */

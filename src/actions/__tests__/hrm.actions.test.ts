@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => {
   const createNotificationMock = vi.fn()
   const sendEmailMock = vi.fn()
   const generateDocNumMock = vi.fn()
+  const generateDocNumBatchMock = vi.fn((...a: unknown[]) => {
+    const count = Number(a[1]) || 0
+    return Promise.resolve(Array.from({ length: count }, (_, i) => `DOC-${i + 1}`))
+  })
   const buildModelMock = () => ({
     findFirst: vi.fn().mockResolvedValue(null),
     findUnique: vi.fn().mockResolvedValue(null),
@@ -56,6 +60,7 @@ const mocks = vi.hoisted(() => {
     createNotificationMock,
     sendEmailMock,
     generateDocNumMock,
+    generateDocNumBatchMock,
     prismaMock,
   }
 })
@@ -69,6 +74,7 @@ const {
   createNotificationMock,
   sendEmailMock,
   generateDocNumMock,
+  generateDocNumBatchMock,
   prismaMock,
 } = mocks
 
@@ -102,7 +108,8 @@ vi.mock("@/lib/services/email", () => ({
 }))
 
 vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: (...a: unknown[]) => mocks.generateDocNumMock(...a),
+  generateDocumentNumber: (...a: any[]) => mocks.generateDocNumMock(...a),
+  generateDocumentNumberBatch: (...a: any[]) => mocks.generateDocNumBatchMock(...a),
 }))
 
 vi.mock("@/lib/utils/error", () => ({

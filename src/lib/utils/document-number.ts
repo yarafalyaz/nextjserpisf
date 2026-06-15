@@ -182,6 +182,38 @@ export async function generateDocumentNumber(
 }
 
 /**
+ * Generate a contiguous block of document numbers.
+ * Used for bulk operations to eliminate N+1 serial round-trips.
+ */
+export async function generateDocumentNumberBatch(
+  key: string,
+  count: number,
+  format: 'complex' | 'simple' = 'complex'
+): Promise<string[]> {
+  if (count <= 0) return []
+  if (count === 1) return [await generateDocumentNumber(key, format)]
+
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const year = now.getFullYear()
+  const prefix = await resolvePrefix(key)
+
+  if (format === 'complex') {
+    const seqKey = `${prefix}-${year}-${month}`
+    const floor = await findMaxSequence(key, prefix, format, month, year)
+    const seqs = await DocumentSequenceService.nextBatch(seqKey, count, floor)
+    const settings = await getSystemSettings()
+    const companyCode = settings.companyName?.substring(0, 3).toUpperCase() ?? 'YRA'
+    return seqs.map((seq) => `${String(seq).padStart(3, '0')}/${prefix}/${companyCode}/${month}/${year}`)
+  } else {
+    // Master-data atomic codes (simple format)
+    const floor = await findMaxSequence(key, prefix, format, month, year)
+    const seqs = await DocumentSequenceService.nextBatch(prefix, count, floor)
+    return seqs.map((seq) => `${prefix}-${String(seq).padStart(4, '0')}`)
+  }
+}
+
+/**
  * Peek at the next document number WITHOUT incrementing the counter.
  */
 export async function peekNextDocumentNumber(
