@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => {
       item: buildModelMock(),
       purchaseRequest: buildModelMock(), // Needs individual
       employee: buildModelMock(), // Used for hasSoftDelete test
+      asset: buildModelMock(), // Has GL journal orphan guard on single-delete
+      vehicle: buildModelMock(), // Has dependent-record linkage guard on single-delete
     }
   }
 })
@@ -42,7 +44,8 @@ vi.mock("@prisma/client", () => ({
           { name: "Journal", fields: [{ name: "id" }] },
           { name: "PurchaseRequest", fields: [{ name: "id" }] },
           { name: "Bank", fields: [{ name: "id" }] },
-          // Intentionally omitting 'asset' to test dmmfModelMap missing case
+          { name: "Asset", fields: [{ name: "id" }] }, // Real schema includes Asset
+          { name: "Vehicle", fields: [{ name: "id" }] }, // Real schema includes Vehicle
         ]
       }
     }
@@ -68,6 +71,15 @@ describe("Bulk Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.message).toMatch(/dampak akuntansi/)
   })
+  it("bulkDelete fails on asset and vehicle", async () => {
+    const resAsset = await bulkDelete("asset", [1])
+    expect(resAsset?.success).toBe(false)
+    expect(resAsset?.message).toMatch(/dampak akuntansi/)
+
+    const resVehicle = await bulkDelete("vehicle", [1])
+    expect(resVehicle?.success).toBe(false)
+    expect(resVehicle?.message).toMatch(/dampak akuntansi/)
+  })
   it("bulkDelete fails on unknown model", async () => {
     const res = await bulkDelete("unknownModel" as any, [1])
     expect(res?.success).toBe(false)
@@ -86,11 +98,11 @@ describe("Bulk Actions", () => {
     expect(res?.message).toMatch(/tidak ditemukan/)
   })
   it("bulkDelete fails when dmmf schema not found", async () => {
-    // asset is a valid model, we'll add it to prismaMock but NOT to dmmf mock above
-    (mocks.prismaMock as any)["asset"] = mocks.buildModelMock()
-    const res = await bulkDelete("asset", [1])
+    // Use a model that's in modelPermissionMap but NOT in the dmmf mock.
+    (mocks.prismaMock as any)["currency"] = mocks.buildModelMock()
+    const res = await bulkDelete("currency", [1])
     expect(res?.success).toBe(false)
-    expect(res?.message).toMatch(/Skema model asset tidak ditemukan/)
+    expect(res?.message).toMatch(/Skema model currency tidak ditemukan/)
   })
   it("bulkDelete uses soft delete when deletedAt exists", async () => {
     const res = await bulkDelete("employee", [1])

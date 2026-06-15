@@ -229,6 +229,9 @@ const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
   "productionOrder",
   "workOrder",
   "loan",
+  // Fixed assets and vehicles — have GL or dependent records guards
+  "asset",
+  "vehicle",
 ])
 
 export async function bulkDelete(model: ModelName, ids: number[]) {
