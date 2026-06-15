@@ -193,6 +193,23 @@ describe("Self Attendance Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("selfCheckIn does not query department holiday or record overtime when employee has no department", async () => {
+    mocks.prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 1, name: "Test", departmentId: null })
+    mocks.prismaMock.departmentHoliday.findFirst.mockResolvedValueOnce({ id: 1, date: new Date() })
+    
+    // Grab the status written to the database
+    let createdStatus: string | undefined
+    mocks.prismaMock.attendance.create.mockImplementationOnce((args: any) => {
+      createdStatus = args.data.status
+      return { id: 2 }
+    })
+
+    const res = await actions.selfCheckIn(fdMap({ latitude: "0", longitude: "0" }))
+    expect(res?.success).toBe(true)
+    expect(createdStatus).toBe("present")
+    expect(mocks.prismaMock.departmentHoliday.findFirst).not.toHaveBeenCalled()
+  })
+
   it("selfCheckIn handles late check-in (> tolerance)", async () => {
     // Monday, 10:00 WIB
     mocks.prismaMock.workSchedule.findMany.mockResolvedValueOnce([

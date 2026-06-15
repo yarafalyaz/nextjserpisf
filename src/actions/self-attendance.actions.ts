@@ -75,9 +75,16 @@ export async function selfCheckIn(formData: FormData) {
   // Hari libur (Minggu / libur nasional / libur departemen) → kerja dicatat
   // sebagai lembur dan otomatis jadi pengajuan lembur saat check-out.
   const holiday = await prisma.holiday.findFirst({ where: { date: today } })
-  const deptHoliday = await prisma.departmentHoliday.findFirst({
-    where: { departmentId: employee.departmentId ?? undefined, date: today },
-  })
+  // Only query department holiday if the employee actually belongs to a
+  // department. Passing `undefined` to a Prisma `where` filter is silently
+  // dropped, which would match ANY department's holiday and incorrectly flag
+  // department-less employees as on a holiday.
+  const deptHoliday =
+    employee.departmentId != null
+      ? await prisma.departmentHoliday.findFirst({
+          where: { departmentId: employee.departmentId, date: today },
+        })
+      : null
   const isOvertimeDay = getWibDayOfWeek(now) === 0 || !!holiday || !!deptHoliday
 
   // Guard: approved leave
