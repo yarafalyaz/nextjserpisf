@@ -742,7 +742,14 @@ export async function onPettyCashCreated(
   });
   if (existing) return;
 
-  await assertPeriodOpen(pettyCash.transactionDate ?? new Date());
+  // Use the authoritative transaction date. `date` is the user-input transaction
+  // date and is always populated; `transactionDate` is an optional legacy field
+  // that callers leave null. Previously the code fell back to `new Date()` (today)
+  // whenever `transactionDate` was null, which silently bypassed the period lock
+  // for back-dated petty-cash entries and posted the journal dated today while
+  // the subledger record sat on a closed-period date — corrupting the GL.
+  const postingDate = pettyCash.transactionDate ?? pettyCash.date;
+  await assertPeriodOpen(postingDate);
 
   await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PC", pettyCashId);
@@ -751,7 +758,7 @@ export async function onPettyCashCreated(
     const journal = await tx.journal.create({
       data: {
         journalNumber,
-        transactionDate: pettyCash.transactionDate ?? new Date(),
+        transactionDate: postingDate,
         referenceType: "PettyCash",
         referenceId: pettyCash.id,
         description: isInflow

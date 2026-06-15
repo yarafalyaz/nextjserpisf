@@ -553,6 +553,28 @@ describe("onExpenseApproved", () => {
 })
 
 describe("onPettyCashCreated", () => {
+  it("uses date field instead of new Date() fallback when transactionDate is null (prevents period lock bypass)", async () => {
+    // A petty cash record from a closed period, but transactionDate was not set by the create action.
+    const closedDate = new Date("2020-01-01");
+    mocks.pettyCashFindUniqueOrThrow.mockResolvedValue({
+      id: 1, type: "OUT", amount: 200, documentNo: "PC-1",
+      expenseAccountId: 610, description: "Beli tinta", 
+      date: closedDate,
+      transactionDate: null, // this simulates the bug condition
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    
+    await onPettyCashCreated(1);
+    
+    // It should check the period using the actual date, not today's date!
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(closedDate);
+    // And the journal should be posted using the actual date
+    expect(mocks.journalCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ transactionDate: closedDate })
+    }));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.systemSettings.pettyCashAccountId = 115
