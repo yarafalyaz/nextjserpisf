@@ -1,6 +1,11 @@
 export default function Loading() {
   return (
-    <div className="flex flex-col gap-6 animate-pulse">
+    <div
+      className="flex flex-col gap-6 animate-pulse"
+      role="status"
+      aria-label="Memuat daftar aset"
+      aria-busy="true"
+    >
       {/* Breadcrumb skeleton */}
       <div className="h-4 w-48 bg-default/20 rounded" />
       

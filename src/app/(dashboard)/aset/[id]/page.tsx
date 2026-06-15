@@ -90,7 +90,7 @@ export default async function AssetDetailPage({
                 {asset.histories.map((h) => (
                   <DetailTableRow key={h.id}>
                     <DetailTableTd>{formatDate(h.date)}</DetailTableTd>
-                    <DetailTableTd><span className="px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground cursor-pointer transition-all capitalize hover:border-primary hover:text-primary">{h.type}</span></DetailTableTd>
+                    <DetailTableTd><span className="inline-flex px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground capitalize">{h.type}</span></DetailTableTd>
                     <DetailTableTd>{h.description || "-"}</DetailTableTd>
                     <DetailTableTd align="right">{h.amount ? formatCurrency(Number(h.amount)) : "-"}</DetailTableTd>
                   </DetailTableRow>

@@ -42,13 +42,14 @@ export function DisposeAssetButton({ assetId, bookValue }: { assetId: number; bo
   const gainLoss = p - bookValue
   return (
     <div className="flex items-center gap-2 flex-wrap rounded-lg border border-default p-2 bg-surface">
-      <span className="text-sm text-muted-foreground">Nilai jual:</span>
+      <span className="text-sm text-muted-foreground" id="dispose-label">Nilai jual:</span>
       <CurrencyInput
         value={p}
         onChange={(v) => setProceeds(String(v))}
         min={0}
         prefix="Rp"
         className="w-40"
+        aria-labelledby="dispose-label"
       />
       <span className={`text-xs ${gainLoss >= 0 ? "text-success" : "text-danger"}`}>
         {gainLoss >= 0 ? "Laba" : "Rugi"} Rp {Math.abs(gainLoss).toLocaleString("id-ID")}

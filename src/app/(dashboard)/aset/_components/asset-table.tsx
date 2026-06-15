@@ -129,9 +129,9 @@ export function AssetTable({
           <Link
             href={`/aset/${row.original.id}`}
             className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
-            aria-label="Detail"
+            aria-label={`Detail aset ${row.original.name}`}
           >
-            <Pencil size={15} />
+            <Pencil size={15} aria-hidden="true" />
           </Link>
         </div>
       ),
