@@ -724,6 +724,15 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
   await requirePermission("edit_stock_adjustments")
 
+  // Validate via the same Zod schema as createStockAdjustment. The previous
+  // hand-parse (requireId / new Date(formData.get("date")) / raw formData.get)
+  // bypassed the schema's warehouseId>=1, non-empty date, and max-length guards
+  // on reason/type/notes — an editor could push an empty/garbage date (crashing
+  // new Date() into Invalid Date) or oversized strings straight into the DB.
+  const parsed = parseFormData(stockAdjustmentSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const adj = await prisma.stockAdjustment.findUniqueOrThrow({ where: { id } })
   if (adj.status !== "draft") {
     throw new Error("Hanya stock adjustment draft yang dapat diedit")
@@ -731,10 +740,10 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
   // Fix #2: Jangan generate documentNo baru saat update
   const adjItems = (safeJsonParse<{ itemId: number; currentQty: number; newQty: number; unitCost: number; reason?: string }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0)
 
-  const warehouseId = requireId(formData.get("warehouseId"), "warehouseId")
+  const warehouseId = v.warehouseId
   const itemIds = adjItems.map((it) => it.itemId)
   const stockMoves = await prisma.stockMove.groupBy({
     by: ['itemId', 'impact'],
@@ -761,10 +770,10 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
       where: { id },
       data: {
         warehouseId,
-        date: new Date(formData.get("date") as string),
-        reason: formData.get("reason") as string | null,
-        type: formData.get("type") as string || "increase",
-        notes: formData.get("notes") as string | null,
+        date: new Date(v.date),
+        reason: v.reason ?? null,
+        type: v.type || "increase",
+        notes: v.notes ?? null,
         items: {
           create: adjItems.map((it) => {
             const systemQty = Number(stockMap.get(Number(it.itemId)) || 0)
@@ -804,6 +813,15 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
   await requirePermission("edit_material_issues")
 
+  // Validate via the same Zod schema as createMaterialIssue. The previous
+  // hand-parse (requireId / safeId / new Date(formData.get("date"))) bypassed
+  // the schema's warehouseId>=1, non-empty date, and max-length guards on
+  // notes — an editor could push an empty date (Invalid Date), an arbitrary
+  // non-existent warehouseId, or a 5MB notes blob straight into the DB.
+  const parsed = parseFormData(materialIssueSchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const v = parsed.data
+
   const mi = await prisma.materialIssue.findUniqueOrThrow({ where: { id } })
   if (mi.status !== "draft") {
     throw new Error("Hanya material issue draft yang dapat diedit")
@@ -811,7 +829,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
   // Fix #2: Jangan generate documentNo baru saat update
   const miItems = (safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
-    formData.get("items") as string | null
+    v.items ?? null
   ) ?? []).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0)
 
   const issue = await prisma.$transaction(async (tx) => {
@@ -826,11 +844,11 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     return tx.materialIssue.update({
       where: { id },
       data: {
-        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
-        projectId: safeId(formData.get("projectId")),
-        workOrderId: safeId(formData.get("workOrderId")),
-        date: new Date(formData.get("date") as string),
-        notes: formData.get("notes") as string | null,
+        warehouseId: v.warehouseId,
+        projectId: v.projectId ?? null,
+        workOrderId: v.workOrderId ?? null,
+        date: new Date(v.date),
+        notes: v.notes ?? null,
         items: {
           create: miItems.map((it) => ({
             itemId: Number(it.itemId),
