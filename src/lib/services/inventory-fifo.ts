@@ -112,20 +112,28 @@ export async function consumeFifoLayers(
   if (consumedQty > 0) {
     // Decrement matching batch lots by the consumed amount.
     if (batchConsumption.size > 0) {
+      // Hoist the batch lookup to O(1) before the loop
+      const uniqueBatchNumbers = Array.from(batchConsumption.keys()).map(k => k.split("|")[0])
+      const batchesData = await tx.itemBatch.findMany({
+        where: {
+          itemId,
+          batchNumber: { in: uniqueBatchNumbers },
+          // Filter by warehouse in memory since the IN clause covers all batches
+        }
+      })
+      
+      const batchUpdates: Promise<any>[] = []
+      
       for (const [key, qtyOut] of batchConsumption.entries()) {
         const [batchNumber, whId] = key.split("|")
         const batchWarehouseId = whId ? parseInt(whId, 10) : null
         
-        const batches = await tx.itemBatch.findMany({
-          where: { 
-            itemId, 
-            batchNumber, 
-            ...(batchWarehouseId != null ? { warehouseId: batchWarehouseId } : {}) 
-          },
-        })
+        const batches = batchesData.filter(b => 
+          b.batchNumber === batchNumber && 
+          (batchWarehouseId != null ? b.warehouseId === batchWarehouseId : true)
+        )
         
         let remainingToDecrement = qtyOut
-        const batchUpdates: Promise<any>[] = []
         for (const batch of batches) {
           if (remainingToDecrement <= 0) break
           const deduct = Math.min(remainingToDecrement, Number(batch.qty))
@@ -139,6 +147,8 @@ export async function consumeFifoLayers(
             remainingToDecrement -= deduct
           }
         }
+      }
+      if (batchUpdates.length > 0) {
         await Promise.all(batchUpdates)
       }
     }
