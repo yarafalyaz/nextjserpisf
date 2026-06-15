@@ -24,3 +24,4 @@ src/lib/hooks/down-payment.hook.ts
 src/actions/project.actions.ts
 src/actions/asset.actions.ts (clean)
 src/actions/vehicle.actions.ts
+src/app/api/cron/route.ts

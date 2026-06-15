@@ -98,25 +98,6 @@ async function taskLockPeriod(): Promise<string> {
   // monthIndex, 0)` gives the last day of the month BEFORE monthIndex.
   const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
 
-  // Check if there are any transactions in the current (next) month
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-
-  const hasTransactions = await prisma.salesInvoice.findFirst({
-    where: {
-      date: { gte: nextMonthStart, lte: nextMonthEnd },
-    },
-    select: { id: true },
-  })
-
-  if (hasTransactions) {
-    // Don't lock if there are transactions in the next period
-    const setting = await prisma.systemSetting.findFirst()
-    if (setting) {
-      return `Period belum dikunci — ada transaksi di bulan depan (${now.getMonth() + 1}/${now.getFullYear()})`
-    }
-  }
-
   const setting = await prisma.systemSetting.findFirst()
   if (!setting) {
     throw new Error("SystemSetting tidak ditemukan")

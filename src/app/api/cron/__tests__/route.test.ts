@@ -117,13 +117,17 @@ describe("GET /api/cron", () => {
       expect(mocks.systemSettingUpdate).toHaveBeenCalled()
     })
 
-    it("skips lock when transactions exist in next month", async () => {
+    it("locks period even when transactions exist in the current month (the just-opened month is unrelated to the previous-period lock)", async () => {
+      // The presence of sales invoices in the current (just-opened) month is the
+      // NORMAL state on/after the 1st of the month and is unrelated to whether
+      // the previous accounting period should be locked. A guard here would make
+      // the auto-lock cron never run in production. See fix(cron): auto-lock period guard skipped lock in normal operation.
       mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 99 })
 
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
-      expect(json.results["lock-period"].message).toContain("belum dikunci")
-      expect(mocks.systemSettingUpdate).not.toHaveBeenCalled()
+      expect(json.results["lock-period"].status).toBe("success")
+      expect(mocks.systemSettingUpdate).toHaveBeenCalled()
     })
 
     it("throws when systemSetting is missing", async () => {
