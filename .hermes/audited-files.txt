@@ -32,3 +32,4 @@ src/lib/hooks/expense.hook.ts (fix: balance guard)
 src/lib/services/inventory-fifo.ts
 src/actions/inventory.actions.ts (fix: double-journal transaction abort)
 src/app/api/cron/daily-notifications/route.ts (fix: local timezone logic bug)
+src/lib/hooks/accounting.hook.ts
