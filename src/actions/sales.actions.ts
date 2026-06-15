@@ -1204,26 +1204,46 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // Insert new items
       if (items.length > 0) {
         await tx.salesInvoiceItem.createMany({
-          data: items.map((item, idx) => ({
-            salesInvoiceId: id,
-            itemId: item.itemId,
-            description: null,
-            qty: Number(item.qty) || 1,
-            uom: item.uom || null,
-            unitPrice: Number(item.unitPrice) || 0,
-            discount: item.discount || 0,
-            total: Math.max(0, safeSubtract(safeMultiply(item.qty, item.unitPrice, 0), item.discount ?? 0, 0)),
-            sortOrder: idx,
-            serialNumbers: item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
-          })),
+          data: items.map((item, idx) => {
+            // Clamp per-line fields to >= 0: a negative qty/unitPrice/discount
+            // sent by a tampered client (updateSalesInvoice does NOT run the
+            // zod schema) would otherwise persist a negative item row. Negative
+            // qty at posting time would credit stock back to the warehouse
+            // (qty_on_hand = qty_on_hand - negative = +stock), inflating
+            // inventory and posting a negative AR/revenue GL.
+            const safeQty = Math.max(0, Number(item.qty) || 0)
+            const safePrice = Math.max(0, Number(item.unitPrice) || 0)
+            const safeDiscount = Math.max(0, Number(item.discount) || 0)
+            return {
+              salesInvoiceId: id,
+              itemId: item.itemId,
+              description: null,
+              qty: safeQty,
+              uom: item.uom || null,
+              unitPrice: safePrice,
+              discount: safeDiscount,
+              total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
+              sortOrder: idx,
+              serialNumbers: item.serialNumbers && item.serialNumbers.length > 0 ? item.serialNumbers : undefined,
+            }
+          }),
         })
       }
 
       // Recalculate totals. Clamp each line to >= 0 so a flat discount larger
       // than the line subtotal can't drive the stored total/subtotal (and the
       // posted AR/revenue GL) negative. Mirrors the quotation computeLine clamp.
-      const subtotal = items.reduce((sum, item) => safeAdd(sum, Math.max(0, safeSubtract(safeMultiply(item.qty, item.unitPrice, 0), item.discount ?? 0, 0)), 0), 0)
-      const taxRate = formData.get("taxRate") ? Number(formData.get("taxRate")) : 0
+      const subtotal = items.reduce((sum, item) => {
+        const safeQty = Math.max(0, Number(item.qty) || 0)
+        const safePrice = Math.max(0, Number(item.unitPrice) || 0)
+        const safeDiscount = Math.max(0, Number(item.discount) || 0)
+        return safeAdd(sum, Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)), 0)
+      }, 0)
+      // Clamp taxRate to >= 0: a negative rate would produce a negative
+      // taxAmount and a negative grandTotal, which then posts a negative
+      // AR/revenue journal. The header discount is already clamped to
+      // [0, subtotal] below; taxRate was the missing counterpart.
+      const taxRate = formData.get("taxRate") ? Math.max(0, Number(formData.get("taxRate"))) : 0
       // Clamp the header discount to [0, subtotal] so a discount larger than the
       // line subtotal can't drive the taxable base, taxAmount, or grandTotal
       // negative (which would post a negative AR/revenue GL). Mirrors the
