@@ -1127,7 +1127,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_sales_orders")
+  await requirePermission("edit_sales_orders")
 
   const existing = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (existing.status !== "draft") {
@@ -1162,7 +1162,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_sales_invoices")
+  await requirePermission("edit_sales_invoices")
 
   const existingInvoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
   if (existingInvoice.status !== "draft") {
@@ -1292,7 +1292,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   "use server"
 
   try {
-  const user = await requirePermission("create_sales_payments")
+  const user = await requirePermission("edit_sales_payments")
 
   // Fetch old invoiceId before update to handle invoice reassignment
   const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true } })
@@ -1375,7 +1375,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_sales_returns")
+  await requirePermission("edit_sales_returns")
 
   const existingReturn = await prisma.salesReturn.findUnique({
     where: { id },
@@ -1513,7 +1513,7 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_delivery_orders")
+  await requirePermission("edit_delivery_orders")
 
   // Validate via the same Zod schema as createDeliveryOrder so the date/string-length/
   // salesOrderId guards are enforced on the update path. The previous hand-rolled
@@ -1568,7 +1568,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_down_payments")
+  await requirePermission("edit_down_payments")
 
   // Fix #2: Jangan generate documentNo baru
   let proofImage: string | null | undefined = undefined

@@ -732,6 +732,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.updateSalesOrder(1, fdMap({ customerId: "1", date: "2026-06-12" }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_sales_orders")
   })
   it("confirmSalesOrder succeeds", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
@@ -769,6 +770,7 @@ describe("Sales Invoice Actions (legacy happy paths)", () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 0 })
     const res = await actions.updateSalesInvoice(1, fdMap({ customerId: "1", date: "2026-06-12", dueDate: "2026-06-20" }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_sales_invoices")
   })
   it("postInvoice succeeds", async () => {
     mocks.prismaMock.salesInvoiceItem.count.mockResolvedValueOnce(1)
@@ -809,6 +811,7 @@ describe("Sales Payment Actions (legacy happy paths)", () => {
     mocks.prismaMock.salesPayment.aggregate.mockResolvedValue({ _sum: { amount: 0 } })
     const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: "1", paymentDate: "2026-06-12", paymentMethod: "cash", amount: "100" }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_sales_payments")
   })
   it("deleteSalesPayment succeeds", async () => {
     mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, salesInvoiceId: 1 })
@@ -837,6 +840,7 @@ describe("Sales Return Actions (legacy happy paths)", () => {
     mocks.prismaMock.salesInvoiceItem.findMany.mockResolvedValue([{ itemId: 1, unitPrice: 100, qty: 10 }])
     const res = await actions.updateSalesReturn(1, fdMap({ customerId: "1", salesInvoiceId: "1", date: "2026-06-12", items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100 }]) }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_sales_returns")
   })
   it("completeSalesReturn succeeds", async () => {
     mocks.prismaMock.salesReturn.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [] })
@@ -864,6 +868,7 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
     mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 1 })
     const res = await actions.updateDeliveryOrder(1, fdMap({ salesOrderId: "1", date: "2026-06-12" }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_delivery_orders")
   })
   it("updateDeliveryOrder rejects invalid input via Zod (no DB write)", async () => {
     const res = await actions.updateDeliveryOrder(1, fdMap({ salesOrderId: "1", date: "" }))
@@ -895,6 +900,7 @@ describe("Down Payment Actions (legacy happy paths)", () => {
     mocks.prismaMock.downPayment.aggregate.mockResolvedValue({ _sum: { amount: 0 } })
     const res = await actions.updateDownPayment(1, fdMap({ quotationId: "1", amount: "100", paymentDate: "2026-06-12" }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_down_payments")
   })
   it("confirmDownPayment succeeds", async () => {
     mocks.prismaMock.downPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
