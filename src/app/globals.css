@@ -22,6 +22,7 @@
   --color-success: #10b981;
   --color-danger: #ef4444;
   --color-warning: #f59e0b;
+  --color-info: #3b82f6;
   --color-surface: var(--bg-card, #ffffff);
   --color-surface-secondary: var(--bg-secondary, #f8fafc);
   --color-foreground: var(--text-primary, #0f172a);
@@ -49,6 +50,9 @@
   --color-danger-soft: color-mix(in srgb, var(--color-danger) 14%, transparent);
   --color-danger-soft-foreground: var(--color-danger);
   --color-danger-600: var(--color-danger);
+  --color-info-soft: color-mix(in srgb, var(--color-info) 14%, transparent);
+  --color-info-soft-foreground: var(--color-info);
+  --color-info-600: var(--color-info);
 }
 
 /* ==================== SHADCN/UI DESIGN TOKENS ====================

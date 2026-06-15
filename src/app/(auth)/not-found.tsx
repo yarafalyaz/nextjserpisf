@@ -11,8 +11,8 @@ export default function AuthNotFound() {
           Tautan yang Anda buka tidak tersedia atau sudah dipindahkan.
         </p>
       </div>
-      <Button asChild>
-        <Link href="/login" className="flex items-center gap-2">
+      <Button asChild className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        <Link href="/login" className="flex items-center gap-2" aria-label="Kembali ke halaman masuk">
           <Home className="h-4 w-4" />
           Kembali ke Halaman Masuk
         </Link>
