@@ -59,13 +59,26 @@ export function CurrencyInput({
     return isNaN(n) ? 0 : n
   }
 
+  const [prevControlledValue, setPrevControlledValue] = useState<number | string | null | undefined>(controlledValue)
   const [displayValue, setDisplayValue] = useState(() =>
     formatDisplay(isControlled ? controlledValue : defaultValue)
   )
 
+  if (isControlled && controlledValue !== prevControlledValue) {
+    setPrevControlledValue(controlledValue)
+    if (controlledValue === null || controlledValue === undefined || controlledValue === "") {
+      setDisplayValue("")
+    } else {
+      const currentNum = parseInput(displayValue)
+      const newNum = typeof controlledValue === "string" ? parseFloat(controlledValue) : controlledValue
+      if (currentNum !== newNum || isNaN(currentNum)) {
+        setDisplayValue(formatDisplay(controlledValue))
+      }
+    }
+  }
+
   const hiddenRef = useRef<HTMLInputElement>(null)
 
-  const visibleValue = isControlled ? formatDisplay(controlledValue) : displayValue
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value
@@ -121,7 +134,7 @@ export function CurrencyInput({
     []
   )
 
-  const numericValue = parseInput(visibleValue)
+  const numericValue = parseInput(displayValue)
 
   return (
     <div className="relative">
@@ -134,7 +147,7 @@ export function CurrencyInput({
         type="text"
         inputMode="numeric"
         id={id}
-        value={visibleValue}
+        value={displayValue}
         onChange={handleChange}
         onBlur={handleBlur}
         onFocus={handleFocus}
