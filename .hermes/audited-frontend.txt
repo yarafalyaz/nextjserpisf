@@ -18,3 +18,7 @@ src/components/reports/report-date-filter.tsx (a11y: role='search'+aria-label on
 src/components/ui/detail-tabs.tsx (responsive: wrapped TabsList in overflow-x-auto container with justify-start on mobile / justify-center on sm+; focus-visible ring on TabsContent for keyboard a11y)
 src/components/forms/vendor-bill-form.tsx (fix: date/dueDate state hydration on edit overriding stored DB values and GL posting date with today/null)
 src/components/ui/page-header.tsx (promoted to Server Component by extracting interactive Button to its own client module)
+22|src/components/activity-log/stats-cards.tsx (a11y: added role='region'+aria-label on grid, role='group'+composite aria-label on each card, aria-hidden on inner text to prevent double announcements)
+23|src/components/ui/empty-state.tsx (a11y: collapsed StatCard nested aria-labels into single composite aria-label on the role='group' wrapper; aria-hidden inner text to avoid SR double-reads)
+24|src/components/ui/qr-code-display.tsx (a11y: added role='img'+aria-label='Kode QR ...' on wrapper, aria-hidden+focusable='false' on raw <QRCodeSVG/> so screen readers announce a single coherent label)
+25|src/components/ui/action-dropdown.tsx (a11y: aria-label='Buka menu aksi' on trigger, aria-hidden='true' on all decorative lucide icons inside DropdownMenuItem)
