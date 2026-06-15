@@ -85,14 +85,18 @@ export async function consumeFifoLayers(
   let toConsume = qty
   let consumedCost = 0
   const batchConsumption = new Map<string, number>()
+  const layerUpdates: Promise<any>[] = []
+
   for (const layer of layers) {
     if (toConsume <= 0) break
     const consume = Math.min(Number(layer.remaining), toConsume)
     consumedCost += consume * Number(layer.unitCost)
-    await tx.inventoryLayer.update({
-      where: { id: layer.id },
-      data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
-    })
+    layerUpdates.push(
+      tx.inventoryLayer.update({
+        where: { id: layer.id },
+        data: { qtyOut: { increment: consume }, remaining: { decrement: consume } },
+      })
+    )
     if (layer.batchNumber) {
       // Key by batchNumber|warehouseId to prevent double-decrement when warehouseId is null
       const key = `${layer.batchNumber}|${layer.warehouseId ?? ""}`
@@ -100,6 +104,8 @@ export async function consumeFifoLayers(
     }
     toConsume -= consume
   }
+
+  await Promise.all(layerUpdates)
 
   // Keep batch lots and serials in sync for tracked items.
   const consumedQty = qty - Math.max(0, toConsume)
@@ -119,17 +125,21 @@ export async function consumeFifoLayers(
         })
         
         let remainingToDecrement = qtyOut
+        const batchUpdates: Promise<any>[] = []
         for (const batch of batches) {
           if (remainingToDecrement <= 0) break
           const deduct = Math.min(remainingToDecrement, Number(batch.qty))
           if (deduct > 0) {
-            await tx.itemBatch.update({
-              where: { id: batch.id },
-              data: { qty: { decrement: deduct } },
-            })
+            batchUpdates.push(
+              tx.itemBatch.update({
+                where: { id: batch.id },
+                data: { qty: { decrement: deduct } },
+              })
+            )
             remainingToDecrement -= deduct
           }
         }
+        await Promise.all(batchUpdates)
       }
     }
     // Mark serials as used for serial-tracked items.
