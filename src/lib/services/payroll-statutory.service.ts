@@ -25,14 +25,14 @@ export interface BpjsResult {
 /** Compute the employee-deducted BPJS portion from monthly base salary. */
 export function computeBpjsEmployee(baseSalary: number): BpjsResult {
   const base = Math.max(0, baseSalary)
-  const health = Math.min(base, BPJS_HEALTH_CEILING) * BPJS_HEALTH_EMPLOYEE_RATE
+  const health = Math.round(Math.min(base, BPJS_HEALTH_CEILING) * BPJS_HEALTH_EMPLOYEE_RATE)
   const jht = base * BPJS_JHT_EMPLOYEE_RATE
   const jp = Math.min(base, BPJS_JP_CEILING) * BPJS_JP_EMPLOYEE_RATE
-  const employment = jht + jp
+  const employment = Math.round(jht + jp)
   return {
-    health: round(health),
-    employment: round(employment),
-    total: round(health + employment),
+    health,
+    employment,
+    total: health + employment,
   }
 }
 
