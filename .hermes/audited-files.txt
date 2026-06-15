@@ -55,3 +55,4 @@ src/lib/hooks/inventory-transfer.hook.ts (fix: float drift in duplicate-row qty 
 src/actions/sales.actions.ts (fix: negative taxRate/qty drove invoice grandTotal negative)
 
 src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)
+src/lib/services/attendance-summary.service.ts (fix: schedule precedence — global schedule wrongly unioned with department/employee schedules, over-counting working days and absentees)

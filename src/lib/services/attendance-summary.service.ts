@@ -55,27 +55,29 @@ export async function calculateAttendanceSummary(
   })
   if (!employee) return empty
 
-  // Which weekdays are working days? (schedule assigned to employee, dept-specific, or global)
+  // Which weekdays are working days? (employee-specific > department-specific > global)
   const allSchedules = await prisma.workSchedule.findMany({
     where: { isActive: true },
     select: { workDays: true, employees: { select: { id: true } }, departments: { select: { id: true } } },
   })
-  const relevant = allSchedules.filter(
-    (s) =>
-      s.employees.some((e) => e.id === employee.id) ||
-      (s.employees.length === 0 &&
-        (s.departments.length === 0 ||
-          (employee.departmentId != null && s.departments.some((d) => d.id === employee.departmentId))))
-  )
+
+  // Precedence matching resolveWorkSchedule logic:
+  // 1. Employee-specific schedule
+  // 2. Department-specific schedule
+  // 3. Global schedule (no employees, no departments)
+  const employeeSchedule = allSchedules.find((s) => s.employees.some((e) => e.id === employee.id))
+  const deptSchedule = allSchedules.find((s) => s.employees.length === 0 && employee.departmentId != null && s.departments.some((d) => d.id === employee.departmentId))
+  const globalSchedule = allSchedules.find((s) => s.employees.length === 0 && s.departments.length === 0)
+  
+  const relevantSchedule = employeeSchedule ?? deptSchedule ?? globalSchedule
+
   const workingWeekdays = new Set(
-    relevant.flatMap((s) =>
-      s.workDays
-        .split(",")
-        .map((d) => d.trim())
-        .filter((d) => d !== "") // drop empty tokens (empty string / trailing comma) so Number("") !== 0 (Sunday)
-        .map((d) => Number(d))
-        .filter((n) => !Number.isNaN(n))
-    )
+    (relevantSchedule?.workDays || "")
+      .split(",")
+      .map((d) => d.trim())
+      .filter((d) => d !== "") // drop empty tokens
+      .map((d) => Number(d))
+      .filter((n) => !Number.isNaN(n))
   )
   // No schedule configured at all → cannot determine working days; skip deduction.
   if (workingWeekdays.size === 0) return empty

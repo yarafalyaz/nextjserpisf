@@ -196,6 +196,7 @@ describe("Self Attendance Actions", () => {
   it("selfCheckIn does not query department holiday or record overtime when employee has no department", async () => {
     mocks.prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 1, name: "Test", departmentId: null })
     mocks.prismaMock.departmentHoliday.findFirst.mockResolvedValueOnce({ id: 1, date: new Date() })
+    attendanceTimeMock.getWibNow.mockReturnValueOnce(new Date("2024-05-10T07:30:00Z")) // mock on-time
     
     // Grab the status written to the database
     let createdStatus: string | undefined
