@@ -57,3 +57,5 @@ src/actions/sales.actions.ts (fix: negative taxRate/qty drove invoice grandTotal
 57|src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)
 58|src/lib/services/attendance-summary.service.ts (fix: schedule precedence — global schedule wrongly unioned with department/employee schedules, over-counting working days and absentees)
 59|src/actions/bulk.actions.ts (fix: asset/vehicle bulk deletion integrity guard bypass)
+
+src/actions/inventory.actions.ts (fix: stuck-in-limbo state on tx failure — processStockAdjustment/processInventoryTransfer/receiveInventoryTransfer/completeMaterialIssue left doc in transient processing/receiving status forever; now roll claim back)

@@ -120,16 +120,29 @@ export async function processStockAdjustment(adjustmentId: number) {
     )
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Hook creates Stock Moves IN/OUT per item + Accounting journal
-    await onStockAdjustmentStock(adjustmentId, Number(user.id), tx)
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Hook creates Stock Moves IN/OUT per item + Accounting journal
+      await onStockAdjustmentStock(adjustmentId, Number(user.id), tx)
 
-    // Update status from processing → processed
-    await tx.stockAdjustment.update({
-      where: { id: adjustmentId },
-      data: { status: "processed" },
+      // Update status from processing → processed
+      await tx.stockAdjustment.update({
+        where: { id: adjustmentId },
+        data: { status: "processed" },
+      })
     })
-  })
+  } catch (e) {
+    // Tx failed after the claim flipped draft -> processing. Restore the
+    // claim so the user can retry instead of leaving the adjustment
+    // permanently stranded in "processing" (where the action refuses to
+    // re-process and the UI offers no way to roll back). Mirrors the
+    // reverseJournal POSTED -> REVERSING claim rollback.
+    await prisma.stockAdjustment.updateMany({
+      where: { id: adjustmentId, status: "processing" },
+      data: { status: "draft" },
+    })
+    throw e
+  }
 
   await logActivity("process", "StockAdjustment", adjustmentId, `Memproses penyesuaian stok #${adjustmentId}`)
   revalidatePath("/inventaris/penyesuaian")
@@ -219,15 +232,26 @@ export async function processInventoryTransfer(transferId: number) {
     )
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Hook creates OUT stock moves (idempotent); action owns status processed.
-    await onInventoryTransferProcessed(transferId, Number(user.id), tx)
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Hook creates OUT stock moves (idempotent); action owns status processed.
+      await onInventoryTransferProcessed(transferId, Number(user.id), tx)
 
-    await tx.inventoryTransfer.update({
-      where: { id: transferId },
-      data: { status: "processed" },
+      await tx.inventoryTransfer.update({
+        where: { id: transferId },
+        data: { status: "processed" },
+      })
     })
-  })
+  } catch (e) {
+    // Tx failed after the claim flipped draft -> processing. Restore the claim
+    // so the transfer can be retried instead of being stranded in "processing"
+    // (the action refuses to re-process it and receive requires "processed").
+    await prisma.inventoryTransfer.updateMany({
+      where: { id: transferId, status: "processing" },
+      data: { status: "draft" },
+    })
+    throw e
+  }
 
   await logActivity("process", "InventoryTransfer", transferId, `Memproses transfer inventaris #${transferId}`)
   revalidatePath("/inventaris/transfer")
@@ -272,13 +296,24 @@ export async function receiveInventoryTransfer(transferId: number) {
     )
   }
 
-  // Hook creates IN stock moves/layers (idempotent); action owns status received.
-  await onInventoryTransferReceived(transferId, Number(user.id))
+  try {
+    // Hook creates IN stock moves/layers (idempotent); action owns status received.
+    await onInventoryTransferReceived(transferId, Number(user.id))
 
-  await prisma.inventoryTransfer.update({
-    where: { id: transferId },
-    data: { status: "received" },
-  })
+    await prisma.inventoryTransfer.update({
+      where: { id: transferId },
+      data: { status: "received" },
+    })
+  } catch (e) {
+    // Receiving failed after the claim flipped processed -> receiving. Restore
+    // the claim so the receiving can be retried instead of being stranded in
+    // "receiving".
+    await prisma.inventoryTransfer.updateMany({
+      where: { id: transferId, status: "receiving" },
+      data: { status: "processed" },
+    })
+    throw e
+  }
 
   await logActivity("receive", "InventoryTransfer", transferId, `Menerima transfer inventaris #${transferId}`)
   revalidatePath("/inventaris/transfer")
@@ -373,10 +408,23 @@ export async function completeMaterialIssue(issueId: number) {
     )
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Hook creates Stock Moves OUT per item + Accounting journal
-    await onMaterialIssueStock(issueId, Number(user.id), tx)
-  })
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Hook creates Stock Moves OUT per item + Accounting journal
+      await onMaterialIssueStock(issueId, Number(user.id), tx)
+    })
+  } catch (e) {
+    // Complete failed after the claim flipped draft -> processing. The hook
+    // updates the status to "completed" inside the same tx, so on failure
+    // neither update happened. Restore the claim so the user can retry
+    // instead of leaving the material issue permanently stranded in
+    // "processing" (where the action refuses to re-process).
+    await prisma.materialIssue.updateMany({
+      where: { id: issueId, status: "processing" },
+      data: { status: "draft" },
+    })
+    throw e
+  }
 
   await logActivity("complete", "MaterialIssue", issueId, `Menyelesaikan pengeluaran material #${issueId}`)
   revalidatePath("/inventaris/pengeluaran-material")
