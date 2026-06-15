@@ -45,14 +45,15 @@ export function AppSearchField({
   }
 
   return (
-    <form onSubmit={handleSubmit} className={cn("relative min-w-0 flex-1 max-w-sm", className)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    <form role="search" aria-label={placeholder} onSubmit={handleSubmit} className={cn("relative min-w-0 flex-1 max-w-sm", className)}>
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
       <Input
         type="text"
         name={paramName}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         className="pl-9 pr-9"
       />
       {value && (

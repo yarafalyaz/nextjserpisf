@@ -1,5 +1,3 @@
-'use client'
-
 import { Badge } from '@/components/ui/shadcn/badge'
 import { statusLabel } from '@/lib/utils/status-labels'
 import { cn } from '@/lib/utils'
