@@ -203,6 +203,23 @@ describe("InventoryService", () => {
 
       await expect(service.postMove(1)).rejects.toThrow("Concurrent stock modification");
     });
+
+    it("handles fractional quantities with float precision safety", async () => {
+      const { service, spies } = buildService();
+      spies.moveFindUniqueOrThrow.mockResolvedValue({
+        id: 1, documentNo: "SM-2", status: "draft", impact: "OUT",
+        itemId: 5, warehouseId: 2, qty: 0.4, cost: 0,
+      });
+      spies.queryRaw
+        .mockResolvedValueOnce([{ id: 5, sku: "ITM-5", qty_on_hand: 100 }])
+        .mockResolvedValueOnce([
+          { id: 1, remaining: 0.3, unit_cost: 5 },
+          { id: 2, remaining: 0.1, unit_cost: 5 },
+        ]);
+      spies.executeRaw.mockResolvedValue(1);
+
+      await service.postMove(1);
+    });
   });
 
   describe("reverseMove", () => {

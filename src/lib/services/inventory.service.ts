@@ -2,6 +2,7 @@
 
 import { PrismaClient, Prisma, StockMove } from '@prisma/client'
 import { notificationService } from './notification.service'
+import { safeAdd, safeSubtract, safeMultiply, safeDivide } from '@/lib/utils/math'
 
 type TxClient = Omit<
   PrismaClient,
@@ -134,17 +135,21 @@ export class InventoryService {
         },
       })
 
-      totalCost += consume * Number(layer.unit_cost)
-      qtyToConsume -= consume
+      totalCost = safeAdd(totalCost, safeMultiply(consume, Number(layer.unit_cost), 0), 0)
+      qtyToConsume = safeSubtract(qtyToConsume, consume, 2)
     }
 
+    // qtyToConsume is now rounded to 2 decimal places (the DB column scale). This
+    // absorbs the float subtraction drift (e.g. 0.4 - 0.3 - 0.1 yields 2.77e-17
+    // in plain JS, which would otherwise falsely trip the "Kurang" branch below
+    // and reject a perfectly balanced FIFO draw against Decimal(15,2) layers).
     if (qtyToConsume > 0) {
       const where = move.warehouseId != null ? ` di gudang #${move.warehouseId}` : ''
       throw new Error(`Stok tidak mencukupi untuk item ${item.sku}${where}. Kurang ${qtyToConsume}.`)
     }
 
     // Update cost on move (weighted average from consumed layers)
-    const unitCost = totalCost / Number(move.qty)
+    const unitCost = safeDivide(totalCost, Number(move.qty), 0)
     await tx.stockMove.update({
       where: { id: move.id },
       data: { cost: unitCost },

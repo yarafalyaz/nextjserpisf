@@ -50,3 +50,4 @@ src/actions/finance.actions.ts (fix: reverseJournal stuck in REVERSING on period
 src/app/api/auth/[...nextauth]/route.ts (clean)
 src/app/api/health/route.ts (clean)
 src/actions/finance.actions.ts (fix: decimal precision balance check bug)
+src/lib/services/inventory.service.ts (fix: float precision in FIFO OUT consumption)
