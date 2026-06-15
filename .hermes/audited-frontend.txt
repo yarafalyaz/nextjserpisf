@@ -6,3 +6,6 @@ src/app/(auth)/ketentuan-layanan/page.tsx (added aria-label + focus ring to back
 335 module error boundaries (src/app/(dashboard)/**/error.tsx) hardened: added role='alert', aria-live='assertive', useEffect console.error, standard Shadcn Button and lucide-react AlertTriangle icons for accessibility.
 src/components/ui/{form-layout,detail-table,page-layout,detail-layout}.tsx (removed unnecessary 'use client' directive to leverage React Server Components)
 src/components/attendance/self-attendance-widget.tsx (replaced broken UnoCSS i-lucide-alert-triangle with lucide-react AlertTriangle, added role='alert'+aria-live, extracted getStatusLabel/getStatusBadgeClass for present/late/half_day/absent, added region role+aria-label to widget shell)
+src/app/(auth)/error.tsx (added role='alert'+aria-live='assertive', focus ring on reset button)
+src/app/(auth)/not-found.tsx (added aria-label + focus-visible ring on back-to-login button)
+src/app/globals.css (added missing --color-info and --color-info-soft/-foreground/-600 tokens; fixed broken text-info/bg-info utilities used by notifications-widget)
