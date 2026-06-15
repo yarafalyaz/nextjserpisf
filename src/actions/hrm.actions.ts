@@ -1667,6 +1667,20 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
 
   await requirePermission("create_overtime_requests")
 
+  // Integrity guard: an approved/rejected overtime has a calculatedValue that
+  // feeds payroll and an audit trail (approvedBy/approvedAt/rejectionReason).
+  // Allowing edits would silently revert status to "pending" (see data block
+  // below), let hours/date/employee be changed after approval, and reset
+  // approval metadata without re-approval. Mirrors updateLeaveRequest's
+  // pending-only guard.
+  const existing = await prisma.overtimeRequest.findUniqueOrThrow({
+    where: { id },
+    select: { status: true },
+  })
+  if (existing.status !== "pending") {
+    throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit")
+  }
+
   const overtime = await prisma.overtimeRequest.update({
     where: { id },
     data: {

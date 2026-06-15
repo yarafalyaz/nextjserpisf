@@ -383,6 +383,18 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("updateOvertimeRequest rejects editing an already-approved request", async () => {
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, employeeId: 1, status: "approved" })
+    const res = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "99",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("menunggu")
+    expect(prismaMock.overtimeRequest.update).not.toHaveBeenCalled()
+  })
+
   it("deleteOvertimeRequest removes record", async () => {
     const res = await actions.deleteOvertimeRequest(1)
     expect(res?.success).toBe(true)
