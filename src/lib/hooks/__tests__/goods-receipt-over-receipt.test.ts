@@ -75,6 +75,7 @@ function wireTx(opts: {
     itemBatchCreate: vi.fn().mockResolvedValue({}),
     itemBatchUpdate: vi.fn().mockResolvedValue({}),
     itemSerialCreate: vi.fn().mockResolvedValue({}),
+    itemSerialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
   }
   const tx = {
     $queryRaw: spies.queryRaw,
@@ -87,7 +88,7 @@ function wireTx(opts: {
     item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany },
     uomConversion: { findMany: spies.uomConversionFindMany },
     itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
-    itemSerial: { create: spies.itemSerialCreate },
+    itemSerial: { create: spies.itemSerialCreate, createMany: spies.itemSerialCreateMany },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
   return { spies, tx }
@@ -231,7 +232,15 @@ describe("onGoodsReceiptVerified stock tracking modules", () => {
       itemMeta: { trackSerial: true },
     })
     await onGoodsReceiptVerified(100, 1)
-    expect(spies.itemSerialCreate).toHaveBeenCalledTimes(2)
+    expect(spies.itemSerialCreateMany).toHaveBeenCalledTimes(1)
+    expect(spies.itemSerialCreateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({ serialNumber: "S1" }),
+          expect.objectContaining({ serialNumber: "S2" }),
+        ]),
+      })
+    )
   })
 
   it("throws when serial numbers array length doesn't match received qty", async () => {

@@ -226,14 +226,14 @@ export async function onGoodsReceiptVerified(
             `Jumlah nomor seri (${serials.length}) tidak sama dengan qty diterima (${Math.round(baseQty)}) untuk item #${item.itemId}.`
           );
         }
-        for (const serialNumber of serials) {
-          await tx.itemSerial.create({
-            data: {
+        if (serials.length > 0) {
+          await tx.itemSerial.createMany({
+            data: serials.map((serialNumber) => ({
               itemId: item.itemId,
               serialNumber,
               warehouseId: goodsReceipt.warehouseId,
               status: "available",
-            },
+            })),
           });
         }
       }

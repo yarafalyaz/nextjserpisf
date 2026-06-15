@@ -1040,15 +1040,15 @@ export async function onPurchaseReturnProcessed(
       },
     });
 
-    for (const entry of entries) {
-      await tx.journalEntry.create({
-        data: {
+    if (entries.length > 0) {
+      await tx.journalEntry.createMany({
+        data: entries.map(e => ({
           journalId: journal.id,
-          accountId: entry.accountId,
-          debit: entry.debit,
-          credit: entry.credit,
-          memo: entry.memo,
-        },
+          accountId: e.accountId,
+          debit: e.debit,
+          credit: e.credit,
+          memo: e.memo,
+        }))
       });
     }
   });

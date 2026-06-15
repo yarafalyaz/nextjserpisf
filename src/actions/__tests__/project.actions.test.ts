@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     delete: vi.fn().mockResolvedValue({}),
     deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     count: vi.fn().mockResolvedValue(0),
+    groupBy: vi.fn().mockResolvedValue([]),
     aggregate: vi.fn().mockResolvedValue({ _avg: { progress: 50 }, _sum: { weight: 100 } }),
   })
 
@@ -100,10 +101,10 @@ describe("Project Actions Error Paths", () => {
   })
   it("initializeProjectStages handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.projectStage.findMany.mockRejectedValueOnce(new Error("db err"))
+    mocks.prismaMock.projectStage.findMany.mockRejectedValue(new Error("db err"))
     const res = await actions.initializeProjectStages(1)
     expect(res?.success).toBe(false)
-    expect(res?.error).toBe("db err")
+    expect((res as any)?.error).toBe("db err")
   })
   it("updateProjectStageProgress handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -178,13 +179,13 @@ describe("Project Stages Extended Branches", () => {
   it("getProjectStageProgress handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.projectStage.findMany.mockResolvedValueOnce([])
-    mocks.prismaMock.projectStage.findMany.mockRejectedValueOnce(new Error("db err"))
+    mocks.prismaMock.projectStage.findMany.mockRejectedValue(new Error("db err"))
     const res = await actions.getProjectStageProgress(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
   it("getProjectProgress returns 0% when no tasks", async () => {
-    mocks.prismaMock.task.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.task.groupBy.mockResolvedValueOnce([])
     const res = await actions.getProjectProgress(1)
     expect(res?.success).toBe(true)
     expect(res?.percentage).toBe(0)
@@ -296,14 +297,16 @@ describe("Project Actions", () => {
   })
   it("getProjectProgress handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.task.count.mockRejectedValueOnce(new Error("db err"))
+    mocks.prismaMock.task.groupBy.mockRejectedValueOnce(new Error("db err"))
     const res = await actions.getProjectProgress(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
   it("getProjectProgress succeeds", async () => {
-    mocks.prismaMock.task.count.mockResolvedValueOnce(10) // total
-    mocks.prismaMock.task.count.mockResolvedValueOnce(5)  // completed
+    mocks.prismaMock.task.groupBy.mockResolvedValueOnce([
+      { status: "completed", _count: 5 },
+      { status: "pending", _count: 5 },
+    ])
     const res = await actions.getProjectProgress(1)
     expect(res?.success).toBe(true)
     expect(res?.percentage).toBe(50)
@@ -581,10 +584,9 @@ describe("syncProjectStatus extended branches", () => {
 
 describe("getProjectStageProgress with stage data", () => {
   it("maps stages and falls back to raw status when label missing", async () => {
-    // initializeProjectStages call -> findMany returns existing so skip create
+    // getProjectStageProgress checks stages first: if stages.length > 0 it uses it
     mocks.prismaMock.projectStage.findMany.mockReset()
     mocks.prismaMock.projectStage.findMany
-      .mockResolvedValueOnce([{ id: 1 }]) // initializeProjectStages: already exists
       .mockResolvedValueOnce([
         { id: 1, name: "Persiapan", sortOrder: 1, status: "completed", startedAt: null, completedAt: null, notes: null },
         { id: 2, name: "Custom", sortOrder: 2, status: "unknown_status", startedAt: null, completedAt: null, notes: "n" },
@@ -593,6 +595,40 @@ describe("getProjectStageProgress with stage data", () => {
     expect(res?.success).toBe(true)
     expect(res?.data?.[0]?.statusLabel).toBe("Selesai")
     expect(res?.data?.[1]?.statusLabel).toBe("unknown_status")
+  })
+
+  it("does not auto-initialize stages if empty and viewer is read-only", async () => {
+    // Mock user has view_projects but lacks edit_projects
+    mocks.requirePermissionMock.mockImplementation((perm) => {
+      if (perm === "view_projects") {
+        return Promise.resolve({ id: 1, permissions: ["view_projects"], roles: ["staff"] })
+      }
+      return Promise.reject(new Error("Akses ditolak"))
+    })
+    mocks.prismaMock.projectStage.findMany.mockReset()
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([])
+
+    const res = await actions.getProjectStageProgress(1)
+    expect(res?.success).toBe(true)
+    expect(res?.data).toEqual([])
+    expect(mocks.prismaMock.projectStage.createMany).not.toHaveBeenCalled()
+  })
+
+  it("auto-initializes stages if empty and viewer has edit permission", async () => {
+    const user = { id: 1, permissions: ["view_projects", "edit_projects"], roles: ["editor"] }
+    mocks.requirePermissionMock.mockResolvedValue(user)
+    mocks.prismaMock.projectStage.findMany.mockReset()
+    mocks.prismaMock.projectStage.findMany
+      .mockResolvedValueOnce([]) // initial check in getProjectStageProgress
+      .mockResolvedValueOnce([]) // check in doInitializeProjectStages
+      .mockResolvedValueOnce([
+        { id: 1, name: "Persiapan", sortOrder: 1, status: "pending", startedAt: null, completedAt: null, notes: null },
+      ]) // return value after initialization
+    
+    const res = await actions.getProjectStageProgress(1)
+    expect(res?.success).toBe(true)
+    expect(res?.data?.[0]?.name).toBe("Persiapan")
+    expect(mocks.prismaMock.projectStage.createMany).toHaveBeenCalled()
   })
 })
 
@@ -633,7 +669,7 @@ describe("NEXT_REDIRECT Error Catch Paths", () => {
   })
 
   it("getProjectProgress re-throws NEXT_REDIRECT error", async () => {
-    mocks.prismaMock.task.count.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_6" })
+    mocks.prismaMock.task.groupBy.mockRejectedValueOnce({ digest: "NEXT_REDIRECT_6" })
     await expect(
       actions.getProjectProgress(1)
     ).rejects.toEqual({ digest: "NEXT_REDIRECT_6" })

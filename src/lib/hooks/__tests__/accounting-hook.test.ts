@@ -159,7 +159,7 @@ describe("onSalesInvoicePosted", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       salesInvoice: { findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow, findUnique: mocks.invoiceFindUnique },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { createMany: mocks.journalEntryCreateMany, create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
       item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
       stockMove: { create: mocks.stockMoveCreate },
       $queryRaw: mocks.queryRaw,
@@ -280,7 +280,7 @@ describe("onSalesPaymentCreated", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       salesPayment: { findUniqueOrThrow: mocks.paymentFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -334,7 +334,7 @@ describe("onPurchaseOrderReceived", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       purchaseOrder: { findUniqueOrThrow: mocks.orderFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -394,7 +394,7 @@ describe("onStockAdjustmentProcessed", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       stockAdjustment: { findUniqueOrThrow: mocks.adjustmentFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -459,7 +459,7 @@ describe("onWorkOrderCompleted", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       workOrder: { findUniqueOrThrow: mocks.workOrderFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -513,7 +513,7 @@ describe("onExpenseApproved", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       expense: { findUniqueOrThrow: mocks.expenseFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -562,7 +562,7 @@ describe("onPettyCashCreated", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       pettyCash: { findUniqueOrThrow: mocks.pettyCashFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -661,7 +661,7 @@ describe("onSalesReturnCompleted", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       salesReturn: { findUniqueOrThrow: mocks.salesReturnFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -729,7 +729,7 @@ describe("onPurchaseReturnProcessed", () => {
       purchaseReturn: { findUniqueOrThrow: mocks.purchaseReturnFindUniqueOrThrow },
       stockMove: { findMany: mocks.stockMoveFindMany },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 
@@ -883,7 +883,7 @@ describe("onMaterialIssueCompleted", () => {
       systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
       materialIssue: { findUniqueOrThrow: mocks.materialIssueFindUniqueOrThrow },
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-      journalEntry: { create: mocks.journalEntryCreate },
+      journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
     }))
   })
 

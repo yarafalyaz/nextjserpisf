@@ -145,13 +145,7 @@ const STAGE_STATUS_LABELS: Record<string, string> = {
   skipped: "Dilewati",
 }
 
-/**
- * Initialize default project stages for a project.
- * Parity with Laravel: Project->initializeStages()
- */
-export async function initializeProjectStages(projectId: number) {
-  try {
-  await requirePermission("edit_projects")
+async function doInitializeProjectStages(projectId: number) {
   const existingStages = await prisma.projectStage.findMany({
     where: { projectId },
   })
@@ -169,8 +163,22 @@ export async function initializeProjectStages(projectId: number) {
   })
 
   await logActivity("initialize", "ProjectStage", projectId, "Inisialisasi tahapan proyek")
-  revalidatePath("/proyek")
   return { success: true }
+}
+
+/**
+ * Initialize default project stages for a project.
+ * Parity with Laravel: Project->initializeStages()
+ */
+export async function initializeProjectStages(projectId: number) {
+  try {
+  await requirePermission("edit_projects")
+  
+  const res = await doInitializeProjectStages(projectId)
+  if (res.success && !res.message) {
+    revalidatePath("/proyek")
+  }
+  return res
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -367,14 +375,18 @@ export async function getProjectProgress(projectId: number) {
   try {
   await requirePermission("view_projects")
 
-  const totalTasks = await prisma.task.count({ where: { projectId } })
+  const taskCounts = await prisma.task.groupBy({
+    by: ['status'],
+    where: { projectId },
+    _count: true,
+  })
+
+  const totalTasks = taskCounts.reduce((sum, g) => sum + g._count, 0)
   if (totalTasks === 0) {
     return { success: true, percentage: 0, totalTasks: 0, completedTasks: 0 }
   }
 
-  const completedTasks = await prisma.task.count({
-    where: { projectId, status: "completed" },
-  })
+  const completedTasks = taskCounts.find((g) => g.status === "completed")?._count || 0
 
   const percentage = Math.round((completedTasks / totalTasks) * 100)
 
@@ -394,13 +406,34 @@ export async function getProjectProgress(projectId: number) {
 export async function getProjectStageProgress(projectId: number) {
   try {
   await requirePermission("view_projects")
-  // Auto-initialize if needed
-  await initializeProjectStages(projectId)
 
-  const stages = await prisma.projectStage.findMany({
+  // Read existing stages first; only auto-initialize when the viewer has edit
+  // permission. Previously this called `initializeProjectStages` which
+  // requires `edit_projects` and silently logged a "Forbidden" error for
+  // view-only users, plus it ran an extra findMany on every read.
+  let stages = await prisma.projectStage.findMany({
     where: { projectId },
     orderBy: { sortOrder: "asc" },
   })
+  if (stages.length === 0) {
+    // Only auto-initialize for users who can edit. Probe the edit permission
+    // separately so a genuine DB error during initialization still surfaces
+    // (only the permission denial is swallowed, leaving an empty list).
+    let canEdit = false
+    try {
+      await requirePermission("edit_projects")
+      canEdit = true
+    } catch {
+      // view-only user: leave the empty list as-is; no write.
+    }
+    if (canEdit) {
+      await doInitializeProjectStages(projectId)
+      stages = await prisma.projectStage.findMany({
+        where: { projectId },
+        orderBy: { sortOrder: "asc" },
+      })
+    }
+  }
 
   const progress = stages.map((s) => ({
     id: s.id,
