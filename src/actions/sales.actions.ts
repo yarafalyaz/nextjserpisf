@@ -16,7 +16,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, createSalesReturnSchema } from "@/lib/validations/sales.schemas"
+import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 
@@ -1514,9 +1514,20 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
 
   try {
   await requirePermission("create_delivery_orders")
-  const salesOrderId = requireId(formData.get("salesOrderId"), "salesOrderId")
+
+  // Validate via the same Zod schema as createDeliveryOrder so the date/string-length/
+  // salesOrderId guards are enforced on the update path. The previous hand-rolled
+  // formData.get() chain bypassed parseFormData(updateDeliveryOrderSchema) entirely —
+  // a draft editor could push arbitrary strings into `date` (crashing new Date()),
+  // non-numeric salesOrderId, or 5MB notes with no enforcement.
+  const parsed = parseFormData(updateDeliveryOrderSchema, formData)
+  if (!parsed.success) {
+    return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  }
+  const v = parsed.data
+
   const salesOrder = await prisma.salesOrder.findUnique({
-    where: { id: salesOrderId },
+    where: { id: v.salesOrderId },
     select: { customerId: true },
   })
 
@@ -1524,20 +1535,20 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
   const deliveryOrder = await prisma.deliveryOrder.update({
     where: { id },
     data: {
-      doNumber: (formData.get("doNumber") as string) || null,
+      doNumber: v.doNumber ?? null,
       customerId: salesOrder?.customerId ?? null,
-      salesOrderId,
-      date: new Date(formData.get("date") as string),
-      deliveryDate: formData.get("deliveryDate") ? new Date(formData.get("deliveryDate") as string) : null,
-      shippingAddress: (formData.get("shippingAddress") as string) || null,
-      shippingProvince: (formData.get("shippingProvince") as string) || null,
-      shippingCity: (formData.get("shippingCity") as string) || null,
-      shippingDistrict: (formData.get("shippingDistrict") as string) || null,
-      shippingVillage: (formData.get("shippingVillage") as string) || null,
-      shippingPostalCode: (formData.get("shippingPostalCode") as string) || null,
-      shippingPhone: (formData.get("shippingPhone") as string) || null,
-      vehicleNumber: (formData.get("vehicleNumber") as string) || null,
-      notes: formData.get("notes") as string | null,
+      salesOrderId: v.salesOrderId,
+      date: new Date(v.date),
+      deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+      shippingAddress: v.shippingAddress ?? null,
+      shippingProvince: v.shippingProvince ?? null,
+      shippingCity: v.shippingCity ?? null,
+      shippingDistrict: v.shippingDistrict ?? null,
+      shippingVillage: v.shippingVillage ?? null,
+      shippingPostalCode: v.shippingPostalCode ?? null,
+      shippingPhone: v.shippingPhone ?? null,
+      vehicleNumber: v.vehicleNumber ?? null,
+      notes: v.notes ?? null,
     },
   })
 

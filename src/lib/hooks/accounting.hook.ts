@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
-import { toBaseFactor } from "@/lib/services/uom.service";
+import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 
 /**
  * Accounting Hook - Observer pattern replacement for all accounting journal entries.
@@ -187,24 +187,50 @@ export async function onSalesInvoicePosted(
     const itemRows = itemIds.length
       ? await tx.item.findMany({
           where: { id: { in: itemIds } },
-          select: { id: true, cost: true, isProduct: true, defaultWarehouseId: true },
+          select: { id: true, cost: true, isProduct: true, defaultWarehouseId: true, unitOfMeasure: true },
         })
       : [];
     const itemInfo = new Map(itemRows.map((r) => [r.id, r]));
 
+    const enteredUoms = [...new Set(productItems.map((it) => (it as { uom?: string | null }).uom).filter(Boolean))] as string[];
+    const conversions = (itemIds.length && enteredUoms.length)
+      ? await tx.uomConversion.findMany({
+          where: { itemId: { in: itemIds }, code: { in: enteredUoms } },
+          select: { itemId: true, code: true, factorToBase: true },
+        })
+      : [];
+    const factorMap = new Map(
+      conversions.map((c) => [`${c.itemId}:${c.code}`, Number(c.factorToBase)])
+    );
+
+    if (itemIds.length > 0) {
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
+    }
+    
+    // Batch SM generation
+    const smProductIdx: number[] = [];
+    for (let i = 0; i < productItems.length; i++) {
+      const it = productItems[i];
+      const info = itemInfo.get(it.itemId);
+      if (info?.isProduct) smProductIdx.push(i);
+    }
+    const smDocNos = smProductIdx.length
+      ? await generateDocumentNumberBatch("SM", smProductIdx.length)
+      : [];
+
     let cogsAmount = 0;
+    let smCursor = 0;
     for (const line of productItems) {
       const info = itemInfo.get(line.itemId);
       if (!info || !info.isProduct) continue; // services / non-stock items: no stock-out, no COGS
+      const smDocNo = smDocNos[smCursor++];
       // Multi-UoM: convert sold qty to base units for stock-out / COGS.
-      const factor = await toBaseFactor(tx, line.itemId, (line as { uom?: string | null }).uom);
+      const uom = (line as { uom?: string | null }).uom;
+      const isBaseUom = !uom || uom === info.unitOfMeasure;
+      const rawFactor = isBaseUom ? 1 : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
+      const factor = rawFactor > 0 ? rawFactor : 1;
       const qty = Number(line.qty) * factor;
       const fallbackUnitCost = factor > 0 ? Number(info.cost ?? 0) / factor : Number(info.cost ?? 0);
-
-      // Lock the item row to serialize concurrent stock-out for the same item,
-      // preventing two parallel sales from racing the FIFO layers into negative
-      // (oversell/negative-remaining). Mirrors material-issue/work-order hooks.
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${line.itemId} FOR UPDATE`;
 
       // Decrement on-hand (reflects the sale even if overselling) and consume
       // FIFO layers from the item's default warehouse up to what is available
@@ -226,7 +252,7 @@ export async function onSalesInvoicePosted(
 
       await tx.stockMove.create({
         data: {
-          documentNo: `SM-INV-${invoice.documentNo}-${line.itemId}`,
+          documentNo: smDocNo,
           itemId: line.itemId,
           warehouseId: info.defaultWarehouseId ?? null,
           qty,

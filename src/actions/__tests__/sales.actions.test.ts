@@ -865,6 +865,12 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
     const res = await actions.updateDeliveryOrder(1, fdMap({ salesOrderId: "1", date: "2026-06-12" }))
     expect(res?.success).toBe(true)
   })
+  it("updateDeliveryOrder rejects invalid input via Zod (no DB write)", async () => {
+    const res = await actions.updateDeliveryOrder(1, fdMap({ salesOrderId: "1", date: "" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.deliveryOrder.update).not.toHaveBeenCalled()
+  })
   it("deleteDeliveryOrder succeeds", async () => {
     const res = await actions.deleteDeliveryOrder(1)
     expect(res?.success).toBe(true)

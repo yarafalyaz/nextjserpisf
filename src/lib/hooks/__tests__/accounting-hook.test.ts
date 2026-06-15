@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
   executeRaw: vi.fn(),
   stockMoveCreate: vi.fn(),
   itemFindMany: vi.fn(),
+  uomConversionFindMany: vi.fn(),
+  generateDocumentNumberBatch: vi.fn(),
   materialIssueFindUniqueOrThrow: vi.fn(),
   vendorBillFindUniqueOrThrow: vi.fn(),
   vendorBillFindUnique: vi.fn(),
@@ -90,6 +92,10 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 
 vi.mock("@/lib/services/inventory-fifo", () => ({
   consumeFifoLayers: (...a: unknown[]) => mocks.fifoConsume(...a),
+}))
+
+vi.mock("@/lib/utils/document-number", () => ({
+  generateDocumentNumberBatch: (...a: unknown[]) => mocks.generateDocumentNumberBatch(...a),
 }))
 
 describe("deleteJournalByReference", () => {
@@ -161,6 +167,7 @@ describe("onSalesInvoicePosted", () => {
       journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
       journalEntry: { create: mocks.journalEntryCreate, createMany: vi.fn(async (args) => { args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d })); return { count: args.data.length }; }) },
       item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
+      uomConversion: { findMany: mocks.uomConversionFindMany },
       stockMove: { create: mocks.stockMoveCreate },
       $queryRaw: mocks.queryRaw,
       $executeRaw: mocks.executeRaw,
@@ -169,6 +176,10 @@ describe("onSalesInvoicePosted", () => {
     mocks.queryRaw.mockResolvedValue([])
     mocks.executeRaw.mockResolvedValue(0)
     mocks.stockMoveCreate.mockResolvedValue({ id: 1 })
+    mocks.uomConversionFindMany.mockResolvedValue([])
+    mocks.generateDocumentNumberBatch.mockImplementation(async (_key: string, count: number) =>
+      Array.from({ length: count }, (_, i) => `SM-${i + 1}`)
+    )
   })
 
   it("returns early if system settings are missing account mappings", async () => {
