@@ -375,20 +375,21 @@ export async function onPurchaseOrderReceived(
   orderId: number,
   userId?: number
 , txClient?: TxClient): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.inventoryAccountId || !settings.purchasePayableAccountId) return;
 
-  const order = await prisma.purchaseOrder.findUniqueOrThrow({
+  const order = await db.purchaseOrder.findUniqueOrThrow({
     where: { id: orderId },
   });
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "PurchaseOrder", referenceId: orderId },
   });
   if (existing) return;
 
-  await assertPeriodOpen(new Date());
+  await assertPeriodOpen(new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PO-RCV", orderId);
@@ -462,16 +463,17 @@ export async function onStockAdjustmentProcessed(
   adjustmentId: number,
   userId?: number
 , txClient?: TxClient): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.inventoryAccountId || !settings.stockAdjustmentAccountId) return;
 
-  const adjustment = await prisma.stockAdjustment.findUniqueOrThrow({
+  const adjustment = await db.stockAdjustment.findUniqueOrThrow({
     where: { id: adjustmentId },
     include: { items: true },
   });
 
   // Idempotency check — covers both IN and OUT journal types
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: { in: ["StockAdjustment", "StockAdjustmentOut"] }, referenceId: adjustmentId },
   });
   if (existing) return;
@@ -487,7 +489,7 @@ export async function onStockAdjustmentProcessed(
     else if (diff < 0) totalNegative += value;
   }
 
-  await assertPeriodOpen(new Date());
+  await assertPeriodOpen(new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
     // Journal for positive adjustments (stock increase)
@@ -586,16 +588,17 @@ export async function onWorkOrderCompleted(
   workOrderId: number,
   userId?: number
 , txClient?: TxClient): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.wipAccountId || !settings.inventoryAccountId) return;
 
-  const workOrder = await prisma.workOrder.findUniqueOrThrow({
+  const workOrder = await db.workOrder.findUniqueOrThrow({
     where: { id: workOrderId },
     include: { items: true },
   });
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "WorkOrder", referenceId: workOrderId },
   });
   if (existing) return;
@@ -608,7 +611,7 @@ export async function onWorkOrderCompleted(
 
   if (totalCost <= 0) return;
 
-  await assertPeriodOpen(new Date());
+  await assertPeriodOpen(new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "WO", workOrderId);
@@ -1061,16 +1064,17 @@ export async function onMaterialIssueCompleted(
   issueId: number,
   userId?: number
 , txClient?: TxClient): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.materialExpenseAccountId || !settings.inventoryAccountId) return;
 
-  const issue = await prisma.materialIssue.findUniqueOrThrow({
+  const issue = await db.materialIssue.findUniqueOrThrow({
     where: { id: issueId },
     include: { items: true },
   });
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "MaterialIssue", referenceId: issueId },
   });
   if (existing) return;
@@ -1083,7 +1087,7 @@ export async function onMaterialIssueCompleted(
 
   if (totalCost <= 0) return;
 
-  await assertPeriodOpen(new Date());
+  await assertPeriodOpen(new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "MI", issueId);
@@ -1137,20 +1141,21 @@ export async function onDownPaymentReceived(
   dpId: number,
   userId?: number
 , txClient?: TxClient): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   // Fix #27: Harus punya cashBankAccountId untuk Dr. Bank/Cash
   if (!settings.cashBankAccountId || !settings.salesReceivableAccountId) return;
 
-  const dp = await prisma.downPayment.findUniqueOrThrow({
+  const dp = await db.downPayment.findUniqueOrThrow({
     where: { id: dpId },
   });
 
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "DownPayment", referenceId: dpId },
   });
   if (existing) return;
 
-  await assertPeriodOpen(dp.paymentDate || new Date());
+  await assertPeriodOpen(dp.paymentDate || new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
@@ -1367,16 +1372,17 @@ export async function onPayrollPaid(
   payrollId: number,
   userId?: number
 , txClient?: TxClient): Promise<void> {
-  const settings = await getSystemSettings();
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId) return;
 
   // Idempotency
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "Payroll", referenceId: payrollId },
   });
   if (existing) return;
 
-  const payroll = await prisma.payroll.findUniqueOrThrow({
+  const payroll = await db.payroll.findUniqueOrThrow({
     where: { id: payrollId },
   });
 
@@ -1386,7 +1392,7 @@ export async function onPayrollPaid(
 
   if (totalExpense <= 0) return;
 
-  await assertPeriodOpen(payroll.paymentDate ?? new Date());
+  await assertPeriodOpen(payroll.paymentDate ?? new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
