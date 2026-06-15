@@ -65,7 +65,14 @@ export async function calculateAttendanceSummary(
           (employee.departmentId != null && s.departments.some((d) => d.id === employee.departmentId))))
   )
   const workingWeekdays = new Set(
-    relevant.flatMap((s) => s.workDays.split(",").map((d) => Number(d.trim())).filter((n) => !Number.isNaN(n)))
+    relevant.flatMap((s) =>
+      s.workDays
+        .split(",")
+        .map((d) => d.trim())
+        .filter((d) => d !== "") // drop empty tokens (empty string / trailing comma) so Number("") !== 0 (Sunday)
+        .map((d) => Number(d))
+        .filter((n) => !Number.isNaN(n))
+    )
   )
   // No schedule configured at all → cannot determine working days; skip deduction.
   if (workingWeekdays.size === 0) return empty

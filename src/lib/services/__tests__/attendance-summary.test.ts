@@ -149,6 +149,38 @@ describe("attendance-summary.service", () => {
     expect(result.absentDays).toBe(7);
   });
 
+  it("does not count Sunday when workDays is empty (Number('') === 0 trap)", async () => {
+    mocks.employeeFindUnique.mockResolvedValue({ id: 1, departmentId: null, baseSalary: 7000000 });
+    // An empty workDays string means "no scheduled work days". It must NOT be
+    // parsed into [0] (Sunday). "".split(",") => [""], Number("") => 0, which
+    // would silently schedule Sunday and deduct salary for a Sunday "bolos".
+    mocks.workScheduleFindMany.mockResolvedValue([
+      { workDays: "", employees: [], departments: [] },
+    ]);
+
+    const result = await calculateAttendanceSummary(1, START, END);
+
+    // No working days configured at all -> nothing to evaluate, no deduction.
+    expect(result.workingDays).toBe(0);
+    expect(result.absentDays).toBe(0);
+    expect(result.absentDeduction).toBe(0);
+  });
+
+  it("ignores empty tokens from a trailing comma in workDays", async () => {
+    mocks.employeeFindUnique.mockResolvedValue({ id: 1, departmentId: null, baseSalary: 0 });
+    // Trailing comma: "1,2,3,4,5,".split(",") => [..., ""], Number("") => 0.
+    // The stray empty token must not add Sunday (day 0) to the working week.
+    mocks.workScheduleFindMany.mockResolvedValue([
+      { workDays: "1,2,3,4,5,", employees: [], departments: [] },
+    ]);
+
+    const result = await calculateAttendanceSummary(1, START, END);
+
+    // Mon-Fri only. Jan 4 2026 (Sun) must NOT be counted as a working day.
+    // Jan 1(Thu),2(Fri),5(Mon),6(Tue),7(Wed) = 5 working days.
+    expect(result.workingDays).toBe(5);
+  });
+
   it("matches department-scoped schedule", async () => {
     mocks.employeeFindUnique.mockResolvedValue({ id: 7, departmentId: 3, baseSalary: 0 });
     mocks.workScheduleFindMany.mockResolvedValue([
