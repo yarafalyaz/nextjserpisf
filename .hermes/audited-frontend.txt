@@ -3,3 +3,4 @@ src/app/error.tsx (removed invalid <html><body> wrapper from route-level error b
 src/app/(dashboard)/not-found.tsx (fixed broken 404 numeral class: text-center-code → text-6xl font-bold)
 src/app/(auth)/kebijakan-privasi/page.tsx (added aria-label + focus ring to back link)
 src/app/(auth)/ketentuan-layanan/page.tsx (added aria-label + focus ring to back link)
+335 module error boundaries (src/app/(dashboard)/**/error.tsx) hardened: added role='alert', aria-live='assertive', useEffect console.error, standard Shadcn Button and lucide-react AlertTriangle icons for accessibility.
