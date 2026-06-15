@@ -506,18 +506,44 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     }
   }
 
-  // 1. Base Salary & Active Loans
-  const employee = await prisma.employee.findUnique({
-    where: { id: employeeId },
-    select: {
-      baseSalary: true,
-      maritalStatus: true,
-      employeeLoans: {
-        where: { status: "active" }
+  // Queries 1–5 are mutually independent (each keyed only on employeeId and the
+  // date range), so fire them in a single Promise.all instead of five sequential
+  // round-trips. This matters most in generateBulkPayroll, which invokes this
+  // estimator once per active employee inside a serial loop: the change collapses
+  // 5×N sequential DB hits into N batched round-trips.
+  const [employee, overtimes, appreciations, latePenalty, attendance] = await Promise.all([
+    // 1. Base Salary & Active Loans
+    prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: {
+        baseSalary: true,
+        maritalStatus: true,
+        employeeLoans: {
+          where: { status: "active" }
+        }
       }
-    }
-  })
-  
+    }),
+    // 2. Overtime
+    prisma.overtimeRequest.findMany({
+      where: {
+        employeeId,
+        status: "approved",
+        date: { gte: startDate, lte: endDate }
+      }
+    }),
+    // 3. Appreciation
+    prisma.appreciation.findMany({
+      where: {
+        employeeId,
+        date: { gte: startDate, lte: endDate }
+      }
+    }),
+    // 4. Late Deduction
+    calculateLatePenalty(employeeId, startDate, endDate),
+    // 5. Attendance summary (working days, absent/bolos deduction, holidays excluded)
+    calculateAttendanceSummary(employeeId, startDate, endDate),
+  ])
+
   if (!employee) throw new Error("Employee not found")
 
   const baseSalary = Number(employee.baseSalary)
@@ -528,30 +554,9 @@ export async function getPayrollEstimation(employeeId: number, startDateStr: str
     0
   )
 
-  // 2. Overtime Total
-  const overtimes = await prisma.overtimeRequest.findMany({
-    where: {
-      employeeId,
-      status: "approved",
-      date: { gte: startDate, lte: endDate }
-    }
-  })
   const overtimeTotal = overtimes.reduce((sum, ot) => safeAdd(sum, ot.calculatedValue ?? 0, 0), 0)
 
-  // 3. Appreciation Total
-  const appreciations = await prisma.appreciation.findMany({
-    where: {
-      employeeId,
-      date: { gte: startDate, lte: endDate }
-    }
-  })
   const appreciationTotal = appreciations.reduce((sum, ap) => safeAdd(sum, ap.amount ?? 0, 0), 0)
-
-  // 4. Late Deduction
-  const latePenalty = await calculateLatePenalty(employeeId, startDate, endDate)
-
-  // 5. Attendance summary (working days, absent/bolos deduction, holidays excluded)
-  const attendance = await calculateAttendanceSummary(employeeId, startDate, endDate)
 
   // 6. Statutory: BPJS (employee portion) + PPh21
   const grossSalary = safeSum([baseSalary, overtimeTotal, appreciationTotal], 0)
