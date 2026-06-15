@@ -141,3 +141,21 @@ describe("GET /api/dashboard/notifications", () => {
     expect(json.latestNotifications[0].readAt).toBe("2026-06-01T00:00:00.000Z")
   })
 })
+
+  it("filters out cancelled invoices from overdue count", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T12:00:00"))
+
+    mocks.requireAuth.mockResolvedValue({ id: 1, roles: ["super_admin"] })
+    mocks.hasPermission.mockResolvedValue(true)
+    mocks.salesInvoiceCount.mockResolvedValue(0)
+
+    await GET()
+
+    // Assert that the query filters out cancelled status
+    expect(mocks.salesInvoiceCount).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        status: { not: "cancelled" },
+      }),
+    })
+  })

@@ -35,6 +35,13 @@ export async function GET() {
         where: {
           dueDate: { lt: new Date() },
           paymentStatus: { not: "paid" },
+          // Cancelled invoices are void; even if they retain a past due date
+          // and unpaid paymentStatus (cancelled status short-circuits the
+          // payment-state recalc), they must never inflate the overdue count.
+          // Mirrors the daily-notifications cron filter to keep both views
+          // consistent — previously a cancelled invoice would surface here
+          // and overstate overdue accounts receivable to admins.
+          status: { not: "cancelled" },
           deletedAt: null,
         },
       }) : Promise.resolve(0),

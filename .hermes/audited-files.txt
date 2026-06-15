@@ -25,3 +25,4 @@ src/actions/project.actions.ts
 src/actions/asset.actions.ts (clean)
 src/actions/vehicle.actions.ts
 src/app/api/cron/route.ts
+src/lib/services/attendance-summary.service.ts
