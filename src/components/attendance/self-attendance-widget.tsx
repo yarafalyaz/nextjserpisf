@@ -3,7 +3,7 @@
 import { getErrorMessage } from "@/lib/utils/error"
 
 import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react"
-import { Clock, MapPin, CheckCircle, LogIn, LogOut, Loader2, Navigation } from "lucide-react"
+import { Clock, MapPin, CheckCircle, LogIn, LogOut, Loader2, Navigation, AlertTriangle } from "lucide-react"
 import { getTodayAttendance, selfCheckIn, selfCheckOut, getCompanyLocation } from "@/actions/self-attendance.actions"
 import { Button } from "@/components/ui/page-header"
 
@@ -28,6 +28,26 @@ interface AttendanceStatus {
   checkInLongitude: number | null
   checkOutLatitude: number | null
   checkOutLongitude: number | null
+}
+
+function getStatusLabel(status: string): string {
+  switch (status) {
+    case "present": return "Hadir"
+    case "late": return "Terlambat"
+    case "half_day": return "Setengah Hari"
+    case "absent": return "Tidak Hadir"
+    default: return status
+  }
+}
+
+function getStatusBadgeClass(status: string): string {
+  switch (status) {
+    case "present": return "bg-success/10 text-success"
+    case "late": return "bg-warning/10 text-warning"
+    case "half_day": return "bg-info/10 text-info"
+    case "absent": return "bg-danger/10 text-danger"
+    default: return "bg-muted text-muted-foreground"
+  }
 }
 
 function formatJam(iso: string | null): string {
@@ -213,7 +233,7 @@ export function SelfAttendanceWidget() {
   const sudahCheckOut = status?.checkOut !== null
 
   return (
-    <div className="bg-surface rounded-2xl border border-default shadow-sm overflow-hidden">
+    <div className="bg-surface rounded-2xl border border-default shadow-sm overflow-hidden" role="region" aria-label="Widget Absensi Mandiri">
       {/* Header */}
       <div
         className="relative px-6 pt-6 pb-5"
@@ -236,9 +256,13 @@ export function SelfAttendanceWidget() {
       <div className="p-6 space-y-5">
         {/* Error */}
         {error && (
-          <div className="bg-danger/10 text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm flex items-center gap-2">
-            <span className="i-lucide-alert-triangle size-4 shrink-0" />
-            {error}
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="bg-danger/10 text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm flex items-center gap-2"
+          >
+            <AlertTriangle size={16} className="shrink-0" aria-hidden="true" />
+            <span>{error}</span>
           </div>
         )}
 
@@ -250,8 +274,8 @@ export function SelfAttendanceWidget() {
               <span className="font-semibold text-foreground">
                 {sudahCheckOut ? "Absensi Hari Ini Lengkap" : "Sedang Bekerja"}
               </span>
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
-                {status.status === "present" ? "Hadir" : status.status === "late" ? "Terlambat" : status.status === "half_day" ? "Setengah Hari" : status.status}
+              <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${getStatusBadgeClass(status.status)}`}>
+                {getStatusLabel(status.status)}
               </span>
             </div>
 
