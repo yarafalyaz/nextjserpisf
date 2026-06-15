@@ -1,5 +1,6 @@
 import { prisma, TxClient } from "@/lib/db/prisma";
-import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { Prisma } from "@prisma/client";
+import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { safeAdd } from "@/lib/utils/math";
 
@@ -62,40 +63,46 @@ export async function onTransferProcessed(
     }
 
     // Create Stock Move OUT per item from source warehouse
-    for (const [itemId, qty] of aggregated) {
-      const smDocNo = await generateDocumentNumber("SM");
+    const aggregatedItems = Array.from(aggregated.entries());
+    if (aggregatedItems.length > 0) {
+      // 1. Batch-generate one document number per item (was N serial round-trips).
+      const smDocNos = await generateDocumentNumberBatch("SM", aggregatedItems.length);
+      // 2. Lock all item rows in a single query (was N serial FOR UPDATE).
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(aggregatedItems.map(([id]) => id))}) FOR UPDATE`;
 
-      // Lock the item row to serialize global qtyOnHand updates.
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${itemId} FOR UPDATE`;
+      let docIdx = 0;
+      for (const [itemId, qty] of aggregatedItems) {
+        const smDocNo = smDocNos[docIdx++];
 
-      // Consume FIFO from the SOURCE warehouse — track cost so the destination
-      // layer can preserve the cost basis (avoids transfers zeroing out COGS).
-      const { consumedCost } = await consumeFifoLayers(tx, {
-        itemId: itemId,
-        warehouseId: transfer.sourceWarehouseId,
-        qty: qty,
-        label: `transfer ${transfer.documentNo}`,
-      });
-      const unitCost = qty > 0 ? consumedCost / qty : 0;
-
-      await tx.stockMove.create({
-        data: {
-          documentNo: smDocNo,
+        // Consume FIFO from the SOURCE warehouse — track cost so the destination
+        // layer can preserve the cost basis (avoids transfers zeroing out COGS).
+        const { consumedCost } = await consumeFifoLayers(tx, {
           itemId: itemId,
           warehouseId: transfer.sourceWarehouseId,
           qty: qty,
-          cost: unitCost,
-          impact: "OUT",
-          status: "posted",
-          referenceType: "InventoryTransfer",
-          referenceId: transfer.id,
-          notes: `Transfer OUT ke WH#${transfer.destinationWarehouseId} - ${transfer.documentNo}`,
-          createdBy: userId ?? null,
-        },
-      });
+          label: `transfer ${transfer.documentNo}`,
+        });
+        const unitCost = qty > 0 ? consumedCost / qty : 0;
 
-      // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${itemId}`;
+        await tx.stockMove.create({
+          data: {
+            documentNo: smDocNo,
+            itemId: itemId,
+            warehouseId: transfer.sourceWarehouseId,
+            qty: qty,
+            cost: unitCost,
+            impact: "OUT",
+            status: "posted",
+            referenceType: "InventoryTransfer",
+            referenceId: transfer.id,
+            notes: `Transfer OUT ke WH#${transfer.destinationWarehouseId} - ${transfer.documentNo}`,
+            createdBy: userId ?? null,
+          },
+        });
+
+        // Update item qtyOnHand (global total)
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${itemId}`;
+      }
     }
   });
 }
@@ -170,44 +177,51 @@ export async function onTransferReceived(
     }
 
     // Create Stock Move IN per item to destination warehouse
-    for (const [itemId, qty] of aggregated) {
-      const smDocNo = await generateDocumentNumber("SM");
+    const aggregatedItems = Array.from(aggregated.entries());
+    if (aggregatedItems.length > 0) {
+      // Batch-generate one document number per item (was N serial round-trips).
+      const smDocNos = await generateDocumentNumberBatch("SM", aggregatedItems.length);
 
-      // Preserve the cost basis carried by the matching OUT move (FIFO cost
-      // captured when the transfer was processed) instead of zeroing it.
-      const carriedUnitCost = carriedCostByItem.get(itemId) ?? 0;
+      let docIdx = 0;
+      for (const [itemId, qty] of aggregatedItems) {
+        const smDocNo = smDocNos[docIdx++];
 
-      // Capture the id from the create return value — eliminates the previous
-      // tx.stockMove.findFirst({ where: { documentNo: smDocNo } }) round-trip
-      // that was running once per item.
-      const createdMove = await tx.stockMove.create({
-        data: {
-          documentNo: smDocNo,
+        // Preserve the cost basis carried by the matching OUT move (FIFO cost
+        // captured when the transfer was processed) instead of zeroing it.
+        const carriedUnitCost = carriedCostByItem.get(itemId) ?? 0;
+
+        // Capture the id from the create return value — eliminates the previous
+        // tx.stockMove.findFirst({ where: { documentNo: smDocNo } }) round-trip
+        // that was running once per item.
+        const createdMove = await tx.stockMove.create({
+          data: {
+            documentNo: smDocNo,
+            itemId: itemId,
+            warehouseId: transfer.destinationWarehouseId,
+            qty: qty,
+            cost: carriedUnitCost,
+            impact: "IN",
+            status: "posted",
+            referenceType: "InventoryTransfer",
+            referenceId: transfer.id,
+            notes: `Transfer IN dari WH#${transfer.sourceWarehouseId} - ${transfer.documentNo}`,
+            createdBy: userId ?? null,
+          },
+          select: { id: true },
+        });
+
+        // Update item qtyOnHand (global total)
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${itemId}`;
+
+        // Create FIFO inventory layer for received stock in the DESTINATION warehouse
+        await createInLayer(tx, {
           itemId: itemId,
           warehouseId: transfer.destinationWarehouseId,
+          stockMoveId: createdMove.id,
           qty: qty,
-          cost: carriedUnitCost,
-          impact: "IN",
-          status: "posted",
-          referenceType: "InventoryTransfer",
-          referenceId: transfer.id,
-          notes: `Transfer IN dari WH#${transfer.sourceWarehouseId} - ${transfer.documentNo}`,
-          createdBy: userId ?? null,
-        },
-        select: { id: true },
-      });
-
-      // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${itemId}`;
-
-      // Create FIFO inventory layer for received stock in the DESTINATION warehouse
-      await createInLayer(tx, {
-        itemId: itemId,
-        warehouseId: transfer.destinationWarehouseId,
-        stockMoveId: createdMove.id,
-        qty: qty,
-        unitCost: carriedUnitCost,
-      });
+          unitCost: carriedUnitCost,
+        });
+      }
     }
   });
 }

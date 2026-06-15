@@ -1,6 +1,7 @@
 
 import { prisma, TxClient } from "@/lib/db/prisma";
-import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { Prisma } from "@prisma/client";
+import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { Status } from "@/lib/constants";
 
@@ -62,39 +63,49 @@ export async function onSalesReturnCompleted(
     const warehouseByItem = new Map(itemDefaults.map((it) => [it.id, it.defaultWarehouseId]));
 
     // Create Stock Move IN per item (goods returned to warehouse)
-    for (const item of salesReturn.items) {
-      const smDocNo = await generateDocumentNumber("SM");
+    const activeItems = salesReturn.items.filter((it) => Number(it.qty) > 0);
+    if (activeItems.length > 0) {
+      // 1. Batch-generate one document number per line (was N serial round-trips).
+      const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
+      // 2. Lock all item rows in a single query (was N serial FOR UPDATE).
+      const activeItemIds = activeItems.map((it) => it.itemId);
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(activeItemIds)}) FOR UPDATE`;
 
-      // Resolve warehouse per item (chain: item default → fallback)
-      const resolvedWarehouseId = warehouseByItem.get(item.itemId) ?? fallbackWarehouse.id;
+      let docIdx = 0;
+      for (const item of activeItems) {
+        const smDocNo = smDocNos[docIdx++];
 
-      const sm = await tx.stockMove.create({
-        data: {
-          documentNo: smDocNo,
+        // Resolve warehouse per item (chain: item default → fallback)
+        const resolvedWarehouseId = warehouseByItem.get(item.itemId) ?? fallbackWarehouse.id;
+
+        const sm = await tx.stockMove.create({
+          data: {
+            documentNo: smDocNo,
+            itemId: item.itemId,
+            warehouseId: resolvedWarehouseId,
+            qty: item.qty,
+            cost: item.cost,
+            impact: "IN",
+            status: "posted",
+            referenceType: "SalesReturn",
+            referenceId: salesReturn.id,
+            notes: `Retur Penjualan ${salesReturn.documentNo}`,
+            createdBy: userId ?? null,
+          },
+        });
+
+        // Update item qtyOnHand (global total)
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
+
+        // Create FIFO inventory layer (returned stock) in the resolved warehouse
+        await createInLayer(tx, {
           itemId: item.itemId,
           warehouseId: resolvedWarehouseId,
-          qty: item.qty,
-          cost: item.cost,
-          impact: "IN",
-          status: "posted",
-          referenceType: "SalesReturn",
-          referenceId: salesReturn.id,
-          notes: `Retur Penjualan ${salesReturn.documentNo}`,
-          createdBy: userId ?? null,
-        },
-      });
-
-      // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
-
-      // Create FIFO inventory layer (returned stock) in the resolved warehouse
-      await createInLayer(tx, {
-        itemId: item.itemId,
-        warehouseId: resolvedWarehouseId,
-        stockMoveId: sm.id,
-        qty: Number(item.qty),
-        unitCost: Number(item.cost ?? 0),
-      });
+          stockMoveId: sm.id,
+          qty: Number(item.qty),
+          unitCost: Number(item.cost ?? 0),
+        });
+      }
     }
 
     // Stock-only hook: GL for a sales return is posted exclusively by

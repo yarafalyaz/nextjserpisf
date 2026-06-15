@@ -8,14 +8,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // The hook now aggregates by itemId: exactly one consume + one OUT move per item.
 
 const mocks = vi.hoisted(() => ({
-  generateDocumentNumber: vi.fn(),
+  generateDocumentNumberBatch: vi.fn(),
   consumeFifoLayers: vi.fn(),
   createInLayer: vi.fn(),
   transaction: vi.fn(),
 }))
 
 vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: mocks.generateDocumentNumber,
+  generateDocumentNumberBatch: mocks.generateDocumentNumberBatch,
 }))
 vi.mock("@/lib/services/inventory-fifo", () => ({
   consumeFifoLayers: mocks.consumeFifoLayers,
@@ -56,7 +56,9 @@ function wireTx(transferItems: Array<{ itemId: number; qty: number }>, status = 
 beforeEach(() => {
   vi.clearAllMocks()
   let n = 0
-  mocks.generateDocumentNumber.mockImplementation(async () => `SM-${++n}`)
+  mocks.generateDocumentNumberBatch.mockImplementation(async (_key: string, count: number) =>
+    Array.from({ length: count }, () => `SM-${++n}`),
+  )
   // Cost differs per FIFO consume call to make drift detectable if dedup regressed.
   mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 500, shortfall: 0 })
 })

@@ -1,9 +1,10 @@
 
 import { prisma, TxClient } from "@/lib/db/prisma";
-import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { WorkOrderStatus } from "@/lib/constants";
+import { Prisma } from "@prisma/client";
 
 
 const executeInTx = async (
@@ -76,48 +77,58 @@ export async function onWorkOrderCompleted(
     // on insufficient stock here (no allowShortfall), so consumedCost always
     // reflects the full quantity.
     const journalLines: { qty: number; cost: number }[] = [];
-    for (const item of workOrder.items) {
-      if (Number(item.qty) <= 0) continue;
 
-      // Resolve warehouse per item (chain: item default → fallback)
-      const resolvedWarehouseId = defaultWarehouseByItem.get(item.itemId) ?? fallbackWarehouse.id;
+    // Filter active items (qty > 0) up front so doc-number batch + item lock
+    // count matches the loop iteration count exactly.
+    const activeItems = workOrder.items.filter((it) => Number(it.qty) > 0);
+    if (activeItems.length > 0) {
+      // 1. Batch-generate one document number per line in a single atomic
+      //    counter bump (was N serial round-trips).
+      const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
 
-      const qty = Number(item.qty);
+      // 2. Lock all item rows in a single query (was N serial FOR UPDATE).
+      const activeItemIds = activeItems.map((it) => it.itemId);
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(activeItemIds)}) FOR UPDATE`;
 
-      // Lock the item row to serialize global qtyOnHand updates.
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
+      let docIdx = 0;
+      for (const item of activeItems) {
+        // Resolve warehouse per item (chain: item default → fallback)
+        const resolvedWarehouseId = defaultWarehouseByItem.get(item.itemId) ?? fallbackWarehouse.id;
 
-      // Consume FIFO from the resolved warehouse (guards per-warehouse stock)
-      // and read back the true consumed cost.
-      const { consumedCost } = await consumeFifoLayers(tx, {
-        itemId: item.itemId,
-        warehouseId: resolvedWarehouseId,
-        qty,
-        label: `WO ${workOrder.documentNo}`,
-      });
-      const moveUnitCost = qty > 0 ? consumedCost / qty : Number(item.cost);
+        const qty = Number(item.qty);
 
-      const smDocNo = await generateDocumentNumber("SM");
-      await tx.stockMove.create({
-        data: {
-          documentNo: smDocNo,
+        // Consume FIFO from the resolved warehouse (guards per-warehouse stock)
+        // and read back the true consumed cost.
+        const { consumedCost } = await consumeFifoLayers(tx, {
           itemId: item.itemId,
           warehouseId: resolvedWarehouseId,
-          qty: item.qty,
-          cost: moveUnitCost,
-          impact: "OUT",
-          status: "posted",
-          referenceType: "WorkOrder",
-          referenceId: workOrder.id,
-          notes: `Pemakaian Material WO ${workOrder.documentNo}`,
-          createdBy: userId ?? null,
-        },
-      });
+          qty,
+          label: `WO ${workOrder.documentNo}`,
+        });
+        const moveUnitCost = qty > 0 ? consumedCost / qty : Number(item.cost);
 
-      // Update item qtyOnHand (global total)
-      await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${item.itemId}`;
+        const smDocNo = smDocNos[docIdx++];
+        await tx.stockMove.create({
+          data: {
+            documentNo: smDocNo,
+            itemId: item.itemId,
+            warehouseId: resolvedWarehouseId,
+            qty: item.qty,
+            cost: moveUnitCost,
+            impact: "OUT",
+            status: "posted",
+            referenceType: "WorkOrder",
+            referenceId: workOrder.id,
+            notes: `Pemakaian Material WO ${workOrder.documentNo}`,
+            createdBy: userId ?? null,
+          },
+        });
 
-      journalLines.push({ qty, cost: moveUnitCost });
+        // Update item qtyOnHand (global total)
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${item.itemId}`;
+
+        journalLines.push({ qty, cost: moveUnitCost });
+      }
     }
 
     // Create Journal Entry (Dr WIP, Cr Inventory) at the actual FIFO cost

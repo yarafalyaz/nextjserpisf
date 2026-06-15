@@ -1,5 +1,6 @@
 import { prisma, TxClient } from "@/lib/db/prisma";
-import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { Prisma } from "@prisma/client";
+import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 
 /**
@@ -76,59 +77,63 @@ export async function onPurchaseReturnProcessed(
     );
 
     // Create Stock Move OUT per item (goods returned to vendor)
-    for (const item of purchaseReturn.items) {
-      if (Number(item.qty) <= 0) continue;
+    const activeItems = purchaseReturn.items.filter((it) => Number(it.qty) > 0);
+    if (activeItems.length > 0) {
+      // Batch-generate one document number per line (was N serial round-trips).
+      const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
+      // Lock all item rows in a single query (was N serial FOR UPDATE).
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(activeItems.map((it) => it.itemId))}) FOR UPDATE`;
 
-      const warehouseId = goodsReceipt?.warehouseId
-        ?? defaultWarehouseByItem.get(item.itemId)
-        ?? activeWarehouse?.id
-        ?? anyWarehouse?.id;
+      let docIdx = 0;
+      for (const item of activeItems) {
+        const warehouseId = goodsReceipt?.warehouseId
+          ?? defaultWarehouseByItem.get(item.itemId)
+          ?? activeWarehouse?.id
+          ?? anyWarehouse?.id;
 
-      if (!warehouseId) {
-        throw new Error("Warehouse retur pembelian tidak ditemukan.");
-      }
+        if (!warehouseId) {
+          throw new Error("Warehouse retur pembelian tidak ditemukan.");
+        }
 
-      // Lock the item row to serialize global qtyOnHand updates.
-      await tx.$queryRaw`SELECT id FROM items WHERE id = ${item.itemId} FOR UPDATE`;
-
-      // Consume FIFO from the resolved warehouse FIRST and capture the ACTUAL
-      // carrying cost that leaves inventory. The StockMove and the GL inventory
-      // relief use this real FIFO cost — not the agreed return price (item.cost),
-      // which the AP side keeps. Any difference is a purchase-return price
-      // variance booked by accounting.hook.onPurchaseReturnProcessed.
-      const { consumedCost } = await consumeFifoLayers(tx, {
-        itemId: item.itemId,
-        warehouseId,
-        qty: Number(item.qty),
-        allowShortfall: false,
-        label: `retur pembelian ${purchaseReturn.documentNo}`,
-      });
-      const carryingUnitCost = Number(item.qty) > 0
-        ? consumedCost / Number(item.qty)
-        : Number(item.cost ?? 0);
-
-      const smDocNo = await generateDocumentNumber("SM");
-
-      await tx.stockMove.create({
-        data: {
-          documentNo: smDocNo,
+        // Consume FIFO from the resolved warehouse FIRST and capture the ACTUAL
+        // carrying cost that leaves inventory. The StockMove and the GL inventory
+        // relief use this real FIFO cost — not the agreed return price (item.cost),
+        // which the AP side keeps. Any difference is a purchase-return price
+        // variance booked by accounting.hook.onPurchaseReturnProcessed.
+        const { consumedCost } = await consumeFifoLayers(tx, {
           itemId: item.itemId,
           warehouseId,
-          qty: item.qty,
-          cost: carryingUnitCost,
-          impact: "OUT",
-          status: "posted",
-          referenceType: "PurchaseReturn",
-          referenceId: purchaseReturn.id,
-          notes: `Retur Pembelian ${purchaseReturn.documentNo}`,
-          createdBy: userId ?? null,
-        },
-      });
+          qty: Number(item.qty),
+          allowShortfall: false,
+          label: `retur pembelian ${purchaseReturn.documentNo}`,
+        });
+        const carryingUnitCost = Number(item.qty) > 0
+          ? consumedCost / Number(item.qty)
+          : Number(item.cost ?? 0);
 
-      // Update item qtyOnHand — guard against negative stock
-      const updated = await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId} AND qty_on_hand >= ${Number(item.qty)}`;
-      if (updated === 0) {
-        throw new Error(`Stok tidak cukup untuk retur item ID ${item.itemId} (qty: ${item.qty})`);
+        const smDocNo = smDocNos[docIdx++];
+
+        await tx.stockMove.create({
+          data: {
+            documentNo: smDocNo,
+            itemId: item.itemId,
+            warehouseId,
+            qty: item.qty,
+            cost: carryingUnitCost,
+            impact: "OUT",
+            status: "posted",
+            referenceType: "PurchaseReturn",
+            referenceId: purchaseReturn.id,
+            notes: `Retur Pembelian ${purchaseReturn.documentNo}`,
+            createdBy: userId ?? null,
+          },
+        });
+
+        // Update item qtyOnHand — guard against negative stock
+        const updated = await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId} AND qty_on_hand >= ${Number(item.qty)}`;
+        if (updated === 0) {
+          throw new Error(`Stok tidak cukup untuk retur item ID ${item.itemId} (qty: ${item.qty})`);
+        }
       }
     }
 
