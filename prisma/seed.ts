@@ -258,6 +258,7 @@ async function main() {
       "manage_projects",
       "view_budgets",
       "create_budgets",
+      "edit_budgets",
       "delete_budgets",
       "view_cost_centers",
       "create_cost_centers",

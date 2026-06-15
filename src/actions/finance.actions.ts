@@ -1143,7 +1143,7 @@ export async function updateBudget(id: number, formData: FormData) {
 
   try {
 
-  const user = await requirePermission("create_budgets")
+  const user = await requirePermission("edit_budgets")
 
   const parsed = parseFormData(budgetSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }

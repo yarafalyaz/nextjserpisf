@@ -348,6 +348,7 @@ describe("Budget Actions", () => {
       endDate: "2026-12-31"
     }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_budgets")
   })
   it("updateBudget fails if endDate is before startDate", async () => {
     mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({ id: 1 })

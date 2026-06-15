@@ -36,12 +36,41 @@ src/lib/hooks/accounting.hook.ts
 src/lib/services/attendance-summary.service.ts (fix: dailyRate divisor used elapsed days)
 src/lib/services/quotation-sync.service.ts (fix: invoice payment status stale after quotation edit)
 src/actions/self-attendance.actions.ts
-src/lib/services/journal.service.ts\nsrc/lib/services/document-sequence.service.ts\nsrc/lib/services/holiday-sync.service.ts\nsrc/lib/services/late-penalty.service.ts\nsrc/lib/services/method.service.ts\nsrc/lib/services/payroll-statutory.service.ts\nsrc/lib/services/period-lock.service.ts\nsrc/lib/services/stock-journal.service.ts\nsrc/lib/services/uom.service.ts\nsrc/lib/services/notification.service.ts\nsrc/lib/services/approval-workflow.service.ts\nsrc/lib/services/activity-log.service.ts
-src/lib/hooks/goods-receipt.hook.ts\nsrc/lib/hooks/material-issue.hook.ts\nsrc/lib/hooks/sales-payment.hook.ts\nsrc/lib/hooks/sales-return.hook.ts
-src/lib/hooks/purchase-order.hook.ts\nsrc/lib/hooks/purchase-return.hook.ts\nsrc/lib/hooks/stock-adjustment.hook.ts\nsrc/lib/hooks/work-order.hook.ts
-src/app/api/upload/route.ts\nsrc/app/api/upload/avatar/route.ts\nsrc/app/api/upload/items/route.ts\nsrc/app/api/upload/attachments/route.ts\nsrc/app/api/upload/attachments/[id]/route.ts\nsrc/app/api/attachments/[...path]/route.ts\nsrc/app/api/backup/download/route.ts\nsrc/app/api/notifications/[id]/read/route.ts\nsrc/app/api/workflow/[...path]/route.ts
-src/app/api/print/route.ts\nsrc/app/api/payroll/late-penalty/route.ts
-src/app/api/address/route.ts\nsrc/app/api/notifications/route.ts\nsrc/app/api/vehicle-brands/route.ts\nsrc/app/api/vehicle-models/route.ts
+src/lib/services/journal.service.ts
+src/lib/services/document-sequence.service.ts
+src/lib/services/holiday-sync.service.ts
+src/lib/services/late-penalty.service.ts
+src/lib/services/method.service.ts
+src/lib/services/payroll-statutory.service.ts
+src/lib/services/period-lock.service.ts
+src/lib/services/stock-journal.service.ts
+src/lib/services/uom.service.ts
+src/lib/services/notification.service.ts
+src/lib/services/approval-workflow.service.ts
+src/lib/services/activity-log.service.ts
+src/lib/hooks/goods-receipt.hook.ts
+src/lib/hooks/material-issue.hook.ts
+src/lib/hooks/sales-payment.hook.ts
+src/lib/hooks/sales-return.hook.ts
+src/lib/hooks/purchase-order.hook.ts
+src/lib/hooks/purchase-return.hook.ts
+src/lib/hooks/stock-adjustment.hook.ts
+src/lib/hooks/work-order.hook.ts
+src/app/api/upload/route.ts
+src/app/api/upload/avatar/route.ts
+src/app/api/upload/items/route.ts
+src/app/api/upload/attachments/route.ts
+src/app/api/upload/attachments/[id]/route.ts
+src/app/api/attachments/[...path]/route.ts
+src/app/api/backup/download/route.ts
+src/app/api/notifications/[id]/read/route.ts
+src/app/api/workflow/[...path]/route.ts
+src/app/api/print/route.ts
+src/app/api/payroll/late-penalty/route.ts
+src/app/api/address/route.ts
+src/app/api/notifications/route.ts
+src/app/api/vehicle-brands/route.ts
+src/app/api/vehicle-models/route.ts
 src/app/api/activity-logs/export/route.ts
 src/app/api/cron/asset-depreciation/route.ts (clean)
 src/app/api/cron/auto-reject-quotations/route.ts (clean)
@@ -53,27 +82,29 @@ src/actions/finance.actions.ts (fix: decimal precision balance check bug)
 src/lib/services/inventory.service.ts (fix: float precision in FIFO OUT consumption)
 src/lib/hooks/inventory-transfer.hook.ts (fix: float drift in duplicate-row qty aggregation)
 src/actions/sales.actions.ts (fix: negative taxRate/qty drove invoice grandTotal negative)
-
-57|src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)
-58|src/lib/services/attendance-summary.service.ts (fix: schedule precedence — global schedule wrongly unioned with department/employee schedules, over-counting working days and absentees)
-59|src/actions/bulk.actions.ts (fix: asset/vehicle bulk deletion integrity guard bypass)
-
-src/actions/inventory.actions.ts (fix: stuck-in-limbo state on tx failure — processStockAdjustment/processInventoryTransfer/receiveInventoryTransfer/completeMaterialIssue left doc in transient processing/receiving status forever; now roll claim back)
+src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)
+src/lib/services/attendance-summary.service.ts (fix: schedule precedence)
+src/actions/bulk.actions.ts (fix: asset/vehicle bulk deletion integrity guard bypass)
+src/actions/inventory.actions.ts (fix: stuck-in-limbo state on tx failure)
 src/actions/project.actions.ts (fix: project status progression and stage reverting)
 src/lib/hooks/sales-payment.hook.ts (fix: float drift left fully-paid invoice stuck on partial)
-64|src/lib/hooks/down-payment.hook.ts (fix: same float drift in multi-DP invoice recalc)
-65|src/actions/self-attendance.actions.ts (fix: schedule-blind overtime/half_day classification — selfCheckIn only treated Sunday as a non-working day, so a Mon-Fri employee checking in Saturday was logged "present" not "overtime" (lost overtime pay) and a Sunday-shift employee checking in Sunday was wrongly auto-"overtime"; selfCheckOut resolved the schedule on the check-OUT day, so an overnight Mon 22:00→Tue 06:00 shift checking out Tue 06:00 was compared against Tue's day-shift endTime 17:00 and mislabeled half_day. Now resolveScheduleInfo returns hasSchedule (workDays-aware, employee>dept>global precedence, matching attendance-summary.service) + endTime, isOvertimeDay=!hasSchedule||holiday, and checkout half_day uses the check-in day schedule with overnight-aware comparison. +4 tests, 2503/2503 pass, tsc+lint clean)src/actions/purchase.actions.ts (fix: over-return cap bypass on updatePurchaseReturn)
-
-src/actions/sales.actions.ts (fix: updateSalesReturn TOCTOU — over-return guard ran OUTSIDE the tx while createSalesReturn was hardened to run it inside a FOR UPDATE lock; two concurrent draft edits could each read stale alreadyReturned totals, both pass the cap, and on completeSalesReturn over-restock inventory + over-credit AR. Now guard + status re-check run inside the locked tx. +1 test, 2506 pass)68|src/actions/hrm.actions.ts (fix: edit guard bypass on paid_off loans)
+src/lib/hooks/down-payment.hook.ts (fix: same float drift in multi-DP invoice recalc)
+src/actions/self-attendance.actions.ts (fix: schedule-blind overtime/half_day classification)
+src/actions/purchase.actions.ts (fix: over-return cap bypass on updatePurchaseReturn)
+src/actions/sales.actions.ts (fix: updateSalesReturn TOCTOU)
+src/actions/hrm.actions.ts (fix: edit guard bypass on paid_off loans)
 src/lib/hooks/accounting.hook.ts (fix: petty-cash period-lock bypass via transactionDate??new Date() fallback)
 src/lib/validations/inventory.schemas.ts (fix: same-warehouse guard)
 src/actions/inventory.actions.ts (fix: updateInventoryTransfer skipped Zod validation)
 src/lib/validations/__tests__/inventory-transfer-same-warehouse.test.ts (new test)
 src/lib/services/payroll-statutory.service.ts (fix: BPJS math rounding discrepancy)
-70|src/components/ui/data-table.tsx (fix: serverPagination + searchColumn silently filtered only the current page; now debounced URL push on ?cari= so the server re-queries the whole dataset — affects src/app/(dashboard)/pengaturan/log-aktivitas)
-71|src/components/ui/data-table-utils.ts (new: pure URL helpers extracted for testability)
-72|src/components/ui/__tests__/data-table-url.test.ts (new: 5 tests covering buildServerSearchUrl — empty/whitespace input keeps halaman, non-empty sets searchParam + resets halaman, custom searchParam name, trims surrounding whitespace, preserves unrelated params)
-src/lib/utils/math.ts (fix: safeRound returned NaN when input was already in exponential notation, e.g. 1e-7 or 1e+21 — broke any money/inventory calculation whose intermediate result was < 1e-6 or >= 1e21)
+src/components/ui/data-table.tsx (fix: serverPagination + searchColumn silently filtered only the current page)
+src/components/ui/data-table-utils.ts (new: pure URL helpers extracted for testability)
+src/components/ui/__tests__/data-table-url.test.ts (new: 5 tests covering buildServerSearchUrl)
+src/lib/utils/math.ts (fix: safeRound returned NaN when input was already in exponential notation)
 src/lib/utils/__tests__/math.test.ts (new: 2 tests covering tiny and huge exponential-notation inputs)
-80|src/actions/inventory.actions.ts (fix: updateWorkOrder bypassed status guard - could silently delete and recreate items on in_progress/completed Work Orders, breaking audit trail, linked Delivery Order, Material Issue stock moves, and project stage tracking. Mirrors the existing updateProductionOrder/updateStockAdjustment/updateMaterialIssue/updateInventoryTransfer guards. Status pre-checked, then re-asserted inside the transaction with a conditional updateMany to close the TOCTOU window. +1 new test (2 cases: rejects completed, proceeds draft))
-81|src/actions/master.actions.ts (fix: deletePosition unguarded employee data-loss cascade)
+src/actions/inventory.actions.ts (fix: updateWorkOrder bypassed status guard)
+src/actions/master.actions.ts (fix: deletePosition unguarded employee data-loss cascade)
+src/actions/finance.actions.ts (fix: updateBudget called requirePermission("create_budgets") instead of "edit_budgets"; edit_budgets missing from prisma/seed.ts so no non-super-admin could ever edit a budget)
+prisma/seed.ts (fix: added missing "edit_budgets" permission to admin role's permission list)
+src/actions/__tests__/finance.actions.test.ts (new: +1 test asserting updateBudget calls requirePermission with "edit_budgets")
