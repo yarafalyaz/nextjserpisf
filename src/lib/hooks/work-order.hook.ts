@@ -53,6 +53,21 @@ export async function onWorkOrderCompleted(
     });
     if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
 
+    // Pre-fetch every item's default warehouse in ONE query instead of issuing a
+    // findUnique per line inside the loop below (N+1 → O(1)).
+    const woItemIds = Array.from(
+      new Set(workOrder.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId))
+    );
+    const defaultWarehouseRows = woItemIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: woItemIds } },
+          select: { id: true, defaultWarehouseId: true },
+        })
+      : [];
+    const defaultWarehouseByItem = new Map(
+      defaultWarehouseRows.map((r) => [r.id, r.defaultWarehouseId])
+    );
+
     // Create Stock Move OUT per item (materials consumed in production).
     // Capture the ACTUAL FIFO-consumed cost so the StockMove and GL journal use
     // the real layer cost — not the stored item.cost master snapshot, which
@@ -65,8 +80,7 @@ export async function onWorkOrderCompleted(
       if (Number(item.qty) <= 0) continue;
 
       // Resolve warehouse per item (chain: item default → fallback)
-      const itemData = await tx.item.findUnique({ where: { id: item.itemId }, select: { defaultWarehouseId: true } });
-      const resolvedWarehouseId = itemData?.defaultWarehouseId ?? fallbackWarehouse.id;
+      const resolvedWarehouseId = defaultWarehouseByItem.get(item.itemId) ?? fallbackWarehouse.id;
 
       const qty = Number(item.qty);
 

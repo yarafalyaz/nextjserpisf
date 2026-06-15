@@ -59,16 +59,28 @@ export async function onPurchaseReturnProcessed(
       ? null
       : await tx.warehouse.findFirst({ select: { id: true }, orderBy: { id: "asc" } });
 
+    // Pre-fetch every item's default warehouse in ONE query instead of issuing a
+    // findUnique per line inside the loop below (N+1 → O(1)). Stock-move creation,
+    // the FOR UPDATE row lock, and FIFO consumption still run per item.
+    const prItemIds = Array.from(
+      new Set(purchaseReturn.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId))
+    );
+    const defaultWarehouseRows = prItemIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: prItemIds } },
+          select: { id: true, defaultWarehouseId: true },
+        })
+      : [];
+    const defaultWarehouseByItem = new Map(
+      defaultWarehouseRows.map((r) => [r.id, r.defaultWarehouseId])
+    );
+
     // Create Stock Move OUT per item (goods returned to vendor)
     for (const item of purchaseReturn.items) {
       if (Number(item.qty) <= 0) continue;
 
-      const dbItem = await tx.item.findUnique({
-        where: { id: item.itemId },
-        select: { defaultWarehouseId: true },
-      });
       const warehouseId = goodsReceipt?.warehouseId
-        ?? dbItem?.defaultWarehouseId
+        ?? defaultWarehouseByItem.get(item.itemId)
         ?? activeWarehouse?.id
         ?? anyWarehouse?.id;
 
