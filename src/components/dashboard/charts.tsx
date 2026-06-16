@@ -90,7 +90,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
   return (
     <Card className="h-full @container/chart">
       <CardHeader>
-        <CardTitle>Tren Pendapatan</CardTitle>
+        <CardTitle id="revenue-chart-title">Tren Pendapatan</CardTitle>
         <CardDescription>
           <span className="hidden @[540px]/chart:block">
             Tagihan diterbitkan vs pembayaran lunas
@@ -103,6 +103,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             value={timeRange}
             onValueChange={(v) => v && setTimeRange(v)}
             variant="outline"
+            aria-label="Pilih rentang waktu"
             className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/chart:flex"
           >
             <ToggleGroupItem value="90d">3 bulan</ToggleGroupItem>
@@ -133,11 +134,24 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         {filteredData.length === 0 ? (
-          <p className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+          <p
+            role="status"
+            className="flex h-[280px] items-center justify-center text-sm text-muted-foreground"
+          >
             Belum ada data pendapatan
           </p>
         ) : (
-          <ChartContainer config={revenueConfig} className="aspect-auto h-[280px] w-full">
+          <ChartContainer
+            config={revenueConfig}
+            className="aspect-auto h-[280px] w-full"
+            role="img"
+            aria-labelledby="revenue-chart-title"
+            aria-describedby="revenue-chart-desc"
+          >
+            <span id="revenue-chart-desc" className="sr-only">
+              Area chart membandingkan total tagihan diterbitkan dengan pembayaran
+              lunas untuk rentang {timeRange === "7d" ? "7 hari" : timeRange === "30d" ? "30 hari" : "3 bulan"} terakhir. Total {filteredData.length} titik data.
+            </span>
             <AreaChart data={filteredData}>
               <defs>
                 <linearGradient id="fillTagihan" x1="0" y1="0" x2="0" y2="1">
@@ -207,6 +221,25 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
                 stackId="a"
               />
             </AreaChart>
+            <table className="sr-only">
+              <caption>Tren Pendapatan — Tagihan vs Lunas</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Tanggal</th>
+                  <th scope="col">Tagihan (Rp)</th>
+                  <th scope="col">Lunas (Rp)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredData.map((d) => (
+                  <tr key={d.date}>
+                    <th scope="row">{d.date}</th>
+                    <td>{d.tagihan.toLocaleString("id-ID")}</td>
+                    <td>{d.lunas.toLocaleString("id-ID")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </ChartContainer>
         )}
       </CardContent>
@@ -228,47 +261,79 @@ export function SalesStatusChart({ data }: { data: StatusData[] }) {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Faktur per Status</CardTitle>
+        <CardTitle id="sales-status-chart-title">Faktur per Status</CardTitle>
         <CardDescription>Distribusi seluruh faktur</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={config} className="mx-auto h-[280px] w-full">
-          <PieChart>
-            <ChartTooltip content={<ChartTooltipContent nameKey="label" hideLabel />} />
-            <Pie data={chartData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={100} paddingAngle={2} strokeWidth={2}>
-              {chartData.map((entry) => (
-                <Cell key={entry.name} fill={entry.fill} />
-              ))}
-              <Label
-                content={({ viewBox }) => {
-                  if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                    return (
-                      <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
-                        <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-2xl font-bold">
-                          {total}
-                        </tspan>
-                        <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 20} className="fill-muted-foreground text-xs">
-                          Faktur
-                        </tspan>
-                      </text>
-                    )
-                  }
-                  return null
-                }}
-              />
-            </Pie>
-          </PieChart>
-        </ChartContainer>
-        <div className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1.5">
-          {chartData.map((item) => (
-            <div key={item.name} className="flex items-center gap-1.5">
-              <span className="size-2.5 rounded-[3px]" style={{ backgroundColor: item.fill }} />
-              <span className="text-xs text-muted-foreground">
-                {item.label} ({item.value})
+        {total === 0 ? (
+          <p
+            role="status"
+            className="flex h-[280px] items-center justify-center text-sm text-muted-foreground"
+          >
+            Belum ada data faktur
+          </p>
+        ) : (
+          <>
+            <ChartContainer
+              config={config}
+              className="mx-auto h-[280px] w-full"
+              role="img"
+              aria-labelledby="sales-status-chart-title"
+              aria-describedby="sales-status-chart-desc"
+            >
+              <span id="sales-status-chart-desc" className="sr-only">
+                Pie chart distribusi {total} faktur berdasarkan status.
+                {chartData
+                  .map((d) => ` ${d.label}: ${d.value} (${Math.round((d.value / total) * 100)}%).`)
+                  .join("")}
               </span>
-            </div>
-          ))}
-        </div>
+              <PieChart>
+                <ChartTooltip content={<ChartTooltipContent nameKey="label" hideLabel />} />
+                <Pie data={chartData} dataKey="value" nameKey="label" innerRadius={62} outerRadius={100} paddingAngle={2} strokeWidth={2}>
+                  {chartData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.fill} />
+                  ))}
+                  <Label
+                    content={({ viewBox }) => {
+                      if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                        return (
+                          <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                            <tspan x={viewBox.cx} y={viewBox.cy} className="fill-foreground text-2xl font-bold">
+                              {total}
+                            </tspan>
+                            <tspan x={viewBox.cx} y={(viewBox.cy || 0) + 20} className="fill-muted-foreground text-xs">
+                              Faktur
+                            </tspan>
+                          </text>
+                        )
+                      }
+                      return null
+                    }}
+                  />
+                </Pie>
+              </PieChart>
+            </ChartContainer>
+            <table className="sr-only">
+              <caption>Faktur per Status</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Status</th>
+                  <th scope="col">Jumlah</th>
+                  <th scope="col">Persentase</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chartData.map((item) => (
+                  <tr key={item.name}>
+                    <th scope="row">{item.label}</th>
+                    <td>{item.value}</td>
+                    <td>{Math.round((item.value / total) * 100)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
       </CardContent>
     </Card>
   )
@@ -324,24 +389,58 @@ export function ProjectPipelineChart({ data }: { data: StageData[] }) {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Pipeline Pengerjaan</CardTitle>
+        <CardTitle id="pipeline-chart-title">Pipeline Pengerjaan</CardTitle>
         <CardDescription>Jumlah proyek aktif per tahap saat ini</CardDescription>
       </CardHeader>
       <CardContent>
         {!hasData ? (
-          <p className="flex h-[280px] items-center justify-center text-sm text-muted-foreground">
+          <p
+            role="status"
+            className="flex h-[280px] items-center justify-center text-sm text-muted-foreground"
+          >
             Belum ada proyek aktif
           </p>
         ) : (
-          <ChartContainer config={config} className="h-[280px] w-full">
-            <BarChart data={data} margin={{ left: 4, right: 12, top: 8 }}>
-              <CartesianGrid vertical={false} strokeDasharray="3 3" />
-              <XAxis dataKey="stage" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} width={28} allowDecimals={false} fontSize={12} />
-              <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-              <Bar dataKey="count" fill="var(--color-count)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ChartContainer>
+          <>
+            <ChartContainer
+              config={config}
+              className="h-[280px] w-full"
+              role="img"
+              aria-labelledby="pipeline-chart-title"
+              aria-describedby="pipeline-chart-desc"
+            >
+              <span id="pipeline-chart-desc" className="sr-only">
+                Bar chart jumlah proyek aktif per tahap.
+                {data
+                  .map((d) => ` ${d.stage}: ${d.count}.`)
+                  .join("")}
+              </span>
+              <BarChart data={data} margin={{ left: 4, right: 12, top: 8 }}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis dataKey="stage" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
+                <YAxis tickLine={false} axisLine={false} width={28} allowDecimals={false} fontSize={12} />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                <Bar dataKey="count" fill="var(--color-count)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ChartContainer>
+            <table className="sr-only">
+              <caption>Pipeline Pengerjaan</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Tahap</th>
+                  <th scope="col">Jumlah Proyek</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((d) => (
+                  <tr key={d.stage}>
+                    <th scope="row">{d.stage}</th>
+                    <td>{d.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </CardContent>
     </Card>
