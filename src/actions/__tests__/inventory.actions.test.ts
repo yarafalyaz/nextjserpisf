@@ -617,6 +617,34 @@ describe('Other Delete Errors', () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Rak masih digunakan oleh")
   })
+
+  // Regression: deleteRackRow must mirror deleteRack's in-use guard. RackRow is
+  // referenced by Item.defaultRackRowId (FK with onDelete: SetNull) and by
+  // StockMove.rackRowId (plain Int, NO FK — silently dangling on raw delete,
+  // erasing the location tag on historical stock movements). A raw delete of a
+  // RackRow that still has dependents loses the Item's default row reference
+  // AND the StockMove's location tag, neither of which can be reconstructed
+  // from the audit log. Refuse the delete, just like deleteRack does.
+  it("deleteRackRow returns error if referenced by items", async () => {
+    mocks.prismaMock.item.count.mockResolvedValue(2)
+    mocks.prismaMock.stockMove.count.mockResolvedValue(0)
+    const res = await (actions as any).deleteRackRow(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Baris rak")
+    expect(res?.error).toContain("2 barang")
+    // Critical: must NOT have deleted
+    expect(mocks.prismaMock.rackRow.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteRackRow returns error if referenced by stock moves", async () => {
+    mocks.prismaMock.item.count.mockResolvedValue(0)
+    mocks.prismaMock.stockMove.count.mockResolvedValue(5)
+    const res = await (actions as any).deleteRackRow(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Baris rak")
+    expect(res?.error).toContain("5 pergerakan")
+    expect(mocks.prismaMock.rackRow.delete).not.toHaveBeenCalled()
+  })
 })
 
 

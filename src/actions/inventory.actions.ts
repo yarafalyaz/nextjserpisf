@@ -994,6 +994,26 @@ export async function deleteRackRow(id: number) {
   try {
   await requirePermission("manage_inventory")
 
+  // Guard: prevent hard-delete if RackRow is referenced by transactional
+  // records. Item.defaultRackRowId is an FK with onDelete: SetNull (so a raw
+  // delete would silently NULL the default row on every assigned item, losing
+  // the Item → location linkage that operators use for picking), and
+  // StockMove.rackRowId is a plain Int with NO FK (raw delete leaves a
+  // dangling int on every historical stock movement, erasing the location
+  // tag from the audit log). Refuse if any dependent record exists, mirroring
+  // deleteRack's in-use guard. Without this, a manager could destroy the
+  // location history of every item assigned to this row in a single click.
+  const [itemCount, stockMoveCount] = await Promise.all([
+    prisma.item.count({ where: { defaultRackRowId: id } }),
+    prisma.stockMove.count({ where: { rackRowId: id } }),
+  ])
+  if (itemCount > 0 || stockMoveCount > 0) {
+    return {
+      success: false,
+      error: `Baris rak masih digunakan oleh ${itemCount} barang dan ${stockMoveCount} pergerakan stok. Hapus atau pindahkan referensi terlebih dahulu.`,
+    }
+  }
+
   await prisma.rackRow.delete({ where: { id } })
 
   await logActivity("delete", "RackRow", id, `Menghapus baris rak #${id}`)
