@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useId, useRef, useState } from "react"
+import { FileText, Upload, X } from "lucide-react"
 import { SafeImage } from "./safe-image"
-import { Upload, X, FileText } from "lucide-react"
 import { showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
@@ -31,6 +31,8 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const labelId = useId()
+  const fileInputId = `${labelId}-file`
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -85,49 +87,73 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
   }
 
   return (
-    <div className="flex flex-col gap-1.5 col-span-full">
-      <Label>{label}</Label>
+    <section aria-labelledby={labelId} className="flex flex-col gap-1.5 col-span-full">
+      <Label id={labelId}>{label}</Label>
       <input type="hidden" name="attachmentIds" value={JSON.stringify(uploadedFiles.map((f) => f.id))} />
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy={uploading}
+        className="sr-only"
+      >
+        {uploading ? `Mengunggah ${label}…` : ""}
+      </div>
       <div className="form-attachment-area">
         {uploadedFiles.length > 0 && (
-          <div className="form-attachment-list">
+          <ul className="form-attachment-list">
             {uploadedFiles.map((file) => (
-              <div key={file.id} className="form-attachment-item">
-                <div className="form-attachment-icon">
+              <li key={file.id} className="form-attachment-item">
+                <div className="form-attachment-icon" aria-hidden="true">
                   {file.mimeType.startsWith("image/") ? (
-                    <SafeImage src={file.fileUrl} alt={file.originalName} width={20} height={20} className="form-attachment-thumb" />
+                    <SafeImage src={file.fileUrl} alt="" width={40} height={40} className="form-attachment-thumb" />
                   ) : (
                     <FileText className="size-5 text-muted-foreground" />
                   )}
                 </div>
                 <div className="form-attachment-info">
                   <span className="form-attachment-name">{file.originalName}</span>
-                  <span className="form-attachment-size">{formatFileSize(file.fileSize)}</span>
+                  <span className="form-attachment-size" aria-label={`Ukuran file ${formatFileSize(file.fileSize)}`}>
+                    {formatFileSize(file.fileSize)}
+                  </span>
                 </div>
-                <Button onPress={() => handleRemoveFile(file.id)} variant="danger-soft" size="sm" isIconOnly className="form-attachment-remove" aria-label="Hapus">
-                  <X className="size-4" />
+                <Button
+                  type="button"
+                  variant="danger-soft"
+                  size="sm"
+                  isIconOnly
+                  className="form-attachment-remove"
+                  aria-label={`Hapus lampiran ${file.originalName}`}
+                  onPress={() => handleRemoveFile(file.id)}
+                >
+                  <X className="size-4" aria-hidden="true" />
                 </Button>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
         <Button
           type="button"
-          variant="secondary" size="sm" className="form-attachment-upload-btn"
+          variant="secondary"
+          size="sm"
+          className="form-attachment-upload-btn"
           onPress={() => fileInputRef.current?.click()}
           isDisabled={uploading}
+          aria-controls={fileInputId}
         >
-          <Upload className="size-4" />
+          <Upload className="size-4" aria-hidden="true" />
           {uploading ? "Mengupload..." : "Upload Bukti (JPG, PDF)"}
         </Button>
         <input
           ref={fileInputRef}
+          id={fileInputId}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
           onChange={handleFileUpload}
-          className="hidden"
+          aria-label={label}
+          tabIndex={-1}
+          className="sr-only"
         />
       </div>
-    </div>
+    </section>
   )
 }

@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useState, useTransition, useRef } from "react"
+import { useState, useTransition, useRef, useId } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -44,6 +44,8 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const labelId = useId()
+  const fileInputId = `${labelId}-file`
 
   const vendorBills = bills.filter((b) => b.vendorId === Number(vendorId))
 
@@ -172,52 +174,61 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
 
           {/* Attachment Upload */}
           <div className="flex flex-col gap-1.5">
-            <Label>Lampiran Bukti</Label>
+            <Label id={labelId}>Lampiran Bukti</Label>
+            <div role="status" aria-live="polite" aria-busy={uploading} className="sr-only">
+              {uploading ? "Mengunggah Lampiran Bukti…" : ""}
+            </div>
             <div className="form-attachment-area">
               {uploadedFiles.length > 0 && (
-                <div className="form-attachment-list">
+                <ul className="form-attachment-list">
                   {uploadedFiles.map((file) => (
-                    <div key={file.id} className="form-attachment-item">
-                      <div className="form-attachment-icon">
+                    <li key={file.id} className="form-attachment-item">
+                      <div className="form-attachment-icon" aria-hidden="true">
                         {file.mimeType.startsWith("image/") ? (
                           <Image
                             src={file.fileUrl}
-                            alt={file.originalName}
+                            alt=""
                             width={40}
                             height={40}
                             className="form-attachment-thumb"
                             unoptimized
                           />
                         ) : (
-                          <FileText className="size-5 text-muted-foreground" />
+                          <FileText className="size-5 text-muted-foreground" aria-hidden="true" />
                         )}
                       </div>
                       <div className="form-attachment-info">
                         <span className="form-attachment-name">{file.originalName}</span>
-                        <span className="form-attachment-size">{formatFileSize(file.fileSize)}</span>
+                        <span className="form-attachment-size" aria-label={`Ukuran file ${formatFileSize(file.fileSize)}`}>
+                          {formatFileSize(file.fileSize)}
+                        </span>
                       </div>
-                      <Button type="button" onPress={() => handleRemoveFile(file.id)} className="form-attachment-remove" aria-label="Hapus">
-                        <X className="size-4" />
+                      <Button type="button" isIconOnly variant="danger-soft" size="sm" className="form-attachment-remove" aria-label={`Hapus lampiran ${file.originalName}`} onPress={() => handleRemoveFile(file.id)}>
+                        <X className="size-4" aria-hidden="true" />
                       </Button>
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
               <Button
                 type="button"
                 className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all"
                 onPress={() => fileInputRef.current?.click()}
                 isDisabled={uploading}
+                aria-controls={fileInputId}
               >
-                <Upload className="size-4" />
+                <Upload className="size-4" aria-hidden="true" />
                 {uploading ? "Mengunggah..." : "Unggah Bukti (JPG, PDF)"}
               </Button>
               <input
                 ref={fileInputRef}
+                id={fileInputId}
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
                 onChange={handleFileUpload}
-                className="hidden"
+                aria-label="Lampiran Bukti"
+                tabIndex={-1}
+                className="sr-only"
               />
             </div>
           </div>
