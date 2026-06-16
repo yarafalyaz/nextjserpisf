@@ -50,7 +50,7 @@ function DiffBlock({
 
   if (!oldObj && !newObj) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground" role="status">
         Tidak ada data perubahan
       </p>
     )
@@ -65,14 +65,23 @@ function DiffBlock({
 
   if (allKeys.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground" role="status">
         Tidak ada data perubahan
       </p>
     )
   }
 
+  const changedCount = allKeys.filter((k) => {
+    const oldStr = oldObj?.[k] === undefined ? "-" : JSON.stringify(oldObj[k])
+    const newStr = newObj?.[k] === undefined ? "-" : JSON.stringify(newObj[k])
+    return oldStr !== newStr
+  }).length
+
   return (
-    <div className="space-y-1">
+    <dl
+      className="space-y-1.5"
+      aria-label={`Perubahan data: ${changedCount} dari ${allKeys.length} kolom berubah`}
+    >
       {allKeys.map((key) => {
         const oldVal = oldObj?.[key]
         const newVal = newObj?.[key]
@@ -83,29 +92,36 @@ function DiffBlock({
         return (
           <div
             key={key}
-            className={`rounded px-2 py-1 text-xs ${
+            className={`rounded px-2 py-1.5 text-xs ${
               changed
                 ? "bg-amber-50 dark:bg-amber-950/30"
                 : "bg-muted/50"
             }`}
+            role={changed ? "group" : undefined}
+            aria-label={
+              changed
+                ? `${key}: berubah dari ${oldStr} menjadi ${newStr}`
+                : undefined
+            }
           >
-            <span className="font-medium">{key}</span>
+            <dt className="font-medium">{key}</dt>
             {changed ? (
-              <div className="mt-0.5 flex gap-2">
+              <dd className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
                 <span className="text-red-600 line-through dark:text-red-400">
                   {oldStr}
                 </span>
+                <span aria-hidden="true" className="text-muted-foreground">→</span>
                 <span className="text-emerald-600 dark:text-emerald-400">
                   {newStr}
                 </span>
-              </div>
+              </dd>
             ) : (
-              <div className="text-muted-foreground">{newStr}</div>
+              <dd className="text-muted-foreground">{newStr}</dd>
             )}
           </div>
         )
       })}
-    </div>
+    </dl>
   )
 }
 
@@ -117,6 +133,7 @@ export function DetailDrawer({
   if (!row) return null
 
   const d = new Date(row.createdAt)
+  const actionText = actionLabel[row.action] || row.action
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -125,57 +142,67 @@ export function DetailDrawer({
           <SheetTitle>Detail Log Aktivitas</SheetTitle>
         </SheetHeader>
 
-        <div className="mt-4 space-y-4">
-          {/* Meta */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-muted-foreground">Waktu</span>
-              <div className="font-medium">
-                {d.toLocaleDateString("id-ID", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}{" "}
-                {d.toLocaleTimeString("id-ID", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
+        <div className="mt-4 space-y-5">
+          {/* Meta — proper <dl> for term/description pairs */}
+          <dl
+            className="grid grid-cols-1 gap-x-3 gap-y-3 text-sm sm:grid-cols-2"
+            aria-label="Metadata log aktivitas"
+          >
+            <div className="space-y-0.5">
+              <dt className="text-muted-foreground">Waktu</dt>
+              <dd className="font-medium">
+                <time dateTime={row.createdAt}>
+                  {d.toLocaleDateString("id-ID", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}{" "}
+                  {d.toLocaleTimeString("id-ID", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </time>
+              </dd>
             </div>
-            <div>
-              <span className="text-muted-foreground">Pengguna</span>
-              <div className="font-medium">{row.userName}</div>
+            <div className="space-y-0.5">
+              <dt className="text-muted-foreground">Pengguna</dt>
+              <dd className="font-medium">{row.userName}</dd>
             </div>
-            <div>
-              <span className="text-muted-foreground">Aksi</span>
-              <div>
-                <Badge variant="outline">
-                  {actionLabel[row.action] || row.action}
+            <div className="space-y-0.5">
+              <dt className="text-muted-foreground">Aksi</dt>
+              <dd>
+                <Badge variant="secondary" aria-label={`Aksi: ${actionText}`}>
+                  {actionText}
                 </Badge>
-              </div>
+              </dd>
             </div>
-            <div>
-              <span className="text-muted-foreground">Model</span>
-              <div className="font-medium">
+            <div className="space-y-0.5">
+              <dt className="text-muted-foreground">Model</dt>
+              <dd className="font-medium">
                 {row.modelType}
                 {row.modelId ? ` #${row.modelId}` : ""}
-              </div>
+              </dd>
             </div>
-            <div className="col-span-2">
-              <span className="text-muted-foreground">Deskripsi</span>
-              <div className="font-medium">{row.description}</div>
+            <div className="space-y-0.5 sm:col-span-2">
+              <dt className="text-muted-foreground">Deskripsi</dt>
+              <dd className="font-medium">{row.description}</dd>
             </div>
-            <div>
-              <span className="text-muted-foreground">IP</span>
-              <div className="font-mono text-xs">{row.ipAddress}</div>
+            <div className="space-y-0.5 sm:col-span-2">
+              <dt className="text-muted-foreground">Alamat IP</dt>
+              <dd className="font-mono text-xs">{row.ipAddress}</dd>
             </div>
-          </div>
+          </dl>
 
           {/* Diff */}
-          <div>
-            <h3 className="mb-2 text-sm font-medium">Perubahan Data</h3>
+          <section aria-labelledby="activity-diff-heading">
+            <h3
+              id="activity-diff-heading"
+              className="mb-2 text-sm font-medium"
+            >
+              Perubahan Data
+            </h3>
             <DiffBlock oldVals={row.oldValues} newVals={row.newValues} />
-          </div>
+          </section>
         </div>
       </SheetContent>
     </Sheet>
