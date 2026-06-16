@@ -1458,6 +1458,19 @@ export async function deletePaymentTerm(id: number) {
   try {
   await requirePermission("delete_payment_terms")
 
+  // Guard: cannot delete a payment term that is still in use by vendors.
+  // Vendor.paymentTermId is an Int? FK with ON DELETE SET NULL (the migration
+  // explicitly sets it), so a raw delete would silently null out the
+  // paymentTermId on every vendor referencing this term, losing their AP
+  // payment-term assignment with no warning. Mirrors the deleteDepartment /
+  // deletePosition guards — refuse and let the operator reassign vendors first.
+  const vendorCount = await prisma.vendor.count({
+    where: { paymentTermId: id, deletedAt: null },
+  })
+  if (vendorCount > 0) {
+    throw new Error(`Syarat pembayaran masih digunakan oleh ${vendorCount} vendor`)
+  }
+
   await prisma.paymentTerm.delete({ where: { id } })
 
   revalidatePath("/master/syarat-pembayaran")
