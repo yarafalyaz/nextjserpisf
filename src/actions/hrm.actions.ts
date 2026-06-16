@@ -265,20 +265,28 @@ export async function updateAttendance(id: number, formData: FormData) {
   try {
   await requirePermission("edit_attendance")
 
+  // Validation parity with createAttendance: route through the same Zod schema
+  // so blank employeeId, empty date, malformed coordinates, or an arbitrary
+  // status string are rejected on the edit path, not just on create. The
+  // previous hand-parsed formData left these holes open.
+  const parsed = parseFormData(attendanceSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const attendance = await prisma.attendance.update({
     where: { id },
     data: {
-      employeeId: requireId(formData.get("employeeId"), "employeeId"),
-      date: new Date(formData.get("date") as string),
-      checkIn: formData.get("checkIn") ? new Date(formData.get("checkIn") as string) : null,
-      checkOut: formData.get("checkOut") ? new Date(formData.get("checkOut") as string) : null,
-      status: (formData.get("status") as string) || "present",
-      checkInLatitude: safeNumber(formData.get("checkInLatitude")),
-      checkInLongitude: safeNumber(formData.get("checkInLongitude")),
-      checkOutLatitude: safeNumber(formData.get("checkOutLatitude")),
-      checkOutLongitude: safeNumber(formData.get("checkOutLongitude")),
-      overtimeMinutes: safeNumber(formData.get("overtimeMinutes")),
-      overtimeApproved: formData.get("overtimeApproved") === "true" || formData.get("overtimeApproved") === "on",
+      employeeId: v.employeeId,
+      date: new Date(v.date),
+      checkIn: v.checkIn ? new Date(v.checkIn) : null,
+      checkOut: v.checkOut ? new Date(v.checkOut) : null,
+      status: v.status,
+      checkInLatitude: v.checkInLatitude ?? null,
+      checkInLongitude: v.checkInLongitude ?? null,
+      checkOutLatitude: v.checkOutLatitude ?? null,
+      checkOutLongitude: v.checkOutLongitude ?? null,
+      overtimeMinutes: v.overtimeMinutes ?? null,
+      overtimeApproved: v.overtimeApproved ?? false,
     },
   })
 

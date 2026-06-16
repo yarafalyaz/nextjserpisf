@@ -252,6 +252,26 @@ describe("Attendance Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+
+  it("updateAttendance rejects missing employeeId", async () => {
+    prismaMock.attendance.update.mockClear()
+    const res = await actions.updateAttendance(1, fd({
+      date: "2026-06-12",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Validasi gagal/)
+    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
+  })
+
+  it("updateAttendance rejects missing date", async () => {
+    prismaMock.attendance.update.mockClear()
+    const res = await actions.updateAttendance(1, fd({
+      employeeId: "1",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Validasi gagal/)
+    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("Leave Request Actions", () => {
