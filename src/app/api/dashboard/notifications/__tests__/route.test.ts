@@ -159,3 +159,30 @@ describe("GET /api/dashboard/notifications", () => {
       }),
     })
   })
+
+  it("uses local midnight (not 'now') as the overdue cutoff, matching the daily cron", async () => {
+    // An invoice due TODAY is not overdue yet — it only becomes overdue once
+    // today has fully elapsed. The daily-notifications cron uses dayStart
+    // (local midnight) as the cutoff, so the dashboard must use the same
+    // boundary. Using `new Date()` (the current instant) instead would flag
+    // every invoice due earlier today (dueDate = local midnight) as overdue,
+    // over-reporting AR and disagreeing with the cron's own count.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T12:00:00")) // noon local
+
+    mocks.requireAuth.mockResolvedValue({ id: 1, roles: ["super_admin"] })
+    mocks.hasPermission.mockResolvedValue(true)
+    mocks.salesInvoiceCount.mockResolvedValue(0)
+
+    await GET()
+
+    const arg = mocks.salesInvoiceCount.mock.calls[0]?.[0] as {
+      where: { dueDate: { lt: Date } }
+    }
+    const cutoff = arg.where.dueDate.lt
+    // Cutoff must be local midnight today, NOT the current time (noon).
+    expect(cutoff.getHours()).toBe(0)
+    expect(cutoff.getMinutes()).toBe(0)
+    expect(cutoff.getSeconds()).toBe(0)
+    expect(cutoff.getTime()).toBe(new Date("2026-06-12T00:00:00").getTime())
+  })

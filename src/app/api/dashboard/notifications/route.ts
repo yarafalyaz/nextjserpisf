@@ -33,7 +33,14 @@ export async function GET() {
       ` : Promise.resolve([{ count: BigInt(0) }] as [{ count: bigint }]),
       canViewInvoices ? prisma.salesInvoice.count({
         where: {
-          dueDate: { lt: new Date() },
+          // An invoice is only overdue once its full due date has elapsed —
+          // using `new Date()` (the current instant) would flag invoices due
+          // earlier today (dueDate = local midnight today) as overdue while
+          // they are still in their due day, and would also disagree with
+          // the daily-notifications cron at src/app/api/cron/daily-notifications/route.ts
+          // which uses dayStart (local midnight today) as the cutoff. Use the
+          // same boundary so both views report the same overdue count.
+          dueDate: { lt: today },
           paymentStatus: { not: "paid" },
           // Cancelled invoices are void; even if they retain a past due date
           // and unpaid paymentStatus (cancelled status short-circuits the
