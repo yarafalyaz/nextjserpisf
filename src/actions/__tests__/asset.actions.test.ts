@@ -407,8 +407,12 @@ describe("Asset Transfer Actions", () => {
       id: 30,
       assetId: 5,
       fromLocation: "OldLoc",
+      toLocation: "Branch1",
     })
     prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
+    // Guard requires asset.location === oldTransfer.toLocation to revert.
+    prismaMock.asset.findUnique.mockResolvedValue({ location: "Branch1" })
+    prismaMock.assetTransfer.findFirst.mockResolvedValue(null)
 
     await updateAssetTransfer(30, fd({
       assetId: "7",
@@ -436,6 +440,34 @@ describe("Asset Transfer Actions", () => {
     }))
     expect(prismaMock.assetTransfer.update).toHaveBeenCalled()
     // Should not call asset.update with revert
+    const revertCalls = prismaMock.asset.update.mock.calls.filter(
+      (c: any[]) => c[0]?.data?.location === "OldLoc"
+    )
+    expect(revertCalls).toHaveLength(0)
+  })
+
+  // Regression: when the old asset has since been moved by a LATER transfer,
+  // its current location no longer equals this transfer's toLocation, so we
+  // MUST NOT revert it to fromLocation (that would clobber the later transfer's
+  // destination and silently corrupt asset.location). Mirrors the
+  // asset.location === transfer.toLocation guard in deleteAssetTransfer.
+  it("does NOT revert old asset when its current location no longer matches this transfer's toLocation", async () => {
+    prismaMock.assetTransfer.findUniqueOrThrow.mockResolvedValue({
+      id: 30,
+      assetId: 5,
+      fromLocation: "OldLoc",
+      toLocation: "Branch1",
+    })
+    prismaMock.assetTransfer.update.mockResolvedValue({ id: 30 })
+    // Asset 5 has since been moved to "LatestBranch" by a later transfer
+    prismaMock.asset.findUnique.mockResolvedValue({ location: "LatestBranch" })
+
+    await updateAssetTransfer(30, fd({
+      assetId: "7",
+      toLocation: "Branch2",
+      transferDate: "2026-06-12",
+    }))
+    // Must NOT call asset.update with revert-to-OldLoc
     const revertCalls = prismaMock.asset.update.mock.calls.filter(
       (c: any[]) => c[0]?.data?.location === "OldLoc"
     )

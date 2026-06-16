@@ -338,18 +338,37 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: parsed.error }
   const { data } = parsed
 
-  // Fix #38: Get old transfer to revert asset location if asset changed
+  // Fix #N: Get old transfer to revert asset location if asset changed
   const oldTransfer = await prisma.assetTransfer.findUniqueOrThrow({
     where: { id },
   })
 
   const transfer = await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
-    // If asset changed, revert old asset location first
-    if (oldTransfer.assetId !== data.assetId && oldTransfer.fromLocation) {
-      await tx.asset.update({
+    // If asset changed, revert old asset location first — but ONLY if this
+    // transfer is what currently drives the old asset's location. Without the
+    // check, editing a back-dated transfer while the asset has since been
+    // moved by a LATER transfer would clobber the asset's current location
+    // back to fromLocation, silently losing the newer transfer's destination.
+    // Mirrors the asset.location === transfer.toLocation guard in
+    // deleteAssetTransfer; when reverting, prefer the latest remaining
+    // transfer's destination over a blind fromLocation fallback so chained
+    // transfers (A→B→C) stay consistent if any middle transfer is edited.
+    if (oldTransfer.assetId !== data.assetId) {
+      const oldAsset = await tx.asset.findUnique({
         where: { id: oldTransfer.assetId },
-        data: { location: oldTransfer.fromLocation },
+        select: { location: true },
       })
+      if (oldAsset && oldAsset.location === oldTransfer.toLocation) {
+        const latest = await tx.assetTransfer.findFirst({
+          where: { assetId: oldTransfer.assetId, NOT: { id } },
+          orderBy: { transferDate: "desc" },
+          select: { toLocation: true },
+        })
+        await tx.asset.update({
+          where: { id: oldTransfer.assetId },
+          data: { location: latest?.toLocation ?? oldTransfer.fromLocation },
+        })
+      }
     }
 
     const updated = await tx.assetTransfer.update({
