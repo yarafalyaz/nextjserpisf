@@ -1676,7 +1676,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
 
   try {
 
-  await requirePermission("create_leave_requests")
+  await requirePermission("edit_leave_requests")
 
   // Only pending requests can be edited. Approved/rejected leave must not be re-opened.
   const existing = await prisma.leaveRequest.findUniqueOrThrow({ where: { id }, select: { status: true } })
@@ -1733,7 +1733,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
 
   try {
 
-  await requirePermission("create_overtime_requests")
+  await requirePermission("edit_overtime_requests")
 
   // Integrity guard: an approved/rejected overtime has a calculatedValue that
   // feeds payroll and an audit trail (approvedBy/approvedAt/rejectionReason).

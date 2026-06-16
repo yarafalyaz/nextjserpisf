@@ -357,6 +357,12 @@ describe("Leave Request Actions", () => {
       endDate: "2026-06-20",
     }))
     expect(res?.success).toBe(true)
+    // Regression: updateLeaveRequest must gate on edit_leave_requests, not
+    // create_leave_requests. The latter would let any user with create rights
+    // edit any pending leave, bypassing the dedicated edit gate used by
+    // approveLeave/rejectLeave. Same class as the sales/purchase/budget
+    // create-vs-edit fix.
+    expect(requirePermissionMock).toHaveBeenCalledWith("edit_leave_requests")
   })
 
   it("deleteLeaveRequest removes record", async () => {
@@ -401,6 +407,10 @@ describe("Overtime Request Actions", () => {
       hours: "3",
     }))
     expect(res?.success).toBe(true)
+    // Regression: updateOvertimeRequest must gate on edit_overtime_requests,
+    // not create_overtime_requests. Mirrors updateLeaveRequest / sales /
+    // purchase / budget create-vs-edit fix.
+    expect(requirePermissionMock).toHaveBeenCalledWith("edit_overtime_requests")
   })
 
   it("updateOvertimeRequest rejects editing an already-approved request", async () => {
