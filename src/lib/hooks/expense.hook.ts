@@ -1,6 +1,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { computePettyCashChain, findFirstNegativeBalance } from "@/lib/finance/petty-cash-chain";
 
 /**
  * Expense Hook - Observer pattern replacement.
@@ -63,26 +64,55 @@ export async function onExpenseApprovedSyncPettyCash(
     // INs) must be rejected — otherwise the negative balance would be
     // silently saved by the recompute loop below, breaking the invariant
     // enforced everywhere else.
-    // Batch updates to avoid N+1 sequential round-trips while still enforcing
-    // the same negative-balance guard as recalcPettyCashChain in finance.actions.
-    const all = await tx.pettyCash.findMany({ orderBy: [{ date: "asc" }, { id: "asc" }] });
-    let running = 0;
-    const updates: Promise<unknown>[] = [];
-    for (const rec of all) {
-      const before = running;
-      const after = rec.type === "IN" ? before + Number(rec.amount) : before - Number(rec.amount);
-      if (after < 0) {
-        throw new Error(
-          `Saldo kas kecil menjadi negatif pada transaksi ${rec.documentNo ?? `#${rec.id}`} ` +
-            `(saldo: ${after.toLocaleString("id-ID")}). Periksa urutan tanggal dan jumlah pengeluaran.`
-        );
-      }
-      if (Number(rec.balanceBefore) !== before || Number(rec.balanceAfter) !== after) {
-        updates.push(tx.pettyCash.update({ where: { id: rec.id }, data: { balanceBefore: before, balanceAfter: after } }));
-      }
-      running = after;
+    //
+    // Reuse the shared `computePettyCashChain` + `findFirstNegativeBalance`
+    // helpers from @/lib/finance/petty-cash-chain (the same source of truth
+    // used by recalcPettyCashChain in finance.actions.ts) so the chain math
+    // is float-drift-safe (safeAdd/safeSubtract) and the overdraw error
+    // message is byte-identical with the one the rest of the app emits.
+    // Previously this loop hand-rolled raw `+`/`-` arithmetic, which could
+    // round differently from the canonical path and silently desync the
+    // balanceAfter values that other code paths depend on.
+    const all = await tx.pettyCash.findMany({
+      orderBy: [{ date: "asc" }, { id: "asc" }],
+      select: { id: true, documentNo: true, type: true, amount: true, balanceBefore: true, balanceAfter: true },
+    });
+
+    const records = all.map((r) => ({
+      id: r.id,
+      documentNo: r.documentNo,
+      type: r.type,
+      amount: Number(r.amount),
+    }));
+
+    const negative = findFirstNegativeBalance(records);
+    if (negative) {
+      throw new Error(
+        `Saldo kas kecil menjadi negatif pada transaksi ${negative.record.documentNo ?? `#${negative.record.id}`} ` +
+          `(saldo: ${negative.balanceAfter.toLocaleString("id-ID")}). Periksa urutan tanggal dan jumlah pengeluaran.`
+      );
     }
+
+    const balances = computePettyCashChain(records);
+    const balanceById = new Map(balances.map((b) => [b.id, b]));
+    const updates = all
+      .map((r) => {
+        const target = balanceById.get(r.id);
+        if (!target) return null;
+        if (Number(r.balanceBefore) === target.balanceBefore && Number(r.balanceAfter) === target.balanceAfter) {
+          return null;
+        }
+        return tx.pettyCash.update({
+          where: { id: r.id },
+          data: { balanceBefore: target.balanceBefore, balanceAfter: target.balanceAfter },
+        });
+      })
+      .filter((u) => u !== null);
+
     if (updates.length > 0) {
+      // Parallelise the per-row updates — N sequential round-trips → 1
+      // batched concurrent dispatch. Matches the Promise.all pattern used
+      // in recalcPettyCashChain in finance.actions.ts.
       await Promise.all(updates);
     }
   });

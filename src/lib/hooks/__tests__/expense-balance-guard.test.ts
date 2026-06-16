@@ -111,4 +111,48 @@ describe("onExpenseApprovedSyncPettyCash balance guard", () => {
     expect(mocks.pettyCashCreate).toHaveBeenCalled()
     expect(mocks.pettyCashUpdate).toHaveBeenCalled()
   })
+
+  it("recomputes balanceBefore/balanceAfter via the shared chain helper", async () => {
+    // Regression: the hook used to hand-roll raw `+`/`-` float math for the
+    // running-balance chain, which could round differently from the canonical
+    // recalcPettyCashChain path (computePettyCashChain + safeAdd/safeSubtract).
+    // This asserts the persisted balances match the shared-helper output for a
+    // multi-record chain whose stored balances are stale (all zero).
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 3,
+      documentNo: "EXP-003",
+      amount: 300,
+      paidFromAccountId: 10,
+      date: new Date(),
+    })
+    mocks.accountFindUnique.mockResolvedValue({ id: 10, name: "Kas Kecil Utama" })
+    mocks.pettyCashFindFirst.mockResolvedValue(null)
+
+    const update = mocks.pettyCashUpdate
+    update.mockClear()
+    update.mockResolvedValue({})
+    const mockTx = {
+      pettyCash: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: mocks.pettyCashCreate,
+        // Stored balances are all stale (0) so every row needs a rewrite.
+        findMany: vi.fn().mockResolvedValue([
+          { id: 1, documentNo: "PC-1", type: "IN", amount: 1000, balanceBefore: 0, balanceAfter: 0 },
+          { id: 2, documentNo: "PC-2", type: "OUT", amount: 300, balanceBefore: 0, balanceAfter: 0 },
+          { id: 3, documentNo: "PC-3", type: "OUT", amount: 200, balanceBefore: 0, balanceAfter: 0 },
+        ]),
+        update,
+      },
+    }
+    mocks.transaction.mockImplementation(async (fn: any) => fn(mockTx))
+
+    await expect(onExpenseApprovedSyncPettyCash(3, 99)).resolves.toBeUndefined()
+
+    // Expected chain: IN 1000 → 1000, OUT 300 → 700, OUT 200 → 500
+    const writes = update.mock.calls.map((c) => c[0])
+    const byId = new Map(writes.map((w: any) => [w.where.id, w.data]))
+    expect(byId.get(1)).toEqual({ balanceBefore: 0, balanceAfter: 1000 })
+    expect(byId.get(2)).toEqual({ balanceBefore: 1000, balanceAfter: 700 })
+    expect(byId.get(3)).toEqual({ balanceBefore: 700, balanceAfter: 500 })
+  })
 })
