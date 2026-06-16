@@ -19,9 +19,11 @@ export default async function BankReconciliationDetailPage({
 }) {
   await requirePermission("view_bank_reconciliation")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const recon = await prisma.bankReconciliation.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { items: true },
   })
   if (!recon) notFound()

@@ -25,9 +25,11 @@ export default async function LeadDetailPage({
 }) {
   await requirePermission("view_leads")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const lead = await prisma.lead.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       activities: { orderBy: { createdAt: "desc" }, take: 10 },
     },

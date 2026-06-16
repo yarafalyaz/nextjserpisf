@@ -33,9 +33,11 @@ export default async function QuotationDetailPage({
 }) {
   await requirePermission("view_quotations");
   const { id } = await params;
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const quotation = await prisma.quotation.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: numId, deletedAt: null },
     include: {
       customer: true,
       sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },

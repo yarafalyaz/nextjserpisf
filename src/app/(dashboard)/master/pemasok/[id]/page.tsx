@@ -25,9 +25,11 @@ export default async function VendorDetailPage({
   await requirePermission("view_vendors")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const vendor = await prisma.vendor.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: numId, deletedAt: null },
     include: {
       purchaseOrders: { take: 10, orderBy: { createdAt: "desc" } },
       vendorBills: { take: 10, orderBy: { createdAt: "desc" } },
@@ -38,13 +40,13 @@ export default async function VendorDetailPage({
 
   const [goodsReceipts, purchaseReturns] = await Promise.all([
     prisma.goodsReceipt.findMany({
-      where: { purchaseOrder: { vendorId: Number(id) } },
+      where: { purchaseOrder: { vendorId: numId } },
       include: { purchaseOrder: true, warehouse: true },
       take: 10,
       orderBy: { createdAt: "desc" },
     }),
     prisma.purchaseReturn.findMany({
-      where: { purchaseOrder: { vendorId: Number(id) } },
+      where: { purchaseOrder: { vendorId: numId } },
       include: { purchaseOrder: true },
       take: 10,
       orderBy: { createdAt: "desc" },

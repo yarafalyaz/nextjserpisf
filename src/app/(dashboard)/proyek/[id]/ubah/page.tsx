@@ -18,8 +18,10 @@ export default async function EditProjectPage({
   await requirePermission("view_projects")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
   const [project, customersRaw, customerVehiclesRaw] = await Promise.all([
-    prisma.project.findUnique({ where: { id: Number(id) } }),
+    prisma.project.findUnique({ where: { id: numId } }),
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },

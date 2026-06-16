@@ -15,9 +15,11 @@ export const metadata: Metadata = { title: "Persetujuan" }
 export default async function ApprovalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("view_dashboard")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const approval = await prisma.approval.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       workflow: { include: { steps: { orderBy: { stepOrder: "asc" } } } },
       histories: { orderBy: { createdAt: "desc" } },

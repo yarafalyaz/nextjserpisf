@@ -26,9 +26,11 @@ export default async function WorkOrderDetailPage({
 }) {
   await requirePermission("view_work_orders")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const wo = await prisma.workOrder.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       customer: true,
       quotation: true,

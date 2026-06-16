@@ -30,9 +30,11 @@ export default async function DownPaymentDetailPage({
   await requirePermission("view_sales_orders");
 
   const { id } = await params;
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const dp = await prisma.downPayment.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       quotation: true,
       customer: true,

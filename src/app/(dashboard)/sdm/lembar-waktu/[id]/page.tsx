@@ -22,9 +22,11 @@ export default async function TimesheetDetailPage({
   await requirePermission("view_employees")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const timesheet = await prisma.timesheet.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       employee: true,
     },

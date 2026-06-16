@@ -17,9 +17,11 @@ export default async function EditVendorPage({
 }) {
   await requirePermission("edit_vendors")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const vendor = await prisma.vendor.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: numId, deletedAt: null },
   })
 
   if (!vendor) notFound()

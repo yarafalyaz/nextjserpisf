@@ -24,9 +24,11 @@ export default async function InventoryTransferDetailPage({
   await requirePermission("view_inventory")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const transfer = await prisma.inventoryTransfer.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       sourceWarehouse: true,
       destinationWarehouse: true,

@@ -18,9 +18,11 @@ export default async function EditDepartmentPage({
   await requirePermission("edit_departments")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const department = await prisma.department.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!department) notFound()

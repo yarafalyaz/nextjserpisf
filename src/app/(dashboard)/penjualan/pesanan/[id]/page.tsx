@@ -32,9 +32,11 @@ export default async function SalesOrderDetailPage({
   await requirePermission("view_sales_orders");
 
   const { id } = await params;
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const order = await prisma.salesOrder.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: numId, deletedAt: null },
     include: {
       customer: true,
       quotation: true,

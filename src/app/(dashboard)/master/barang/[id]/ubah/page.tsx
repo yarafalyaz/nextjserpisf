@@ -17,9 +17,11 @@ export default async function EditItemPage({
 }) {
   await requirePermission("edit_items")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const [item, categories, brands, vendors, warehouses, racks, rackRows] = await Promise.all([
-    prisma.item.findUnique({ where: { id: Number(id) }, include: { uomConversions: true } }),
+    prisma.item.findUnique({ where: { id: numId }, include: { uomConversions: true } }),
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),

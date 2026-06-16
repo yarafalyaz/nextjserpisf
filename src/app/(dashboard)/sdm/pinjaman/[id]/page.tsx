@@ -23,9 +23,11 @@ export default async function EmployeeLoanDetailPage({
   await requirePermission("view_employees")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const loan = await prisma.employeeLoan.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       employee: true,
     },

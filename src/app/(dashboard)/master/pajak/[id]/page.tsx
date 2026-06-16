@@ -22,9 +22,11 @@ export default async function TaxDetailPage({
   await requirePermission("view_taxes")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const tax = await prisma.tax.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!tax) notFound()

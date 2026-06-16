@@ -25,9 +25,11 @@ export default async function PositionDetailPage({
   await requirePermission("view_positions")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const position = await prisma.position.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       department: true,
       employees: { take: 10, orderBy: { name: "asc" } },

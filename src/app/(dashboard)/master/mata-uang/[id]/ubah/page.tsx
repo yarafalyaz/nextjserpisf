@@ -18,7 +18,9 @@ export default async function EditCurrencyPage({
   await requirePermission("edit_currencies")
 
   const { id } = await params
-  const currency = await prisma.currency.findUnique({ where: { id: Number(id) } })
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
+  const currency = await prisma.currency.findUnique({ where: { id: numId } })
 
   if (!currency) notFound()
 

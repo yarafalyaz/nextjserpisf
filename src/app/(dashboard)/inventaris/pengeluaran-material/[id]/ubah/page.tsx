@@ -19,9 +19,11 @@ export default async function EditPage({
   await requirePermission("edit_inventory")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const data = await prisma.materialIssue.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!data) notFound()

@@ -24,9 +24,11 @@ export default async function VehicleModelDetailPage({
   await requirePermission("view_vehicles")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const model = await prisma.vehicleModel.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       brand: true,
       variants: true,

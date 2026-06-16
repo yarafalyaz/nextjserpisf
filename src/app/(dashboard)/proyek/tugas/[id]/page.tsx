@@ -23,9 +23,11 @@ export default async function TaskDetailPage({
   await requirePermission("view_projects")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const task = await prisma.task.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       project: true,
       assignee: true,

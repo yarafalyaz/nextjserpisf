@@ -27,9 +27,11 @@ export default async function ProjectDetailPage({
   await requirePermission("view_projects")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const project = await prisma.project.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       customer: true,
       customerVehicle: {

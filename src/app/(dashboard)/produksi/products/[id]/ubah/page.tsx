@@ -17,9 +17,11 @@ export default async function EditProductPage({
 }) {
   await requirePermission("edit_products")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const product = await prisma.product.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { materials: true },
   })
   if (!product) notFound()

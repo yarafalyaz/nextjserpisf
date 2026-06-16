@@ -18,9 +18,11 @@ export default async function EditQuotationPage({
   await requirePermission("edit_sales_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const data = await prisma.quotation.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { sections: { include: { items: true } } },
   })
 

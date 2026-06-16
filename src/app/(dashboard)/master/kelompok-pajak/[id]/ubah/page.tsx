@@ -17,9 +17,11 @@ export default async function EditTaxGroupPage({
 }) {
   await requirePermission("edit_taxes")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const [group, taxes] = await Promise.all([
-    prisma.taxGroup.findUnique({ where: { id: Number(id) }, include: { taxes: true } }),
+    prisma.taxGroup.findUnique({ where: { id: numId }, include: { taxes: true } }),
     prisma.tax.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ])
   if (!group) notFound()

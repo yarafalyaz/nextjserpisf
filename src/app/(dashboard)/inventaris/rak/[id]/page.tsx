@@ -23,9 +23,11 @@ export default async function RackDetailPage({
   await requirePermission("view_inventory")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const rack = await prisma.rack.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       warehouse: true,
       rows: true,

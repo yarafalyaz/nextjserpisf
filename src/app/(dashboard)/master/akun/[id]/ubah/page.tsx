@@ -18,9 +18,11 @@ export default async function EditAccountPage({
   await requirePermission("edit_accounts")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const data = await prisma.account.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!data) notFound()

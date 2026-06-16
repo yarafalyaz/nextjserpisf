@@ -17,8 +17,10 @@ export default async function EditShippingMethodPage({
 }) {
   await requirePermission("edit_shipping_methods")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
-  const data = await prisma.shippingMethod.findUnique({ where: { id: Number(id) } })
+  const data = await prisma.shippingMethod.findUnique({ where: { id: numId } })
   if (!data) notFound()
 
   return (

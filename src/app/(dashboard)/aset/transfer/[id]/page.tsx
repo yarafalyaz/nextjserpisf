@@ -24,9 +24,11 @@ export default async function AssetTransferDetailPage({
   await requirePermission("view_asset_transfers")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const transfer = await prisma.assetTransfer.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       asset: true,
     },

@@ -23,9 +23,11 @@ export default async function ProductionOrderDetailPage({
   await requirePermission("view_production")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const order = await prisma.productionOrder.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       product: true,
       materials: true,

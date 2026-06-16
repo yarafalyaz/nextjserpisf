@@ -18,9 +18,11 @@ export default async function DetailPage({
   await requirePermission("view_tax_groups")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const data = await prisma.taxGroup.findUnique({
-    where: { id: Number(id) }
+    where: { id: numId }
   })
 
   if (!data) notFound()

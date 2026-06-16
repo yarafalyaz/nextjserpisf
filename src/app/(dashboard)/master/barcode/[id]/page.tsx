@@ -18,9 +18,11 @@ export default async function DetailPage({
   await requirePermission("view_barcodes")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const data = await prisma.barcode.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { item: true }
   })
 

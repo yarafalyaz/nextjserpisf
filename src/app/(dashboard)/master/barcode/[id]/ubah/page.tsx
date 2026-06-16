@@ -17,8 +17,10 @@ export default async function EditBarcodePage({
 }) {
   await requirePermission("edit_barcodes")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
-  const data = await prisma.barcode.findUnique({ where: { id: Number(id) } })
+  const data = await prisma.barcode.findUnique({ where: { id: numId } })
   if (!data) notFound()
 
   return (

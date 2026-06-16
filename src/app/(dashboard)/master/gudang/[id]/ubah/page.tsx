@@ -17,9 +17,11 @@ export default async function EditWarehousePage({
 }) {
   await requirePermission("edit_warehouses")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const warehouse = await prisma.warehouse.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: numId, deletedAt: null },
   })
 
   if (!warehouse) notFound()

@@ -28,9 +28,11 @@ export default async function ItemDetailPage({
 }) {
   await requirePermission("view_items")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const item = await prisma.item.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       category: true,
       warehouse: true,

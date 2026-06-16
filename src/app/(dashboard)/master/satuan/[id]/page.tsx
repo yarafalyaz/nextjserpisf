@@ -19,9 +19,11 @@ export default async function UomDetailPage({
   await requirePermission("view_units")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const uom = await prisma.unitOfMeasure.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!uom) notFound()

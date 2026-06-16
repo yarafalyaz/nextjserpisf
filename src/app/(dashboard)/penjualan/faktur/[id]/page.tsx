@@ -32,9 +32,11 @@ export default async function InvoiceDetailPage({
 }) {
   await requirePermission("view_sales_invoices")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const invoice = await prisma.salesInvoice.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       customer: true,
       salesOrder: true,

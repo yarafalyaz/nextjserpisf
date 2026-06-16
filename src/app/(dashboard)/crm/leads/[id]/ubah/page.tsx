@@ -18,7 +18,9 @@ export default async function EditLeadPage({
   await requirePermission("edit_leads")
 
   const { id } = await params
-  const lead = await prisma.lead.findUnique({ where: { id: Number(id) } })
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
+  const lead = await prisma.lead.findUnique({ where: { id: numId } })
 
   if (!lead) notFound()
 

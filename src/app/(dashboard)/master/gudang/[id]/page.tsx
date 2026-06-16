@@ -25,9 +25,11 @@ export default async function WarehouseDetailPage({
   await requirePermission("view_warehouses")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const warehouse = await prisma.warehouse.findUnique({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: numId, deletedAt: null },
     include: {
       racks: { include: { rows: true } },
     },
@@ -36,7 +38,7 @@ export default async function WarehouseDetailPage({
   if (!warehouse) notFound()
 
   const stockMoves = await prisma.stockMove.findMany({
-    where: { warehouseId: Number(id), status: "posted" },
+    where: { warehouseId: numId, status: "posted" },
     include: { item: { include: { category: true } } },
     orderBy: { createdAt: "desc" },
     take: 20,

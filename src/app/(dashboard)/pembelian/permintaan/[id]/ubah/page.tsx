@@ -18,10 +18,12 @@ export default async function EditPage({
   await requirePermission("edit_purchase_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const [data, items, employees] = await Promise.all([
     prisma.purchaseRequest.findUnique({
-      where: { id: Number(id) },
+      where: { id: numId },
       include: { items: true },
     }),
     prisma.item.findMany({

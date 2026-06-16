@@ -22,9 +22,11 @@ export default async function RackRowDetailPage({
   await requirePermission("view_inventory")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const rackRow = await prisma.rackRow.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     select: {
       id: true,
       code: true,

@@ -17,9 +17,11 @@ export default async function EditRackPage({
 }) {
   await requirePermission("create_warehouses")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const [rack, warehouses] = await Promise.all([
-    prisma.rack.findUnique({ where: { id: Number(id) } }),
+    prisma.rack.findUnique({ where: { id: numId } }),
     prisma.warehouse.findMany({ where: { deletedAt: null, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ])
   if (!rack) notFound()

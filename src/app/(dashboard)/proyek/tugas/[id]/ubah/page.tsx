@@ -18,9 +18,11 @@ export default async function EditTaskPage({
   await requirePermission("view_projects")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const [task, projects, employees] = await Promise.all([
-    prisma.task.findUnique({ where: { id: Number(id) } }),
+    prisma.task.findUnique({ where: { id: numId } }),
     prisma.project.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },

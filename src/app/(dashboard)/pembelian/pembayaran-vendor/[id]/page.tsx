@@ -27,9 +27,11 @@ export default async function VendorPaymentDetailPage({
   await requirePermission("view_purchase_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const payment = await prisma.vendorPayment.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       vendor: true,
       allocations: true,

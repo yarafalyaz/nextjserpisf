@@ -18,8 +18,10 @@ export default async function BankStatementDetailPage({
 }) {
   await requirePermission("view_bank_statements")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
-  const stmt = await prisma.bankStatement.findUnique({ where: { id: Number(id) } })
+  const stmt = await prisma.bankStatement.findUnique({ where: { id: numId } })
   if (!stmt) notFound()
 
   const account = stmt.accountId

@@ -23,9 +23,11 @@ export default async function CostCenterDetailPage({
   await requirePermission("view_cost_centers")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const costCenter = await prisma.costCenter.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!costCenter) notFound()

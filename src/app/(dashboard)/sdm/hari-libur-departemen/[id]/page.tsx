@@ -20,9 +20,11 @@ export default async function DepartmentHolidayDetailPage({
   await requirePermission("view_employees")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const holiday = await prisma.departmentHoliday.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { department: true },
   })
 

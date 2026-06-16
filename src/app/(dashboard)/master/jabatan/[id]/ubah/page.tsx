@@ -18,9 +18,11 @@ export default async function EditPositionPage({
   await requirePermission("edit_positions")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const position = await prisma.position.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!position) notFound()

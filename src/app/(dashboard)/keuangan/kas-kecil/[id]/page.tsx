@@ -24,9 +24,11 @@ export default async function PettyCashDetailPage({
   await requirePermission("view_petty_cash")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const pettyCash = await prisma.pettyCash.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!pettyCash) notFound()

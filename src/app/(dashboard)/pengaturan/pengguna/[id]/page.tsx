@@ -18,9 +18,11 @@ export default async function UserDetailPage({
 }) {
   await requirePermission("manage_users")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const user = await prisma.user.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { roles: true },
   })
   if (!user) notFound()

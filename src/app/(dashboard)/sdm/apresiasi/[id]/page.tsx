@@ -28,9 +28,11 @@ export default async function AppreciationDetailPage({
   await requirePermission("view_employees")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const appreciation = await prisma.appreciation.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       employee: true,
     },

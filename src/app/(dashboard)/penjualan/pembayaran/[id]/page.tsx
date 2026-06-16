@@ -26,9 +26,11 @@ export default async function SalesPaymentDetailPage({
   await requirePermission("view_sales_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const payment = await prisma.salesPayment.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       salesInvoice: { include: { customer: true } },
     },

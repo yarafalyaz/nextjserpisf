@@ -27,9 +27,11 @@ export default async function ExpenseDetailPage({
   await requirePermission("view_expenses")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const expense = await prisma.expense.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!expense) notFound()

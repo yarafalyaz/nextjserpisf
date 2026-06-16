@@ -18,9 +18,11 @@ export default async function EditRackRowPage({
   await requirePermission("edit_inventory")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const rackRow = await prisma.rackRow.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     select: {
       id: true,
       rackId: true,

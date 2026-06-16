@@ -21,9 +21,11 @@ export default async function BrandDetailPage({
   await requirePermission("view_brands")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const brand = await prisma.brand.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       items: { take: 20, orderBy: { createdAt: "desc" }, select: { id: true, sku: true, name: true } },
     },

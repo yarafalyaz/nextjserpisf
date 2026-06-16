@@ -18,9 +18,11 @@ export default async function EditBrandPage({
   await requirePermission("edit_brands")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const brand = await prisma.brand.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!brand) notFound()

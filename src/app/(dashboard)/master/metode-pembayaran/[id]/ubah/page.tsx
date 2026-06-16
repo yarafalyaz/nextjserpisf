@@ -17,8 +17,10 @@ export default async function EditPaymentMethodPage({
 }) {
   await requirePermission("edit_payment_methods")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
-  const data = await prisma.paymentMethod.findUnique({ where: { id: Number(id) } })
+  const data = await prisma.paymentMethod.findUnique({ where: { id: numId } })
   if (!data) notFound()
 
   return (

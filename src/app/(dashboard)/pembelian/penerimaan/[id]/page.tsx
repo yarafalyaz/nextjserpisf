@@ -24,9 +24,11 @@ export default async function GoodsReceiptDetailPage({
   await requirePermission("view_purchase_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const receipt = await prisma.goodsReceipt.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       purchaseOrder: { include: { vendor: true, items: true } },
       warehouse: true,

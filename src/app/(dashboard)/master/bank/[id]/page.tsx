@@ -23,9 +23,11 @@ export default async function BankDetailPage({
   await requirePermission("view_banks")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const bank = await prisma.bank.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!bank) notFound()

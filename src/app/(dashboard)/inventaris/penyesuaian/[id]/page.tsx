@@ -24,9 +24,11 @@ export default async function StockAdjustmentDetailPage({
   await requirePermission("view_inventory")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const adjustment = await prisma.stockAdjustment.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       warehouse: true,
       items: true,

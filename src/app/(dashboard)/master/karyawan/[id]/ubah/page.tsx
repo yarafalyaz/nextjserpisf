@@ -16,10 +16,12 @@ export default async function EditEmployeePage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
   await requirePermission("edit_employees")
 
   const data = await prisma.employee.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       user: {
         include: {

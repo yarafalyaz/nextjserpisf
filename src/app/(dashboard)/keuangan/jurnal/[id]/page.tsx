@@ -22,9 +22,11 @@ export default async function JournalDetailPage({
   await requirePermission("view_journals")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const journal = await prisma.journal.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       entries: {
         include: { account: true },

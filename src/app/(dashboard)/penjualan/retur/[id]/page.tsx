@@ -25,9 +25,11 @@ export default async function SalesReturnDetailPage({
   await requirePermission("view_sales_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const salesReturn = await prisma.salesReturn.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       items: true,
     },

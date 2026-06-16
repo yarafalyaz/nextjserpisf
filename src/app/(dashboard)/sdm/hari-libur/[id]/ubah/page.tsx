@@ -17,8 +17,10 @@ export default async function EditHolidayPage({
 }) {
   await requirePermission("create_holidays")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
-  const data = await prisma.holiday.findUnique({ where: { id: Number(id) } })
+  const data = await prisma.holiday.findUnique({ where: { id: numId } })
   if (!data) notFound()
 
   return (

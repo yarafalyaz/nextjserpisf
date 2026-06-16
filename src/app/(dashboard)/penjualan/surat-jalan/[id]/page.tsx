@@ -22,9 +22,11 @@ export default async function DeliveryOrderDetailPage({
   await requirePermission("view_sales_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const deliveryOrder = await prisma.deliveryOrder.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       salesOrder: { include: { customer: true } },
     },

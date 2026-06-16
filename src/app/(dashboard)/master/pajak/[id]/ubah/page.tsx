@@ -18,7 +18,9 @@ export default async function EditTaxPage({
   await requirePermission("edit_taxes")
 
   const { id } = await params
-  const tax = await prisma.tax.findUnique({ where: { id: Number(id) } })
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
+  const tax = await prisma.tax.findUnique({ where: { id: numId } })
 
   if (!tax) notFound()
 

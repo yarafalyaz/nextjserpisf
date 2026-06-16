@@ -24,9 +24,11 @@ export default async function CrmTicketDetailPage({
 }) {
   await requirePermission("view_tickets")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const ticket = await prisma.crmTicket.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       comments: { orderBy: { createdAt: "desc" } },
     },

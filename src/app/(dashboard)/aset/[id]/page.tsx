@@ -25,9 +25,11 @@ export default async function AssetDetailPage({
 }) {
   await requirePermission("view_assets")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const asset = await prisma.asset.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       category: true,
       group: true,

@@ -18,7 +18,9 @@ export default async function EditItemCategoryPage({
   await requirePermission("edit_item_categories")
 
   const { id } = await params
-  const category = await prisma.itemCategory.findUnique({ where: { id: Number(id) } })
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
+  const category = await prisma.itemCategory.findUnique({ where: { id: numId } })
 
   if (!category) notFound()
 

@@ -24,9 +24,11 @@ export default async function WorkScheduleDetailPage({
   await requirePermission("view_employees")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const schedule = await prisma.workSchedule.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { employees: { select: { id: true, name: true } }, departments: { select: { id: true, name: true } } },
   })
 

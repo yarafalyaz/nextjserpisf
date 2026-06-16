@@ -27,9 +27,11 @@ export default async function PurchaseRequestDetailPage({
   await requirePermission("view_purchase_orders")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const request = await prisma.purchaseRequest.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       items: true,
       purchaseOrders: { orderBy: { createdAt: "desc" } },

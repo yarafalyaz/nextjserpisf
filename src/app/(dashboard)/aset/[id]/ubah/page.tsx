@@ -17,9 +17,11 @@ export default async function EditAssetPage({
 }) {
   await requirePermission("edit_assets")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const [asset, categories, brands] = await Promise.all([
-    prisma.asset.findUnique({ where: { id: Number(id) } }),
+    prisma.asset.findUnique({ where: { id: numId } }),
     prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.assetBrand.findMany({ orderBy: { name: "asc" } }),
   ])

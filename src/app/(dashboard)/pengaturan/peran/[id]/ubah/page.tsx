@@ -14,10 +14,12 @@ export const metadata: Metadata = { title: "Ubah Peran" }
 export default async function EditRolePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePermission("manage_settings")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const [role, allPermissions] = await Promise.all([
     prisma.role.findUnique({
-      where: { id: Number(id) },
+      where: { id: numId },
       include: { permissions: true },
     }),
     prisma.permission.findMany({ orderBy: { name: "asc" } }),

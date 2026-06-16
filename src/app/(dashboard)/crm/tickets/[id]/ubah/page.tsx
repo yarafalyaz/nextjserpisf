@@ -17,9 +17,11 @@ export default async function EditPage({
 }) {
   await requirePermission("edit_tickets")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const data = await prisma.crmTicket.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!data) notFound()

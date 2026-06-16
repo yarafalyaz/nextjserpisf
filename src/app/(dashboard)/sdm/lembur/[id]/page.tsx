@@ -24,9 +24,11 @@ export default async function OvertimeRequestDetailPage({
   await requirePermission("view_employees")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const overtime = await prisma.overtimeRequest.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       employee: true,
     },

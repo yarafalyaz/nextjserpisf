@@ -23,9 +23,11 @@ export default async function MaterialIssueDetailPage({
   await requirePermission("view_inventory")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const issue = await prisma.materialIssue.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: {
       warehouse: true,
       items: true,

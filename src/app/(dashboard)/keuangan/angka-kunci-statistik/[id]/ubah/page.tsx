@@ -17,8 +17,10 @@ export default async function EditKeyFigurePage({
 }) {
   await requirePermission("edit_accounts")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
-  const data = await prisma.statisticalKeyFigure.findUnique({ where: { id: Number(id) } })
+  const data = await prisma.statisticalKeyFigure.findUnique({ where: { id: numId } })
   if (!data) notFound()
 
   return (

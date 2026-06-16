@@ -18,9 +18,11 @@ export default async function EditPaymentTermPage({
   await requirePermission("edit_payment_terms")
 
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const paymentTerm = await prisma.paymentTerm.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
   })
 
   if (!paymentTerm) notFound()

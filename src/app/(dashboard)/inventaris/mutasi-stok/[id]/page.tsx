@@ -19,9 +19,11 @@ export default async function StockMoveDetailPage({
 }) {
   await requirePermission("view_stock_moves")
   const { id } = await params
+  const numId = Number(id)
+  if (Number.isNaN(numId)) notFound()
 
   const move = await prisma.stockMove.findUnique({
-    where: { id: Number(id) },
+    where: { id: numId },
     include: { item: true, warehouse: true },
   })
   if (!move) notFound()
