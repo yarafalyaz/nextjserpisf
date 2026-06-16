@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     vehicleVariant: buildModelMock(),
     vehicle: buildModelMock(),
     customerVehicle: buildModelMock(),
+    product: buildModelMock(),
     salesOrder: buildModelMock(),
     salesInvoice: buildModelMock(),
 

@@ -156,6 +156,28 @@ export async function deleteVehicleBrand(id: number) {
   try {
     await requirePermission("delete_vehicle_brands")
 
+    // Integrity guard: Product.vehicleBrandId has ON DELETE SET NULL in the
+    // migration (and Cascade in the Prisma schema — either way destructive).
+    // VehicleModel.vehicleBrandId is ON DELETE RESTRICT, so a raw delete only
+    // fails with a generic Prisma FK error if models exist; but products
+    // referencing the brand would be silently NULL'd (or cascade-wiped) with
+    // NO error and NO warning, losing the brand-compatibility tag on every
+    // affected product. Mirrors deletePosition/deletePaymentTerm's guard:
+    // refuse with Indonesian error listing the count, let the operator
+    // reassign/detach products first.
+    const productCount = await prisma.product.count({
+      where: { vehicleBrandId: id },
+    })
+    if (productCount > 0) {
+      return {
+        success: false,
+        error:
+          `Merek kendaraan ini masih dipakai oleh ${productCount} produk ` +
+          `dan tidak bisa dihapus karena akan menghilangkan informasi kompatibilitas merek. ` +
+          `Lepas asosiasi merek dari produk terlebih dahulu.`,
+      }
+    }
+
     await prisma.vehicleBrand.delete({ where: { id } })
 
     revalidatePath("/kendaraan/merek")
@@ -171,6 +193,30 @@ export async function deleteVehicleBrand(id: number) {
 export async function deleteVehicleModel(id: number) {
   try {
     await requirePermission("delete_vehicle_models")
+
+    // Integrity guard: Product.vehicleModelId is ON DELETE SET NULL in the
+    // migration (and Cascade in the Prisma schema — either way destructive).
+    // Worse, ProductVehicleModel.vehicleModelId is ON DELETE CASCADE in the
+    // migration, so a raw delete of an in-use model would silently wipe the
+    // entire product↔model compatibility table (every ProductVehicleModel
+    // junction row pointing at this model disappears) AND null the
+    // vehicleModelId on every Product referencing it, all with NO error. A
+    // manager could destroy the entire compatibility catalog in one click.
+    // Mirrors deletePosition / deletePaymentTerm's guard — refuse with
+    // Indonesian error listing the count, let the operator detach the
+    // junction rows and reassign product.modelId first.
+    const productCount = await prisma.product.count({
+      where: { vehicleModelId: id },
+    })
+    if (productCount > 0) {
+      return {
+        success: false,
+        error:
+          `Model kendaraan ini masih dipakai oleh ${productCount} produk ` +
+          `dan tidak bisa dihapus karena akan menghilangkan informasi kompatibilitas model. ` +
+          `Lepas asosiasi model dari produk terlebih dahulu.`,
+      }
+    }
 
     await prisma.vehicleModel.delete({ where: { id } })
 
