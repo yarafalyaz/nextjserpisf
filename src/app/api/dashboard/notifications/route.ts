@@ -53,6 +53,13 @@ export async function GET() {
       ` : Promise.resolve([{ count: BigInt(0) }] as [{ count: bigint }]),
       canViewAttendance ? (async () => {
         if (new Date().getHours() < 10) return 0
+        // Skip on weekends (no work schedule applied yet → use calendar
+        // weekend as the safe default). Mirrors the daily-notifications cron
+        // holiday-skip so both views stay consistent. WorkSchedule-aware
+        // filtering can be added later; for now, count absent only on
+        // Mon-Fri non-holiday weekdays.
+        const day = new Date().getDay()
+        if (day === 0 || day === 6) return 0
         const [active, present, onLeave, holiday] = await Promise.all([
           prisma.employee.count({ where: { isActive: true, deletedAt: null } }),
           prisma.attendance.count({ where: { date: { gte: today, lt: tomorrow } } }),
