@@ -210,20 +210,62 @@ export const notificationService = {
   /**
    * Notify admins when a document is auto-generated from Down Payment confirmation.
    * Mirrors Laravel: document-ready notifications from DP observer.
+   *
+   * Thin wrapper around `notifyDocumentsReadyBatch` for the common single-doc
+   * case. Callers that need to fire N ready-document notifications in one go
+   * (e.g. `onDownPaymentConfirmed` pushes WorkOrder/SalesOrder/SalesInvoice)
+   * should use `notifyDocumentsReadyBatch` directly to avoid the N+1 of
+   * re-querying the admin list once per doc.
    */
-  async notifyDocumentReady(type: DocumentType, documentNo: string, context?: string): Promise<void> {
-    const labels: Record<DocumentType, { label: string }> = {
-      WorkOrder:     { label: 'Work Order' },
-      SalesOrder:    { label: 'Sales Order' },
-      SalesInvoice:  { label: 'Invoice' },
-    }
-    const info = labels[type] ?? { label: type }
+  async notifyDocumentReady(
+    type: DocumentType,
+    documentNo: string,
+    context?: string
+  ): Promise<void> {
+    await this.notifyDocumentsReadyBatch([{ type, documentNo, context }])
+  },
 
-    await this.notifyAdmins(
-      `${info.label} Siap: ${documentNo}`,
-      `${info.label} ${documentNo} telah dibuat otomatis.${context ? ` ${context}` : ''}`,
-      'info'
+  /**
+   * Batched version: notify admins about N ready documents in one round-trip.
+   * Replaces N×(admin findMany + notification createMany) with 1+1 queries.
+   * Admin lookup is done once; one `createMany` writes all N×A rows. Mirrors
+   * `checkAndNotifyLowStockBatch` and `notifyLateCheckInBatch`.
+   */
+  async notifyDocumentsReadyBatch(
+    docs: { type: DocumentType; documentNo: string; context?: string }[]
+  ): Promise<number> {
+    if (docs.length === 0) return 0
+    const admins = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        roles: { some: { name: { in: ['super_admin', 'admin'] } } },
+      },
+      select: { id: true },
+    })
+    if (admins.length === 0) return 0
+
+    const labels: Record<DocumentType, string> = {
+      WorkOrder: 'Work Order',
+      SalesOrder: 'Sales Order',
+      SalesInvoice: 'Invoice',
+    }
+
+    const notifications = admins.flatMap((admin) =>
+      docs.map((d) => {
+        const label = labels[d.type] ?? d.type
+        const ctxSuffix = d.context ? ` ${d.context}` : ''
+        return {
+          userId: admin.id,
+          title: `${label} Siap: ${d.documentNo}`,
+          body: `${label} ${d.documentNo} telah dibuat otomatis.${ctxSuffix}`,
+          type: 'info' as const,
+          readAt: null,
+        }
+      })
     )
+
+    await prisma.notification.createMany({ data: notifications })
+    return notifications.length
   },
 
   /**

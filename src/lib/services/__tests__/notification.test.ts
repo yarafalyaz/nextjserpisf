@@ -341,6 +341,110 @@ describe("notification.service", () => {
     });
   });
 
+  describe("notifyDocumentsReadyBatch", () => {
+    it("creates one info notification per (admin, doc) pair in a single createMany", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 6 });
+
+      const count = await notificationService.notifyDocumentsReadyBatch([
+        { type: "WorkOrder", documentNo: "WO-1", context: "Dari DP-1" },
+        { type: "SalesOrder", documentNo: "SO-1", context: "Dari DP-1" },
+        { type: "SalesInvoice", documentNo: "INV-1", context: "Dari DP-1" },
+      ]);
+
+      // 2 admins × 3 docs = 6 rows, in 1 round-trip.
+      expect(count).toBe(6);
+      expect(mocks.findManyUsers).toHaveBeenCalledTimes(1);
+      expect(mocks.createManyNotif).toHaveBeenCalledTimes(1);
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            userId: 1,
+            title: "Work Order Siap: WO-1",
+            body: "Work Order WO-1 telah dibuat otomatis. Dari DP-1",
+            type: "info",
+            readAt: null,
+          }),
+          expect.objectContaining({
+            userId: 1,
+            title: "Sales Order Siap: SO-1",
+          }),
+          expect.objectContaining({
+            userId: 1,
+            title: "Invoice Siap: INV-1",
+          }),
+          expect.objectContaining({
+            userId: 2,
+            title: "Work Order Siap: WO-1",
+          }),
+          expect.objectContaining({
+            userId: 2,
+            title: "Sales Order Siap: SO-1",
+          }),
+          expect.objectContaining({
+            userId: 2,
+            title: "Invoice Siap: INV-1",
+          }),
+        ]),
+      });
+    });
+
+    it("returns 0 and writes nothing when the doc list is empty", async () => {
+      const count = await notificationService.notifyDocumentsReadyBatch([]);
+      expect(count).toBe(0);
+      expect(mocks.findManyUsers).not.toHaveBeenCalled();
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+
+    it("returns 0 and writes nothing when there are docs but no admins", async () => {
+      mocks.findManyUsers.mockResolvedValue([]);
+      const count = await notificationService.notifyDocumentsReadyBatch([
+        { type: "WorkOrder", documentNo: "WO-1" },
+      ]);
+      expect(count).toBe(0);
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the raw type name when an unknown document type is supplied", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      // Cast through unknown: DocumentType is a closed union, but the helper
+      // explicitly handles an unknown type by falling back to the raw string,
+      // and the test verifies that branch.
+      await notificationService.notifyDocumentsReadyBatch([
+        { type: "SomethingElse" as unknown as "WorkOrder", documentNo: "X-1" },
+      ]);
+
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            title: "SomethingElse Siap: X-1",
+            body: "SomethingElse X-1 telah dibuat otomatis.",
+          }),
+        ]),
+      });
+    });
+
+    it("omits the trailing context separator when context is missing", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 1 });
+
+      await notificationService.notifyDocumentsReadyBatch([
+        { type: "WorkOrder", documentNo: "WO-1" },
+      ]);
+
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            title: "Work Order Siap: WO-1",
+            body: "Work Order WO-1 telah dibuat otomatis.",
+          }),
+        ]),
+      });
+    });
+  });
+
   describe("markAsRead", () => {
     it("scopes the update to the caller's userId and returns true when a row is updated", async () => {
       mocks.updateManyNotif.mockResolvedValue({ count: 1 });

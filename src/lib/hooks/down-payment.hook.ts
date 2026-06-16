@@ -454,8 +454,11 @@ export async function onDownPaymentConfirmed(
     );
   });
 
-  for (const doc of readyDocuments) {
-    await notificationService.notifyDocumentReady(doc.type, doc.documentNo, doc.context)
+  // Batch the ready-document notifications: a single admin lookup + a single
+  // createMany, instead of one (admin findMany + notification createMany) per
+  // document. readyDocuments holds up to 3 entries (WO/SO/Invoice).
+  if (readyDocuments.length > 0) {
+    await notificationService.notifyDocumentsReadyBatch(readyDocuments)
   }
 
   // Recognize revenue + COGS + stock-out for the auto-generated invoice (it is

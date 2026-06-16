@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   salesPaymentFindMany: vi.fn(),
   salesPaymentCreate: vi.fn(),
   generateDocumentNumber: vi.fn(),
-  notifyDocumentReady: vi.fn(),
+  notifyDocumentsReadyBatch: vi.fn(),
   onSalesInvoicePosted: vi.fn(),
 }))
 
@@ -49,7 +49,7 @@ vi.mock("@/lib/utils/document-number", () => ({
 
 vi.mock("@/lib/services/notification.service", () => ({
   notificationService: {
-    notifyDocumentReady: (...a: unknown[]) => mocks.notifyDocumentReady(...a),
+    notifyDocumentsReadyBatch: (...a: unknown[]) => mocks.notifyDocumentsReadyBatch(...a),
   },
 }))
 
@@ -135,7 +135,7 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
     vi.clearAllMocks()
     mocks.generateDocumentNumber.mockResolvedValue("PAY-1")
     mocks.onSalesInvoicePosted.mockResolvedValue(undefined)
-    mocks.notifyDocumentReady.mockResolvedValue(undefined)
+    mocks.notifyDocumentsReadyBatch.mockResolvedValue(undefined)
     mocks.downPaymentUpdate.mockResolvedValue({})
     mocks.salesPaymentCreate.mockResolvedValue({ id: 555, amount: 500 })
     mocks.salesPaymentFindMany.mockResolvedValue([{ amount: 500 }])
@@ -195,5 +195,66 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
     // (they return undefined and the hook would crash). The test passes only
     // if the subsequent-DP branch returns cleanly without those calls.
     expect(mocks.onSalesInvoicePosted).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Regression test for the ready-document notification N+1.
+ *
+ * Bug: the hook pushed up to 3 ready documents (WorkOrder/SalesOrder/SalesInvoice)
+ * into a `for (const doc of readyDocuments) await notifyDocumentReady(...)` loop.
+ * Each call internally re-ran `notifyAdmins` → a fresh `prisma.user.findMany`
+ * admin lookup + `prisma.notification.createMany`, so a 3-doc confirmation
+ * cost 6 round-trips. Fixed by collapsing the loop into a single
+ * `notificationService.notifyDocumentsReadyBatch(readyDocuments)` call.
+ */
+describe("onDownPaymentConfirmed — ready-document notification batching", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.generateDocumentNumber.mockImplementation(async (key: string) => `${key}-X`)
+    mocks.onSalesInvoicePosted.mockResolvedValue(undefined)
+    mocks.notifyDocumentsReadyBatch.mockResolvedValue(undefined)
+    mocks.salesPaymentCreate.mockResolvedValue({ id: 555, amount: 100 })
+  })
+
+  it("sends one batched notification call with all 3 ready documents, not a per-doc loop", async () => {
+    // First-DP branch: quotation is ACCEPTED, no existing invoice, no existing WO/SO.
+    const dp = buildDp({ id: 1, amount: 100, status: "draft", docNo: "DP-1" })
+    const tx = buildTx(dp, 100) as any
+    // The first-DP branch also needs the existing-invoice lookup to return null,
+    // the WO/SO idempotency lookups to return null, and a few create mocks.
+    tx.salesInvoice.findFirst = vi.fn().mockResolvedValue(null) // no existing invoice
+    tx.workOrder.findFirst = mocks.workOrderFindFirst.mockResolvedValue(null)
+    tx.salesOrder.findFirst = mocks.salesOrderFindFirst.mockResolvedValue(null)
+    tx.product = { findMany: vi.fn().mockResolvedValue([]) }
+    tx.item = { findMany: vi.fn().mockResolvedValue([]) }
+    tx.workOrder.create = vi.fn().mockResolvedValue({ id: 1, documentNo: "WO-X" })
+    tx.project = { create: vi.fn().mockResolvedValue({ id: 1 }) }
+    tx.projectStage = { createMany: vi.fn().mockResolvedValue({ count: 0 }) }
+    tx.salesOrder.create = vi.fn().mockResolvedValue({ id: 2, documentNo: "SO-X" })
+    tx.salesInvoice.create = vi.fn().mockResolvedValue({ id: 3, documentNo: "INV-X" })
+    tx.quotation = { update: vi.fn() }
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(1, 1)
+
+    // One batched call, three entries, in the order the hook built them.
+    expect(mocks.notifyDocumentsReadyBatch).toHaveBeenCalledTimes(1)
+    expect(mocks.notifyDocumentsReadyBatch).toHaveBeenCalledWith([
+      { type: "WorkOrder", documentNo: "WO-X", context: "Dari DP DP-1" },
+      { type: "SalesOrder", documentNo: "SO-X", context: "Dari DP DP-1" },
+      { type: "SalesInvoice", documentNo: "INV-X", context: "Dari DP DP-1" },
+    ])
+  })
+
+  it("does not call the batched notification when no documents were produced (subsequent-DP branch)", async () => {
+    // Subsequent-DP branch: existing invoice present → no new WO/SO/Invoice.
+    const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
+    const tx = buildTx(dp2, 100)
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    expect(mocks.notifyDocumentsReadyBatch).not.toHaveBeenCalled()
   })
 })
