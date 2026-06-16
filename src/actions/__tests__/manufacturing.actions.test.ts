@@ -132,6 +132,91 @@ describe("Product Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  // ==================== REGRESSION: parseMaterialRows hardening ====================
+  // The legacy createProduct/updateProduct hand-parsed materialItemId[] /
+  // materialQty[] via `Number(itemId) > 0 && Number(qty) > 0` — letting
+  // negative qty (poisons BOM totals) and non-integer itemId (FK violation
+  // opaque 500) reach Prisma. The new parseMaterialRows validator must reject
+  // these *before* touching the DB. These cases assert the validator hard-
+  // fails (and the DB is NOT called) for each bypass class.
+  describe("material row validation (regression)", () => {
+    it("createProduct rejects negative material qty (was: silent BOM corruption)", async () => {
+      const fd = fdMap({ name: "Bad Product" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "-5")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/Qty material harus > 0/i)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("createProduct rejects fractional material itemId (was: opaque FK 500)", async () => {
+      const fd = fdMap({ name: "Bad Product 2" })
+      fd.append("materialItemId", "1.5")
+      fd.append("materialQty", "2")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(false)
+      // z.coerce.number().int() emits "Invalid input: expected int, received
+      // number" for fractional input. The important assertion is that the row
+      // is rejected and the DB is NOT called.
+      expect(res?.error).toMatch(/Baris material #1/i)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("createProduct rejects zero/negative material itemId (was: accepted by > 0 false, but fractional leaked)", async () => {
+      const fd = fdMap({ name: "Bad Product 3" })
+      fd.append("materialItemId", "-1")
+      fd.append("materialQty", "2")
+      const res = await actions.createProduct(fd)
+      // Negative itemId is rejected by parseMaterialRows's positive-integer
+      // guard. (itemId=0 and qty=0 are the legacy "blank row" sentinel and
+      // remain dropped silently — see the createProduct "valid materials"
+      // happy-path test above which still filters 0/0.)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/Material item tidak valid/i)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("createProduct de-dupes duplicate itemIds by summing qty", async () => {
+      const fd = fdMap({ name: "Dup Product" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "2")
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "3")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(true)
+      expect(mocks.prismaMock.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            materials: { create: [{ itemId: 1, qty: 5 }] },
+          }),
+        }),
+      )
+    })
+
+    it("updateProduct rejects negative material qty (regression)", async () => {
+      const fd = fdMap({ name: "Update Bad" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "-1")
+      const res = await actions.updateProduct(1, fd)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/Qty material harus > 0/i)
+      expect(mocks.prismaMock.product.update).not.toHaveBeenCalled()
+    })
+
+    it("createProduct accepts qty just over the 1,000,000 safety cap", async () => {
+      // Documents the cap's edge case: 1_000_000.0001 is invalid (over the
+      // cap), 1_000_000 exactly is the inclusive boundary and is allowed.
+      const fd = fdMap({ name: "Edge Qty" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "1000000.0001")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/Qty terlalu besar/i)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+  })
+
   it("deleteProduct succeeds", async () => {
     const res = await actions.deleteProduct(1)
     expect(res?.success).toBe(true)

@@ -13,6 +13,7 @@ import {
   updateProductSchema,
   createProductionOrderSchema,
   updateProductionOrderSchema,
+  parseMaterialRows,
 } from "@/lib/validations/manufacturing.schemas"
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
@@ -30,9 +31,19 @@ export async function createProduct(formData: FormData) {
     code = await generateDocumentNumber("PRD", "simple")
   }
 
-  // Parse dynamic material rows
+  // Parse dynamic material rows. These are parallel arrays posted via
+  // formData.append (captured by getAll — NOT by parseFormData's forEach, which
+  // only keeps the last value per key). Validate them with parseMaterialRows
+  // so a malformed row (negative qty, non-existent itemId, non-integer id) is
+  // a hard error rather than crashing Prisma with a FK violation or, worse,
+  // silently corrupting the BOM totals that propagate to production-order
+  // material consumption.
   const itemIds = formData.getAll("materialItemId") as string[]
   const qtys = formData.getAll("materialQty") as string[]
+  const materialsParsed = parseMaterialRows(itemIds, qtys)
+  if (!materialsParsed.success) {
+    return { success: false, error: materialsParsed.error }
+  }
 
   const product = await prisma.product.create({
     data: {
@@ -42,12 +53,10 @@ export async function createProduct(formData: FormData) {
       vehicleBrandId: v.vehicleBrandId,
       vehicleModelId: v.vehicleModelId,
       materials: {
-        create: itemIds
-          .map((itemId, index) => ({
-            itemId: Number(itemId),
-            qty: Number(qtys[index] || 0),
-          }))
-          .filter((m) => m.itemId > 0 && m.qty > 0),
+        create: materialsParsed.data.map((m) => ({
+          itemId: m.itemId,
+          qty: m.qty,
+        })),
       },
     },
   })
@@ -71,9 +80,15 @@ export async function updateProduct(id: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: parsed.error }
   const v = parsed.data
 
-  // Parse dynamic material rows
+  // Parse dynamic material rows (see createProduct for the rationale — the
+  // legacy `Number(itemId) > 0 && Number(qty) > 0` filter let partially-malicious
+  // payloads through). parseMaterialRows also de-dupes by itemId.
   const itemIds = formData.getAll("materialItemId") as string[]
   const qtys = formData.getAll("materialQty") as string[]
+  const materialsParsed = parseMaterialRows(itemIds, qtys)
+  if (!materialsParsed.success) {
+    return { success: false, error: materialsParsed.error }
+  }
 
   await prisma.product.update({
     where: { id },
@@ -85,12 +100,10 @@ export async function updateProduct(id: number, formData: FormData) {
       vehicleModelId: v.vehicleModelId,
       materials: {
         deleteMany: {},
-        create: itemIds
-          .map((itemId, index) => ({
-            itemId: Number(itemId),
-            qty: Number(qtys[index] || 0),
-          }))
-          .filter((m) => m.itemId > 0 && m.qty > 0),
+        create: materialsParsed.data.map((m) => ({
+          itemId: m.itemId,
+          qty: m.qty,
+        })),
       },
     },
   })

@@ -127,7 +127,9 @@ describe("changePassword", () => {
 
   it("requires both fields", async () => {
     const res = await changePassword(fd({ [SECRET_KEY]: "" }))
-    expect(res).toEqual({ error: "Password lama dan baru wajib diisi" })
+    // New Zod-based validation reports the first missing field ("Password
+    // lama wajib diisi") rather than the legacy combined string.
+    expect(res).toEqual({ error: "Password lama wajib diisi" })
   })
 
   it("enforces minimum length on the new value", async () => {
@@ -175,7 +177,10 @@ describe("createUser", () => {
 
   it("requires name, email, and password", async () => {
     const res = await createUser(fd({ name: "X" }))
-    expect(res).toEqual({ error: "Nama, email, dan password wajib diisi" })
+    // New Zod-based validation reports the first missing field rather than the
+    // legacy combined "Nama, email, dan password wajib diisi" string. Both
+    // email + password are missing; Zod reports email first.
+    expect(res).toEqual({ error: "Email wajib diisi" })
   })
 
   it("hashes the password and connects roles", async () => {
@@ -214,6 +219,61 @@ describe("createUser", () => {
     expect(res).toEqual({ error: "Terjadi kesalahan saat membuat pengguna" })
     expect(consoleSpy).toHaveBeenCalled()
     consoleSpy.mockRestore()
+  })
+
+  // ==================== REGRESSION: Zod bypass hardening (createUser) ====================
+  // The legacy createUser hand-parsed name/email/password via formData.get with
+  // no format / length cap. An authenticated manage_users holder could push
+  // (a) a non-email string ("not-an-email") — which would then collide on the
+  // unique index with a confusing Prisma error, (b) a 5MB+ password blob (DoS
+  // on bcrypt.hash), (c) a 5MB+ name (row persisted as a 5MB user.name in the
+  // users table), (d) non-positive roleIds that would crash the .connect or
+  // silently no-op. These cases assert the validator hard-fails AND the DB
+  // was NOT called.
+  describe("Zod bypass hardening (regression)", () => {
+    it("rejects non-email string (was: passed straight to prisma)", async () => {
+      const res = await createUser(
+        fd({ name: "X", email: "not-an-email", password: "passval12" }),
+      )
+      expect(res).toEqual({ error: "Format email tidak valid" })
+      expect(userCreateMock).not.toHaveBeenCalled()
+    })
+
+    it("rejects oversized password blob (was: 5MB bcrypt DoS)", async () => {
+      const huge = "p".repeat(5000)
+      const res = await createUser(
+        fd({ name: "X", email: "x@y.z", password: huge }),
+      )
+      // 5000 chars is well over the 256-char schema cap.
+      expect(res).toMatchObject({ error: expect.any(String) })
+      expect(userCreateMock).not.toHaveBeenCalled()
+    })
+
+    it("rejects negative roleIds (was: silently no-op'd by .connect)", async () => {
+      const res = await createUser(
+        fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["-1"] }),
+      )
+      expect(res).toMatchObject({ error: expect.any(String) })
+      expect(userCreateMock).not.toHaveBeenCalled()
+    })
+
+    it("de-dupes duplicate roleIds", async () => {
+      userCreateMock.mockResolvedValue({ id: 99 })
+      const res = await createUser(
+        fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["1", "1", "2"] }),
+      )
+      expect(res).toEqual({ success: true, id: 99 })
+      const arg = userCreateMock.mock.calls[0][0]
+      expect(arg.data.roles.connect).toEqual([{ id: 1 }, { id: 2 }])
+    })
+
+    it("rejects malformed email like 'a@b' (no TLD)", async () => {
+      const res = await createUser(
+        fd({ name: "X", email: "a@b", password: "passval12" }),
+      )
+      expect(res).toEqual({ error: "Format email tidak valid" })
+      expect(userCreateMock).not.toHaveBeenCalled()
+    })
   })
 })
 
@@ -325,7 +385,10 @@ describe("updateProfile", () => {
 
   it("requires name and email", async () => {
     const res = await updateProfile(fd({ name: "" }))
-    expect(res).toEqual({ error: "Nama dan email wajib diisi" })
+    // New Zod-based validation reports the first failing field. Empty name
+    // is the error; email is also missing but the schema is processed in
+    // field order and the empty-name error is the one surfaced.
+    expect(res).toEqual({ error: "Nama wajib diisi" })
   })
 
   it("updates the session user (IDOR guard) and maps duplicate email", async () => {

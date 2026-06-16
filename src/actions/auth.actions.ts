@@ -5,6 +5,13 @@ import { prisma } from "@/lib/db/prisma"
 import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
+import {
+  changePasswordSchema,
+  createUserSchema,
+  loginSchema,
+  updateProfileSchema,
+  updateUserRolesSchema,
+} from "@/lib/validations/auth.schemas"
 
 // Privilege-escalation guard: a non-super-admin (even one holding manage_users)
 // must not be able to grant the super_admin role to anyone — including
@@ -45,12 +52,20 @@ async function assertCanModifyTarget(
 }
 
 export async function loginAction(formData: FormData) {
-  const email = formData.get("email") as string
-  const password = formData.get("password") as string
-
-  if (!email || !password) {
+  // Validate via Zod directly on the raw values (NOT parseFormData): the
+  // generic FormData→object coercion turns "true"/"false"/"on"/"off" into
+  // booleans, which would corrupt a password literally equal to one of those
+  // tokens. Email + password are read as raw strings and length/format-capped.
+  // Coerce missing-field `null` → "" so the .min(1) guard fires with the
+  // user-facing "wajib diisi" string.
+  const parsed = loginSchema.safeParse({
+    email: formData.get("email") ?? "",
+    password: formData.get("password") ?? "",
+  })
+  if (!parsed.success) {
     return { error: "Email dan password wajib diisi" }
   }
+  const { email, password } = parsed.data
 
   try {
     await signIn("credentials", {
@@ -79,16 +94,16 @@ export async function changePassword(formData: FormData) {
     const sessionUser = await requireAuth()
     const userId = Number(sessionUser.id)
 
-    const currentPassword = formData.get("currentPassword") as string
-    const newPassword = formData.get("newPassword") as string
-
-    if (!currentPassword || !newPassword) {
-      return { error: "Password lama dan baru wajib diisi" }
+    // Validate via Zod directly on the raw values (NOT parseFormData — see
+    // loginAction for the boolean-coercion reason).
+    const parsed = changePasswordSchema.safeParse({
+      currentPassword: formData.get("currentPassword") ?? "",
+      newPassword: formData.get("newPassword") ?? "",
+    })
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Validasi gagal" }
     }
-
-    if (newPassword.length < 8) {
-      return { error: "Password baru minimal 8 karakter" }
-    }
+    const { currentPassword, newPassword } = parsed.data
 
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: userId },
@@ -119,27 +134,36 @@ export async function createUser(formData: FormData) {
     // Fix #19: Add permission check
     const actor = await requirePermission("manage_users")
 
-    const name = formData.get("name") as string
-    const email = formData.get("email") as string
-    const password = formData.get("password") as string
-    const roleIds = formData.getAll("roleIds").map(Number)
-
-    if (!name || !email || !password) {
-      return { error: "Nama, email, dan password wajib diisi" }
+    // Validate name/email/password via Zod. The boolean-coercion concern in
+    // changePassword/loginAction does not apply here (no `password` field is
+    // ever literally "true"/"false" in this form, and parseFormData only
+    // coerces exact matches, not substrings), but the roleIds come from
+    // formData.getAll — that path is NOT covered by parseFormData's forEach
+    // (which only retains the last value per key). Re-validate them through
+    // the .roleIds slot of the schema below, so a caller can't sneak in
+    // roleIds=["abc", "-1", "0"] to either crash the .connect or no-op.
+    //
+    // formData.get() returns `null` for missing fields, which Zod's string()
+    // rejects with a generic "Invalid input: expected string, received null"
+    // (not the friendly "wajib diisi" message). Coerce to "" so the .min(1)
+    // guard fires with the user-facing string.
+    const rawRoleIds = formData.getAll("roleIds").map((v) => String(v))
+    const parsed = createUserSchema.safeParse({
+      name: formData.get("name") ?? "",
+      email: formData.get("email") ?? "",
+      password: formData.get("password") ?? "",
+      roleIds: rawRoleIds,
+    })
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Validasi gagal" }
     }
+    const { name, email, password, roleIds } = parsed.data
 
     // Privilege-escalation guard: block granting super_admin unless the actor
     // is super_admin (prevents a manage_users holder from minting super admins).
-    const grantErr = await assertNoSuperAdminGrant(actor.roles, roleIds)
+    const grantErr = await assertNoSuperAdminGrant(actor.roles, roleIds ?? [])
     if (grantErr) {
       return { error: grantErr }
-    }
-
-    // Enforce the same minimum-length policy as changePassword (min 8), so a
-    // user can't be created with a password weaker than they're allowed to
-    // change it to later.
-    if (password.length < 8) {
-      return { error: "Password minimal 8 karakter" }
     }
 
     const hashedPassword = await bcrypt.hash(password, 12)
@@ -152,7 +176,7 @@ export async function createUser(formData: FormData) {
         password: hashedPassword,
         isActive: true,
         roles: {
-          connect: roleIds.map((id) => ({ id })),
+          connect: (roleIds ?? []).map((id) => ({ id })),
         },
       },
     })
@@ -174,6 +198,16 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     // Fix #20: Add permission check — prevents privilege escalation
     const actor = await requirePermission("manage_users")
 
+    // Validate the roleIds array (it comes over the wire as a plain number[]).
+    // Without this guard, a caller could pass [NaN], [-1], [0] (the .set would
+    // throw on NaN, silently no-op on 0/negative). updateUserRolesSchema also
+    // de-dupes so a duplicated id doesn't trigger a redundant Prisma write.
+    const parsed = updateUserRolesSchema.safeParse(roleIds)
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Validasi gagal" }
+    }
+    const cleanRoleIds = parsed.data
+
     // Target-escalation guard: a non-super-admin must not be able to alter the
     // roles of an existing super_admin (e.g. demote/strip the super_admin role).
     const targetErr = await assertCanModifyTarget(actor.roles, userId)
@@ -183,7 +217,7 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
 
     // Privilege-escalation guard: a non-super-admin must not be able to assign
     // the super_admin role to anyone (including themselves).
-    const grantErr = await assertNoSuperAdminGrant(actor.roles, roleIds)
+    const grantErr = await assertNoSuperAdminGrant(actor.roles, cleanRoleIds)
     if (grantErr) {
       return { error: grantErr }
     }
@@ -192,7 +226,7 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
       where: { id: userId },
       data: {
         roles: {
-          set: roleIds.map((id) => ({ id })),
+          set: cleanRoleIds.map((id) => ({ id })),
         },
       },
     })
@@ -240,12 +274,18 @@ export async function updateProfile(formData: FormData) {
     const sessionUser = await requireAuth()
     const userId = Number(sessionUser.id)
 
-    const name = formData.get("name") as string
-    const email = formData.get("email") as string
-
-    if (!name || !email) {
-      return { error: "Nama dan email wajib diisi" }
+    // Validate name/email via Zod. The legacy hand-rolled `!name || !email`
+    // check let an untrimmed whitespace string through and accepted any
+    // non-email string (locking the user out of their own account on next
+    // login). updateProfileSchema trims + length-caps + forces email format.
+    const parsed = updateProfileSchema.safeParse({
+      name: formData.get("name") ?? "",
+      email: formData.get("email") ?? "",
+    })
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Validasi gagal" }
     }
+    const { name, email } = parsed.data
 
     await prisma.user.update({
       where: { id: userId },
