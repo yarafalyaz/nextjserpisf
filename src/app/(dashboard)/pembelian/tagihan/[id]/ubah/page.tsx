@@ -1,31 +1,42 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/db/prisma"
-import { notFound } from "next/navigation"
-import { VendorBillForm } from "@/components/forms/vendor-bill-form"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { prisma } from "@/lib/db/prisma";
+import { notFound } from "next/navigation";
+import { VendorBillForm } from "@/components/forms/vendor-bill-form";
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Ubah Tagihan" }
+import { requirePermission } from "@/lib/auth/permissions";
+export const metadata: Metadata = { title: "Ubah Tagihan" };
 
 export default async function EditPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("edit_purchase_orders")
+  await requirePermission("edit_purchase_orders");
 
-  const { id } = await params
-  const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  const { id } = await params;
+  const numId = Number(id);
+  if (Number.isNaN(numId)) notFound();
 
   const data = await prisma.vendorBill.findUnique({
     where: { id: numId },
-  })
+    include: {
+      items: {
+        select: {
+          itemId: true,
+          qty: true,
+          unitPrice: true,
+          discountPercent: true,
+          taxPercent: true,
+        },
+      },
+    },
+  });
 
-  if (!data) notFound()
+  if (!data) notFound();
 
   const bill = {
     id: data.id,
@@ -36,21 +47,45 @@ export default async function EditPage({
     notes: data.notes,
     vendorInvoiceNumber: data.vendorInvoiceNumber,
     terms: data.terms,
-  }
+    items: data.items.map((it) => ({
+      itemId: it.itemId ?? 0,
+      qty: Number(it.qty),
+      unitPrice: Number(it.unitPrice),
+      discountPercent: Number(it.discountPercent),
+      taxPercent: Number(it.taxPercent),
+    })),
+  };
 
-  const [vendors, items] = await Promise.all([prisma.vendor.findMany({ orderBy: { name: "asc" } }), prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, cost: true, unitOfMeasure: true } }).then(items => items.map(i => ({ ...i, cost: Number(i.cost) })))])
+  const [vendors, items] = await Promise.all([
+    prisma.vendor.findMany({ orderBy: { name: "asc" } }),
+    prisma.item
+      .findMany({
+        where: { isActive: true, deletedAt: null },
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          cost: true,
+          unitOfMeasure: true,
+        },
+      })
+      .then((items) => items.map((i) => ({ ...i, cost: Number(i.cost) }))),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Tagihan", href: "/pembelian/tagihan" },
-  { label: "Ubah" },
-]} />
+      <AppBreadcrumbs
+        items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Tagihan", href: "/pembelian/tagihan" },
+          { label: "Ubah" },
+        ]}
+      />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <VendorBillForm bill={bill} vendors={vendors} items={items}/>
+      <VendorBillForm bill={bill} vendors={vendors} items={items} />
     </div>
-  )
+  );
 }
