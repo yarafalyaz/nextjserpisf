@@ -1,66 +1,78 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { signIn } from "next-auth/react"
-import { Loader2 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/shadcn/button"
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/shadcn/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/shadcn/card"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/shadcn/field"
-import { Input } from "@/components/ui/shadcn/input"
+} from "@/components/ui/shadcn/card";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/shadcn/field";
+import { Input } from "@/components/ui/shadcn/input";
+import { safeInternalPath } from "@/lib/utils/safe-redirect";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const router = useRouter();
+  const searchParams = useSearchParams();
   // Read callbackUrl from the query string. The page is wrapped in <Suspense>
   // so useSearchParams can safely bail out to client rendering.
-  const callbackUrl = searchParams.get("callbackUrl") || "/"
+  // SECURITY: validate it's a same-origin path — never push an attacker-supplied
+  // javascript:/https://evil URL (XSS / open redirect).
+  const callbackUrl = safeInternalPath(searchParams.get("callbackUrl"), "/");
 
   // Strip the callback from the URL bar so it does not leak via copy/paste
   // or browser history. Done in an effect (NOT during render) to avoid
   // mutating the DOM from a component body.
   useEffect(() => {
-    if (typeof window === "undefined") return
-    if (!window.location.search.includes("callbackUrl=")) return
-    const clean = window.location.pathname + window.location.hash
-    window.history.replaceState({}, "", clean)
-  }, [])
+    if (typeof window === "undefined") return;
+    if (!window.location.search.includes("callbackUrl=")) return;
+    const clean = window.location.pathname + window.location.hash;
+    window.history.replaceState({}, "", clean);
+  }, []);
 
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
 
-    const formData = new FormData(e.currentTarget)
-    const email = formData.get("email") as string
-    const password = formData.get("password") as string
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
-    const result = await signIn("credentials", { email, password, redirect: false })
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
 
     if (result?.error) {
-      setError("Email atau password salah")
-      setLoading(false)
+      setError("Email atau password salah");
+      setLoading(false);
     } else {
-      router.push(callbackUrl)
-      router.refresh()
+      router.push(callbackUrl);
+      router.refresh();
     }
   }
 
   function clearErrorOnEdit() {
-    if (error) setError(null)
+    if (error) setError(null);
   }
 
   return (
@@ -84,7 +96,7 @@ export function LoginForm({
                     "mb-4 p-3 rounded-lg border text-sm flex items-center gap-2",
                     error
                       ? "bg-destructive/15 border-destructive/30 text-destructive"
-                      : "hidden"
+                      : "hidden",
                   )}
                 >
                   {error && (
@@ -176,5 +188,5 @@ export function LoginForm({
         kami.
       </FieldDescription>
     </div>
-  )
+  );
 }

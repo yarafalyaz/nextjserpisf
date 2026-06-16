@@ -1,9 +1,13 @@
-import { z } from "zod"
+import { z } from "zod";
 
 const optionalString = (max: number) =>
-  z.string().max(max).optional().or(z.literal("").transform(() => undefined))
+  z
+    .string()
+    .max(max)
+    .optional()
+    .or(z.literal("").transform(() => undefined));
 
-const optionalId = z.coerce.number().min(1).optional()
+const optionalId = z.coerce.number().int().min(1).optional();
 
 // ==================== TICKET ====================
 
@@ -17,7 +21,7 @@ export const createTicketSchema = z.object({
   type: optionalString(100),
   priority: optionalString(50),
   assignedTo: optionalId,
-})
+});
 
 export const updateTicketSchema = z.object({
   subject: z.string().min(1, "Subjek wajib diisi").max(255),
@@ -30,7 +34,7 @@ export const updateTicketSchema = z.object({
   priority: optionalString(50),
   assignedTo: optionalId,
   resolutionNotes: optionalString(2000),
-})
+});
 
 // ==================== LEAD ====================
 
@@ -42,7 +46,7 @@ export const updateTicketSchema = z.object({
 // prisma with an opaque 500), or unbounded strings. Mirrors the validation the
 // other master/CRM actions already enforce via parseFormData.
 const optionalNonNegative = () =>
-  z.coerce.number().min(0, "Nilai tidak boleh negatif").nullable().optional()
+  z.coerce.number().min(0, "Nilai tidak boleh negatif").nullable().optional();
 
 export const createLeadSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi").max(255),
@@ -58,6 +62,6 @@ export const createLeadSchema = z.object({
   source: optionalString(255),
   notes: optionalString(2000),
   assignedTo: optionalId,
-})
+});
 
-export const updateLeadSchema = createLeadSchema
+export const updateLeadSchema = createLeadSchema;
