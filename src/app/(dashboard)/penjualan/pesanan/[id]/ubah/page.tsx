@@ -1,45 +1,59 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/db/prisma"
-import { notFound } from "next/navigation"
-import { SalesOrderForm } from "@/components/forms/sales-order-form"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { prisma } from "@/lib/db/prisma";
+import { notFound } from "next/navigation";
+import { SalesOrderForm } from "@/components/forms/sales-order-form";
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Ubah Pesanan" }
+import { requirePermission } from "@/lib/auth/permissions";
+export const metadata: Metadata = { title: "Ubah Pesanan" };
 
 export default async function EditPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("edit_sales_orders")
+  await requirePermission("edit_sales_orders");
 
-  const { id } = await params
-  const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  const { id } = await params;
+  const numId = Number(id);
+  if (Number.isNaN(numId)) notFound();
 
   const data = await prisma.salesOrder.findUnique({
     where: { id: numId },
-  })
+  });
 
-  if (!data) notFound()
+  if (!data) notFound();
 
-  const customers = await prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } })
+  const customers = await prisma.customer.findMany({
+    where: { deletedAt: null },
+    orderBy: { name: "asc" },
+  });
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Penjualan", href: "/penjualan/pesanan" },
-  { label: "Ubah" },
-]} />
+      <AppBreadcrumbs
+        items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Pesanan", href: "/penjualan/pesanan" },
+          { label: "Ubah" },
+        ]}
+      />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <SalesOrderForm order={{ id: data.id, customerId: data.customerId, date: data.date.toISOString().split('T')[0], notes: data.notes }} customers={customers}/>
+      <SalesOrderForm
+        order={{
+          id: data.id,
+          customerId: data.customerId,
+          date: data.date.toISOString().split("T")[0],
+          notes: data.notes,
+        }}
+        customers={customers}
+      />
     </div>
-  )
+  );
 }

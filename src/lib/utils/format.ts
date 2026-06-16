@@ -143,6 +143,9 @@ export function formatRelativeTime(
 
   const now = new Date();
   const diffMs = now.getTime() - dateObj.getTime();
+  // Future dates: diffMs is negative. Guard so we don't mislabel a
+  // scheduled/future timestamp as "Baru saja".
+  if (diffMs < 0) return formatDate(dateObj);
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
   const diffHours = Math.floor(diffMinutes / 60);

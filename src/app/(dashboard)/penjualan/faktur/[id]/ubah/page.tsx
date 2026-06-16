@@ -18,8 +18,8 @@ export default async function EditPage({
   await requirePermission("edit_sales_orders");
 
   const { id } = await params;
-  const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  const numId = Number(id);
+  if (Number.isNaN(numId)) notFound();
 
   const data = await prisma.salesInvoice.findUnique({
     where: { id: numId },
@@ -52,7 +52,8 @@ export default async function EditPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Penjualan", href: "/penjualan/faktur" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Faktur", href: "/penjualan/faktur" },
           { label: "Ubah" },
         ]}
       />

@@ -1,4 +1,3 @@
-
 import { Prisma } from "@prisma/client";
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
@@ -23,7 +22,7 @@ async function getSystemSettings(tx?: TxClient) {
 
 const executeInTx = async (
   txClient: TxClient | undefined,
-  callback: (tx: TxClient) => Promise<unknown>
+  callback: (tx: TxClient) => Promise<unknown>,
 ) => {
   return txClient ? callback(txClient) : prisma.$transaction(callback);
 };
@@ -31,9 +30,12 @@ const executeInTx = async (
 async function generateJournalNumber(
   _tx: TxClient,
   prefix: string,
-  referenceId: number
+  referenceId: number,
 ): Promise<string> {
-  const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:T.Z]/g, "")
+    .slice(0, 14);
   return `${prefix}/${referenceId}/${timestamp}`;
 }
 
@@ -44,8 +46,9 @@ async function generateJournalNumber(
  */
 export async function deleteJournalByReference(
   referenceType: string,
-  referenceId: number
-, txClient?: TxClient): Promise<void> {
+  referenceId: number,
+  txClient?: TxClient,
+): Promise<void> {
   await executeInTx(txClient, async (tx) => {
     await deleteJournalByReferenceTx(tx, referenceType, referenceId);
   });
@@ -61,18 +64,24 @@ export async function deleteJournalByReference(
 export async function deleteJournalByReferenceTx(
   tx: TxClient,
   referenceType: string | string[],
-  referenceId: number | number[]
+  referenceId: number | number[],
 ): Promise<void> {
   const journals = await tx.journal.findMany({
     where: {
-      referenceType: Array.isArray(referenceType) ? { in: referenceType } : referenceType,
-      referenceId: Array.isArray(referenceId) ? { in: referenceId } : referenceId,
+      referenceType: Array.isArray(referenceType)
+        ? { in: referenceType }
+        : referenceType,
+      referenceId: Array.isArray(referenceId)
+        ? { in: referenceId }
+        : referenceId,
     },
     select: { id: true },
   });
   if (journals.length === 0) return;
   const journalIds = journals.map((j) => j.id);
-  await tx.journalEntry.deleteMany({ where: { journalId: { in: journalIds } } });
+  await tx.journalEntry.deleteMany({
+    where: { journalId: { in: journalIds } },
+  });
   await tx.journal.deleteMany({ where: { id: { in: journalIds } } });
 }
 
@@ -86,11 +95,12 @@ export async function deleteJournalByReferenceTx(
 export async function onSalesInvoicePosted(
   invoiceId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId) return;
+  if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId)
+    return;
 
   const invoice = await db.salesInvoice.findUniqueOrThrow({
     where: { id: invoiceId },
@@ -110,7 +120,13 @@ export async function onSalesInvoicePosted(
     // stale data from being used in the journal.
     const inv = await tx.salesInvoice.findUnique({
       where: { id: invoiceId },
-      select: { id: true, totalAmount: true, taxAmount: true, date: true, documentNo: true },
+      select: {
+        id: true,
+        totalAmount: true,
+        taxAmount: true,
+        date: true,
+        documentNo: true,
+      },
     });
     if (!inv) throw new Error("Invoice tidak ditemukan");
 
@@ -181,32 +197,46 @@ export async function onSalesInvoicePosted(
     // was never reduced, diverging the GL inventory from the stock subledger.
     // Here we also create StockMove OUT and consume FIFO for stockable products.
     const productItems = invoice.items.filter(
-      (it): it is typeof it & { itemId: number } => typeof it.itemId === "number" && Number(it.qty) > 0
-    )
-    const itemIds = productItems.map((it) => it.itemId)
+      (it): it is typeof it & { itemId: number } =>
+        typeof it.itemId === "number" && Number(it.qty) > 0,
+    );
+    const itemIds = productItems.map((it) => it.itemId);
     const itemRows = itemIds.length
       ? await tx.item.findMany({
           where: { id: { in: itemIds } },
-          select: { id: true, cost: true, isProduct: true, defaultWarehouseId: true, unitOfMeasure: true },
+          select: {
+            id: true,
+            cost: true,
+            isProduct: true,
+            defaultWarehouseId: true,
+            unitOfMeasure: true,
+          },
         })
       : [];
     const itemInfo = new Map(itemRows.map((r) => [r.id, r]));
 
-    const enteredUoms = [...new Set(productItems.map((it) => (it as { uom?: string | null }).uom).filter(Boolean))] as string[];
-    const conversions = (itemIds.length && enteredUoms.length)
-      ? await tx.uomConversion.findMany({
-          where: { itemId: { in: itemIds }, code: { in: enteredUoms } },
-          select: { itemId: true, code: true, factorToBase: true },
-        })
-      : [];
+    const enteredUoms = [
+      ...new Set(
+        productItems
+          .map((it) => (it as { uom?: string | null }).uom)
+          .filter(Boolean),
+      ),
+    ] as string[];
+    const conversions =
+      itemIds.length && enteredUoms.length
+        ? await tx.uomConversion.findMany({
+            where: { itemId: { in: itemIds }, code: { in: enteredUoms } },
+            select: { itemId: true, code: true, factorToBase: true },
+          })
+        : [];
     const factorMap = new Map(
-      conversions.map((c) => [`${c.itemId}:${c.code}`, Number(c.factorToBase)])
+      conversions.map((c) => [`${c.itemId}:${c.code}`, Number(c.factorToBase)]),
     );
 
     if (itemIds.length > 0) {
       await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
     }
-    
+
     // Batch SM generation
     const smProductIdx: number[] = [];
     for (let i = 0; i < productItems.length; i++) {
@@ -227,17 +257,24 @@ export async function onSalesInvoicePosted(
       // Multi-UoM: convert sold qty to base units for stock-out / COGS.
       const uom = (line as { uom?: string | null }).uom;
       const isBaseUom = !uom || uom === info.unitOfMeasure;
-      const rawFactor = isBaseUom ? 1 : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
+      const rawFactor = isBaseUom
+        ? 1
+        : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
       const factor = rawFactor > 0 ? rawFactor : 1;
       const qty = Number(line.qty) * factor;
-      const fallbackUnitCost = factor > 0 ? Number(info.cost ?? 0) / factor : Number(info.cost ?? 0);
+      const fallbackUnitCost =
+        factor > 0 ? Number(info.cost ?? 0) / factor : Number(info.cost ?? 0);
 
       // Decrement on-hand (reflects the sale even if overselling) and consume
       // FIFO layers from the item's default warehouse up to what is available
       // (allowShortfall — a sale is never blocked by stock).
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${line.itemId}`;
-      const lineSerials = Array.isArray((line as { serialNumbers?: unknown }).serialNumbers)
-        ? ((line as { serialNumbers?: unknown[] }).serialNumbers as unknown[]).map((s) => String(s))
+      const lineSerials = Array.isArray(
+        (line as { serialNumbers?: unknown }).serialNumbers,
+      )
+        ? (
+            (line as { serialNumbers?: unknown[] }).serialNumbers as unknown[]
+          ).map((s) => String(s))
         : null;
       const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
         itemId: line.itemId,
@@ -267,8 +304,16 @@ export async function onSalesInvoicePosted(
       });
     }
 
-    if (cogsAmount > 0 && settings.cogsAccountId && settings.inventoryAccountId) {
-      const cogsJournalNumber = await generateJournalNumber(tx, "INV-COGS", invoiceId);
+    if (
+      cogsAmount > 0 &&
+      settings.cogsAccountId &&
+      settings.inventoryAccountId
+    ) {
+      const cogsJournalNumber = await generateJournalNumber(
+        tx,
+        "INV-COGS",
+        invoiceId,
+      );
       const cogsJournal = await tx.journal.create({
         data: {
           journalNumber: cogsJournalNumber,
@@ -316,7 +361,7 @@ export async function onSalesInvoicePosted(
 export async function onSalesPaymentCreated(
   paymentId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
@@ -345,8 +390,7 @@ export async function onSalesPaymentCreated(
     const journalNumber = await generateJournalNumber(tx, "PAY", paymentId);
 
     // Determine cash/bank account from payment method or default
-    const cashAccountId =
-      payment.accountId ?? settings.cashBankAccountId;
+    const cashAccountId = payment.accountId ?? settings.cashBankAccountId;
 
     if (!cashAccountId) return;
 
@@ -395,11 +439,13 @@ export async function onSalesPaymentCreated(
 
 export async function onPurchaseOrderReceived(
   orderId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.inventoryAccountId || !settings.purchasePayableAccountId) return;
+  if (!settings.inventoryAccountId || !settings.purchasePayableAccountId)
+    return;
 
   const order = await db.purchaseOrder.findUniqueOrThrow({
     where: { id: orderId },
@@ -476,11 +522,13 @@ export async function onPurchaseOrderReceived(
 
 export async function onStockAdjustmentProcessed(
   adjustmentId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.inventoryAccountId || !settings.stockAdjustmentAccountId) return;
+  if (!settings.inventoryAccountId || !settings.stockAdjustmentAccountId)
+    return;
 
   const adjustment = await db.stockAdjustment.findUniqueOrThrow({
     where: { id: adjustmentId },
@@ -489,7 +537,10 @@ export async function onStockAdjustmentProcessed(
 
   // Idempotency check — covers both IN and OUT journal types
   const existing = await db.journal.findFirst({
-    where: { referenceType: { in: ["StockAdjustment", "StockAdjustmentOut"] }, referenceId: adjustmentId },
+    where: {
+      referenceType: { in: ["StockAdjustment", "StockAdjustmentOut"] },
+      referenceId: adjustmentId,
+    },
   });
   if (existing) return;
 
@@ -509,7 +560,11 @@ export async function onStockAdjustmentProcessed(
   await executeInTx(txClient, async (tx) => {
     // Journal for positive adjustments (stock increase)
     if (totalPositive > 0) {
-      const journalNumber = await generateJournalNumber(tx, "ADJ-IN", adjustmentId);
+      const journalNumber = await generateJournalNumber(
+        tx,
+        "ADJ-IN",
+        adjustmentId,
+      );
 
       const journal = await tx.journal.create({
         data: {
@@ -549,7 +604,11 @@ export async function onStockAdjustmentProcessed(
 
     // Journal for negative adjustments (stock decrease)
     if (totalNegative > 0) {
-      const journalNumber = await generateJournalNumber(tx, "ADJ-OUT", adjustmentId);
+      const journalNumber = await generateJournalNumber(
+        tx,
+        "ADJ-OUT",
+        adjustmentId,
+      );
 
       const journal = await tx.journal.create({
         data: {
@@ -597,8 +656,9 @@ export async function onStockAdjustmentProcessed(
 
 export async function onWorkOrderCompleted(
   workOrderId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
   if (!settings.wipAccountId || !settings.inventoryAccountId) return;
@@ -617,7 +677,7 @@ export async function onWorkOrderCompleted(
   // Calculate total material cost
   const totalCost = workOrder.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
-    0
+    0,
   );
 
   if (totalCost <= 0) return;
@@ -672,16 +732,18 @@ export async function onWorkOrderCompleted(
 
 export async function onExpenseApproved(
   expenseId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
-  const expense = await prisma.expense.findUniqueOrThrow({
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  const db = txClient || prisma;
+  const expense = await db.expense.findUniqueOrThrow({
     where: { id: expenseId },
   });
 
   if (!expense.accountId || !expense.paidFromAccountId) return;
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "Expense", referenceId: expenseId },
   });
   if (existing) return;
@@ -736,17 +798,19 @@ export async function onExpenseApproved(
 
 export async function onPettyCashCreated(
   pettyCashId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
-  const settings = await getSystemSettings();
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
   if (!settings.pettyCashAccountId) return;
 
-  const pettyCash = await prisma.pettyCash.findUniqueOrThrow({
+  const pettyCash = await db.pettyCash.findUniqueOrThrow({
     where: { id: pettyCashId },
   });
 
   // Idempotency check
-  const existing = await prisma.journal.findFirst({
+  const existing = await db.journal.findFirst({
     where: { referenceType: "PettyCash", referenceId: pettyCashId },
   });
   if (existing) return;
@@ -789,7 +853,9 @@ export async function onPettyCashCreated(
       const sourceAccountId =
         pettyCash.sourceAccountId ?? settings.cashBankAccountId;
       if (!sourceAccountId) {
-        throw new Error("Akun sumber dana (sourceAccountId/cashBankAccountId) belum dikonfigurasi untuk pengisian kas kecil");
+        throw new Error(
+          "Akun sumber dana (sourceAccountId/cashBankAccountId) belum dikonfigurasi untuk pengisian kas kecil",
+        );
       }
 
       pettyCashEntries.push(
@@ -813,7 +879,9 @@ export async function onPettyCashCreated(
       const expenseAccountId =
         pettyCash.expenseAccountId ?? settings.generalExpenseAccountId;
       if (!expenseAccountId) {
-        throw new Error("Akun beban (expenseAccountId/generalExpenseAccountId) belum dikonfigurasi untuk pengeluaran kas kecil");
+        throw new Error(
+          "Akun beban (expenseAccountId/generalExpenseAccountId) belum dikonfigurasi untuk pengeluaran kas kecil",
+        );
       }
 
       pettyCashEntries.push(
@@ -846,11 +914,16 @@ export async function onPettyCashCreated(
 export async function onSalesReturnCompleted(
   returnId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.salesReturnAccountId || !settings.salesReceivableAccountId || !settings.inventoryAccountId) return;
+  if (
+    !settings.salesReturnAccountId ||
+    !settings.salesReceivableAccountId ||
+    !settings.inventoryAccountId
+  )
+    return;
 
   const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
@@ -867,8 +940,14 @@ export async function onSalesReturnCompleted(
   // goods come back into inventory at cost. The margin nets into the Sales Return
   // contra-revenue account. This single journal owns all GL for a sales return
   // (the stock hook only moves stock now).
-  const priceTotal = salesReturn.items.reduce((sum, item) => sum + Number(item.qty) * Number(item.price ?? 0), 0);
-  const costTotal = salesReturn.items.reduce((sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0), 0);
+  const priceTotal = salesReturn.items.reduce(
+    (sum, item) => sum + Number(item.qty) * Number(item.price ?? 0),
+    0,
+  );
+  const costTotal = salesReturn.items.reduce(
+    (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
+    0,
+  );
   if (priceTotal <= 0 && costTotal <= 0) return;
 
   await assertPeriodOpen(new Date(), txClient);
@@ -902,10 +981,34 @@ export async function onSalesReturnCompleted(
     // sequential tx.journalEntry.create round-trips.
     await tx.journalEntry.createMany({
       data: [
-        { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: priceTotal, credit: 0, memo: "Retur Penjualan" },
-        { journalId: journal.id, accountId: settings.salesReceivableAccountId!, debit: 0, credit: priceTotal, memo: "Pengurangan Piutang (Retur)" },
-        { journalId: journal.id, accountId: settings.inventoryAccountId!, debit: costTotal, credit: 0, memo: "Persediaan Masuk (Retur)" },
-        { journalId: journal.id, accountId: settings.salesReturnAccountId!, debit: 0, credit: costTotal, memo: "HPP Retur Masuk Kembali" },
+        {
+          journalId: journal.id,
+          accountId: settings.salesReturnAccountId!,
+          debit: priceTotal,
+          credit: 0,
+          memo: "Retur Penjualan",
+        },
+        {
+          journalId: journal.id,
+          accountId: settings.salesReceivableAccountId!,
+          debit: 0,
+          credit: priceTotal,
+          memo: "Pengurangan Piutang (Retur)",
+        },
+        {
+          journalId: journal.id,
+          accountId: settings.inventoryAccountId!,
+          debit: costTotal,
+          credit: 0,
+          memo: "Persediaan Masuk (Retur)",
+        },
+        {
+          journalId: journal.id,
+          accountId: settings.salesReturnAccountId!,
+          debit: 0,
+          credit: costTotal,
+          memo: "HPP Retur Masuk Kembali",
+        },
       ],
     });
   });
@@ -920,11 +1023,12 @@ export async function onSalesReturnCompleted(
 export async function onPurchaseReturnProcessed(
   returnId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.purchasePayableAccountId || !settings.inventoryAccountId) return;
+  if (!settings.purchasePayableAccountId || !settings.inventoryAccountId)
+    return;
 
   const purchaseReturn = await db.purchaseReturn.findUniqueOrThrow({
     where: { id: returnId },
@@ -940,7 +1044,7 @@ export async function onPurchaseReturnProcessed(
   // AP relief = agreed return price (what the vendor credits back).
   const totalAmount = purchaseReturn.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
-    0
+    0,
   );
   if (totalAmount <= 0) return;
 
@@ -949,12 +1053,16 @@ export async function onPurchaseReturnProcessed(
   // what was really removed from inventory; it can differ from the agreed return
   // price when purchase prices drifted since the goods were received.
   const outMoves = await db.stockMove.findMany({
-    where: { referenceType: "PurchaseReturn", referenceId: returnId, impact: "OUT" },
+    where: {
+      referenceType: "PurchaseReturn",
+      referenceId: returnId,
+      impact: "OUT",
+    },
     select: { qty: true, cost: true },
   });
   const inventoryAmount = outMoves.reduce(
     (sum, m) => sum + Number(m.qty) * Number(m.cost),
-    0
+    0,
   );
 
   await assertPeriodOpen(new Date(), txClient);
@@ -984,7 +1092,12 @@ export async function onPurchaseReturnProcessed(
     const inventoryCredit = useVariance ? inventoryAmount : totalAmount;
     const variance = totalAmount - inventoryAmount; // >0: gain (Cr), <0: loss (Dr)
 
-    const entries: { accountId: number; debit: number; credit: number; memo: string }[] = [
+    const entries: {
+      accountId: number;
+      debit: number;
+      credit: number;
+      memo: string;
+    }[] = [
       {
         accountId: settings.purchasePayableAccountId!,
         debit: totalAmount,
@@ -1028,7 +1141,7 @@ export async function onPurchaseReturnProcessed(
     // silently persist an unbalanced purchase-return journal.
     if (Math.abs(totalDebit - totalCredit) > 0.001) {
       throw new Error(
-        `Jurnal retur pembelian tidak balance. Debit: ${totalDebit.toFixed(2)}, Kredit: ${totalCredit.toFixed(2)}.`
+        `Jurnal retur pembelian tidak balance. Debit: ${totalDebit.toFixed(2)}, Kredit: ${totalCredit.toFixed(2)}.`,
       );
     }
 
@@ -1049,13 +1162,13 @@ export async function onPurchaseReturnProcessed(
 
     if (entries.length > 0) {
       await tx.journalEntry.createMany({
-        data: entries.map(e => ({
+        data: entries.map((e) => ({
           journalId: journal.id,
           accountId: e.accountId,
           debit: e.debit,
           credit: e.credit,
           memo: e.memo,
-        }))
+        })),
       });
     }
   });
@@ -1069,11 +1182,13 @@ export async function onPurchaseReturnProcessed(
 
 export async function onMaterialIssueCompleted(
   issueId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.materialExpenseAccountId || !settings.inventoryAccountId) return;
+  if (!settings.materialExpenseAccountId || !settings.inventoryAccountId)
+    return;
 
   const issue = await db.materialIssue.findUniqueOrThrow({
     where: { id: issueId },
@@ -1089,7 +1204,7 @@ export async function onMaterialIssueCompleted(
   // Calculate total cost
   const totalCost = issue.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
-    0
+    0,
   );
 
   if (totalCost <= 0) return;
@@ -1144,8 +1259,9 @@ export async function onMaterialIssueCompleted(
 
 export async function onDownPaymentReceived(
   dpId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
   // Fix #27: Harus punya cashBankAccountId untuk Dr. Bank/Cash
@@ -1180,9 +1296,19 @@ export async function onDownPaymentReceived(
         entries: {
           create: [
             // Fix #27: Dr. Bank/Cash (bukan Piutang)
-            { accountId: settings.cashBankAccountId!, debit: dp.amount, credit: 0, memo: "Bank/Cash received" },
+            {
+              accountId: settings.cashBankAccountId!,
+              debit: dp.amount,
+              credit: 0,
+              memo: "Bank/Cash received",
+            },
             // Fix #27: Cr. Uang Muka Penjualan (bukan Revenue)
-            { accountId: settings.salesReceivableAccountId!, debit: 0, credit: dp.amount, memo: "Uang Muka Penjualan" },
+            {
+              accountId: settings.salesReceivableAccountId!,
+              debit: 0,
+              credit: dp.amount,
+              memo: "Uang Muka Penjualan",
+            },
           ],
         },
       },
@@ -1199,7 +1325,7 @@ export async function onDownPaymentReceived(
 export async function onVendorBillPosted(
   billId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
@@ -1226,15 +1352,32 @@ export async function onVendorBillPosted(
   const goodsBased =
     bill.purchaseOrderId != null &&
     settings.purchaseInventoryAccountId != null &&
-    (await db.goodsReceipt.count({ where: { purchaseOrderId: bill.purchaseOrderId } })) > 0;
+    (await db.goodsReceipt.count({
+      where: { purchaseOrderId: bill.purchaseOrderId },
+    })) > 0;
 
-  const debitEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [];
+  const debitEntries: {
+    accountId: number;
+    debit: number;
+    credit: number;
+    memo: string;
+  }[] = [];
   if (goodsBased) {
     const taxAmount = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
     const clearingAmount = grandTotal - taxAmount;
-    debitEntries.push({ accountId: settings.purchaseInventoryAccountId!, debit: clearingAmount, credit: 0, memo: "Clearing penerimaan barang" });
+    debitEntries.push({
+      accountId: settings.purchaseInventoryAccountId!,
+      debit: clearingAmount,
+      credit: 0,
+      memo: "Clearing penerimaan barang",
+    });
     if (taxAmount > 0) {
-      debitEntries.push({ accountId: settings.purchaseTaxAccountId!, debit: taxAmount, credit: 0, memo: "PPN Masukan" });
+      debitEntries.push({
+        accountId: settings.purchaseTaxAccountId!,
+        debit: taxAmount,
+        credit: 0,
+        memo: "PPN Masukan",
+      });
     }
   } else {
     // Service/expense bill (no goods receipt): debit the expense account. Fail
@@ -1243,9 +1386,16 @@ export async function onVendorBillPosted(
     // looked "posted" but never actually recognised the liability in the GL.
     // Mirrors the fail-closed convention used by onPettyCashCreated/onExpenseApproved.
     if (!settings.purchaseExpenseAccountId) {
-      throw new Error("Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya")
+      throw new Error(
+        "Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya",
+      );
     }
-    debitEntries.push({ accountId: settings.purchaseExpenseAccountId, debit: grandTotal, credit: 0, memo: "Purchase expense" });
+    debitEntries.push({
+      accountId: settings.purchaseExpenseAccountId,
+      debit: grandTotal,
+      credit: 0,
+      memo: "Purchase expense",
+    });
   }
 
   await executeInTx(txClient, async (tx) => {
@@ -1259,27 +1409,57 @@ export async function onVendorBillPosted(
     // stale data from being used in the journal.
     const b = await tx.vendorBill.findUnique({
       where: { id: billId },
-      select: { id: true, grandTotal: true, tax: true, date: true, documentNo: true },
+      select: {
+        id: true,
+        grandTotal: true,
+        tax: true,
+        date: true,
+        documentNo: true,
+      },
     });
     if (!b) throw new Error("Bill tidak ditemukan");
 
     const latestGrandTotal = Number(b.grandTotal);
-    const latestTaxAmount = settings.purchaseTaxAccountId ? Number(b.tax ?? 0) : 0;
+    const latestTaxAmount = settings.purchaseTaxAccountId
+      ? Number(b.tax ?? 0)
+      : 0;
 
     const journalNumber = await generateJournalNumber(tx, "BILL", billId);
 
-    const latestDebitEntries: { accountId: number; debit: number; credit: number; memo: string }[] = [];
+    const latestDebitEntries: {
+      accountId: number;
+      debit: number;
+      credit: number;
+      memo: string;
+    }[] = [];
     if (goodsBased) {
       const clearingAmount = latestGrandTotal - latestTaxAmount;
-      latestDebitEntries.push({ accountId: settings.purchaseInventoryAccountId!, debit: clearingAmount, credit: 0, memo: "Clearing penerimaan barang" });
+      latestDebitEntries.push({
+        accountId: settings.purchaseInventoryAccountId!,
+        debit: clearingAmount,
+        credit: 0,
+        memo: "Clearing penerimaan barang",
+      });
       if (latestTaxAmount > 0) {
-        latestDebitEntries.push({ accountId: settings.purchaseTaxAccountId!, debit: latestTaxAmount, credit: 0, memo: "PPN Masukan" });
+        latestDebitEntries.push({
+          accountId: settings.purchaseTaxAccountId!,
+          debit: latestTaxAmount,
+          credit: 0,
+          memo: "PPN Masukan",
+        });
       }
     } else {
       if (!settings.purchaseExpenseAccountId) {
-        throw new Error("Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya")
+        throw new Error(
+          "Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya",
+        );
       }
-      latestDebitEntries.push({ accountId: settings.purchaseExpenseAccountId, debit: latestGrandTotal, credit: 0, memo: "Purchase expense" });
+      latestDebitEntries.push({
+        accountId: settings.purchaseExpenseAccountId,
+        debit: latestGrandTotal,
+        credit: 0,
+        memo: "Purchase expense",
+      });
     }
 
     await tx.journal.create({
@@ -1297,7 +1477,12 @@ export async function onVendorBillPosted(
         entries: {
           create: [
             ...latestDebitEntries,
-            { accountId: settings.purchasePayableAccountId!, debit: 0, credit: latestGrandTotal, memo: "Accounts Payable" },
+            {
+              accountId: settings.purchasePayableAccountId!,
+              debit: 0,
+              credit: latestGrandTotal,
+              memo: "Accounts Payable",
+            },
           ],
         },
       },
@@ -1314,7 +1499,7 @@ export async function onVendorBillPosted(
 export async function onVendorPaymentCreated(
   paymentId: number,
   userId?: number,
-  txClient?: TxClient
+  txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
@@ -1356,9 +1541,19 @@ export async function onVendorPaymentCreated(
         entries: {
           create: [
             // Dr. Hutang Usaha
-            { accountId: settings.purchasePayableAccountId!, debit: payment.amount, credit: 0, memo: "Accounts Payable" },
+            {
+              accountId: settings.purchasePayableAccountId!,
+              debit: payment.amount,
+              credit: 0,
+              memo: "Accounts Payable",
+            },
             // Fix #28: Cr. Bank/Cash (bukan salesReceivableAccountId!)
-            { accountId: payment.accountId ?? settings.cashBankAccountId!, debit: 0, credit: payment.amount, memo: "Bank/Cash paid" },
+            {
+              accountId: payment.accountId ?? settings.cashBankAccountId!,
+              debit: 0,
+              credit: payment.amount,
+              memo: "Bank/Cash paid",
+            },
           ],
         },
       },
@@ -1375,11 +1570,13 @@ export async function onVendorPaymentCreated(
 
 export async function onPayrollPaid(
   payrollId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId) return;
+  if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId)
+    return;
 
   // Idempotency
   const existing = await db.journal.findFirst({
@@ -1392,7 +1589,10 @@ export async function onPayrollPaid(
   });
 
   const netSalary = Number(payroll.netSalary) || 0;
-  const statutory = Number(payroll.bpjsHealthEmployee ?? 0) + Number(payroll.bpjsEmploymentEmployee ?? 0) + Number(payroll.pph21 ?? 0);
+  const statutory =
+    Number(payroll.bpjsHealthEmployee ?? 0) +
+    Number(payroll.bpjsEmploymentEmployee ?? 0) +
+    Number(payroll.pph21 ?? 0);
   const totalExpense = netSalary + statutory;
 
   if (totalExpense <= 0) return;
@@ -1402,11 +1602,26 @@ export async function onPayrollPaid(
   await executeInTx(txClient, async (tx) => {
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
 
-    const entries: Array<{ accountId: number; debit: number; credit: number; memo: string }> = [
+    const entries: Array<{
+      accountId: number;
+      debit: number;
+      credit: number;
+      memo: string;
+    }> = [
       // Dr. Salary Expense
-      { accountId: settings.salaryExpenseAccountId!, debit: totalExpense, credit: 0, memo: "Beban Gaji" },
+      {
+        accountId: settings.salaryExpenseAccountId!,
+        debit: totalExpense,
+        credit: 0,
+        memo: "Beban Gaji",
+      },
       // Cr. Bank/Cash (net paid to employee)
-      { accountId: settings.payrollBankAccountId!, debit: 0, credit: netSalary, memo: "Pembayaran Gaji" },
+      {
+        accountId: settings.payrollBankAccountId!,
+        debit: 0,
+        credit: netSalary,
+        memo: "Pembayaran Gaji",
+      },
     ];
 
     // Cr. Salaries Payable for statutory (BPJS+PPh) if account configured

@@ -1,36 +1,51 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
-import { notFound } from "next/navigation"
-import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteBudget } from "@/actions/finance.actions"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
-import { Button } from "@/components/ui/button"
-import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { Pencil } from "lucide-react"
+import { prisma } from "@/lib/db/prisma";
+import { formatDate, formatCurrency } from "@/lib/utils/format";
+import { notFound } from "next/navigation";
+import { DeleteButton } from "@/components/ui/delete-button";
+import { deleteBudget } from "@/actions/finance.actions";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import { Pencil } from "lucide-react";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Anggaran" }
+import { requirePermission } from "@/lib/auth/permissions";
+export const metadata: Metadata = { title: "Anggaran" };
 
 export default async function BudgetDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_budgets")
+  await requirePermission("view_budgets");
 
-  const { id } = await params
-  const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  const { id } = await params;
+  const numId = Number(id);
+  if (Number.isNaN(numId)) notFound();
 
   const budget = await prisma.budget.findUnique({
     where: { id: numId },
-  })
+  });
 
-  if (!budget) notFound()
+  if (!budget) notFound();
+
+  const [account, costCenter] = await Promise.all([
+    budget.accountId
+      ? prisma.account.findUnique({
+          where: { id: budget.accountId },
+          select: { code: true, name: true },
+        })
+      : Promise.resolve(null),
+    budget.costCenterId
+      ? prisma.costCenter.findUnique({
+          where: { id: budget.costCenterId },
+          select: { code: true, name: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,22 +57,56 @@ export default async function BudgetDetailPage({
           { label: "Anggaran", href: "/keuangan/anggaran" },
           { label: budget.name },
         ]}
-        actions={<>
-          <Button href={`/keuangan/anggaran/${budget.id}/ubah`} variant="primary"><Pencil size={14} /> Ubah</Button>
-          <DeleteButton id={budget.id} action={deleteBudget} />
-          <BackButton href="/keuangan/anggaran" />
-        </>}
+        actions={
+          <>
+            <Button
+              href={`/keuangan/anggaran/${budget.id}/ubah`}
+              variant="primary"
+            >
+              <Pencil size={14} /> Ubah
+            </Button>
+            <DeleteButton id={budget.id} action={deleteBudget} />
+            <BackButton href="/keuangan/anggaran" />
+          </>
+        }
       />
 
       <DetailCard>
         <DetailField label="Nama" value={budget.name} />
-        <DetailField label="Jumlah Anggaran" value={formatCurrency(Number(budget.amount))} />
-        <DetailField label="Account ID" value={budget.accountId} />
-        {budget.costCenterId && <DetailField label="Cost Center ID" value={budget.costCenterId} />}
-        <DetailField label="Tanggal Mulai" value={formatDate(budget.startDate)} />
-        <DetailField label="Tanggal Selesai" value={formatDate(budget.endDate)} />
+        <DetailField
+          label="Jumlah Anggaran"
+          value={formatCurrency(Number(budget.amount))}
+        />
+        <DetailField
+          label="Akun"
+          value={
+            budget.accountId != null
+              ? account
+                ? `${account.code} - ${account.name}`
+                : `#${budget.accountId}`
+              : "-"
+          }
+        />
+        {budget.costCenterId && (
+          <DetailField
+            label="Pusat Biaya"
+            value={
+              costCenter
+                ? `${costCenter.code} - ${costCenter.name}`
+                : `#${budget.costCenterId}`
+            }
+          />
+        )}
+        <DetailField
+          label="Tanggal Mulai"
+          value={formatDate(budget.startDate)}
+        />
+        <DetailField
+          label="Tanggal Selesai"
+          value={formatDate(budget.endDate)}
+        />
         <DetailField label="Dibuat" value={formatDate(budget.createdAt)} />
       </DetailCard>
     </div>
-  )
+  );
 }

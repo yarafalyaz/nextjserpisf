@@ -1,35 +1,44 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
-import { auth } from "@/lib/auth/auth"
-import { notFound } from "next/navigation"
-import { formatDate } from "@/lib/utils/format"
-import { StatusChip } from "@/components/ui/status-chip"
-import { Badge } from "@/components/ui/shadcn/badge"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
-import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { prisma } from "@/lib/db/prisma";
+import { requirePermission } from "@/lib/auth/permissions";
+import { auth } from "@/lib/auth/auth";
+import { notFound } from "next/navigation";
+import { formatDate } from "@/lib/utils/format";
+import { StatusChip } from "@/components/ui/status-chip";
+import { Badge } from "@/components/ui/shadcn/badge";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { DetailCard, DetailField } from "@/components/ui/detail-card";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Absensi" }
+export const metadata: Metadata = { title: "Absensi" };
 
 function formatTime(date: Date | null): string {
-  if (!date) return "-"
-  return date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+  if (!date) return "-";
+  return date.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatOvertimeMinutes(minutes: number | null): string {
-  if (!minutes || minutes <= 0) return "-"
-  const jam = Math.floor(minutes / 60)
-  const menit = minutes % 60
-  if (jam > 0 && menit > 0) return `${jam} jam ${menit} menit`
-  if (jam > 0) return `${jam} jam`
-  return `${menit} menit`
+  if (!minutes || minutes <= 0) return "-";
+  const jam = Math.floor(minutes / 60);
+  const menit = minutes % 60;
+  if (jam > 0 && menit > 0) return `${jam} jam ${menit} menit`;
+  if (jam > 0) return `${jam} jam`;
+  return `${menit} menit`;
 }
 
-function GpsLink({ latitude, longitude }: { latitude: number; longitude: number }) {
-  const url = `https://www.google.com/maps?q=${latitude},${longitude}`
+function GpsLink({
+  latitude,
+  longitude,
+}: {
+  latitude: number;
+  longitude: number;
+}) {
+  const url = `https://www.google.com/maps?q=${latitude},${longitude}`;
   return (
     <a
       href={url}
@@ -39,40 +48,53 @@ function GpsLink({ latitude, longitude }: { latitude: number; longitude: number 
     >
       {latitude.toFixed(6)}, {longitude.toFixed(6)}
     </a>
-  )
+  );
 }
 
 export default async function AttendanceDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_attendance")
-  const session = await auth()
+  await requirePermission("view_attendance");
+  const session = await auth();
 
-  const { id } = await params
-  const attendanceId = Number(id)
-  if (isNaN(attendanceId)) notFound()
+  const { id } = await params;
+  const attendanceId = Number(id);
+  if (Number.isNaN(attendanceId)) notFound();
 
   const attendance = await prisma.attendance.findUnique({
     where: { id: attendanceId },
     include: { employee: true },
-  })
+  });
 
-  if (!attendance) notFound()
+  if (!attendance) notFound();
 
-  const isPrivileged = session?.user?.roles?.includes("super_admin") || session?.user?.roles?.includes("hr")
+  const isPrivileged =
+    session?.user?.roles?.includes("super_admin") ||
+    session?.user?.roles?.includes("hr");
   if (!isPrivileged) {
     const myEmployee = session?.user?.id
-      ? await prisma.employee.findFirst({ where: { userId: Number(session.user.id) }, select: { id: true } })
-      : null
-    if (!myEmployee || attendance.employeeId !== myEmployee.id) notFound()
+      ? await prisma.employee.findFirst({
+          where: { userId: Number(session.user.id) },
+          select: { id: true },
+        })
+      : null;
+    if (!myEmployee || attendance.employeeId !== myEmployee.id) notFound();
   }
 
-  const checkInLat = attendance.checkInLatitude ? Number(attendance.checkInLatitude) : null
-  const checkInLng = attendance.checkInLongitude ? Number(attendance.checkInLongitude) : null
-  const checkOutLat = attendance.checkOutLatitude ? Number(attendance.checkOutLatitude) : null
-  const checkOutLng = attendance.checkOutLongitude ? Number(attendance.checkOutLongitude) : null
+  const checkInLat = attendance.checkInLatitude
+    ? Number(attendance.checkInLatitude)
+    : null;
+  const checkInLng = attendance.checkInLongitude
+    ? Number(attendance.checkInLongitude)
+    : null;
+  const checkOutLat = attendance.checkOutLatitude
+    ? Number(attendance.checkOutLatitude)
+    : null;
+  const checkOutLng = attendance.checkOutLongitude
+    ? Number(attendance.checkOutLongitude)
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -90,28 +112,41 @@ export default async function AttendanceDetailPage({
 
       <DetailCard title="Informasi Absensi">
         <DetailField label="Karyawan" value={attendance.employee.name} />
-        <DetailField label="Tanggal" value={formatDate(attendance.date.toISOString())} />
+        <DetailField
+          label="Tanggal"
+          value={formatDate(attendance.date.toISOString())}
+        />
         <DetailField label="Masuk" value={formatTime(attendance.checkIn)} />
         <DetailField
           label="GPS Masuk"
           value={
-            checkInLat !== null && checkInLng !== null
-              ? <GpsLink latitude={checkInLat} longitude={checkInLng} />
-              : "-"
+            checkInLat !== null && checkInLng !== null ? (
+              <GpsLink latitude={checkInLat} longitude={checkInLng} />
+            ) : (
+              "-"
+            )
           }
         />
         <DetailField label="Pulang" value={formatTime(attendance.checkOut)} />
         <DetailField
           label="GPS Pulang"
           value={
-            checkOutLat !== null && checkOutLng !== null
-              ? <GpsLink latitude={checkOutLat} longitude={checkOutLng} />
-              : "-"
+            checkOutLat !== null && checkOutLng !== null ? (
+              <GpsLink latitude={checkOutLat} longitude={checkOutLng} />
+            ) : (
+              "-"
+            )
           }
         />
-        <DetailField label="Lembur" value={formatOvertimeMinutes(attendance.overtimeMinutes)} />
+        <DetailField
+          label="Lembur"
+          value={formatOvertimeMinutes(attendance.overtimeMinutes)}
+        />
         {attendance.lateMinutes > 0 && (
-          <DetailField label="Keterlambatan" value={`${attendance.lateMinutes} menit`} />
+          <DetailField
+            label="Keterlambatan"
+            value={`${attendance.lateMinutes} menit`}
+          />
         )}
         <DetailField
           label="Lembur Disetujui"
@@ -127,10 +162,12 @@ export default async function AttendanceDetailPage({
               >
                 {attendance.overtimeApproved ? "Disetujui" : "Belum Disetujui"}
               </Badge>
-            ) : "-"
+            ) : (
+              "-"
+            )
           }
         />
       </DetailCard>
     </div>
-  )
+  );
 }

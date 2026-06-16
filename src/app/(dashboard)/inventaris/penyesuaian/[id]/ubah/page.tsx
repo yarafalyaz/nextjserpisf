@@ -78,7 +78,8 @@ export default async function EditPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Inventaris", href: "/inventaris/penyesuaian" },
+          { label: "Inventaris", href: "/inventaris" },
+          { label: "Penyesuaian", href: "/inventaris/penyesuaian" },
           { label: "Ubah" },
         ]}
       />

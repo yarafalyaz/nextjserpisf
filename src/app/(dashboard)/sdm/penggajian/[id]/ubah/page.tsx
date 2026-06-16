@@ -1,31 +1,31 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/db/prisma"
-import { notFound } from "next/navigation"
-import { requirePermission } from "@/lib/auth/permissions"
-import { PayrollForm } from "@/components/forms/payroll-form"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
+import { prisma } from "@/lib/db/prisma";
+import { notFound } from "next/navigation";
+import { requirePermission } from "@/lib/auth/permissions";
+import { PayrollForm } from "@/components/forms/payroll-form";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Ubah Penggajian" }
+export const metadata: Metadata = { title: "Ubah Penggajian" };
 
 export default async function EditPayrollPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("update_payroll")
-  
-  const { id } = await params
-  const numId = Number(id)
-  if (isNaN(numId)) notFound()
+  await requirePermission("update_payroll");
+
+  const { id } = await params;
+  const numId = Number(id);
+  if (Number.isNaN(numId)) notFound();
 
   const payroll = await prisma.payroll.findUnique({
-    where: { id: numId }
-  })
+    where: { id: numId },
+  });
 
-  if (!payroll) notFound()
+  if (!payroll) notFound();
   if (payroll.status !== "draft") {
     // Only draft payrolls can be edited
     return (
@@ -41,10 +41,11 @@ export default async function EditPayrollPage({
           actions={<BackButton href={`/sdm/penggajian/${id}`} />}
         />
         <div className="p-6 bg-danger/10 border border-danger/20 rounded-xl text-danger">
-          Hanya penggajian dengan status <strong>Draft</strong> yang dapat diubah.
+          Hanya penggajian dengan status <strong>Draft</strong> yang dapat
+          diubah.
         </div>
       </div>
-    )
+    );
   }
 
   const plainPayroll = {
@@ -63,12 +64,12 @@ export default async function EditPayrollPage({
     paymentDate: payroll.paymentDate ? payroll.paymentDate.toISOString() : null,
     createdAt: payroll.createdAt.toISOString(),
     updatedAt: payroll.updatedAt.toISOString(),
-  }
+  };
 
   const employees = await prisma.employee.findMany({
     where: { isActive: true, deletedAt: null },
-    select: { id: true, name: true }
-  })
+    select: { id: true, name: true },
+  });
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
@@ -85,5 +86,5 @@ export default async function EditPayrollPage({
 
       <PayrollForm employees={employees} initialData={plainPayroll} />
     </div>
-  )
+  );
 }
