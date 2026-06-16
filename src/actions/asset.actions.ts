@@ -114,23 +114,34 @@ export async function createAssetTransfer(formData: FormData) {
   if (!parsed.success) return { success: false, error: parsed.error }
   const { data } = parsed
 
-  const transfer = await prisma.assetTransfer.create({
-    data: {
-      assetId: data.assetId,
-      fromLocation: data.fromLocation ?? null,
-      toLocation: data.toLocation,
-      fromEmployeeId: data.fromEmployeeId ?? null,
-      toEmployeeId: data.toEmployeeId ?? null,
-      transferDate: new Date(data.transferDate),
-      notes: data.notes ?? null,
-      createdBy: Number(user.id),
-    },
-  })
+  // Atomicity guard: a successful assetTransfer.create followed by a failed
+  // asset.update (FK violation, transient DB error, lost connection) would
+  // orphan the transfer record with a stale asset.location, silently desyncing
+  // the asset's current-location view from the latest transfer destination.
+  // Wrap the pair in $transaction so any inner write failing rolls the whole
+  // batch back — mirrors deleteAssetTransfer / updateAssetTransfer / createAsset
+  // / vehicle compound writes (commit 7bc5062).
+  const transfer = await prisma.$transaction(async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
+    const created = await tx.assetTransfer.create({
+      data: {
+        assetId: data.assetId,
+        fromLocation: data.fromLocation ?? null,
+        toLocation: data.toLocation,
+        fromEmployeeId: data.fromEmployeeId ?? null,
+        toEmployeeId: data.toEmployeeId ?? null,
+        transferDate: new Date(data.transferDate),
+        notes: data.notes ?? null,
+        createdBy: Number(user.id),
+      },
+    })
 
-  // Update asset location
-  await prisma.asset.update({
-    where: { id: data.assetId },
-    data: { location: data.toLocation },
+    // Update asset location inside the same tx.
+    await tx.asset.update({
+      where: { id: data.assetId },
+      data: { location: data.toLocation },
+    })
+
+    return created
   })
 
   await logActivity("create", "AssetTransfer", transfer.id, "Membuat transfer aset")
