@@ -53,12 +53,71 @@ const BRACKETS: { upTo: number; rate: number }[] = [
 const OCCUPATIONAL_COST_RATE = 0.05 // biaya jabatan 5%
 const OCCUPATIONAL_COST_CEILING_YEAR = 6_000_000 // max 500rb/bulan
 
-/** PTKP yearly amount based on marital status (dependents assumed 0). */
+/**
+ * PTKP yearly amount based on marital status (dependents assumed 0).
+ *
+ * Accepts the canonical Indonesian tax codes (TK/0, K/0, K/1 …) used in the
+ * test fixtures AND the human-readable strings the Employee form / KTP
+ * records actually store ("Single", "Married", "Divorced", "Belum Kawin",
+ * "Menikah", "Cerai", …). Unknown values default to TK/0 (single) so a stale
+ * or typo'd string never silently widens the PTKP and erodes withholding.
+ *
+ * The previous implementation used `String.includes("kawin")` as a positive
+ * married marker, which mis-classified two of the most common real values:
+ *   - "Belum Kawin" / "Belum Menikah"  (Indonesian for *single*) CONTAINS
+ *     the substring "kawin", so it was flagged married → +4.5jt PTKP → the
+ *     employee was under-withheld every payslip (illegal income-tax gap).
+ *   - "Menikah"  (Indonesian for *married*) matched NONE of the married
+ *     markers (no leading "k", no "kawin", no "married") → treated as
+ *     single → the employee was over-withheld every payslip.
+ *
+ * Strategy: strip Indonesian negation/divorce prefixes FIRST ("belum",
+ * "tidak", "cerai", "duda", "janda", "divorced", "widowed", "bachelor",
+ * "single") so a "Belum Kawin" body no longer leaks through to the married
+ * branch; THEN check for married markers (tax code "K/" prefix, "kawin",
+ * "menikah", "nikah", "married"). Order matters: the "belum" guard must run
+ * before the "kawin" check, otherwise the old substring bug re-appears.
+ */
 function ptkpFor(maritalStatus?: string | null): number {
-  const married = (maritalStatus ?? "").toLowerCase().startsWith("k") ||
-    (maritalStatus ?? "").toLowerCase().includes("kawin") ||
-    (maritalStatus ?? "").toLowerCase().includes("married")
-  return PTKP_SINGLE + (married ? PTKP_MARRIED_EXTRA : 0)
+  const raw = (maritalStatus ?? "").toLowerCase().trim()
+  if (!raw) return PTKP_SINGLE
+
+  // Canonical Indonesian tax codes.
+  // TK/* = Tidak Kawin (not married) → single. K/* = Kawin (married) → +4.5jt.
+  if (/^tk\//.test(raw) || /^t\/k\//.test(raw)) return PTKP_SINGLE
+  if (/^k\//.test(raw)) return PTKP_SINGLE + PTKP_MARRIED_EXTRA
+
+  // Explicit single/divorced/negation phrases. Checked BEFORE the married
+  // markers so "Belum Kawin" never falls through to the .includes("kawin")
+  // branch below.
+  if (
+    raw === "single" ||
+    raw === "belum kawin" ||
+    raw === "belum menikah" ||
+    raw === "tidak kawin" ||
+    raw === "tidak menikah" ||
+    raw === "lajang" ||
+    raw === "bachelor" ||
+    raw === "cerai" ||
+    raw === "duda" ||
+    raw === "janda" ||
+    raw === "divorced" ||
+    raw === "widowed" ||
+    raw === "widower" ||
+    raw === "single parent"
+  ) {
+    return PTKP_SINGLE
+  }
+
+  // Married markers.
+  if (raw === "married" || raw === "kawin" || raw === "menikah" || raw === "nikah") {
+    return PTKP_SINGLE + PTKP_MARRIED_EXTRA
+  }
+
+  // Unknown / typo'd value: default to TK/0 (single) so we never silently
+  // widen the PTKP. Better to over-withold a payslip than to under-withhold
+  // and owe the tax office later.
+  return PTKP_SINGLE
 }
 
 /**
