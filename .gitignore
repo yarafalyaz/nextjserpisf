@@ -60,3 +60,10 @@ memory/
 # Internal cron job notes (auto-generated, do not commit)
 .hermes/audited-*.txt
 .hermes/next_target.txt
+
+# Autopilot / openclaw artifacts (auto-generated logs & state — do not commit)
+.openclaw/
+.openclaw-logs/
+.autopilot/
+silengkap-autopilot.log
+*-autopilot.log

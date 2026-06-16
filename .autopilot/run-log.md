@@ -1,3 +1,0 @@
-[2026-05-31 05:27 WIB] FAIL e2e/inventory-rack-row-crud.spec.ts: create rack row gagal (server: "Field rackId harus berupa ID yang valid"). Percobaan keyboard select (ArrowDown/Enter) belum menyelesaikan issue. Next: stabilkan pemilihan ComboBox gudang+rak / verifikasi payload rackId sebelum submit.
-[2026-05-31 08:34 WIB] FAIL e2e/master-gudang-crud.spec.ts: mobile-chrome timeout klik #submit-warehouse (overlay/sidebar menghalangi). Chromium pass. Aksi: rollback eksperimen force click/close overlay; lanjut run berikutnya fokus task lain atau perbaiki mekanisme sidebar mobile.
-[2026-05-31 08:39 WIB] OK e2e/master-gudang-crud.spec.ts chromium+mobile pass. Fix: helper closeMobileSidebarIfOpen (klik .sidebar-close-btn force, fallback ESC) sebelum submit create/update.
