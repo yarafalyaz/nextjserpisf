@@ -1,6 +1,13 @@
 "use client"
 
 import type { ReactNode } from "react"
+import { useId } from "react"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  TriangleAlert,
+} from "lucide-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,6 +16,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/shadcn/alert-dialog"
 import { cn } from "@/lib/utils"
@@ -34,6 +42,43 @@ interface ConfirmDialogProps {
   children?: ReactNode
 }
 
+const variantConfig: Record<
+  ConfirmVariant,
+  {
+    /** Tailwind classes applied to the AlertDialogAction confirm button. */
+    confirmClass: string
+    /** Tailwind classes for the media icon wrapper background/foreground. */
+    mediaClass: string
+    /** Icon component for the media slot (mark decorative via aria-hidden). */
+    Icon: typeof AlertTriangle
+  }
+> = {
+  danger: {
+    confirmClass:
+      "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
+    mediaClass: "bg-destructive/10 text-destructive",
+    Icon: AlertTriangle,
+  },
+  warning: {
+    confirmClass:
+      "bg-warning text-white hover:bg-warning/90 focus-visible:ring-warning/30 dark:focus-visible:ring-warning/40",
+    mediaClass: "bg-warning/15 text-warning",
+    Icon: TriangleAlert,
+  },
+  accent: {
+    confirmClass:
+      "bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary/30",
+    mediaClass: "bg-primary/10 text-primary",
+    Icon: Info,
+  },
+  success: {
+    confirmClass:
+      "bg-success text-white hover:bg-success-600 focus-visible:ring-success/30",
+    mediaClass: "bg-success/10 text-success",
+    Icon: CheckCircle2,
+  },
+}
+
 export function ConfirmDialog({
   isOpen,
   onOpenChange,
@@ -47,15 +92,27 @@ export function ConfirmDialog({
   className,
   children,
 }: ConfirmDialogProps) {
-  const danger = variant === "danger"
+  // Explicit id wiring so the dialog's accessible name comes from
+  // <AlertDialogTitle id={titleId}>, and its long description from
+  // <AlertDialogDescription id={descriptionId}>. Radix's Content auto-binds
+  // aria-labelledby/aria-describedby to these ids when they live inside the
+  // same dialog, so screen readers announce both the short label and the
+  // longer prompt for every variant.
+  const titleId = useId()
+  const descriptionId = useId()
+  const { confirmClass, mediaClass, Icon } = variantConfig[variant]
+  const hasBody = !!(children ?? body)
 
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent className={className ?? "sm:max-w-[400px]"}>
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          {(children || body) && (
-            <AlertDialogDescription asChild>
+          <AlertDialogMedia className={cn(mediaClass, "sm:group-data-[size=default]/alert-dialog-content:row-span-2")}>
+            <Icon aria-hidden="true" />
+          </AlertDialogMedia>
+          <AlertDialogTitle id={titleId}>{title}</AlertDialogTitle>
+          {hasBody && (
+            <AlertDialogDescription id={descriptionId} asChild>
               <div>{children ?? body}</div>
             </AlertDialogDescription>
           )}
@@ -68,10 +125,7 @@ export function ConfirmDialog({
               e.preventDefault()
               onConfirm()
             }}
-            className={cn(
-              danger &&
-                "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20"
-            )}
+            className={cn(confirmClass)}
           >
             {confirmLabel}
           </AlertDialogAction>
