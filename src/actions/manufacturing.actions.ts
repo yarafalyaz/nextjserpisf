@@ -15,6 +15,7 @@ import {
   updateProductionOrderSchema,
   parseMaterialRows,
 } from "@/lib/validations/manufacturing.schemas"
+import { computeProjectStatus } from "@/lib/services/project-status"
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
 
@@ -355,29 +356,39 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number) {
 
 /**
  * Helper: sync linked Project status based on its stage completion.
+ *
+ * Delegates to the pure `computeProjectStatus` helper so the transition
+ * rules (and the endDate-preservation guard for re-runs on an already-
+ * completed project) are unit-tested without Prisma. endDate is only
+ * stamped on the forward transition to completed; subsequent calls while
+ * the project is still completed leave it untouched (fixes the historical
+ * completion-date drift bug that fired every time a new WO completed for
+ * the same project, e.g. warranty follow-up work).
  */
 async function syncProjectStatus(projectId: number) {
+  const project = await prisma.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { status: true, endDate: true },
+  })
   const stages = await prisma.projectStage.findMany({
     where: { projectId },
     orderBy: { sortOrder: "asc" },
+    select: { status: true },
   })
   if (stages.length === 0) return
 
-  const total = stages.length
-  const completed = stages.filter((s) => s.status === "completed" || s.status === "skipped").length
-  const inProgress = stages.filter((s) => s.status === "in_progress").length
+  const result = computeProjectStatus(
+    stages,
+    project.status,
+    project.endDate,
+    new Date()
+  )
+  if (!result.changed) return
 
-  if (completed === total) {
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { status: "completed", endDate: new Date() },
-    })
-  } else if (inProgress > 0 || completed > 0) {
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { status: "in_progress", endDate: null },
-    })
-  }
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { status: result.status, endDate: result.endDate },
+  })
 }
 
 /**

@@ -440,6 +440,7 @@ describe("Work Order Actions", () => {
       } as any)
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ status: "in_progress", endDate: null })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([
       { id: 1, status: "completed" },
       { id: 2, status: "completed" }
@@ -462,6 +463,7 @@ describe("Work Order Actions", () => {
       } as any)
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ status: "active", endDate: null })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([
       { id: 1, status: "completed" },
       { id: 2, status: "in_progress" }
@@ -504,6 +506,7 @@ describe("Work Order Actions", () => {
       } as any)
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ status: "active", endDate: null })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([
       { id: 1, status: "pending" },
       { id: 2, status: "pending" }
@@ -530,6 +533,7 @@ describe("Work Order Actions", () => {
       } as any)
     mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({ status: "in_progress", endDate: null })
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([
       { id: 1, status: "completed" },
       { id: 2, status: "skipped" }
@@ -556,6 +560,39 @@ describe("Work Order Actions", () => {
 
     const res = await actions.completeWorkOrder(1)
     expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+
+  it("completeWorkOrder does NOT overwrite project.endDate on a re-run for an already-completed project (regression: endDate drift)", async () => {
+    // Regression: previously syncProjectStatus wrote `endDate: new Date()`
+    // unconditionally on every call. A second WO completing for the same
+    // project (e.g. warranty follow-up work, additional scope) would
+    // silently drift the historical completion date forward, corrupting
+    // SLA reports and customer follow-ups.
+    const originalEndDate = new Date("2026-01-15T10:00:00.000Z")
+    mocks.prismaMock.workOrder.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "in_progress", items: [{ id: 1 }], projectId: 50 })
+      .mockResolvedValueOnce({
+        id: 1, documentNo: "WO-1", customerId: 5, quotationId: null,
+        items: [{ id: 10, itemId: 1, qty: 0, description: null }],
+        customer: null
+      } as any)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    // Project is ALREADY completed with a prior endDate — this is the
+    // re-run scenario that triggered the drift bug.
+    mocks.prismaMock.project.findUniqueOrThrow.mockResolvedValue({
+      status: "completed",
+      endDate: originalEndDate,
+    })
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { id: 1, status: "completed" },
+      { id: 2, status: "completed" },
+    ])
+
+    const res = await actions.completeWorkOrder(1)
+    expect(res?.success).toBe(true)
+    // No project update should fire — status & endDate are already correct.
     expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
   })
   it("deleteWorkOrder succeeds", async () => {
