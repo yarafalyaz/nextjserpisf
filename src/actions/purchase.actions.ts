@@ -1182,7 +1182,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
   "use server"
 
   try {
-  const user = await requirePermission("create_purchase_requests")
+  const user = await requirePermission("edit_purchase_requests")
 
   const parsed = parseFormData(purchaseRequestSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
@@ -1240,7 +1240,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_purchase_orders")
+  await requirePermission("edit_purchase_orders")
 
   const parsed = parseFormData(purchaseOrderSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
@@ -1313,7 +1313,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
   "use server"
 
   try {
-  const user = await requirePermission("create_vendor_bills")
+  const user = await requirePermission("edit_vendor_bills")
 
   const parsed = parseFormData(vendorBillSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
@@ -1391,7 +1391,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_goods_receipts")
+  await requirePermission("edit_goods_receipts")
 
   const parsed = parseFormData(goodsReceiptSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
@@ -1456,7 +1456,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("create_purchase_returns")
+  await requirePermission("edit_purchase_returns")
 
   const parsed = parseFormData(purchaseReturnSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
@@ -1569,7 +1569,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
   "use server"
 
   try {
-  const user = await requirePermission("create_vendor_payments")
+  const user = await requirePermission("edit_vendor_payments")
 
   const parsed = parseFormData(vendorPaymentSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }

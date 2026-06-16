@@ -144,6 +144,7 @@ describe("Purchase Request Actions", () => {
       items: JSON.stringify([{ itemId: 1, qty: 12, notes: "updated" }])
     }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_requests")
   })
 
   it("approvePurchaseRequest succeeds", async () => {
@@ -178,6 +179,7 @@ describe("Purchase Order Actions", () => {
       items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1200, discount: 0 }])
     }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_orders")
   })
 
   it("approvePurchaseOrder succeeds", async () => {
@@ -222,6 +224,7 @@ describe("Goods Receipt Actions", () => {
       items: JSON.stringify([{ itemId: 1, qty: 6, unitCost: 1000 }])
     }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_goods_receipts")
   })
 
   it("verifyGoodsReceipt succeeds", async () => {
@@ -275,6 +278,7 @@ describe("Vendor Bill Actions", () => {
       grandTotal: "1200"
     }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_vendor_bills")
   })
 
   it("confirmVendorBill succeeds", async () => {
@@ -320,6 +324,7 @@ describe("Vendor Payment Actions", () => {
       paymentMethod: "cash"
     }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_vendor_payments")
   })
 
   it("confirmVendorPayment succeeds", async () => {
@@ -354,6 +359,7 @@ describe("Purchase Return Actions", () => {
       items: JSON.stringify([{ itemId: 1, qty: 3 }])
     }))
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_returns")
   })
 
   it("processPurchaseReturn succeeds", async () => {

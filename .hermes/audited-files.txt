@@ -114,3 +114,4 @@ src/actions/purchase.actions.ts (fix: partially-paid vendor bill stuck in posted
 src/components/forms/sales-return-form.tsx (fix: edit-mode hydration + qty input binding)
 src/components/forms/purchase-return-form.tsx (fix: same edit-mode hydration + qty input binding)
 src/components/forms/__tests__/sales-return-form.test.tsx (new test)
+src/actions/purchase.actions.ts (fix: 6 update actions used create_purchase_* perm instead of edit_purchase_*)
