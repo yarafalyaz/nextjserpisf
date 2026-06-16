@@ -26,10 +26,16 @@ interface ReturnItem {
 export function SalesReturnForm({ invoices, customers, items, returnData }: SalesReturnFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(returnData?.date ?? new Date().toISOString().split("T")[0])
   const [salesInvoiceId, setSalesInvoiceId] = useState(returnData?.salesInvoiceId ? String(returnData.salesInvoiceId) : "")
   const [customerId, setCustomerId] = useState("")
-  const [returnItems, setReturnItems] = useState<ReturnItem[]>([{ itemId: 0, qty: 1 }])
+  // Seed returnItems from returnData on edit so updating a return doesn't
+  // silently wipe all existing line items to a single empty row.
+  const [returnItems, setReturnItems] = useState<ReturnItem[]>(
+    returnData?.items && returnData.items.length > 0
+      ? returnData.items.map((it) => ({ itemId: it.itemId, qty: it.qty }))
+      : [{ itemId: 0, qty: 1 }],
+  )
 
   function addItem() {
     setReturnItems([...returnItems, { itemId: 0, qty: 1 }])
@@ -140,7 +146,8 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                   <input
                     type="number"
                     min={1}
-                    onChange={(e) => updateItem(index, "qty", (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0))}
+                    value={ri.qty}
+                    onChange={(e) => updateItem(index, "qty", Math.max(1, Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1))}
                     className="form-input"
                     style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
                   />
