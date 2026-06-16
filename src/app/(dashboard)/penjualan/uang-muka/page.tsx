@@ -1,32 +1,39 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { toPlain } from "@/lib/utils/serialization"
-import { prisma } from "@/lib/db/prisma"
-import { parsePagination } from "@/lib/utils/pagination"
-import { requirePermission } from "@/lib/auth/permissions"
-import Link from "next/link"
-import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
-import { AppSearchField } from "@/components/ui/search-field"
-import { DownPaymentTable } from "./_components/down-payment-table"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { toPlain } from "@/lib/utils/serialization";
+import { prisma } from "@/lib/db/prisma";
+import { parsePagination } from "@/lib/utils/pagination";
+import { requirePermission } from "@/lib/auth/permissions";
+import Link from "next/link";
+import {
+  statusLabel,
+  statusToIndo,
+  indoToStatus,
+} from "@/lib/utils/status-labels";
+import { AppSearchField } from "@/components/ui/search-field";
+import { DownPaymentTable } from "./_components/down-payment-table";
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Uang Muka" }
+export const metadata: Metadata = { title: "Uang Muka" };
 
 export default async function DownPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string 
-  halaman?: string
-  pageSize?: string}>
+  searchParams: Promise<{
+    status?: string;
+    cari?: string;
+    halaman?: string;
+    pageSize?: string;
+  }>;
 }) {
-  await requirePermission("view_down_payments")
+  await requirePermission("view_down_payments");
 
-  const params = await searchParams
+  const params = await searchParams;
 
-  const { page, pageSize, take } = parsePagination(params)
-  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
+  const { page, pageSize, take } = parsePagination(params);
+  const dbStatusParam = params.status ? indoToStatus[params.status] : undefined;
 
   const where = {
     ...(params.cari && {
@@ -35,8 +42,10 @@ export default async function DownPaymentsPage({
         { quotation: { documentNo: { contains: params.cari } } },
       ],
     }),
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
-  }
+    ...((dbStatusParam || params.status) && {
+      status: dbStatusParam || params.status,
+    }),
+  };
 
   const rawDps = await prisma.downPayment.findMany({
     where,
@@ -44,7 +53,7 @@ export default async function DownPaymentsPage({
     take,
     skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
-  })
+  });
 
   const dps = rawDps.map((dp) => ({
     id: dp.id,
@@ -52,25 +61,37 @@ export default async function DownPaymentsPage({
     amount: Number(dp.amount),
     status: dp.status,
     createdAt: dp.createdAt,
-  }))
+  }));
 
-  const tableData = toPlain(dps)
-
+  const tableData = toPlain(dps);
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Uang Muka"}]} />
+      <AppBreadcrumbs
+        items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Uang Muka" },
+        ]}
+      />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Uang Muka</h1>
       </div>
 
       <DownPaymentTable
         data={tableData}
-        toolbar={<AppSearchField placeholder="Cari pelanggan atau penawaran..." action="/penjualan/uang-muka" />}
+        toolbar={
+          <AppSearchField
+            placeholder="Cari pelanggan atau penawaran..."
+            action="/penjualan/uang-muka"
+          />
+        }
         filters={
           <div className="flex gap-1.5 flex-wrap">
-            {["", "pending", "confirmed", "cancelled"].map((dbStatus) => {
-              const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
+            {["", "draft", "confirmed", "cancelled"].map((dbStatus) => {
+              const urlStatus = dbStatus
+                ? statusToIndo[dbStatus] || dbStatus
+                : "";
               return (
                 <Link
                   key={dbStatus}
@@ -79,11 +100,11 @@ export default async function DownPaymentsPage({
                 >
                   {dbStatus ? statusLabel(dbStatus) : "Semua"}
                 </Link>
-              )
+              );
             })}
           </div>
         }
       />
     </div>
-  )
+  );
 }

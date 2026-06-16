@@ -1,30 +1,37 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
-import Link from "next/link"
-import { notFound } from "next/navigation"
-import { StatusChip } from "@/components/ui/status-chip"
-import { StatusActions } from "@/components/ui/status-actions"
-import { PrintButton } from "@/components/ui/print-button"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
-import { Button } from "@/components/ui/button"
-import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { prisma } from "@/lib/db/prisma";
+import { formatCurrency, formatDate } from "@/lib/utils/format";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { StatusChip } from "@/components/ui/status-chip";
+import { StatusActions } from "@/components/ui/status-actions";
+import { PrintButton } from "@/components/ui/print-button";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import {
+  DetailTable,
+  DetailTableHead,
+  DetailTableTh,
+  DetailTableBody,
+  DetailTableRow,
+  DetailTableTd,
+} from "@/components/ui/detail-table";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Pesanan" }
+import { requirePermission } from "@/lib/auth/permissions";
+export const metadata: Metadata = { title: "Pesanan" };
 
 export default async function SalesOrderDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_sales_orders")
+  await requirePermission("view_sales_orders");
 
-  const { id } = await params
+  const { id } = await params;
 
   const order = await prisma.salesOrder.findUnique({
     where: { id: Number(id), deletedAt: null },
@@ -35,9 +42,9 @@ export default async function SalesOrderDetailPage({
       deliveryOrders: { orderBy: { createdAt: "desc" } },
       salesInvoices: { orderBy: { createdAt: "desc" } },
     },
-  })
+  });
 
-  if (!order) notFound()
+  if (!order) notFound();
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,9 +59,19 @@ export default async function SalesOrderDetailPage({
         badge={<StatusChip status={order.status} />}
         actions={
           <>
-            <Button href={`/penjualan/pesanan/${order.id}/ubah`} variant="primary">Ubah</Button>
-            {order.status === "approved" && (
-              <Button href={`/penjualan/uang-muka/tambah?pesananPenjualanId=${order.id}`} variant="primary">+ Uang Muka</Button>
+            <Button
+              href={`/penjualan/pesanan/${order.id}/ubah`}
+              variant="primary"
+            >
+              Ubah
+            </Button>
+            {order.status === "confirmed" && (
+              <Button
+                href={`/penjualan/uang-muka/tambah?salesOrderId=${order.id}`}
+                variant="primary"
+              >
+                + Uang Muka
+              </Button>
             )}
             <PrintButton documentType="order" documentId={order.id} />
             <BackButton href="/penjualan/pesanan" />
@@ -72,21 +89,41 @@ export default async function SalesOrderDetailPage({
       <DetailCard>
         <DetailField
           label="Pelanggan"
-          value={<Link href={`/master/pelanggan/${order.customerId}`}>{order.customer.name}</Link>}
+          value={
+            <Link href={`/master/pelanggan/${order.customerId}`}>
+              {order.customer.name}
+            </Link>
+          }
         />
         <DetailField label="Tanggal" value={formatDate(order.date)} />
-        <DetailField label="Tanggal Pengiriman" value={order.deliveryDate ? formatDate(order.deliveryDate) : "-"} />
+        <DetailField
+          label="Tanggal Pengiriman"
+          value={order.deliveryDate ? formatDate(order.deliveryDate) : "-"}
+        />
         <DetailField
           label="Penawaran"
-          value={order.quotation ? <Link href={`/penjualan/penawaran/${order.quotation.id}`}>{order.quotation.documentNo}</Link> : "-"}
+          value={
+            order.quotation ? (
+              <Link href={`/penjualan/penawaran/${order.quotation.id}`}>
+                {order.quotation.documentNo}
+              </Link>
+            ) : (
+              "-"
+            )
+          }
         />
-        <DetailField label="Total Keseluruhan" value={formatCurrency(Number(order.grandTotal))} />
+        <DetailField
+          label="Total Keseluruhan"
+          value={formatCurrency(Number(order.grandTotal))}
+        />
       </DetailCard>
 
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Item</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">
+            Item
+          </h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable>
@@ -101,10 +138,18 @@ export default async function SalesOrderDetailPage({
               {order.items.map((item) => (
                 <DetailTableRow key={item.id}>
                   <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                  <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(Number(item.unitPrice))}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(Number(item.discount))}</DetailTableTd>
-                  <DetailTableTd align="right">{formatCurrency(Number(item.total))}</DetailTableTd>
+                  <DetailTableTd align="right">
+                    {Number(item.qty)}
+                  </DetailTableTd>
+                  <DetailTableTd align="right">
+                    {formatCurrency(Number(item.unitPrice))}
+                  </DetailTableTd>
+                  <DetailTableTd align="right">
+                    {formatCurrency(Number(item.discount))}
+                  </DetailTableTd>
+                  <DetailTableTd align="right">
+                    {formatCurrency(Number(item.total))}
+                  </DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>
@@ -114,17 +159,32 @@ export default async function SalesOrderDetailPage({
 
       {/* Summary */}
       <DetailCard columns={4}>
-        <DetailField label="Subtotal" value={formatCurrency(Number(order.subtotal))} />
-        <DetailField label="Diskon" value={formatCurrency(Number(order.discount))} />
+        <DetailField
+          label="Subtotal"
+          value={formatCurrency(Number(order.subtotal))}
+        />
+        <DetailField
+          label="Diskon"
+          value={formatCurrency(Number(order.discount))}
+        />
         <DetailField label="Pajak" value={formatCurrency(Number(order.tax))} />
-        <DetailField label="Total Keseluruhan" value={<span className="text-xl">{formatCurrency(Number(order.grandTotal))}</span>} />
+        <DetailField
+          label="Total Keseluruhan"
+          value={
+            <span className="text-xl">
+              {formatCurrency(Number(order.grandTotal))}
+            </span>
+          }
+        />
       </DetailCard>
 
       {/* Delivery Orders */}
       {order.deliveryOrders.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Surat Jalan</h2>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">
+              Surat Jalan
+            </h2>
           </div>
           <div className="p-4 px-5">
             <DetailTable>
@@ -136,9 +196,15 @@ export default async function SalesOrderDetailPage({
               <DetailTableBody>
                 {order.deliveryOrders.map((d) => (
                   <DetailTableRow key={d.id}>
-                    <DetailTableTd className="font-mono"><Link href={`/penjualan/surat-jalan/${d.id}`}>{d.documentNo}</Link></DetailTableTd>
+                    <DetailTableTd className="font-mono">
+                      <Link href={`/penjualan/surat-jalan/${d.id}`}>
+                        {d.documentNo}
+                      </Link>
+                    </DetailTableTd>
                     <DetailTableTd>{formatDate(d.date)}</DetailTableTd>
-                    <DetailTableTd><StatusChip status={d.status} /></DetailTableTd>
+                    <DetailTableTd>
+                      <StatusChip status={d.status} />
+                    </DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
@@ -151,7 +217,9 @@ export default async function SalesOrderDetailPage({
       {order.salesInvoices.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Faktur</h2>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">
+              Faktur
+            </h2>
           </div>
           <div className="p-4 px-5">
             <DetailTable>
@@ -164,10 +232,18 @@ export default async function SalesOrderDetailPage({
               <DetailTableBody>
                 {order.salesInvoices.map((inv) => (
                   <DetailTableRow key={inv.id}>
-                    <DetailTableTd className="font-mono"><Link href={`/penjualan/faktur/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
+                    <DetailTableTd className="font-mono">
+                      <Link href={`/penjualan/faktur/${inv.id}`}>
+                        {inv.documentNo}
+                      </Link>
+                    </DetailTableTd>
                     <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
-                    <DetailTableTd><StatusChip status={inv.status} /></DetailTableTd>
+                    <DetailTableTd align="right">
+                      {formatCurrency(Number(inv.grandTotal))}
+                    </DetailTableTd>
+                    <DetailTableTd>
+                      <StatusChip status={inv.status} />
+                    </DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>
@@ -183,5 +259,5 @@ export default async function SalesOrderDetailPage({
         </DetailCard>
       )}
     </div>
-  )
+  );
 }

@@ -1,32 +1,35 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import Image from "next/image"
-import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
-import Link from "next/link"
-import { notFound } from "next/navigation"
-import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteDownPayment } from "@/actions/sales.actions"
-import { StatusChip } from "@/components/ui/status-chip"
-import { PrintButton } from "@/components/ui/print-button"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
-import { Button } from "@/components/ui/button"
-import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
+import Image from "next/image";
+import { prisma } from "@/lib/db/prisma";
+import { formatCurrency, formatDate } from "@/lib/utils/format";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { DeleteButton } from "@/components/ui/delete-button";
+import { deleteDownPayment } from "@/actions/sales.actions";
+import { StatusChip } from "@/components/ui/status-chip";
+import { PrintButton } from "@/components/ui/print-button";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import {
+  getPaymentMethodMap,
+  resolvePaymentMethodName,
+} from "@/lib/services/method.service";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Uang Muka" }
+import { requirePermission } from "@/lib/auth/permissions";
+export const metadata: Metadata = { title: "Uang Muka" };
 
 export default async function DownPaymentDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_sales_orders")
+  await requirePermission("view_sales_orders");
 
-  const { id } = await params
+  const { id } = await params;
 
   const dp = await prisma.downPayment.findUnique({
     where: { id: Number(id) },
@@ -34,11 +37,11 @@ export default async function DownPaymentDetailPage({
       quotation: true,
       customer: true,
     },
-  })
+  });
 
-  if (!dp) notFound()
+  if (!dp) notFound();
 
-  const pmMap = await getPaymentMethodMap()
+  const pmMap = await getPaymentMethodMap();
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,9 +56,19 @@ export default async function DownPaymentDetailPage({
         badge={<StatusChip status={dp.status} />}
         actions={
           <>
-            <Button href={`/penjualan/uang-muka/${dp.id}/ubah`} variant="primary">Ubah</Button>
-            {dp.status === "paid" && (
-              <Button href={`/produksi/perintah-kerja/tambah?penawaranId=${dp.quotationId}`} variant="primary">+ Perintah Kerja</Button>
+            <Button
+              href={`/penjualan/uang-muka/${dp.id}/ubah`}
+              variant="primary"
+            >
+              Ubah
+            </Button>
+            {dp.status === "confirmed" && (
+              <Button
+                href={`/produksi/perintah-kerja/tambah?quotationId=${dp.quotationId}`}
+                variant="primary"
+              >
+                + Perintah Kerja
+              </Button>
             )}
             <PrintButton />
             <DeleteButton id={dp.id} action={deleteDownPayment} />
@@ -68,15 +81,31 @@ export default async function DownPaymentDetailPage({
         <DetailField label="No. Dokumen" value={dp.documentNo} mono />
         <DetailField
           label="Pelanggan"
-          value={<Link href={`/master/pelanggan/${dp.customer.id}`}>{dp.customer.name}</Link>}
+          value={
+            <Link href={`/master/pelanggan/${dp.customer.id}`}>
+              {dp.customer.name}
+            </Link>
+          }
         />
         <DetailField
           label="Penawaran"
-          value={<Link href={`/penjualan/penawaran/${dp.quotation.id}`}>{dp.quotation.documentNo}</Link>}
+          value={
+            <Link href={`/penjualan/penawaran/${dp.quotation.id}`}>
+              {dp.quotation.documentNo}
+            </Link>
+          }
         />
-        <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(dp.amount))}</span>} />
+        <DetailField
+          label="Jumlah"
+          value={
+            <span className="text-xl">{formatCurrency(Number(dp.amount))}</span>
+          }
+        />
         <DetailField label="Tanggal Bayar" value={formatDate(dp.paymentDate)} />
-        <DetailField label="Metode Pembayaran" value={resolvePaymentMethodName(dp.paymentMethod, pmMap)} />
+        <DetailField
+          label="Metode Pembayaran"
+          value={resolvePaymentMethodName(dp.paymentMethod, pmMap)}
+        />
         <DetailField label="Dibuat" value={formatDate(dp.createdAt)} />
       </DetailCard>
 
@@ -107,5 +136,5 @@ export default async function DownPaymentDetailPage({
         </DetailCard>
       )}
     </div>
-  )
+  );
 }
