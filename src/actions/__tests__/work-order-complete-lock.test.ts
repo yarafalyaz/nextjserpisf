@@ -25,8 +25,8 @@ const generateDocNumberMock = vi.fn()
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  const prisma = {
     workOrder: {
       findUniqueOrThrow: (...a: unknown[]) => woFindUniqueOrThrowMock(...a),
       updateMany: (...a: unknown[]) => woUpdateManyMock(...a),
@@ -36,8 +36,16 @@ vi.mock("@/lib/db/prisma", () => ({
     salesOrder: { findFirst: (...a: unknown[]) => soFindFirstMock(...a) },
     deliveryOrder: { create: (...a: unknown[]) => doCreateMock(...a) },
     deliveryOrderItem: { createMany: (...a: unknown[]) => doItemCreateManyMock(...a) },
-  },
-}))
+    // completeWorkOrder now wraps the claim + item flip in a $transaction;
+    // run the callback against the same mock so the existing per-model
+    // assertions still observe the calls.
+    $transaction: vi.fn((cb: unknown) =>
+      typeof cb === "function" ? (cb as (tx: unknown) => unknown)(prisma) : Promise.all(cb as unknown[]),
+    ),
+    $executeRaw: vi.fn().mockResolvedValue(0),
+  }
+  return { prisma }
+})
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => generateDocNumberMock(...a),
 }))

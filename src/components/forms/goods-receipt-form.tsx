@@ -47,6 +47,19 @@ interface GRFormProps {
     warehouseId?: number;
     date: string;
     notes?: string | null;
+    // Items from the existing GR, used to hydrate edit mode. The form
+    // previously re-derived rows from the PO on every render of an edit page,
+    // so saving an edited GR wiped the original received data. With this
+    // shape the form can hydrate from the receipt instead.
+    items?: Array<{
+      itemId: number;
+      qty: number;
+      unitCost: number;
+      batchNumber: string;
+      expiryDate: string;
+      serialNumbers: string;
+      warehouseId: number | null;
+    }>;
   };
   defaultPoId?: number;
 }
@@ -91,6 +104,38 @@ function mapPoToRows(
   }));
 }
 
+// Hydrate the GR rows from a previously-saved receipt, falling back to
+// item metadata from the PO for fields not stored on the GR line (name,
+// trackBatch, etc). Without this, edit mode rebuilds the grid from the PO
+// and discards every received qty/unitCost/batch/serial on save.
+function mapReceiptToRows(
+  receipt: NonNullable<GRFormProps["receipt"]>,
+  po: GRFormProps["purchaseOrders"][number] | undefined,
+): GRItemRow[] {
+  if (!receipt.items || receipt.items.length === 0) {
+    return mapPoToRows(po);
+  }
+  return receipt.items.map((ri) => {
+    const poItem = po?.items.find((it) => it.itemId === ri.itemId);
+    return {
+      itemId: ri.itemId,
+      qty: ri.qty,
+      unitCost: ri.unitCost,
+      qtyOrdered: poItem ? Number(poItem.qty) : ri.qty,
+      warehouseId: ri.warehouseId ? String(ri.warehouseId) : "",
+      uom: poItem?.item?.unitOfMeasure ?? "PCS",
+      batchNumber: ri.batchNumber,
+      expiryDate: ri.expiryDate,
+      serialNumbers: ri.serialNumbers,
+      name: poItem?.item?.name ?? `Item #${ri.itemId}`,
+      trackBatch: poItem?.item?.trackBatch ?? false,
+      trackSerial: poItem?.item?.trackSerial ?? false,
+      unitOfMeasure: poItem?.item?.unitOfMeasure ?? "PCS",
+      uomConversions: poItem?.item?.uomConversions ?? [],
+    };
+  });
+}
+
 export function GoodsReceiptForm({
   purchaseOrders,
   warehouses,
@@ -108,9 +153,16 @@ export function GoodsReceiptForm({
   const [warehouseId, setWarehouseId] = useState(
     receipt?.warehouseId ? String(receipt.warehouseId) : "",
   );
-  const [grItems, setGrItems] = useState<GRItemRow[]>(() =>
-    mapPoToRows(purchaseOrders.find((p) => p.id === Number(initialPoId))),
-  );
+  const [grItems, setGrItems] = useState<GRItemRow[]>(() => {
+    // Edit mode: hydrate from the existing GR's lines (qty/unitCost/batch/
+    // serial/per-line warehouse) so saving doesn't wipe received data. Only
+    // fall back to PO-derived rows when the receipt has no items recorded.
+    if (receipt?.id) {
+      const po = purchaseOrders.find((p) => p.id === Number(initialPoId));
+      return mapReceiptToRows(receipt, po);
+    }
+    return mapPoToRows(purchaseOrders.find((p) => p.id === Number(initialPoId)));
+  });
 
   const selectedPO = purchaseOrders.find((po) => po.id === Number(poId));
 
@@ -130,6 +182,11 @@ export function GoodsReceiptForm({
     });
   }
 
+  const [notes, setNotes] = useState<string>(receipt?.notes ?? "");
+  const [date, setDate] = useState<string>(
+    receipt?.date ?? new Date().toISOString().split("T")[0],
+  );
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
@@ -137,7 +194,13 @@ export function GoodsReceiptForm({
         const formData = new FormData();
         formData.append("purchaseOrderId", poId);
         formData.append("warehouseId", warehouseId);
-        formData.append("date", new Date().toISOString().split("T")[0]);
+        // Persist the user-visible date, not a fresh `new Date()`. The old
+        // code overwrote the existing receipt.date with today on every edit,
+        // shifting period-cutoff reporting for the original transaction.
+        formData.append("date", date);
+        // Notes round-trip — the goodsReceiptSchema accepts `notes` but the
+        // form never appended it, so any saved notes were silently dropped.
+        if (notes) formData.append("notes", notes);
         const items = grItems.map((item) => {
           const serials = item.serialNumbers
             .split(/\r?\n/)

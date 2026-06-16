@@ -670,30 +670,40 @@ export async function createVendorPayment(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("VPAY");
 
-    const payment = await prisma.vendorPayment.create({
-      data: {
-        documentNo,
-        vendorId: v.vendorId,
-        amount: v.amount,
-        paymentDate: new Date(v.paymentDate),
-        paymentMethod: v.paymentMethod,
-        accountId: v.accountId ?? null,
-        notes: v.notes ?? null,
-        createdBy: Number(user.id),
-      },
-    });
+    // ATOMICITY: the payment row + the attachment pointer update must commit
+    // together. If the attachment updateMany fails after the payment is
+    // created, the user sees a payment without its supporting documents linked
+    // (or worse, the attachments stay orphaned with referenceId=0 and never get
+    // cleaned up). Wrapping both in one tx ties payment existence to the
+    // attachment linkage.
+    const payment = await prisma.$transaction(async (tx) => {
+      const created = await tx.vendorPayment.create({
+        data: {
+          documentNo,
+          vendorId: v.vendorId,
+          amount: v.amount,
+          paymentDate: new Date(v.paymentDate),
+          paymentMethod: v.paymentMethod,
+          accountId: v.accountId ?? null,
+          notes: v.notes ?? null,
+          createdBy: Number(user.id),
+        },
+      });
 
-    // Associate uploaded attachments with the new payment
-    const attachmentIds = v.attachmentIds;
-    if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: payment.id },
-        });
+      // Associate uploaded attachments with the new payment
+      const attachmentIds = v.attachmentIds;
+      if (attachmentIds) {
+        const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
+        if (ids.length > 0) {
+          await tx.transactionAttachment.updateMany({
+            where: { id: { in: ids }, referenceId: 0 },
+            data: { referenceId: created.id },
+          });
+        }
       }
-    }
+
+      return created;
+    });
 
     // Journal is NOT created here — it is posted only on confirmVendorPayment
     // to prevent draft/unconfirmed payments from affecting the GL.
@@ -951,87 +961,95 @@ export async function createPurchaseReturn(formData: FormData) {
       prCostRows.map((r) => [r.id, Number(r.cost ?? 0)]),
     );
 
-    // Over-return guard: a purchase return must not return more units than were
-    // actually received (verified/completed GR for this PO), counting prior
-    // non-cancelled returns. Without this, the return over-reduces inventory and
-    // over-credits the vendor. Mirrors the sales-return cap.
-    if (prItemIds.length) {
-      const grItems = await prisma.goodsReceiptItem.findMany({
-        where: {
-          goodsReceipt: {
-            purchaseOrderId: v.purchaseOrderId,
-            status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
-          },
-          itemId: { in: prItemIds },
-        },
-        select: { itemId: true, qty: true },
-      });
-      const receivedQtyByItem = new Map<number, number>();
-      for (const it of grItems) {
-        receivedQtyByItem.set(
-          it.itemId,
-          (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
-        );
+    // Over-return guard + return create MUST be in a single transaction with
+    // a row lock on the purchase_order, otherwise two concurrent createPurchaseReturn
+    // calls on the same PO can each pass the cap (TOCTOU) and over-reduce
+    // inventory + over-credit the vendor. Mirrors the createVendorBill
+    // 3-way-match pattern: lock + in-tx re-check + write atomically.
+    const purchaseReturn = await prisma.$transaction(async (tx) => {
+      if (v.purchaseOrderId) {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       }
 
-      const priorReturns = await prisma.purchaseReturnItem.findMany({
-        where: {
-          purchaseReturn: {
-            purchaseOrderId: v.purchaseOrderId,
-            status: { not: "cancelled" },
+      if (prItemIds.length) {
+        const grItems = await tx.goodsReceiptItem.findMany({
+          where: {
+            goodsReceipt: {
+              purchaseOrderId: v.purchaseOrderId,
+              status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+            },
+            itemId: { in: prItemIds },
           },
-          itemId: { in: prItemIds },
-        },
-        select: { itemId: true, qty: true },
-      });
-      const alreadyReturnedByItem = new Map<number, number>();
-      for (const r of priorReturns) {
-        alreadyReturnedByItem.set(
-          r.itemId,
-          (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
-        );
-      }
-
-      const violation = findOverReturn(
-        validPrItems.map((it: any) => ({
-          itemId: Number(it.itemId),
-          qty: Number(it.qty),
-        })),
-        receivedQtyByItem,
-        alreadyReturnedByItem,
-      );
-      if (violation) {
-        if (violation.type === "not_on_invoice") {
-          return {
-            success: false,
-            error: `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
-          };
+          select: { itemId: true, qty: true },
+        });
+        const receivedQtyByItem = new Map<number, number>();
+        for (const it of grItems) {
+          receivedQtyByItem.set(
+            it.itemId,
+            (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
+          );
         }
-        return {
-          success: false,
-          error:
-            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
-            `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
-        };
-      }
-    }
 
-    const purchaseReturn = await prisma.purchaseReturn.create({
-      data: {
-        documentNo,
-        purchaseOrderId: v.purchaseOrderId,
-        date: new Date(v.date),
-        reason: v.reason ?? null,
-        status: "draft",
-        createdBy: Number(user.id),
-        items: {
-          create: validPrItems.map((item: any) => ({
-            itemId: Number(item.itemId),
-            qty: item.qty,
-            cost: prCostMap.get(Number(item.itemId)) ?? 0,
+        const priorReturns = await tx.purchaseReturnItem.findMany({
+          where: {
+            purchaseReturn: {
+              purchaseOrderId: v.purchaseOrderId,
+              status: { not: "cancelled" },
+            },
+            itemId: { in: prItemIds },
+          },
+          select: { itemId: true, qty: true },
+        });
+        const alreadyReturnedByItem = new Map<number, number>();
+        for (const r of priorReturns) {
+          alreadyReturnedByItem.set(
+            r.itemId,
+            (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
+          );
+        }
+
+        const violation = findOverReturn(
+          validPrItems.map((it: any) => ({
+            itemId: Number(it.itemId),
+            qty: Number(it.qty),
           })),
+          receivedQtyByItem,
+          alreadyReturnedByItem,
+        );
+        if (violation) {
+          if (violation.type === "not_on_invoice") {
+            throw new Error(
+              `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
+            );
+          }
+          throw new Error(
+            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
+              `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
+          );
+        }
+      }
+
+      return await tx.purchaseReturn.create({
+        data: {
+          documentNo,
+          purchaseOrderId: v.purchaseOrderId,
+          date: new Date(v.date),
+          reason: v.reason ?? null,
+          status: "draft",
+          createdBy: Number(user.id),
+          items: {
+            create: validPrItems.map((item: any) => ({
+              itemId: Number(item.itemId),
+              // qty arrives as a string from safeJsonParse; the purchase_return_items
+              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
+              // pattern) so a tampered 0/undefined qty is treated as essentially zero
+              // rather than crashing the Prisma insert with a string-to-Int error.
+              qty: Math.max(0.01, Number(item.qty) || 0),
+              cost: prCostMap.get(Number(item.itemId)) ?? 0,
+            })),
+          },
         },
-      },
+      });
     });
 
     await logActivity(
@@ -1357,9 +1375,15 @@ export async function deleteVendorBill(id: number) {
       throw new Error("Hanya tagihan draft yang dapat dihapus");
     }
 
-    // Reverse any journal posted at draft creation before removing the record.
-    await deleteJournalByReference("VendorBill", id);
-    await prisma.vendorBill.delete({ where: { id } });
+    // ATOMICITY: deleting the bill row while leaving its draft journal behind
+    // would orphan Dr Expense / Cr AP in the GL (no source document to reverse
+    // later) — a silent balance-sheet drift. Wrapping the journal-delete + bill
+    // delete in one tx guarantees the GL is clean iff the bill row is gone.
+    await prisma.$transaction(async (tx) => {
+      // Reverse any journal posted at draft creation before removing the record.
+      await deleteJournalByReferenceTx(tx, "VendorBill", id);
+      await tx.vendorBill.delete({ where: { id } });
+    });
 
     await logActivity(
       "delete",
@@ -1387,9 +1411,15 @@ export async function deleteVendorPayment(id: number) {
       throw new Error("Hanya pembayaran draft yang dapat dihapus");
     }
 
-    // Reverse any journal posted at draft creation before removing the record.
-    await deleteJournalByReference("VendorPayment", id);
-    await prisma.vendorPayment.delete({ where: { id } });
+    // ATOMICITY: same as deleteVendorBill — the draft journal (Dr AP / Cr Bank
+    // for confirm-time, or reversing for void) must move with the payment row.
+    // A half-deleted state leaves the GL out of balance with no orphan-reversal
+    // hook to clean it up later.
+    await prisma.$transaction(async (tx) => {
+      // Reverse any journal posted at draft creation before removing the record.
+      await deleteJournalByReferenceTx(tx, "VendorPayment", id);
+      await tx.vendorPayment.delete({ where: { id } });
+    });
 
     await logActivity(
       "delete",
@@ -1549,12 +1579,21 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       });
     });
 
-    // Update PR status if linked
+    // Update PR status if linked.
+    // NOTE: onPurchaseOrderCreated is intentionally called OUTSIDE the
+    // transaction above — its signature only accepts (purchaseOrderId: number)
+    // and internally opens its own $transaction (purchase-order.hook.ts:11-13).
+    // It also does not post a journal here (it only updates the linked PR's
+    // status), so there is no GL exposure to roll back. Moving it inside would
+    // require giving it an optional txClient parameter (mirroring
+    // deleteJournalByReference's txClient pattern) and re-checking that the
+    // nested $transaction does not deadlock against the outer one. Left as
+    // a follow-up.
     if (v.purchaseRequestId) {
       await onPurchaseOrderCreated(po.id);
     }
 
-    // Notify admins
+    // Notify admins — external side-effect, must stay outside the tx.
     await notificationService.notifyAdmins(
       "Pesanan Pembelian baru dibuat",
       `/pembelian/pesanan/${po.id}`,
@@ -1624,6 +1663,14 @@ export async function updateVendorBill(id: number, formData: FormData) {
           purchaseOrderId: v.purchaseOrderId ?? null,
           date: new Date(v.date),
           dueDate: v.dueDate ? new Date(v.dueDate) : null,
+          // Persist the free-text fields the form sends. The previous data
+          // block dropped vendorInvoiceNumber / terms / notes, so editing a
+          // draft bill to fix a vendor's invoice reference number (or to
+          // update payment terms / notes) silently discarded the change with
+          // a successful save — the user could not tell from the UI.
+          vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
+          terms: v.terms ?? null,
+          notes: v.notes ?? null,
           subtotal: v.subtotal,
           tax: v.tax,
           grandTotal: v.grandTotal,
@@ -1791,75 +1838,12 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       updPrCostRows.map((r) => [r.id, Number(r.cost ?? 0)]),
     );
 
-    // Over-return guard (mirrors createPurchaseReturn). Without this, a small valid
-    // draft return could be EDITED to a qty far exceeding what was received, and
-    // on processPurchaseReturn would over-reduce inventory and over-credit the
-    // vendor. Prior non-cancelled returns must EXCLUDE this return's own id
-    // because its existing rows are about to be deleted/replaced below (counting
-    // them would double-count). Mirrors the updateSalesReturn guard.
-    if (updPrIds.length && v.purchaseOrderId) {
-      const grItems = await prisma.goodsReceiptItem.findMany({
-        where: {
-          goodsReceipt: {
-            purchaseOrderId: v.purchaseOrderId,
-            status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
-          },
-          itemId: { in: updPrIds },
-        },
-        select: { itemId: true, qty: true },
-      });
-      const receivedQtyByItem = new Map<number, number>();
-      for (const it of grItems) {
-        receivedQtyByItem.set(
-          it.itemId,
-          (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
-        );
-      }
-
-      const priorReturns = await prisma.purchaseReturnItem.findMany({
-        where: {
-          purchaseReturn: {
-            purchaseOrderId: v.purchaseOrderId,
-            status: { not: "cancelled" },
-            id: { not: id },
-          },
-          itemId: { in: updPrIds },
-        },
-        select: { itemId: true, qty: true },
-      });
-      const alreadyReturnedByItem = new Map<number, number>();
-      for (const r of priorReturns) {
-        alreadyReturnedByItem.set(
-          r.itemId,
-          (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
-        );
-      }
-
-      const violation = findOverReturn(
-        validPrItems.map((it: any) => ({
-          itemId: Number(it.itemId),
-          qty: Number(it.qty),
-        })),
-        receivedQtyByItem,
-        alreadyReturnedByItem,
-      );
-      if (violation) {
-        if (violation.type === "not_on_invoice") {
-          return {
-            success: false,
-            error: `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
-          };
-        }
-        return {
-          success: false,
-          error:
-            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
-            `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
-        };
-      }
-    }
-
     // Keep existing documentNo (do not regenerate), and replace items atomically.
+    // The over-return guard runs INSIDE the transaction (under a PO row lock) to
+    // close the TOCTOU window: a concurrent edit on the same PO can otherwise
+    // each pass the cap and over-reduce inventory. Prior non-cancelled returns
+    // must EXCLUDE this return's own id because its existing rows are about
+    // to be deleted/replaced below (counting them would double-count).
     const purchaseReturn = await prisma.$transaction(async (tx) => {
       const latestPr = await tx.purchaseReturn.findUnique({
         where: { id },
@@ -1867,6 +1851,70 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       });
       if (latestPr && latestPr.status !== "draft")
         throw new Error("Hanya retur draft yang dapat diedit");
+
+      if (v.purchaseOrderId) {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+      }
+
+      if (updPrIds.length && v.purchaseOrderId) {
+        const grItems = await tx.goodsReceiptItem.findMany({
+          where: {
+            goodsReceipt: {
+              purchaseOrderId: v.purchaseOrderId,
+              status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+            },
+            itemId: { in: updPrIds },
+          },
+          select: { itemId: true, qty: true },
+        });
+        const receivedQtyByItem = new Map<number, number>();
+        for (const it of grItems) {
+          receivedQtyByItem.set(
+            it.itemId,
+            (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
+          );
+        }
+
+        const priorReturns = await tx.purchaseReturnItem.findMany({
+          where: {
+            purchaseReturn: {
+              purchaseOrderId: v.purchaseOrderId,
+              status: { not: "cancelled" },
+              id: { not: id },
+            },
+            itemId: { in: updPrIds },
+          },
+          select: { itemId: true, qty: true },
+        });
+        const alreadyReturnedByItem = new Map<number, number>();
+        for (const r of priorReturns) {
+          alreadyReturnedByItem.set(
+            r.itemId,
+            (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
+          );
+        }
+
+        const violation = findOverReturn(
+          validPrItems.map((it: any) => ({
+            itemId: Number(it.itemId),
+            qty: Number(it.qty),
+          })),
+          receivedQtyByItem,
+          alreadyReturnedByItem,
+        );
+        if (violation) {
+          if (violation.type === "not_on_invoice") {
+            throw new Error(
+              `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
+            );
+          }
+          throw new Error(
+            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
+              `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
+          );
+        }
+      }
+
       await tx.purchaseReturnItem.deleteMany({
         where: { purchaseReturnId: id },
       });
@@ -1879,7 +1927,11 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
           items: {
             create: validPrItems.map((item: any) => ({
               itemId: Number(item.itemId),
-              qty: item.qty,
+              // qty arrives as a string from safeJsonParse; the purchase_return_items
+              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
+              // pattern) so a tampered 0/undefined qty is treated as essentially zero
+              // rather than crashing the Prisma insert with a string-to-Int error.
+              qty: Math.max(0.01, Number(item.qty) || 0),
               cost: updPrCostMap.get(Number(item.itemId)) ?? 0,
             })),
           },
@@ -1919,29 +1971,38 @@ export async function updateVendorPayment(id: number, formData: FormData) {
       throw new Error("Hanya pembayaran draft yang dapat diedit");
     }
 
-    const payment = await prisma.vendorPayment.update({
-      where: { id },
-      data: {
-        vendorId: v.vendorId,
-        amount: v.amount,
-        paymentDate: new Date(v.paymentDate),
-        paymentMethod: v.paymentMethod,
-        accountId: v.accountId ?? null,
-        notes: v.notes ?? null,
-      },
-    });
+    // ATOMICITY: payment update + attachment pointer update must commit
+    // together. A failed attachment updateMany after a successful update would
+    // leave the edited payment without its supporting documents linked — the
+    // operator would see a stale/empty attachment list and not know that the
+    // new files were never attached. Wrapping both in one tx closes that gap.
+    const payment = await prisma.$transaction(async (tx) => {
+      const updated = await tx.vendorPayment.update({
+        where: { id },
+        data: {
+          vendorId: v.vendorId,
+          amount: v.amount,
+          paymentDate: new Date(v.paymentDate),
+          paymentMethod: v.paymentMethod,
+          accountId: v.accountId ?? null,
+          notes: v.notes ?? null,
+        },
+      });
 
-    // Associate uploaded attachments with the new payment
-    const attachmentIds = v.attachmentIds;
-    if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: payment.id },
-        });
+      // Associate uploaded attachments with the new payment
+      const attachmentIds = v.attachmentIds;
+      if (attachmentIds) {
+        const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
+        if (ids.length > 0) {
+          await tx.transactionAttachment.updateMany({
+            where: { id: { in: ids }, referenceId: 0 },
+            data: { referenceId: updated.id },
+          });
+        }
       }
-    }
+
+      return updated;
+    });
 
     // Journal is NOT posted here. Per the design contract (see createVendorPayment:
     // "Journal is NOT created here — posted only on confirmVendorPayment"), a draft

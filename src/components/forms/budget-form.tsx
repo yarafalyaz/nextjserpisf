@@ -17,14 +17,16 @@ import { Button } from "@/components/ui/button";
 
 interface BudgetFormProps {
   accounts: { id: number; code: string; name: string }[];
+  // The Budget model only carries the fields listed here. Previous versions
+  // of this prop type advertised `year`, `totalAmount`, `departmentId`, and
+  // `notes` — none of which exist on the Prisma model. Those prop entries
+  // were a type-only lie: pages that passed them in relied on form fields
+  // that were either never rendered (year) or were silently stripped by the
+  // Zod schema before reaching the DB (totalAmount/notes).
   budget?: {
     id: number;
     name: string;
-    year: number;
-    departmentId?: number | null;
-    totalAmount: number;
     amount?: number;
-    notes?: string | null;
     accountId?: number | null;
     costCenterId?: number | null;
     startDate?: string | null;

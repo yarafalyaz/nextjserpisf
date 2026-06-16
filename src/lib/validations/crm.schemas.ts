@@ -32,6 +32,15 @@ export const updateTicketSchema = z.object({
   customerPhone: optionalString(50),
   type: optionalString(100),
   priority: optionalString(50),
+  // Status round-trip: the edit form exposes a Status select so a support
+  // agent can mark a ticket as resolved/closed. Without this field the form
+  // posts the value, Zod strips it, and the action's data block never
+  // writes it — the ticket stays 'open' forever.
+  status: z
+    .enum(["open", "in_progress", "resolved", "closed"], {
+      message: "Status harus salah satu dari open, in_progress, resolved, closed",
+    })
+    .optional(),
   assignedTo: optionalId,
   resolutionNotes: optionalString(2000),
 });

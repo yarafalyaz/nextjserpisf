@@ -244,12 +244,15 @@ describe("deleteEmployee — revoke linked login account", () => {
   it("deactivates the linked user account when the employee is deleted", async () => {
     employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
     employeeDeleteMock.mockResolvedValue({ id: 50 }) // hard delete succeeds
-    userUpdateMock.mockResolvedValue({ id: 7 })
+    txUserUpdateMock.mockResolvedValue({ id: 7 })
 
     const res = await deleteEmployee(50)
 
     expect(res).toEqual({ success: true })
-    expect(userUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
+    // deleteEmployee now wraps the delete + user deactivation in a
+    // $transaction; the user.update runs against the tx client (txUserUpdateMock),
+    // not the global prisma.user.update.
+    expect(txUserUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
   })
 
   it("does not touch any user when the employee has no login account", async () => {
@@ -259,6 +262,6 @@ describe("deleteEmployee — revoke linked login account", () => {
     const res = await deleteEmployee(51)
 
     expect(res).toEqual({ success: true })
-    expect(userUpdateMock).not.toHaveBeenCalled()
+    expect(txUserUpdateMock).not.toHaveBeenCalled()
   })
 })

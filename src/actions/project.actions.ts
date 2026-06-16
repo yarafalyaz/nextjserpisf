@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { computeProjectStatus } from "@/lib/services/project-status"
+import type { TxClient } from "@/lib/db/prisma"
 import { parseFormData } from "@/lib/validations/parse-form"
 import {
   createProjectSchema,
@@ -252,13 +253,27 @@ export async function updateProjectStageProgress(
     updateData.notes = notes
   }
 
-  await prisma.projectStage.update({
-    where: { id: stageId },
-    data: updateData,
-  })
+  // ATOMICITY: the stage status flip + the cascading project/WO sync must
+  // commit together. Previously the stage update landed and then syncProjectStatus
+  // ran as a separate call — a failure in the sync (e.g. transient DB error,
+  // a stage row deleted by a concurrent request) would leave the stage marked
+  // "completed" while the project header still showed "in_progress" and the WO
+  // was still "in_progress" with all items "in_progress", a permanent divergence
+  // that no UI affordance repairs. Wrapping both in one tx guarantees the
+  // stage status, project status, and WO status all agree on commit.
+  // We use the tx-accepting internal helper (syncProjectStatusTx) because
+  // Prisma cannot nest $transaction callbacks — calling the public
+  // syncProjectStatus inside this tx would open a separate transaction
+  // that commits independently, breaking the atomicity we are after.
+  await prisma.$transaction(async (tx) => {
+    await tx.projectStage.update({
+      where: { id: stageId },
+      data: updateData,
+    })
 
-  // Auto-update project + WO status
-  await syncProjectStatus(projectId)
+    // Auto-update project + WO status (in same tx via the TxClient variant)
+    await syncProjectStatusTx(projectId, tx)
+  })
 
   await logActivity("update", "ProjectStage", stageId, "Memperbarui progres tahapan proyek")
   revalidatePath("/proyek")
@@ -278,11 +293,35 @@ export async function updateProjectStageProgress(
  */
 export async function syncProjectStatus(projectId: number) {
   await requirePermission("edit_projects")
-  const project = await prisma.project.findUniqueOrThrow({
+  // ATOMICITY: a sync can touch up to 5 tables (project + workOrder +
+  // workOrderItem + (in the "all completed" branch) the materialIssue lookup
+  // and the WO completion flip). Previously these were sequential non-
+  // transactional prisma calls — a mid-sequence failure (e.g. transient DB
+  // error) would leave the project marked "completed" but its linked WO still
+  // "in_progress" with all items "in_progress", a permanent divergence that
+  // no UI affordance repairs. Wrapping all writes in one tx guarantees
+  // project + WO + WO items all reflect the same stage state on commit.
+  // The materialIssue lookup inside the tx is a SELECT — safe to run inside
+  // the same tx body (no state to roll back), and the result is only used to
+  // gate the WO update; the in-tx writes are still atomic with each other.
+  await prisma.$transaction(async (tx) => {
+    await syncProjectStatusTx(projectId, tx)
+  })
+}
+
+/**
+ * Internal helper: same body as syncProjectStatus, but accepts a tx client so
+ * callers that already hold a transaction (e.g. updateProjectStageProgress)
+ * can join the same atomic unit instead of opening a nested $transaction
+ * (Prisma cannot nest $transaction callbacks — the inner one would commit
+ * independently and break atomicity).
+ */
+async function syncProjectStatusTx(projectId: number, tx: TxClient) {
+  const project = await tx.project.findUniqueOrThrow({
     where: { id: projectId },
   })
 
-  const stages = await prisma.projectStage.findMany({
+  const stages = await tx.projectStage.findMany({
     where: { projectId },
     orderBy: { sortOrder: "asc" },
   })
@@ -305,7 +344,7 @@ export async function syncProjectStatus(projectId: number) {
   if (completed === total) {
     // All stages completed → project + WO done
     if (decision.changed) {
-      await prisma.project.update({
+      await tx.project.update({
         where: { id: projectId },
         data: { status: decision.status, endDate: decision.endDate },
       })
@@ -314,16 +353,16 @@ export async function syncProjectStatus(projectId: number) {
     // issued (a completed Material Issue exists), mirroring completeWorkOrder's
     // guard. Otherwise leave the WO open; the project can still be marked completed.
     if (project.workOrderId) {
-      const issuedMi = await prisma.materialIssue.findFirst({
+      const issuedMi = await tx.materialIssue.findFirst({
         where: { workOrderId: project.workOrderId, status: "completed" },
         select: { id: true },
       })
       if (issuedMi) {
-        await prisma.workOrder.update({
+        await tx.workOrder.update({
           where: { id: project.workOrderId },
           data: { status: "completed", endDate: new Date() },
         })
-        await prisma.workOrderItem.updateMany({
+        await tx.workOrderItem.updateMany({
           where: { workOrderId: project.workOrderId },
           data: { status: "completed" },
         })
@@ -332,20 +371,20 @@ export async function syncProjectStatus(projectId: number) {
   } else if (inProgress > 0 || completed > 0) {
     // Some stages in progress or completed
     if (project.status === "active" || project.status === "pending" || project.status === "completed") {
-      await prisma.project.update({
+      await tx.project.update({
         where: { id: projectId },
         data: { status: "in_progress", endDate: null },
       })
     }
     // Sync linked WorkOrder to in_progress if still pending or completed
     if (project.workOrderId) {
-      const wo = await prisma.workOrder.findUnique({ where: { id: project.workOrderId } })
+      const wo = await tx.workOrder.findUnique({ where: { id: project.workOrderId } })
       if (wo && (wo.status === "pending" || wo.status === "draft" || wo.status === "completed")) {
-        await prisma.workOrder.update({
+        await tx.workOrder.update({
           where: { id: project.workOrderId },
           data: { status: "in_progress", endDate: null },
         })
-        await prisma.workOrderItem.updateMany({
+        await tx.workOrderItem.updateMany({
           where: { workOrderId: project.workOrderId, status: { in: ["pending", "completed"] } },
           data: { status: "in_progress" },
         })
@@ -354,19 +393,19 @@ export async function syncProjectStatus(projectId: number) {
   } else {
     // All stages pending
     if (project.status === "in_progress" || project.status === "completed") {
-      await prisma.project.update({
+      await tx.project.update({
         where: { id: projectId },
         data: { status: "active", endDate: null },
       })
     }
     if (project.workOrderId) {
-      const wo = await prisma.workOrder.findUnique({ where: { id: project.workOrderId } })
+      const wo = await tx.workOrder.findUnique({ where: { id: project.workOrderId } })
       if (wo && (wo.status === "in_progress" || wo.status === "completed")) {
-        await prisma.workOrder.update({
+        await tx.workOrder.update({
           where: { id: project.workOrderId },
           data: { status: "pending", endDate: null },
         })
-        await prisma.workOrderItem.updateMany({
+        await tx.workOrderItem.updateMany({
           where: { workOrderId: project.workOrderId, status: { in: ["in_progress", "completed"] } },
           data: { status: "pending" },
         })
@@ -510,6 +549,20 @@ export async function updateTask(formData: FormData) {
   // Security Guard: Staff can only update tasks assigned to them.
   if (!isManager && existing.assignedTo !== Number(actor.id)) {
     throw new Error("Anda hanya dapat memperbarui tugas yang ditugaskan kepada Anda.")
+  }
+
+  // Reassignment guard: a non-manager must not be able to sidestep the
+  // ownership check by setting assignedTo to themselves (or anyone else)
+  // on a task they don't own at read time. The "you can only edit your own
+  // tasks" rule would otherwise be bypassable by "claim any task you can
+  // see and reassign it to yourself before saving". Managers retain full
+  // reassignment rights.
+  const isReassigning =
+    data.assignedTo !== undefined && data.assignedTo !== existing.assignedTo;
+  if (!isManager && isReassigning) {
+    throw new Error(
+      "Hanya manager / super admin yang dapat mengubah penugasan tugas.",
+    );
   }
 
   await prisma.task.update({

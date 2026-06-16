@@ -460,6 +460,17 @@ export async function onPurchaseOrderReceived(
   await assertPeriodOpen(new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
+    // double-check inside tx: two concurrent calls both pass the early
+    // `findFirst` (returns null) and both open their own $transaction;
+    // without this in-tx re-check the second call's `tx.journal.create` trips
+    // the @@unique([referenceType, referenceId]) constraint and surfaces as
+    // a confusing Prisma P2002 error to the user even though the operation
+    // logically succeeded once.
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "PurchaseOrder", referenceId: orderId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "PO-RCV", orderId);
 
     const taxAmount = Number(order.tax ?? 0);
@@ -552,6 +563,17 @@ export async function onExpenseApproved(
   await assertPeriodOpen(expense.date ?? new Date());
 
   await executeInTx(txClient, async (tx) => {
+    // double-check inside tx: two concurrent calls both pass the early
+    // `findFirst` (returns null) and both open their own $transaction;
+    // without this in-tx re-check the second call's `tx.journal.create` trips
+    // the @@unique([referenceType, referenceId]) constraint and surfaces as
+    // a confusing Prisma P2002 error to the user even though the operation
+    // logically succeeded once.
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "Expense", referenceId: expenseId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "EXP", expenseId);
 
     const journal = await tx.journal.create({
@@ -626,6 +648,17 @@ export async function onPettyCashCreated(
   await assertPeriodOpen(postingDate);
 
   await executeInTx(txClient, async (tx) => {
+    // double-check inside tx: two concurrent calls both pass the early
+    // `findFirst` (returns null) and both open their own $transaction;
+    // without this in-tx re-check the second call's `tx.journal.create` trips
+    // the @@unique([referenceType, referenceId]) constraint and surfaces as
+    // a confusing Prisma P2002 error to the user even though the operation
+    // logically succeeded once.
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "PettyCash", referenceId: pettyCashId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "PC", pettyCashId);
     const isInflow = pettyCash.type === "IN";
 
@@ -1003,6 +1036,17 @@ export async function onDownPaymentReceived(
   await assertPeriodOpen(dp.paymentDate || new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
+    // double-check inside tx: two concurrent calls both pass the early
+    // `findFirst` (returns null) and both open their own $transaction;
+    // without this in-tx re-check the second call's `tx.journal.create` trips
+    // the @@unique([referenceType, referenceId]) constraint and surfaces as
+    // a confusing Prisma P2002 error to the user even though the operation
+    // logically succeeded once.
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "DownPayment", referenceId: dpId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
     await tx.journal.create({
@@ -1324,6 +1368,17 @@ export async function onPayrollPaid(
   await assertPeriodOpen(payroll.paymentDate ?? new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
+    // double-check inside tx: two concurrent calls both pass the early
+    // `findFirst` (returns null) and both open their own $transaction;
+    // without this in-tx re-check the second call's `tx.journal.create` trips
+    // the @@unique([referenceType, referenceId]) constraint and surfaces as
+    // a confusing Prisma P2002 error to the user even though the operation
+    // logically succeeded once.
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "Payroll", referenceId: payrollId },
+    });
+    if (existingInTx) return;
+
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
 
     const entries: Array<{

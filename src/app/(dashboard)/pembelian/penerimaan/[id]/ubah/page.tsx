@@ -23,6 +23,10 @@ export default async function EditPage({
 
   const data = await prisma.goodsReceipt.findUnique({
     where: { id: numId },
+    // The form's edit mode needs the existing received lines — without this
+    // include, the form would re-derive line items from the PO and silently
+    // wipe the original qty/unitCost/batch/serial data on save.
+    include: { items: true },
   });
 
   if (!data) notFound();
@@ -33,6 +37,17 @@ export default async function EditPage({
     warehouseId: data.warehouseId,
     date: data.date.toISOString().split("T")[0],
     notes: data.notes,
+    items: data.items.map((it) => ({
+      itemId: it.itemId,
+      qty: Number(it.qty),
+      unitCost: Number(it.unitCost),
+      batchNumber: it.batchNumber ?? "",
+      expiryDate: it.expiryDate ? it.expiryDate.toISOString().split("T")[0] : "",
+      serialNumbers: Array.isArray(it.serialNumbers)
+        ? it.serialNumbers.join("\n")
+        : "",
+      warehouseId: it.warehouseId,
+    })),
   };
 
   const [purchaseOrders, warehouses, itemRecords] = await Promise.all([

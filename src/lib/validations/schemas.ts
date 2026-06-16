@@ -93,6 +93,15 @@ export const accountServerSchema = z.object({
   }),
   parentId: optionalNumber(),
   description: optionalString(1000),
+  // The account-form renders a "Saldo Normal" select (DEBIT/CREDIT) and writes
+  // it to a form field, but the previous schema dropped it. The Account model
+  // column is required by every report/filter (trial balance, financial
+  // statements) — an unset value silently misclassifies the account.
+  normalBalance: z
+    .enum(["DEBIT", "CREDIT"], {
+      message: "Saldo normal harus DEBIT atau CREDIT",
+    })
+    .optional(),
 })
 
 export type CustomerInput = z.infer<typeof customerSchema>

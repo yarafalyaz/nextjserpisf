@@ -353,6 +353,9 @@ describe("Leave Request Actions", () => {
   it("updateLeaveRequest updates record", async () => {
     const res = await actions.updateLeaveRequest(1, fd({
       employeeId: "1",
+      // leaveRequestSchema requires `type` (the real form sends it); without
+      // it the migrated parseFormData validation rejects the edit.
+      type: "annual",
       startDate: "2026-06-15",
       endDate: "2026-06-20",
     }))
@@ -705,6 +708,11 @@ describe("Payroll Actions", () => {
 
   it("updatePayroll succeeds", async () => {
     const res = await actions.updatePayroll(1, fd({
+      // payrollSchema requires period/startDate/endDate (the real edit form
+      // sends them); include them so the migrated validation passes.
+      period: "2026-05",
+      startDate: "2026-05-01",
+      endDate: "2026-05-31",
       basicSalary: "6000000",
       totalAllowances: "0",
       totalDeductions: "0",
@@ -1359,6 +1367,7 @@ describe("Payroll extra branches", () => {
     const f = new FormData()
     f.set("recalcLate", "true") // branch 815 -> true
     f.set("employeeId", "1")
+    f.set("period", "2026-05")
     f.set("startDate", "2026-05-01")
     f.set("endDate", "2026-05-31")
     const res = await actions.updatePayroll(1, f)
@@ -1378,6 +1387,8 @@ describe("Payroll errors and limits", () => {
     const f = new FormData()
     f.set("employeeId", "1")
     f.set("period", "2026-05")
+    f.set("startDate", "2026-05-01")
+    f.set("endDate", "2026-05-31")
     prismaMock.payroll.findFirst.mockResolvedValueOnce({ id: 1 })
     const res = await actions.processPayroll(f)
     expect(res?.success).toBe(false)

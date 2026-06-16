@@ -125,6 +125,22 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
           />
         </div>
         {isEdit && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="status">Status</Label>
+            <FormSelect
+              id="status"
+              name="status"
+              defaultValue={ticket?.status || "open"}
+              options={[
+                { value: "open", label: "Terbuka" },
+                { value: "in_progress", label: "Dalam Pengerjaan" },
+                { value: "resolved", label: "Selesai" },
+                { value: "closed", label: "Ditutup" },
+              ]}
+            />
+          </div>
+        )}
+        {isEdit && (
           <div className="flex flex-col gap-1.5 col-span-full">
             <Label htmlFor="resolutionNotes">Catatan Resolusi</Label>
             <Textarea id="resolutionNotes" name="resolutionNotes" rows={3} placeholder="Catatan penyelesaian tiket..." defaultValue={ticket?.resolutionNotes ?? ""} />

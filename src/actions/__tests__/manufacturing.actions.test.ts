@@ -39,6 +39,10 @@ const mocks = vi.hoisted(() => {
       if (typeof ops === "function") return ops(prismaMock)
       return Promise.all(ops)
     }),
+    // createMaterialIssueFromWorkOrder locks the WO row with tx.$executeRaw
+    // before the in-tx idempotency re-check.
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: vi.fn().mockResolvedValue([]),
   }
 
   return {

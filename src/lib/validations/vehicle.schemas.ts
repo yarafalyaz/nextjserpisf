@@ -20,6 +20,17 @@ const optionalNum = (min?: number) => {
 
 const optionalBool = z.boolean().optional()
 
+// Vehicle production year: bounded both sides. The previous `optionalNum(1900)`
+// had no upper bound, so a tampered/typo'd year like 99999 was accepted and
+// then fed nonsense into age / warranty-expiry math. Cap at next calendar year
+// (new model-year vehicles are sold slightly ahead of the calendar).
+const yearField = z.coerce
+  .number()
+  .int()
+  .min(1900, "Tahun tidak valid")
+  .max(new Date().getFullYear() + 1, "Tahun tidak valid")
+  .optional()
+
 // ==================== Vehicle Brand ====================
 
 export const vehicleBrandSchema = z.object({
@@ -48,7 +59,7 @@ export const vehicleSchema = z.object({
   plateNo: requiredStr("Nomor plat wajib diisi", 20),
   variantId: optionalId,
   modelId: optionalId,
-  year: optionalNum(1900),
+  year: yearField,
   color: optionalStr(50),
   customerId: optionalId,
 })
@@ -61,7 +72,7 @@ export const customerVehicleSchema = z.object({
   vehicleId: optionalId,
   kendaraanId: optionalId,
   licensePlate: optionalStr(20),
-  year: optionalNum(1900),
+  year: yearField,
   color: optionalStr(50),
   vehicleType: optionalStr(100),
   transmission: optionalStr(100),

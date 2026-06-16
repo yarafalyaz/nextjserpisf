@@ -623,29 +623,35 @@ export async function matchReconciliationLine(
     }
 
     // Dedupe: a statement line already matched in this reconciliation is updated in
-    // place instead of inserting a duplicate match row.
-    const existing = await prisma.bankReconciliationItem.findFirst({
-      where: {
-        bankReconciliationId: reconciliationId,
-        bankStatementLineId: lineId,
-      },
-      select: { id: true },
-    });
-    if (existing) {
-      await prisma.bankReconciliationItem.update({
-        where: { id: existing.id },
-        data: { journalEntryId, matched: true },
-      });
-    } else {
-      await prisma.bankReconciliationItem.create({
-        data: {
+    // place instead of inserting a duplicate match row. Wrap the check +
+    // create-or-update in a single $transaction so a double-clicked "Match"
+    // button (or two concurrent requests) cannot both pass the findFirst and
+    // create two match rows for the same bank statement line — which would
+    // double-count the line in the matched-totals aggregate.
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.bankReconciliationItem.findFirst({
+        where: {
           bankReconciliationId: reconciliationId,
           bankStatementLineId: lineId,
-          journalEntryId,
-          matched: true,
         },
+        select: { id: true },
       });
-    }
+      if (existing) {
+        await tx.bankReconciliationItem.update({
+          where: { id: existing.id },
+          data: { journalEntryId, matched: true },
+        });
+      } else {
+        await tx.bankReconciliationItem.create({
+          data: {
+            bankReconciliationId: reconciliationId,
+            bankStatementLineId: lineId,
+            journalEntryId,
+            matched: true,
+          },
+        });
+      }
+    });
 
     await logActivity(
       "match",
@@ -848,10 +854,18 @@ export async function deleteExpense(id: number) {
       );
     }
 
-    await prisma.transactionAttachment.deleteMany({
-      where: { referenceType: "Expense", referenceId: id },
+    // Atomicity: the attachment deleteMany + expense delete must commit
+    // together. Without the wrapper, a failure in either step leaves
+    // attachments orphaned with the wrong referenceId (or pointing at a
+    // deleted expense) — the user retries and the receipts are gone, or the
+    // expense vanishes but the receipts persist with referenceId pointing at
+    // a row that no longer exists.
+    await prisma.$transaction(async (tx) => {
+      await tx.transactionAttachment.deleteMany({
+        where: { referenceType: "Expense", referenceId: id },
+      });
+      await tx.expense.delete({ where: { id } });
     });
-    await prisma.expense.delete({ where: { id } });
 
     await logActivity("delete", "Expense", id, "Menghapus pengeluaran");
     revalidatePath("/keuangan/pengeluaran");
@@ -1011,13 +1025,25 @@ export async function updateJournal(id: number, formData: FormData) {
 
     // Fix #14: Jangan generate documentNo baru dan jangan reset totals ke 0
     // Replace header + entries atomically (delete old entries, recreate from form).
+    //
+    // Type preservation: the previous code wrote `type: formData.get("type") || "GENERAL"`,
+    // which silently reset auto-posted journals (COGS=ADJUSTMENT, Payroll=AUTO, ...)
+    // back to "GENERAL" on every accountant edit. The journal-edit form does
+    // not render a `type` field at all (the type is system-assigned at create
+    // time), so the form never sends one. Preserve the existing type when the
+    // form omits the field, and only accept an explicit override when sent.
+    const submittedType = (formData.get("type") as string | null)?.trim();
+    const journalType = submittedType && submittedType.length > 0
+      ? submittedType
+      : existing.type;
+
     const journal = await prisma.$transaction(async (tx) => {
       const j = await tx.journal.update({
         where: { id },
         data: {
           transactionDate: new Date(formData.get("transactionDate") as string),
           description: formData.get("description") as string | null,
-          type: (formData.get("type") as string) || "GENERAL",
+          type: journalType,
           totalDebit,
           totalCredit,
         },

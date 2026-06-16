@@ -67,6 +67,7 @@ export const createSalesInvoiceSchema = z.object({
   quotationId: optionalId,
   date: z.string().min(1, "Tanggal wajib diisi").max(50),
   dueDate: optionalString(50),
+  notes: optionalString(500),
 });
 
 export const updateSalesInvoiceSchema = z.object({
@@ -75,7 +76,16 @@ export const updateSalesInvoiceSchema = z.object({
   quotationId: optionalId,
   date: z.string().min(1, "Tanggal wajib diisi").max(50),
   dueDate: optionalString(50),
+  // Notes round-trip: the invoice form renders a notes textarea but the
+  // schema didn't accept the field, so the value was stripped before
+  // reaching the action's data block.
+  notes: optionalString(500),
   items: optionalString(50000),
+  // taxRate/discount are intentionally NOT min(0)-bounded at the schema layer:
+  // updateSalesInvoice already clamps a negative taxRate to 0 and a discount
+  // to [0, subtotal] in-action (see update-invoice-negative-tax regression
+  // test). Clamping is the established behaviour — a hard schema rejection
+  // would change the contract from "silently corrected" to "save blocked".
   taxRate: z.coerce.number().optional(),
   discount: z.coerce.number().optional(),
 });

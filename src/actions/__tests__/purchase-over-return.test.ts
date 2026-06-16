@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => {
       if (typeof ops === "function") return ops(prismaMock)
       return ops
     }),
+    // updatePurchaseReturn now locks the PO row with tx.$executeRaw before
+    // running the over-return guard inside the transaction.
+    $executeRaw: vi.fn().mockResolvedValue(0),
     purchaseReturn: {
       findUniqueOrThrow: vi.fn(),
       findUnique: vi.fn(),

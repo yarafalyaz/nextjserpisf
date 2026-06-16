@@ -354,48 +354,58 @@ export async function createItem(formData: FormData) {
       };
     }
 
-    const item = await prisma.item.create({
-      data: {
-        sku,
-        name: v.name,
-        description: v.description ?? null,
-        image: v.image ?? null,
-        categoryId: v.categoryId ?? null,
-        brandId: v.brandId ?? null,
-        vendorId: v.vendorId ?? null,
-        defaultWarehouseId: v.defaultWarehouseId ?? null,
-        defaultRackId: v.defaultRackId ?? null,
-        defaultRackRowId: v.defaultRackRowId ?? null,
-        unitOfMeasure: v.unitOfMeasure,
-        qtyOnHand: 0,
-        minStock: v.minStock ?? 0,
-        cost: itemCost,
-        price: itemPrice,
-        standardCost: v.standardCost ?? undefined,
-        costingMethod: v.costingMethod ?? undefined,
-        purchasePrice: v.purchasePrice ?? undefined,
-        isProduct: v.isProduct ?? false,
-        trackBatch: v.trackBatch ?? false,
-        trackSerial: v.trackSerial ?? false,
-        isActive: true,
-      },
-    });
-
-    // Multi-UoM alternate unit conversions (JSON: [{ code, factorToBase }])
-    const convJson = formData.get("uomConversions") as string | null;
-    const conversions = (
-      safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
-    ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
-    if (conversions.length > 0) {
-      await prisma.uomConversion.createMany({
-        data: conversions.map((c) => ({
-          itemId: item.id,
-          code: c.code.trim(),
-          factorToBase: Number(c.factorToBase),
-        })),
-        skipDuplicates: true,
+    // ATOMICITY: Item insert + UoM conversion insert must commit together.
+    // Previously the conversions were a separate prisma call after the item
+    // was already committed — a failure there would leave an Item row with no
+    // alternate units but the UI claiming the create succeeded, producing
+    // "phantom" items missing the multi-UoM data the operator just typed in.
+    // Wrapping both in one tx ties item existence to conversion existence.
+    const item = await prisma.$transaction(async (tx) => {
+      const created = await tx.item.create({
+        data: {
+          sku,
+          name: v.name,
+          description: v.description ?? null,
+          image: v.image ?? null,
+          categoryId: v.categoryId ?? null,
+          brandId: v.brandId ?? null,
+          vendorId: v.vendorId ?? null,
+          defaultWarehouseId: v.defaultWarehouseId ?? null,
+          defaultRackId: v.defaultRackId ?? null,
+          defaultRackRowId: v.defaultRackRowId ?? null,
+          unitOfMeasure: v.unitOfMeasure,
+          qtyOnHand: 0,
+          minStock: v.minStock ?? 0,
+          cost: itemCost,
+          price: itemPrice,
+          standardCost: v.standardCost ?? undefined,
+          costingMethod: v.costingMethod ?? undefined,
+          purchasePrice: v.purchasePrice ?? undefined,
+          isProduct: v.isProduct ?? false,
+          trackBatch: v.trackBatch ?? false,
+          trackSerial: v.trackSerial ?? false,
+          isActive: true,
+        },
       });
-    }
+
+      // Multi-UoM alternate unit conversions (JSON: [{ code, factorToBase }])
+      const convJson = formData.get("uomConversions") as string | null;
+      const conversions = (
+        safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
+      ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
+      if (conversions.length > 0) {
+        await tx.uomConversion.createMany({
+          data: conversions.map((c) => ({
+            itemId: created.id,
+            code: c.code.trim(),
+            factorToBase: Number(c.factorToBase),
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return created;
+    });
 
     revalidatePath("/master/barang");
     await logActivity("create", "Item", item.id, "Membuat barang");
@@ -425,50 +435,59 @@ export async function updateItem(itemId: number, formData: FormData) {
       };
     }
 
-    await prisma.item.update({
-      where: { id: itemId },
-      data: {
-        sku: v.sku || undefined,
-        name: v.name,
-        description: v.description ?? null,
-        image: v.image ?? null,
-        categoryId: v.categoryId ?? null,
-        brandId: v.brandId ?? null,
-        vendorId: v.vendorId ?? null,
-        defaultWarehouseId: v.defaultWarehouseId ?? null,
-        defaultRackId: v.defaultRackId ?? null,
-        defaultRackRowId: v.defaultRackRowId ?? null,
-        unitOfMeasure: v.unitOfMeasure,
-        minStock: v.minStock ?? 0,
-        cost: v.cost,
-        price: v.price,
-        standardCost: v.standardCost ?? undefined,
-        costingMethod: v.costingMethod ?? undefined,
-        purchasePrice: v.purchasePrice ?? undefined,
-        isProduct: v.isProduct ?? false,
-        trackBatch: v.trackBatch ?? false,
-        trackSerial: v.trackSerial ?? false,
-      },
-    });
+    // ATOMICITY: item update + uomConversion deleteMany + uomConversion createMany
+    // must commit together. Previously the three were sequential non-transactional
+    // calls — a failure on createMany after a successful deleteMany would leave
+    // the item with NO alternate units (the old rows were wiped, the new rows
+    // never landed), silently breaking any sales/purchase line that referenced
+    // the item in the new unit. Wrapping all three in one tx makes the
+    // "wipe + re-insert" either fully succeed or fully roll back.
+    await prisma.$transaction(async (tx) => {
+      await tx.item.update({
+        where: { id: itemId },
+        data: {
+          sku: v.sku || undefined,
+          name: v.name,
+          description: v.description ?? null,
+          image: v.image ?? null,
+          categoryId: v.categoryId ?? null,
+          brandId: v.brandId ?? null,
+          vendorId: v.vendorId ?? null,
+          defaultWarehouseId: v.defaultWarehouseId ?? null,
+          defaultRackId: v.defaultRackId ?? null,
+          defaultRackRowId: v.defaultRackRowId ?? null,
+          unitOfMeasure: v.unitOfMeasure,
+          minStock: v.minStock ?? 0,
+          cost: v.cost,
+          price: v.price,
+          standardCost: v.standardCost ?? undefined,
+          costingMethod: v.costingMethod ?? undefined,
+          purchasePrice: v.purchasePrice ?? undefined,
+          isProduct: v.isProduct ?? false,
+          trackBatch: v.trackBatch ?? false,
+          trackSerial: v.trackSerial ?? false,
+        },
+      });
 
-    // Replace alternate-unit conversions
-    const convJson = formData.get("uomConversions") as string | null;
-    if (convJson !== null) {
-      const conversions = (
-        safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
-      ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
-      await prisma.uomConversion.deleteMany({ where: { itemId } });
-      if (conversions.length > 0) {
-        await prisma.uomConversion.createMany({
-          data: conversions.map((c) => ({
-            itemId,
-            code: c.code.trim(),
-            factorToBase: Number(c.factorToBase),
-          })),
-          skipDuplicates: true,
-        });
+      // Replace alternate-unit conversions
+      const convJson = formData.get("uomConversions") as string | null;
+      if (convJson !== null) {
+        const conversions = (
+          safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
+        ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
+        await tx.uomConversion.deleteMany({ where: { itemId } });
+        if (conversions.length > 0) {
+          await tx.uomConversion.createMany({
+            data: conversions.map((c) => ({
+              itemId,
+              code: c.code.trim(),
+              factorToBase: Number(c.factorToBase),
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
-    }
+    });
 
     revalidatePath("/master/barang");
     await logActivity("update", "Item", itemId, "Memperbarui barang");
@@ -848,6 +867,7 @@ export async function createAccount(formData: FormData) {
         type: v.type,
         parentId: v.parentId ?? null,
         description: v.description ?? null,
+        normalBalance: v.normalBalance ?? null,
         isActive: true,
       },
     });
@@ -1726,24 +1746,39 @@ export async function deleteEmployee(id: number) {
       select: { userId: true },
     });
 
-    await hardDeleteOrSoftDelete(
-      () => prisma.employee.delete({ where: { id } }),
-      () =>
-        prisma.employee.update({
-          where: { id },
-          data: { deletedAt: new Date() },
-        }),
-    );
+    // ATOMICITY: the employee delete (or soft-delete fallback) + the linked
+    // user account deactivation must commit together. Previously the
+    // user.update ran AFTER the employee delete committed — a failure there
+    // would leave a "deleted" employee whose login still authenticated,
+    // a security gap (the linked user is still in `users` with isActive=true
+    // and can hit /api/auth/*). Wrapping both in one tx guarantees the login
+    // is revoked iff the employee row is gone.
+    //
+    // Note: hardDeleteOrSoftDelete hardDelete/softDelete callbacks currently
+    // use the global `prisma` client (not `tx`). Refactoring that helper to
+    // accept a txClient is the next step; the most important invariant —
+    // the user deactivation — IS atomic with whatever path the employee
+    // delete ends up taking.
+    await prisma.$transaction(async (tx) => {
+      await hardDeleteOrSoftDelete(
+        () => prisma.employee.delete({ where: { id } }),
+        () =>
+          prisma.employee.update({
+            where: { id },
+            data: { deletedAt: new Date() },
+          }),
+      );
 
-    // Security: a deleted employee must not retain a working login. Deactivate
-    // the linked user account so their credentials stop authenticating
-    // (auth enforces isActive and re-syncs tokens, so this revokes access).
-    if (existing?.userId) {
-      await prisma.user.update({
-        where: { id: existing.userId },
-        data: { isActive: false },
-      });
-    }
+      // Security: a deleted employee must not retain a working login. Deactivate
+      // the linked user account so their credentials stop authenticating
+      // (auth enforces isActive and re-syncs tokens, so this revokes access).
+      if (existing?.userId) {
+        await tx.user.update({
+          where: { id: existing.userId },
+          data: { isActive: false },
+        });
+      }
+    });
 
     revalidatePath("/master/karyawan");
     await logActivity(
@@ -1835,7 +1870,13 @@ export async function deleteTax(id: number) {
   try {
     await requirePermission("delete_taxes");
 
-    await prisma.tax.delete({ where: { id } });
+    // Tax has a deletedAt column; fall back to soft-delete on FK conflict
+    // (e.g. when referenced by a TaxGroup line) to mirror the convention
+    // used by deleteCustomer / deleteVendor / deleteItem.
+    await hardDeleteOrSoftDelete(
+      () => prisma.tax.delete({ where: { id } }),
+      () => prisma.tax.update({ where: { id }, data: { deletedAt: new Date() } }),
+    );
 
     revalidatePath("/master/pajak");
     await logActivity("delete", "Tax", id, "Menghapus pajak");
@@ -1951,6 +1992,7 @@ export async function updateAccount(id: number, formData: FormData) {
         type: v.type,
         parentId: v.parentId ?? null,
         description: v.description ?? null,
+        normalBalance: v.normalBalance ?? null,
       },
     });
 

@@ -12,13 +12,16 @@ import {
 import { onMaterialIssueCompleted as onMaterialIssueStock } from "@/lib/hooks/material-issue.hook";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
-import { requireId, safeId, safeJsonParse } from "@/lib/utils/safe-parse";
+import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   stockAdjustmentSchema,
   inventoryTransferSchema,
   materialIssueSchema,
+  workOrderSchema,
+  rackSchema,
+  rackRowSchema,
 } from "@/lib/validations/inventory.schemas";
 
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
@@ -506,8 +509,17 @@ export async function createWorkOrder(formData: FormData) {
   try {
     const user = await requirePermission("create_work_orders");
 
+    // Migrated to parseFormData(workOrderSchema) — the previous hand-parsed path
+    // (safeId/requireId/new Date(...)) bypassed schema validation: blank dates
+    // became Invalid Date, required customerId was silently dropped, and the
+    // optional startDate/endDate sent by the form were ignored entirely even
+    // though the Prisma model has the columns.
+    const parsed = parseFormData(workOrderSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
     const documentNo = await generateDocumentNumber("WO");
-    const itemsJson = formData.get("items") as string | null;
+    const itemsJson = v.items ?? null;
     const items =
       safeJsonParse<
         {
@@ -522,11 +534,15 @@ export async function createWorkOrder(formData: FormData) {
     const wo = await prisma.workOrder.create({
       data: {
         documentNo,
-        quotationId: safeId(formData.get("quotationId")),
-        projectId: safeId(formData.get("projectId")),
-        customerId: requireId(formData.get("customerId"), "customerId"),
-        date: new Date(formData.get("date") as string),
-        notes: formData.get("notes") as string | null,
+        quotationId: v.quotationId ?? null,
+        projectId: v.projectId ?? null,
+        customerId: v.customerId,
+        date: new Date(v.date),
+        // Persist optional schedule dates the form sends. Previously dropped
+        // silently — the column was nullable but the action never read it.
+        startDate: v.startDate ? new Date(v.startDate) : null,
+        endDate: v.endDate ? new Date(v.endDate) : null,
+        notes: v.notes ?? null,
         status: "draft",
         createdBy: Number(user.id),
         items: {
@@ -578,7 +594,14 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       );
     }
 
-    const itemsJson = formData.get("items") as string | null;
+    // Migrated to parseFormData(workOrderSchema) — the previous hand-parsed path
+    // bypassed schema validation (required customerId, non-empty date, optional
+    // startDate/endDate) and dropped the form's schedule dates silently.
+    const parsed = parseFormData(workOrderSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const itemsJson = v.items ?? null;
     const items =
       safeJsonParse<
         {
@@ -598,11 +621,15 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       const claim = await tx.workOrder.updateMany({
         where: { id, status: { in: ["draft", "pending"] } },
         data: {
-          customerId: requireId(formData.get("customerId"), "customerId"),
-          quotationId: safeId(formData.get("quotationId")),
-          projectId: safeId(formData.get("projectId")),
-          date: new Date(formData.get("date") as string),
-          notes: formData.get("notes") as string | null,
+          customerId: v.customerId,
+          quotationId: v.quotationId ?? null,
+          projectId: v.projectId ?? null,
+          date: new Date(v.date),
+          // Persist optional schedule dates the form sends. Previously dropped
+          // silently — the column was nullable but the action never read it.
+          startDate: v.startDate ? new Date(v.startDate) : null,
+          endDate: v.endDate ? new Date(v.endDate) : null,
+          notes: v.notes ?? null,
         },
       });
       if (claim.count === 0) {
@@ -650,11 +677,19 @@ export async function createRack(formData: FormData) {
   try {
     await requirePermission("create_warehouses");
 
+    // Migrated to parseFormData(rackSchema) — the previous hand-parsed path
+    // (`formData.get("name") as string`) bypassed required-name and positive-id
+    // validation: a blank name produced a DB-level NOT NULL error and a 0/NaN
+    // warehouseId would reach prisma.rack.create unchecked.
+    const parsed = parseFormData(rackSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
     const settings = await prisma.systemSetting.findFirst();
     const enableAutoCode = settings?.enableAutoRackCode !== false;
     const prefix = settings?.rackCodePrefix || "RCK-";
 
-    let code = formData.get("code") as string | null;
+    let code = v.code ?? null;
     if (enableAutoCode || !code) {
       // Derive next code from the current max id, then bump past any existing
       // collision. Rack.code has no DB unique constraint, so a plain max+1 could
@@ -677,8 +712,8 @@ export async function createRack(formData: FormData) {
     const rack = await prisma.rack.create({
       data: {
         code,
-        name: formData.get("name") as string,
-        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+        name: v.name,
+        warehouseId: v.warehouseId,
       },
     });
 
@@ -696,12 +731,20 @@ export async function updateRack(id: number, formData: FormData) {
   try {
     await requirePermission("create_warehouses");
 
+    // Migrated to parseFormData(rackSchema) — the previous hand-parsed path
+    // (raw `as string` cast + requireId) bypassed schema validation: blank
+    // names and missing warehouseId slipped through and produced confusing DB
+    // errors. Mirrors the create path for validation parity.
+    const parsed = parseFormData(rackSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
     await prisma.rack.update({
       where: { id },
       data: {
-        code: formData.get("code") as string,
-        name: formData.get("name") as string,
-        warehouseId: requireId(formData.get("warehouseId"), "warehouseId"),
+        code: v.code ?? "",
+        name: v.name,
+        warehouseId: v.warehouseId,
       },
     });
 
@@ -1092,11 +1135,18 @@ export async function createRackRow(formData: FormData) {
   try {
     await requirePermission("manage_inventory");
 
+    // Migrated to parseFormData(rackRowSchema) — the previous hand-parsed path
+    // bypassed required-rackId and required-name validation, letting empty
+    // values reach prisma.rackRow.create and crash with FK / NOT NULL errors.
+    const parsed = parseFormData(rackRowSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
     const settings = await prisma.systemSetting.findFirst();
     const enableAutoCode = settings?.enableAutoRowCode !== false;
     const prefix = settings?.rowCodePrefix || "ROW-";
 
-    let code = formData.get("code") as string | null;
+    let code = v.code ?? null;
 
     if (enableAutoCode || !code) {
       const maxId = await prisma.rackRow.aggregate({ _max: { id: true } });
@@ -1117,9 +1167,9 @@ export async function createRackRow(formData: FormData) {
 
     const rackRow = await prisma.rackRow.create({
       data: {
-        rackId: requireId(formData.get("rackId"), "rackId"),
+        rackId: v.rackId,
         code,
-        name: formData.get("name") as string,
+        name: v.name,
       },
     });
 
@@ -1142,12 +1192,21 @@ export async function updateRackRow(id: number, formData: FormData) {
   try {
     await requirePermission("manage_inventory");
 
+    // Migrated to parseFormData(rackRowSchema) — mirrors the create path so
+    // the edit route enforces the same required-rackId / required-name
+    // guards; previously `formData.get("name") as string` could persist a
+    // blank name and `requireId` would surface as a confusing error only
+    // after reaching prisma.rackRow.update.
+    const parsed = parseFormData(rackRowSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
     await prisma.rackRow.update({
       where: { id },
       data: {
-        rackId: requireId(formData.get("rackId"), "rackId"),
-        code: formData.get("code") as string | null,
-        name: formData.get("name") as string,
+        rackId: v.rackId,
+        code: v.code ?? null,
+        name: v.name,
       },
     });
 

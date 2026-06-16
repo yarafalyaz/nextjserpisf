@@ -95,22 +95,29 @@ export async function updateProduct(id: number, formData: FormData) {
       return { success: false, error: materialsParsed.error };
     }
 
-    await prisma.product.update({
-      where: { id },
-      data: {
-        name: v.name,
-        code: v.code ?? null,
-        description: v.description ?? null,
-        vehicleBrandId: v.vehicleBrandId,
-        vehicleModelId: v.vehicleModelId,
-        materials: {
-          deleteMany: {},
-          create: materialsParsed.data.map((m) => ({
-            itemId: m.itemId,
-            qty: m.qty,
-          })),
+    // Atomic BOM swap: deleteMany + createMany must commit together. Without
+    // a $transaction, a transient error on the createMany leaves the product
+    // with NO materials — production orders that auto-derive from the BOM
+    // then run with an empty list (qty 0), silently producing empty
+    // production orders.
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: {
+          name: v.name,
+          code: v.code ?? null,
+          description: v.description ?? null,
+          vehicleBrandId: v.vehicleBrandId,
+          vehicleModelId: v.vehicleModelId,
+          materials: {
+            deleteMany: {},
+            create: materialsParsed.data.map((m) => ({
+              itemId: m.itemId,
+              qty: m.qty,
+            })),
+          },
         },
-      },
+      });
     });
 
     await logActivity("update", "Product", id, `Memperbarui produk #${id}`);
@@ -203,18 +210,27 @@ export async function startWorkOrder(workOrderId: number) {
       );
     }
 
-    await prisma.workOrder.update({
-      where: { id: workOrderId },
-      data: {
-        status: "in_progress",
-        startDate: wo.startDate || new Date(),
-      },
-    });
+    // ATOMICITY: the WO header status flip + the per-item status flip must
+    // commit together. Previously they were two separate prisma calls — a
+    // failure on the second (e.g. a transient DB error) would leave the WO
+    // header "in_progress" with all items still "pending", a half-started WO
+    // that the UI then refuses to re-start (status guard). Operators would
+    // have to flip items by hand. Wrapping both in one tx guarantees the
+    // header and its items are always in sync.
+    await prisma.$transaction(async (tx) => {
+      await tx.workOrder.update({
+        where: { id: workOrderId },
+        data: {
+          status: "in_progress",
+          startDate: wo.startDate || new Date(),
+        },
+      });
 
-    // Update all WO items to in_progress
-    await prisma.workOrderItem.updateMany({
-      where: { workOrderId, status: "pending" },
-      data: { status: "in_progress" },
+      // Update all WO items to in_progress
+      await tx.workOrderItem.updateMany({
+        where: { workOrderId, status: "pending" },
+        data: { status: "in_progress" },
+      });
     });
 
     await logActivity(
@@ -276,35 +292,54 @@ export async function completeWorkOrder(workOrderId: number) {
     // same materials would leave inventory twice and Inventory would be credited
     // twice. WO completion here is a status/fulfilment milestone only.
 
-    // Atomically claim completion: only the request that flips status away from
-    // in_progress/pending wins. Without this, two concurrent "selesai" clicks
-    // could both pass the status guard above and each run autoCreateDeliveryOrder
-    // → duplicate Delivery Orders. The conditional updateMany serializes it.
-    const claim = await prisma.workOrder.updateMany({
-      where: { id: workOrderId, status: { in: ["in_progress", "pending"] } },
-      data: {
-        status: "completed",
-        endDate: new Date(),
-      },
+    // ATOMICITY: the WO claim + WO item flip + autoCreateDeliveryOrder +
+    // syncProjectStatus must be a single atomic unit. Previously they were
+    // three sequential non-transactional calls — a mid-sequence failure (e.g.
+    // DO creation error) would leave a "completed" WO with no DeliveryOrder
+    // for downstream shipping, and the project's status flip would be missing
+    // even though the WO says it is done. Wrapping all four in one tx closes
+    // that gap. (autoCreateDeliveryOrder and syncProjectStatus don't accept
+    // a txClient parameter — they internally use the global prisma client, so
+    // this transaction still wraps their writes (the in-flight claim update
+    // is rolled back on a later failure) but the nested writes themselves
+    // run as separate auto-commits. Documented as a known limitation; the
+    // most important invariant — the claim + item flip — IS atomic.)
+    await prisma.$transaction(async (tx) => {
+      // Atomically claim completion: only the request that flips status away from
+      // in_progress/pending wins. Without this, two concurrent "selesai" clicks
+      // could both pass the status guard above and each run autoCreateDeliveryOrder
+      // → duplicate Delivery Orders. The conditional updateMany serializes it.
+      const claim = await tx.workOrder.updateMany({
+        where: { id: workOrderId, status: { in: ["in_progress", "pending"] } },
+        data: {
+          status: "completed",
+          endDate: new Date(),
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Work Order sudah diselesaikan atau sedang diproses.");
+      }
+
+      // Update all WO items to completed
+      await tx.workOrderItem.updateMany({
+        where: { workOrderId },
+        data: { status: "completed" },
+      });
+
+      // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
+      // the atomic claim above so only the winning request reaches here).
+      // NOTE: autoCreateDeliveryOrder does not accept a txClient; it uses the
+      // global prisma client. Its writes are therefore not part of this
+      // transaction — a failure here would still leave a "completed" WO row.
+      // Documented as a known limitation; refactoring that helper to accept
+      // a txClient is the next step if this proves brittle.
+      await autoCreateDeliveryOrder(workOrderId, Number(user.id));
+
+      // Sync linked Project status (same caveat: helper uses global prisma).
+      if (wo.projectId) {
+        await syncProjectStatus(wo.projectId);
+      }
     });
-    if (claim.count === 0) {
-      throw new Error("Work Order sudah diselesaikan atau sedang diproses.");
-    }
-
-    // Update all WO items to completed
-    await prisma.workOrderItem.updateMany({
-      where: { workOrderId },
-      data: { status: "completed" },
-    });
-
-    // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
-    // the atomic claim above so only the winning request reaches here).
-    await autoCreateDeliveryOrder(workOrderId, Number(user.id));
-
-    // Sync linked Project status
-    if (wo.projectId) {
-      await syncProjectStatus(wo.projectId);
-    }
 
     await logActivity(
       "complete",
@@ -434,53 +469,63 @@ export async function createMaterialIssueFromWorkOrder(
       },
     });
 
-    // Idempotency: prevent duplicate Material Issues for the same Work Order.
-    // One WO should only have one MI to prevent multiple stock-outs for one job.
-    const existingMi = await prisma.materialIssue.findFirst({
-      where: { workOrderId },
-      select: { id: true, documentNo: true },
-    });
-    if (existingMi) {
-      throw new Error(
-        `Material Issue sudah pernah dibuat untuk Work Order ini (No: ${existingMi.documentNo}).`,
-      );
-    }
+    // Idempotency + create + items must be atomic. The early `findFirst` check
+    // is a TOCTOU window: two concurrent "create MI for WO#N" calls both see
+    // existingMi=null, both insert, and the WO ends up with two MIs (double
+    // stock-out). Wrap the check + create + items in a single $transaction
+    // with a row lock on the WO, and re-check inside the tx.
+    const issue = await prisma.$transaction(async (tx) => {
+      // Lock the WO row so a concurrent create call for the same WO waits
+      // for this one to commit before its own check runs.
+      await tx.$executeRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
 
-    if (wo.items.length === 0) {
-      throw new Error(
-        "Work Order tidak memiliki item. Tambahkan item terlebih dahulu.",
-      );
-    }
+      const existingMi = await tx.materialIssue.findFirst({
+        where: { workOrderId },
+        select: { id: true, documentNo: true },
+      });
+      if (existingMi) {
+        throw new Error(
+          `Material Issue sudah pernah dibuat untuk Work Order ini (No: ${existingMi.documentNo}).`,
+        );
+      }
 
-    const miDocNo = await generateDocumentNumber("MI");
+      if (wo.items.length === 0) {
+        throw new Error(
+          "Work Order tidak memiliki item. Tambahkan item terlebih dahulu.",
+        );
+      }
 
-    const customerName = wo.customer?.name ?? "Unknown";
-    const licensePlate = wo.quotation?.customerVehicle?.licensePlate ?? "-";
-    const notes = `Pengeluaran material untuk WO ${wo.documentNo}\nPelanggan: ${customerName}\nPlat Nomor: ${licensePlate}`;
+      const miDocNo = await generateDocumentNumber("MI");
+      const customerName = wo.customer?.name ?? "Unknown";
+      const licensePlate = wo.quotation?.customerVehicle?.licensePlate ?? "-";
+      const notes = `Pengeluaran material untuk WO ${wo.documentNo}\nPelanggan: ${customerName}\nPlat Nomor: ${licensePlate}`;
 
-    const issue = await prisma.materialIssue.create({
-      data: {
-        documentNo: miDocNo,
-        warehouseId,
-        workOrderId,
-        projectId: wo.projectId,
-        date: new Date(),
-        notes,
-        status: "draft",
-        createdBy: Number(user.id),
-      },
-    });
+      const created = await tx.materialIssue.create({
+        data: {
+          documentNo: miDocNo,
+          warehouseId,
+          workOrderId,
+          projectId: wo.projectId,
+          date: new Date(),
+          notes,
+          status: "draft",
+          createdBy: Number(user.id),
+        },
+      });
 
-    // Auto-create MI items from WO items
-    await prisma.materialIssueItem.createMany({
-      data: wo.items
-        .filter((i) => Number(i.qty) > 0)
-        .map((i) => ({
-          materialIssueId: issue.id,
-          itemId: i.itemId,
-          qty: i.qty,
-          cost: i.cost,
-        })),
+      // Auto-create MI items from WO items (same tx).
+      await tx.materialIssueItem.createMany({
+        data: wo.items
+          .filter((i) => Number(i.qty) > 0)
+          .map((i) => ({
+            materialIssueId: created.id,
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost,
+          })),
+      });
+
+      return created;
     });
 
     await logActivity(

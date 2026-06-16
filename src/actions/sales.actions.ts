@@ -78,8 +78,19 @@ export async function createQuotation(formData: FormData) {
     const q = await tx.quotation.create({
       data: {
         documentNo,
-        customerId: data.customerId,
-        customerVehicleId: data.customerVehicleId || null,
+        // data arrives via safeJsonParse so IDs come in as strings; Prisma's
+        // foreign-key fields expect number. Without the cast, a tampered/buggy
+        // client submitting "1" makes the WHERE match nothing and silently
+        // relinks the quotation to no customer (DB constraint would catch the
+        // missing customer, but a truthy string bypasses the null check). Cast
+        // at the boundary to keep types honest. Mirrors the updateQuotation
+        // pattern at line ~453.
+        customerId: (data.customerId
+          ? Number(data.customerId)
+          : null) as number,
+        customerVehicleId: data.customerVehicleId
+          ? Number(data.customerVehicleId)
+          : null,
         date: new Date(data.date),
         validUntil: data.validUntil ? new Date(data.validUntil) : null,
         subtotal: computedSubtotal,
@@ -99,7 +110,11 @@ export async function createQuotation(formData: FormData) {
               create: (section.items || []).map((item: any, ii: number) => {
                 const { discountAmount, total } = computeLine(item)
                 return {
-                  itemId: item.itemId || null,
+                  // itemId arrives as a string from safeJsonParse; the items table
+                  // expects a number foreign key. Cast at the boundary so a tampered
+                  // "abc" / null doesn't quietly write a string to the Int column
+                  // and crash the Prisma insert with a "Invalid value" error.
+                  itemId: item.itemId ? Number(item.itemId) : null,
                   description: item.description || null,
                   qty: Number(item.qty) || 1,
                   uom: item.uom || null,
@@ -473,7 +488,11 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
               create: (section.items || []).map((item: any, ii: number) => {
                 const { discountAmount, total } = computeLine(item)
                 return {
-                  itemId: item.itemId || null,
+                  // itemId arrives as a string from safeJsonParse; the items table
+                  // expects a number foreign key. Cast at the boundary so a tampered
+                  // "abc" / null doesn't quietly write a string to the Int column
+                  // and crash the Prisma insert with a "Invalid value" error.
+                  itemId: item.itemId ? Number(item.itemId) : null,
                   description: item.description || null,
                   qty: Number(item.qty) || 1,
                   uom: item.uom || null,
@@ -557,8 +576,12 @@ export async function createDownPayment(formData: FormData) {
   // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
   // two concurrent DP creations on the same quotation can't each pass the cap
   // (TOCTOU) and together over-pay the quotation grandTotal. Mirrors the
-  // convertQuotationToOrder / createVendorBill lock pattern. The GL hook runs
-  // after commit (onDownPaymentReceived opens its own tx and is idempotent).
+  // convertQuotationToOrder / createVendorBill lock pattern. The GL hook
+  // (onDownPaymentReceived) was previously called AFTER commit — if the journal
+  // post failed (closed period, misconfigured account) the DP row stayed in
+  // draft while the rest of the system moved on, leaving a "phantom" DP with
+  // no GL trace. Move it INSIDE the tx and pass tx so a failed post rolls
+  // back the DP insert.
   const dp = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
@@ -571,7 +594,7 @@ export async function createDownPayment(formData: FormData) {
       throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalExisting})`)
     }
 
-    return tx.downPayment.create({
+    const created = await tx.downPayment.create({
       data: {
         documentNo,
         quotationId,
@@ -585,9 +608,15 @@ export async function createDownPayment(formData: FormData) {
         createdBy: Number(user.id),
       },
     })
-  })
 
-  await onDownPaymentReceived(dp.id, Number(user.id))
+    // GL hook inside the same tx (was previously called after commit).
+    // onDownPaymentReceived accepts an optional txClient as the 3rd arg, so
+    // we join the atomic unit. Its internal executeInTx() will use this tx
+    // rather than opening a nested one.
+    await onDownPaymentReceived(created.id, Number(user.id), tx)
+
+    return created
+  })
   await logActivity("create", "DownPayment", dp.id, `Membuat uang muka #${dp.id}`)
   revalidatePath("/penjualan/uang-muka")
   return { success: true, id: dp.id }
@@ -830,7 +859,12 @@ export async function createSalesPayment(formData: FormData) {
   const salesInvoiceId = v.salesInvoiceId
   const amount = v.amount
 
-  // Atomic: lock invoice, validate remaining, create payment + recalc in one transaction.
+  // Atomic: lock invoice, validate remaining, create payment + recalc + attach
+  // in one transaction. The attachment linkage was previously OUTSIDE the tx —
+  // a failure there would leave a confirmed payment with no supporting docs
+  // (operator-visible mismatch, but not a balance-sheet bug since the journal is
+  // already posted). Move it inside so the payment row only exists when its
+  // attachments are linked (all-or-nothing from the caller's perspective).
   const payment = await prisma.$transaction(async (tx) => {
     // Lock invoice row to prevent concurrent overpay
     await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${salesInvoiceId} FOR UPDATE`
@@ -861,20 +895,27 @@ export async function createSalesPayment(formData: FormData) {
     await onSalesPaymentRecalculate(created.id, tx)
     // Create accounting journal (idempotent; guarded by unique referenceType+referenceId)
     await onSalesPaymentCreated(created.id, Number(user.id), tx)
+
+    // Associate uploaded attachments with the new payment — moved INSIDE the tx
+    // so a failed updateMany rolls back the payment create + journal + recalc
+    // (none of which are useful without the supporting docs attached).
+    const attachmentIds = v.attachmentIds as string | undefined
+    if (attachmentIds) {
+      // The array elements arrive over the wire as JSON numbers OR strings
+      // depending on the form's serializer. Prisma's `in: [...]` clause hits a
+      // typed Int column, so a stray string in the array would crash the
+      // updateMany. Map to Number to keep types honest at the boundary.
+      const ids = (safeJsonParse<number[]>(attachmentIds) ?? []).map(Number)
+      if (ids.length > 0) {
+        await tx.transactionAttachment.updateMany({
+          where: { id: { in: ids }, referenceId: 0 },
+          data: { referenceId: created.id },
+        })
+      }
+    }
+
     return created
   })
-
-  // Associate uploaded attachments with the new payment
-  const attachmentIds = v.attachmentIds as string | undefined
-  if (attachmentIds) {
-    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
-    if (ids.length > 0) {
-      await prisma.transactionAttachment.updateMany({
-        where: { id: { in: ids }, referenceId: 0 },
-        data: { referenceId: payment.id },
-      })
-    }
-  }
 
   await logActivity("create", "SalesPayment", payment.id, `Membuat pembayaran penjualan #${payment.id}`)
   revalidatePath("/penjualan/pembayaran")
@@ -1013,7 +1054,11 @@ export async function createSalesReturn(formData: FormData) {
         items: {
           create: validItems.map((item: any) => ({
             itemId: Number(item.itemId),
-            qty: item.qty,
+            // qty arrives as a string from safeJsonParse; the sales_return_items
+            // table expects a number. Clamp to >= 0.01 (matching the createQuotation
+            // pattern) so a tampered 0/undefined qty is treated as essentially zero
+            // rather than crashing the Prisma insert with a string-to-Int error.
+            qty: Math.max(0.01, Number(item.qty) || 0),
             cost: returnCostMap.get(Number(item.itemId)) ?? 0,
             price: resolvePrice(Number(item.itemId)),
           })),
@@ -1317,6 +1362,10 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         quotationId: v.quotationId ?? null,
         date: new Date(v.date),
         dueDate: v.dueDate ? new Date(v.dueDate) : null,
+        // Persist notes: the sales-invoice form exposes a notes textarea
+        // but the previous data block silently dropped the value, so the
+        // user's note input was never saved on edit.
+        notes: v.notes ?? null,
       },
     })
 
@@ -1442,6 +1491,11 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   // remaining balance (excluding THIS payment) — mirrors createSalesPayment.
   // Previously the edit path did a bare update with no overpay guard, so a
   // payment could be raised past the invoice grandTotal, silently corrupting AR.
+  // The recalc (onSalesPaymentUpdated) and attachment linkage are now ALSO
+  // inside this tx so a failure rolls back the payment update + GL repost
+  // together — otherwise the invoice's paidAmount could be left stale relative
+  // to the payment row, and the operator's just-uploaded attachments would
+  // silently never get linked to the edited payment.
   const payment = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${newInvoiceId} FOR UPDATE`
     const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: newInvoiceId } })
@@ -1478,27 +1532,38 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     await deleteJournalByReferenceTx(tx, "SalesPayment", id)
     await onSalesPaymentCreated(updated.id, Number(user.id), tx)
 
+    // Recalculate the (now) target invoice inside the tx so a failed recompute
+    // rolls back the edit. Was previously called AFTER the $transaction commit
+    // — a recalc failure there would leave the invoice's paidAmount/status
+    // stale relative to the new payment row. onSalesPaymentUpdated accepts an
+    // optional txClient; pass tx so the recalc joins the same atomic unit.
+    await onSalesPaymentUpdated(updated.salesInvoiceId, tx)
+    // If the payment was reassigned to a different invoice, the old invoice also
+    // needs a recalc — must happen inside the same tx for the same reason.
+    if (oldPayment.salesInvoiceId && oldPayment.salesInvoiceId !== updated.salesInvoiceId) {
+      await onSalesPaymentUpdated(oldPayment.salesInvoiceId, tx)
+    }
+
+    // Associate uploaded attachments inside the tx (moved from outside) so a
+    // failed linkage rolls back the payment edit + GL repost rather than
+    // leaving a committed payment without its supporting docs.
+    const attachmentIds = v.attachmentIds
+    if (attachmentIds) {
+      // The array elements arrive over the wire as JSON numbers OR strings
+      // depending on the form's serializer. Prisma's `in: [...]` clause hits a
+      // typed Int column, so a stray string in the array would crash the
+      // updateMany. Map to Number to keep types honest at the boundary.
+      const ids = (safeJsonParse<number[]>(attachmentIds) ?? []).map(Number)
+      if (ids.length > 0) {
+        await tx.transactionAttachment.updateMany({
+          where: { id: { in: ids }, referenceId: 0 },
+          data: { referenceId: updated.id },
+        })
+      }
+    }
+
     return updated
   })
-
-  // Recalculate new invoice
-  await onSalesPaymentUpdated(payment.salesInvoiceId)
-  // If invoice changed, also recalc old invoice
-  if (oldPayment.salesInvoiceId && oldPayment.salesInvoiceId !== payment.salesInvoiceId) {
-    await onSalesPaymentUpdated(oldPayment.salesInvoiceId)
-  }
-
-  // Associate uploaded attachments
-  const attachmentIds = v.attachmentIds
-  if (attachmentIds) {
-    const ids = safeJsonParse<number[]>(attachmentIds) ?? []
-    if (ids.length > 0) {
-      await prisma.transactionAttachment.updateMany({
-        where: { id: { in: ids }, referenceId: 0 },
-        data: { referenceId: payment.id },
-      })
-    }
-  }
 
   await logActivity("update", "SalesPayment", payment.id, `Memperbarui pembayaran penjualan #${payment.id}`)
   revalidatePath("/penjualan/pembayaran")
@@ -1634,7 +1699,11 @@ export async function updateSalesReturn(id: number, formData: FormData) {
           create: validReturnItems
             .map((item: any) => ({
               itemId: Number(item.itemId),
-              qty: item.qty,
+              // qty arrives as a string from safeJsonParse; the sales_return_items
+              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
+              // pattern) so a tampered 0/undefined qty is treated as essentially zero
+              // rather than crashing the Prisma insert with a string-to-Int error.
+              qty: Math.max(0.01, Number(item.qty) || 0),
               cost: updReturnCostMap.get(Number(item.itemId)) ?? 0,
               price: resolveUpdPrice(Number(item.itemId)),
             })),

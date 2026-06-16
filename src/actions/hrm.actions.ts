@@ -15,8 +15,6 @@ import {
 import { revalidatePath } from "next/cache";
 import {
   requireId,
-  safeId,
-  requireNumber,
   safeNumber,
 } from "@/lib/utils/safe-parse";
 import { parseFormData } from "@/lib/validations/parse-form";
@@ -30,6 +28,7 @@ import {
   holidaySchema,
   departmentHolidaySchema,
   appreciationSchema,
+  payrollSchema,
 } from "@/lib/validations/hrm.schemas";
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
 import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service";
@@ -421,30 +420,36 @@ export async function createLeaveRequest(formData: FormData) {
     }
 
     // Guard: overlap — no pending/approved leave can overlap [startDate, endDate].
-    const overlap = await prisma.leaveRequest.findFirst({
-      where: {
-        employeeId,
-        status: { in: ["pending", "approved"] },
-        startDate: { lte: endDate },
-        endDate: { gte: startDate },
-      },
-      select: { id: true },
-    });
-    if (overlap) {
-      throw new Error(
-        "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.",
-      );
-    }
+    // Wrap the overlap check + insert in a single $transaction. Without this,
+    // two concurrent submissions for the same employee / same week both pass
+    // the check (TOCTOU) and create duplicate pending leaves — the schedule
+    // becomes ambiguous when one is approved and the other is blocked.
+    const leave = await prisma.$transaction(async (tx) => {
+      const overlap = await tx.leaveRequest.findFirst({
+        where: {
+          employeeId,
+          status: { in: ["pending", "approved"] },
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+        },
+        select: { id: true },
+      });
+      if (overlap) {
+        throw new Error(
+          "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.",
+        );
+      }
 
-    const leave = await prisma.leaveRequest.create({
-      data: {
-        employeeId,
-        type: v.type,
-        startDate,
-        endDate,
-        reason: v.reason ?? null,
-        status: "pending",
-      },
+      return await tx.leaveRequest.create({
+        data: {
+          employeeId,
+          type: v.type,
+          startDate,
+          endDate,
+          reason: v.reason ?? null,
+          status: "pending",
+        },
+      });
     });
 
     await logActivity(
@@ -1312,11 +1317,22 @@ export async function processPayroll(formData: FormData) {
   try {
     const user = await requirePermission("create_payroll");
 
+    // Migrated to parseFormData(payrollSchema) — the previous hand-parsed path
+    // (safeId/period as string/new Date(raw)/safeNumber) bypassed schema
+    // validation: blank periods and dates crashed new Date() into Invalid Date,
+    // non-numeric amounts became NaN, and the period/startDate/endDate required
+    // guards were not enforced. Server still re-checks employeeId below because
+    // payrollSchema accepts generateBulkPayroll's empty-employeeId case too.
+    const parsed = parseFormData(payrollSchema, formData);
+    if (!parsed.success)
+      return { success: false, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
     const documentNo = await generateDocumentNumber("PAYROLL");
-    const employeeId = safeId(formData.get("employeeId"));
-    const period = formData.get("period") as string;
-    const startDate = new Date(formData.get("startDate") as string);
-    const endDate = new Date(formData.get("endDate") as string);
+    const employeeId = v.employeeId ?? null;
+    const period = v.period;
+    const startDate = new Date(v.startDate);
+    const endDate = new Date(v.endDate);
 
     // Guard: employeeId is required — without it, payroll has no linkage
     if (!employeeId) {
@@ -1337,8 +1353,8 @@ export async function processPayroll(formData: FormData) {
     }
 
     // Auto-calculate late penalty
-    let lateDeduction = safeNumber(formData.get("lateDeduction")) ?? 0;
-    let lateMinutes = safeNumber(formData.get("lateMinutes")) ?? 0;
+    let lateDeduction = v.lateDeduction ?? 0;
+    let lateMinutes = v.lateMinutes ?? 0;
 
     if (employeeId && lateDeduction === 0) {
       const latePenalty = await calculateLatePenalty(
@@ -1351,10 +1367,10 @@ export async function processPayroll(formData: FormData) {
     }
 
     // Attendance summary (working days + bolos deduction; holidays excluded)
-    let workingDays = safeNumber(formData.get("workingDays")) ?? 0;
-    let presentDays = safeNumber(formData.get("presentDays")) ?? 0;
-    let absentDays = safeNumber(formData.get("absentDays")) ?? 0;
-    let absentDeduction = safeNumber(formData.get("absentDeduction")) ?? 0;
+    let workingDays = v.workingDays ?? 0;
+    let presentDays = v.presentDays ?? 0;
+    let absentDays = v.absentDays ?? 0;
+    let absentDeduction = v.absentDeduction ?? 0;
     if (employeeId && absentDeduction === 0 && workingDays === 0) {
       const att = await calculateAttendanceSummary(
         employeeId,
@@ -1367,13 +1383,12 @@ export async function processPayroll(formData: FormData) {
       absentDeduction = att.absentDeduction;
     }
 
-    const baseSalary = safeNumber(formData.get("baseSalary")) ?? 0;
-    const allowances = safeNumber(formData.get("allowances")) ?? 0;
-    const deductions = safeNumber(formData.get("deductions")) ?? 0;
-    const overtimeTotal = safeNumber(formData.get("overtimeTotal")) ?? 0;
-    const appreciationTotal =
-      safeNumber(formData.get("appreciationTotal")) ?? 0;
-    const loanDeduction = safeNumber(formData.get("loanDeduction")) ?? 0;
+    const baseSalary = v.baseSalary ?? 0;
+    const allowances = v.allowances ?? 0;
+    const deductions = v.deductions ?? 0;
+    const overtimeTotal = v.overtimeTotal ?? 0;
+    const appreciationTotal = v.appreciationTotal ?? 0;
+    const loanDeduction = v.loanDeduction ?? 0;
 
     // Statutory: BPJS (employee) + PPh21, computed server-side from base salary.
     const empForTax = employeeId
@@ -1405,7 +1420,7 @@ export async function processPayroll(formData: FormData) {
     // pay and from the GL posting, which posts netSalary + statutory (see
     // postPayrollJournal in accounting.hook.ts).
     const totalAmount = netSalary;
-    const paymentDateRaw = formData.get("paymentDate") as string | null;
+    const paymentDateRaw = v.paymentDate ?? null;
 
     const payroll = await prisma.payroll.create({
       data: {
@@ -1472,15 +1487,27 @@ export async function updatePayroll(id: number, formData: FormData) {
       throw new Error("Hanya penggajian status draft yang dapat diubah");
     }
 
-    const employeeId = safeId(formData.get("employeeId"));
-    const startDate = new Date(formData.get("startDate") as string);
-    const endDate = new Date(formData.get("endDate") as string);
+    // Migrated to parseFormData(payrollSchema) — the previous hand-parsed path
+    // (safeId/period as string/new Date(raw)/safeNumber) bypassed schema
+    // validation: blank periods and dates became Invalid Date, non-numeric
+    // amounts became NaN, and the period/startDate/endDate required guards
+    // were not enforced. Mirrors processPayroll for validation parity.
+    const parsed = parseFormData(payrollSchema, formData);
+    if (!parsed.success)
+      return { success: false, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
+    const employeeId = v.employeeId ?? null;
+    const startDate = new Date(v.startDate);
+    const endDate = new Date(v.endDate);
 
     // Auto-calculate late penalty if not manually provided
-    let lateDeduction = safeNumber(formData.get("lateDeduction")) ?? 0;
-    let lateMinutes = safeNumber(formData.get("lateMinutes")) ?? 0;
+    let lateDeduction = v.lateDeduction ?? 0;
+    let lateMinutes = v.lateMinutes ?? 0;
 
-    const recalcLate = formData.get("recalcLate") === "true";
+    // recalcLate is a formData-only signal; payrollSchema doesn't include it
+    // (it's a client hint, not a stored field).
+    const recalcLate = v.recalcLate === true;
     if (employeeId && (lateDeduction === 0 || recalcLate)) {
       const latePenalty = await calculateLatePenalty(
         employeeId,
@@ -1492,10 +1519,10 @@ export async function updatePayroll(id: number, formData: FormData) {
     }
 
     // Attendance summary (working days + bolos deduction; holidays excluded)
-    let workingDays = safeNumber(formData.get("workingDays")) ?? 0;
-    let presentDays = safeNumber(formData.get("presentDays")) ?? 0;
-    let absentDays = safeNumber(formData.get("absentDays")) ?? 0;
-    let absentDeduction = safeNumber(formData.get("absentDeduction")) ?? 0;
+    let workingDays = v.workingDays ?? 0;
+    let presentDays = v.presentDays ?? 0;
+    let absentDays = v.absentDays ?? 0;
+    let absentDeduction = v.absentDeduction ?? 0;
     if (
       employeeId &&
       (recalcLate || (absentDeduction === 0 && workingDays === 0))
@@ -1511,13 +1538,12 @@ export async function updatePayroll(id: number, formData: FormData) {
       absentDeduction = att.absentDeduction;
     }
 
-    const baseSalary = safeNumber(formData.get("baseSalary")) ?? 0;
-    const allowances = safeNumber(formData.get("allowances")) ?? 0;
-    const deductions = safeNumber(formData.get("deductions")) ?? 0;
-    const overtimeTotal = safeNumber(formData.get("overtimeTotal")) ?? 0;
-    const appreciationTotal =
-      safeNumber(formData.get("appreciationTotal")) ?? 0;
-    const loanDeduction = safeNumber(formData.get("loanDeduction")) ?? 0;
+    const baseSalary = v.baseSalary ?? 0;
+    const allowances = v.allowances ?? 0;
+    const deductions = v.deductions ?? 0;
+    const overtimeTotal = v.overtimeTotal ?? 0;
+    const appreciationTotal = v.appreciationTotal ?? 0;
+    const loanDeduction = v.loanDeduction ?? 0;
 
     // Statutory: BPJS (employee) + PPh21, computed server-side.
     const empForTaxUpd = employeeId
@@ -1550,13 +1576,13 @@ export async function updatePayroll(id: number, formData: FormData) {
     // pay and from the GL posting, which posts netSalary + statutory (see
     // postPayrollJournal in accounting.hook.ts).
     const totalAmount = netSalary;
-    const paymentDateRaw = formData.get("paymentDate") as string | null;
+    const paymentDateRaw = v.paymentDate ?? null;
 
     const payroll = await prisma.payroll.update({
       where: { id },
       data: {
         employeeId,
-        period: formData.get("period") as string,
+        period: v.period,
         startDate,
         endDate,
         baseSalary,
@@ -2071,9 +2097,19 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       );
     }
 
-    const employeeId = requireId(formData.get("employeeId"), "employeeId");
-    const startDate = new Date(formData.get("startDate") as string);
-    const endDate = new Date(formData.get("endDate") as string);
+    // Migrated to parseFormData(leaveRequestSchema) — the previous hand-parsed
+    // path (requireId/new Date(raw)/raw `as string` cast) bypassed schema
+    // validation: blank dates became Invalid Date, employeeId/type could be
+    // empty strings, and the existing date-order / overlap guards relied on
+    // unvalidated raw inputs. Mirrors createLeaveRequest for validation parity.
+    const parsed = parseFormData(leaveRequestSchema, formData);
+    if (!parsed.success)
+      return { success: false, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
+    const employeeId = v.employeeId;
+    const startDate = new Date(v.startDate);
+    const endDate = new Date(v.endDate);
 
     if (startDate > endDate) {
       throw new Error("Tanggal mulai tidak boleh melebihi tanggal selesai");
@@ -2099,10 +2135,10 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       where: { id },
       data: {
         employeeId,
-        type: formData.get("type") as string,
+        type: v.type,
         startDate,
         endDate,
-        reason: formData.get("reason") as string | null,
+        reason: v.reason ?? null,
       },
     });
 
@@ -2143,17 +2179,27 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       );
     }
 
+    // Migrated to parseFormData(overtimeRequestSchema) — the previous hand-parsed
+    // path (requireId/requireNumber/new Date(raw)) bypassed schema validation:
+    // a blank date became Invalid Date, hours could be 0 or negative, and the
+    // employeeId / projectId / hours / date / reason guards were not enforced.
+    // Mirrors createOvertimeRequest for validation parity.
+    const parsed = parseFormData(overtimeRequestSchema, formData);
+    if (!parsed.success)
+      return { success: false, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
     const overtime = await prisma.overtimeRequest.update({
       where: { id },
       data: {
-        employeeId: requireId(formData.get("employeeId"), "employeeId"),
-        projectId: safeNumber(formData.get("projectId")),
-        date: new Date(formData.get("date") as string),
-        hours: requireNumber(formData.get("hours"), "hours"),
-        totalHours: safeNumber(formData.get("totalHours")),
-        mealHours: safeNumber(formData.get("mealHours")),
-        billableHours: safeNumber(formData.get("billableHours")),
-        reason: formData.get("reason") as string | null,
+        employeeId: v.employeeId,
+        projectId: v.projectId ?? null,
+        date: new Date(v.date),
+        hours: v.hours,
+        totalHours: v.totalHours ?? null,
+        mealHours: v.mealHours ?? null,
+        billableHours: v.billableHours ?? null,
+        reason: v.reason ?? null,
         status: "pending",
       },
     });
@@ -2179,10 +2225,18 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
   try {
     await requirePermission("create_loans");
 
-    const totalAmount = requireNumber(
-      formData.get("totalAmount"),
-      "totalAmount",
-    );
+    // Migrated to parseFormData(employeeLoanSchema) — the previous hand-parsed
+    // path (requireNumber / new Date(raw) / requireId) bypassed schema
+    // validation: negative amounts could reach the DB, blank loanDates crashed
+    // new Date() into Invalid Date, and the loanDate / totalAmount / installment
+    // required guards were not enforced. Mirrors createEmployeeLoan for
+    // validation parity.
+    const parsed = parseFormData(employeeLoanSchema, formData);
+    if (!parsed.success)
+      return { success: false, error: `Validasi gagal: ${parsed.error}` };
+    const v = parsed.data;
+
+    const totalAmount = v.totalAmount;
 
     // Only adjust remainingAmount if totalAmount was actually changed. This prevents
     // wiping amortization progress when editing other fields (notes, installment).
@@ -2212,16 +2266,13 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
     const loan = await prisma.employeeLoan.update({
       where: { id },
       data: {
-        employeeId: requireId(formData.get("employeeId"), "employeeId"),
-        loanDate: new Date(formData.get("loanDate") as string),
+        employeeId: v.employeeId,
+        loanDate: new Date(v.loanDate),
         totalAmount,
-        monthlyInstallment: requireNumber(
-          formData.get("monthlyInstallment"),
-          "monthlyInstallment",
-        ),
+        monthlyInstallment: v.monthlyInstallment,
         remainingAmount: newRemaining,
         // Status stays unchanged (managed by markPayrollPaid / system only).
-        notes: formData.get("notes") as string | null,
+        notes: v.notes ?? null,
       },
     });
 
