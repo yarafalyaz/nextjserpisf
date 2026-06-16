@@ -13,5 +13,10 @@ export function PageTitle({ children, className }: { children: React.ReactNode; 
 }
 
 export function PageSubtitle({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <p className={cn("text-[0.9375rem] text-muted-foreground mt-1", className)}>{children}</p>
+  // <p> is the correct semantic element for subtitle text. role="doc-subtitle"
+  // is an ARIA role designed for "subtitle" purposes on top-level page headings;
+  // assistive tech that understands it (e.g. NVDA, JAWS) announces the
+  // relationship to the preceding h1, so screen-reader users hear e.g.
+  // "heading: Laporan Keuangan, doc-subtitle: Periode 1 Jan – 31 Des 2026".
+  return <p role="doc-subtitle" className={cn("text-[0.9375rem] text-muted-foreground mt-1", className)}>{children}</p>
 }

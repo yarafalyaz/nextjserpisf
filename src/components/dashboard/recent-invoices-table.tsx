@@ -14,7 +14,7 @@ import type {
   VisibilityState,
 } from "@tanstack/react-table"
 import type { ReactNode } from "react"
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   Table,
@@ -89,6 +89,7 @@ function SortButton({
   children: ReactNode
   onClick: () => void
 }) {
+  const label = typeof children === "string" ? children : "kolom"
   return (
     <Button
       type="button"
@@ -96,9 +97,10 @@ function SortButton({
       size="sm"
       className="-ml-3 h-8 px-2 text-xs font-medium"
       onClick={onClick}
+      aria-label={`Urutkan ${label}`}
     >
       {children}
-      <ArrowUpDown className="size-3.5" />
+      <ArrowUpDown className="size-3.5" aria-hidden="true" />
     </Button>
   )
 }
@@ -147,7 +149,9 @@ const columns: ColumnDef<InvoiceRow>[] = [
       </SortButton>
     ),
     cell: ({ row }) => (
-      <span className="block max-w-[180px] truncate font-medium">{row.original.customerName}</span>
+      <span className="block max-w-[180px] truncate font-medium" title={row.original.customerName}>
+        {row.original.customerName}
+      </span>
     ),
   },
   {
@@ -158,7 +162,9 @@ const columns: ColumnDef<InvoiceRow>[] = [
       </SortButton>
     ),
     cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground">{formatDate(row.original.date)}</span>
+      <time className="text-xs text-muted-foreground" dateTime={row.original.date}>
+        {formatDate(row.original.date)}
+      </time>
     ),
   },
   {
@@ -179,15 +185,28 @@ const columns: ColumnDef<InvoiceRow>[] = [
       const paid = row.original.paidAmount
       const total = row.original.grandTotal
       const percent = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0
+      const paidLabel = `Terbayar ${formatRp(paid)} dari ${formatRp(total)}, ${percent} persen`
 
       return (
         <div className="min-w-[150px]">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2" aria-hidden="true">
             <span className="text-xs tabular-nums text-muted-foreground">{formatRp(paid)}</span>
             <span className="text-xs tabular-nums text-muted-foreground">{percent}%</span>
           </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+          <div
+            className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-label={paidLabel}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percent}
+            aria-valuetext={`${percent} persen terbayar`}
+          >
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{ width: `${percent}%` }}
+              aria-hidden="true"
+            />
           </div>
         </div>
       )
@@ -199,7 +218,7 @@ const columns: ColumnDef<InvoiceRow>[] = [
     cell: ({ row }) => {
       const cfg = statusConfig[row.original.status] ?? { label: row.original.status, className: "" }
       return (
-        <Badge variant="outline" className={cfg.className}>
+        <Badge variant="outline" className={cfg.className} aria-label={`Status: ${cfg.label}`}>
           {cfg.label}
         </Badge>
       )
@@ -213,6 +232,8 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [statusTab, setStatusTab] = useState("all")
   const [query, setQuery] = useState("")
+  const titleId = useId()
+  const paginationId = useId()
 
   const filteredData = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -261,14 +282,14 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
   })
 
   return (
-    <Card>
+    <Card aria-labelledby={titleId}>
       <CardHeader>
-        <CardTitle>Faktur Terbaru</CardTitle>
+        <CardTitle id={titleId}>Faktur Terbaru</CardTitle>
         <CardDescription>10 faktur penjualan terakhir</CardDescription>
         <CardAction>
           <Button asChild variant="ghost" size="sm">
             <Link href="/penjualan/faktur">
-              Semua <ArrowUpRight className="size-3.5" />
+              Semua <ArrowUpRight className="size-3.5" aria-hidden="true" />
             </Link>
           </Button>
         </CardAction>
@@ -321,24 +342,40 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
           </div>
 
           <div className="overflow-x-auto border-t">
-            <Table>
+            <Table aria-label="Tabel faktur terbaru">
+              <caption className="sr-only">Daftar faktur penjualan terbaru dengan nomor, pelanggan, tanggal, total, status pembayaran, dan status dokumen</caption>
               <TableHeader>
                 {table.getHeaderGroups().map((hg) => (
                   <TableRow key={hg.id}>
-                    {hg.headers.map((header) => (
-                      <TableHead key={header.id} className="px-4 lg:px-6">
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                      </TableHead>
-                    ))}
+                    {hg.headers.map((header) => {
+                      const sort = header.column.getIsSorted()
+                      const ariaSort: "ascending" | "descending" | undefined =
+                        sort === "asc" ? "ascending" : sort === "desc" ? "descending" : undefined
+                      const isSortable = header.column.getCanSort()
+                      return (
+                        <TableHead
+                          key={header.id}
+                          scope="col"
+                          aria-sort={isSortable ? ariaSort : undefined}
+                          className="px-4 lg:px-6"
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </TableHead>
+                      )
+                    })}
                   </TableRow>
                 ))}
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="py-10 text-center text-muted-foreground">
+                    <TableCell
+                      colSpan={columns.length}
+                      className="py-10 text-center text-muted-foreground"
+                      role="status"
+                    >
                       Belum ada faktur
                     </TableCell>
                   </TableRow>
@@ -358,11 +395,15 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
           </div>
 
           <div className="flex flex-col gap-3 border-t px-4 py-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between lg:px-6">
-            <span>
+            <span aria-live="polite" aria-atomic="true">
               {table.getSelectedRowModel().rows.length} dari {filteredData.length} faktur dipilih
             </span>
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
-              <span>
+            <nav
+              id={paginationId}
+              aria-label="Pagination tabel faktur"
+              className="flex items-center justify-between gap-3 sm:justify-end"
+            >
+              <span aria-live="polite" aria-atomic="true">
                 Halaman {table.getState().pagination.pageIndex + 1} dari {Math.max(table.getPageCount(), 1)}
               </span>
               <div className="flex gap-1.5">
@@ -387,7 +428,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                   <ChevronRight className="size-4" aria-hidden="true" />
                 </Button>
               </div>
-            </div>
+            </nav>
           </div>
         </Tabs>
       </CardContent>
