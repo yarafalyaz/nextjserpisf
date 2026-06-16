@@ -350,6 +350,28 @@ describe("Budget Actions", () => {
     expect(res?.success).toBe(true)
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_budgets")
   })
+  it("updateBudget does not overwrite createdBy (audit-trail immutability)", async () => {
+    // Original creator was user 42; editor is user 1 (from beforeEach mock).
+    // updateBudget must NOT touch createdBy, otherwise every edit silently
+    // re-attributes the budget to whoever last saved it and erases the real
+    // creator from the audit trail.
+    mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      createdBy: 42,
+    })
+    const res = await (actions as any).updateBudget(1, fdMap({
+      name: "Budget 2026 v2",
+      accountId: 1,
+      amount: 120000,
+      startDate: "2026-01-01",
+      endDate: "2026-12-31",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.budget.update).toHaveBeenCalledTimes(1)
+    const updateData = mocks.prismaMock.budget.update.mock.calls[0][0].data
+    expect(updateData).not.toHaveProperty("createdBy")
+  })
+
   it("updateBudget fails if endDate is before startDate", async () => {
     mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({ id: 1 })
     const res = await (actions as any).updateBudget(1, fdMap({

@@ -1143,7 +1143,7 @@ export async function updateBudget(id: number, formData: FormData) {
 
   try {
 
-  const user = await requirePermission("edit_budgets")
+  await requirePermission("edit_budgets")
 
   const parsed = parseFormData(budgetSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
@@ -1158,7 +1158,10 @@ export async function updateBudget(id: number, formData: FormData) {
       amount: v.amount,
       startDate: v.startDate,
       endDate: v.endDate,
-      createdBy: Number(user.id),
+      // NOTE: createdBy is intentionally NOT updated here. It records the
+      // original author and must remain immutable across edits — overwriting it
+      // with the current editor erases the audit trail (every save would
+      // re-attribute the budget to whoever last touched it).
     },
   })
 
