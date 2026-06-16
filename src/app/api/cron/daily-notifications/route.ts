@@ -47,6 +47,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "No active admins found." })
   }
 
+  // Pre-resolve admin IDs once. notificationService.notifyAdmins internally
+  // re-runs this same `prisma.user.findMany` on every call, so without this
+  // a single cron pass issued up to 5 identical admin lookups (one per
+  // notification category). Reusing the pre-fetched list via notifyUsers
+  // drops 5 redundant round-trips to 0.
+  const adminIds = admins.map((a) => a.id)
+
   const results: Record<string, number> = {}
 
   // 1. Low stock items
@@ -67,7 +74,8 @@ export async function GET(request: Request) {
       .map((i) => `• ${i.name} (Stok: ${i.qty_on_hand}, Min: ${i.min_stock})`)
       .join("\n")
 
-    await notificationService.notifyAdmins(
+    await notificationService.notifyUsers(
+      adminIds,
       `${count} Barang Stok Menipis`,
       itemList + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
       "warning"
@@ -93,7 +101,8 @@ export async function GET(request: Request) {
       0
     )
 
-    await notificationService.notifyAdmins(
+    await notificationService.notifyUsers(
+      adminIds,
       `${count} Invoice Jatuh Tempo`,
       `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}`,
       "danger"
@@ -116,7 +125,8 @@ export async function GET(request: Request) {
 
   if (stalePOs.length > 0) {
     const count = stalePOs.length
-    await notificationService.notifyAdmins(
+    await notificationService.notifyUsers(
+      adminIds,
       `${count} PO Belum Diterima (>7 hari)`,
       `Ada ${count} pesanan pembelian yang sudah lebih dari 7 hari belum diterima barangnya.`,
       "warning"
@@ -141,7 +151,8 @@ export async function GET(request: Request) {
       .map((a) => `• ${a.employee?.name || "Unknown"}`)
       .join("\n")
 
-    await notificationService.notifyAdmins(
+    await notificationService.notifyUsers(
+      adminIds,
       `${count} Karyawan Telat Hari Ini`,
       names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
       "warning"
@@ -180,7 +191,8 @@ export async function GET(request: Request) {
           .map((e) => `• ${e.name}${e.department ? ` (${e.department.name})` : ""}`)
           .join("\n")
 
-        await notificationService.notifyAdmins(
+        await notificationService.notifyUsers(
+          adminIds,
           `${count} Karyawan Belum Absen`,
           names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
           "danger"

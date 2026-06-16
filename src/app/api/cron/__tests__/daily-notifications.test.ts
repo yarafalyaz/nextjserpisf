@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
     employee: { findMany: vi.fn().mockResolvedValue([]) },
     leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
   },
-  notificationService: { notifyAdmins: vi.fn() },
+  notificationService: { notifyUsers: vi.fn() },
   isValidCronRequest: vi.fn().mockReturnValue(true),
 }))
 

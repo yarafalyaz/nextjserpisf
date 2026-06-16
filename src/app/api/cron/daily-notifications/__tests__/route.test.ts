@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   holidayFindFirst: vi.fn(),
   employeeFindMany: vi.fn(),
   leaveRequestFindMany: vi.fn(),
-  notifyAdmins: vi.fn(),
+  notifyUsers: vi.fn(),
 }))
 
 vi.mock("@/lib/security/cron", () => ({
@@ -20,7 +20,7 @@ vi.mock("@/lib/security/cron", () => ({
 
 vi.mock("@/lib/services/notification.service", () => ({
   notificationService: {
-    notifyAdmins: (...a: unknown[]) => mocks.notifyAdmins(...a),
+    notifyUsers: (...a: unknown[]) => mocks.notifyUsers(...a),
   },
 }))
 
@@ -89,7 +89,8 @@ describe("GET /api/cron/daily-notifications", () => {
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.lowStock).toBe(7)
-    expect(mocks.notifyAdmins).toHaveBeenCalledWith(
+    expect(mocks.notifyUsers).toHaveBeenCalledWith(
+      [1],
       expect.stringContaining("7 Barang"),
       expect.stringContaining("lainnya"),
       "warning"
@@ -173,10 +174,46 @@ describe("GET /api/cron/daily-notifications", () => {
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.absentEmployees).toBe(7)
-    expect(mocks.notifyAdmins).toHaveBeenCalledWith(
+    expect(mocks.notifyUsers).toHaveBeenCalledWith(
+      [1],
       expect.stringContaining("7 Karyawan Belum Absen"),
       expect.stringContaining("lainnya"),
       "danger"
     )
+  })
+
+  it("looks up admins exactly once even when every notification category fires", async () => {
+    // Regression: previously the route pre-fetched admins at the top AND each
+    // notifyAdmins(...) call internally re-queried the same user list, yielding
+    // up to 5 redundant `prisma.user.findMany` round-trips per cron pass. Now
+    // the pre-fetched admin IDs are reused via notifyUsers, so the user lookup
+    // must be called exactly once regardless of how many notification branches
+    // fire.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T12:00:00")) // post-10am so ALL branches fire
+    mocks.userFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.queryRaw.mockResolvedValue([{ id: 1, name: "Item1", qty_on_hand: 1, min_stock: 10 }]) // low stock
+    mocks.salesInvoiceFindMany.mockResolvedValue([{ grandTotal: 100, paidAmount: 0 }]) // overdue
+    mocks.purchaseOrderFindMany.mockResolvedValue([{ id: 1 }]) // stale PO
+    mocks.attendanceFindMany.mockResolvedValue([{ employee: { name: "Late" } }]) // late
+    mocks.holidayFindFirst.mockResolvedValue(null)
+    mocks.employeeFindMany.mockResolvedValue([{ id: 99, name: "Absent", department: null }])
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.results.lowStock).toBe(1)
+    expect(json.results.overdueInvoices).toBe(1)
+    expect(json.results.stalePOs).toBe(1)
+    expect(json.results.lateAttendance).toBe(1)
+    expect(json.results.absentEmployees).toBe(1)
+
+    // The pre-fetched admin IDs must be passed to every notifyUsers call
+    expect(mocks.notifyUsers).toHaveBeenCalledTimes(5)
+    for (const call of mocks.notifyUsers.mock.calls) {
+      expect(call[0]).toEqual([1, 2])
+    }
+
+    // And the user table must have been queried exactly once
+    expect(mocks.userFindMany).toHaveBeenCalledTimes(1)
   })
 })
