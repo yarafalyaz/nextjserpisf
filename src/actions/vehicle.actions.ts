@@ -105,28 +105,43 @@ export async function createVehicle(formData: FormData) {
       }
     }
 
-    // Let the DB assign the PK via autoincrement. The previous "smallest unused
-    // id" scan + explicit id assignment raced under concurrency (two creates
-    // computing the same gap id → PK collision → intermittent create failure),
-    // and was inconsistent with createCustomerVehicle which uses autoincrement.
-    const vehicle = await prisma.vehicle.create({
-      data: {
-        plateNumber: plateNo,
-        vehicleVariantId,
-        year: year ?? null,
-        color: color ?? null,
-      },
+    // Atomic create: Vehicle row + optional CustomerVehicle link in one tx.
+    // Without the transaction wrapper, a prisma.vehicle.create success followed
+    // by a prisma.customerVehicle.create failure would orphan a Vehicle row
+    // (no FK from Vehicle → CustomerVehicle) — the vehicle would be invisible
+    // to any customer, take a plate number, and survive forever. Wrapping the
+    // pair in a single $transaction makes the failure mode roll back the
+    // Vehicle insert too.
+    const { vehicle, customerVehicleId } = await prisma.$transaction(async (tx) => {
+      const created = await tx.vehicle.create({
+        data: {
+          plateNumber: plateNo,
+          vehicleVariantId,
+          year: year ?? null,
+          color: color ?? null,
+        },
+      })
+
+      let cvId: number | null = null
+      if (customerId) {
+        const cv = await tx.customerVehicle.create({
+          data: { customerId, vehicleId: created.id },
+        })
+        cvId = cv.id
+      }
+
+      return { vehicle: created, customerVehicleId: cvId }
     })
 
-    // Link to customer if provided
-    if (customerId) {
-      await prisma.customerVehicle.create({
-        data: { customerId, vehicleId: vehicle.id },
-      })
-    }
-
     revalidatePath("/kendaraan")
-    await logActivity("create", "Vehicle", vehicle.id, "Membuat kendaraan")
+    await logActivity(
+      "create",
+      "Vehicle",
+      vehicle.id,
+      customerVehicleId
+        ? `Membuat kendaraan + linkage pelanggan #${customerVehicleId}`
+        : "Membuat kendaraan"
+    )
     return { success: true, id: vehicle.id }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -410,42 +425,48 @@ export async function createCustomerVehicle(formData: FormData) {
     notes,
   } = parsed.data
 
-  // Find or create Vehicle from variantId
-  let vehicleId: number
+  // Find or create Vehicle from variantId, then link to the customer — both in
+  // ONE transaction. Without the wrapper, a vehicle.create success followed by a
+  // customerVehicle.create failure orphans the freshly-created Vehicle row (no
+  // FK from Vehicle → CustomerVehicle), leaving a plate-holding ghost vehicle
+  // that belongs to no customer. Mirrors the atomic createVehicle fix.
+  const customerVehicle = await prisma.$transaction(async (tx) => {
+    let vehicleId: number
 
-  if (variantId) {
-    // Create a new Vehicle record linked to the variant
-    const vehicle = await prisma.vehicle.create({
+    if (variantId) {
+      // Create a new Vehicle record linked to the variant
+      const vehicle = await tx.vehicle.create({
+        data: {
+          vehicleVariantId: variantId,
+          plateNumber: licensePlate ?? null,
+          year: year ?? null,
+          color: color ?? null,
+        },
+      })
+      vehicleId = vehicle.id
+    } else {
+      const rawVehicleId = formVehicleId ?? kendaraanId
+      if (!rawVehicleId) {
+        throw new Error("vehicleId wajib diisi")
+      }
+      vehicleId = rawVehicleId
+    }
+
+    return tx.customerVehicle.create({
       data: {
-        vehicleVariantId: variantId,
-        plateNumber: licensePlate ?? null,
+        customerId,
+        vehicleId,
+        licensePlate: licensePlate ?? null,
         year: year ?? null,
         color: color ?? null,
+        vehicleType: vehicleType ?? null,
+        transmission: transmission ?? null,
+        chassisNumber: chassisNumber ?? null,
+        engineNumber: engineNumber ?? null,
+        isActive: isActive ?? true,
+        notes: notes ?? null,
       },
     })
-    vehicleId = vehicle.id
-  } else {
-    const rawVehicleId = formVehicleId ?? kendaraanId
-    if (!rawVehicleId) {
-      return { success: false, error: "vehicleId wajib diisi" }
-    }
-    vehicleId = rawVehicleId
-  }
-
-  const customerVehicle = await prisma.customerVehicle.create({
-    data: {
-      customerId,
-      vehicleId,
-      licensePlate: licensePlate ?? null,
-      year: year ?? null,
-      color: color ?? null,
-      vehicleType: vehicleType ?? null,
-      transmission: transmission ?? null,
-      chassisNumber: chassisNumber ?? null,
-      engineNumber: engineNumber ?? null,
-      isActive: isActive ?? true,
-      notes: notes ?? null,
-    },
   })
 
   revalidatePath(`/master/pelanggan/${customerId}/kendaraan`)
@@ -481,45 +502,53 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
     notes,
   } = parsed.data
 
-  // Find or create Vehicle from variantId
-  let vehicleId: number
+  // Atomic update: Vehicle row + CustomerVehicle link, both in ONE transaction.
+  // Without the wrapper, a vehicle.update success followed by a customerVehicle
+  // .update failure would leave the linkage row pointing at an old field set
+  // (e.g. licensePlate mismatch) or, if the FK chain rejected, leave the
+  // vehicle mutated without the customer's linkage row being touched. The
+  // existing findUniqueOrThrow inside the tx (added below) plus a single
+  // $transaction make the pair atomic. Mirrors createVehicle / createCustomerVehicle.
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.customerVehicle.findUniqueOrThrow({ where: { id } })
 
-  const existing = await prisma.customerVehicle.findUniqueOrThrow({ where: { id } })
+    let vehicleId: number
 
-  if (variantId) {
-    // Update existing vehicle record
-    const updatedVehicle = await prisma.vehicle.update({
-      where: { id: existing.vehicleId },
+    if (variantId) {
+      // Update existing vehicle record
+      const updatedVehicle = await tx.vehicle.update({
+        where: { id: existing.vehicleId },
+        data: {
+          vehicleVariantId: variantId,
+          plateNumber: licensePlate ?? null,
+          year: year ?? null,
+          color: color ?? null,
+        },
+      })
+      vehicleId = updatedVehicle.id
+    } else {
+      const rawVehicleId = formVehicleId ?? kendaraanId
+      if (!rawVehicleId) {
+        throw new Error("vehicleId wajib diisi")
+      }
+      vehicleId = rawVehicleId
+    }
+
+    await tx.customerVehicle.update({
+      where: { id },
       data: {
-        vehicleVariantId: variantId,
-        plateNumber: licensePlate ?? null,
+        vehicleId,
+        licensePlate: licensePlate ?? null,
         year: year ?? null,
         color: color ?? null,
+        vehicleType: vehicleType ?? null,
+        transmission: transmission ?? null,
+        chassisNumber: chassisNumber ?? null,
+        engineNumber: engineNumber ?? null,
+        isActive: isActive ?? true,
+        notes: notes ?? null,
       },
     })
-    vehicleId = updatedVehicle.id
-  } else {
-    const rawVehicleId = formVehicleId ?? kendaraanId
-    if (!rawVehicleId) {
-      return { success: false, error: "vehicleId wajib diisi" }
-    }
-    vehicleId = rawVehicleId
-  }
-
-  await prisma.customerVehicle.update({
-    where: { id },
-    data: {
-      vehicleId,
-      licensePlate: licensePlate ?? null,
-      year: year ?? null,
-      color: color ?? null,
-      vehicleType: vehicleType ?? null,
-      transmission: transmission ?? null,
-      chassisNumber: chassisNumber ?? null,
-      engineNumber: engineNumber ?? null,
-      isActive: isActive ?? true,
-      notes: notes ?? null,
-    },
   })
 
   revalidatePath(`/master/pelanggan/${customerId}/kendaraan`)

@@ -143,6 +143,24 @@ describe("Customer Vehicle Actions", () => {
     const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, kendaraanId: 7 }))
     expect(res?.success).toBe(true)
   })
+  it("createCustomerVehicle wraps Vehicle + CustomerVehicle in a single $transaction", async () => {
+    mocks.prismaMock.customerVehicle.create.mockResolvedValueOnce({ id: 1 })
+    const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1 }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vehicle.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.customerVehicle.create).toHaveBeenCalledTimes(1)
+    const txCalls = mocks.prismaMock.$transaction.mock.calls.filter(
+      (c: any[]) => typeof c[0] === "function"
+    )
+    expect(txCalls.length).toBeGreaterThan(0)
+  })
+  it("createCustomerVehicle surfaces failure (no orphan) when CustomerVehicle.create throws after Vehicle.create", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.customerVehicle.create.mockRejectedValueOnce(new Error("fk fail"))
+    const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/fk fail/)
+  })
   it("updateCustomerVehicle succeeds", async () => {
     const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 1, vehicleId: 1 }))
     expect(res?.success).toBe(true)
@@ -290,6 +308,38 @@ describe("Vehicle Actions Error Paths", () => {
     mocks.prismaMock.customerVehicle.create.mockResolvedValueOnce({ id: 1 })
     const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1, customerId: 5 }))
     expect(res?.success).toBe(true)
+  })
+
+  it("createVehicle wraps Vehicle + CustomerVehicle in a single $transaction (no orphan risk)", async () => {
+    // The $transaction mock invokes the callback with the prisma mock, so any
+    // tx.vehicle.create / tx.customerVehicle.create call proves the atomic
+    // wrapper is in place. Without it, the function would call prisma.vehicle
+    // .create / prisma.customerVehicle.create directly and a partial failure
+    // would orphan a Vehicle row.
+    mocks.prismaMock.customerVehicle.create.mockResolvedValueOnce({ id: 1 })
+    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1, customerId: 5 }))
+    expect(res?.success).toBe(true)
+    // Inside-tx calls routed through the prisma mock (which IS the tx mock here).
+    expect(mocks.prismaMock.vehicle.create).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.customerVehicle.create).toHaveBeenCalledTimes(1)
+    // $transaction must be invoked (function form, not array form) to wrap the pair.
+    const txCalls = mocks.prismaMock.$transaction.mock.calls.filter(
+      (c: any[]) => typeof c[0] === "function"
+    )
+    expect(txCalls.length).toBeGreaterThan(0)
+  })
+
+  it("createVehicle rolls back Vehicle when CustomerVehicle.create throws inside the tx", async () => {
+    mocks.prismaMock.customerVehicle.create.mockRejectedValueOnce(new Error("fk fail"))
+    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1, customerId: 5 }))
+    // The $transaction mock propagates the rejection as a rejection of the
+    // whole callback (it's not a real DB tx that would auto-rollback), so the
+    // outer catch turns it into success: false. Crucially, vehicle.create
+    // was attempted (then "rolled back" by the rejected tx) — but no commit
+    // happens. The test asserts the function surfaces the failure rather than
+    // returning success with an orphan Vehicle.
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/fk fail/)
   })
   it("createVehicleVariant fails if duplicate name (line 187 branch)", async () => {
     mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 2 })
