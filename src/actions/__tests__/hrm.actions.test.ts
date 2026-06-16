@@ -284,6 +284,14 @@ describe("Leave Request Actions", () => {
     })
     prismaMock.leaveRequest.update.mockResolvedValue({})
     prismaMock.leaveRequest.delete.mockResolvedValue({})
+    // Annual-leave quota gate (getLeaveQuota) reads employee.joinDate to check
+    // tenure ≥ 1 year. Provide an employee joined well over a year ago so the
+    // eligibility gate passes; workSchedule.findMany defaults to [] → the quota
+    // service falls back to a Mon–Fri work week, and leaveRequest.findMany
+    // defaults to [] → 0 days already used.
+    prismaMock.employee.findUnique.mockResolvedValue({
+      id: 1, departmentId: null, joinDate: new Date("2020-01-01"),
+    })
   })
 
   it("createLeaveRequest validates form", async () => {

@@ -32,6 +32,11 @@ import {
 } from "@/lib/validations/hrm.schemas";
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
 import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service";
+import {
+  getLeaveQuota,
+  countLeaveWorkingDays,
+  QUOTA_LEAVE_TYPES,
+} from "@/lib/services/leave-quota.service";
 import { syncNationalHolidays as syncNationalHolidaysService } from "@/lib/services/holiday-sync.service";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid } from "@/lib/hooks/accounting.hook";
@@ -438,6 +443,47 @@ export async function createLeaveRequest(formData: FormData) {
         throw new Error(
           "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.",
         );
+      }
+
+      // Annual-leave quota gate (only `annual` draws down the 12-day/calendar-year
+      // balance — see QUOTA_LEAVE_TYPES). Two enforced rules:
+      //  1. Tenure: employees with < 1 year of service (from joinDate) are not
+      //     entitled to paid annual leave at all (entitled = 0).
+      //  2. Balance: (already-used + days requested) must not exceed the 12-day
+      //     entitlement. Working days are counted per the employee's WorkSchedule
+      //     and exclude national/department holidays. pending requests count
+      //     toward "used" so two in-flight requests can't both pass the check.
+      // Runs inside the same tx as the overlap check + insert so the read used
+      // for the gate and the write are atomic. Quota is keyed on the leave's
+      // START year (a leave straddling Dec→Jan is charged to the year it begins).
+      if (QUOTA_LEAVE_TYPES.has(v.type)) {
+        const quotaYear = startDate.getFullYear();
+        const quota = await getLeaveQuota(employeeId, {
+          year: quotaYear,
+          db: tx,
+        });
+        if (!quota.eligible) {
+          throw new Error(
+            "Cuti tahunan hanya untuk karyawan dengan masa kerja minimal 1 tahun.",
+          );
+        }
+        const requestedDays = await countLeaveWorkingDays(
+          employeeId,
+          startDate,
+          endDate,
+          tx,
+        );
+        if (requestedDays === 0) {
+          throw new Error(
+            "Rentang cuti tidak mengandung hari kerja (semua tanggal jatuh pada akhir pekan / hari libur).",
+          );
+        }
+        if (quota.used + requestedDays > quota.entitled) {
+          throw new Error(
+            `Sisa jatah cuti tahunan ${quota.remaining} hari tidak cukup untuk ${requestedDays} hari yang diajukan ` +
+              `(jatah ${quota.entitled} hari/tahun ${quotaYear}, sudah terpakai ${quota.used} hari).`,
+          );
+        }
       }
 
       return await tx.leaveRequest.create({
@@ -1963,6 +2009,84 @@ export async function deleteLeaveRequest(id: number) {
   }
 }
 
+/**
+ * Annual-leave balance for a single employee (used by the leave form to show
+ * the live remaining quota before submission). Returns null entitlement info
+ * when the employee can't be resolved. Year defaults to the current calendar
+ * year; pass a year to inspect a different period.
+ */
+export async function getEmployeeLeaveBalance(
+  employeeId: number,
+  year?: number,
+) {
+  try {
+    await requirePermission("view_leave_requests");
+    if (!employeeId || Number.isNaN(employeeId)) {
+      return { success: false as const, error: "Karyawan tidak valid" };
+    }
+    const quota = await getLeaveQuota(employeeId, { year });
+    return { success: true as const, quota };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[getEmployeeLeaveBalance]", getErrorMessage(e) || e);
+    return {
+      success: false as const,
+      error: getErrorMessage(e, "Terjadi kesalahan"),
+    };
+  }
+}
+
+/**
+ * Annual-leave balance for every active employee (used by the leave-balance
+ * dashboard). One getLeaveQuota call per employee — fine for typical SME
+ * headcounts; revisit with a batched query if the roster grows large.
+ */
+export async function getAllLeaveBalances(year?: number) {
+  try {
+    await requirePermission("view_leave_requests");
+    const targetYear = year ?? new Date().getFullYear();
+
+    const employees = await prisma.employee.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        employeeNo: true,
+        joinDate: true,
+        department: { select: { name: true } },
+      },
+    });
+
+    const balances = await Promise.all(
+      employees.map(async (emp) => {
+        const quota = await getLeaveQuota(emp.id, { year: targetYear });
+        return {
+          employeeId: emp.id,
+          name: emp.name,
+          employeeNo: emp.employeeNo,
+          department: emp.department?.name ?? null,
+          joinDate: emp.joinDate.toISOString().split("T")[0],
+          entitled: quota.entitled,
+          used: quota.used,
+          remaining: quota.remaining,
+          eligible: quota.eligible,
+          tenureMonths: quota.tenureMonths,
+        };
+      }),
+    );
+
+    return { success: true as const, year: targetYear, balances };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[getAllLeaveBalances]", getErrorMessage(e) || e);
+    return {
+      success: false as const,
+      error: getErrorMessage(e, "Terjadi kesalahan"),
+    };
+  }
+}
+
 export async function deleteOvertimeRequest(id: number) {
   try {
     await requirePermission("delete_overtime_requests");
@@ -2115,31 +2239,68 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       throw new Error("Tanggal mulai tidak boleh melebihi tanggal selesai");
     }
 
-    const overlap = await prisma.leaveRequest.findFirst({
-      where: {
-        employeeId,
-        status: { in: ["pending", "approved"] },
-        startDate: { lte: endDate },
-        endDate: { gte: startDate },
-        id: { not: id },
-      },
-      select: { id: true },
-    });
-    if (overlap) {
-      throw new Error(
-        "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.",
-      );
-    }
+    // Overlap check + quota gate + update run in one $transaction (mirrors
+    // createLeaveRequest) so the reads backing the guards and the write are
+    // atomic. The quota check excludes THIS request's id so its own existing
+    // days are not double-counted against the balance when editing.
+    const leave = await prisma.$transaction(async (tx) => {
+      const overlap = await tx.leaveRequest.findFirst({
+        where: {
+          employeeId,
+          status: { in: ["pending", "approved"] },
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+          id: { not: id },
+        },
+        select: { id: true },
+      });
+      if (overlap) {
+        throw new Error(
+          "Terdapat pengajuan cuti lain yang bentrok di tanggal yang sama. Hapus atau tolak yang lama terlebih dahulu.",
+        );
+      }
 
-    const leave = await prisma.leaveRequest.update({
-      where: { id },
-      data: {
-        employeeId,
-        type: v.type,
-        startDate,
-        endDate,
-        reason: v.reason ?? null,
-      },
+      if (QUOTA_LEAVE_TYPES.has(v.type)) {
+        const quotaYear = startDate.getFullYear();
+        const quota = await getLeaveQuota(employeeId, {
+          year: quotaYear,
+          excludeLeaveId: id,
+          db: tx,
+        });
+        if (!quota.eligible) {
+          throw new Error(
+            "Cuti tahunan hanya untuk karyawan dengan masa kerja minimal 1 tahun.",
+          );
+        }
+        const requestedDays = await countLeaveWorkingDays(
+          employeeId,
+          startDate,
+          endDate,
+          tx,
+        );
+        if (requestedDays === 0) {
+          throw new Error(
+            "Rentang cuti tidak mengandung hari kerja (semua tanggal jatuh pada akhir pekan / hari libur).",
+          );
+        }
+        if (quota.used + requestedDays > quota.entitled) {
+          throw new Error(
+            `Sisa jatah cuti tahunan ${quota.remaining} hari tidak cukup untuk ${requestedDays} hari yang diajukan ` +
+              `(jatah ${quota.entitled} hari/tahun ${quotaYear}, sudah terpakai ${quota.used} hari).`,
+          );
+        }
+      }
+
+      return await tx.leaveRequest.update({
+        where: { id },
+        data: {
+          employeeId,
+          type: v.type,
+          startDate,
+          endDate,
+          reason: v.reason ?? null,
+        },
+      });
     });
 
     await logActivity(

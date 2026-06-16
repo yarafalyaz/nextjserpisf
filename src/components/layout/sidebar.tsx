@@ -136,6 +136,7 @@ const navigation: NavItem[] = [
     children: [
       { label: "Absensi", href: "/sdm/absensi", icon: Clock },
       { label: "Cuti", href: "/sdm/cuti", icon: Palmtree },
+      { label: "Saldo Cuti", href: "/sdm/cuti/saldo", icon: Palmtree },
       { label: "Lembur", href: "/sdm/lembur", icon: Timer },
       { label: "Penggajian", href: "/sdm/penggajian", icon: Banknote },
       { label: "Jadwal Kerja", href: "/sdm/jadwal-kerja", icon: CalendarDays },
