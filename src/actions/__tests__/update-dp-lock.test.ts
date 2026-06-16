@@ -50,7 +50,7 @@ import { updateDownPayment } from "../sales.actions"
 function wireTransaction() {
   const tx = {
     $executeRaw: txExecuteRawMock,
-    downPayment: { aggregate: dpAggregateMock },
+    downPayment: { aggregate: dpAggregateMock, update: dpUpdateMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }

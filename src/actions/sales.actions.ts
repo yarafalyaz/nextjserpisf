@@ -1628,39 +1628,42 @@ export async function updateDownPayment(id: number, formData: FormData) {
 
   const amount = v.amount
 
-  // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
-  // two concurrent updates (or a create + an update) on the same quotation can't
-  // each pass the cap (TOCTOU) and together over-pay the quotation grandTotal.
-  // Mirrors the createDownPayment / convertQuotationToOrder lock pattern.
-  const otherDPs = await prisma.$transaction(async (tx) => {
+  // Lock the quotation row + re-run the cumulative cap + perform the write
+  // INSIDE the same transaction so two concurrent updates (or a create racing
+  // an update) on the same quotation can't each pass the cap (TOCTOU) and
+  // together over-pay the quotation grandTotal. Mirrors the createDownPayment
+  // lock pattern. The cap-check throw rolls the (otherwise no-op) tx back, and
+  // the outer catch surfaces the same message.
+  const dp = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
-    return tx.downPayment.aggregate({
+
+    const otherDPs = await tx.downPayment.aggregate({
       where: { quotationId, status: { not: "cancelled" }, id: { not: id } },
       _sum: { amount: true },
     })
-  })
-  const totalOther = Number(otherDPs._sum.amount ?? 0)
-  if (totalOther + amount > Number(quotation.grandTotal)) {
-    throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalOther})`)
-  }
+    const totalOther = Number(otherDPs._sum.amount ?? 0)
+    if (totalOther + amount > Number(quotation.grandTotal)) {
+      throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalOther})`)
+    }
 
-  const data: any = {
-    quotationId,
-    customerId: quotation.customerId,
-    amount,
-    paymentDate: new Date(v.paymentDate),
-    paymentMethod: v.paymentMethod ?? null,
-    notes: v.notes ?? null,
-  }
+    const data: any = {
+      quotationId,
+      customerId: quotation.customerId,
+      amount,
+      paymentDate: new Date(v.paymentDate),
+      paymentMethod: v.paymentMethod ?? null,
+      notes: v.notes ?? null,
+    }
 
-  // Only update proofImage if new file uploaded
-  if (proofImage !== undefined) {
-    data.proofImage = proofImage
-  }
+    // Only update proofImage if new file uploaded
+    if (proofImage !== undefined) {
+      data.proofImage = proofImage
+    }
 
-  const dp = await prisma.downPayment.update({
-    where: { id },
-    data,
+    return tx.downPayment.update({
+      where: { id },
+      data,
+    })
   })
 
   await logActivity("update", "DownPayment", dp.id, `Memperbarui uang muka #${dp.id}`)
