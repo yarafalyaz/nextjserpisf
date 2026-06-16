@@ -51,7 +51,7 @@ import {
 async function assertThreeWayMatch(
   tx: Prisma.TransactionClient,
   purchaseOrderId: number | null | undefined,
-  billGrandTotal: number,
+  billGoodsValue: number,
   excludeBillId?: number,
 ): Promise<void> {
   if (!purchaseOrderId) return; // bills without a PO link are not matched
@@ -86,15 +86,20 @@ async function assertThreeWayMatch(
   // (each sees the other as draft → uncounted) and over-bill the PO even
   // sequentially. notIn:['cancelled'] = draft|posted|partial|paid = every bill
   // that has recognised AP for this PO.
+  //
+  // Match goods-value to goods-value: receivedValue is Σ qty×unitCost (tax- and
+  // discount-exclusive), so compare it against each bill's `subtotal` (Σ
+  // qty×unitPrice, also pre-tax/pre-discount). Using grandTotal here would add
+  // PPN/discount to one side only and wrongly reject every bill that carries tax.
   const otherBills = await tx.vendorBill.aggregate({
     where: {
       purchaseOrderId,
       status: { notIn: ["cancelled"] },
       ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
     },
-    _sum: { grandTotal: true },
+    _sum: { subtotal: true },
   });
-  const alreadyBilled = Number(otherBills._sum.grandTotal ?? 0);
+  const alreadyBilled = Number(otherBills._sum.subtotal ?? 0);
 
   // Allow a small tolerance for rounding/freight differences.
   const tolerance = safeRound(
@@ -102,11 +107,11 @@ async function assertThreeWayMatch(
     0,
   );
   if (
-    safeAdd(alreadyBilled, billGrandTotal, 0) >
+    safeAdd(alreadyBilled, billGoodsValue, 0) >
     safeAdd(receivedValue, tolerance, 0)
   ) {
     throw new Error(
-      `3-way match gagal: total tagihan (${safeAdd(alreadyBilled, billGrandTotal, 0).toLocaleString("id-ID")}) ` +
+      `3-way match gagal: total tagihan (${safeAdd(alreadyBilled, billGoodsValue, 0).toLocaleString("id-ID")}) ` +
         `melebihi nilai barang diterima (${receivedValue.toLocaleString("id-ID")}).`,
     );
   }
@@ -602,7 +607,7 @@ export async function createVendorBill(formData: FormData) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       }
 
-      await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, v.grandTotal);
+      await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, v.subtotal);
 
       const created = await tx.vendorBill.create({
         data: {
@@ -741,7 +746,7 @@ export async function confirmVendorBill(billId: number) {
       await assertThreeWayMatch(
         tx,
         fresh.purchaseOrderId,
-        Number(fresh.grandTotal),
+        Number(fresh.subtotal),
         fresh.id,
       );
 
@@ -1608,7 +1613,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       await assertThreeWayMatch(
         tx,
         v.purchaseOrderId ?? null,
-        v.grandTotal,
+        v.subtotal,
         id,
       );
 
@@ -1638,13 +1643,17 @@ export async function updateVendorBill(id: number, formData: FormData) {
         }
       }
 
+      // The bill journal is posted at creation; reverse + repost so the edited
+      // amount/tax/PO-link (which can flip the goods-based clearing branch) is
+      // reflected. Both run INSIDE this transaction so a failing repost (closed
+      // period, misconfigured account) rolls back the delete — otherwise the bill
+      // would be left with no AP journal and the GL silently understated. Delete
+      // first so onVendorBillPosted's idempotency guard doesn't skip the repost.
+      await deleteJournalByReferenceTx(tx, "VendorBill", id);
+      await onVendorBillPosted(updated.id, Number(user.id), tx);
+
       return updated;
     });
-
-    // The bill journal is posted at creation; reverse + repost so the edited
-    // amount/tax/PO-link (which can flip the goods-based clearing branch) is reflected.
-    await deleteJournalByReference("VendorBill", id);
-    await onVendorBillPosted(bill.id, Number(user.id));
 
     await logActivity(
       "update",

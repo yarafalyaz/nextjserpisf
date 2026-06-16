@@ -4,6 +4,7 @@ const requirePermissionMock = vi.fn()
 const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
 const deleteJournalByRefMock = vi.fn()
+const deleteJournalByRefTxMock = vi.fn()
 const onPaymentCreatedMock = vi.fn()
 const onPaymentUpdatedMock = vi.fn()
 const transactionMock = vi.fn()
@@ -29,7 +30,7 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
   onSalesInvoicePosted: vi.fn(), onSalesPaymentCreated: (...a: unknown[]) => onPaymentCreatedMock(...a),
   onSalesReturnCompleted: vi.fn(), onDownPaymentReceived: vi.fn(),
   deleteJournalByReference: (...a: unknown[]) => deleteJournalByRefMock(...a),
-  deleteJournalByReferenceTx: vi.fn(),
+  deleteJournalByReferenceTx: (...a: unknown[]) => deleteJournalByRefTxMock(...a),
 }))
 vi.mock("@/lib/hooks/down-payment.hook", () => ({ onDownPaymentConfirmed: vi.fn() }))
 vi.mock("@/lib/hooks/sales-payment.hook", () => ({
@@ -68,7 +69,7 @@ function wireTransaction() {
 
 beforeEach(() => {
   for (const m of [
-    requirePermissionMock, revalidateMock, logActivityMock, deleteJournalByRefMock,
+    requirePermissionMock, revalidateMock, logActivityMock, deleteJournalByRefMock, deleteJournalByRefTxMock,
     onPaymentCreatedMock, onPaymentUpdatedMock, transactionMock,
     paymentFindUniqueOrThrowMock, paymentUpdateMock, paymentAggregateMock,
     invoiceFindUniqueOrThrowMock, execRawMock, attachmentUpdateManyMock,
@@ -112,8 +113,11 @@ describe("updateSalesPayment overpay guard", () => {
     expect(paymentUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 9 }, data: expect.objectContaining({ amount: 800 }) }),
     )
-    // GL kept in sync: old cash journal reversed + reposted, invoice recalced.
-    expect(deleteJournalByRefMock).toHaveBeenCalledWith("SalesPayment", 9)
+    // GL kept in sync inside the transaction: old cash journal reversed + reposted,
+    // invoice recalced. The reverse now uses the tx-aware variant so a failed repost
+    // rolls back the delete.
+    expect(deleteJournalByRefTxMock).toHaveBeenCalledWith(expect.anything(), "SalesPayment", 9)
+    expect(onPaymentCreatedMock).toHaveBeenCalled()
     expect(onPaymentUpdatedMock).toHaveBeenCalled()
   })
 })

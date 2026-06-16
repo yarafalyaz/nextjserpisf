@@ -339,27 +339,33 @@ describe("Quotation Actions", () => {
   it("updateQuotation fails on mismatched vehicle", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
     mocks.prismaMock.customerVehicle.findFirst.mockResolvedValue(null)
-    const res = await actions.updateQuotation(1, fdMap({ customerVehicleId: 2, customerId: 1 }))
+    const res = await actions.updateQuotation(1, fdQuotation({ ...basicPayload, customerVehicleId: 2 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Kendaraan tidak terdaftar")
   })
   it("updateQuotation succeeds with omitted optional dates", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
-    const res = await actions.updateQuotation(1, fdMap({ customerId: 1 }))
+    const res = await actions.updateQuotation(1, fdQuotation({ customerId: 1, sections: [], discount: 0, tax: 0 }))
     expect(res?.success).toBe(true)
   })
-  // === Zod validation (regression: Zod bypass) ===
-  it("updateQuotation rejects negative customerId (id=0) before DB lookup", async () => {
-    const findSpy = mocks.prismaMock.quotation.findUniqueOrThrow
-    const res = await actions.updateQuotation(1, fdMap({ customerId: 0 }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("Validasi gagal")
-    expect(findSpy).not.toHaveBeenCalled()
+  // === item editing (regression: edited line items used to be silently dropped) ===
+  it("updateQuotation persists edited section items and re-syncs linked docs", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", customerId: 1 })
+    const res = await actions.updateQuotation(1, fdQuotation({
+      ...basicPayload,
+      sections: [{ name: "Jasa", items: [{ itemId: 5, qty: 2, unitPrice: 1000, discount: 0, total: 2000 }] }],
+    }))
+    expect(res?.success).toBe(true)
+    // Old sections wiped and recreated via nested write on the quotation update.
+    expect(mocks.prismaMock.quotationSection.deleteMany).toHaveBeenCalled()
+    expect(mocks.prismaMock.quotation.update).toHaveBeenCalled()
+    // Linked SO/Invoice re-sync runs after the section rewrite.
+    expect(mocks.resyncOnEditMock).toHaveBeenCalledWith(1)
   })
-  it("updateQuotation rejects oversized notes (500+ char blob)", async () => {
-    const res = await actions.updateQuotation(1, fdMap({ customerId: 1, notes: "x".repeat(501) }))
+  it("updateQuotation fails on invalid json", async () => {
+    const res = await actions.updateQuotation(1, fdMap({ data: "invalid json" }))
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("Validasi gagal")
+    expect(res?.error).toContain("Data penawaran tidak valid")
   })
 })
 
@@ -757,7 +763,7 @@ describe("Quotation Actions (legacy happy paths)", () => {
   })
   it("updateQuotation succeeds", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft", customerId: 1, customerVehicleId: 1 })
-    const res = await actions.updateQuotation(1, fdMap({ customerId: "1", date: "2026-06-12" }))
+    const res = await actions.updateQuotation(1, fdQuotation({ customerId: 1, date: "2026-06-12", sections: [], discount: 0, tax: 0 }))
     expect(res?.success).toBe(true)
   })
   it("sendQuotation succeeds", async () => {

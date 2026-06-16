@@ -674,13 +674,29 @@ describe("Purchase Actions Additional Branch Coverage", () => {
 
   it("createVendorBill fails 3-way match (over-billing)", async () => {
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
-    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 500 } })
+    // alreadyBilled is summed from existing bills' goods value (subtotal), and the
+    // new bill's goods value (subtotal) is matched against received value — both
+    // tax-exclusive. 500 + 5000 goods value far exceeds the 1000 received.
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 500 } })
     const res = await actions.createVendorBill(fdMap({
       vendorId: "1", purchaseOrderId: "1", date: "2026-06-12",
-      subtotal: "1000", tax: "0", grandTotal: "5000"
+      subtotal: "5000", tax: "0", grandTotal: "5000"
     }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("melebihi nilai barang diterima")
+  })
+
+  it("createVendorBill passes 3-way match when only PPN pushes grandTotal over received value (regression)", async () => {
+    // Goods value (subtotal) == received value (1000); grandTotal is 1110 due to
+    // 11% PPN. Matching grandTotal against the tax-exclusive received value used
+    // to reject every taxed bill. The match must compare goods value to goods value.
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1", purchaseOrderId: "1", date: "2026-06-12",
+      subtotal: "1000", tax: "110", grandTotal: "1110"
+    }))
+    expect(res?.success).toBe(true)
   })
 
   it("createPurchaseRequest filters items with itemId <= 0", async () => {

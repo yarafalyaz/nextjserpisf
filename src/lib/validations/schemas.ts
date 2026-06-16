@@ -92,6 +92,7 @@ export const accountServerSchema = z.object({
     message: "Tipe akun harus salah satu dari ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE",
   }),
   parentId: optionalNumber(),
+  description: optionalString(1000),
 })
 
 export type CustomerInput = z.infer<typeof customerSchema>

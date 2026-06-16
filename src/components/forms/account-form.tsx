@@ -21,7 +21,7 @@ interface AccountFormProps {
 export function AccountForm({ accounts, generatedCode, account }: AccountFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [parentId, setParentId] = useState("")
+  const [parentId, setParentId] = useState(account?.parentId ? String(account.parentId) : "")
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -47,11 +47,11 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="code">Kode Akun *</Label>
-          <Input id="code" name="code" defaultValue={generatedCode || ""} readOnly className="bg-muted" />
+          <Input id="code" name="code" defaultValue={account?.code ?? generatedCode ?? ""} readOnly className="bg-muted" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Akun *</Label>
-          <Input id="name" name="name" placeholder="Kas" required />
+          <Input id="name" name="name" placeholder="Kas" defaultValue={account?.name ?? ""} required />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="type">Tipe *</Label>
@@ -60,6 +60,7 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
             name="type"
             required
             placeholder="Pilih Tipe"
+            defaultValue={account?.type}
             options={[
               { value: "ASSET", label: "Aset" },
               { value: "LIABILITY", label: "Liabilitas" },

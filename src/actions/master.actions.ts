@@ -847,6 +847,7 @@ export async function createAccount(formData: FormData) {
         name: v.name,
         type: v.type,
         parentId: v.parentId ?? null,
+        description: v.description ?? null,
         isActive: true,
       },
     });
@@ -1949,7 +1950,7 @@ export async function updateAccount(id: number, formData: FormData) {
         name: v.name,
         type: v.type,
         parentId: v.parentId ?? null,
-        isActive: true,
+        description: v.description ?? null,
       },
     });
 

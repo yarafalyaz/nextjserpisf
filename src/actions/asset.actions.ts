@@ -225,7 +225,13 @@ export async function deleteAssetTransfer(id: number) {
       if (asset && asset.location === transfer.toLocation) {
         const latest = await tx.assetTransfer.findFirst({
           where: { assetId: transfer.assetId },
-          orderBy: { transferDate: "desc" },
+          // Tiebreaker on id: two transfers on the same day (common when staff
+          // batch-move multiple assets at end-of-day) would otherwise come back
+          // in non-deterministic order, letting an earlier-inserted row "win"
+          // and silently override the asset's current location. The auto-
+          // incrementing id is a monotonic creation proxy, so desc-pick gives
+          // the genuinely newest transfer.
+          orderBy: [{ transferDate: "desc" }, { id: "desc" }],
           select: { toLocation: true },
         });
         await tx.asset.update({
@@ -385,7 +391,10 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
           if (oldAsset && oldAsset.location === oldTransfer.toLocation) {
             const latest = await tx.assetTransfer.findFirst({
               where: { assetId: oldTransfer.assetId, NOT: { id } },
-              orderBy: { transferDate: "desc" },
+              // See deleteAssetTransfer for the tiebreaker rationale: an id
+              // tiebreaker keeps the "latest" pick stable when several
+              // transfers share a date.
+              orderBy: [{ transferDate: "desc" }, { id: "desc" }],
               select: { toLocation: true },
             });
             await tx.asset.update({
@@ -410,10 +419,25 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
           },
         });
 
-        // Update asset location to new destination
+        // Only drive the asset's current location from THIS transfer when it is
+        // the most recent transfer for the asset. Editing a back-dated transfer
+        // for an asset since moved on by a LATER transfer must not reset the
+        // asset's location to this (older) transfer's destination — recompute
+        // from the latest transfer instead. Mirrors the latest-transfer logic in
+        // the revert branch and deleteAssetTransfer.
+        const latestForAsset = await tx.assetTransfer.findFirst({
+          where: { assetId: data.assetId },
+          // Tiebreaker on id: editing a back-dated transfer when several newer
+          // transfers exist for the same date would otherwise pick a sibling
+          // (DB row order is undefined for ties) and apply its toLocation to
+          // the asset — losing the actual newest move. id desc gives a
+          // monotonic, deterministic "latest" pick.
+          orderBy: [{ transferDate: "desc" }, { id: "desc" }],
+          select: { id: true, toLocation: true },
+        });
         await tx.asset.update({
           where: { id: data.assetId },
-          data: { location: data.toLocation },
+          data: { location: latestForAsset?.toLocation ?? data.toLocation },
         });
 
         return updated;

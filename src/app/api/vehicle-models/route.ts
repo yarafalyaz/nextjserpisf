@@ -12,14 +12,15 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const cari = searchParams.get("cari") || undefined;
     const brandId = searchParams.get("brandId");
-    const halaman = Math.max(
-      1,
-      Number.parseInt(searchParams.get("halaman") || "1", 10),
+    const halamanRaw = Number.parseInt(searchParams.get("halaman") || "1", 10);
+    const halaman = Number.isFinite(halamanRaw) ? Math.max(1, halamanRaw) : 1;
+    const pageSizeRaw = Number.parseInt(
+      searchParams.get("pageSize") || "50",
+      10,
     );
-    const pageSize = Math.min(
-      100,
-      Math.max(1, Number.parseInt(searchParams.get("pageSize") || "50", 10)),
-    );
+    const pageSize = Number.isFinite(pageSizeRaw)
+      ? Math.min(100, Math.max(1, pageSizeRaw))
+      : 50;
     const skip = (halaman - 1) * pageSize;
 
     const where: Record<string, unknown> = {};

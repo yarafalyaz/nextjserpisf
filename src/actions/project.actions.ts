@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { computeProjectStatus } from "@/lib/services/project-status"
 import { parseFormData } from "@/lib/validations/parse-form"
 import {
   createProjectSchema,
@@ -295,13 +296,20 @@ export async function syncProjectStatus(projectId: number) {
   const completed = stages.filter((s) => s.status === "completed" || s.status === "skipped").length
   const inProgress = stages.filter((s) => s.status === "in_progress").length
 
+  // Project status + endDate decision is delegated to the tested helper so the
+  // historical completion date is preserved on re-runs (an already-completed
+  // project re-syncing must NOT have its endDate stamped forward — see
+  // project-status.ts header).
+  const decision = computeProjectStatus(stages, project.status, project.endDate, new Date())
 
   if (completed === total) {
     // All stages completed → project + WO done
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { status: "completed", endDate: new Date() },
-    })
+    if (decision.changed) {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: decision.status, endDate: decision.endDate },
+      })
+    }
     // Sync linked WorkOrder — only auto-complete it if its materials were actually
     // issued (a completed Material Issue exists), mirroring completeWorkOrder's
     // guard. Otherwise leave the WO open; the project can still be marked completed.

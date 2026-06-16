@@ -16,7 +16,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateQuotationSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema } from "@/lib/validations/sales.schemas"
+import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 
@@ -50,7 +50,14 @@ export async function createQuotation(formData: FormData) {
   const headerDiscount = Number(data.discount) || 0
   const headerTax = Number(data.tax) || 0
   const computeLine = (item: any) => {
-    const qty = Number(item.qty) || 1
+    // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
+    // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
+    // bills the customer for an item they did not order; clamping to 0.01 makes
+    // the line essentially zero so the parent totals stay correct. The Zod
+    // schema is the real guard — this is the defensive backstop for routes
+    // (createQuotation / updateQuotation) that bypass parseFormData and read
+    // safeJsonParse(raw) directly.
+    const qty = Math.max(0.01, Number(item.qty) || 0)
     const unitPrice = Number(item.unitPrice) || 0
     const lineSubtotal = safeMultiply(qty, unitPrice, 0)
     let discountAmount = Number(item.discount) || 0
@@ -365,9 +372,9 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   try {
   await requirePermission("edit_quotations")
 
-  const parsed = parseFormData(updateQuotationSchema, formData)
-  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
-  const v = parsed.data
+  const raw = formData.get("data") as string
+  const data = safeJsonParse(raw) as any
+  if (!data) return { success: false, error: "Data penawaran tidak valid" }
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
@@ -378,11 +385,11 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   }
 
   // Validate vehicle belongs to customer if both are provided
-  const updCustomerId = v.customerId ?? quotation.customerId
-  const updVehicleId = v.customerVehicleId ?? null
+  const updCustomerId = data.customerId ?? quotation.customerId
+  const updVehicleId = data.customerVehicleId ? Number(data.customerVehicleId) : null
   if (updVehicleId && updCustomerId) {
     const vehicle = await prisma.customerVehicle.findFirst({
-      where: { id: updVehicleId, customerId: updCustomerId },
+      where: { id: updVehicleId, customerId: Number(updCustomerId) },
       select: { id: true },
     })
     if (!vehicle) {
@@ -390,17 +397,97 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     }
   }
 
-  await prisma.quotation.update({
-    where: { id: quotationId },
-    data: {
-      customerId: v.customerId,
-      customerVehicleId: v.customerVehicleId ?? null,
-      date: v.date ? new Date(v.date) : undefined,
-      validUntil: v.validUntil ? new Date(v.validUntil) : undefined,
-      paymentMethod: v.paymentMethod ?? null,
-      shippingMethod: v.shippingMethod ?? null,
-      notes: v.notes ?? null,
-    },
+  // Server-side recompute of totals — never trust client-sent subtotal /
+  // grandTotal / per-line total (mirrors createQuotation). A tampered or buggy
+  // client could otherwise persist a Rp 0 grandTotal that flows downstream.
+  const headerDiscount = Number(data.discount) || 0
+  const headerTax = Number(data.tax) || 0
+  const computeLine = (item: any) => {
+    // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
+    // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
+    // bills the customer for an item they did not order; clamping to 0.01 makes
+    // the line essentially zero so the parent totals stay correct. The Zod
+    // schema is the real guard — this is the defensive backstop for routes
+    // (createQuotation / updateQuotation) that bypass parseFormData and read
+    // safeJsonParse(raw) directly.
+    const qty = Math.max(0.01, Number(item.qty) || 0)
+    const unitPrice = Number(item.unitPrice) || 0
+    const lineSubtotal = safeMultiply(qty, unitPrice, 0)
+    let discountAmount = Number(item.discount) || 0
+    if (item.discountType === "percent") {
+      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, discountAmount, 4), 100, 4), 0)
+    }
+    return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
+  }
+  const computedSubtotal = (data.sections || []).reduce(
+    (acc: number, section: any) =>
+      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
+    0,
+  )
+  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
+
+  await prisma.$transaction(async (tx) => {
+    // Replace sections + items wholesale: the edit form sends the full section
+    // tree, so delete the existing rows and recreate from the payload. Item IDs
+    // are not referenced elsewhere (resyncOnEdit re-reads + re-flattens), so
+    // regenerating them is safe.
+    const existingSections = await tx.quotationSection.findMany({
+      where: { quotationId },
+      select: { id: true },
+    })
+    const existingSectionIds = existingSections.map((s) => s.id)
+    if (existingSectionIds.length) {
+      await tx.quotationItem.deleteMany({ where: { sectionId: { in: existingSectionIds } } })
+    }
+    await tx.quotationSection.deleteMany({ where: { quotationId } })
+
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: {
+        // data arrives via safeJsonParse so IDs come in as strings; Prisma's
+        // foreign-key fields expect number. Without the cast, a tampered/buggy
+        // client submitting "1" makes the WHERE match nothing and silently
+        // relinks the quotation to no customer (DB constraint would catch the
+        // missing customer, but a truthy string bypasses the null check). Cast
+        // at the boundary to keep types honest.
+        customerId: data.customerId
+          ? Number(data.customerId)
+          : quotation.customerId,
+        customerVehicleId: data.customerVehicleId
+          ? Number(data.customerVehicleId)
+          : null,
+        date: data.date ? new Date(data.date) : undefined,
+        validUntil: data.validUntil ? new Date(data.validUntil) : null,
+        subtotal: computedSubtotal,
+        discount: headerDiscount,
+        tax: headerTax,
+        grandTotal: computedGrandTotal,
+        paymentMethod: data.paymentMethod || null,
+        shippingMethod: data.shippingMethod || null,
+        notes: data.notes || null,
+        sections: {
+          create: (data.sections || []).map((section: any, si: number) => ({
+            name: section.name || `Section ${si + 1}`,
+            sortOrder: si,
+            items: {
+              create: (section.items || []).map((item: any, ii: number) => {
+                const { discountAmount, total } = computeLine(item)
+                return {
+                  itemId: item.itemId || null,
+                  description: item.description || null,
+                  qty: Number(item.qty) || 1,
+                  uom: item.uom || null,
+                  unitPrice: Number(item.unitPrice) || 0,
+                  discount: discountAmount,
+                  total,
+                  sortOrder: ii,
+                }
+              }),
+            },
+          })),
+        },
+      },
+    })
   })
 
   // Re-sync linked SO/Invoice items
@@ -1060,17 +1147,26 @@ export async function deleteSalesPayment(id: number) {
 
   const payment = await prisma.salesPayment.findUniqueOrThrow({ where: { id } })
 
-  // Reverse the cash-receipt journal (Dr Cash / Cr Piutang) before removing the
-  // record, otherwise the GL keeps cash/receivable overstated. Mirrors the
-  // vendor-payment delete path.
-  await deleteJournalByReference("SalesPayment", id)
+  // Atomicity: reversing the journal, deleting the payment row, and recalculating
+  // the invoice's paid-amount must commit together. Without the wrapper, a failing
+  // onSalesPaymentDeleted (transient DB error, FK) leaves a deleted payment but
+  // the invoice's status / paidAmount still reflects the old total — a partially-
+  // settled AR row that disagrees with the payment ledger. The downstream recalc
+  // also opens its own tx (sales-payment.hook), so we pass the existing tx to
+  // avoid nested transactions. Mirrors deleteDownPayment and deleteVendorPayment.
+  await prisma.$transaction(async (tx) => {
+    // Reverse the cash-receipt journal (Dr Cash / Cr Piutang) before removing the
+    // record, otherwise the GL keeps cash/receivable overstated. Mirrors the
+    // vendor-payment delete path.
+    await deleteJournalByReferenceTx(tx, "SalesPayment", id)
 
-  await prisma.salesPayment.delete({ where: { id } })
+    await tx.salesPayment.delete({ where: { id } })
 
-  // Recalculate invoice after payment deletion
-  if (payment.salesInvoiceId) {
-    await onSalesPaymentDeleted(payment.salesInvoiceId)
-  }
+    // Recalculate invoice after payment deletion
+    if (payment.salesInvoiceId) {
+      await onSalesPaymentDeleted(payment.salesInvoiceId, tx)
+    }
+  })
 
   await logActivity("delete", "SalesPayment", id, `Menghapus pembayaran penjualan #${id}`)
   revalidatePath("/penjualan/pembayaran")
@@ -1128,9 +1224,18 @@ export async function deleteDownPayment(id: number) {
     throw new Error("Hanya down payment draft yang bisa dihapus")
   }
 
-  // Reverse any journal posted at draft creation before removing the record.
-  await deleteJournalByReference("DownPayment", id)
-  await prisma.downPayment.delete({ where: { id } })
+  // Atomicity: reversing the journal and deleting the row must commit together.
+  // Without the wrapper, a failed delete after the journal reversal would leave
+  // no journal for the still-existing DP (so a future resync / repost would
+  // double-post) — and conversely a successful delete with a stuck reversal
+  // would orphan the GL entries. Use deleteJournalByReferenceTx to compose
+  // inside our own $transaction; deleteJournalByReference opens its own tx
+  // and Prisma rejects nested $transaction calls.
+  await prisma.$transaction(async (tx) => {
+    // Reverse any journal posted at draft creation before removing the record.
+    await deleteJournalByReferenceTx(tx, "DownPayment", id)
+    await tx.downPayment.delete({ where: { id } })
+  })
 
   await logActivity("delete", "DownPayment", id, `Menghapus uang muka #${id}`)
   revalidatePath("/penjualan/uang-muka")
@@ -1352,7 +1457,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
     }
 
-    return tx.salesPayment.update({
+    const updated = await tx.salesPayment.update({
       where: { id },
       data: {
         salesInvoiceId: newInvoiceId,
@@ -1363,12 +1468,18 @@ export async function updateSalesPayment(id: number, formData: FormData) {
         notes: v.notes ?? null,
       },
     })
-  })
 
-  // Keep the GL in sync with the edited amount/account/invoice: reverse the old
-  // cash-receipt journal and repost it from the updated payment.
-  await deleteJournalByReference("SalesPayment", id)
-  await onSalesPaymentCreated(payment.id, Number(user.id))
+    // Keep the GL in sync with the edited amount/account/invoice: reverse the old
+    // cash-receipt journal and repost it from the updated payment. Both run INSIDE
+    // this transaction so a failing repost (closed period, misconfigured account)
+    // rolls back the delete — otherwise the payment would be left with no journal,
+    // understating cash and overstating AR. Delete first so onSalesPaymentCreated's
+    // idempotency guard doesn't skip the repost.
+    await deleteJournalByReferenceTx(tx, "SalesPayment", id)
+    await onSalesPaymentCreated(updated.id, Number(user.id), tx)
+
+    return updated
+  })
 
   // Recalculate new invoice
   await onSalesPaymentUpdated(payment.salesInvoiceId)

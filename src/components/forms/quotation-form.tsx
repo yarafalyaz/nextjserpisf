@@ -509,13 +509,9 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
         const formData = new FormData()
         let result: { success: boolean; id?: number; error?: string }
         if (quotation?.id) {
-          formData.set("customerId", String(data.customerId))
-          if (data.customerVehicleId) formData.set("customerVehicleId", String(data.customerVehicleId))
-          formData.set("date", data.date)
-          if (data.validUntil) formData.set("validUntil", data.validUntil)
-          formData.set("paymentMethod", data.paymentMethod || "")
-          formData.set("shippingMethod", data.shippingMethod || "")
-          formData.set("notes", data.notes || "")
+          // Send the full section tree (same shape as create) so edited line
+          // items/qty/prices are persisted and re-synced to linked SO/Invoice.
+          formData.set("data", JSON.stringify(data))
           result = await updateQuotation(Number(quotation.id), formData)
         } else {
           formData.set("data", JSON.stringify(data))

@@ -10,27 +10,23 @@
 export function formatCurrency(
   amount: number | string | null | undefined,
   options?: {
-    symbol?: string
-    decimals?: number
-    showSymbol?: boolean
-  }
+    symbol?: string;
+    decimals?: number;
+    showSymbol?: boolean;
+  },
 ): string {
-  const {
-    symbol = 'Rp ',
-    decimals = 0,
-    showSymbol = true,
-  } = options ?? {}
+  const { symbol = "Rp ", decimals = 0, showSymbol = true } = options ?? {};
 
-  const numericAmount = Number(amount ?? 0)
+  const numericAmount = Number(amount ?? 0);
 
-  if (isNaN(numericAmount)) return showSymbol ? `${symbol}0` : '0'
+  if (isNaN(numericAmount)) return showSymbol ? `${symbol}0` : "0";
 
-  const formatted = new Intl.NumberFormat('id-ID', {
+  const formatted = new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(numericAmount)
+  }).format(numericAmount);
 
-  return showSymbol ? `${symbol}${formatted}` : formatted
+  return showSymbol ? `${symbol}${formatted}` : formatted;
 }
 
 /**
@@ -47,33 +43,33 @@ export function formatCurrency(
 export function formatAccounting(
   amount: number | string | null | undefined,
   options?: {
-    symbol?: string
-    decimals?: number
-    showSymbol?: boolean
-    zeroDash?: boolean
-  }
+    symbol?: string;
+    decimals?: number;
+    showSymbol?: boolean;
+    zeroDash?: boolean;
+  },
 ): string {
   const {
-    symbol = 'Rp ',
+    symbol = "Rp ",
     decimals = 0,
     showSymbol = false,
     zeroDash = true,
-  } = options ?? {}
+  } = options ?? {};
 
-  const numericAmount = Number(amount ?? 0)
-  if (isNaN(numericAmount)) return zeroDash ? '–' : '0'
+  const numericAmount = Number(amount ?? 0);
+  if (isNaN(numericAmount)) return zeroDash ? "–" : "0";
 
   // Treat sub-cent magnitudes as zero so float drift never prints "(0)".
-  if (zeroDash && Math.abs(numericAmount) < 0.005) return '–'
+  if (zeroDash && Math.abs(numericAmount) < 0.005) return "–";
 
-  const magnitude = Math.abs(numericAmount)
-  const formatted = new Intl.NumberFormat('id-ID', {
+  const magnitude = Math.abs(numericAmount);
+  const formatted = new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(magnitude)
+  }).format(magnitude);
 
-  const body = showSymbol ? `${symbol}${formatted}` : formatted
-  return numericAmount < 0 ? `(${body})` : body
+  const body = showSymbol ? `${symbol}${formatted}` : formatted;
+  return numericAmount < 0 ? `(${body})` : body;
 }
 
 /**
@@ -82,16 +78,16 @@ export function formatAccounting(
  */
 export function formatNumber(
   value: number | string | null | undefined,
-  decimals: number = 0
+  decimals: number = 0,
 ): string {
-  const numericValue = Number(value ?? 0)
+  const numericValue = Number(value ?? 0);
 
-  if (isNaN(numericValue)) return '0'
+  if (isNaN(numericValue)) return "0";
 
-  return new Intl.NumberFormat('id-ID', {
+  return new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(numericValue)
+  }).format(numericValue);
 }
 
 /**
@@ -101,62 +97,64 @@ export function formatNumber(
 export function formatDate(
   date: Date | string | null | undefined,
   options?: {
-    format?: 'short' | 'long' | 'numeric'
-    includeTime?: boolean
-  }
+    format?: "short" | "long" | "numeric";
+    includeTime?: boolean;
+  },
 ): string {
-  if (!date) return '-'
+  if (!date) return "-";
 
-  const { format = 'long', includeTime = false } = options ?? {}
+  const { format = "long", includeTime = false } = options ?? {};
 
-  const dateObj = typeof date === 'string' ? new Date(date) : date
+  const dateObj = typeof date === "string" ? new Date(date) : date;
 
-  if (isNaN(dateObj.getTime())) return '-'
+  if (isNaN(dateObj.getTime())) return "-";
 
   const dateOptions: Intl.DateTimeFormatOptions = (() => {
     switch (format) {
-      case 'short':
-        return { day: '2-digit', month: 'short', year: 'numeric' } as const
-      case 'numeric':
-        return { day: '2-digit', month: '2-digit', year: 'numeric' } as const
-      case 'long':
+      case "short":
+        return { day: "2-digit", month: "short", year: "numeric" } as const;
+      case "numeric":
+        return { day: "2-digit", month: "2-digit", year: "numeric" } as const;
+      case "long":
       default:
-        return { day: 'numeric', month: 'long', year: 'numeric' } as const
+        return { day: "numeric", month: "long", year: "numeric" } as const;
     }
-  })()
+  })();
 
   if (includeTime) {
-    dateOptions.hour = '2-digit'
-    dateOptions.minute = '2-digit'
+    dateOptions.hour = "2-digit";
+    dateOptions.minute = "2-digit";
   }
 
-  return new Intl.DateTimeFormat('id-ID', dateOptions).format(dateObj)
+  return new Intl.DateTimeFormat("id-ID", dateOptions).format(dateObj);
 }
 
 /**
  * Format a date to relative time string.
  * Example: "2 jam yang lalu", "3 hari yang lalu"
  */
-export function formatRelativeTime(date: Date | string | null | undefined): string {
-  if (!date) return '-'
+export function formatRelativeTime(
+  date: Date | string | null | undefined,
+): string {
+  if (!date) return "-";
 
-  const dateObj = typeof date === 'string' ? new Date(date) : date
-  if (isNaN(dateObj.getTime())) return '-'
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+  if (isNaN(dateObj.getTime())) return "-";
 
-  const now = new Date()
-  const diffMs = now.getTime() - dateObj.getTime()
-  const diffSeconds = Math.floor(diffMs / 1000)
-  const diffMinutes = Math.floor(diffSeconds / 60)
-  const diffHours = Math.floor(diffMinutes / 60)
-  const diffDays = Math.floor(diffHours / 24)
+  const now = new Date();
+  const diffMs = now.getTime() - dateObj.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
 
-  if (diffSeconds < 60) return 'Baru saja'
-  if (diffMinutes < 60) return `${diffMinutes} menit yang lalu`
-  if (diffHours < 24) return `${diffHours} jam yang lalu`
-  if (diffDays < 7) return `${diffDays} hari yang lalu`
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} minggu yang lalu`
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} bulan yang lalu`
-  return `${Math.floor(diffDays / 365)} tahun yang lalu`
+  if (diffSeconds < 60) return "Baru saja";
+  if (diffMinutes < 60) return `${diffMinutes} menit yang lalu`;
+  if (diffHours < 24) return `${diffHours} jam yang lalu`;
+  if (diffDays < 7) return `${diffDays} hari yang lalu`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} minggu yang lalu`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} bulan yang lalu`;
+  return `${Math.floor(diffDays / 365)} tahun yang lalu`;
 }
 
 /**
@@ -167,16 +165,16 @@ export function formatPercentage(
   value: number | string | null | undefined,
   decimals: number = 1,
   /** If true, treat value as fraction (0.11 = 11%). Default false = value is already percentage. */
-  isFraction: boolean = false
+  isFraction: boolean = false,
 ): string {
-  const numericValue = Number(value ?? 0)
+  const numericValue = Number(value ?? 0);
 
-  if (isNaN(numericValue)) return '0%'
+  if (isNaN(numericValue)) return "0%";
 
   // Fix #52: Explicit flag instead of ambiguous auto-detection
-  const percentage = isFraction ? numericValue * 100 : numericValue
+  const percentage = isFraction ? numericValue * 100 : numericValue;
 
-  return `${formatNumber(percentage, decimals)}%`
+  return `${formatNumber(percentage, decimals)}%`;
 }
 
 /**
@@ -184,22 +182,28 @@ export function formatPercentage(
  * Example: 1048576 → "1 MB"
  */
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
+  if (bytes <= 0) return "0 B";
 
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const k = 1024
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const k = 1024;
+  const i = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(k)),
+    units.length - 1,
+  );
 
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`;
 }
 
 /**
  * Truncate a string to a maximum length with ellipsis.
  */
-export function truncate(str: string | null | undefined, maxLength: number = 50): string {
-  if (!str) return ''
-  if (str.length <= maxLength) return str
-  return `${str.slice(0, maxLength)}...`
+export function truncate(
+  str: string | null | undefined,
+  maxLength: number = 50,
+): string {
+  if (!str) return "";
+  if (str.length <= maxLength) return str;
+  return `${str.slice(0, maxLength)}...`;
 }
 
 /**
@@ -207,36 +211,50 @@ export function truncate(str: string | null | undefined, maxLength: number = 50)
  * Example: "08123456789" → "0812-3456-789"
  */
 export function formatPhone(phone: string | null | undefined): string {
-  if (!phone) return '-'
+  if (!phone) return "-";
 
-  const cleaned = phone.replace(/\D/g, '')
+  const cleaned = phone.replace(/\D/g, "");
 
-  if (cleaned.length <= 4) return cleaned
-  if (cleaned.length <= 8) return `${cleaned.slice(0, 4)}-${cleaned.slice(4)}`
-  return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}-${cleaned.slice(8)}`
+  if (cleaned.length <= 4) return cleaned;
+  if (cleaned.length <= 8) return `${cleaned.slice(0, 4)}-${cleaned.slice(4)}`;
+  return `${cleaned.slice(0, 4)}-${cleaned.slice(4, 8)}-${cleaned.slice(8)}`;
 }
 
 export function getInitials(name: string | null | undefined): string {
-  if (!name) return "?"
+  if (!name) return "?";
   return name
     .split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase()
-    .substring(0, 2)
+    .substring(0, 2);
 }
 
 export function getStatusColor(status: string): string {
   const colorMap: Record<string, string> = {
-    draft: "default", pending: "warning", approved: "success",
-    rejected: "danger", cancelled: "danger", completed: "success",
-    done: "success", active: "success", sent: "primary",
-    posted: "secondary", partial: "warning", paid: "success",
-    accepted: "success", converted: "secondary", ordered: "primary",
-    received: "success", processed: "success", returned: "warning",
-    confirmed: "success", DRAFT: "default", POSTED: "success",
-  }
-  return colorMap[status] || "default"
+    draft: "default",
+    pending: "warning",
+    approved: "success",
+    rejected: "danger",
+    cancelled: "danger",
+    completed: "success",
+    done: "success",
+    active: "success",
+    sent: "primary",
+    posted: "secondary",
+    partial: "warning",
+    paid: "success",
+    accepted: "success",
+    converted: "secondary",
+    ordered: "primary",
+    received: "success",
+    processed: "success",
+    returned: "warning",
+    confirmed: "success",
+    DRAFT: "default",
+    POSTED: "success",
+  };
+  return colorMap[status] || "default";
 }
 
 /**
@@ -244,17 +262,27 @@ export function getStatusColor(status: string): string {
  * Example: "2026-05" -> "Mei 2026"
  */
 export function formatPeriod(period: string | null | undefined): string {
-  if (!period || !period.includes("-")) return period ?? "-"
-  
-  const [year, month] = period.split("-")
+  if (!period || !period.includes("-")) return period ?? "-";
+
+  const [year, month] = period.split("-");
   const months = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-  ]
-  const mIndex = parseInt(month, 10) - 1
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+  ];
+  const mIndex = parseInt(month, 10) - 1;
   if (mIndex >= 0 && mIndex < 12) {
-    return `${months[mIndex]} ${year}`
+    return `${months[mIndex]} ${year}`;
   }
-  
-  return period
+
+  return period;
 }

@@ -260,7 +260,6 @@ export async function createExpense(formData: FormData) {
     const expense = await prisma.expense.create({
       data: {
         documentNo,
-        employeeId: v.employeeId ?? null,
         accountId: v.accountId,
         paidFromAccountId: v.paidFromAccountId ?? null,
         projectId: v.projectId ?? null,
@@ -1195,7 +1194,6 @@ export async function updateExpense(id: number, formData: FormData) {
     const expense = await prisma.expense.update({
       where: { id },
       data: {
-        employeeId: v.employeeId ?? null,
         accountId: v.accountId,
         paidFromAccountId: v.paidFromAccountId ?? null,
         projectId: v.projectId ?? null,

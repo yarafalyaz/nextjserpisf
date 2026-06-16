@@ -1090,9 +1090,11 @@ describe("HRM Actions Extra Coverage Inline", () => {
   })
 
   it("checkIn/checkOut breakOverlapMinutes coverage & branches", async () => {
-    // 1. checkIn with P2002 error
+    // 1. checkIn with P2002 error — returns structured error (mirrors checkOut)
     prismaMock.attendance.create.mockRejectedValueOnce({ code: "P2002" })
-    await expect(actions.checkIn(1)).rejects.toThrow("Sudah check-in hari ini")
+    const resDup = await actions.checkIn(1)
+    expect(resDup.success).toBe(false)
+    expect(resDup.error).toContain("Sudah check-in hari ini")
 
     // 2. checkOut with no attendance
     prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
@@ -1247,17 +1249,21 @@ describe("breakOverlapMinutes / resolveWorkSchedule paths", () => {
   it("checkIn rejects if employee not found", async () => {
     prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
     prismaMock.employee.findUnique.mockResolvedValueOnce(null)
-    await expect(actions.checkIn(1)).rejects.toThrow("Karyawan tidak ditemukan")
+    const res = await actions.checkIn(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Karyawan tidak ditemukan")
   })
 
   it("checkIn rejects if employee is on approved leave", async () => {
     prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
     prismaMock.employee.findUnique.mockResolvedValueOnce({ departmentId: 1 })
-    
+
     // The second call to findFirst is for leaveRequest. We need to mock implementation properly
     prismaMock.leaveRequest.findFirst.mockResolvedValueOnce({ id: 1, status: "approved" })
-    
-    await expect(actions.checkIn(1)).rejects.toThrow("Anda sedang dalam masa cuti")
+
+    const res = await actions.checkIn(1)
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Anda sedang dalam masa cuti")
   })
 })
 

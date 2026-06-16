@@ -297,12 +297,17 @@ export async function receiveInventoryTransfer(transferId: number) {
   }
 
   try {
-    // Hook creates IN stock moves/layers (idempotent); action owns status received.
-    await onInventoryTransferReceived(transferId, Number(user.id))
+    await prisma.$transaction(async (tx) => {
+      // Hook creates IN stock moves/layers (idempotent); action owns status received.
+      // Both run in one tx so a failed status update rolls back the inbound stock —
+      // otherwise stock could be added while the transfer stays "receiving" and gets
+      // restored to "processed" below, allowing a re-receive to double the inbound.
+      await onInventoryTransferReceived(transferId, Number(user.id), tx)
 
-    await prisma.inventoryTransfer.update({
-      where: { id: transferId },
-      data: { status: "received" },
+      await tx.inventoryTransfer.update({
+        where: { id: transferId },
+        data: { status: "received" },
+      })
     })
   } catch (e) {
     // Receiving failed after the claim flipped processed -> receiving. Restore

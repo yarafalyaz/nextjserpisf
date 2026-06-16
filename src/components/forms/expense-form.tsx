@@ -22,7 +22,7 @@ interface ExpenseFormProps {
   accounts: { id: number; code: string; name: string; type: string }[]
   costCenters?: { id: number; code: string; name: string }[]
   projects?: { id: number; name: string; documentNo: string | null }[]
-  expense?: { id: number; date: string; description?: string | null; amount: number; accountId: number; costCenterId?: number | null; projectId?: number | null; referenceNo?: string | null; receiptImage?: string | null; notes?: string | null; status?: string }
+  expense?: { id: number; date: string; description?: string | null; amount: number; accountId: number; paidFromAccountId?: number | null; category?: string | null; costCenterId?: number | null; projectId?: number | null; referenceNo?: string | null; receiptImage?: string | null; notes?: string | null; status?: string }
 }
 
 export function ExpenseForm({ accounts, costCenters = [], projects = [], expense }: ExpenseFormProps) {
@@ -39,11 +39,11 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
       date: expense.date,
       amount: expense.amount,
       description: expense.description ?? "",
-      category: "",
+      category: expense.category ?? "",
       referenceNo: expense.referenceNo ?? "",
       receiptImage: expense.receiptImage ?? "",
       accountId: expense.accountId,
-      paidFromAccountId: undefined,
+      paidFromAccountId: expense.paidFromAccountId ?? undefined,
       projectId: expense.projectId ?? undefined,
     } : {
       date: new Date().toISOString().split("T")[0],

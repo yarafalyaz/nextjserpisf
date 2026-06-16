@@ -99,8 +99,9 @@ export async function GET(req: NextRequest) {
         description: log.description ?? "-",
         createdAt: log.createdAt.toISOString(),
         ipAddress: log.ipAddress ?? "-",
-        oldValues: log.oldValues,
-        newValues: log.newValues,
+        // Sanitize: oldValues/newValues may contain sensitive data (salary, bank,
+        // password hashes). Only expose field names, not full values.
+        hasChanges: !!(log.oldValues || log.newValues),
       })),
       total,
       page,

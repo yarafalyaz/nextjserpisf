@@ -50,7 +50,13 @@ describe("GET /api/dashboard/notifications", () => {
   })
 
   it("returns 401 when requireAuth throws", async () => {
-    mocks.requireAuth.mockRejectedValue(new Error("no auth"))
+    // The route's catch block distinguishes auth failures from internal errors
+    // by matching the error message (see route.ts catch). Mirror the real
+    // requireAuth message — "Unauthorized: Silakan login terlebih dahulu." —
+    // so the test exercises the production 401 path, not a generic 500.
+    mocks.requireAuth.mockRejectedValue(
+      new Error("Unauthorized: Silakan login terlebih dahulu."),
+    )
     const res = await GET()
     expect(res.status).toBe(401)
   })
