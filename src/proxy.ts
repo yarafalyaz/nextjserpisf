@@ -161,6 +161,22 @@ export async function proxy(req: NextRequest) {
     pathname === "/ketentuan-layanan" ||
     pathname === "/kebijakan-privasi";
 
+  // A deactivated (or password-changed) user can still carry a stale-but-valid
+  // JWT cookie: the dashboard layout re-syncs against the DB via auth() and
+  // redirects to /login?reason=deactivated, but the raw JWT this middleware
+  // decodes here may still report isActive=true (re-sync only runs inside the
+  // jwt callback, not in getToken). Bouncing such a "logged-in" user back to /
+  // creates an infinite redirect loop (ERR_TOO_MANY_REDIRECTS). When /login
+  // carries an explicit reason, clear the stale session cookie and render login
+  // instead of redirecting away.
+  const reason = req.nextUrl.searchParams.get("reason");
+  if (isAuthPage && isLoggedIn && reason) {
+    const res = addSecurityHeaders(NextResponse.next());
+    res.cookies.delete("authjs.session-token");
+    res.cookies.delete("__Secure-authjs.session-token");
+    return res;
+  }
+
   // Redirect logged-in users away from login page
   if (isAuthPage && isLoggedIn) {
     return NextResponse.redirect(new URL("/", req.url));

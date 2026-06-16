@@ -34,6 +34,13 @@ export function LoginForm({
   // javascript:/https://evil URL (XSS / open redirect).
   const callbackUrl = safeInternalPath(searchParams.get("callbackUrl"), "/");
 
+  // Why the user landed here (set by middleware/layout), e.g. deactivated account.
+  const reason = searchParams.get("reason");
+  const reasonMessage =
+    reason === "deactivated"
+      ? "Akun Anda telah dinonaktifkan. Silakan hubungi administrator."
+      : null;
+
   // Strip the callback from the URL bar so it does not leak via copy/paste
   // or browser history. Done in an effect (NOT during render) to avoid
   // mutating the DOM from a component body.
@@ -87,6 +94,15 @@ export function LoginForm({
         <CardContent>
           <form onSubmit={handleSubmit} aria-busy={loading} noValidate>
             <FieldGroup>
+              {reasonMessage && !error && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="mb-4 p-3 rounded-lg border text-sm bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-400"
+                >
+                  {reasonMessage}
+                </div>
+              )}
               <Field>
                 <div
                   id="login-error"
