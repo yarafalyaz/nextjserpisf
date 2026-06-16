@@ -327,7 +327,10 @@ export function DataTable<TData extends { id: number | string }>({
                 {toolbar}
                 {searchColumn && (
                   <div className="relative min-w-0 flex-1 max-w-sm">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                     <Input
                       value={isServer ? serverSearch : ((table.getColumn(searchColumn)?.getFilterValue() as string) ?? "")}
                       onChange={(e) => {
@@ -353,7 +356,7 @@ export function DataTable<TData extends { id: number | string }>({
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="ml-auto shrink-0">
-                        Kolom <ChevronDown className="size-4" />
+                        Kolom <ChevronDown className="size-4" aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44">
@@ -384,7 +387,7 @@ export function DataTable<TData extends { id: number | string }>({
             <span className="text-sm font-medium">{selectedCount} data dipilih</span>
             {onBulkDelete && (
               <Button size="sm" variant="destructive" onClick={handleBulkDelete} disabled={isDeleting}>
-                <Trash2 className="size-3" /> {isDeleting ? "Menghapus..." : "Hapus Terpilih"}
+                <Trash2 className="size-3" aria-hidden="true" /> {isDeleting ? "Menghapus..." : "Hapus Terpilih"}
               </Button>
             )}
             {bulkActions}
@@ -481,22 +484,27 @@ export function DataTable<TData extends { id: number | string }>({
         </div>
 
         {/* Pagination (shadcn DataTablePagination layout) */}
-        <div className="flex flex-col items-start gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="text-sm text-muted-foreground sm:flex-1">
+        <nav
+          aria-label="Pagination tabel"
+          className="flex flex-col items-start gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+        >
+          <div className="text-sm text-muted-foreground sm:flex-1" aria-live="polite">
             {selectable
               ? `${selectedCount} dari ${totalRows} baris dipilih.`
               : `${totalRows} baris.`}
           </div>
           <div className="flex w-full flex-wrap items-center justify-between gap-x-6 gap-y-3 sm:w-auto sm:justify-end lg:gap-8">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-medium whitespace-nowrap">Baris per halaman</p>
+              <label htmlFor="pageSize" className="text-sm font-medium whitespace-nowrap">
+                Baris per halaman
+              </label>
               <Select
                 value={String(currentPageSize)}
                 onValueChange={(v) =>
                   isServer ? goToPageSize(Number(v) || 100) : table.setPageSize(Number(v) || 20)
                 }
               >
-                <SelectTrigger className="h-8 w-[70px]">
+                <SelectTrigger id="pageSize" className="h-8 w-[70px]" aria-label="Baris per halaman">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent side="top">
@@ -508,7 +516,10 @@ export function DataTable<TData extends { id: number | string }>({
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center justify-center whitespace-nowrap text-sm font-medium">
+            <div
+              className="flex items-center justify-center whitespace-nowrap text-sm font-medium"
+              aria-live="polite"
+            >
               Halaman {pageCount === 0 ? 0 : pageIndex + 1} dari {pageCount}
             </div>
             <div className="flex items-center gap-2">
@@ -520,7 +531,7 @@ export function DataTable<TData extends { id: number | string }>({
                 disabled={pageIndex <= 0}
               >
                 <span className="sr-only">Ke halaman pertama</span>
-                <ChevronsLeft className="size-4" />
+                <ChevronsLeft className="size-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="outline"
@@ -530,7 +541,7 @@ export function DataTable<TData extends { id: number | string }>({
                 disabled={pageIndex <= 0}
               >
                 <span className="sr-only">Halaman sebelumnya</span>
-                <ChevronLeft className="size-4" />
+                <ChevronLeft className="size-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="outline"
@@ -540,7 +551,7 @@ export function DataTable<TData extends { id: number | string }>({
                 disabled={pageIndex >= pageCount - 1}
               >
                 <span className="sr-only">Halaman berikutnya</span>
-                <ChevronRight className="size-4" />
+                <ChevronRight className="size-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="outline"
@@ -550,11 +561,11 @@ export function DataTable<TData extends { id: number | string }>({
                 disabled={pageIndex >= pageCount - 1}
               >
                 <span className="sr-only">Ke halaman terakhir</span>
-                <ChevronsRight className="size-4" />
+                <ChevronsRight className="size-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
-        </div>
+        </nav>
       </div>
 
       <ConfirmDialog
