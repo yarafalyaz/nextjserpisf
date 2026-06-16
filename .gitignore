@@ -56,3 +56,7 @@ memory/
 
 # database backups (contain all data — never commit)
 /backups/
+
+# Internal cron job notes (auto-generated, do not commit)
+.hermes/audited-*.txt
+.hermes/next_target.txt

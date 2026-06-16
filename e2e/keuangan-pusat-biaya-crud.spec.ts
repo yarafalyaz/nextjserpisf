@@ -79,7 +79,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     const row = page.locator("tr").filter({ hasText: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 30000 })
-    await row.getByRole("button", { name: "Menu" }).first().click()
+    await row.getByRole("button", { name: "Buka menu aksi" }).first().click()
     await page.waitForTimeout(2000)
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
@@ -106,7 +106,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
     // 1. Open dropdown
-    await updatedRow.getByRole("button", { name: "Menu" }).first().click()
+    await updatedRow.getByRole("button", { name: "Buka menu aksi" }).first().click()
     await page.waitForTimeout(2000)
     // 2. Click Hapus menu item
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()

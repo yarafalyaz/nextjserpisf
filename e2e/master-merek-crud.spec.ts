@@ -68,7 +68,7 @@ test.describe("Master Merek CRUD", () => {
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 30000 })
-    await row.getByRole("button", { name: "Menu" }).click()
+    await row.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/merek\/\d+\/ubah$/, { timeout: 30000 })
@@ -87,7 +87,7 @@ test.describe("Master Merek CRUD", () => {
     const updatedRow = page.getByRole("row", { name: new RegExp(updated) }).first()
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
-    await updatedRow.getByRole("button", { name: "Menu" }).click()
+    await updatedRow.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
 
     // Confirm dialog

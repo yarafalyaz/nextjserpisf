@@ -87,7 +87,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
-    await updatedRow.getByRole("button", { name: "Menu" }).click()
+    await updatedRow.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
 
     // Confirm dialog

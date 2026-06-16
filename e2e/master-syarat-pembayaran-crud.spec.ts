@@ -66,7 +66,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     // Open action dropdown menu
-    await row.getByRole("button", { name: "Menu" }).click()
+    await row.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
 
     // Confirm dialog
@@ -89,7 +89,7 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
       const retryText = page.getByText(name)
       if (await retryText.isVisible().catch(() => false)) {
         const retryRow = retryText.locator("xpath=ancestor::tr")
-        await retryRow.getByRole("button", { name: "Menu" }).click()
+        await retryRow.getByRole("button", { name: "Buka menu aksi" }).click()
         await page.getByRole("menuitem", { name: "Hapus" }).first().click()
         await page.getByRole("button", { name: "Hapus" }).click({ timeout: 10000 })
         await page.waitForLoadState("networkidle")

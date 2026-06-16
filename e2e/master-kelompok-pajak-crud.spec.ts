@@ -58,7 +58,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     // 1. Open dropdown menu
-    await row.getByRole("button", { name: "Menu" }).click()
+    await row.getByRole("button", { name: "Buka menu aksi" }).click()
     // 2. Wait for dropdown popover to be visible
     await page.waitForTimeout(2000)
     // 3. Click Hapus menu item
