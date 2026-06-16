@@ -152,9 +152,10 @@ export function computePph21Monthly(
     prevCap = b.upTo
   }
 
-  return round(taxYear / 12)
-}
-
-function round(n: number): number {
-  return Math.round(n)
+  // PER-16/PJ/2016 Art. 17: monthly PPh21 is rounded DOWN to the nearest IDR
+  // (dibulatkan ke bawah). The previous implementation used Math.round (round
+  // to nearest), which over-withheld by 1 IDR on many real-world payslips
+  // where taxYear/12 lands on the .50..x.99 range, creating a small but
+  // accumulating tax gap the company owed the tax office but never remitted.
+  return Math.floor(taxYear / 12)
 }

@@ -39,7 +39,7 @@ describe("computePph21Monthly", () => {
   it("withholds the first 5% bracket correctly (base 10jt, single)", () => {
     // grossYear 120jt − biaya jabatan 6jt (capped) − bpjs 4.8jt = 109.2jt
     // taxable = 109.2jt − 54jt PTKP = 55.2jt (all in 5% bracket)
-    // taxYear = 2.76jt → monthly round(230,000) = 230,000
+    // taxYear = 2.76jt → monthly = 230,000 (clean integer; no rounding effect)
     expect(computePph21Monthly(10_000_000, "TK/0", 400_000)).toBe(230_000)
   })
 
@@ -51,8 +51,22 @@ describe("computePph21Monthly", () => {
 
   it("crosses multiple progressive brackets (base 30jt, married)", () => {
     // Hand-computed: taxable PKP 285,654,000 → 5%/15%/25% slices →
-    // taxYear 40,413,500 → monthly round(3,367,791.67) = 3,367,792
-    expect(computePph21Monthly(30_000_000, "K/0", 820_423)).toBe(3_367_792)
+    // taxYear 40,413,500 → monthly 3,367,791.666...
+    // PER-16/PJ/2016 Art. 17: round DOWN to nearest IDR → 3,367,791
+    // (The previous test expected 3,367,792 from Math.round — see service
+    // comment for the regulatory reason this is now 3,367,791.)
+    expect(computePph21Monthly(30_000_000, "K/0", 820_423)).toBe(3_367_791)
+  })
+
+  it("rounds the monthly withholding DOWN to the nearest IDR (PER-16/PJ/2016)", () => {
+    // Construct a case where taxYear/12 lands on a .50 boundary: a single
+    // employee whose net-of-PTKP taxable maps to exactly Rp150 of annual tax
+    // (first 5% bracket), giving 150/12 = 12.5 IDR/month. The regulation
+    // mandates rounding DOWN → 12, not 13 (which Math.round would produce).
+    //   grossYear = 56,845,264 → biaya jabatan 5% (2,842,263.2),
+    //   bpjs 0, net 54,003,000.8, PTKP(TK/0) 54,000,000,
+    //   taxable 3,000.8 → PKP floor-to-1000 = 3,000 → taxYear 150 → 12.5/mo.
+    expect(computePph21Monthly(56_845_264 / 12, "TK/0", 0)).toBe(12)
   })
 
   it("is monotonically non-decreasing as gross salary rises", () => {
