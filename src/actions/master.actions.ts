@@ -12,6 +12,7 @@ import { safeId, requireNumber, safeNumber, safeJsonParse, requireString } from 
 import { logActivity } from "@/lib/services/activity-log.service"
 import { customerSchema, vendorSchema, itemSchema, warehouseServerSchema, accountServerSchema } from "@/lib/validations/schemas"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { createLeadSchema, updateLeadSchema } from "@/lib/validations/crm.schemas"
 import { employeeSchema } from "@/lib/validators"
 import bcrypt from "bcryptjs"
 
@@ -945,23 +946,29 @@ export async function createLead(formData: FormData) {
   try {
   await requirePermission("create_leads")
 
+  const parsed = parseFormData(createLeadSchema, formData)
+  if (!parsed.success) {
+    throw new Error(parsed.error)
+  }
+  const v = parsed.data
+
   const leadNumber = await generateDocumentNumber("LEAD", "simple")
 
   const data = {
     leadNumber,
-    name: requireString(formData.get("name"), "name"),
-    email: formData.get("email") as string || null,
-    phone: formData.get("phone") as string || null,
-    company: formData.get("company") as string || null,
-    contactName: formData.get("contactName") as string || null,
-    position: formData.get("position") as string || null,
-    industry: formData.get("industry") as string || null,
-    estimatedValue: safeNumber(formData.get("estimatedValue")),
-    expectedCloseDate: formData.get("expectedCloseDate") ? new Date(formData.get("expectedCloseDate") as string) : null,
-    address: formData.get("address") as string || null,
-    source: formData.get("source") as string || null,
-    notes: formData.get("notes") as string || null,
-    assignedTo: safeId(formData.get("assignedTo")),
+    name: v.name,
+    email: v.email ?? null,
+    phone: v.phone ?? null,
+    company: v.company ?? null,
+    contactName: v.contactName ?? null,
+    position: v.position ?? null,
+    industry: v.industry ?? null,
+    estimatedValue: v.estimatedValue ?? null,
+    expectedCloseDate: v.expectedCloseDate ?? null,
+    address: v.address ?? null,
+    source: v.source ?? null,
+    notes: v.notes ?? null,
+    assignedTo: v.assignedTo ?? null,
     status: "new",
   }
 
@@ -982,15 +989,21 @@ export async function updateLead(id: number, formData: FormData) {
   const actor = await requirePermission("edit_leads")
   const isAdmin = actor.permissions.includes("manage_leads") || actor.roles.includes("super_admin")
 
+  const parsed = parseFormData(updateLeadSchema, formData)
+  if (!parsed.success) {
+    throw new Error(parsed.error)
+  }
+  const v = parsed.data
+
   const existing = await prisma.lead.findUniqueOrThrow({ where: { id } })
-  
+
   // Security Guard: Sales can only edit their own leads unless they have manage_leads permission.
   if (!isAdmin && existing.assignedTo !== Number(actor.id)) {
     throw new Error("Anda hanya dapat mengubah lead yang ditugaskan kepada Anda.")
   }
 
-  const newAssignedTo = safeId(formData.get("assignedTo"))
-  
+  const newAssignedTo = v.assignedTo ?? null
+
   // Security Guard: Only admins can re-assign leads to others.
   if (!isAdmin && newAssignedTo !== existing.assignedTo) {
     throw new Error("Anda tidak memiliki izin untuk mengubah penugasan (assignee) lead.")
@@ -999,18 +1012,18 @@ export async function updateLead(id: number, formData: FormData) {
   await prisma.lead.update({
     where: { id },
     data: {
-      name: requireString(formData.get("name"), "name"),
-      email: formData.get("email") as string || null,
-      phone: formData.get("phone") as string || null,
-      company: formData.get("company") as string || null,
-      contactName: formData.get("contactName") as string || null,
-      position: formData.get("position") as string || null,
-      industry: formData.get("industry") as string || null,
-      estimatedValue: safeNumber(formData.get("estimatedValue")),
-      expectedCloseDate: formData.get("expectedCloseDate") ? new Date(formData.get("expectedCloseDate") as string) : null,
-      address: formData.get("address") as string || null,
-      source: formData.get("source") as string || null,
-      notes: formData.get("notes") as string || null,
+      name: v.name,
+      email: v.email ?? null,
+      phone: v.phone ?? null,
+      company: v.company ?? null,
+      contactName: v.contactName ?? null,
+      position: v.position ?? null,
+      industry: v.industry ?? null,
+      estimatedValue: v.estimatedValue ?? null,
+      expectedCloseDate: v.expectedCloseDate ?? null,
+      address: v.address ?? null,
+      source: v.source ?? null,
+      notes: v.notes ?? null,
       assignedTo: newAssignedTo,
     },
   })

@@ -234,16 +234,27 @@ describe("Position Actions", () => {
 describe("Lead Actions", () => {
   it("createLead succeeds", async () => {
     try {
-      await actions.createLead(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+      await actions.createLead(fdMap({ name: "test", estimatedValue: "100" }))
     } catch (e) { /* redirect */ }
     expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
+  })
+  it("createLead fails validation on negative estimatedValue", async () => {
+    const res = await actions.createLead(fdMap({ name: "test", estimatedValue: "-50" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("estimatedValue")
   })
   it("updateLead succeeds", async () => {
     mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ id: 1, activities: "[]", assignedTo: 1 })
     try {
-      await actions.updateLead(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+      await actions.updateLead(1, fdMap({ name: "test", estimatedValue: "100" }))
     } catch (e) { /* redirect */ }
     expect(mocks.prismaMock.lead.update).toHaveBeenCalled()
+  })
+  it("updateLead fails validation on invalid date", async () => {
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ id: 1, activities: "[]", assignedTo: 1 })
+    const res = await actions.updateLead(1, fdMap({ name: "test", expectedCloseDate: "invalid-date" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("expectedCloseDate")
   })
 })
 
