@@ -4,20 +4,16 @@ import { NextRequest } from "next/server"
 
 const mocks = vi.hoisted(() => ({
   authFn: vi.fn(),
-  findFirst: vi.fn(),
-  update: vi.fn(),
+  markAsRead: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/auth", () => ({
   auth: (...a: unknown[]) => mocks.authFn(...a),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    notification: {
-      findFirst: (...a: unknown[]) => mocks.findFirst(...a),
-      update: (...a: unknown[]) => mocks.update(...a),
-    },
+vi.mock("@/lib/services/notification.service", () => ({
+  notificationService: {
+    markAsRead: (...a: unknown[]) => mocks.markAsRead(...a),
   },
 }))
 
@@ -60,27 +56,22 @@ describe("POST /api/notifications/[id]/read", () => {
 
   it("returns 404 when notification not owned by user", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
-    mocks.findFirst.mockResolvedValue(null)
+    mocks.markAsRead.mockResolvedValue(false)
     const res = await POST(makeReq(), makeParams("5"))
     expect(res.status).toBe(404)
-    expect(mocks.update).not.toHaveBeenCalled()
+    // The service call MUST scope to the caller's userId, otherwise the route
+    // would silently mark another user's notification as read.
+    expect(mocks.markAsRead).toHaveBeenCalledWith(5, 1)
   })
 
   it("marks notification as read on success", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
-    mocks.findFirst.mockResolvedValue({ id: 5 })
-    mocks.update.mockResolvedValue({})
+    mocks.markAsRead.mockResolvedValue(true)
 
     const res = await POST(makeReq(), makeParams("5"))
     const json = await res.json()
     expect(json.success).toBe(true)
-    expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 5, userId: 1 },
-    }))
-    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 5 },
-      data: { readAt: expect.any(Date) },
-    }))
+    expect(mocks.markAsRead).toHaveBeenCalledWith(5, 1)
   })
 
   it("returns 500 on internal error", async () => {

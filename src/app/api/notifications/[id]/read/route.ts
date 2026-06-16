@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db/prisma"
 import { auth } from "@/lib/auth/auth"
 import { apiError } from "@/lib/api-response"
+import { notificationService } from "@/lib/services/notification.service"
 
 export async function POST(
   _request: NextRequest,
@@ -17,16 +17,12 @@ export async function POST(
     if (!Number.isInteger(notificationId) || notificationId <= 0) return apiError("BAD_REQUEST", "Invalid notification id")
     if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
 
-    // Fix H1: verify ownership first — `id` is the PK so Prisma ignores the
-    // userId filter in the update where-clause (IDOR). Use findFirst to assert
-    // ownership, then update by PK.
-    const own = await prisma.notification.findFirst({ where: { id: notificationId, userId }, select: { id: true } })
-    if (!own) return apiError("NOT_FOUND", "Not found")
-
-    await prisma.notification.update({
-      where: { id: notificationId },
-      data: { readAt: new Date() },
-    })
+    // Security: scope the update to the caller's userId inside the service.
+    // `markAsRead` returns false both for missing notifications and
+    // notifications owned by other users, so we return 404 for both — the
+    // response shape doesn't leak existence to a probing attacker.
+    const ok = await notificationService.markAsRead(notificationId, userId)
+    if (!ok) return apiError("NOT_FOUND", "Not found")
 
     return NextResponse.json({ success: true })
   } catch {

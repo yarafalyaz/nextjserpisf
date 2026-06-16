@@ -342,13 +342,28 @@ describe("notification.service", () => {
   });
 
   describe("markAsRead", () => {
-    it("updates notification readAt", async () => {
-      mocks.updateNotif.mockResolvedValue({ id: 5 });
+    it("scopes the update to the caller's userId and returns true when a row is updated", async () => {
+      mocks.updateManyNotif.mockResolvedValue({ count: 1 });
 
-      await notificationService.markAsRead(5);
+      const ok = await notificationService.markAsRead(5, 42);
 
-      expect(mocks.updateNotif).toHaveBeenCalledWith({
-        where: { id: 5 },
+      expect(ok).toBe(true);
+      // Ownership is enforced inside the DB op: id AND userId. This prevents
+      // an IDOR where another user's notification id silently gets marked read.
+      expect(mocks.updateManyNotif).toHaveBeenCalledWith({
+        where: { id: 5, userId: 42 },
+        data: { readAt: expect.any(Date) },
+      });
+    });
+
+    it("returns false when no row matched (missing or not owned by user)", async () => {
+      mocks.updateManyNotif.mockResolvedValue({ count: 0 });
+
+      const ok = await notificationService.markAsRead(999, 42);
+
+      expect(ok).toBe(false);
+      expect(mocks.updateManyNotif).toHaveBeenCalledWith({
+        where: { id: 999, userId: 42 },
         data: { readAt: expect.any(Date) },
       });
     });

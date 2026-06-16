@@ -227,13 +227,22 @@ export const notificationService = {
   },
 
   /**
-   * Mark a notification as read.
+   * Mark a single notification as read.
+   *
+   * Security: requires a `userId` to scope the update. Without it, a caller
+   * could pass another user's notification id and silently mutate it. The
+   * `where: { id, userId }` shape makes the ownership check part of the
+   * database operation itself — `updateMany` returns `count: 0` when the row
+   * is missing OR not owned by the user (no distinction leaks existence),
+   * avoiding the prior 2-step findFirst + update that doubled round-trips
+   * and let `prisma.notification.update` run unguarded.
    */
-  async markAsRead(notificationId: number): Promise<void> {
-    await prisma.notification.update({
-      where: { id: notificationId },
+  async markAsRead(notificationId: number, userId: number): Promise<boolean> {
+    const { count } = await prisma.notification.updateMany({
+      where: { id: notificationId, userId },
       data: { readAt: new Date() },
     })
+    return count > 0
   },
 
   /**
