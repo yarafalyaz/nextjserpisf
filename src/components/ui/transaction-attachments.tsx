@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState, useEffect, useRef } from "react"
+import { useCallback, useState, useEffect, useRef, useId } from "react"
 import { Upload, FileText, Download, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { SafeImage } from "./safe-image"
@@ -39,6 +39,8 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const headingId = useId()
+  const fileInputId = useId()
 
   const fetchAttachments = useCallback(async () => {
     try {
@@ -124,10 +126,10 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
   }
 
   return (
-    <div className="attachment-section">
+    <section className="attachment-section" aria-labelledby={headingId}>
       <div className="attachment-header">
-        <h3 className="attachment-title">
-          <FileText className="size-4" />
+        <h3 id={headingId} className="attachment-title">
+          <FileText className="size-4" aria-hidden="true" />
           Bukti / Lampiran
         </h3>
         <Button
@@ -135,55 +137,95 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
           variant="secondary" size="sm"
           onPress={() => fileInputRef.current?.click()}
           isDisabled={uploading}
+          aria-controls={fileInputId}
         >
-          <Upload className="size-3" />
+          <Upload className="size-3" aria-hidden="true" />
           {uploading ? "Mengupload..." : "Upload Bukti"}
         </Button>
         <input
+          id={fileInputId}
           ref={fileInputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
           onChange={handleUpload}
-          className="hidden"
+          className="sr-only"
+          aria-label="Pilih file bukti atau lampiran (JPG, PNG, WebP, GIF, atau PDF, maksimal 10MB)"
+          tabIndex={-1}
         />
       </div>
 
+      <div role="status" aria-live="polite" aria-busy={loading} className="sr-only">
+        {loading
+          ? "Memuat lampiran"
+          : `${attachments.length} lampiran tersedia`}
+      </div>
+
       {loading ? (
-        <div className="attachment-loading">Memuat lampiran...</div>
+        <div className="attachment-loading" aria-hidden="true">Memuat lampiran...</div>
       ) : attachments.length === 0 ? (
-        <div className="attachment-empty">
-          <FileText className="size-8 text-muted-foreground" />
+        <div className="attachment-empty" role="status">
+          <FileText className="size-8 text-muted-foreground" aria-hidden="true" />
           <span>Belum ada lampiran bukti</span>
         </div>
       ) : (
-        <div className="attachment-grid">
+        <ul
+          className="attachment-grid"
+          aria-label={`Daftar ${attachments.length} lampiran bukti`}
+        >
           {attachments.map((att) => (
-            <div key={att.id} className="attachment-card">
+            <li key={att.id} className="attachment-card">
               {isImage(att.mimeType) ? (
-                <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="attachment-preview">
-                  <SafeImage src={att.fileUrl} alt={att.originalName} width={96} height={96} className="attachment-img" />
+                <a
+                  href={att.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="attachment-preview"
+                  aria-label={`Buka pratinjau gambar ${att.originalName} di tab baru`}
+                >
+                  <SafeImage src={att.fileUrl} alt="" role="presentation" width={96} height={96} className="attachment-img" />
                 </a>
               ) : (
-                <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="attachment-preview attachment-file">
-                  <FileText className="size-8" />
-                  <span className="text-xs font-medium">PDF</span>
+                <a
+                  href={att.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="attachment-preview attachment-file"
+                  aria-label={`Buka pratinjau PDF ${att.originalName} di tab baru`}
+                >
+                  <FileText className="size-8" aria-hidden="true" />
+                  <span className="text-xs font-medium" aria-hidden="true">PDF</span>
                 </a>
               )}
               <div className="attachment-info">
                 <span className="attachment-name" title={att.originalName}>{att.originalName}</span>
-                <span className="attachment-size">{formatFileSize(att.fileSize)}</span>
+                <span className="attachment-size" aria-label={`Ukuran file ${formatFileSize(att.fileSize)}`}>
+                  {formatFileSize(att.fileSize)}
+                </span>
               </div>
               <div className="attachment-actions">
-                <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="button button--secondary button--sm attachment-action-link" title="Unduh">
-                  <Download className="size-3.5" />
+                <a
+                  href={att.fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="button button--secondary button--sm attachment-action-link"
+                  aria-label={`Unduh ${att.originalName}`}
+                  title="Unduh"
+                >
+                  <Download className="size-3.5" aria-hidden="true" />
                 </a>
-                <Button onPress={() => handleDeleteClick(att.id)} variant="danger-soft" size="sm" className="attachment-action-button" title="Hapus">
-                  <Trash2 className="size-3.5" />
+                <Button
+                  onPress={() => handleDeleteClick(att.id)}
+                  variant="danger-soft"
+                  size="sm"
+                  className="attachment-action-button"
+                  aria-label={`Hapus lampiran ${att.originalName}`}
+                >
+                  <Trash2 className="size-3.5" aria-hidden="true" />
                 </Button>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       <ConfirmDialog
@@ -196,6 +238,6 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         variant="danger"
         onConfirm={executeDelete}
       />
-    </div>
+    </section>
   )
 }

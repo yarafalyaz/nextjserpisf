@@ -2027,6 +2027,9 @@ html.dark [cmdk-group-heading] {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 .attachment-card {
