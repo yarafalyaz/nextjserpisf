@@ -12,10 +12,43 @@ import {
   rejectStepSchema,
   createWorkflowSchema,
   updateWorkflowSchema,
+  workflowStepsSchema,
 } from "@/lib/validations/approval.schemas"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 
-type WorkflowStepInput = { name?: string; roleId?: number | null; approverType?: string | null }
+type WorkflowStepInput = { name?: string; roleId?: number | null; userId?: number | null; approverType?: string | null }
+
+/**
+ * Parse + Zod-validate the workflow steps JSON blob from formData.
+ * Returns `{ steps }` on success or `{ error }` on failure (malformed JSON,
+ * oversized blob, roleId not a positive int, name > 255 chars, > 50 steps,
+ * etc.). Centralized so create + update share the exact same gate.
+ */
+function parseWorkflowSteps(stepsJson: string | null | undefined):
+  | { ok: true; steps: WorkflowStepInput[] }
+  | { ok: false; error: string } {
+  if (!stepsJson) return { ok: true, steps: [] }
+  const raw = safeJsonParse<unknown>(stepsJson)
+  if (raw === null) {
+    return { ok: false, error: "Validasi gagal: steps: bukan JSON yang valid" }
+  }
+  const parsed = workflowStepsSchema.safeParse(raw)
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.issues
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ")
+    return { ok: false, error: `Validasi gagal: ${fieldErrors}` }
+  }
+  return {
+    ok: true,
+    steps: parsed.data.map((s) => ({
+      name: s.name,
+      roleId: s.roleId ?? null,
+      userId: s.userId ?? null,
+      approverType: s.approverType,
+    })),
+  }
+}
 
 // Enforce that the acting user is actually the designated approver for the
 // approval's current step. requirePermission("approve_workflows") only gates
@@ -188,8 +221,11 @@ export async function createApprovalWorkflow(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const { name, modelType, code, isActive, steps: stepsJson } = parsed.data
 
-    const steps = (safeJsonParse<WorkflowStepInput[]>(stepsJson ?? null) ?? [])
-      .filter((s) => s.roleId || s.approverType || s.name)
+    const stepsResult = parseWorkflowSteps(stepsJson ?? null)
+    if (!stepsResult.ok) return { success: false, error: stepsResult.error }
+    const steps = stepsResult.steps.filter(
+      (s) => s.roleId || s.userId || s.approverType || s.name,
+    )
 
     const wf = await prisma.approvalWorkflow.create({
       data: {
@@ -202,6 +238,7 @@ export async function createApprovalWorkflow(formData: FormData) {
             stepOrder: i + 1,
             name: s.name || `Langkah ${i + 1}`,
             roleId: s.roleId ? Number(s.roleId) : null,
+            userId: s.userId ? Number(s.userId) : null,
             approverType: s.approverType || null,
           })),
         },
@@ -226,8 +263,11 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error }
     const { name, modelType, code, isActive, steps: stepsJson } = parsed.data
 
-    const steps = (safeJsonParse<WorkflowStepInput[]>(stepsJson ?? null) ?? [])
-      .filter((s) => s.roleId || s.approverType || s.name)
+    const stepsResult = parseWorkflowSteps(stepsJson ?? null)
+    if (!stepsResult.ok) return { success: false, error: stepsResult.error }
+    const steps = stepsResult.steps.filter(
+      (s) => s.roleId || s.userId || s.approverType || s.name,
+    )
 
     await prisma.$transaction(async (tx) => {
       await tx.approvalWorkflowStep.deleteMany({ where: { workflowId: id } })
@@ -243,6 +283,7 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
               stepOrder: i + 1,
               name: s.name || `Langkah ${i + 1}`,
               roleId: s.roleId ? Number(s.roleId) : null,
+              userId: s.userId ? Number(s.userId) : null,
               approverType: s.approverType || null,
             })),
           },

@@ -123,6 +123,72 @@ describe("Approval Workflow CRUD", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
+
+  // ── Zod-validation bypass regression (workflow step JSON) ──
+  it("createApprovalWorkflow rejects malformed steps JSON", async () => {
+    const res = await actions.createApprovalWorkflow(fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: "{not valid json"
+    }))
+    expect(res?.success).toBe(false)
+    expect(typeof res?.error).toBe("string")
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled()
+  })
+  it("createApprovalWorkflow rejects negative/non-int roleId in a step", async () => {
+    const res = await actions.createApprovalWorkflow(fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: JSON.stringify([{ name: "S1", roleId: -3 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled()
+  })
+  it("createApprovalWorkflow rejects oversized step name", async () => {
+    const res = await actions.createApprovalWorkflow(fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: JSON.stringify([{ name: "x".repeat(256) }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled()
+  })
+  it("createApprovalWorkflow rejects more than 50 steps", async () => {
+    const manySteps = Array.from({ length: 51 }, (_, i) => ({ name: `S${i}` }))
+    const res = await actions.createApprovalWorkflow(fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: JSON.stringify(manySteps)
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled()
+  })
+  it("createApprovalWorkflow persists a per-user (userId) step", async () => {
+    mocks.prismaMock.approvalWorkflow.create.mockResolvedValueOnce({ id: 1 })
+    const res = await actions.createApprovalWorkflow(fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: JSON.stringify([{ name: "Manager", userId: 7 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.approvalWorkflow.create.mock.calls[0][0]
+    expect(arg.data.steps.create[0]).toMatchObject({ userId: 7, roleId: null })
+  })
+  it("updateApprovalWorkflow rejects malformed steps JSON", async () => {
+    const res = await actions.updateApprovalWorkflow(1, fdMap({
+      name: "WF1",
+      modelType: "PurchaseRequest",
+      steps: "[{bad"
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it("updateApprovalWorkflow succeeds", async () => {
     const res = await actions.updateApprovalWorkflow(1, fdMap({
       name: "WF1",

@@ -9,6 +9,8 @@ import {
   approveStepSchema,
   rejectStepSchema,
   createWorkflowSchema,
+  workflowStepSchema,
+  workflowStepsSchema,
 } from "@/lib/validations/approval.schemas";
 import { createRoleSchema, updateRoleSchema } from "@/lib/validations/roles.schemas";
 import { selfAttendanceLocationSchema } from "@/lib/validations/self-attendance.schemas";
@@ -74,6 +76,43 @@ describe("validations/approval.schemas", () => {
   });
   it("createWorkflowSchema rejects empty modelType", () => {
     expect(createWorkflowSchema.safeParse({ name: "X", modelType: "" }).success).toBe(false);
+  });
+
+  it("workflowStepSchema accepts roleId step", () => {
+    expect(workflowStepSchema.safeParse({ name: "Manager", roleId: 3 }).success).toBe(true);
+  });
+  it("workflowStepSchema accepts userId step (per-user approver)", () => {
+    expect(workflowStepSchema.safeParse({ name: "Boss", userId: 7 }).success).toBe(true);
+  });
+  it("workflowStepSchema accepts null roleId/userId", () => {
+    expect(workflowStepSchema.safeParse({ roleId: null, userId: null }).success).toBe(true);
+  });
+  it("workflowStepSchema rejects non-positive roleId", () => {
+    expect(workflowStepSchema.safeParse({ roleId: 0 }).success).toBe(false);
+    expect(workflowStepSchema.safeParse({ roleId: -1 }).success).toBe(false);
+  });
+  it("workflowStepSchema rejects non-integer roleId", () => {
+    expect(workflowStepSchema.safeParse({ roleId: 1.5 }).success).toBe(false);
+  });
+  it("workflowStepSchema rejects non-numeric roleId", () => {
+    expect(workflowStepSchema.safeParse({ roleId: "abc" }).success).toBe(false);
+  });
+  it("workflowStepSchema rejects name over 255 chars", () => {
+    expect(workflowStepSchema.safeParse({ name: "a".repeat(256) }).success).toBe(false);
+  });
+  it("workflowStepSchema rejects approverType over 100 chars", () => {
+    expect(workflowStepSchema.safeParse({ approverType: "x".repeat(101) }).success).toBe(false);
+  });
+  it("workflowStepsSchema rejects non-array input", () => {
+    expect(workflowStepsSchema.safeParse({ name: "x" }).success).toBe(false);
+  });
+  it("workflowStepsSchema rejects more than 50 steps", () => {
+    const many = Array.from({ length: 51 }, () => ({ name: "S" }));
+    expect(workflowStepsSchema.safeParse(many).success).toBe(false);
+  });
+  it("workflowStepsSchema accepts up to 50 valid steps", () => {
+    const fifty = Array.from({ length: 50 }, (_, i) => ({ name: `S${i}`, roleId: i + 1 }));
+    expect(workflowStepsSchema.safeParse(fifty).success).toBe(true);
   });
 });
 
