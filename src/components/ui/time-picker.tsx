@@ -61,12 +61,17 @@ export function AppTimePicker({
   }
 
   return (
-    <div className={cn("flex items-center gap-1.5", className)}>
+    <div
+      role="group"
+      aria-label="Pemilih waktu"
+      className={cn("flex items-center gap-1.5", className)}
+    >
       {name && <input type="hidden" name={name} value={current} />}
-      <Clock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <Clock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div className="w-20 shrink-0">
         <Combobox
           id={id}
+          aria-label="Jam"
           options={hourOptions}
           value={h || null}
           onChange={(k) => emit(k ?? "", m)}
@@ -74,9 +79,11 @@ export function AppTimePicker({
           disabled={disabled}
         />
       </div>
-      <span className="text-muted-foreground">:</span>
+      <span className="text-muted-foreground" aria-hidden="true">:</span>
       <div className="w-20 shrink-0">
         <Combobox
+          id={id ? `${id}-menit` : undefined}
+          aria-label="Menit"
           options={minuteOptions}
           value={m || null}
           onChange={(k) => emit(h, k ?? "")}
