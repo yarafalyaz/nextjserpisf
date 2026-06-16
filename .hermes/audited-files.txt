@@ -1,0 +1,125 @@
+src/lib/hooks/inventory-transfer.hook.ts
+src/actions/roles.actions.ts
+src/lib/services/attendance-summary.service.ts
+src/actions/finance.actions.ts
+src/actions/hrm.actions.ts
+src/lib/services/inventory.service.ts
+src/actions/sales.actions.ts
+src/actions/approval.actions.ts
+src/actions/crm.actions.ts
+src/actions/cron.actions.ts
+src/actions/database.actions.ts
+src/actions/settings.actions.ts
+src/actions/method.actions.ts
+src/actions/bulk.actions.ts
+src/actions/auth.actions.ts
+src/actions/manufacturing.actions.ts
+src/actions/master.actions.ts
+src/actions/purchase.actions.ts
+src/actions/hrm.actions.ts
+src/actions/inventory.actions.ts
+src/app/api/activity-logs/route.ts
+src/app/api/activity-logs/export/route.ts
+src/lib/hooks/down-payment.hook.ts
+src/actions/project.actions.ts
+src/actions/asset.actions.ts (clean)
+src/actions/vehicle.actions.ts
+src/app/api/cron/route.ts
+src/lib/services/attendance-summary.service.ts
+src/app/api/dashboard/notifications/route.ts
+src/lib/hooks/expense.hook.ts (fix: balance guard)
+(clean)
+src/lib/services/inventory-fifo.ts
+src/actions/inventory.actions.ts (fix: double-journal transaction abort)
+src/app/api/cron/daily-notifications/route.ts (fix: local timezone logic bug)
+src/lib/hooks/accounting.hook.ts
+src/lib/services/attendance-summary.service.ts (fix: dailyRate divisor used elapsed days)
+src/lib/services/quotation-sync.service.ts (fix: invoice payment status stale after quotation edit)
+src/actions/self-attendance.actions.ts
+src/lib/services/journal.service.ts
+src/lib/services/document-sequence.service.ts
+src/lib/services/holiday-sync.service.ts
+src/lib/services/late-penalty.service.ts
+src/lib/services/method.service.ts
+src/lib/services/payroll-statutory.service.ts
+src/lib/services/period-lock.service.ts
+src/lib/services/stock-journal.service.ts
+src/lib/services/uom.service.ts
+src/lib/services/notification.service.ts
+src/lib/services/approval-workflow.service.ts
+src/lib/services/activity-log.service.ts
+src/lib/hooks/goods-receipt.hook.ts
+src/lib/hooks/material-issue.hook.ts
+src/lib/hooks/sales-payment.hook.ts
+src/lib/hooks/sales-return.hook.ts
+src/lib/hooks/purchase-order.hook.ts
+src/lib/hooks/purchase-return.hook.ts
+src/lib/hooks/stock-adjustment.hook.ts
+src/lib/hooks/work-order.hook.ts
+src/app/api/upload/route.ts
+src/app/api/upload/avatar/route.ts
+src/app/api/upload/items/route.ts
+src/app/api/upload/attachments/route.ts
+src/app/api/upload/attachments/[id]/route.ts
+src/app/api/attachments/[...path]/route.ts
+src/app/api/backup/download/route.ts
+src/app/api/notifications/[id]/read/route.ts
+src/app/api/workflow/[...path]/route.ts
+src/app/api/print/route.ts
+src/app/api/payroll/late-penalty/route.ts
+src/app/api/address/route.ts
+src/app/api/notifications/route.ts
+src/app/api/vehicle-brands/route.ts
+src/app/api/vehicle-models/route.ts
+src/app/api/activity-logs/export/route.ts
+src/app/api/cron/asset-depreciation/route.ts (clean)
+src/app/api/cron/auto-reject-quotations/route.ts (clean)
+src/actions/roles.actions.ts (clean)
+src/actions/finance.actions.ts (fix: reverseJournal stuck in REVERSING on period/seq failure)
+src/app/api/auth/[...nextauth]/route.ts (clean)
+src/app/api/health/route.ts (clean)
+src/actions/finance.actions.ts (fix: decimal precision balance check bug)
+src/lib/services/inventory.service.ts (fix: float precision in FIFO OUT consumption)
+src/lib/hooks/inventory-transfer.hook.ts (fix: float drift in duplicate-row qty aggregation)
+src/actions/sales.actions.ts (fix: negative taxRate/qty drove invoice grandTotal negative)
+src/actions/manufacturing.actions.ts (fix: autoCreateDeliveryOrder attached DO to wrong SalesOrder when WO has null quotationId)
+src/lib/services/attendance-summary.service.ts (fix: schedule precedence)
+src/actions/bulk.actions.ts (fix: asset/vehicle bulk deletion integrity guard bypass)
+src/actions/inventory.actions.ts (fix: stuck-in-limbo state on tx failure)
+src/actions/project.actions.ts (fix: project status progression and stage reverting)
+src/lib/hooks/sales-payment.hook.ts (fix: float drift left fully-paid invoice stuck on partial)
+src/lib/hooks/down-payment.hook.ts (fix: same float drift in multi-DP invoice recalc)
+src/actions/self-attendance.actions.ts (fix: schedule-blind overtime/half_day classification)
+src/actions/purchase.actions.ts (fix: over-return cap bypass on updatePurchaseReturn)
+src/actions/sales.actions.ts (fix: updateSalesReturn TOCTOU)
+src/actions/hrm.actions.ts (fix: edit guard bypass on paid_off loans)
+src/lib/hooks/accounting.hook.ts (fix: petty-cash period-lock bypass via transactionDate??new Date() fallback)
+src/lib/validations/inventory.schemas.ts (fix: same-warehouse guard)
+src/actions/inventory.actions.ts (fix: updateInventoryTransfer skipped Zod validation)
+src/lib/validations/__tests__/inventory-transfer-same-warehouse.test.ts (new test)
+src/lib/services/payroll-statutory.service.ts (fix: BPJS math rounding discrepancy)
+src/components/ui/data-table.tsx (fix: serverPagination + searchColumn silently filtered only the current page)
+src/components/ui/data-table-utils.ts (new: pure URL helpers extracted for testability)
+src/components/ui/__tests__/data-table-url.test.ts (new: 5 tests covering buildServerSearchUrl)
+src/lib/utils/math.ts (fix: safeRound returned NaN when input was already in exponential notation)
+src/lib/utils/__tests__/math.test.ts (new: 2 tests covering tiny and huge exponential-notation inputs)
+src/actions/inventory.actions.ts (fix: updateWorkOrder bypassed status guard)
+src/actions/master.actions.ts (fix: deletePosition unguarded employee data-loss cascade)
+src/actions/finance.actions.ts (fix: updateBudget called requirePermission("create_budgets") instead of "edit_budgets"; edit_budgets missing from prisma/seed.ts so no non-super-admin could ever edit a budget)
+prisma/seed.ts (fix: added missing "edit_budgets" permission to admin role's permission list)
+src/actions/__tests__/finance.actions.test.ts (new: +1 test asserting updateBudget calls requirePermission with "edit_budgets")
+src/actions/hrm.actions.ts (fix: create-vs-update validation asymmetry — updateTimesheet/updateWorkSchedule/updateHoliday/updateDepartmentHoliday/updateAppreciation bypassed Zod, allowing negative/zero hours & blank/oversized fields the create-guard rejects)
+2026-06-16 | src/actions/sales.actions.ts (6 update actions) + prisma/seed.ts | Fixed inconsistent action-level permission gates (same class as updateBudget fix #30/#31). All 7 sales edit pages (penjualan/*/[id]/ubah/page.tsx) gate on edit_* permissions, but 6 update server actions checked create_* instead: updateSalesOrder (create_sales_orders→edit_sales_orders), updateSalesInvoice (create→edit_sales_invoices), updateSalesPayment (create→edit_sales_payments), updateSalesReturn (create→edit_sales_returns), updateDeliveryOrder (create→edit_delivery_orders), updateDownPayment (create→edit_down_payments). Server actions are direct network endpoints, so a user granted only create_X (but denied edit_X) could edit any existing draft record by invoking the action directly — bypassing the page gate. Also seed.ts was missing edit_sales_invoices/edit_sales_payments/edit_delivery_orders entirely (no user could ever hold them), added all 3 to admin role. Added 6 regression assertions (toHaveBeenCalledWith the correct edit_* string) to existing happy-path tests in sales.actions.test.ts. RED verified (6 fail on create_* code), GREEN after. Tsc clean, lint 0 errors, 2552/2552 tests pass.
+src/actions/purchase.actions.ts (fix: partially-paid vendor bill stuck in posted instead of partial status)
+src/components/forms/sales-return-form.tsx (fix: edit-mode hydration + qty input binding)
+src/components/forms/purchase-return-form.tsx (fix: same edit-mode hydration + qty input binding)
+src/components/forms/__tests__/sales-return-form.test.tsx (new test)
+src/actions/purchase.actions.ts (fix: 6 update actions used create_purchase_* perm instead of edit_purchase_*)
+src/app/api/dashboard/notifications/route.ts
+src/app/api/cron/daily-notifications/route.ts
+src/app/api/dashboard/notifications/__tests__/route-weekend.test.ts
+src/actions/finance.actions.ts (fix: updateBudget silently overwrote createdBy, destroying audit trail; now leaves it immutable + added RED/GREEN test)
+2026-06-16 | src/app/api/dashboard/notifications/route.ts | Fixed overdue-invoice cutoff divergence: dashboard used dueDate < new Date() (current instant), but the daily-notifications cron uses dueDate < dayStart (local midnight). An invoice due earlier today (dueDate = local midnight) was wrongly flagged overdue on the dashboard while still in its due day, overstating AR and disagreeing with the cron's own count. Changed to dueDate < today (the already-computed local midnight). Added RED/GREEN test pinning time to noon and asserting the count() cutoff is 00:00:00. tsc clean, eslint 0, 2591/2591 tests pass. No e2e specs reference this route.
+2026-06-16 | src/app/api/dashboard/notifications/route.ts | Fixed late-attendance timezone divergence: the dashboard computed `today`/`tomorrow` (JS local midnight) for the overdue-invoice and absent-employee branches, but the late-attendance count used a raw SQL `WHERE date >= CURDATE() AND date < CURDATE() + INTERVAL 1 DAY`. CURDATE() evaluates in the MySQL server's timezone, so when MySQL TZ != Node TZ (e.g. MySQL UTC, Node Asia/Jakarta) the "today" window shifted by up to a day, making the dashboard's "Karyawan Telat Hari Ini" count disagree with the daily-notifications cron (which uses JS dayStart/dayEnd) and mis-count at the day rollover. Same divergence class as the overdue-invoice fix in this file. Replaced the $queryRaw with prisma.attendance.count({ where: { date: { gte: today, lt: tomorrow }, OR: [{status:"late"},{lateMinutes:{gt:0}}] } }), matching the cron and the rest of the route. Added RED/GREEN test (route-weekend.test.ts) asserting the Prisma count() is invoked with the JS local-midnight [today,tomorrow) boundary; updated route.test.ts mock to queue two attendance.count() values. tsc clean, eslint 0, 2596/2596 tests pass. No e2e specs reference this route.
+2026-06-16 | src/actions/asset.actions.ts | Fixed updateAssetTransfer location-revert clobber: when the transfer's assetId changes, the action unconditionally reverted the OLD asset's location to oldTransfer.fromLocation if fromLocation was set. But it never checked whether this transfer is what actually drives the old asset's current location. If the old asset had since been moved by a LATER transfer (chain A→B→C), editing this back-dated transfer would clobber asset.location back to fromLocation, silently losing the newer transfer's destination — a data-integrity corruption. Added the asset.location === oldTransfer.toLocation guard (mirrors deleteAssetTransfer) inside the tx, and when reverting now prefers the latest remaining transfer's toLocation (excluding this one) over a blind fromLocation fallback so chained transfers stay consistent. Added RED/GREEN regression test asserting no revert-to-OldLoc when current location no longer matches. tsc clean, eslint 0 errors, 2601/2601 tests pass. No e2e selector/text changes (module-coverage only asserts page load + "Transfer").
+2026-06-16 | src/actions/manufacturing.actions.ts | Fixed Project.endDate drift on re-sync: syncProjectStatus (called from completeWorkOrder) wrote `endDate: new Date()` unconditionally every time all stages were completed, so a second WO completing for the same project (warranty/scope follow-up) silently overwrote the historical completion date with the current time, corrupting SLA/follow-up reporting. Extracted transition rules to pure src/lib/services/project-status.ts (computeProjectStatus); endDate now only stamped on the forward non-completed->completed transition and cleared only on completed->in_progress. Added 7 unit tests + a completeWorkOrder regression test (re-run on already-completed project fires no project.update). tsc clean, eslint 0 errors, 2611/2611 tests pass. Pure backend logic, no UI/e2e selector impact.
