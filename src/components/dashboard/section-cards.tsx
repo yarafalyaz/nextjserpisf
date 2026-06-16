@@ -34,7 +34,10 @@ export function SectionCards({
   totalCustomers,
 }: SectionCardsProps) {
   return (
-    <div className="*:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card lg:px-6">
+    <section
+      aria-label="Ringkasan kinerja"
+      className="*:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4 grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card lg:px-6"
+    >
       <Card className="@container/card">
         <CardHeader className="relative">
           <CardDescription>Total Pendapatan</CardDescription>
@@ -43,7 +46,7 @@ export function SectionCards({
           </CardTitle>
           <div className="absolute right-4 top-4">
             <Badge variant="outline" className="flex gap-1 rounded-lg border-transparent bg-emerald-100 text-xs text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
-              <TrendingUpIcon className="size-3" />
+              <TrendingUpIcon className="size-3" aria-hidden="true" />
               Masuk
             </Badge>
           </div>
@@ -51,7 +54,7 @@ export function SectionCards({
         <CardFooter className="flex-col items-start gap-1 text-sm">
           <div className="line-clamp-1 flex items-center gap-2 font-medium">
             Pembayaran terkonfirmasi
-            <DollarSign className="size-4 text-emerald-600" />
+            <DollarSign className="size-4 text-emerald-600" aria-hidden="true" />
           </div>
           <div className="text-muted-foreground">Akumulasi semua transaksi</div>
         </CardFooter>
@@ -65,7 +68,7 @@ export function SectionCards({
           </CardTitle>
           <div className="absolute right-4 top-4">
             <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <Car className="size-3" />
+              <Car className="size-3" aria-hidden="true" />
               Aktif
             </Badge>
           </div>
@@ -73,7 +76,7 @@ export function SectionCards({
         <CardFooter className="flex-col items-start gap-1 text-sm">
           <div className="line-clamp-1 flex items-center gap-2 font-medium">
             Selesai bulan ini: {completedThisMonth}
-            <CheckCircle2 className="size-4 text-blue-500" />
+            <CheckCircle2 className="size-4 text-blue-500" aria-hidden="true" />
           </div>
           <div className="text-muted-foreground">Proyek aktif berjalan saat ini</div>
         </CardFooter>
@@ -87,7 +90,7 @@ export function SectionCards({
           </CardTitle>
           <div className="absolute right-4 top-4">
             <Badge variant="outline" className="flex gap-1 rounded-lg border-transparent bg-amber-100 text-xs text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
-              <Receipt className="size-3" />
+              <Receipt className="size-3" aria-hidden="true" />
               Terbuka
             </Badge>
           </div>
@@ -96,9 +99,9 @@ export function SectionCards({
           <div className="line-clamp-1 flex items-center gap-2 font-medium">
             {overdueProjects} proyek melewati target
             {overdueProjects > 0 ? (
-              <TrendingDownIcon className="size-4 text-red-500" />
+              <TrendingDownIcon className="size-4 text-red-500" aria-hidden="true" />
             ) : (
-              <TrendingUpIcon className="size-4 text-emerald-500" />
+              <TrendingUpIcon className="size-4 text-emerald-500" aria-hidden="true" />
             )}
           </div>
           <div className="text-muted-foreground">Sisa tagihan yang belum dibayar</div>
@@ -113,7 +116,7 @@ export function SectionCards({
           </CardTitle>
           <div className="absolute right-4 top-4">
             <Badge variant="outline" className="flex gap-1 rounded-lg text-xs">
-              <Users className="size-3" />
+              <Users className="size-3" aria-hidden="true" />
               Pelanggan
             </Badge>
           </div>
@@ -121,11 +124,11 @@ export function SectionCards({
         <CardFooter className="flex-col items-start gap-1 text-sm">
           <div className="line-clamp-1 flex items-center gap-2 font-medium">
             Pelanggan terdaftar
-            <Users className="size-4 text-sky-500" />
+            <Users className="size-4 text-sky-500" aria-hidden="true" />
           </div>
           <div className="text-muted-foreground">Total pelanggan aktif di sistem</div>
         </CardFooter>
       </Card>
-    </div>
+    </section>
   )
 }
