@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   notificationLowStock: vi.fn(),
   notificationNotifyAdmins: vi.fn(),
   notificationLateCheckIn: vi.fn(),
+  notificationLateCheckInBatch: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -37,6 +38,7 @@ vi.mock("@/lib/services/notification.service", () => ({
     checkAndNotifyLowStockBatch: (...a: unknown[]) => mocks.notificationLowStock(...a),
     notifyAdmins: (...a: unknown[]) => mocks.notificationNotifyAdmins(...a),
     notifyLateCheckIn: (...a: unknown[]) => mocks.notificationLateCheckIn(...a),
+    notifyLateCheckInBatch: (...a: unknown[]) => mocks.notificationLateCheckInBatch(...a),
   },
 }))
 
@@ -220,7 +222,9 @@ describe("GET /api/cron", () => {
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].message).toContain("1 karyawan")
-      expect(mocks.notificationLateCheckIn).toHaveBeenCalled()
+      expect(mocks.notificationLateCheckInBatch).toHaveBeenCalled()
+      // Per-employee loop is gone: a single batched call handles all rows.
+      expect(mocks.notificationLateCheckIn).not.toHaveBeenCalled()
     })
 
     it("skips rows with null employee", async () => {
@@ -230,6 +234,8 @@ describe("GET /api/cron", () => {
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].status).toBe("success")
+      // All employees were null → empty entries → batch helper not called.
+      expect(mocks.notificationLateCheckInBatch).not.toHaveBeenCalled()
       expect(mocks.notificationLateCheckIn).not.toHaveBeenCalled()
     })
 
@@ -240,6 +246,22 @@ describe("GET /api/cron", () => {
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
       const json = await res.json()
       expect(json.results["late-checkin"].status).toBe("success")
+      expect(mocks.notificationLateCheckInBatch).toHaveBeenCalled()
+    })
+
+    it("batches multiple late employees into a single helper call", async () => {
+      mocks.attendanceFindMany.mockResolvedValue([
+        { checkIn: new Date(), employee: { id: 1, name: "Alice", department: { name: "IT" } } },
+        { checkIn: new Date(), employee: { id: 2, name: "Bob",   department: { name: "HR" } } },
+        { checkIn: new Date(), employee: { id: 3, name: "Carol", department: null } },
+      ])
+      const res = await GET(makeCronRequest("http://localhost/api/cron?task=late-checkin"))
+      const json = await res.json()
+      expect(json.results["late-checkin"].message).toContain("3 karyawan")
+      expect(mocks.notificationLateCheckInBatch).toHaveBeenCalledTimes(1)
+      const entries = mocks.notificationLateCheckInBatch.mock.calls[0][0]
+      expect(entries).toHaveLength(3)
+      expect(entries.map((e: { employee: { id: number } }) => e.employee.id)).toEqual([1, 2, 3])
     })
   })
 

@@ -170,6 +170,44 @@ export const notificationService = {
   },
 
   /**
+   * Batched version of notifyLateCheckIn: send a separate "telat" notification
+   * for each of N late employees to every active admin, in a single
+   * `notification.createMany` round-trip. Replaces N × (admin findMany +
+   * notification createMany) with 1 + 1 queries. Mirrors
+   * `checkAndNotifyLowStockBatch` for low-stock alerts. The admin lookup is
+   * done once; one createMany writes all N×A rows.
+   */
+  async notifyLateCheckInBatch(
+    entries: { employee: LateCheckIn; checkInTime: string; scheduledTime?: string }[]
+  ): Promise<number> {
+    if (entries.length === 0) return 0
+    const admins = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        roles: { some: { name: { in: ['super_admin', 'admin'] } } },
+      },
+      select: { id: true },
+    })
+    if (admins.length === 0) return 0
+
+    const notifications = admins.flatMap((admin) =>
+      entries.map((e) => {
+        const dept = e.employee.departmentName ? ` (${e.employee.departmentName})` : ''
+        return {
+          userId: admin.id,
+          title: `${e.employee.name}${dept} Telat Masuk`,
+          body: `Check-in: ${e.checkInTime}${e.scheduledTime ? ` (Jadwal: ${e.scheduledTime})` : ''}`,
+          type: 'warning' as const,
+          readAt: null,
+        }
+      })
+    )
+
+    await prisma.notification.createMany({ data: notifications })
+    return notifications.length
+  },
+
+  /**
    * Notify admins when a document is auto-generated from Down Payment confirmation.
    * Mirrors Laravel: document-ready notifications from DP observer.
    */

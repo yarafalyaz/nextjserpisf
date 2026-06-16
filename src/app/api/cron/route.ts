@@ -210,20 +210,25 @@ async function taskLateCheckInAlert(): Promise<string> {
     return "Tidak ada keterlambatan check-in hari ini"
   }
 
-  for (const attendance of lateAttendances) {
-    if (!attendance.employee) continue
-    const checkInTime = attendance.checkIn
-      ? new Date(attendance.checkIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
-      : "-"
-
-    await notificationService.notifyLateCheckIn(
-      {
+  // Pre-format check-in times once. Filter out rows with a null employee
+  // (defensive: an attendance row whose employee was deleted) so the batched
+  // call only sees the rows we'd actually notify on.
+  const entries = lateAttendances.flatMap((attendance) => {
+    if (!attendance.employee) return []
+    return [{
+      employee: {
         id: attendance.employee.id,
         name: attendance.employee.name,
         departmentName: attendance.employee.department?.name,
       },
-      checkInTime
-    )
+      checkInTime: attendance.checkIn
+        ? new Date(attendance.checkIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+        : "-",
+    }]
+  })
+
+  if (entries.length > 0) {
+    await notificationService.notifyLateCheckInBatch(entries)
   }
 
   return `${lateAttendances.length} karyawan telat — notifikasi dikirim ke admin`

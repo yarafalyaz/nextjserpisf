@@ -256,6 +256,57 @@ describe("notification.service", () => {
     });
   });
 
+  describe("notifyLateCheckInBatch", () => {
+    it("creates one warning notification per (admin × late employee) in a single createMany", async () => {
+      mocks.findManyUsers.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      mocks.createManyNotif.mockResolvedValue({ count: 4 });
+
+      const count = await notificationService.notifyLateCheckInBatch([
+        { employee: { id: 10, name: "Budi", departmentName: "Bengkel" }, checkInTime: "08:15", scheduledTime: "08:00" },
+        { employee: { id: 11, name: "Andi" }, checkInTime: "09:00" },
+      ]);
+
+      // 2 admins × 2 employees = 4 notification rows, one round-trip.
+      expect(count).toBe(4);
+      expect(mocks.findManyUsers).toHaveBeenCalledTimes(1);
+      expect(mocks.createManyNotif).toHaveBeenCalledTimes(1);
+      expect(mocks.createManyNotif).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            userId: 1,
+            title: "Budi (Bengkel) Telat Masuk",
+            body: "Check-in: 08:15 (Jadwal: 08:00)",
+            type: "warning",
+            readAt: null,
+          }),
+          expect.objectContaining({
+            userId: 2,
+            title: "Andi Telat Masuk",
+            body: "Check-in: 09:00",
+            type: "warning",
+            readAt: null,
+          }),
+        ]),
+      });
+    });
+
+    it("returns 0 and writes nothing when there are no entries", async () => {
+      const count = await notificationService.notifyLateCheckInBatch([]);
+      expect(count).toBe(0);
+      expect(mocks.findManyUsers).not.toHaveBeenCalled();
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+
+    it("returns 0 and writes nothing when there are entries but no admins", async () => {
+      mocks.findManyUsers.mockResolvedValue([]);
+      const count = await notificationService.notifyLateCheckInBatch([
+        { employee: { id: 10, name: "Budi" }, checkInTime: "08:15" },
+      ]);
+      expect(count).toBe(0);
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+  });
+
   describe("notifyDocumentReady", () => {
     it("notifies with WorkOrder label", async () => {
       mocks.findManyUsers.mockResolvedValue([{ id: 1 }]);
