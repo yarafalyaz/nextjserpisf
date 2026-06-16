@@ -37,6 +37,7 @@ export function FormSelect({
   id,
   name,
   disabled,
+  required,
   className,
   "aria-label": ariaLabel,
 }: FormSelectProps) {
@@ -56,6 +57,7 @@ export function FormSelect({
       }}
       placeholder={placeholder}
       disabled={disabled}
+      required={required}
       className={className}
       aria-label={ariaLabel}
     />

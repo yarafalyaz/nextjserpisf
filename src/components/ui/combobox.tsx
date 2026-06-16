@@ -21,6 +21,10 @@ interface ComboboxProps {
   id?: string
   className?: string
   emptyText?: string
+  /** Marks the field as required. The visible input gets `aria-required` for screen readers
+   *  and the hidden form-submission input gets the native `required` attribute so HTML
+   *  form validation blocks submission of an empty value. */
+  required?: boolean
   "aria-label"?: string
 }
 
@@ -39,6 +43,7 @@ export function Combobox({
   id,
   className,
   emptyText = "Tidak ada data",
+  required,
   "aria-label": ariaLabel,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
@@ -75,7 +80,7 @@ export function Combobox({
 
   return (
     <div ref={containerRef} className={cn("relative w-full", className)}>
-      {name && <input type="hidden" name={name} value={value ?? ""} />}
+      {name && <input type="hidden" name={name} value={value ?? ""} required={required} />}
       <div
         className={cn(
           "flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors",
@@ -87,9 +92,11 @@ export function Combobox({
           id={id}
           role="combobox"
           aria-label={ariaLabel}
+          aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
+          aria-required={required || undefined}
           aria-activedescendant={open && filtered.length > 0 ? `${optionIdPrefix}-${activeIndex}` : undefined}
           autoComplete="off"
           disabled={disabled}
