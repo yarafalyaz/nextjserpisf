@@ -1088,6 +1088,24 @@ export async function deleteDeliveryOrder(id: number) {
   try {
   await requirePermission("delete_delivery_orders")
 
+  // Status guard: a DeliveryOrder with confirmedAt or deliveredAt stamped is a
+  // completed logistics record (the customer already received the goods or the
+  // courier already confirmed pickup). Hard-deleting it erases the audit trail
+  // — the linked SalesOrder's status transition history loses its trigger row,
+  // and the printed "Tanda Terima" PDF no longer reconciles to any document.
+  // Mirrors the sibling deleteDownPayment("Hanya down payment draft yang bisa
+  // dihapus") guard. The schema carries confirmedBy / confirmedAt / deliveredAt
+  // precisely as the immutability record for this row.
+  const existing = await prisma.deliveryOrder.findUniqueOrThrow({
+    where: { id },
+    select: { status: true },
+  })
+  if (existing.status !== "draft") {
+    throw new Error(
+      `Surat jalan berstatus "${existing.status}" tidak dapat dihapus; hanya draft yang boleh dihapus agar jejak audit (confirmed/delivered) tidak hilang.`
+    )
+  }
+
   await prisma.deliveryOrder.delete({ where: { id } })
 
   await logActivity("delete", "DeliveryOrder", id, `Menghapus surat jalan #${id}`)
