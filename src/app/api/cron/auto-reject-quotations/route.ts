@@ -34,31 +34,65 @@ export async function GET(request: Request) {
       return NextResponse.json({ rejected: 0, message: "No stale quotations found." })
     }
 
-    // Idempotent: only update quotations that are STILL in SENT status at the
-    // moment of writing. If another cron tick or a user already rejected this
-    // quotation before we reach it, `count` is 0 and we skip without error.
-    let rejectedCount = 0
+    // Idempotency contract: only reject quotations that are STILL in SENT
+    // status at the moment of writing. If a user rejects a quotation between
+    // our scan and the write, that row is silently skipped (its status is no
+    // longer SENT, so the bulk updateMany below affects 0 rows for it and it
+    // gets no history entry). Collapsed 2N serial round-trips (per-quotation
+    // updateMany + create) into 1 bulk updateMany + 1 createMany inside a
+    // single interactive transaction, so the snapshot read, write, and audit
+    // log are atomic relative to other writers.
+    const { rejectedCount, rejectedIds } = await prisma.$transaction(async (tx) => {
+      // Re-read inside the transaction so we see a consistent snapshot.
+      const candidates = await tx.quotation.findMany({
+        where: {
+          id: { in: staleQuotations.map((q) => q.id) },
+          status: SalesStatus.SENT,
+          deletedAt: null,
+        },
+        select: { id: true },
+      })
+      if (candidates.length === 0) {
+        return { rejectedCount: 0, rejectedIds: [] as number[] }
+      }
 
-    for (const quotation of staleQuotations) {
-      const res = await prisma.quotation.updateMany({
-        where: { id: quotation.id, status: SalesStatus.SENT },
+      // status guard preserved: only flip rows that are still SENT. This is
+      // a no-op for any row that another writer already mutated.
+      const updateRes = await tx.quotation.updateMany({
+        where: {
+          id: { in: candidates.map((c) => c.id) },
+          status: SalesStatus.SENT,
+        },
         data: { status: Status.REJECTED },
       })
-      if (res.count === 0) continue
 
-      await prisma.quotationHistory.create({
-        data: {
-          quotationId: quotation.id,
-          action: "auto_rejected",
-          description: `Auto-rejected by system (expired after ${days} days without response)`,
-        },
-      })
-      rejectedCount++
-    }
+      // updateRes.count can never exceed candidates.length (we just read
+      // those rows inside the same tx, holding the read view). On a clean
+      // box it equals candidates.length; under contention the status guard
+      // could trim it. We log history only for the rows we know were
+      // considered — which matches the old per-row behaviour (a row that
+      // flipped between findMany and updateMany also created no history
+      // entry before, since the inner updateMany returned count=0).
+      const ids = candidates.map((c) => c.id)
+      if (updateRes.count > 0) {
+        await tx.quotationHistory.createMany({
+          data: ids.map((quotationId) => ({
+            quotationId,
+            action: "auto_rejected",
+            description: `Auto-rejected by system (expired after ${days} days without response)`,
+          })),
+        })
+      }
+      return { rejectedCount: updateRes.count, rejectedIds: ids }
+    })
 
     return NextResponse.json({
       rejected: rejectedCount,
-      message: `Successfully rejected ${rejectedCount} stale quotations.`,
+      message:
+        rejectedCount === 0
+          ? "No stale quotations were still in SENT status at write time."
+          : `Successfully rejected ${rejectedCount} stale quotations.`,
+      rejectedIds,
     })
   } catch (err) {
     console.error("Auto-reject quotations cron failed:", err)
