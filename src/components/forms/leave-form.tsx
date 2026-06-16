@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { FormGrid, FormGroup } from "@/components/ui/form-layout"
 
 interface LeaveFormProps {
   employees: { id: number; name: string
@@ -50,56 +51,67 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="employeeId">Karyawan *</Label>
-          <Combobox
-            id="employeeId"
-            name="employeeId"
-            options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
-            value={employeeId}
-            onChange={setEmployeeId}
-            placeholder="Cari karyawan..."
-          />
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={leave?.id ? "Formulir ubah permintaan cuti" : "Formulir ajukan permintaan cuti"}
+      className="bg-surface rounded-xl border border-default shadow-sm p-6"
+    >
+        <FormGrid>
+          <FormGroup>
+            <Label htmlFor="employeeId">
+              Karyawan <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
+            <Combobox
+              id="employeeId"
+              name="employeeId"
+              required
+              options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+              value={employeeId}
+              onChange={setEmployeeId}
+              placeholder="Cari karyawan..."
+            />
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="type">
+              Tipe Cuti <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
+            <FormSelect
+              id="type"
+              name="type"
+              required
+              value={leaveType}
+              onValueChange={setLeaveType}
+              options={leaveTypes.map((lt) => ({ value: lt.id, label: lt.name }))}
+            />
+          </FormGroup>
+          <FormGroup>
+            <AppDatePicker
+              label="Mulai"
+              name="startDate"
+              defaultValue={leave?.startDate ?? ""}
+              onChange={() => {}}
+              required
+            />
+          </FormGroup>
+          <FormGroup>
+            <AppDatePicker
+              label="Selesai"
+              name="endDate"
+              defaultValue={leave?.endDate ?? ""}
+              onChange={() => {}}
+              required
+            />
+          </FormGroup>
+          <FormGroup full>
+            <Label htmlFor="reason">Alasan</Label>
+            <Textarea id="reason" name="reason" className="w-full" rows={3} placeholder="Alasan cuti..." defaultValue={leave?.reason ?? ""} />
+          </FormGroup>
+        </FormGrid>
+        <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
+          <Button type="button" onPress={() => router.back()} >Batal</Button>
+          <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : leave?.id ? "Perbarui" : "Simpan"}</Button>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="type">Tipe Cuti *</Label>
-          <FormSelect
-            id="type"
-            name="type"
-            value={leaveType}
-            onValueChange={setLeaveType}
-            options={leaveTypes.map((lt) => ({ value: lt.id, label: lt.name }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <AppDatePicker
-            label="Mulai"
-            name="startDate"
-            defaultValue={leave?.startDate ?? ""}
-            onChange={() => {}}
-            required
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <AppDatePicker
-            label="Selesai"
-            name="endDate"
-            defaultValue={leave?.endDate ?? ""}
-            onChange={() => {}}
-            required
-          />
-        </div>
-        <div className="flex flex-col gap-1.5 col-span-full">
-          <Label>Alasan</Label>
-          <Textarea name="reason" className="w-full" rows={3} placeholder="Alasan cuti..." defaultValue={leave?.reason ?? ""} />
-        </div>
-      </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : leave?.id ? "Perbarui" : "Simpan"}</Button>
-      </div>
-    </form>
+      </form>
   )
 }
