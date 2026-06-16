@@ -34,14 +34,23 @@ export function DetailTableTh({
   align = "left",
   className,
   colSpan,
+  /**
+   * Accessible scope for the header cell. Defaults to `"col"` because every
+   * consumer in the codebase uses `DetailTableTh` exclusively inside a
+   * `DetailTableHead` (the `<thead>`) — they are always column headers.
+   * Pass `"row"` if a consumer ever needs to mark a row-header `<th>`.
+   */
+  scope = "col",
 }: {
   children: React.ReactNode
   align?: "left" | "right" | "center"
   className?: string
   colSpan?: number
+  scope?: "col" | "row" | "colgroup" | "rowgroup"
 }) {
   return (
     <th
+      scope={scope}
       colSpan={colSpan}
       className={cn(
         "py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide",
