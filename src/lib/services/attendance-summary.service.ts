@@ -56,19 +56,63 @@ export async function calculateAttendanceSummary(
   if (!employee) return empty
 
   // Which weekdays are working days? (employee-specific > department-specific > global)
-  const allSchedules = await prisma.workSchedule.findMany({
-    where: { isActive: true },
-    select: { workDays: true, employees: { select: { id: true } }, departments: { select: { id: true } } },
+  //
+  // Previously this fetched every active WorkSchedule along with the FULL
+  // employees[] and departments[] arrays for each, then filtered them in
+  // JavaScript — an N×M over-fetch (N active schedules × M employees+depts
+  // across them) on every call. For an employee-specific schedule attached
+  // to 500 employees, the old query pulled all 500 employee IDs back just to
+  // check "is this employee in here?". Refactored to push the filtering into
+  // the DB: the relation `is`-filter narrows the candidate set to the 3
+  // schedules that can possibly win (employee-specific, department-specific,
+  // global-with-no-attachments) in a single round-trip. We still need
+  // `_count` for the *unfiltered* employees[] size so the precedence check
+  // `s.employees.length === 0` (which guards the dept/global fallback path —
+  // a schedule with ANY employee assignment is NOT a department schedule, it
+  // would only win if THIS employee were in it) keeps the exact same
+  // semantics as the original code. The downstream .find() precedence logic
+  // is unchanged.
+  const candidates = await prisma.workSchedule.findMany({
+    where: {
+      isActive: true,
+      OR: [
+        { employees: { some: { id: employee.id } } },
+        ...(employee.departmentId != null
+          ? [{ departments: { some: { id: employee.departmentId as number } } }]
+          : []),
+        // Global schedule: no employee AND no department assignments at all.
+        { employees: { none: {} }, departments: { none: {} } },
+      ],
+    },
+    select: {
+      workDays: true,
+      // _count tells us "this schedule is/was attached to N employees" so the
+      // dept/global guard `s.employees.length === 0` (originally checking the
+      // full unfiltered list) still discriminates correctly.
+      _count: { select: { employees: true, departments: true } },
+      employees: { where: { id: employee.id }, select: { id: true } },
+      departments: employee.departmentId != null
+        ? { where: { id: employee.departmentId as number }, select: { id: true } }
+        : { select: { id: true } },
+    },
   })
 
   // Precedence matching resolveWorkSchedule logic:
-  // 1. Employee-specific schedule
-  // 2. Department-specific schedule
-  // 3. Global schedule (no employees, no departments)
-  const employeeSchedule = allSchedules.find((s) => s.employees.some((e) => e.id === employee.id))
-  const deptSchedule = allSchedules.find((s) => s.employees.length === 0 && employee.departmentId != null && s.departments.some((d) => d.id === employee.departmentId))
-  const globalSchedule = allSchedules.find((s) => s.employees.length === 0 && s.departments.length === 0)
-  
+  // 1. Employee-specific schedule: schedule whose employees[] INCLUDES this employee
+  // 2. Department-specific schedule: schedule with no employees AT ALL (full list,
+  //    not just this employee) that targets this employee's department
+  // 3. Global schedule: no employees AND no departments
+  const employeeSchedule = candidates.find((s) => s.employees.length > 0)
+  const deptSchedule =
+    employee.departmentId != null
+      ? candidates.find(
+          (s) => s._count.employees === 0 && s.departments.length > 0
+        )
+      : undefined
+  const globalSchedule = candidates.find(
+    (s) => s._count.employees === 0 && s._count.departments === 0
+  )
+
   const relevantSchedule = employeeSchedule ?? deptSchedule ?? globalSchedule
 
   const workingWeekdays = new Set(

@@ -1,13 +1,7 @@
-"use client"
+"use client";
 
-import type { ReactNode } from "react"
-import { useId } from "react"
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Info,
-  TriangleAlert,
-} from "lucide-react"
+import type { ReactNode } from "react";
+import { AlertTriangle, CheckCircle2, Info, TriangleAlert } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,39 +12,39 @@ import {
   AlertDialogHeader,
   AlertDialogMedia,
   AlertDialogTitle,
-} from "@/components/ui/shadcn/alert-dialog"
-import { cn } from "@/lib/utils"
+} from "@/components/ui/shadcn/alert-dialog";
+import { cn } from "@/lib/utils";
 
-export type ConfirmVariant = "danger" | "warning" | "accent" | "success"
+export type ConfirmVariant = "danger" | "warning" | "accent" | "success";
 
 interface ConfirmDialogProps {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
-  body?: ReactNode
-  confirmLabel?: string
-  cancelLabel?: string
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  body?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
   /** Visual variant for the confirm button. Default: "danger" */
-  variant?: ConfirmVariant
+  variant?: ConfirmVariant;
   /** Shows pending state on confirm button */
-  isPending?: boolean
+  isPending?: boolean;
   /** Fired when user clicks confirm */
-  onConfirm: () => void
+  onConfirm: () => void;
   /** Custom classNames for the dialog content */
-  className?: string
+  className?: string;
   /** Custom children rendered inside the body (overrides body prop) */
-  children?: ReactNode
+  children?: ReactNode;
 }
 
 const variantConfig: Record<
   ConfirmVariant,
   {
     /** Tailwind classes applied to the AlertDialogAction confirm button. */
-    confirmClass: string
+    confirmClass: string;
     /** Tailwind classes for the media icon wrapper background/foreground. */
-    mediaClass: string
+    mediaClass: string;
     /** Icon component for the media slot (mark decorative via aria-hidden). */
-    Icon: typeof AlertTriangle
+    Icon: typeof AlertTriangle;
   }
 > = {
   danger: {
@@ -77,7 +71,7 @@ const variantConfig: Record<
     mediaClass: "bg-success/10 text-success",
     Icon: CheckCircle2,
   },
-}
+};
 
 export function ConfirmDialog({
   isOpen,
@@ -98,32 +92,37 @@ export function ConfirmDialog({
   // aria-labelledby/aria-describedby to these ids when they live inside the
   // same dialog, so screen readers announce both the short label and the
   // longer prompt for every variant.
-  const titleId = useId()
-  const descriptionId = useId()
-  const { confirmClass, mediaClass, Icon } = variantConfig[variant]
-  const hasBody = !!(children ?? body)
+  const { confirmClass, mediaClass, Icon } = variantConfig[variant];
+  const hasBody = !!(children ?? body);
 
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogContent className={className ?? "sm:max-w-[400px]"}>
         <AlertDialogHeader>
-          <AlertDialogMedia className={cn(mediaClass, "sm:group-data-[size=default]/alert-dialog-content:row-span-2")}>
+          <AlertDialogMedia
+            className={cn(
+              mediaClass,
+              "sm:group-data-[size=default]/alert-dialog-content:row-span-2",
+            )}
+          >
             <Icon aria-hidden="true" />
           </AlertDialogMedia>
-          <AlertDialogTitle id={titleId}>{title}</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           {hasBody && (
-            <AlertDialogDescription id={descriptionId} asChild>
+            <AlertDialogDescription asChild>
               <div>{children ?? body}</div>
             </AlertDialogDescription>
           )}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel disabled={isPending}>
+            {cancelLabel}
+          </AlertDialogCancel>
           <AlertDialogAction
             disabled={isPending}
             onClick={(e) => {
-              e.preventDefault()
-              onConfirm()
+              e.preventDefault();
+              onConfirm();
             }}
             className={cn(confirmClass)}
           >
@@ -132,5 +131,5 @@ export function ConfirmDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  )
+  );
 }
