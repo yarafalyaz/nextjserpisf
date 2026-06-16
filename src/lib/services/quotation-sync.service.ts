@@ -43,6 +43,36 @@ export async function resyncOnEdit(quotationId: number): Promise<void> {
       where: { quotationId, status: { in: ['draft', 'confirmed', 'processing'] } },
     })
 
+    // Hoist the invoice lookup OUTSIDE the SO loop. Previously each SO triggered
+    // its own `tx.salesInvoice.findMany({ where: { salesOrderId: so.id, ... } })`
+    // round-trip, so S unfinished SOs cost S findMany calls even though all the
+    // invoices share a single `salesOrderId IN (...)` shape. Now: 1 findMany,
+    // then group the rows in-memory by salesOrderId. Drops DB round-trips from
+    // S to 1 (S queries → 1 query) when more than one SO is being re-synced.
+    const salesOrderIds = salesOrders.map((s) => s.id)
+    const allInvoices =
+      salesOrderIds.length === 0
+        ? []
+        : await tx.salesInvoice.findMany({
+            where: {
+              salesOrderId: { in: salesOrderIds },
+              status: { in: [SalesInvoiceStatus.draft, SalesInvoiceStatus.sent, SalesInvoiceStatus.partial] },
+            },
+          })
+    const invoicesBySO = new Map<number, typeof allInvoices>()
+    for (const inv of allInvoices) {
+      // salesOrderId is non-null on schema (required FK), but Prisma's TS type
+      // marks the join column as nullable. The where:{ in: salesOrderIds }
+      // filter above guarantees we never see null; the explicit assertion
+      // (plus the null check for type narrowing) keeps tsc happy and is a
+      // defensive guard if the filter is ever relaxed.
+      const soId = inv.salesOrderId
+      if (soId == null) continue
+      const list = invoicesBySO.get(soId) ?? []
+      list.push(inv)
+      invoicesBySO.set(soId, list)
+    }
+
     for (const so of salesOrders) {
       await tx.salesOrderItem.deleteMany({ where: { salesOrderId: so.id } })
       if (items.length > 0) {
@@ -70,12 +100,7 @@ export async function resyncOnEdit(quotationId: number): Promise<void> {
         },
       })
 
-      const invoices = await tx.salesInvoice.findMany({
-        where: {
-          salesOrderId: so.id,
-          status: { in: [SalesInvoiceStatus.draft, SalesInvoiceStatus.sent, SalesInvoiceStatus.partial] },
-        },
-      })
+      const invoices = invoicesBySO.get(so.id) ?? []
 
       for (const inv of invoices) {
         await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: inv.id } })

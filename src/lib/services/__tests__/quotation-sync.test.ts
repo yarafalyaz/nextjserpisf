@@ -74,7 +74,7 @@ describe("quotation-sync.service / resyncOnEdit", () => {
 
     // Linked invoice: already partially paid (600 of 1000) → status "partial".
     p.salesInvoice.findMany.mockResolvedValue([
-      { id: 100, status: "partial", paidAmount: 600, grandTotal: 1000 },
+      { id: 100, salesOrderId: 10, status: "partial", paidAmount: 600, grandTotal: 1000 },
     ])
     p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
     p.salesInvoice.update.mockResolvedValue({})
@@ -95,7 +95,73 @@ describe("quotation-sync.service / resyncOnEdit", () => {
     expect(p.salesInvoice.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "paid", paymentStatus: "paid" }),
-      })
+      }),
     )
+  })
+
+  it("batches the linked-invoice lookup into a single findMany (N+1 fix) when multiple SOs are being re-synced", async () => {
+    const p = mocks.prismaMock
+
+    // Quotation with 2 SOs and 2 items per SO. Re-edited → 2 unfinished SOs need
+    // to be re-synced, each with its own linked unpaid invoice. The pre-fix code
+    // would call tx.salesInvoice.findMany once per SO (2 calls). The post-fix
+    // code calls it exactly once with salesOrderId: { in: [10, 20] }.
+    p.quotation.findUnique.mockResolvedValue({
+      id: 2,
+      status: "draft",
+      subtotal: 800,
+      discount: 0,
+      tax: 0,
+      grandTotal: 800,
+      sections: [
+        {
+          items: [
+            { itemId: 1, qty: 2, unitPrice: 100, discount: 0, total: 200 },
+            { itemId: 2, qty: 1, unitPrice: 200, discount: 0, total: 200 },
+          ],
+        },
+      ],
+    })
+
+    p.salesOrder.findMany.mockResolvedValue([{ id: 10 }, { id: 20 }])
+    p.salesOrder.update.mockResolvedValue({})
+    p.salesOrderItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesOrderItem.createMany.mockResolvedValue({ count: 2 })
+
+    // Both invoices are returned in a single findMany (the batched shape).
+    p.salesInvoice.findMany.mockResolvedValue([
+      { id: 100, salesOrderId: 10, status: "posted", paidAmount: 0, grandTotal: 800 },
+      { id: 200, salesOrderId: 20, status: "posted", paidAmount: 0, grandTotal: 800 },
+    ])
+    p.salesInvoiceItem.deleteMany.mockResolvedValue({ count: 0 })
+    p.salesInvoiceItem.createMany.mockResolvedValue({ count: 2 })
+    p.salesInvoice.update.mockResolvedValue({})
+
+    // recalcCore re-reads each invoice (still 800 grandTotal, 0 paid → status "posted").
+    p.salesInvoice.findUniqueOrThrow.mockImplementation(async ({ where }: any) => ({
+      id: where.id,
+      status: "posted",
+      grandTotal: 800,
+    }))
+    p.salesPayment.findMany.mockResolvedValue([])
+
+    await resyncOnEdit(2)
+
+    // The single batched invoice lookup must use salesOrderId: { in: [10, 20] }
+    // — exactly once — not once-per-SO.
+    const invoiceFindManyCalls = p.salesInvoice.findMany.mock.calls.filter(
+      (call: any[]) => call[0]?.where?.salesOrderId?.in,
+    )
+    expect(invoiceFindManyCalls).toHaveLength(1)
+    expect(invoiceFindManyCalls[0][0].where.salesOrderId.in).toEqual([10, 20])
+    // Both invoices must still be processed (deleteMany / createMany fire once
+    // each per invoice). salesInvoice.update fires TWICE per invoice (once in
+    // resyncOnEdit to overwrite totals, once again in onSalesPaymentUpdated
+    // via recalcCore to re-derive status), so we expect 4 calls here.
+    expect(p.salesInvoiceItem.deleteMany).toHaveBeenCalledTimes(2)
+    expect(p.salesInvoiceItem.createMany).toHaveBeenCalledTimes(2)
+    expect(p.salesInvoice.update).toHaveBeenCalledTimes(4)
+    // The two SOs themselves are updated exactly once each.
+    expect(p.salesOrder.update).toHaveBeenCalledTimes(2)
   })
 })
