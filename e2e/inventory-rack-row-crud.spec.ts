@@ -104,7 +104,7 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await closeMobileSidebarIfOpen(page)
     const updatedRow = page.locator("tr").filter({ has: page.locator(`a[href='/inventaris/baris-rak/${id}']`) })
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
-    await updatedRow.locator("button[aria-label='Menu']").click()
+    await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
     
     // Perbaikan: gunakan page.getByRole() untuk mencari menuitem
     await page.getByRole("menuitem", { name: "Hapus" }).click()

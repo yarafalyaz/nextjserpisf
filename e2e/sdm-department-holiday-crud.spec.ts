@@ -39,7 +39,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     // ─── UPDATE ────────────────────────────────────────────────
     const row = page.locator("tr").filter({ hasText: name }).first()
     await expect(row).toBeVisible({ timeout: 30000 })
-    await row.locator("button[aria-label='Menu']").click()
+    await row.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/sdm\/hari-libur-departemen\/\d+\/ubah/, { timeout: 20000 })
@@ -56,7 +56,7 @@ test.describe("SDM Hari Libur Departemen CRUD", () => {
     // ─── DELETE ────────────────────────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
-    await updatedRow.locator("button[aria-label='Menu']").click()
+    await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
 
     // Confirm delete — click Hapus in confirmation dialog

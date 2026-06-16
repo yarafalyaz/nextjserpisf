@@ -55,7 +55,7 @@ async function crudMaster(
   // ─── READ detail/edit via ActionDropdown ─────────────────────
   const rowCreate = page.locator("tr").filter({ hasText: opts.fields[0].value })
   await expect(rowCreate).toBeVisible({ timeout: 30000 })
-  await rowCreate.locator("button[aria-label='Menu']").click()
+  await rowCreate.locator("button[aria-label='Buka menu aksi']").click()
   await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
   await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/\\d+\\/ubah`), { timeout: 30000 })
   const currentUrl = page.url()
@@ -101,7 +101,7 @@ async function crudMaster(
   const searchText = opts.fields.find((f) => f.updated && f.id === "name")?.updated || opts.fields[0].updated || opts.fields[0].value
   const rowAfterUpdate = page.locator("tr").filter({ hasText: searchText }).first()
   await expect(rowAfterUpdate).toBeVisible({ timeout: 30000 })
-  await rowAfterUpdate.locator("button[aria-label='Menu']").click()
+  await rowAfterUpdate.locator("button[aria-label='Buka menu aksi']").click()
   await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
   await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
   await page.locator("button").filter({ hasText: "Hapus" }).last().click()

@@ -50,7 +50,7 @@ test.describe("Kendaraan Merek CRUD", () => {
 
     const updatedRow = page.locator("tr").filter({ hasText: updated })
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
-    await updatedRow.locator("button[aria-label='Menu']").click()
+    await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 

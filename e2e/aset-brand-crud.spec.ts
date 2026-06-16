@@ -70,7 +70,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await expect(rowForEdit).toBeVisible({ timeout: 30000 })
 
     // Open ActionDropdown → Edit
-    await rowForEdit.locator("button[aria-label='Menu']").click()
+    await rowForEdit.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/aset\/merek\/\d+\/ubah$/, { timeout: 30000 })

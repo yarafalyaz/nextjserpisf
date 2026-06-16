@@ -82,7 +82,7 @@ test.describe("Inventaris - Rak CRUD", () => {
     // Delete via menu
     const row = page.locator("tr").filter({ hasText: name }).first()
     await expect(row).toBeVisible({ timeout: 10000 })
-    await row.locator("button[aria-label='Menu']").click()
+    await row.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()

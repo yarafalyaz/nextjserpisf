@@ -77,7 +77,7 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
     const row = page.locator("tr").filter({ hasText: updatedWarehouseName })
     await expect(row).toBeVisible({ timeout: 30000 })
 
-    await row.locator("button[aria-label='Menu']").click()
+    await row.locator("button[aria-label='Buka menu aksi']").click()
 
     // Click "Hapus" item inside popover
     const deleteItem = page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first()

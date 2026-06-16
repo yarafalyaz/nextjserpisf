@@ -80,7 +80,7 @@ test.describe("Kendaraan Model CRUD", () => {
     // ─── DELETE via ActionDropdown ────────────────────────────
     const updatedRow = page.locator("tr").filter({ hasText: updated })
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
-    await updatedRow.locator("button[aria-label='Menu']").click()
+    await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
 
@@ -95,7 +95,7 @@ test.describe("Kendaraan Model CRUD", () => {
     await page.waitForLoadState("networkidle")
     const brandRow = page.locator("tr").filter({ hasText: brandName })
     await expect(brandRow).toBeVisible({ timeout: 30000 })
-    await brandRow.locator("button[aria-label='Menu']").click()
+    await brandRow.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
     await page.locator("button").filter({ hasText: "Hapus" }).last().click()
     await expect(brandRow).toHaveCount(0, { timeout: 10000 })

@@ -74,7 +74,7 @@ test.describe("Master Departemen CRUD", () => {
     const rowForEdit = page.locator("tr").filter({ hasText: name }).first()
     await expect(rowForEdit).toBeVisible({ timeout: 30000 })
 
-    await rowForEdit.locator("button[aria-label='Menu']").click()
+    await rowForEdit.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/departemen\/\d+\/ubah$/, { timeout: 30000 })
@@ -94,7 +94,7 @@ test.describe("Master Departemen CRUD", () => {
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
-    await updatedRow.locator("button[aria-label='Menu']").click()
+    await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
 
     const confirmBtn = page.locator("button").filter({ hasText: "Hapus" }).last()
