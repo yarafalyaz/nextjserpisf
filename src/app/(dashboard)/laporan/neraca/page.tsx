@@ -1,65 +1,86 @@
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { prisma } from '@/lib/db/prisma'
-import { requirePermission } from '@/lib/auth/permissions'
-import { formatAccounting } from '@/lib/utils/format'
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ExportButtons } from "@/components/reports/export-buttons"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { ReportSingleDateFilter } from "@/components/reports/report-date-filter"
-import { ReportLetterhead } from "@/components/reports/report-letterhead"
-import { computeBalanceSheet } from "@/lib/finance/balance-sheet"
+import { prisma } from "@/lib/db/prisma";
+import { requirePermission } from "@/lib/auth/permissions";
+import { formatAccounting } from "@/lib/utils/format";
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { ExportButtons } from "@/components/reports/export-buttons";
+import {
+  DetailTable,
+  DetailTableHead,
+  DetailTableTh,
+  DetailTableBody,
+  DetailTableRow,
+  DetailTableTd,
+} from "@/components/ui/detail-table";
+import { ReportSingleDateFilter } from "@/components/reports/report-date-filter";
+import { ReportLetterhead } from "@/components/reports/report-letterhead";
+import { computeBalanceSheet } from "@/lib/finance/balance-sheet";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Neraca" }
+export const metadata: Metadata = { title: "Neraca" };
 
 export default async function BalanceSheetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>
+  searchParams: Promise<{ date?: string }>;
 }) {
-  await requirePermission('view_reports')
-  const params = await searchParams
+  await requirePermission("view_reports");
+  const params = await searchParams;
   // Include the whole "as of" day: new Date("YYYY-MM-DD") is midnight, so a bare
   // `lte` would drop same-day transactions (which carry a full timestamp). Other
   // reports already use end-of-day; match that here.
-  const asOfDate = params.date ? new Date(params.date) : new Date()
-  if (params.date) asOfDate.setHours(23, 59, 59, 999)
+  const _asOf = params.date ? new Date(params.date) : new Date();
+  const asOfDate = Number.isNaN(_asOf.getTime()) ? new Date() : _asOf;
+  if (params.date) asOfDate.setHours(23, 59, 59, 999);
 
   const entries = await prisma.journalEntry.findMany({
     where: {
       journal: {
-        status: { in: ['POSTED', 'REVERSED'] },
+        status: { in: ["POSTED", "REVERSED"] },
         transactionDate: { lte: asOfDate },
       },
     },
     include: { account: true },
-  })
+  });
 
   // Aggregation + net-income roll-up lives in computeBalanceSheet (unit-tested).
-  const { assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity, isBalanced } =
-    computeBalanceSheet(
-      entries.map((e) => ({
-        accountId: e.accountId,
-        accountName: e.account.name,
-        accountCode: e.account.code,
-        accountType: e.account.type,
-        debit: Number(e.debit),
-        credit: Number(e.credit),
-      }))
-    )
+  const {
+    assets,
+    liabilities,
+    equity,
+    totalAssets,
+    totalLiabilities,
+    totalEquity,
+    isBalanced,
+  } = computeBalanceSheet(
+    entries.map((e) => ({
+      accountId: e.accountId,
+      accountName: e.account.name,
+      accountCode: e.account.code,
+      accountType: e.account.type,
+      debit: Number(e.debit),
+      credit: Number(e.credit),
+    })),
+  );
 
-  const asOfLabel = asOfDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+  const asOfLabel = asOfDate.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div className="flex flex-col gap-6">
       <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Neraca" },
-        ]} />
+        <AppBreadcrumbs
+          items={[
+            { label: "Dasbor", href: "/" },
+            { label: "Laporan", href: "/laporan" },
+            { label: "Neraca" },
+          ]}
+        />
       </div>
 
       <div className="flex items-center justify-end print:hidden">
@@ -67,16 +88,24 @@ export default async function BalanceSheetPage({
       </div>
 
       <div className="print:hidden">
-        <ReportSingleDateFilter defaultDate={params.date || asOfDate.toISOString().split('T')[0]} />
+        <ReportSingleDateFilter
+          defaultDate={params.date || asOfDate.toISOString().split("T")[0]}
+        />
       </div>
 
       {/* Professional letterhead (screen + print) */}
-      <ReportLetterhead title="Neraca" subtitle="Laporan Posisi Keuangan" periodLabel={`Per ${asOfLabel}`} />
+      <ReportLetterhead
+        title="Neraca"
+        subtitle="Laporan Posisi Keuangan"
+        periodLabel={`Per ${asOfLabel}`}
+      />
 
       {/* ASET */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">ASET</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">
+            ASET
+          </h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable data-report-table="Aset">
@@ -90,12 +119,16 @@ export default async function BalanceSheetPage({
                 <DetailTableRow key={a.code}>
                   <DetailTableTd>{a.code}</DetailTableTd>
                   <DetailTableTd>{a.name}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(a.balance)}</DetailTableTd>
+                  <DetailTableTd align="right">
+                    {formatAccounting(a.balance)}
+                  </DetailTableTd>
                 </DetailTableRow>
               ))}
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>Total Aset</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalAssets)}</DetailTableTd>
+                <DetailTableTd align="right">
+                  {formatAccounting(totalAssets)}
+                </DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>
@@ -105,7 +138,9 @@ export default async function BalanceSheetPage({
       {/* KEWAJIBAN */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">KEWAJIBAN</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">
+            KEWAJIBAN
+          </h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable data-report-table="Kewajiban">
@@ -119,12 +154,16 @@ export default async function BalanceSheetPage({
                 <DetailTableRow key={a.code}>
                   <DetailTableTd>{a.code}</DetailTableTd>
                   <DetailTableTd>{a.name}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(a.balance)}</DetailTableTd>
+                  <DetailTableTd align="right">
+                    {formatAccounting(a.balance)}
+                  </DetailTableTd>
                 </DetailTableRow>
               ))}
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>Total Kewajiban</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalLiabilities)}</DetailTableTd>
+                <DetailTableTd align="right">
+                  {formatAccounting(totalLiabilities)}
+                </DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>
@@ -134,7 +173,9 @@ export default async function BalanceSheetPage({
       {/* EKUITAS */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">EKUITAS</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">
+            EKUITAS
+          </h2>
         </div>
         <div className="p-4 px-5">
           <DetailTable data-report-table="Ekuitas">
@@ -148,12 +189,16 @@ export default async function BalanceSheetPage({
                 <DetailTableRow key={a.code}>
                   <DetailTableTd>{a.code}</DetailTableTd>
                   <DetailTableTd>{a.name}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(a.balance)}</DetailTableTd>
+                  <DetailTableTd align="right">
+                    {formatAccounting(a.balance)}
+                  </DetailTableTd>
                 </DetailTableRow>
               ))}
               <DetailTableRow className="font-bold border-t-2 border-default">
                 <DetailTableTd colSpan={2}>Total Ekuitas</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalEquity)}</DetailTableTd>
+                <DetailTableTd align="right">
+                  {formatAccounting(totalEquity)}
+                </DetailTableTd>
               </DetailTableRow>
             </DetailTableBody>
           </DetailTable>
@@ -161,14 +206,22 @@ export default async function BalanceSheetPage({
       </div>
 
       {/* Balance Check */}
-      <div className={`bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border no-break ${isBalanced ? "border-success" : "border-danger"}`}>
-        <div className={`text-xl font-bold ${isBalanced ? "text-success" : "text-danger"}`}>
-          {isBalanced ? 'SEIMBANG' : 'TIDAK SEIMBANG'}
+      <div
+        className={`bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border no-break ${isBalanced ? "border-success" : "border-danger"}`}
+      >
+        <div
+          className={`text-xl font-bold ${isBalanced ? "text-success" : "text-danger"}`}
+        >
+          {isBalanced ? "SEIMBANG" : "TIDAK SEIMBANG"}
         </div>
         <div className="text-[0.8125rem] text-muted-foreground font-medium">
-          Aset: {formatAccounting(totalAssets, { showSymbol: true })} | Kewajiban + Ekuitas: {formatAccounting(totalLiabilities + totalEquity, { showSymbol: true })}
+          Aset: {formatAccounting(totalAssets, { showSymbol: true })} |
+          Kewajiban + Ekuitas:{" "}
+          {formatAccounting(totalLiabilities + totalEquity, {
+            showSymbol: true,
+          })}
         </div>
       </div>
     </div>
-  )
+  );
 }
