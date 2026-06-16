@@ -1,32 +1,32 @@
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/db/prisma"
-import { notFound } from "next/navigation"
-import { PageHeader, BackButton } from "@/components/ui/page-header"
-import { Button } from "@/components/ui/button"
-import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { prisma } from "@/lib/db/prisma";
+import { notFound } from "next/navigation";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { DetailCard, DetailField } from "@/components/ui/detail-card";
 
-import type { Metadata } from "next"
+import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Akun" }
+import { requirePermission } from "@/lib/auth/permissions";
+export const metadata: Metadata = { title: "Akun" };
 
 export default async function DetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_accounts")
+  await requirePermission("view_accounts");
 
-  const { id } = await params
-  const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  const { id } = await params;
+  const numId = Number(id);
+  if (Number.isNaN(numId)) notFound();
 
   const data = await prisma.account.findUnique({
-    where: { id: numId }
-  })
+    where: { id: numId },
+  });
 
-  if (!data) notFound()
+  if (!data) notFound();
 
   return (
     <div className="flex flex-col gap-6">
@@ -34,13 +34,15 @@ export default async function DetailPage({
         title="Detail Akun"
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master/akun" },
+          { label: "Master Data", href: "/master" },
           { label: "Akun", href: "/master/akun" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/akun/${data.id}/ubah`} variant="primary">Ubah</Button>
+            <Button href={`/master/akun/${data.id}/ubah`} variant="primary">
+              Ubah
+            </Button>
             <BackButton href="/master/akun" />
           </>
         }
@@ -50,8 +52,11 @@ export default async function DetailPage({
         <DetailField label="Kode" value={String(data.code ?? "-")} mono />
         <DetailField label="Nama" value={String(data.name ?? "-")} />
         <DetailField label="Tipe" value={String(data.type ?? "-")} />
-        <DetailField label="Status" value={data.isActive ? "Aktif" : "Nonaktif"} />
+        <DetailField
+          label="Status"
+          value={data.isActive ? "Aktif" : "Nonaktif"}
+        />
       </DetailCard>
     </div>
-  )
+  );
 }
