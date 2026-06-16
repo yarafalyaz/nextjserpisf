@@ -1,93 +1,106 @@
-import { type NextRequest } from "next/server"
-import { prisma } from "@/lib/db/prisma"
-import { auth } from "@/lib/auth/auth"
-import { hasPermission } from "@/lib/auth/permissions"
+import { type NextRequest } from "next/server";
+import { prisma } from "@/lib/db/prisma";
+import { auth } from "@/lib/auth/auth";
+import { hasPermission } from "@/lib/auth/permissions";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth()
-    if (!session?.user)
-      return new Response("Unauthorized", { status: 401 })
+    const session = await auth();
+    if (!session?.user) return new Response("Unauthorized", { status: 401 });
 
     if (!(await hasPermission("manage_settings"))) {
-      return new Response("Forbidden", { status: 403 })
+      return new Response("Forbidden", { status: 403 });
     }
 
-    const sp = req.nextUrl.searchParams
-    const where: Record<string, unknown> = {}
+    const sp = req.nextUrl.searchParams;
+    const where: Record<string, unknown> = {};
 
-    const userId = sp.get("userId")
-    const action = sp.get("action")
-    const modelType = sp.get("modelType")
-    const dateFrom = sp.get("dateFrom")
-    const dateTo = sp.get("dateTo")
-    const search = sp.get("cari")
+    const userId = sp.get("userId");
+    const action = sp.get("action");
+    const modelType = sp.get("modelType");
+    const dateFrom = sp.get("dateFrom");
+    const dateTo = sp.get("dateTo");
+    const search = sp.get("cari");
 
-    if (userId && userId !== "all") where.userId = Number.parseInt(userId, 10)
-    if (action && action !== "all") where.action = action
-    if (modelType && modelType !== "all") where.modelType = modelType
+    if (userId && userId !== "all") {
+      const uid = Number.parseInt(userId, 10);
+      if (Number.isInteger(uid)) where.userId = uid;
+    }
+    if (action && action !== "all") where.action = action;
+    if (modelType && modelType !== "all") where.modelType = modelType;
     if (dateFrom || dateTo) {
-      where.createdAt = {}
-      const w = where.createdAt as Record<string, Date>
-      if (dateFrom) w.gte = new Date(dateFrom)
+      where.createdAt = {};
+      const w = where.createdAt as Record<string, Date>;
+      if (dateFrom) {
+        const d = new Date(dateFrom);
+        if (!Number.isNaN(d.getTime())) w.gte = d;
+      }
       if (dateTo) {
-        const d = new Date(dateTo)
-        d.setHours(23, 59, 59, 999)
-        w.lte = d
+        const d = new Date(dateTo);
+        if (!Number.isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          w.lte = d;
+        }
       }
     }
-    if (search) where.description = { contains: search }
+    if (search) where.description = { contains: search };
 
     const logs = await prisma.activityLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: 10000,
-    })
+    });
 
     const userIds = Array.from(
-      new Set(logs.map((l) => l.userId).filter((id): id is number => id != null)),
-    )
+      new Set(
+        logs.map((l) => l.userId).filter((id): id is number => id != null),
+      ),
+    );
     const users = userIds.length
       ? await prisma.user.findMany({
           where: { id: { in: userIds } },
           select: { id: true, name: true },
         })
-      : []
-    const userMap = new Map(users.map((u) => [u.id, u.name]))
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u.name]));
 
     const actionLabel: Record<string, string> = {
-      CREATE: "Buat", create: "Buat",
-      UPDATE: "Ubah", update: "Ubah",
-      DELETE: "Hapus", delete: "Hapus",
-      LOGIN: "Login", login: "Login",
-    }
+      CREATE: "Buat",
+      create: "Buat",
+      UPDATE: "Ubah",
+      update: "Ubah",
+      DELETE: "Hapus",
+      delete: "Hapus",
+      LOGIN: "Login",
+      login: "Login",
+    };
 
-    const header = "Waktu,Pengguna,Aksi,Model,ID,Deskripsi,IP\n"
+    const header = "Waktu,Pengguna,Aksi,Model,ID,Deskripsi,IP\n";
     const rows = logs
       .map((l) => {
-        const d = new Date(l.createdAt).toLocaleString("id-ID")
-        const user = l.userId ? (userMap.get(l.userId) ?? "-") : "Sistem"
-        const act = actionLabel[l.action] || l.action
-        
-        const esc = (val: unknown) => {
-          if (val == null) return ""
-          let str = String(val).replace(/"/g, '""')
-          if (/^[=+\-@\t\r]/.test(str)) str = "'" + str
-          return str
-        }
+        const d = new Date(l.createdAt).toLocaleString("id-ID");
+        const user = l.userId ? (userMap.get(l.userId) ?? "-") : "Sistem";
+        const act = actionLabel[l.action] || l.action;
 
-        return `"${esc(d)}","${esc(user)}","${esc(act)}","${esc(l.modelType)}","${esc(l.modelId)}","${esc(l.description ?? "-")}","${esc(l.ipAddress)}"`
+        const esc = (val: unknown) => {
+          if (val == null) return "";
+          let str = String(val).replace(/"/g, '""');
+          if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+          return str;
+        };
+
+        return `"${esc(d)}","${esc(user)}","${esc(act)}","${esc(l.modelType)}","${esc(l.modelId)}","${esc(l.description ?? "-")}","${esc(l.ipAddress)}"`;
       })
-      .join("\n")
+      .join("\n");
 
     return new Response(header + rows, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename=log-aktivitas-${Date.now()}.csv`,
       },
-    })
+    });
   } catch (e) {
-    console.error("CSV export error:", e)
-    return new Response("Gagal export", { status: 500 })
+    console.error("CSV export error:", e);
+    return new Response("Gagal export", { status: 500 });
   }
 }
