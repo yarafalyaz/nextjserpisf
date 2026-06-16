@@ -53,11 +53,21 @@ export async function GET() {
         },
       }) : Promise.resolve(0),
       Promise.resolve(0),
-      canViewAttendance ? prisma.$queryRaw<[{ count: bigint }]>`
-        SELECT COUNT(*) as count FROM attendances
-        WHERE date >= CURDATE() AND date < CURDATE() + INTERVAL 1 DAY
-          AND (status = 'late' OR late_minutes > 0)
-      ` : Promise.resolve([{ count: BigInt(0) }] as [{ count: bigint }]),
+      canViewAttendance ? prisma.attendance.count({
+        where: {
+          // Use the same JS local-midnight [today, tomorrow) window the rest
+          // of this route (and the daily-notifications cron) uses. The previous
+          // raw SQL `WHERE date >= CURDATE() AND date < CURDATE() + INTERVAL 1
+          // DAY` used MySQL's CURDATE(), which evaluates in the MySQL server's
+          // timezone — when the MySQL TZ differs from the Node TZ (e.g. Node
+          // in Asia/Jakarta, MySQL in UTC), the dashboard's late-attendance
+          // count silently disagreed with the cron's own count by ±1 day at
+          // the rollover. Mirrors the overdue-invoice -> today fix in this
+          // same file (and the cron's lateAttendances `dayStart/dayEnd`).
+          date: { gte: today, lt: tomorrow },
+          OR: [{ status: "late" }, { lateMinutes: { gt: 0 } }],
+        },
+      }) : Promise.resolve(0),
       canViewAttendance ? (async () => {
         if (new Date().getHours() < 10) return 0
         // Skip on weekends (no work schedule applied yet → use calendar
@@ -99,7 +109,7 @@ export async function GET() {
       lowStockCount: Number(lowStockCount[0]?.count ?? 0),
       overdueInvoiceCount,
       pendingApprovalCount,
-      lateAttendanceCount: Number(lateAttendanceCount[0]?.count ?? 0),
+      lateAttendanceCount: lateAttendanceCount as number,
       absentEmployeeCount,
       recentActivities: recentActivities.map((a) => ({
         ...a,

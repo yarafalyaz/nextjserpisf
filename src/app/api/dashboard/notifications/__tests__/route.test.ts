@@ -65,7 +65,10 @@ describe("GET /api/dashboard/notifications", () => {
     mocks.queryRaw.mockResolvedValue([{ count: BigInt(3) }])
     mocks.salesInvoiceCount.mockResolvedValue(2)
     mocks.employeeCount.mockResolvedValue(10)
-    mocks.attendanceCount.mockResolvedValue(7)
+    // Two attendance.count() calls: late-attendance (3, now via Prisma count
+    // after the CURDATE()-removal fix) and the absent branch (7). Queue both
+    // explicitly so mockResolvedValueOnce doesn't queue-collide.
+    mocks.attendanceCount.mockResolvedValueOnce(3).mockResolvedValueOnce(7)
     mocks.leaveRequestCount.mockResolvedValue(1)
     mocks.activityLogFindMany.mockResolvedValue([
       { id: 1, action: "create", modelType: "Item", description: "X", createdAt: new Date() },
