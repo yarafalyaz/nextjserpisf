@@ -991,16 +991,10 @@ export async function reverseJournal(journalId: number) {
     // Tx failed (or a pre-tx check failed) after the claim flipped status to
     // REVERSING — roll back the claim so the journal can be retried instead of
     // being stuck in limbo.
-    try {
-      await prisma.journal.updateMany({
-        where: { id: journalId, status: "REVERSING" },
-        data: { status: "POSTED" },
-      })
-    } catch (rollbackErr) {
-      // Never let a rollback failure mask the original error. Log so an
-      // operator can manually unstick the journal from REVERSING.
-      console.error("[reverseJournal] claim rollback failed", rollbackErr)
-    }
+    await prisma.journal.updateMany({
+      where: { id: journalId, status: "REVERSING" },
+      data: { status: "POSTED" },
+    })
     throw e
   }
 
