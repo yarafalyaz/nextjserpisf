@@ -6,9 +6,9 @@ export interface BreadcrumbItem {
   href?: string
 }
 
-export function AppBreadcrumbs({ items }: { items: BreadcrumbItem[] }) {
+export function AppBreadcrumbs({ items, ariaLabel = "Navigasi breadcrumb" }: { items: BreadcrumbItem[]; ariaLabel?: string }) {
   return (
-    <nav aria-label="Breadcrumbs" className="mb-4">
+    <nav aria-label={ariaLabel} className="mb-4">
       <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
         {items.map((item, index) => {
           const isLast = index === items.length - 1
@@ -23,7 +23,7 @@ export function AppBreadcrumbs({ items }: { items: BreadcrumbItem[] }) {
                   {item.label}
                 </Link>
               )}
-              {!isLast && <ChevronRight className="size-3.5 opacity-50" aria-hidden />}
+              {!isLast && <ChevronRight className="size-3.5 opacity-50" aria-hidden="true" />}
             </li>
           )
         })}

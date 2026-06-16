@@ -168,7 +168,7 @@ export function CommandPalette() {
                     value={`${item.label} ${item.group}`}
                     onSelect={() => handleSelect(item.href)}
                   >
-                    <Icon size={16} />
+                    <Icon size={16} aria-hidden="true" />
                     <span>{item.label}</span>
                   </CommandItem>
                 )
