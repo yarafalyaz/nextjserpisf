@@ -72,8 +72,8 @@ export const updateSalesInvoiceSchema = z.object({
   date: z.string().min(1, "Tanggal wajib diisi").max(50),
   dueDate: optionalString(50),
   items: optionalString(50000),
-  taxRate: optionalNumber,
-  discount: optionalNumber,
+  taxRate: z.coerce.number().optional(),
+  discount: z.coerce.number().optional(),
 })
 
 // ==================== SALES PAYMENT ====================

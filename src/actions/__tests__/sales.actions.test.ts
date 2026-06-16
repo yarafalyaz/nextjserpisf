@@ -348,6 +348,19 @@ describe("Quotation Actions", () => {
     const res = await actions.updateQuotation(1, fdMap({ customerId: 1 }))
     expect(res?.success).toBe(true)
   })
+  // === Zod validation (regression: Zod bypass) ===
+  it("updateQuotation rejects negative customerId (id=0) before DB lookup", async () => {
+    const findSpy = mocks.prismaMock.quotation.findUniqueOrThrow
+    const res = await actions.updateQuotation(1, fdMap({ customerId: 0 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(findSpy).not.toHaveBeenCalled()
+  })
+  it("updateQuotation rejects oversized notes (500+ char blob)", async () => {
+    const res = await actions.updateQuotation(1, fdMap({ customerId: 1, notes: "x".repeat(501) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+  })
 })
 
 describe("Down Payment Actions", () => {
@@ -415,6 +428,30 @@ describe("Down Payment Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  // === Zod validation (regression: Zod bypass) ===
+  it("updateDownPayment rejects with Zod error when amount is zero (no DB lookup)", async () => {
+    const findUniqueOrThrowSpy = mocks.prismaMock.downPayment.findUniqueOrThrow
+    const res = await actions.updateDownPayment(1, fdMap({ quotationId: 1, amount: 0, paymentDate: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(findUniqueOrThrowSpy).not.toHaveBeenCalled()
+  })
+  it("updateDownPayment rejects when amount is negative", async () => {
+    const res = await actions.updateDownPayment(1, fdMap({ quotationId: 1, amount: -100, paymentDate: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+  })
+  it("updateDownPayment rejects when paymentDate is empty", async () => {
+    const res = await actions.updateDownPayment(1, fdMap({ quotationId: 1, amount: 100, paymentDate: "" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+  })
+  it("updateDownPayment rejects oversized notes (5MB+ blob)", async () => {
+    const res = await actions.updateDownPayment(1, fdMap({ quotationId: 1, amount: 100, paymentDate: "2026-06-12", notes: "x".repeat(501) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+  })
+
   // === deleteDownPayment ===
   it("deleteDownPayment fails if status not draft", async () => {
     mocks.prismaMock.downPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
@@ -450,6 +487,19 @@ describe("Sales Order Actions", () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
     const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
     expect(res?.success).toBe(false)
+  })
+  // === Zod validation (regression: Zod bypass) ===
+  it("updateSalesOrder rejects empty date before any DB lookup", async () => {
+    const findSpy = mocks.prismaMock.salesOrder.findUniqueOrThrow
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(findSpy).not.toHaveBeenCalled()
+  })
+  it("updateSalesOrder rejects missing customerId", async () => {
+    const res = await actions.updateSalesOrder(1, fdMap({ date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
   })
 })
 
@@ -496,6 +546,13 @@ describe("Sales Invoice Actions", () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
     const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12" }))
     expect(res?.success).toBe(false)
+  })
+  it("updateSalesInvoice rejects empty date before DB lookup", async () => {
+    const findSpy = mocks.prismaMock.salesInvoice.findUniqueOrThrow
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(findSpy).not.toHaveBeenCalled()
   })
   it("updateSalesInvoice computes discount and status", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", paidAmount: 50 })
@@ -582,6 +639,19 @@ describe("Sales Payment Actions", () => {
     const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: 1, amount: 0, paymentDate: "2026-06-12", paymentMethod: "cash" }))
     expect(res?.success).toBe(false)
   })
+  // === Zod validation (regression: Zod bypass) ===
+  it("updateSalesPayment rejects amount 0 before any DB lookup", async () => {
+    const findSpy = mocks.prismaMock.salesPayment.findUniqueOrThrow
+    const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: 1, amount: 0, paymentDate: "2026-06-12", paymentMethod: "cash" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(findSpy).not.toHaveBeenCalled()
+  })
+  it("updateSalesPayment rejects empty paymentMethod", async () => {
+    const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: 1, amount: 100, paymentDate: "2026-06-12", paymentMethod: "" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+  })
   it("updateSalesPayment fails if overpaid", async () => {
     mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, salesInvoiceId: 1 })
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted", grandTotal: 100 })
@@ -635,6 +705,14 @@ describe("Sales Return Actions", () => {
     mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "completed" })
     const res = await actions.updateSalesReturn(1, fdMap({ customerId: 1, date: "2026-06-12", items: "[]" }))
     expect(res?.success).toBe(false)
+  })
+  // === Zod validation (regression: Zod bypass) ===
+  it("updateSalesReturn rejects empty items before DB lookup", async () => {
+    const findSpy = mocks.prismaMock.salesReturn.findUnique
+    const res = await actions.updateSalesReturn(1, fdMap({ customerId: 1, date: "2026-06-12", items: "" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(findSpy).not.toHaveBeenCalled()
   })
   it("updateSalesReturn fails on over-return violation", async () => {
     mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })

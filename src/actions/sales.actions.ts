@@ -16,7 +16,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema } from "@/lib/validations/sales.schemas"
+import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateQuotationSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 
@@ -365,6 +365,10 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   try {
   await requirePermission("edit_quotations")
 
+  const parsed = parseFormData(updateQuotationSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
   })
@@ -374,8 +378,8 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   }
 
   // Validate vehicle belongs to customer if both are provided
-  const updCustomerId = formData.get("customerId") ? requireId(formData.get("customerId"), "customerId") : quotation.customerId
-  const updVehicleId = safeId(formData.get("customerVehicleId"))
+  const updCustomerId = v.customerId ?? quotation.customerId
+  const updVehicleId = v.customerVehicleId ?? null
   if (updVehicleId && updCustomerId) {
     const vehicle = await prisma.customerVehicle.findFirst({
       where: { id: updVehicleId, customerId: updCustomerId },
@@ -389,13 +393,13 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   await prisma.quotation.update({
     where: { id: quotationId },
     data: {
-      customerId: formData.get("customerId") ? requireId(formData.get("customerId"), "customerId") : undefined,
-      customerVehicleId: safeId(formData.get("customerVehicleId")),
-      date: formData.get("date") ? new Date(formData.get("date") as string) : undefined,
-      validUntil: formData.get("validUntil") ? new Date(formData.get("validUntil") as string) : undefined,
-      paymentMethod: formData.get("paymentMethod") as string | null,
-      shippingMethod: formData.get("shippingMethod") as string | null,
-      notes: formData.get("notes") as string | null,
+      customerId: v.customerId,
+      customerVehicleId: v.customerVehicleId ?? null,
+      date: v.date ? new Date(v.date) : undefined,
+      validUntil: v.validUntil ? new Date(v.validUntil) : undefined,
+      paymentMethod: v.paymentMethod ?? null,
+      shippingMethod: v.shippingMethod ?? null,
+      notes: v.notes ?? null,
     },
   })
 
@@ -1129,6 +1133,10 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   try {
   await requirePermission("edit_sales_orders")
 
+  const parsed = parseFormData(updateSalesOrderSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const existing = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (existing.status !== "draft") {
     throw new Error("Hanya Sales Order draft yang bisa diubah")
@@ -1138,11 +1146,11 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   const salesOrder = await prisma.salesOrder.update({
     where: { id },
     data: {
-      customerId: requireId(formData.get("customerId"), "customerId"),
-      quotationId: safeId(formData.get("quotationId")),
-      date: new Date(formData.get("date") as string),
-      deliveryDate: formData.get("deliveryDate") ? new Date(formData.get("deliveryDate") as string) : null,
-      notes: formData.get("notes") as string | null,
+      customerId: v.customerId,
+      quotationId: v.quotationId ?? null,
+      date: new Date(v.date),
+      deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+      notes: v.notes ?? null,
     },
   })
 
@@ -1164,12 +1172,16 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   try {
   await requirePermission("edit_sales_invoices")
 
+  const parsed = parseFormData(updateSalesInvoiceSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const existingInvoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
   if (existingInvoice.status !== "draft") {
     throw new Error("Hanya invoice draft yang bisa diubah")
   }
 
-  const itemsJson = formData.get("items") as string | null
+  const itemsJson = v.items
   const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null }>>(itemsJson) ?? []) : null
 
   const result = await prisma.$transaction(async (tx) => {
@@ -1177,11 +1189,11 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     const invoice = await tx.salesInvoice.update({
       where: { id },
       data: {
-        customerId: requireId(formData.get("customerId"), "customerId"),
-        salesOrderId: safeId(formData.get("salesOrderId")),
-        quotationId: safeId(formData.get("quotationId")),
-        date: new Date(formData.get("date") as string),
-        dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
+        customerId: v.customerId,
+        salesOrderId: v.salesOrderId ?? null,
+        quotationId: v.quotationId ?? null,
+        date: new Date(v.date),
+        dueDate: v.dueDate ? new Date(v.dueDate) : null,
       },
     })
 
@@ -1234,12 +1246,12 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       // taxAmount and a negative grandTotal, which then posts a negative
       // AR/revenue journal. The header discount is already clamped to
       // [0, subtotal] below; taxRate was the missing counterpart.
-      const taxRate = formData.get("taxRate") ? Math.max(0, Number(formData.get("taxRate"))) : 0
+      const taxRate = v.taxRate !== undefined ? Math.max(0, v.taxRate) : 0
       // Clamp the header discount to [0, subtotal] so a discount larger than the
       // line subtotal can't drive the taxable base, taxAmount, or grandTotal
       // negative (which would post a negative AR/revenue GL). Mirrors the
       // per-line clamp above.
-      const rawDiscount = formData.get("discount") ? Number(formData.get("discount")) : 0
+      const rawDiscount = v.discount ?? 0
       const discountTotal = Math.min(Math.max(0, rawDiscount), subtotal)
       const taxAmount = safeRound(safeDivide(safeMultiply(safeSubtract(subtotal, discountTotal, 0), taxRate, 4), 100, 4), 0)
       const grandTotal = safeSubtract(safeAdd(subtotal, taxAmount, 0), discountTotal, 0)
@@ -1294,13 +1306,14 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   try {
   const user = await requirePermission("edit_sales_payments")
 
+  const parsed = parseFormData(updateSalesPaymentSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   // Fetch old invoiceId before update to handle invoice reassignment
   const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true } })
-  const newInvoiceId = requireId(formData.get("salesInvoiceId"), "salesInvoiceId")
-  const newAmount = requireNumber(formData.get("amount"), "amount")
-  if (newAmount <= 0) {
-    return { success: false, error: "Jumlah pembayaran harus lebih dari 0" }
-  }
+  const newInvoiceId = v.salesInvoiceId
+  const newAmount = v.amount
 
   // Atomic: lock the target invoice and validate the edited amount against the
   // remaining balance (excluding THIS payment) — mirrors createSalesPayment.
@@ -1326,10 +1339,10 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       data: {
         salesInvoiceId: newInvoiceId,
         amount: newAmount,
-        paymentDate: new Date(formData.get("paymentDate") as string),
-        paymentMethod: formData.get("paymentMethod") as string,
-        accountId: safeId(formData.get("accountId")),
-        notes: formData.get("notes") as string | null,
+        paymentDate: new Date(v.paymentDate),
+        paymentMethod: v.paymentMethod,
+        accountId: v.accountId ?? null,
+        notes: v.notes ?? null,
       },
     })
   })
@@ -1347,7 +1360,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   }
 
   // Associate uploaded attachments
-  const attachmentIds = formData.get("attachmentIds") as string | null
+  const attachmentIds = v.attachmentIds
   if (attachmentIds) {
     const ids = safeJsonParse<number[]>(attachmentIds) ?? []
     if (ids.length > 0) {
@@ -1377,6 +1390,10 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   try {
   await requirePermission("edit_sales_returns")
 
+  const parsed = parseFormData(updateSalesReturnSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const input = parsed.data
+
   const existingReturn = await prisma.salesReturn.findUnique({
     where: { id },
     select: { status: true },
@@ -1387,7 +1404,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   }
 
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
-  const itemsJson = formData.get("items") as string
+  const itemsJson = input.items
   const items = safeJsonParse<any[]>(itemsJson) ?? []
   const validReturnItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
   const updReturnIds = validReturnItems.map((it: any) => Number(it.itemId))
@@ -1397,7 +1414,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   const updReturnCostMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
   const updMasterPriceMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
 
-  const updInvoiceId = safeId(formData.get("salesInvoiceId"))
+  const updInvoiceId = input.salesInvoiceId ?? null
   const updInvoicePriceMap = new Map<number, number>()
   if (updInvoiceId) {
     const invItems = await prisma.salesInvoiceItem.findMany({
@@ -1481,9 +1498,9 @@ export async function updateSalesReturn(id: number, formData: FormData) {
       where: { id },
       data: {
         salesInvoiceId: updInvoiceId,
-        customerId: requireId(formData.get("customerId"), "customerId"),
-        date: new Date(formData.get("date") as string),
-        reason: formData.get("reason") as string | null,
+        customerId: input.customerId,
+        date: new Date(input.date),
+        reason: input.reason ?? null,
         items: {
           create: validReturnItems
             .map((item: any) => ({
@@ -1595,20 +1612,21 @@ export async function updateDownPayment(id: number, formData: FormData) {
     proofImage = `/uploads/proofs/${filename}`
   }
 
+  const parsed = parseFormData(updateDownPaymentSchema, formData)
+  if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
+  const v = parsed.data
+
   const existingDp = await prisma.downPayment.findUniqueOrThrow({ where: { id } })
   if (existingDp.status !== "draft") {
     throw new Error("Hanya Down Payment draft yang bisa diubah")
   }
-  const quotationId = requireId(formData.get("quotationId"), "quotationId")
+  const quotationId = v.quotationId
   const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
   if (!["accepted", "converted"].includes(quotation.status)) {
     throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
   }
 
-  const amount = requireNumber(formData.get("amount"), "amount")
-  if (amount <= 0) {
-    throw new Error("Nominal uang muka harus lebih dari 0")
-  }
+  const amount = v.amount
 
   // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
   // two concurrent updates (or a create + an update) on the same quotation can't
@@ -1630,9 +1648,9 @@ export async function updateDownPayment(id: number, formData: FormData) {
     quotationId,
     customerId: quotation.customerId,
     amount,
-    paymentDate: new Date(formData.get("paymentDate") as string),
-    paymentMethod: formData.get("paymentMethod") as string | null,
-    notes: formData.get("notes") as string | null,
+    paymentDate: new Date(v.paymentDate),
+    paymentMethod: v.paymentMethod ?? null,
+    notes: v.notes ?? null,
   }
 
   // Only update proofImage if new file uploaded
