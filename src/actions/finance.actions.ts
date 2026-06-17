@@ -521,6 +521,7 @@ export async function createPettyCash(formData: FormData) {
           balanceAfter,
           date: v.date,
           accountId: v.accountId ?? null,
+          referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
           createdBy: Number(user.id),
         },
@@ -1291,6 +1292,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
           amount,
           date: v.date,
           accountId: v.accountId ?? null,
+          referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
         },
       });

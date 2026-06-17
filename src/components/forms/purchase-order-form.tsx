@@ -30,6 +30,8 @@ interface PurchaseOrderFormProps {
     vendorId: number;
     date: string;
     notes?: string | null;
+    paymentTerm?: string | null;
+    shippingCost?: number;
     items?: Array<{
       itemId: number;
       qty: number;
@@ -86,6 +88,8 @@ export function PurchaseOrderForm({
       vendorId: order?.vendorId,
       date: order?.date ?? new Date().toISOString().split("T")[0],
       notes: order?.notes ?? "",
+      paymentTerm: order?.paymentTerm ?? "",
+      shippingCost: order?.shippingCost ?? 0,
       purchaseRequestId: defaultPrId,
     },
   });
@@ -108,10 +112,12 @@ export function PurchaseOrderForm({
     setPoItems(updated);
   }
 
-  const grandTotal = poItems.reduce(
+  const itemsTotal = poItems.reduce(
     (sum, item) => sum + (item.qty * item.unitPrice - item.discount),
     0,
   );
+  const shippingCost = Number(watch("shippingCost")) || 0;
+  const grandTotal = itemsTotal + shippingCost;
 
   function onSubmit(data: PurchaseOrderInput) {
     startTransition(async () => {
@@ -193,6 +199,32 @@ export function PurchaseOrderForm({
               name="expectedDate"
               value={watch("expectedDate")}
               onChange={(val) => setValue("expectedDate", val)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="paymentTerm">Termin Pembayaran</Label>
+            <input
+              id="paymentTerm"
+              {...register("paymentTerm")}
+              className="form-input"
+              placeholder="Mis. Net 30, COD..."
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="shippingCost">Biaya Pengiriman</Label>
+            <Controller
+              name="shippingCost"
+              control={control}
+              render={({ field }) => (
+                <CurrencyInput
+                  id="shippingCost"
+                  value={field.value ?? 0}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  placeholder="0"
+                  prefix="Rp"
+                />
+              )}
             />
           </div>
         </FormSection>

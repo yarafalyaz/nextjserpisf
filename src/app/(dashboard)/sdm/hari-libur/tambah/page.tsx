@@ -7,6 +7,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Label } from "@/components/ui/shadcn/label"
+import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/button"
 
 
@@ -14,6 +15,7 @@ export default function CreateHolidayPage() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState("")
+  const [isNationalHoliday, setIsNationalHoliday] = useState(true)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -44,6 +46,12 @@ export default function CreateHolidayPage() {
           <div className="flex flex-col gap-1.5 col-span-full">
             <Label htmlFor="description">Deskripsi</Label>
             <Textarea id="description" name="description" rows={3} placeholder="Deskripsi hari libur (opsional)" />
+          </div>
+
+          <div className="flex items-center gap-2 col-span-full">
+            <input type="hidden" name="isNationalHoliday" value={isNationalHoliday ? "true" : "false"} />
+            <Checkbox id="isNationalHoliday" checked={isNationalHoliday} onCheckedChange={(c) => setIsNationalHoliday(c === true)} />
+            <Label htmlFor="isNationalHoliday">Libur Nasional</Label>
           </div>
         </div>
 

@@ -32,6 +32,8 @@ export const purchaseOrderSchema = z.object({
   purchaseRequestId: optionalNumber(),
   date: dateString,
   expectedDate: optionalDateString,
+  paymentTerm: optionalString(200),
+  shippingCost: optionalNumber(0),
   notes: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
 })
@@ -44,6 +46,7 @@ export const goodsReceiptSchema = z.object({
   purchaseOrderId: z.coerce.number().min(1, "PO wajib dipilih"),
   warehouseId: z.coerce.number().min(1, "Gudang wajib dipilih"),
   date: dateString,
+  referenceNumber: optionalString(100),
   notes: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
 })

@@ -39,6 +39,7 @@ export default async function EditHolidayPage({
         name={data.name}
         date={data.date.toISOString().split("T")[0]}
         description={data.description}
+        isNationalHoliday={data.isNationalHoliday}
       />
     </div>
   )

@@ -25,6 +25,7 @@ export const customerSchema = z.object({
   gender: z.enum(["male", "female"]).optional(),
   creditLimit: optionalNumber(0),
   code: optionalString(50),
+  taxId: optionalString(50),
 })
 
 export const vendorSchema = z.object({

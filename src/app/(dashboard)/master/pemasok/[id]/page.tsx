@@ -33,6 +33,7 @@ export default async function VendorDetailPage({
     include: {
       purchaseOrders: { take: 10, orderBy: { createdAt: "desc" } },
       vendorBills: { take: 10, orderBy: { createdAt: "desc" } },
+      items: { take: 20, orderBy: { name: "asc" } },
     },
   })
 
@@ -227,6 +228,42 @@ export default async function VendorDetailPage({
                             <DetailTableTd align="right">{formatCurrency(Number(bill.grandTotal))}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(bill.paidAmount))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "items",
+            label: `Barang (${vendor.items.length})`,
+            content: (
+              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang yang Dipasok</h2>
+                  <Link href={`/master/barang?cari=${vendor.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                </div>
+                <div className="p-4 px-5">
+                  {vendor.items.length === 0 ? (
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada barang dari pemasok ini</p>
+                  ) : (
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>SKU</DetailTableTh>
+                        <DetailTableTh>Nama</DetailTableTh>
+                        <DetailTableTh align="right">Harga Beli</DetailTableTh>
+                        <DetailTableTh align="right">Stok</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {vendor.items.map((item) => (
+                          <DetailTableRow key={item.id}>
+                            <DetailTableTd className="font-mono"><Link href={`/master/barang/${item.id}`}>{item.sku}</Link></DetailTableTd>
+                            <DetailTableTd>{item.name}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
+                            <DetailTableTd align="right">{Number(item.qtyOnHand)}</DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

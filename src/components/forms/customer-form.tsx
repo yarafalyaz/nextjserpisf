@@ -31,6 +31,7 @@ interface CustomerFormProps {
     contactPerson: string | null
     gender: string | null
     code: string | null
+    taxId?: string | null
     creditLimit?: number | string | null
   }
   generatedCode?: string
@@ -53,6 +54,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
       contactPerson: customer?.contactPerson || "",
       gender: customer?.gender || "",
       code: customer?.code || (enableAutoCode ? generatedCode : "") || "",
+      taxId: customer?.taxId || "",
       creditLimit: customer?.creditLimit != null ? Number(customer.creditLimit) : 0,
     },
   })
@@ -108,6 +110,11 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
             <Label htmlFor="phone">Telepon *</Label>
             <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
             {errors.phone && <span className="text-xs text-danger mt-1">{errors.phone.message}</span>}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxId">NPWP</Label>
+            <Input id="taxId" {...register("taxId")} placeholder="Nomor Pokok Wajib Pajak" />
+            {errors.taxId && <span className="text-xs text-danger mt-1">{errors.taxId.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="creditLimit">Batas Kredit (Rp)</Label>

@@ -5,6 +5,7 @@ import { useTransition } from "react"
 import { updateBank } from "@/actions/master.actions"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
+import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
 
 interface EditBankFormProps {
@@ -13,6 +14,7 @@ interface EditBankFormProps {
     name: string
     code: string
     accountId: number | null
+    type: string
   }
 }
 
@@ -41,6 +43,19 @@ export function EditBankForm({ bank }: EditBankFormProps) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="code">Kode Bank *</Label>
           <Input id="code" name="code" placeholder="Contoh: BCA" required defaultValue={bank.code} />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="type">Tipe *</Label>
+          <FormSelect
+            id="type"
+            name="type"
+            defaultValue={bank.type || "bank"}
+            options={[
+              { value: "bank", label: "Bank" },
+              { value: "emoney", label: "E-Money" },
+            ]}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">

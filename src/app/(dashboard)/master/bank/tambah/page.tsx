@@ -6,6 +6,7 @@ import { createBank } from "@/actions/master.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
+import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
 
 
@@ -44,6 +45,19 @@ export default function CreateBankPage() {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="code">Kode Bank *</Label>
             <Input id="code" name="code" placeholder="Contoh: BCA" required />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="type">Tipe *</Label>
+            <FormSelect
+              id="type"
+              name="type"
+              defaultValue="bank"
+              options={[
+                { value: "bank", label: "Bank" },
+                { value: "emoney", label: "E-Money" },
+              ]}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

@@ -887,6 +887,7 @@ export async function createSalesPayment(formData: FormData) {
         paymentDate: new Date(v.paymentDate),
         paymentMethod: v.paymentMethod,
         accountId: v.accountId ?? null,
+        referenceNo: v.referenceNo ?? null,
         notes: v.notes ?? null,
         createdBy: Number(user.id),
       },
@@ -1519,6 +1520,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
         paymentDate: new Date(v.paymentDate),
         paymentMethod: v.paymentMethod,
         accountId: v.accountId ?? null,
+        referenceNo: v.referenceNo ?? null,
         notes: v.notes ?? null,
       },
     })

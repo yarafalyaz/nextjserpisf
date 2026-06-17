@@ -161,6 +161,7 @@ export async function createCustomer(formData: FormData) {
         postalCode: v.postalCode ?? null,
         creditLimit: v.creditLimit ?? 0,
         isActive: true,
+        taxId: v.taxId ?? null,
       },
     });
 
@@ -199,6 +200,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
         creditLimit: v.creditLimit ?? 0,
+        taxId: v.taxId ?? null,
       },
     });
 
@@ -1016,6 +1018,7 @@ export async function createPosition(formData: FormData) {
             name: requireString(formData.get("name"), "name"),
             code,
             departmentId: safeId(formData.get("departmentId")),
+            description: (formData.get("description") as string) || null,
           },
         });
 
@@ -1058,6 +1061,7 @@ export async function updatePosition(id: number, formData: FormData) {
       data: {
         name: requireString(formData.get("name"), "name"),
         departmentId: safeId(formData.get("departmentId")),
+        description: (formData.get("description") as string) || null,
       },
     });
 
@@ -1183,6 +1187,7 @@ export async function createBank(formData: FormData) {
         name: requireString(formData.get("name"), "name"),
         code: formData.get("code") as string,
         accountId: safeId(formData.get("accountId")),
+        type: (formData.get("type") as string) || "bank",
         isActive: true,
       },
     });
@@ -1207,6 +1212,7 @@ export async function updateBank(id: number, formData: FormData) {
         name: requireString(formData.get("name"), "name"),
         code: formData.get("code") as string,
         accountId: safeId(formData.get("accountId")),
+        type: (formData.get("type") as string) || "bank",
       },
     });
 
@@ -2015,6 +2021,7 @@ export async function createBrand(formData: FormData) {
     const brand = await prisma.brand.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        description: (formData.get("description") as string) || null,
       },
     });
 
@@ -2036,6 +2043,7 @@ export async function updateBrand(id: number, formData: FormData) {
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        description: (formData.get("description") as string) || null,
       },
     });
 

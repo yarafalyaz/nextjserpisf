@@ -5,12 +5,13 @@ import { useTransition } from "react"
 import { createPosition, updatePosition } from "@/actions/master.actions"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
 
 interface PositionCreateFormProps {
   departments: { id: number; name: string }[]
-  position?: { id: number; name: string; departmentId: number | null; code?: string | null }
+  position?: { id: number; name: string; departmentId: number | null; code?: string | null; description?: string | null }
   generatedCode?: string
 }
 
@@ -56,6 +57,11 @@ export function PositionCreateForm({ departments, position, generatedCode }: Pos
             placeholder="Pilih Departemen"
             options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor="description">Deskripsi</Label>
+          <Textarea id="description" name="description" rows={3} placeholder="Deskripsi jabatan (opsional)" defaultValue={position?.description || ""} />
         </div>
       </div>
 

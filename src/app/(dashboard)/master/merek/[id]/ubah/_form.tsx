@@ -6,10 +6,11 @@ import { updateBrand } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
 
 interface BrandEditFormProps {
-  brand: { id: number; name: string }
+  brand: { id: number; name: string; description: string | null }
 }
 
 export function BrandEditForm({ brand }: BrandEditFormProps) {
@@ -37,6 +38,10 @@ export function BrandEditForm({ brand }: BrandEditFormProps) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama Merek *</Label>
           <Input id="name" name="name" placeholder="Nama merek" defaultValue={brand.name} required />
+        </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor="description">Deskripsi</Label>
+          <Textarea id="description" name="description" rows={3} placeholder="Deskripsi merek (opsional)" defaultValue={brand.description ?? ""} />
         </div>
       </div>
 

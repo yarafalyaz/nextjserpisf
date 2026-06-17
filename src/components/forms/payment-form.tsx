@@ -40,6 +40,7 @@ interface PaymentFormProps {
     amount?: number;
     paymentDate?: string;
     paymentMethod?: string;
+    referenceNo?: string;
     notes?: string;
   };
   paymentMethods?: { code: string; name: string }[];
@@ -79,6 +80,7 @@ export function PaymentForm({
       paymentDate:
         payment?.paymentDate ?? new Date().toISOString().split("T")[0],
       paymentMethod: payment?.paymentMethod ?? "",
+      referenceNo: payment?.referenceNo ?? "",
       notes: payment?.notes ?? "",
     },
   });
@@ -267,6 +269,15 @@ export function PaymentForm({
           </div>
         </FormSection>
         <FormSection title="Lainnya" columns={1}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="referenceNo">No. Referensi</Label>
+            <input
+              id="referenceNo"
+              {...register("referenceNo")}
+              className="form-input"
+              placeholder="No. referensi / bukti transfer..."
+            />
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="notes">Catatan</Label>
             <Textarea

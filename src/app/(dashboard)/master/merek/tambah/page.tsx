@@ -7,6 +7,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
 
 
@@ -45,6 +46,10 @@ export default function CreateBrandPage() {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Nama Merek *</Label>
             <Input id="name" name="name" placeholder="Nama merek" required />
+          </div>
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Label htmlFor="description">Deskripsi</Label>
+            <Textarea id="description" name="description" rows={3} placeholder="Deskripsi merek (opsional)" />
           </div>
         </div>
 

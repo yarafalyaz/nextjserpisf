@@ -98,6 +98,7 @@ export const createSalesPaymentSchema = z.object({
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,
+  referenceNo: optionalString(100),
   notes: optionalString(500),
   attachmentIds: optionalString(2000),
 });
@@ -108,6 +109,7 @@ export const updateSalesPaymentSchema = z.object({
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,
+  referenceNo: optionalString(100),
   notes: optionalString(500),
   attachmentIds: optionalString(2000),
 });

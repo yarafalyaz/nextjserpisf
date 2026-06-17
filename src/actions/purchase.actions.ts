@@ -235,7 +235,12 @@ export async function createPurchaseOrder(formData: FormData) {
       (s, it) => safeAdd(s, it.discount || 0, 0),
       0,
     );
-    const grandTotal = safeSubtract(subtotal, discountTotal, 0);
+    const shippingCost = v.shippingCost ?? 0;
+    const grandTotal = safeAdd(
+      safeSubtract(subtotal, discountTotal, 0),
+      shippingCost,
+      0,
+    );
 
     const po = await prisma.purchaseOrder.create({
       data: {
@@ -244,6 +249,8 @@ export async function createPurchaseOrder(formData: FormData) {
         purchaseRequestId: v.purchaseRequestId ?? null,
         date: new Date(v.date),
         expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+        paymentTerm: v.paymentTerm ?? null,
+        shippingCost,
         notes: v.notes ?? null,
         subtotal,
         discount: discountTotal,
@@ -497,6 +504,7 @@ export async function createGoodsReceipt(formData: FormData) {
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
           date: new Date(v.date),
+          referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
           status: "draft",
           createdBy: Number(user.id),
@@ -1539,7 +1547,12 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       (s, it) => safeAdd(s, it.discount || 0, 0),
       0,
     );
-    const grandTotal = safeSubtract(subtotal, discountTotal, 0);
+    const shippingCost = v.shippingCost ?? 0;
+    const grandTotal = safeAdd(
+      safeSubtract(subtotal, discountTotal, 0),
+      shippingCost,
+      0,
+    );
 
     // Keep existing documentNo (do not regenerate on edit)
     const po = await prisma.$transaction(async (tx) => {
@@ -1557,6 +1570,8 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           purchaseRequestId: v.purchaseRequestId ?? null,
           date: new Date(v.date),
           expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+          paymentTerm: v.paymentTerm ?? null,
+          shippingCost,
           notes: v.notes ?? null,
           subtotal,
           discount: discountTotal,
@@ -1761,6 +1776,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
           date: new Date(v.date),
+          referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
         },
       });

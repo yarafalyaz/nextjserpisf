@@ -10,6 +10,7 @@ import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteEmployee } from "@/actions/master.actions"
+import { getLeaveQuota } from "@/lib/services/leave-quota.service"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
@@ -42,11 +43,15 @@ export default async function EmployeeDetailPage({
       attendances: { take: 10, orderBy: { date: "desc" } },
       leaveRequests: { take: 10, orderBy: { createdAt: "desc" } },
       overtimeRequests: { take: 10, orderBy: { date: "desc" } },
+      payrolls: { take: 12, orderBy: { createdAt: "desc" } },
       employeeLoans: { where: { status: "active" } },
     },
   })
 
   if (!employee) notFound()
+
+  // Annual-leave balance for the current calendar year (surface in Info tab).
+  const leaveQuota = await getLeaveQuota(numId)
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,6 +99,30 @@ export default async function EmployeeDetailPage({
                     </span>
                   } />
                 </DetailCard>
+
+                {/* Sisa Cuti Tahunan (tahun berjalan) */}
+                <DetailSection title={`Saldo Cuti Tahunan ${leaveQuota.year}`}>
+                  {leaveQuota.eligible ? (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="rounded-lg border border-default bg-surface-secondary p-4">
+                        <div className="text-xs text-muted-foreground">Jatah</div>
+                        <div className="text-xl font-bold text-foreground">{leaveQuota.entitled} hari</div>
+                      </div>
+                      <div className="rounded-lg border border-default bg-surface-secondary p-4">
+                        <div className="text-xs text-muted-foreground">Terpakai</div>
+                        <div className="text-xl font-bold text-foreground">{leaveQuota.used} hari</div>
+                      </div>
+                      <div className="rounded-lg border border-default bg-surface-secondary p-4">
+                        <div className="text-xs text-muted-foreground">Sisa</div>
+                        <div className={`text-xl font-bold ${leaveQuota.remaining > 0 ? "text-success" : "text-danger"}`}>{leaveQuota.remaining} hari</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Belum berhak cuti tahunan berbayar (masa kerja belum genap 1 tahun).
+                    </p>
+                  )}
+                </DetailSection>
 
                 {/* Active Loans */}
                 {employee.employeeLoans.length > 0 && (
@@ -222,6 +251,44 @@ export default async function EmployeeDetailPage({
                             <DetailTableTd>{Number(ot.hours)} jam</DetailTableTd>
                             <DetailTableTd><StatusChip status={ot.status} /></DetailTableTd>
                             <DetailTableTd>{ot.reason ? (ot.reason.length > 30 ? ot.reason.substring(0, 30) + "..." : ot.reason) : "-"}</DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "payroll",
+            label: `Penggajian (${employee.payrolls.length})`,
+            content: (
+              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Penggajian</h2>
+                  <Link href={`/sdm/penggajian?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
+                </div>
+                <div className="p-4 px-5">
+                  {employee.payrolls.length === 0 ? (
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data penggajian</p>
+                  ) : (
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Periode</DetailTableTh>
+                        <DetailTableTh>Gaji Pokok</DetailTableTh>
+                        <DetailTableTh>Gaji Bersih</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {employee.payrolls.map((p) => (
+                          <DetailTableRow key={p.id}>
+                            <DetailTableTd className="font-mono">{p.documentNo}</DetailTableTd>
+                            <DetailTableTd>{p.period}</DetailTableTd>
+                            <DetailTableTd>{formatCurrency(Number(p.baseSalary))}</DetailTableTd>
+                            <DetailTableTd className="font-semibold">{formatCurrency(Number(p.netSalary))}</DetailTableTd>
+                            <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

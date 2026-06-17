@@ -106,6 +106,7 @@ export const holidaySchema = z.object({
   name: requiredStr("Nama hari libur wajib diisi"),
   date: requiredDate("Tanggal"),
   description: optionalStr(500),
+  isNationalHoliday: z.boolean().optional().default(true),
 })
 
 // ==================== Department Holiday ====================

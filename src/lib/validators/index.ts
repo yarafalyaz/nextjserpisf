@@ -33,6 +33,7 @@ export const customerSchema = z.object({
   village: z.string().optional(),
   postalCode: z.string().optional(),
   creditLimit: z.number().min(0).optional(),
+  taxId: z.string().max(50).optional(),
 })
 
 export const vendorSchema = z.object({
@@ -172,6 +173,7 @@ export const salesPaymentSchema = z.object({
   paymentDate: z.string().min(1, "Tanggal bayar wajib diisi"),
   paymentMethod: z.string().min(1, "Metode bayar wajib dipilih"),
   accountId: z.number().optional(),
+  referenceNo: z.string().optional(),
   notes: z.string().optional(),
 })
 
@@ -182,6 +184,8 @@ export const purchaseOrderSchema = z.object({
   purchaseRequestId: z.number().optional(),
   date: z.string().min(1, "Tanggal wajib diisi"),
   expectedDate: z.string().optional(),
+  paymentTerm: z.string().optional(),
+  shippingCost: z.number().min(0).optional(),
   notes: z.string().optional(),
 })
 

@@ -80,6 +80,7 @@ export const pettyCashSchema = z.object({
     .positive("amount harus lebih dari 0"),
   date: requiredDate,
   accountId: optionalNumber(),
+  referenceNo: optionalString(100),
   description: optionalString(1000),
   attachmentIds: optionalString(5000),
 });

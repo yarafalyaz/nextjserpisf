@@ -6,6 +6,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
@@ -13,13 +14,12 @@ import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
 
-export function PettyCashForm({ accounts, pettyCash, currentBalance }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; balanceBefore?: number; balanceAfter?: number }; currentBalance?: number }) {
+export function PettyCashForm({ accounts, pettyCash, currentBalance }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; referenceNo?: string | null; balanceBefore?: number; balanceAfter?: number }; currentBalance?: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(pettyCash?.date ?? new Date().toISOString().split("T")[0])
   const [type, setType] = useState(pettyCash?.type ?? "IN")
   const [accountId, setAccountId] = useState<string | null>(pettyCash?.accountId ? String(pettyCash.accountId) : null)
-
   const assetAccounts = accounts.filter((a) => a.type === "ASSET")
   const expenseAccounts = accounts.filter((a) => a.type === "EXPENSE")
   const allAccounts = [...assetAccounts.map((a) => ({ ...a, group: "Kas/Bank" })), ...expenseAccounts.map((a) => ({ ...a, group: "Beban" }))]
@@ -88,6 +88,10 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
           </div>
         </FormSection>
         <FormSection title="Detail" columns={1}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="referenceNo">No. Referensi</Label>
+            <Input id="referenceNo" name="referenceNo" placeholder="No. referensi transaksi..." defaultValue={pettyCash?.referenceNo ?? ""} />
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="description">Deskripsi</Label>
             <Textarea id="description" name="description" rows={3} placeholder="Deskripsi transaksi kas kecil..." defaultValue={pettyCash?.description ?? ""} />

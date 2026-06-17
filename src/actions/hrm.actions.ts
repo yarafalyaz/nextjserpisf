@@ -1933,6 +1933,7 @@ export async function createHoliday(formData: FormData) {
         name: v.name,
         date: new Date(v.date),
         description: v.description ?? null,
+        isNationalHoliday: v.isNationalHoliday ?? true,
       },
     });
 
@@ -1965,6 +1966,7 @@ export async function updateHoliday(id: number, formData: FormData) {
         name: v.name,
         date: new Date(v.date),
         description: v.description ?? null,
+        isNationalHoliday: v.isNationalHoliday ?? true,
       },
     });
 

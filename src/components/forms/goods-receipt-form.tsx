@@ -46,6 +46,7 @@ interface GRFormProps {
     purchaseOrderId: number;
     warehouseId?: number;
     date: string;
+    referenceNumber?: string | null;
     notes?: string | null;
     // Items from the existing GR, used to hydrate edit mode. The form
     // previously re-derived rows from the PO on every render of an edit page,
@@ -183,6 +184,9 @@ export function GoodsReceiptForm({
   }
 
   const [notes, setNotes] = useState<string>(receipt?.notes ?? "");
+  const [referenceNumber, setReferenceNumber] = useState<string>(
+    receipt?.referenceNumber ?? "",
+  );
   const [date, setDate] = useState<string>(
     receipt?.date ?? new Date().toISOString().split("T")[0],
   );
@@ -198,6 +202,7 @@ export function GoodsReceiptForm({
         // code overwrote the existing receipt.date with today on every edit,
         // shifting period-cutoff reporting for the original transaction.
         formData.append("date", date);
+        if (referenceNumber) formData.append("referenceNumber", referenceNumber);
         // Notes round-trip — the goodsReceiptSchema accepts `notes` but the
         // form never appended it, so any saved notes were silently dropped.
         if (notes) formData.append("notes", notes);
@@ -273,6 +278,17 @@ export function GoodsReceiptForm({
               value={warehouseId || null}
               onChange={(key) => setWarehouseId(key ? String(key) : "")}
               placeholder="Cari gudang..."
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="referenceNumber">No. Referensi / DO</Label>
+            <input
+              id="referenceNumber"
+              type="text"
+              value={referenceNumber}
+              onChange={(e) => setReferenceNumber(e.target.value)}
+              placeholder="Mis. DO-2024-001"
+              className="form-input"
             />
           </div>
         </FormSection>

@@ -7,6 +7,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Plus, Trash2 } from "lucide-react"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
@@ -24,6 +25,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
   const [isPending, startTransition] = useTransition()
   const [sourceId, setSourceId] = useState(transfer?.sourceWarehouseId ? String(transfer.sourceWarehouseId) : "")
   const [destId, setDestId] = useState(transfer?.destinationWarehouseId ? String(transfer.destinationWarehouseId) : "")
+  const [notes, setNotes] = useState(transfer?.notes ?? "")
   const [transferItems, setTransferItems] = useState<TransferItem[]>(
     transfer?.items && transfer.items.length > 0
       ? transfer.items.map((it) => ({ itemId: it.itemId, qty: it.qty }))
@@ -54,6 +56,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         formData.append("sourceWarehouseId", sourceId)
         formData.append("destinationWarehouseId", destId)
         formData.append("date", new Date().toISOString().split("T")[0])
+        if (notes) formData.append("notes", notes)
         formData.append("items", JSON.stringify(transferItems.filter((it) => it.itemId > 0 && it.qty > 0)))
         const result = transfer?.id ? await updateInventoryTransfer(transfer.id, formData) : await createInventoryTransfer(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
@@ -144,6 +147,19 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
               })}
             </DetailTableBody>
           </DetailTable>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="notes">Catatan</Label>
+          <Textarea
+            id="notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Catatan transfer..."
+          />
         </div>
       </div>
 
