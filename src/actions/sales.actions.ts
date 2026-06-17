@@ -630,7 +630,7 @@ export async function createDownPayment(formData: FormData) {
 
 export async function confirmDownPayment(dpId: number) {
   try {
-  const user = await requirePermission("edit_down_payments")
+  const user = await requirePermission("confirm_down_payments")
 
   await onDownPaymentConfirmed(dpId, Number(user.id))
 

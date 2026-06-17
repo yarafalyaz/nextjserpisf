@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
+import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope";
 import { AttendanceTable } from "./_components/attendance-table";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { SelfAttendanceWidget } from "@/components/attendance/self-attendance-widget";
@@ -32,9 +33,11 @@ export default async function AttendancePage({
   const nextDay = new Date(targetDate);
   nextDay.setDate(nextDay.getDate() + 1);
 
-  // Role-scope: non admin/hr only sees own data
-  const isPrivileged =
-    user.roles.includes("super_admin") || user.roles.includes("hr");
+  // Self-service scoping via helper terpusat (karyawan→sendiri,
+  // kepala_bengkel→se-departemen, HR/finance/admin/ga→semua).
+  const scope = await getHrScope(user);
+  // `me` masih diperlukan terpisah untuk flag self-attend (admin yang juga
+  // karyawan tetap boleh check-in mandiri), independen dari scope tabel.
   const session = await auth();
   const me = session?.user?.id
     ? await prisma.employee.findFirst({
@@ -44,19 +47,15 @@ export default async function AttendancePage({
     : null;
   // Only employees linked to a user account can self-attend.
   const canSelfAttend = me != null;
-  let employeeFilter: { employeeId: number } | { employeeId: -1 } | undefined;
-  if (!isPrivileged) {
-    employeeFilter = { employeeId: me?.id ?? -1 };
-  }
 
   const where = {
     date: {
       gte: targetDate,
       lt: nextDay,
     },
-    ...employeeFilter,
+    ...hrScopeWhere(scope),
     ...(params.cari &&
-      isPrivileged && {
+      canSearchAcrossEmployees(scope) && {
         employee: { name: { contains: params.cari } },
       }),
   };

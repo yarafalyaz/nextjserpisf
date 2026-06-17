@@ -4,6 +4,7 @@ import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -16,11 +17,12 @@ export const metadata: Metadata = { title: "Lembur" }
 export default async function OvertimePage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string 
+  searchParams: Promise<{ status?: string; cari?: string
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_overtime")
+  const user = await requirePermission("view_overtime")
+  const scope = await getHrScope(user)
 
   const params = await searchParams
 
@@ -28,7 +30,8 @@ export default async function OvertimePage({
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
-    ...(params.cari && {
+    ...hrScopeWhere(scope),
+    ...(params.cari && canSearchAcrossEmployees(scope) && {
       OR: [
         { employee: { name: { contains: params.cari } } },
       ],

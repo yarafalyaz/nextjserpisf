@@ -195,7 +195,7 @@ export async function createJournal(formData: FormData) {
 
 export async function postJournal(journalId: number) {
   try {
-    await requirePermission("edit_journals");
+    await requirePermission("post_journals");
 
     const journal = await prisma.journal.findUniqueOrThrow({
       where: { id: journalId },
@@ -301,7 +301,7 @@ export async function createExpense(formData: FormData) {
 
 export async function approveExpense(expenseId: number) {
   try {
-    const user = await requirePermission("edit_expenses");
+    const user = await requirePermission("approve_expenses");
 
     const expense = await prisma.expense.findUniqueOrThrow({
       where: { id: expenseId },
@@ -347,7 +347,7 @@ export async function approveExpense(expenseId: number) {
 
 export async function markExpensePaid(expenseId: number) {
   try {
-    await requirePermission("edit_expenses");
+    await requirePermission("approve_expenses");
 
     const expense = await prisma.expense.findUniqueOrThrow({
       where: { id: expenseId },
@@ -609,7 +609,7 @@ export async function matchReconciliationLine(
   journalEntryId: number,
 ) {
   try {
-    await requirePermission("edit_journals");
+    await requirePermission("post_journals");
 
     // Only draft reconciliations may be matched.
     const recon = await prisma.bankReconciliation.findUniqueOrThrow({
@@ -670,7 +670,7 @@ export async function matchReconciliationLine(
 
 export async function completeReconciliation(reconciliationId: number) {
   try {
-    await requirePermission("edit_journals");
+    await requirePermission("post_journals");
 
     // Laravel parity: only draft reconciliations can be completed
     const reconciliation = await prisma.bankReconciliation.findUniqueOrThrow({
@@ -1088,7 +1088,7 @@ export async function updateJournal(id: number, formData: FormData) {
 
 export async function reverseJournal(journalId: number) {
   try {
-    const user = await requirePermission("edit_journals");
+    const user = await requirePermission("post_journals");
 
     const journal = await prisma.journal.findUniqueOrThrow({
       where: { id: journalId },

@@ -302,6 +302,37 @@ async function main() {
       "manage_roles",
       "manage_inventory",
       "approve_workflows",
+      // --- Backfill: permissions yang dicek di action (requirePermission/hasPermission)
+      // tapi sebelumnya tak pernah di-seed, sehingga role non-admin fail-CLOSED
+      // (ketolak) dari fitur terkait. Semua 23 string ini diverifikasi dipakai di
+      // kode produksi. super_admin/admin tetap dapat semua via grant menyeluruh.
+      "edit_assets",
+      "edit_asset_brands",
+      "edit_asset_categories",
+      "edit_asset_transfers",
+      "edit_holidays",
+      "edit_inventory",
+      "edit_petty_cash",
+      "edit_production",
+      "edit_production_orders",
+      "edit_tax_groups",
+      "edit_units",
+      "view_asset_brands",
+      "view_asset_categories",
+      "view_asset_transfers",
+      "view_banks",
+      "view_departments",
+      "view_inventory",
+      "view_item_categories",
+      "view_positions",
+      "view_production",
+      "view_statistical_key_figures",
+      "view_tax_groups",
+      "view_taxes",
+      "view_units",
+      // Approval permissions terpisah dari edit_* (Separation of Duties).
+      "approve_vendor_payments",
+      "approve_purchase_returns",
     ];
 
     for (const name of permissions) {
@@ -451,6 +482,66 @@ async function main() {
     }
 
     console.log("✅ Roles created: super_admin, admin, staff, ga, kepala_bengkel, karyawan, purchasing, warehouse");
+
+    // === FINANCE ROLE + EXPLICIT APPROVAL GRANTS (Separation of Duties) ===
+    // The LIKE-based grants above only match view_/create_/edit_/delete_/manage_,
+    // so the dedicated approval permissions (approve_*/post_*/verify_*/process_*/
+    // confirm_*/complete_*) are NOT granted by them. Without this block every
+    // approval/posting action would be locked to super_admin/admin only. We grant
+    // them explicitly per the agreed RBAC matrix.
+
+    // Finance role: keuangan view/create/edit + all financial approvals.
+    await conn.query(
+      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('finance', NOW(), NOW())",
+    );
+    const [financeRole] = await conn.query("SELECT id FROM roles WHERE name = 'finance'");
+    const financeBasePerms = await conn.query(
+      "SELECT id, name FROM permissions WHERE name LIKE 'view_%' OR ((name LIKE 'create_%' OR name LIKE 'edit_%') AND (name LIKE '%journal%' OR name LIKE '%expense%' OR name LIKE '%account%' OR name LIKE '%budget%' OR name LIKE '%petty%' OR name LIKE '%reconciliation%' OR name LIKE '%tax%' OR name LIKE '%payment%' OR name LIKE '%invoice%' OR name LIKE '%payroll%' OR name LIKE '%down_payment%' OR name LIKE '%cost_center%' OR name LIKE '%bank%'))",
+    );
+    for (const perm of financeBasePerms) {
+      await conn.query("INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)", [
+        (perm as Record<string, unknown>).id as number,
+        (financeRole as Record<string, unknown>).id as number,
+      ]);
+    }
+
+    // approval permission -> roles that may perform it (super_admin/admin already
+    // hold everything via the all-permissions grant above).
+    const approvalMatrix: Record<string, string[]> = {
+      post_journals: ["finance"],
+      approve_expenses: ["finance"],
+      approve_vendor_bills: ["finance"],
+      approve_vendor_payments: ["finance"],
+      post_sales_invoices: ["finance"],
+      process_payroll: ["finance"],
+      confirm_down_payments: ["finance"],
+      approve_quotations: ["finance"],
+      approve_sales_orders: ["finance"],
+      approve_purchase_requests: ["purchasing"],
+      approve_purchase_orders: ["purchasing"],
+      approve_purchase_returns: ["purchasing"],
+      verify_goods_receipts: ["purchasing", "warehouse"],
+      process_stock_adjustments: ["warehouse"],
+      complete_work_orders: ["kepala_bengkel"],
+      approve_overtime_requests: ["kepala_bengkel"],
+      approve_leave_requests: ["kepala_bengkel", "ga"],
+    };
+    for (const [permName, roleNames] of Object.entries(approvalMatrix)) {
+      const [permRow] = await conn.query("SELECT id FROM permissions WHERE name = ?", [permName]);
+      if (!permRow) {
+        console.warn(`⚠️  approval permission '${permName}' tidak ditemukan — skip`);
+        continue;
+      }
+      for (const roleName of roleNames) {
+        const [roleRow] = await conn.query("SELECT id FROM roles WHERE name = ?", [roleName]);
+        if (!roleRow) continue;
+        await conn.query("INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)", [
+          (permRow as Record<string, unknown>).id as number,
+          (roleRow as Record<string, unknown>).id as number,
+        ]);
+      }
+    }
+    console.log("✅ Finance role + approval grants applied (RBAC matrix)");
 
     // Create default super-admin user.
     // Credentials come from env so production never ships a known password.

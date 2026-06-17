@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { parsePagination } from "@/lib/utils/pagination";
 import { requirePermission } from "@/lib/auth/permissions";
-import { auth } from "@/lib/auth/auth";
+import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope";
 import Link from "next/link";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { AppSearchField } from "@/components/ui/search-field";
@@ -42,6 +42,11 @@ export default async function PayrollPage({
   }>;
 }) {
   const user = await requirePermission("view_payroll");
+  // Self-service scoping via helper terpusat: karyawan→sendiri,
+  // kepala_bengkel→se-departemen, HR/finance/admin/ga→semua. (Sebelumnya hanya
+  // super_admin||hr yang privileged, sehingga admin/finance/ga keliru ter-scope
+  // ke dirinya sendiri.)
+  const scope = await getHrScope(user);
 
   const params = await searchParams;
 
@@ -51,24 +56,9 @@ export default async function PayrollPage({
   const month = params.bulan ? Number(params.bulan) : undefined;
   const year = params.tahun ? Number(params.tahun) : undefined;
 
-  // Role-scope: non-HR/admin only sees own payroll
-  const isPrivileged =
-    user.roles.includes("super_admin") || user.roles.includes("hr");
-  let employeeFilter: { employeeId: number } | { employeeId: -1 } | undefined;
-  if (!isPrivileged) {
-    const session = await auth();
-    const me = session?.user?.id
-      ? await prisma.employee.findFirst({
-          where: { userId: Number(session.user.id) },
-          select: { id: true },
-        })
-      : null;
-    employeeFilter = { employeeId: me?.id ?? -1 };
-  }
-
   const where = {
-    ...employeeFilter,
-    ...(params.cari && {
+    ...hrScopeWhere(scope),
+    ...(params.cari && canSearchAcrossEmployees(scope) && {
       OR: [
         { documentNo: { contains: params.cari } },
         { employee: { name: { contains: params.cari } } },

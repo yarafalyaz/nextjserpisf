@@ -179,7 +179,7 @@ export async function createPurchaseRequest(formData: FormData) {
 
 export async function approvePurchaseRequest(prId: number) {
   try {
-    const user = await requirePermission("edit_purchase_requests");
+    const user = await requirePermission("approve_purchase_requests");
 
     const pr = await prisma.purchaseRequest.findUniqueOrThrow({
       where: { id: prId },
@@ -298,7 +298,7 @@ export async function createPurchaseOrder(formData: FormData) {
 
 export async function approvePurchaseOrder(poId: number) {
   try {
-    const user = await requirePermission("edit_purchase_orders");
+    const user = await requirePermission("approve_purchase_orders");
 
     const po = await prisma.purchaseOrder.findUniqueOrThrow({
       where: { id: poId },
@@ -549,7 +549,7 @@ export async function createGoodsReceipt(formData: FormData) {
 
 export async function verifyGoodsReceipt(grId: number) {
   try {
-    const user = await requirePermission("edit_goods_receipts");
+    const user = await requirePermission("verify_goods_receipts");
 
     const gr = await prisma.goodsReceipt.findUniqueOrThrow({
       where: { id: grId },
@@ -725,7 +725,7 @@ export async function createVendorPayment(formData: FormData) {
 
 export async function confirmVendorBill(billId: number) {
   try {
-    const user = await requirePermission("edit_vendor_bills");
+    const user = await requirePermission("approve_vendor_bills");
 
     const bill = await prisma.vendorBill.findUniqueOrThrow({
       where: { id: billId },
@@ -791,7 +791,7 @@ export async function confirmVendorBill(billId: number) {
 
 export async function confirmVendorPayment(paymentId: number) {
   try {
-    const user = await requirePermission("edit_vendor_payments");
+    const user = await requirePermission("approve_vendor_payments");
 
     const payment = await prisma.vendorPayment.findUniqueOrThrow({
       where: { id: paymentId },
@@ -1069,7 +1069,7 @@ export async function createPurchaseReturn(formData: FormData) {
 
 export async function processPurchaseReturn(returnId: number) {
   try {
-    const user = await requirePermission("edit_purchase_returns");
+    const user = await requirePermission("approve_purchase_returns");
 
     const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({
       where: { id: returnId },

@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
@@ -18,13 +19,17 @@ export default async function LeaveRequestsPage({
 }: {
   searchParams: Promise<{ status?: string; cari?: string }>
 }) {
-  await requirePermission("view_leave_requests")
+  const user = await requirePermission("view_leave_requests")
+  // Self-service scoping: karyawan hanya lihat cutinya sendiri, kepala_bengkel
+  // se-departemen, HR/finance/admin/ga semua.
+  const scope = await getHrScope(user)
 
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
-    ...(params.cari && {
+    ...hrScopeWhere(scope),
+    ...(params.cari && canSearchAcrossEmployees(scope) && {
       OR: [
         { employee: { name: { contains: params.cari } } },
       ],

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/hr-scope"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { Banknote } from "lucide-react"
@@ -18,13 +19,15 @@ export default async function EmployeeLoansPage({
 }: {
   searchParams: Promise<{ status?: string; cari?: string }>
 }) {
-  await requirePermission("view_employee_loans")
+  const user = await requirePermission("view_employee_loans")
+  const scope = await getHrScope(user)
 
   const params = await searchParams
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
-    ...(params.cari && {
+    ...hrScopeWhere(scope),
+    ...(params.cari && canSearchAcrossEmployees(scope) && {
       OR: [
         { employee: { name: { contains: params.cari } } },
       ],

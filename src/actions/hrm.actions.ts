@@ -515,7 +515,7 @@ export async function createLeaveRequest(formData: FormData) {
 
 export async function approveLeave(leaveId: number) {
   try {
-    const user = await requirePermission("edit_leave_requests");
+    const user = await requirePermission("approve_leave_requests");
 
     const leave = await prisma.leaveRequest.findUniqueOrThrow({
       where: { id: leaveId },
@@ -627,7 +627,7 @@ export async function createOvertimeRequest(formData: FormData) {
 
 export async function approveOvertime(overtimeId: number) {
   try {
-    const user = await requirePermission("edit_overtime_requests");
+    const user = await requirePermission("approve_overtime_requests");
 
     const ot = await prisma.overtimeRequest.findUniqueOrThrow({
       where: { id: overtimeId },
@@ -1670,7 +1670,7 @@ export async function updatePayroll(id: number, formData: FormData) {
 
 export async function approvePayroll(payrollId: number) {
   try {
-    const user = await requirePermission("edit_payroll");
+    const user = await requirePermission("process_payroll");
 
     const payroll = await prisma.payroll.findUniqueOrThrow({
       where: { id: payrollId },
@@ -1697,7 +1697,7 @@ export async function approvePayroll(payrollId: number) {
 
 export async function markPayrollPaid(payrollId: number) {
   try {
-    await requirePermission("edit_payroll");
+    await requirePermission("process_payroll");
 
     const payroll = await prisma.payroll.findUniqueOrThrow({
       where: { id: payrollId },

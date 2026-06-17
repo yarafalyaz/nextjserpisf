@@ -259,7 +259,7 @@ export async function startWorkOrder(workOrderId: number) {
  */
 export async function completeWorkOrder(workOrderId: number) {
   try {
-    const user = await requirePermission("edit_work_orders");
+    const user = await requirePermission("complete_work_orders");
 
     const wo = await prisma.workOrder.findUniqueOrThrow({
       where: { id: workOrderId },

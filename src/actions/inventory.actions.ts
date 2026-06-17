@@ -119,7 +119,7 @@ export async function createStockAdjustment(formData: FormData) {
 
 export async function processStockAdjustment(adjustmentId: number) {
   try {
-    const user = await requirePermission("edit_stock_adjustments");
+    const user = await requirePermission("process_stock_adjustments");
 
     const adjustment = await prisma.stockAdjustment.findUniqueOrThrow({
       where: { id: adjustmentId },
