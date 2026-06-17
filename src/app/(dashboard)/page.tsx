@@ -12,6 +12,7 @@ import {
   ProjectPipelineChart,
   RevenueChart,
   SalesStatusChart,
+  TopCustomersChart,
 } from "@/components/lazy/dashboard-charts"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/shadcn/button"
@@ -57,7 +58,7 @@ async function getCharts() {
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
   ninetyDaysAgo.setHours(0, 0, 0, 0)
 
-  const [revenueRaw, statusRaw, pipelineRaw] = await Promise.all([
+  const [revenueRaw, statusRaw, pipelineRaw, topCustomersRaw] = await Promise.all([
     prisma.$queryRaw<
       { date: string; lunas: number; tagihan: number }[]
     >`
@@ -88,6 +89,18 @@ async function getCharts() {
       GROUP BY ps.name
       ORDER BY MIN(ps.sort_order) ASC
     `,
+    // Top 5 customers this year by invoiced revenue (grand_total of non-cancelled invoices).
+    prisma.$queryRaw<{ name: string; revenue: number }[]>`
+      SELECT c.name as name, COALESCE(SUM(si.grand_total), 0) as revenue
+      FROM sales_invoices si
+      JOIN customers c ON si.customer_id = c.id
+      WHERE si.deleted_at IS NULL
+        AND si.status IN ('posted', 'partial', 'paid')
+        AND YEAR(si.date) = YEAR(CURDATE())
+      GROUP BY c.id, c.name
+      ORDER BY revenue DESC
+      LIMIT 5
+    `,
   ])
 
   return {
@@ -103,6 +116,10 @@ async function getCharts() {
     pipeline: pipelineRaw.map((row) => ({
       stage: row.stage,
       count: Number(row.count),
+    })),
+    topCustomers: topCustomersRaw.map((row) => ({
+      name: row.name,
+      revenue: Number(row.revenue),
     })),
   }
 }
@@ -277,6 +294,10 @@ export default async function DashboardPage() {
               <ProjectPipelineChart data={charts.pipeline} />
             </div>
             <SalesStatusChart data={charts.salesByStatus} />
+          </div>
+
+          <div className="px-4 lg:px-6">
+            <TopCustomersChart data={charts.topCustomers} />
           </div>
 
           <div className="px-4 lg:px-6">

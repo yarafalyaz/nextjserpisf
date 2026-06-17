@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => {
     notification: buildModelMock(),
     setting: buildModelMock(),
     systemSetting: buildModelMock(),
+    journal: buildModelMock(),
+    journalEntry: buildModelMock(),
     user: buildModelMock(),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") {
@@ -448,6 +450,12 @@ describe("Employee Loan Actions", () => {
     requirePermissionMock.mockResolvedValue({ id: 1 })
     prismaMock.employeeLoan.create.mockResolvedValue({ id: 1 })
     prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "active" })
+    // createEmployeeLoan now posts a disbursement journal via onEmployeeLoanDisbursed.
+    // Provide a settings row WITHOUT GL accounts → hook returns early (skips GL),
+    // keeping these CRUD tests focused. journal mock covers deleteEmployeeLoan's
+    // reversal (deleteJournalByReferenceTx) which finds 0 journals.
+    prismaMock.systemSetting.findFirst.mockResolvedValue({ id: 1 })
+    prismaMock.journal.findMany.mockResolvedValue([])
   })
 
   it("createEmployeeLoan succeeds with valid data", async () => {

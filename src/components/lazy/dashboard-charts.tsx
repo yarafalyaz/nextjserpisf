@@ -28,3 +28,7 @@ export const SalesStatusChart = nextDynamic(
   () => import("@/components/dashboard/charts").then((m) => m.SalesStatusChart),
   { ssr: false, loading: () => <ChartSkeleton /> },
 )
+export const TopCustomersChart = nextDynamic(
+  () => import("@/components/dashboard/charts").then((m) => m.TopCustomersChart),
+  { ssr: false, loading: () => <ChartSkeleton /> },
+)

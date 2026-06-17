@@ -1435,3 +1435,73 @@ export async function onPayrollPaid(
     });
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// onEmployeeLoanDisbursed
+//   Dr. Piutang Karyawan (employeeReceivable)   total
+//   Cr. Bank/Kas Payroll (payrollBank)          total
+// Posted when an employee loan becomes active (cash disbursed to the employee).
+// Mirrors YaraERP EmployeeLoanObserver. Idempotent on (referenceType, referenceId).
+// ─────────────────────────────────────────────────────────────────────────────
+export async function onEmployeeLoanDisbursed(
+  loanId: number,
+  userId?: number,
+  txClient?: TxClient,
+): Promise<void> {
+  const db = txClient || prisma;
+  const settings = await getSystemSettings(db);
+  // Need both legs configured; otherwise skip GL (loan row still created).
+  if (!settings.employeeReceivableAccountId || !settings.payrollBankAccountId)
+    return;
+
+  const loan = await db.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
+  const amount = Number(loan.totalAmount);
+  if (amount <= 0) return;
+
+  const existing = await db.journal.findFirst({
+    where: { referenceType: "EmployeeLoan", referenceId: loanId },
+  });
+  if (existing) return;
+
+  await assertPeriodOpen(loan.loanDate || new Date(), txClient);
+
+  await executeInTx(txClient, async (tx) => {
+    const existingInTx = await tx.journal.findFirst({
+      where: { referenceType: "EmployeeLoan", referenceId: loanId },
+    });
+    if (existingInTx) return;
+
+    const journalNumber = await generateJournalNumber(tx, "LOAN", loanId);
+
+    await tx.journal.create({
+      data: {
+        journalNumber,
+        transactionDate: loan.loanDate || new Date(),
+        referenceType: "EmployeeLoan",
+        referenceId: loan.id,
+        description: `Pencairan pinjaman karyawan #${loanId}`,
+        type: "AUTO",
+        status: "POSTED",
+        totalDebit: amount,
+        totalCredit: amount,
+        createdBy: userId,
+        entries: {
+          create: [
+            {
+              accountId: settings.employeeReceivableAccountId!,
+              debit: amount,
+              credit: 0,
+              memo: "Piutang Karyawan (pinjaman)",
+            },
+            {
+              accountId: settings.payrollBankAccountId!,
+              debit: 0,
+              credit: amount,
+              memo: "Pencairan pinjaman",
+            },
+          ],
+        },
+      },
+    });
+  });
+}

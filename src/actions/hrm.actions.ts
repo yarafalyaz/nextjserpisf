@@ -39,7 +39,7 @@ import {
 } from "@/lib/services/leave-quota.service";
 import { syncNationalHolidays as syncNationalHolidaysService } from "@/lib/services/holiday-sync.service";
 import { logActivity } from "@/lib/services/activity-log.service";
-import { onPayrollPaid } from "@/lib/hooks/accounting.hook";
+import { onPayrollPaid, onEmployeeLoanDisbursed, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 
 function getWibNow(now = new Date()) {
@@ -1789,7 +1789,7 @@ export async function markPayrollPaid(payrollId: number) {
 
 export async function createEmployeeLoan(formData: FormData) {
   try {
-    await requirePermission("create_loans");
+    const user = await requirePermission("create_loans");
 
     const parsed = parseFormData(employeeLoanSchema, formData);
     if (!parsed.success)
@@ -1809,6 +1809,11 @@ export async function createEmployeeLoan(formData: FormData) {
         notes: v.notes ?? null,
       },
     });
+
+    // Post the disbursement journal (Dr Piutang Karyawan / Cr Bank Payroll).
+    // Loan is created active = cash already disbursed, so recognise the GL now.
+    // Idempotent + opens its own tx; safe to call after the create commits.
+    await onEmployeeLoanDisbursed(loan.id, Number(user.id));
 
     await logActivity(
       "create",
@@ -2130,7 +2135,13 @@ export async function deleteEmployeeLoan(id: number) {
   try {
     await requirePermission("delete_loans");
 
-    await prisma.employeeLoan.delete({ where: { id } });
+    // Reverse the disbursement journal + delete the loan atomically. Loans now
+    // post a GL journal on creation (onEmployeeLoanDisbursed); deleting without
+    // reversing would orphan the journal and overstate Piutang Karyawan.
+    await prisma.$transaction(async (tx) => {
+      await deleteJournalByReferenceTx(tx, "EmployeeLoan", id);
+      await tx.employeeLoan.delete({ where: { id } });
+    });
 
     await logActivity(
       "delete",
