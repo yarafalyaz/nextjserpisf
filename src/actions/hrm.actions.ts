@@ -1798,22 +1798,26 @@ export async function createEmployeeLoan(formData: FormData) {
 
     const totalAmount = v.totalAmount;
 
-    const loan = await prisma.employeeLoan.create({
-      data: {
-        employeeId: v.employeeId,
-        loanDate: new Date(v.loanDate),
-        totalAmount,
-        monthlyInstallment: v.monthlyInstallment,
-        remainingAmount: totalAmount,
-        status: "active",
-        notes: v.notes ?? null,
-      },
+    // Create the loan row + post the disbursement journal atomically. Loan is
+    // created active = cash already disbursed, so the GL must recognise it now.
+    // Wrapping both in one tx means a posting failure (closed period, missing
+    // account) rolls back the loan row instead of leaving an active loan with
+    // no Piutang Karyawan entry (which a retry would then duplicate).
+    const loan = await prisma.$transaction(async (tx) => {
+      const created = await tx.employeeLoan.create({
+        data: {
+          employeeId: v.employeeId,
+          loanDate: new Date(v.loanDate),
+          totalAmount,
+          monthlyInstallment: v.monthlyInstallment,
+          remainingAmount: totalAmount,
+          status: "active",
+          notes: v.notes ?? null,
+        },
+      });
+      await onEmployeeLoanDisbursed(created.id, Number(user.id), tx);
+      return created;
     });
-
-    // Post the disbursement journal (Dr Piutang Karyawan / Cr Bank Payroll).
-    // Loan is created active = cash already disbursed, so recognise the GL now.
-    // Idempotent + opens its own tx; safe to call after the create commits.
-    await onEmployeeLoanDisbursed(loan.id, Number(user.id));
 
     await logActivity(
       "create",

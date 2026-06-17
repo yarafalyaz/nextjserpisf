@@ -197,6 +197,18 @@ export async function convertLead(leadId: number) {
     const code = await generateDocumentNumber("CUST", "simple")
 
     const customer = await prisma.$transaction(async (tx) => {
+      // Lock the lead row + re-check inside the tx (TOCTOU guard): two concurrent
+      // convert calls would otherwise both pass the pre-tx customerId check and
+      // create duplicate customers. The FOR UPDATE serialises them; the loser
+      // sees customerId already set and aborts.
+      await tx.$queryRaw`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`
+      const fresh = await tx.lead.findUniqueOrThrow({
+        where: { id: leadId },
+        select: { customerId: true },
+      })
+      if (fresh.customerId) {
+        throw new Error("Lead sudah dikonversi menjadi pelanggan.")
+      }
       const created = await tx.customer.create({
         data: {
           name: lead.company || lead.name,

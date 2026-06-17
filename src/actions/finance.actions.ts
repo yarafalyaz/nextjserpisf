@@ -528,11 +528,12 @@ export async function createPettyCash(formData: FormData) {
       });
       // Keep the running-balance chain correct regardless of insertion order.
       await recalcPettyCashChain(tx, { guardNegative: true });
+      // Post the GL journal INSIDE the same tx so a posting failure (closed
+      // period, unconfigured account) rolls back the subledger row instead of
+      // leaving a committed petty-cash row with no journal (subledger/GL drift).
+      await onPettyCashCreated(created.id, Number(user.id), tx);
       return created;
     });
-
-    // Accounting journal
-    await onPettyCashCreated(pettyCash.id, Number(user.id));
 
     // Associate uploaded attachments with the new petty cash record
     const attachmentIds = v.attachmentIds as string | undefined;
@@ -1333,11 +1334,14 @@ export async function updatePettyCash(id: number, formData: FormData) {
 
       // Recompute running balances for the whole chain (this + subsequent records).
       await recalcPettyCashChain(tx, { guardNegative: true });
+
+      // Rebuild the journal INSIDE the same tx. Critical: the delete above is
+      // already in-tx, so re-posting here keeps delete+recreate atomic — a
+      // posting failure (closed period, missing account) rolls back the delete
+      // too, instead of leaving the row with NO journal (GL/subledger drift).
+      await onPettyCashCreated(updated.id, Number(user.id), tx);
       return updated;
     });
-
-    // Rebuild the accounting journal to reflect the edited values.
-    await onPettyCashCreated(pettyCash.id, Number(user.id));
 
     // Associate uploaded attachments with the new petty cash record
     const attachmentIds = v.attachmentIds as string | undefined;

@@ -201,17 +201,6 @@ export async function createProductionOrder(formData: FormData) {
       include: { materials: true },
     });
 
-    // Lazy backfill: if the product's standard cost was never rolled up, do it
-    // now so the order isn't created with a 0 cost (matches Laravel store()).
-    if (Number(product.standardCost) <= 0 && product.materials.length > 0) {
-      await calculateStandardCost(v.productId);
-    }
-    const freshProduct = await prisma.product.findUniqueOrThrow({
-      where: { id: v.productId },
-      select: { standardCost: true },
-    });
-    const productStdCost = Number(freshProduct.standardCost);
-
     // Per-item standard cost for each BOM line (stamped on the order material).
     const bomItemIds = product.materials.map((m) => m.itemId);
     const bomItems = bomItemIds.length
@@ -221,6 +210,20 @@ export async function createProductionOrder(formData: FormData) {
         })
       : [];
     const bomCostMap = new Map(bomItems.map((i) => [i.id, Number(i.standardCost)]));
+
+    // Product standard cost: use the stored rollup, but if it was never computed
+    // (<= 0) derive it INLINE from the BOM here. Computing inline (rather than
+    // calling calculateStandardCost) avoids its nested requirePermission("edit_products")
+    // check — a user holding only create_production_orders would otherwise have
+    // that throw silently swallowed, leaving totalStandardCost = 0 and a bogus
+    // full-actual variance at completion.
+    let productStdCost = Number(product.standardCost);
+    if (productStdCost <= 0 && product.materials.length > 0) {
+      productStdCost = product.materials.reduce(
+        (sum, m) => safeAdd(sum, safeMultiply(bomCostMap.get(m.itemId) ?? 0, Number(m.qty), 2), 2),
+        0,
+      );
+    }
 
     const productionOrder = await prisma.productionOrder.create({
       data: {
@@ -308,6 +311,10 @@ export async function issueMaterial(
     if (!items?.length) throw new Error("Tidak ada material yang dikeluarkan");
 
     await prisma.$transaction(async (tx) => {
+      // Lock the order row so concurrent issueMaterial calls serialise — without
+      // this, two calls read the same totalActualCost and the later write
+      // overwrites the earlier (lost update), dropping a batch's cost.
+      await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`;
       const order = await tx.productionOrder.findUniqueOrThrow({
         where: { id: productionOrderId },
         select: { id: true, status: true, totalActualCost: true },
