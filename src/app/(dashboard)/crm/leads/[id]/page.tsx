@@ -9,6 +9,8 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteLead } from "@/actions/crm.actions"
+import { CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
+import { ConvertLeadButton, AddLeadActivityForm } from "../_components/lead-actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -49,6 +51,10 @@ export default async function LeadDetailPage({
         ]}
         badge={<StatusChip status={lead.status} />}
         actions={<>
+          <ConvertLeadButton
+            leadId={lead.id}
+            canConvert={!lead.customerId && (CONVERTIBLE_STATUSES as readonly string[]).includes(lead.status)}
+          />
           <Button href={`/crm/leads/${lead.id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
           <DeleteButton id={lead.id} action={deleteLead} />
           <BackButton href="/crm/leads" />
@@ -83,6 +89,7 @@ export default async function LeadDetailPage({
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Aktivitas Terbaru</h2>
                 </div>
+                <AddLeadActivityForm leadId={lead.id} />
                 <div className="p-4 px-5">
                   {lead.activities.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada aktivitas</p>
@@ -90,14 +97,20 @@ export default async function LeadDetailPage({
                     <DetailTable>
                       <DetailTableHead>
                         <DetailTableTh>Tipe</DetailTableTh>
-                        <DetailTableTh>Catatan</DetailTableTh>
+                        <DetailTableTh>Subjek</DetailTableTh>
+                        <DetailTableTh>Detail</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>
                       </DetailTableHead>
                       <DetailTableBody>
                         {lead.activities.map((activity) => (
                           <DetailTableRow key={activity.id}>
                             <DetailTableTd>{activity.type}</DetailTableTd>
-                            <DetailTableTd>{activity.notes || "-"}</DetailTableTd>
+                            <DetailTableTd>
+                              {activity.type === "status_change"
+                                ? `${activity.oldStatus ?? "-"} → ${activity.newStatus ?? "-"}`
+                                : (activity.subject || "-")}
+                            </DetailTableTd>
+                            <DetailTableTd>{activity.description || activity.notes || "-"}</DetailTableTd>
                             <DetailTableTd>{formatDate(activity.createdAt)}</DetailTableTd>
                           </DetailTableRow>
                         ))}
