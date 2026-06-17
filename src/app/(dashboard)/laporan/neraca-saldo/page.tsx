@@ -26,7 +26,7 @@ export const metadata: Metadata = { title: "Neraca Saldo" };
 export default async function TrialBalancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; pembanding?: string }>;
 }) {
   await requirePermission("view_reports");
   const params = await searchParams;
@@ -36,6 +36,12 @@ export default async function TrialBalancePage({
   const _asOf = params.date ? new Date(params.date) : new Date();
   const asOfDate = Number.isNaN(_asOf.getTime()) ? new Date() : _asOf;
   if (params.date) asOfDate.setHours(23, 59, 59, 999);
+
+  // Optional comparative ("pembanding") date — when set, render a side-by-side
+  // net-balance comparison of the two periods.
+  const _cmp = params.pembanding ? new Date(params.pembanding) : null;
+  const compareDate = _cmp && !Number.isNaN(_cmp.getTime()) ? _cmp : null;
+  if (compareDate) compareDate.setHours(23, 59, 59, 999);
 
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
@@ -76,11 +82,50 @@ export default async function TrialBalancePage({
     })),
   );
 
+  // Build the comparative net-balance table when a second date is provided.
+  // Net = Σdebit − Σcredit per account (sign-based), so a single number per
+  // period is comparable. We re-fetch the second period's entries.
+  type CmpRow = { id: number; code: string; name: string; net1: number; net2: number };
+  let comparison: CmpRow[] | null = null;
+  if (compareDate) {
+    const accounts2 = await prisma.account.findMany({
+      where: { isActive: true },
+      include: {
+        journalEntries: {
+          where: {
+            journal: {
+              status: { in: ["POSTED", "REVERSED"] },
+              transactionDate: { lte: compareDate },
+            },
+          },
+        },
+      },
+      orderBy: { code: "asc" },
+    });
+    const net2Map = new Map(
+      accounts2.map((a) => [
+        a.id,
+        a.journalEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0),
+      ]),
+    );
+    comparison = accounts
+      .map((a) => {
+        const net1 = a.journalEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0);
+        const net2 = net2Map.get(a.id) ?? 0;
+        return { id: a.id, code: a.code, name: a.name, net1, net2 };
+      })
+      // Drop accounts that are zero in both periods to keep the table focused.
+      .filter((r) => r.net1 !== 0 || r.net2 !== 0);
+  }
+
   const asOfLabel = asOfDate.toLocaleDateString("id-ID", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
+  const compareLabel = compareDate
+    ? compareDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -175,6 +220,68 @@ export default async function TrialBalancePage({
           Total Debit: {formatAccounting(grandTotalDebit, { showSymbol: true })}{" "}
           | Total Kredit:{" "}
           {formatAccounting(grandTotalCredit, { showSymbol: true })}
+        </div>
+      </div>
+      {/* Comparative period selector + table */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
+        <div className="flex items-center justify-between p-4 px-5 border-b border-default flex-wrap gap-3">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">
+            Perbandingan Periode
+          </h2>
+          <form className="flex items-end gap-2 print:hidden" action="/laporan/neraca-saldo">
+            <input type="hidden" name="date" value={params.date || asOfDate.toISOString().split("T")[0]} />
+            <div className="flex flex-col gap-1">
+              <label htmlFor="pembanding" className="text-xs text-muted-foreground">Bandingkan dengan tanggal</label>
+              <input
+                id="pembanding"
+                name="pembanding"
+                type="date"
+                defaultValue={params.pembanding || ""}
+                className="form-input h-9 rounded-md border border-default bg-background px-2 text-sm"
+              />
+            </div>
+            <button type="submit" className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">Bandingkan</button>
+          </form>
+        </div>
+        <div className="p-4 px-5">
+          {!comparison ? (
+            <p className="text-sm text-muted-foreground">
+              Pilih tanggal pembanding untuk melihat perubahan saldo bersih tiap akun antar dua periode.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <DetailTable data-report-table="Perbandingan Neraca Saldo">
+                <DetailTableHead>
+                  <DetailTableTh>Kode</DetailTableTh>
+                  <DetailTableTh>Nama Akun</DetailTableTh>
+                  <DetailTableTh align="right">Saldo per {asOfLabel} (Rp)</DetailTableTh>
+                  <DetailTableTh align="right">Saldo per {compareLabel} (Rp)</DetailTableTh>
+                  <DetailTableTh align="right">Selisih (Rp)</DetailTableTh>
+                </DetailTableHead>
+                <DetailTableBody>
+                  {comparison.map((r) => {
+                    const diff = r.net1 - r.net2
+                    return (
+                      <DetailTableRow key={r.id}>
+                        <DetailTableTd>{r.code}</DetailTableTd>
+                        <DetailTableTd>{r.name}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(r.net1)}</DetailTableTd>
+                        <DetailTableTd align="right">{formatAccounting(r.net2)}</DetailTableTd>
+                        <DetailTableTd align="right" className={diff > 0 ? "text-success" : diff < 0 ? "text-danger" : ""}>
+                          {formatAccounting(diff)}
+                        </DetailTableTd>
+                      </DetailTableRow>
+                    )
+                  })}
+                  {comparison.length === 0 && (
+                    <DetailTableRow>
+                      <DetailTableTd colSpan={5} className="text-center">Tidak ada saldo pada kedua periode</DetailTableTd>
+                    </DetailTableRow>
+                  )}
+                </DetailTableBody>
+              </DetailTable>
+            </div>
+          )}
         </div>
       </div>
     </div>

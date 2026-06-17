@@ -57,6 +57,7 @@ export default async function CashFlowPage({
   });
 
   const cashAccountIds = cashAccounts.map((a) => a.id);
+  const cashIdSet = new Set(cashAccountIds);
 
   // Get journal entries for these accounts within date range
   const entries = await prisma.journalEntry.findMany({
@@ -96,6 +97,65 @@ export default async function CashFlowPage({
   }
 
   const netCashFlow = totalInflow - totalOutflow;
+
+  // ── Activity classification (Operating / Investing / Financing) ─────────────
+  // Robust approach (better than YaraERP's description substring-matching):
+  // classify each cash journal by the TYPE of its non-cash counterpart account.
+  //   REVENUE / EXPENSE / current-asset (AR, inventory) / current-liability (AP,
+  //     tax)                         → Operating
+  //   Fixed-asset counterpart (Aset Tetap, code 1-3*) → Investing
+  //   EQUITY / loan-liability counterpart            → Financing
+  // Cash delta of the journal (Σ cash debit − credit) is attributed to that bucket.
+  const journalIds = Array.from(new Set(entries.map((e) => e.journalId)));
+  const fullJournals = journalIds.length
+    ? await prisma.journal.findMany({
+        where: { id: { in: journalIds } },
+        include: { entries: { include: { account: true } } },
+      })
+    : [];
+
+  function classifyCounterpart(acc: { type: string; code: string; name: string }): "operating" | "investing" | "financing" {
+    const code = acc.code || "";
+    const name = (acc.name || "").toLowerCase();
+    if (acc.type === "EQUITY") return "financing";
+    if (acc.type === "ASSET") {
+      // Fixed/non-current assets = investing; current assets (AR, inventory) = operating.
+      if (code.startsWith("1-3") || code.startsWith("13") || name.includes("aset tetap") || name.includes("tetap"))
+        return "investing";
+      return "operating";
+    }
+    if (acc.type === "LIABILITY") {
+      if (name.includes("pinjaman") || name.includes("hutang bank") || name.includes("loan") || name.includes("modal"))
+        return "financing";
+      return "operating";
+    }
+    // REVENUE / EXPENSE / COGS
+    return "operating";
+  }
+
+  const activity = { operating: 0, investing: 0, financing: 0 };
+  for (const j of fullJournals) {
+    let cashDelta = 0;
+    const counterparts: { type: string; code: string; name: string; weight: number }[] = [];
+    for (const e of j.entries) {
+      const d = Number(e.debit);
+      const c = Number(e.credit);
+      if (cashIdSet.has(e.accountId)) {
+        cashDelta += d - c; // + = cash in, − = cash out
+      } else if (e.account) {
+        counterparts.push({ type: e.account.type, code: e.account.code, name: e.account.name, weight: Math.abs(d - c) });
+      }
+    }
+    if (cashDelta === 0 || counterparts.length === 0) continue;
+    // Pick the dominant counterpart (largest amount) to classify the journal.
+    const dominant = counterparts.reduce((a, b) => (b.weight > a.weight ? b : a));
+    activity[classifyCounterpart(dominant)] += cashDelta;
+  }
+  const activityRows: { key: string; label: string; value: number }[] = [
+    { key: "operating", label: "Aktivitas Operasi", value: activity.operating },
+    { key: "investing", label: "Aktivitas Investasi", value: activity.investing },
+    { key: "financing", label: "Aktivitas Pendanaan", value: activity.financing },
+  ];
 
   const sortedMonths = Array.from(monthlyData.entries()).sort((a, b) =>
     b[0].localeCompare(a[0]),
@@ -192,6 +252,47 @@ export default async function CashFlowPage({
               )}
             </DetailTableBody>
           </DetailTable>
+        </div>
+      </div>
+
+      {/* Cash flow by activity (Operating / Investing / Financing) */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
+        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">
+            Arus Kas per Aktivitas
+          </h2>
+        </div>
+        <div className="p-4 px-5">
+          <DetailTable data-report-table="Arus Kas per Aktivitas">
+            <DetailTableHead>
+              <DetailTableTh>Aktivitas</DetailTableTh>
+              <DetailTableTh align="right">Arus Kas Bersih (Rp)</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {activityRows.map((row) => (
+                <DetailTableRow key={row.key}>
+                  <DetailTableTd>{row.label}</DetailTableTd>
+                  <DetailTableTd
+                    align="right"
+                    className={row.value >= 0 ? "text-success" : "text-danger"}
+                  >
+                    {formatAccounting(row.value)}
+                  </DetailTableTd>
+                </DetailTableRow>
+              ))}
+              <DetailTableRow className="font-bold border-t-2 border-default">
+                <DetailTableTd>Kenaikan/(Penurunan) Kas Bersih</DetailTableTd>
+                <DetailTableTd align="right">
+                  {formatAccounting(activity.operating + activity.investing + activity.financing)}
+                </DetailTableTd>
+              </DetailTableRow>
+            </DetailTableBody>
+          </DetailTable>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Klasifikasi otomatis berdasarkan tipe akun lawan tiap transaksi kas
+            (operasi: pendapatan/beban/piutang/utang usaha; investasi: aset tetap;
+            pendanaan: ekuitas/pinjaman).
+          </p>
         </div>
       </div>
 
