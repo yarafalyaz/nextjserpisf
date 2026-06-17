@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createTicketSchema, updateTicketSchema } from "@/lib/validations/crm.schemas"
+import { createTicketSchema, updateTicketSchema, leadActivitySchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
 
 // Soft-delete helper, mirrors the convention in master.actions.ts: try hard
 // delete first; if a FK constraint blocks it, fall back to stamping deletedAt.
@@ -164,6 +164,105 @@ export async function deleteLead(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[deleteLead]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * Convert a qualified lead into a Customer. Guards: status must be
+ * qualified/proposal/negotiation/won and lead not already converted. Creates the
+ * Customer (mapping lead fields), stamps lead.customerId + convertedAt +
+ * status="won", and logs a conversion activity — all atomic. Mirrors YaraERP
+ * LeadController::convert. (Customer has no `notes` column, so lead.notes is not
+ * copied; Lead↔Customer is a raw customerId int, not a Prisma relation.)
+ */
+export async function convertLead(leadId: number) {
+  try {
+    const user = await requirePermission("edit_leads")
+
+    const lead = await prisma.lead.findUniqueOrThrow({ where: { id: leadId } })
+
+    if (!(CONVERTIBLE_STATUSES as readonly string[]).includes(lead.status)) {
+      return {
+        success: false,
+        error: "Lead belum dapat dikonversi. Status minimal harus 'qualified'.",
+      }
+    }
+    if (lead.customerId) {
+      return { success: false, error: "Lead sudah dikonversi menjadi pelanggan." }
+    }
+
+    // Document-number generation opens its own session → run before the tx.
+    const { generateDocumentNumber } = await import("@/lib/utils/document-number")
+    const code = await generateDocumentNumber("CUST", "simple")
+
+    const customer = await prisma.$transaction(async (tx) => {
+      const created = await tx.customer.create({
+        data: {
+          name: lead.company || lead.name,
+          contactPerson: lead.contactName ?? lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          address: lead.address,
+          code,
+          isActive: true,
+        },
+      })
+      await tx.lead.update({
+        where: { id: leadId },
+        data: { customerId: created.id, convertedAt: new Date(), status: "won" },
+      })
+      await tx.leadActivity.create({
+        data: {
+          leadId,
+          userId: Number(user.id),
+          type: "conversion",
+          subject: "Lead dikonversi menjadi pelanggan",
+        },
+      })
+      return created
+    })
+
+    await logActivity("convert", "Lead", leadId, "Mengonversi lead menjadi pelanggan")
+    revalidatePath("/crm/leads")
+    revalidatePath(`/crm/leads/${leadId}`)
+    revalidatePath("/master/pelanggan")
+    return { success: true, customerId: customer.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[convertLead]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * Add a timeline activity (note/call/email/meeting/task) to a lead.
+ * Mirrors YaraERP LeadController::addActivity.
+ */
+export async function addLeadActivity(leadId: number, formData: FormData) {
+  try {
+    const user = await requirePermission("edit_leads")
+    const parsed = parseFormData(leadActivitySchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
+
+    const activity = await prisma.leadActivity.create({
+      data: {
+        leadId,
+        userId: Number(user.id),
+        type: v.type,
+        subject: v.subject,
+        description: v.description ?? null,
+        scheduledAt: v.scheduledAt ?? null,
+      },
+    })
+
+    revalidatePath(`/crm/leads/${leadId}`)
+    await logActivity("create", "LeadActivity", activity.id, "Menambahkan aktivitas lead")
+    return { success: true, id: activity.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[addLeadActivity]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

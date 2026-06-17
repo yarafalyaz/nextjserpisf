@@ -2,7 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
-import { safeMultiply } from "@/lib/utils/math";
+import { safeMultiply, safeAdd, safeSubtract } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
@@ -132,6 +132,59 @@ export async function updateProduct(id: number, formData: FormData) {
 
 // ==================== PRODUCTION ORDER ACTIONS ====================
 
+/**
+ * Recompute a product's standard cost from its BOM:
+ *   standardCost = Σ (material.qty × item.standardCost)
+ * Mirrors Laravel Product::calculateStandardCost. Persists onto Product.standardCost.
+ * ProductMaterial has no item relation (itemId only), so item costs are fetched
+ * in one batched query and mapped.
+ */
+export async function calculateStandardCost(productId: number) {
+  try {
+    await requirePermission("edit_products");
+
+    const product = await prisma.product.findUniqueOrThrow({
+      where: { id: productId },
+      include: { materials: true },
+    });
+
+    const itemIds = product.materials.map((m) => m.itemId);
+    const items = itemIds.length
+      ? await prisma.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, standardCost: true },
+        })
+      : [];
+    const costMap = new Map(items.map((i) => [i.id, Number(i.standardCost)]));
+
+    const total = product.materials.reduce(
+      (sum, m) =>
+        safeAdd(sum, safeMultiply(costMap.get(m.itemId) ?? 0, Number(m.qty), 2), 2),
+      0,
+    );
+
+    await prisma.product.update({
+      where: { id: productId },
+      data: { standardCost: total },
+    });
+
+    return { success: true, standardCost: total };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[calculateStandardCost]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Resolve a per-item standard cost for production: prefer item.standardCost,
+ * fall back to purchasePrice (mirrors Laravel issueMaterial cost resolution).
+ */
+function resolveItemCost(item: { standardCost: unknown; purchasePrice: unknown }): number {
+  const std = Number(item.standardCost);
+  return std > 0 ? std : Number(item.purchasePrice);
+}
+
 export async function createProductionOrder(formData: FormData) {
   try {
     const user = await requirePermission("create_production_orders");
@@ -148,6 +201,27 @@ export async function createProductionOrder(formData: FormData) {
       include: { materials: true },
     });
 
+    // Lazy backfill: if the product's standard cost was never rolled up, do it
+    // now so the order isn't created with a 0 cost (matches Laravel store()).
+    if (Number(product.standardCost) <= 0 && product.materials.length > 0) {
+      await calculateStandardCost(v.productId);
+    }
+    const freshProduct = await prisma.product.findUniqueOrThrow({
+      where: { id: v.productId },
+      select: { standardCost: true },
+    });
+    const productStdCost = Number(freshProduct.standardCost);
+
+    // Per-item standard cost for each BOM line (stamped on the order material).
+    const bomItemIds = product.materials.map((m) => m.itemId);
+    const bomItems = bomItemIds.length
+      ? await prisma.item.findMany({
+          where: { id: { in: bomItemIds } },
+          select: { id: true, standardCost: true },
+        })
+      : [];
+    const bomCostMap = new Map(bomItems.map((i) => [i.id, Number(i.standardCost)]));
+
     const productionOrder = await prisma.productionOrder.create({
       data: {
         documentNo,
@@ -157,11 +231,14 @@ export async function createProductionOrder(formData: FormData) {
         endDate: v.endDate ? new Date(v.endDate) : null,
         notes: v.notes ?? null,
         status: "draft",
+        // total_standard_cost = product standard cost × order qty
+        totalStandardCost: safeMultiply(productStdCost, v.qty, 2),
         createdBy: Number(user.id),
         materials: {
           create: product.materials.map((m) => ({
             itemId: m.itemId,
             qty: safeMultiply(Number(m.qty), v.qty, 4),
+            standardCost: bomCostMap.get(m.itemId) ?? 0,
           })),
         },
       },
@@ -178,6 +255,187 @@ export async function createProductionOrder(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createProductionOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Confirm a draft production order (draft → confirmed). Required before
+ * material can be issued (mirrors Laravel CONFIRMED gate on issueMaterial).
+ */
+export async function confirmProductionOrder(id: number) {
+  try {
+    await requirePermission("edit_production_orders");
+    const claim = await prisma.productionOrder.updateMany({
+      where: { id, status: "draft" },
+      data: { status: "confirmed" },
+    });
+    if (claim.count === 0) {
+      const cur = await prisma.productionOrder.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      throw new Error(
+        cur
+          ? `Perintah produksi sudah berstatus '${cur.status}', hanya draft yang bisa dikonfirmasi`
+          : "Perintah produksi tidak ditemukan",
+      );
+    }
+    await logActivity("confirm", "ProductionOrder", id, `Konfirmasi perintah produksi #${id}`);
+    revalidatePath("/produksi/production-orders");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[confirmProductionOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Issue material against a confirmed/in-progress production order. Accumulates
+ * actual_qty + actual_cost per material (creating an unplanned-material row when
+ * the issued item is not in the BOM) and rolls up total_actual_cost on the order.
+ * Flips confirmed → in_progress on first issue. Mirrors Laravel issueMaterial.
+ * NOTE: no GL/stock posting here — Laravel left the WIP/inventory journal as a
+ * TODO, so this preserves source parity (material issue does not yet move stock).
+ */
+export async function issueMaterial(
+  productionOrderId: number,
+  items: { itemId: number; qty: number }[],
+) {
+  try {
+    await requirePermission("edit_production_orders");
+    if (!items?.length) throw new Error("Tidak ada material yang dikeluarkan");
+
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.productionOrder.findUniqueOrThrow({
+        where: { id: productionOrderId },
+        select: { id: true, status: true, totalActualCost: true },
+      });
+      if (order.status !== "confirmed" && order.status !== "in_progress") {
+        throw new Error(
+          `Material hanya bisa dikeluarkan untuk perintah berstatus 'confirmed' atau 'in_progress' (saat ini '${order.status}')`,
+        );
+      }
+      if (order.status === "confirmed") {
+        await tx.productionOrder.update({
+          where: { id: productionOrderId },
+          data: { status: "in_progress" },
+        });
+      }
+
+      const itemIds = items.map((i) => Number(i.itemId));
+      const itemRows = await tx.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, standardCost: true, purchasePrice: true },
+      });
+      const itemMap = new Map(itemRows.map((i) => [i.id, i]));
+
+      let runningActual = 0;
+      for (const { itemId, qty } of items) {
+        const itm = itemMap.get(Number(itemId));
+        if (!itm) throw new Error(`Item #${itemId} tidak ditemukan`);
+        const q = Math.max(0, Number(qty) || 0);
+        if (q <= 0) continue;
+        const cost = resolveItemCost(itm);
+        const lineCost = safeMultiply(q, cost, 2);
+
+        const existing = await tx.productionOrderMaterial.findFirst({
+          where: { productionOrderId, itemId: Number(itemId) },
+          select: { id: true, actualQty: true, actualCost: true },
+        });
+        if (existing) {
+          await tx.productionOrderMaterial.update({
+            where: { id: existing.id },
+            data: {
+              actualQty: safeAdd(Number(existing.actualQty ?? 0), q, 2),
+              actualCost: safeAdd(Number(existing.actualCost), lineCost, 2),
+            },
+          });
+        } else {
+          // Unplanned material (not in BOM): bom qty = 0.
+          await tx.productionOrderMaterial.create({
+            data: {
+              productionOrderId,
+              itemId: Number(itemId),
+              qty: 0,
+              standardCost: cost,
+              actualQty: q,
+              actualCost: lineCost,
+            },
+          });
+        }
+        runningActual = safeAdd(runningActual, lineCost, 2);
+      }
+
+      await tx.productionOrder.update({
+        where: { id: productionOrderId },
+        data: {
+          totalActualCost: safeAdd(Number(order.totalActualCost), runningActual, 2),
+        },
+      });
+    });
+
+    await logActivity(
+      "issue_material",
+      "ProductionOrder",
+      productionOrderId,
+      `Pengeluaran material perintah produksi #${productionOrderId}`,
+    );
+    revalidatePath("/produksi/production-orders");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[issueMaterial]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Complete an in-progress production order. Computes variance = actual − standard
+ * and persists it (favourable < 0, unfavourable > 0). Atomic status claim
+ * prevents double-completion. Mirrors Laravel complete() (its WIP/variance GL
+ * journals were TODO, so none are posted here).
+ */
+export async function completeProductionOrder(id: number) {
+  try {
+    await requirePermission("edit_production_orders");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const claim = await tx.productionOrder.updateMany({
+        where: { id, status: "in_progress" },
+        data: { status: "completed" },
+      });
+      if (claim.count === 0) {
+        const cur = await tx.productionOrder.findUnique({
+          where: { id },
+          select: { status: true },
+        });
+        throw new Error(
+          cur
+            ? `Perintah produksi berstatus '${cur.status}', hanya 'in_progress' yang bisa diselesaikan`
+            : "Perintah produksi tidak ditemukan",
+        );
+      }
+      const order = await tx.productionOrder.findUniqueOrThrow({
+        where: { id },
+        select: { totalActualCost: true, totalStandardCost: true },
+      });
+      const variance = safeSubtract(
+        Number(order.totalActualCost),
+        Number(order.totalStandardCost),
+        2,
+      );
+      await tx.productionOrder.update({ where: { id }, data: { variance } });
+      return { variance, totalActualCost: Number(order.totalActualCost), totalStandardCost: Number(order.totalStandardCost) };
+    });
+
+    await logActivity("complete", "ProductionOrder", id, `Menyelesaikan perintah produksi #${id}`);
+    revalidatePath("/produksi/production-orders");
+    return { success: true, ...result };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[completeProductionOrder]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -719,6 +977,17 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       include: { materials: true },
     });
 
+    // Per-item standard cost map for stamping BOM lines (no more hardcoded 0).
+    const updBomItemIds = product.materials.map((m) => m.itemId);
+    const updBomItems = updBomItemIds.length
+      ? await prisma.item.findMany({
+          where: { id: { in: updBomItemIds } },
+          select: { id: true, standardCost: true },
+        })
+      : [];
+    const updBomCostMap = new Map(updBomItems.map((i) => [i.id, Number(i.standardCost)]));
+    const updProductStdCost = Number(product.standardCost);
+
     const productionOrder = await prisma.$transaction(async (tx) => {
       const po = await tx.productionOrder.update({
         where: { id },
@@ -728,6 +997,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
           startDate: v.startDate ? new Date(v.startDate) : null,
           endDate: v.endDate ? new Date(v.endDate) : null,
           notes: v.notes ?? null,
+          totalStandardCost: safeMultiply(updProductStdCost, v.qty, 2),
         },
       });
 
@@ -742,7 +1012,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
             productionOrderId: id,
             itemId: m.itemId,
             qty: safeMultiply(Number(m.qty), v.qty, 4),
-            standardCost: 0,
+            standardCost: updBomCostMap.get(m.itemId) ?? 0,
           })),
         });
       }

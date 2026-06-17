@@ -240,8 +240,15 @@ describe("Production Order Actions", () => {
   it("createProductionOrder succeeds with materials", async () => {
     mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({
       id: 1,
+      standardCost: 1000,
       materials: [{ itemId: 1, qty: 2 }, { itemId: 2, qty: 3 }]
     })
+    // BOM item standard costs (createProductionOrder now stamps standardCost
+    // on each material line + rolls up totalStandardCost = productStd * qty).
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 1, standardCost: 100 },
+      { id: 2, standardCost: 200 },
+    ])
     const res = await actions.createProductionOrder(fdMap({
       productId: 1,
       qty: 5,
@@ -255,10 +262,11 @@ describe("Production Order Actions", () => {
         startDate: expect.any(Date),
         endDate: expect.any(Date),
         notes: "Test",
+        totalStandardCost: 5000,
         materials: {
           create: [
-            { itemId: 1, qty: 10 },
-            { itemId: 2, qty: 15 },
+            { itemId: 1, qty: 10, standardCost: 100 },
+            { itemId: 2, qty: 15, standardCost: 200 },
           ]
         }
       })

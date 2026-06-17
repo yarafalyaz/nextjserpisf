@@ -1147,23 +1147,43 @@ export async function updateLead(id: number, formData: FormData) {
       );
     }
 
-    await prisma.lead.update({
-      where: { id },
-      data: {
-        name: v.name,
-        email: v.email ?? null,
-        phone: v.phone ?? null,
-        company: v.company ?? null,
-        contactName: v.contactName ?? null,
-        position: v.position ?? null,
-        industry: v.industry ?? null,
-        estimatedValue: v.estimatedValue ?? null,
-        expectedCloseDate: v.expectedCloseDate ?? null,
-        address: v.address ?? null,
-        source: v.source ?? null,
-        notes: v.notes ?? null,
-        assignedTo: newAssignedTo,
-      },
+    // Log a status_change activity when status actually changes (mirrors
+    // YaraERP LeadController::update). Status + activity write atomically.
+    const statusChanged =
+      v.status != null && v.status !== existing.status;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.lead.update({
+        where: { id },
+        data: {
+          name: v.name,
+          email: v.email ?? null,
+          phone: v.phone ?? null,
+          company: v.company ?? null,
+          contactName: v.contactName ?? null,
+          position: v.position ?? null,
+          industry: v.industry ?? null,
+          estimatedValue: v.estimatedValue ?? null,
+          expectedCloseDate: v.expectedCloseDate ?? null,
+          address: v.address ?? null,
+          source: v.source ?? null,
+          notes: v.notes ?? null,
+          assignedTo: newAssignedTo,
+          ...(v.status != null ? { status: v.status } : {}),
+        },
+      });
+      if (statusChanged) {
+        await tx.leadActivity.create({
+          data: {
+            leadId: id,
+            userId: Number(actor.id),
+            type: "status_change",
+            subject: "Status diubah",
+            oldStatus: existing.status,
+            newStatus: v.status,
+          },
+        });
+      }
     });
 
     revalidatePath("/crm/leads");

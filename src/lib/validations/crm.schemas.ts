@@ -73,4 +73,32 @@ export const createLeadSchema = z.object({
   assignedTo: optionalId,
 });
 
-export const updateLeadSchema = createLeadSchema;
+// Lead status lifecycle (mirrors YaraERP). Only qualified+ may be converted.
+export const LEAD_STATUSES = [
+  "new",
+  "contacted",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
+export const CONVERTIBLE_STATUSES = [
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+] as const;
+
+// updateLead additionally accepts a status (createLead always seeds "new"),
+// so the action can drive the lifecycle + log status_change activities.
+export const updateLeadSchema = createLeadSchema.extend({
+  status: z.enum(LEAD_STATUSES).optional(),
+});
+
+export const leadActivitySchema = z.object({
+  type: z.enum(["note", "call", "email", "meeting", "task"]),
+  subject: z.string().min(1, "Subjek wajib diisi").max(255),
+  description: optionalString(2000),
+  scheduledAt: z.coerce.date().optional(),
+});

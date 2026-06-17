@@ -1,0 +1,1 @@
+ALTER TABLE `production_orders` ADD COLUMN `variance` DECIMAL(15,2) NOT NULL DEFAULT 0.00;

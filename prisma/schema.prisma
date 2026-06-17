@@ -1412,6 +1412,7 @@ model ProductionOrder {
   notes             String?                   @db.Text
   totalStandardCost Decimal                   @default(0.00) @map("total_standard_cost") @db.Decimal(15, 2)
   totalActualCost   Decimal                   @default(0.00) @map("total_actual_cost") @db.Decimal(15, 2)
+  variance          Decimal                   @default(0.00) @db.Decimal(15, 2)
   createdBy         Int?                      @map("created_by")
   createdAt         DateTime                  @default(now()) @map("created_at")
   updatedAt         DateTime                  @updatedAt @map("updated_at")

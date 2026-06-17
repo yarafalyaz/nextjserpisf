@@ -693,11 +693,45 @@ export async function completeReconciliation(reconciliationId: number) {
       );
     }
 
+    // Numeric balance gate (Laravel BankReconciliation::calculateDifference + isBalanced).
+    // Only UNCLEARED outstanding deposits/payments adjust the book balance.
+    //   adjusted_book_balance = book_balance + outstanding_deposits − outstanding_payments
+    //   difference            = statement_ending_balance − adjusted_book_balance
+    // Block completion unless |difference| < 0.01. Persist the computed figures
+    // so the report reflects the reconciliation math (these columns existed in
+    // the schema but were never populated before).
+    const outstandingDeposits = reconciliation.items
+      .filter((i) => !i.cleared && i.type === "outstanding_deposit")
+      .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
+    const outstandingPayments = reconciliation.items
+      .filter((i) => !i.cleared && i.type === "outstanding_check")
+      .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
+    const adjustedBookBalance = safeSubtract(
+      safeAdd(Number(reconciliation.bookBalance), outstandingDeposits, 2),
+      outstandingPayments,
+      2,
+    );
+    const difference = safeSubtract(
+      Number(reconciliation.statementBalance),
+      adjustedBookBalance,
+      2,
+    );
+    if (Math.abs(difference) >= 0.01) {
+      throw new Error(
+        `Rekonsiliasi belum seimbang. Selisih: ${difference.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. ` +
+          `Tambahkan item penyesuaian (setoran/cek beredar) atau periksa saldo sebelum menyelesaikan.`,
+      );
+    }
+
     await prisma.bankReconciliation.update({
       where: { id: reconciliationId },
       data: {
         status: "completed",
         completedAt: new Date(),
+        outstandingDeposits,
+        outstandingPayments,
+        adjustedBookBalance,
+        difference,
       },
     });
 
