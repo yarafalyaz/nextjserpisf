@@ -47,8 +47,11 @@ export async function createQuotation(formData: FormData) {
   // grandTotal / per-line total. A tampered or buggy client could otherwise
   // persist a Rp 0 grandTotal that flows downstream into DP and invoicing.
   // Mirrors the client formula (calculateItemTotal + grandTotal in the form).
-  const headerDiscount = Number(data.discount) || 0
-  const headerTax = Number(data.tax) || 0
+  // Header discount is clamped to [0, computedSubtotal] and header tax to >= 0
+  // so a tampered negative or oversize value can't persist in the DB row and
+  // resurface in PDF/UI downstream — mirrors the updateSalesInvoice clamp.
+  const rawHeaderDiscount = Number(data.discount) || 0
+  const headerTax = Math.max(0, Number(data.tax) || 0)
   const computeLine = (item: any) => {
     // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
     // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
@@ -62,7 +65,11 @@ export async function createQuotation(formData: FormData) {
     const lineSubtotal = safeMultiply(qty, unitPrice, 0)
     let discountAmount = Number(item.discount) || 0
     if (item.discountType === "percent") {
-      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, discountAmount, 4), 100, 4), 0)
+      // Clamp percent to [0, 100] so a tampered >100 or negative value can't
+      // produce a discount larger than the line subtotal and persist invalid
+      // data in the row. The per-line total is already clamped to >= 0 below.
+      const percent = Math.min(100, Math.max(0, discountAmount))
+      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
     }
     return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
   }
@@ -71,6 +78,11 @@ export async function createQuotation(formData: FormData) {
       safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
     0,
   )
+  // Clamp the persisted headerDiscount to [0, computedSubtotal] so the value
+  // we store matches the value used in the grandTotal recompute. A discount
+  // > subtotal in the row would otherwise show up in the PDF/UI as a discount
+  // larger than the line total (confusing for the customer).
+  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
   const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
 
   const quotation = await prisma.$transaction(async (tx) => {
@@ -413,10 +425,14 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   }
 
   // Server-side recompute of totals — never trust client-sent subtotal /
-  // grandTotal / per-line total (mirrors createQuotation). A tampered or buggy
-  // client could otherwise persist a Rp 0 grandTotal that flows downstream.
-  const headerDiscount = Number(data.discount) || 0
-  const headerTax = Number(data.tax) || 0
+  // grandTotal / per-line total. A tampered or buggy client could otherwise
+  // persist a Rp 0 grandTotal that flows downstream into DP and invoicing.
+  // Mirrors the client formula (calculateItemTotal + grandTotal in the form).
+  // Header discount is clamped to [0, computedSubtotal] and header tax to >= 0
+  // so a tampered negative or oversize value can't persist in the DB row and
+  // resurface in PDF/UI downstream — mirrors the updateSalesInvoice clamp.
+  const rawHeaderDiscount = Number(data.discount) || 0
+  const headerTax = Math.max(0, Number(data.tax) || 0)
   const computeLine = (item: any) => {
     // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
     // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
@@ -430,7 +446,11 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     const lineSubtotal = safeMultiply(qty, unitPrice, 0)
     let discountAmount = Number(item.discount) || 0
     if (item.discountType === "percent") {
-      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, discountAmount, 4), 100, 4), 0)
+      // Clamp percent to [0, 100] so a tampered >100 or negative value can't
+      // produce a discount larger than the line subtotal and persist invalid
+      // data in the row. The per-line total is already clamped to >= 0 below.
+      const percent = Math.min(100, Math.max(0, discountAmount))
+      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
     }
     return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
   }
@@ -439,6 +459,11 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
       safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
     0,
   )
+  // Clamp the persisted headerDiscount to [0, computedSubtotal] so the value
+  // we store matches the value used in the grandTotal recompute. A discount
+  // > subtotal in the row would otherwise show up in the PDF/UI as a discount
+  // larger than the line total (confusing for the customer).
+  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
   const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
 
   await prisma.$transaction(async (tx) => {

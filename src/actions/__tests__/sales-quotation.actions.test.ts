@@ -53,10 +53,10 @@ function wireTransaction() {
 }
 
 beforeEach(() => {
-for (const m of [
-  requirePermissionMock, revalidateMock, logActivityMock, generateDocNumberMock,
-  transactionMock, quotationCreateMock, vehicleFindFirstMock,
-]) m.mockReset()
+  for (const m of [
+    requirePermissionMock, revalidateMock, logActivityMock, generateDocNumberMock,
+    transactionMock, quotationCreateMock, vehicleFindFirstMock,
+  ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   generateDocNumberMock.mockResolvedValue("QUO-0001")
   quotationCreateMock.mockResolvedValue({ id: 99 })
@@ -143,6 +143,119 @@ describe("createQuotation server-side total recompute", () => {
                 items: expect.objectContaining({
                   create: expect.arrayContaining([
                     expect.objectContaining({ discount: 400, total: 3600 }),
+                  ]),
+                }),
+              }),
+            ]),
+          }),
+        }),
+      }),
+    )
+  })
+
+  it("clamps negative header discount and negative tax to 0", async () => {
+    // Client tries to send negative discount and tax (to make grandTotal
+    // artificially high) — both must be clamped to 0 so the persisted row stays
+    // sane. Mirrors the updateSalesInvoice header clamp.
+    const data = {
+      customerId: 10,
+      date: "2026-06-09",
+      subtotal: 999, discount: -500, tax: -100, grandTotal: 1, // garbage client values
+      sections: [
+        {
+          name: "Parts",
+          // 1 x 1000 = 1000 (no line discount)
+          items: [{ itemId: 1, qty: 1, unitPrice: 1000, discountType: "fixed", discount: 0, total: 999 }],
+        },
+      ],
+    }
+    const result = await createQuotation(fdData(data))
+    expect(result.success).toBe(true)
+    // subtotal 1000, header discount clamped from -500 to 0, tax clamped from -100 to 0
+    // grandTotal = max(0, 1000 + 0 - 0) = 1000
+    expect(quotationCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subtotal: 1000,
+          discount: 0, // negative clamped
+          tax: 0, // negative clamped
+          grandTotal: 1000,
+        }),
+      }),
+    )
+  })
+
+  it("clamps oversize header discount to the recomputed subtotal", async () => {
+    // Header discount larger than subtotal: previously the grandTotal was clamped
+    // to 0 but the discount was persisted as-is, so the row read back showed
+    // discount > line total. Now both must agree: discount = subtotal.
+    const data = {
+      customerId: 10,
+      date: "2026-06-09",
+      subtotal: 999, discount: 99999, tax: 0, grandTotal: 1, // garbage client values
+      sections: [
+        {
+          name: "Parts",
+          items: [{ itemId: 1, qty: 1, unitPrice: 500, discountType: "fixed", discount: 0, total: 999 }],
+        },
+      ],
+    }
+    const result = await createQuotation(fdData(data))
+    expect(result.success).toBe(true)
+    // subtotal 500, header discount clamped from 99999 to 500
+    // grandTotal = max(0, 500 + 0 - 500) = 0
+    expect(quotationCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subtotal: 500,
+          discount: 500, // clamped to subtotal
+          tax: 0,
+          grandTotal: 0,
+        }),
+      }),
+    )
+  })
+
+  it("clamps per-line percent discount to [0, 100] so a tampered >100% can't produce a discount larger than the line subtotal", async () => {
+    // Line sends discount 150% (which would normally yield lineSubtotal * 1.5) and
+    // a negative percent (which would yield a negative line discount and a phantom
+    // credit). Both must be clamped so the persisted discount amount stays within
+    // [0, lineSubtotal]. The per-line total is already clamped to >= 0 by the
+    // computeLine helper, so this clamp just protects the persisted discount value.
+    const data = {
+      customerId: 10,
+      date: "2026-06-09",
+      subtotal: 999, discount: 0, tax: 0, grandTotal: 1,
+      sections: [
+        {
+          name: "Parts",
+          items: [
+            // 2 x 1000 = 2000 lineSubtotal
+            { itemId: 1, qty: 2, unitPrice: 1000, discountType: "percent", discount: 150, total: 999 },
+            { itemId: 2, qty: 1, unitPrice: 1000, discountType: "percent", discount: -50, total: 999 },
+          ],
+        },
+      ],
+    }
+    const result = await createQuotation(fdData(data))
+    expect(result.success).toBe(true)
+    // Line 1: 150% clamped to 100% → discount 2000, line total 0
+    // Line 2: -50% clamped to 0%   → discount 0,    line total 1000
+    // subtotal 1000, grandTotal 1000
+    expect(quotationCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          subtotal: 1000,
+          discount: 0,
+          tax: 0,
+          grandTotal: 1000,
+          sections: expect.objectContaining({
+            create: expect.arrayContaining([
+              expect.objectContaining({
+                items: expect.objectContaining({
+                  create: expect.arrayContaining([
+                    expect.objectContaining({ qty: 2, unitPrice: 1000, discount: 2000, total: 0 }),
+                    expect.objectContaining({ qty: 1, unitPrice: 1000, discount: 0, total: 1000 }),
                   ]),
                 }),
               }),
