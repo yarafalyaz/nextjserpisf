@@ -3,6 +3,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { WorkOrderStatus } from "@/lib/constants";
 import { Prisma } from "@prisma/client";
 
@@ -46,6 +47,11 @@ export async function onWorkOrderCompleted(
     if (workOrder.status === WorkOrderStatus.COMPLETED || workOrder.status === WorkOrderStatus.CANCELLED) {
       return; // already completed/cancelled; idempotent no-op
     }
+
+    // Period lock: the GL journal posted below (stockJournalService) bypasses
+    // accounting.hook, so enforce the closed-period guard here too — otherwise
+    // work-order completions can back-date GL into a closed period.
+    await assertPeriodOpen(workOrder.date, tx);
 
     // Resolve warehouse: WO warehouse (if exists) → project warehouse → item default warehouse
     // Per-item resolution below; this is just for items without default warehouse
