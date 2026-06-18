@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { Status } from "@/lib/constants";
 
 
@@ -47,6 +48,11 @@ export async function onMaterialIssueCompleted(
     if (issue.status === Status.COMPLETED) {
       return; // already completed; idempotent no-op
     }
+
+    // Period lock: the GL journal posted below (stockJournalService) bypasses
+    // accounting.hook, so enforce the closed-period guard here too — otherwise
+    // material issues can back-date GL into a closed period.
+    await assertPeriodOpen(issue.date, tx);
 
     // Create Stock Move OUT per item
     const journalItems: { qty: number; cost: number }[] = [];

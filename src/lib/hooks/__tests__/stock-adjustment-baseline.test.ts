@@ -45,6 +45,7 @@ function wireTx(opts: {
       documentNo: "ADJ-001",
       warehouseId: 1,
       status: "draft",
+      date: new Date("2024-06-15"),
       items: opts.items,
     }),
     moveFindFirst: vi.fn().mockResolvedValue(null),
@@ -54,6 +55,7 @@ function wireTx(opts: {
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
     executeRaw: vi.fn().mockResolvedValue(1),
     adjUpdate: vi.fn().mockResolvedValue({ id: 50 }),
+    systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
   }
   const tx = {
     $queryRaw: spies.queryRaw,
@@ -71,6 +73,7 @@ function wireTx(opts: {
       }
       return results
     }) },
+    systemSetting: { findFirst: spies.systemSettingFindFirst },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
   return spies

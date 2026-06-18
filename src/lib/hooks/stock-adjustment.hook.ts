@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { InventoryStatus, Status } from "@/lib/constants";
 
 
@@ -46,6 +47,11 @@ export async function onStockAdjustmentProcessed(
     if (adjustment.status === InventoryStatus.PROCESSED || adjustment.status === Status.CANCELLED) {
       return; // already processed/cancelled; idempotent no-op
     }
+
+    // Period lock: the GL journal posted below (stockJournalService) bypasses
+    // accounting.hook, so enforce the closed-period guard here too — otherwise
+    // adjustments can back-date GL into a closed period.
+    await assertPeriodOpen(adjustment.date, tx);
 
     // Create Stock Move per item based on difference
     const journalItems: { qty: number; cost: number; difference: number }[] = [];

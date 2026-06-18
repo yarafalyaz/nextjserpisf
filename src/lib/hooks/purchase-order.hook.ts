@@ -20,6 +20,17 @@ export async function onPurchaseOrderCreated(
     // Guard: must have a linked Purchase Request
     if (!po.purchaseRequestId) return;
 
+    // Lock the PR row so two concurrent PO creations for the SAME PR serialize.
+    // Without this, both transactions read PR status (PENDING), each compute
+    // cumulative coverage from a query that excludes the other (different PO
+    // ids), and both race to write the PR status — last write wins and the
+    // intermediate value is lost. e.g. PO-A covers item 1 fully, PO-B covers
+    // item 2 fully; concurrent verifies → both see "partial" → final PR
+    // status is "partial_ordered" instead of "ordered". Locking the PR row
+    // makes the read-compute-write atomic per PR. Mirrors the row-lock
+    // pattern used in goods-receipt.hook.ts for the PO row.
+    await tx.$queryRaw`SELECT id FROM purchase_requests WHERE id = ${po.purchaseRequestId} FOR UPDATE`;
+
     // Idempotency: check if PR is already updated
     const pr = await tx.purchaseRequest.findUnique({
       where: { id: po.purchaseRequestId },
