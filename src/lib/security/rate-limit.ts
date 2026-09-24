@@ -83,6 +83,23 @@ return { allowed, remaining, resetAt }
 `
 
 // ── In-memory fallback ──────────────────────────────────────────────────────
+function peekInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
+  const now = nowMs()
+  const current = buckets.get(key)
+
+  if (!current || now >= current.resetAt) {
+    return { allowed: true, remaining: config.max, resetAt: now + config.windowMs }
+  }
+
+  // `allowed` answers "would the NEXT attempt be accepted?", matching
+  // takeRateLimit(), which counts the attempt before comparing with max.
+  return {
+    allowed: current.count < config.max,
+    remaining: Math.max(0, config.max - current.count),
+    resetAt: current.resetAt,
+  }
+}
+
 function takeInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
   registerCleanup()
   const now = nowMs()
@@ -145,6 +162,41 @@ export async function takeRateLimit(
       console.error("[rate-limit] Redis error, falling back to in-memory:", err)
       return takeInMemRateLimit(key, config)
     })
+}
+
+/**
+ * Check the current state of a bucket WITHOUT consuming an attempt.
+ *
+ * Needed by the login flow: the per-email limit must block an attacker after N
+ * failed attempts, yet not punish a legitimate user who signs in repeatedly. The
+ * caller therefore PEEKS before authenticating and only calls takeRateLimit() to
+ * record an attempt once the credentials turned out to be wrong.
+ */
+export async function peekRateLimit(
+  key: string,
+  config: RateLimitConfig,
+): Promise<RateLimitResult> {
+  const client = getRedisClient()
+  if (!client) {
+    return peekInMemRateLimit(key, config)
+  }
+
+  try {
+    const [raw, ttl] = await Promise.all([client.get<number>(key), client.pttl(key)])
+    const count = Number(raw ?? 0)
+    if (!Number.isFinite(count) || count <= 0) {
+      return { allowed: true, remaining: config.max, resetAt: nowMs() + config.windowMs }
+    }
+    const remainingTtl = typeof ttl === "number" && ttl > 0 ? ttl : config.windowMs
+    return {
+      allowed: count < config.max,
+      remaining: Math.max(0, config.max - count),
+      resetAt: nowMs() + remainingTtl,
+    }
+  } catch (err) {
+    console.error("[rate-limit] Redis peek error, falling back to in-memory:", err)
+    return peekInMemRateLimit(key, config)
+  }
 }
 
 /**

@@ -3,13 +3,14 @@ import { Pencil } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
+import { CanCreate } from "@/components/auth/can-create"
 
 export const metadata: Metadata = { title: "Akun" }
 
@@ -19,6 +20,7 @@ export default async function AccountsPage({
   searchParams: Promise<{ cari?: string }>
 }) {
   await requirePermission("view_accounts")
+  const canCreate = await hasPermission("create_accounts")
 
   const params = await searchParams
 
@@ -62,9 +64,13 @@ export default async function AccountsPage({
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Bagan Akun</h1>
-        <Link href="/master/akun/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-account-btn">
-          + Tambah Akun
-        </Link>
+        {canCreate && (
+          <CanCreate permission="create_accounts">
+          <Link href="/master/akun/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-account-btn">
+            + Tambah Akun
+          </Link>
+        </CanCreate>
+        )}
       </div>
 
       <div className="p-3 px-4 flex flex-col gap-3">
@@ -105,6 +111,16 @@ export default async function AccountsPage({
           </div>
         </div>
       ))}
+
+      {accounts.length >= MAX_LIST_ROWS && (
+        <p
+          role="status"
+          className="rounded-lg border border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
+        >
+          Menampilkan maksimal {MAX_LIST_ROWS} baris pertama. Masih ada akun lain yang tidak
+          ditampilkan — persempit pencarian atau filter untuk melihatnya.
+        </p>
+      )}
     </div>
   )
 }

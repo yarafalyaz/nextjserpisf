@@ -1,10 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 "use server"
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import type { TxClient } from "@/lib/db/prisma"
 import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived, deleteJournalByReference, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
 import { onDownPaymentConfirmed } from "@/lib/hooks/down-payment.hook"
@@ -19,6 +20,8 @@ import { parseFormData } from "@/lib/validations/parse-form"
 import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
+import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
+import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service"
 
 // ==================== QUOTATION ACTIONS ====================
 
@@ -142,6 +145,17 @@ export async function createQuotation(formData: FormData) {
       },
     })
 
+    if (tx.quotationHistory) {
+      await tx.quotationHistory.create({
+        data: {
+          quotationId: q.id,
+          action: "created",
+          description: "Penawaran dibuat (Draft)",
+          userId: Number(user.id),
+        },
+      })
+    }
+
     return q
   })
 
@@ -158,7 +172,7 @@ export async function createQuotation(formData: FormData) {
 
 export async function sendQuotation(quotationId: number) {
   try {
-  await requirePermission("edit_quotations")
+  const user = await requirePermission("edit_quotations")
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
@@ -176,9 +190,22 @@ export async function sendQuotation(quotationId: number) {
     throw new Error("Quotation harus memiliki minimal 1 item sebelum dikirim")
   }
 
-  await prisma.quotation.update({
-    where: { id: quotationId },
-    data: { status: "sent" },
+  await prisma.$transaction(async (tx) => {
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: { status: "sent" },
+    })
+
+    if (tx.quotationHistory) {
+      await tx.quotationHistory.create({
+        data: {
+          quotationId,
+          action: "sent",
+          description: "Penawaran dikirim ke pelanggan",
+          userId: Number(user.id),
+        },
+      })
+    }
   })
 
   await logActivity("send", "Quotation", quotationId, `Mengirim penawaran #${quotationId}`)
@@ -194,7 +221,7 @@ export async function sendQuotation(quotationId: number) {
 
 export async function acceptQuotation(quotationId: number) {
   try {
-  await requirePermission("confirm_quotations")
+  const user = await requirePermission("confirm_quotations")
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
@@ -204,9 +231,22 @@ export async function acceptQuotation(quotationId: number) {
     throw new Error("Quotation hanya bisa di-accept dari status sent")
   }
 
-  await prisma.quotation.update({
-    where: { id: quotationId },
-    data: { status: "accepted" },
+  await prisma.$transaction(async (tx) => {
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: { status: "accepted" },
+    })
+
+    if (tx.quotationHistory) {
+      await tx.quotationHistory.create({
+        data: {
+          quotationId,
+          action: "accepted",
+          description: "Penawaran diterima oleh pelanggan",
+          userId: Number(user.id),
+        },
+      })
+    }
   })
 
   // Notify admins
@@ -226,7 +266,7 @@ export async function acceptQuotation(quotationId: number) {
 
 export async function rejectQuotation(quotationId: number) {
   try {
-  await requirePermission("confirm_quotations")
+  const user = await requirePermission("confirm_quotations")
 
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
@@ -236,9 +276,22 @@ export async function rejectQuotation(quotationId: number) {
     throw new Error("Hanya penawaran terkirim yang dapat ditolak")
   }
 
-  await prisma.quotation.update({
-    where: { id: quotationId },
-    data: { status: "rejected" },
+  await prisma.$transaction(async (tx) => {
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: { status: "rejected" },
+    })
+
+    if (tx.quotationHistory) {
+      await tx.quotationHistory.create({
+        data: {
+          quotationId,
+          action: "rejected",
+          description: "Penawaran ditolak oleh pelanggan",
+          userId: Number(user.id),
+        },
+      })
+    }
   })
 
   await logActivity("reject", "Quotation", quotationId, `Menolak penawaran #${quotationId}`)
@@ -322,8 +375,8 @@ export async function convertQuotationToOrder(quotationId: number) {
     include: { sections: { include: { items: true } } },
   })
 
-  if (quotation.status !== "accepted") {
-    throw new Error("Hanya penawaran accepted yang dapat dikonversi")
+  if (!["accepted", "approved"].includes(quotation.status)) {
+    throw new Error("Hanya penawaran approved/accepted yang dapat dikonversi")
   }
 
   const documentNo = await generateDocumentNumber("SO")
@@ -356,7 +409,7 @@ export async function convertQuotationToOrder(quotationId: number) {
         grandTotal: quotation.grandTotal,
         totalAmount: quotation.grandTotal,
         status: "draft",
-        notes: `Auto-generated dari Quotation ${quotation.documentNo}`,
+        notes: `Otomatis dibuat dari Quotation ${quotation.documentNo}`,
         createdBy: Number(user.id),
       },
     })
@@ -594,8 +647,8 @@ export async function createDownPayment(formData: FormData) {
   const amount = v.amount
 
   const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
-  if (!["accepted", "converted"].includes(quotation.status)) {
-    throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
+  if (!["accepted", "approved", "converted"].includes(quotation.status)) {
+    throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
   }
 
   // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
@@ -607,44 +660,48 @@ export async function createDownPayment(formData: FormData) {
   // draft while the rest of the system moved on, leaving a "phantom" DP with
   // no GL trace. Move it INSIDE the tx and pass tx so a failed post rolls
   // back the DP insert.
-  const dp = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+    const dp = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
-    const existingDPs = await tx.downPayment.aggregate({
-      where: { quotationId, status: { not: "cancelled" } },
-      _sum: { amount: true },
+      const existingDPs = await tx.downPayment.aggregate({
+        where: { quotationId, status: { not: "cancelled" } },
+        _sum: { amount: true },
+      })
+      const totalExisting = Number(existingDPs._sum.amount ?? 0)
+      if (totalExisting + amount > Number(quotation.grandTotal)) {
+        throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalExisting})`)
+      }
+
+      const created = await tx.downPayment.create({
+        data: {
+          documentNo,
+          quotationId,
+          customerId: quotation.customerId,
+          amount,
+          paymentDate: new Date(v.paymentDate),
+          paymentMethod: v.paymentMethod ?? null,
+          proofImage,
+          notes: v.notes ?? null,
+          status: "draft",
+          createdBy: Number(user.id),
+        },
+      })
+
+      // GL hook inside the same tx (was previously called after commit).
+      // onDownPaymentReceived accepts an optional txClient as the 3rd arg, so
+      // we join the atomic unit. Its internal executeInTx() will use this tx
+      // rather than opening a nested one.
+      await onDownPaymentReceived(created.id, Number(user.id), tx)
+
+      // Auto-confirm the Down Payment immediately after creation (now inside the same tx!)
+      await onDownPaymentConfirmed(created.id, Number(user.id), tx)
+
+      return created
     })
-    const totalExisting = Number(existingDPs._sum.amount ?? 0)
-    if (totalExisting + amount > Number(quotation.grandTotal)) {
-      throw new Error(`Total DP melebihi nilai quotation (sisa: ${Number(quotation.grandTotal) - totalExisting})`)
-    }
 
-    const created = await tx.downPayment.create({
-      data: {
-        documentNo,
-        quotationId,
-        customerId: quotation.customerId,
-        amount,
-        paymentDate: new Date(v.paymentDate),
-        paymentMethod: v.paymentMethod ?? null,
-        proofImage,
-        notes: v.notes ?? null,
-        status: "draft",
-        createdBy: Number(user.id),
-      },
-    })
-
-    // GL hook inside the same tx (was previously called after commit).
-    // onDownPaymentReceived accepts an optional txClient as the 3rd arg, so
-    // we join the atomic unit. Its internal executeInTx() will use this tx
-    // rather than opening a nested one.
-    await onDownPaymentReceived(created.id, Number(user.id), tx)
-
-    return created
-  })
-  await logActivity("create", "DownPayment", dp.id, `Membuat uang muka #${dp.id}`)
-  revalidatePath("/penjualan/uang-muka")
-  return { success: true, id: dp.id }
+    await logActivity("create", "DownPayment", dp.id, `Membuat uang muka #${dp.id}`)
+    revalidatePath("/penjualan/uang-muka")
+    return { success: true, id: dp.id }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -679,24 +736,30 @@ export async function createSalesOrder(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_orders")
 
+  const idempotencyKey = formData.get("idempotencyKey") as string | null
+
   const parsed = parseFormData(createSalesOrderSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  const documentNo = await generateDocumentNumber("SO")
+  const salesOrder = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(idempotencyKey, tx, user.id)
 
-  const data = {
-    documentNo,
-    customerId: v.customerId,
-    quotationId: v.quotationId ?? null,
-    date: new Date(v.date),
-    deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
-    notes: v.notes ?? null,
-    status: "draft" as const,
-    createdBy: Number(user.id),
-  }
+    const documentNo = await generateDocumentNumber("SO")
 
-  const salesOrder = await prisma.salesOrder.create({ data })
+    return tx.salesOrder.create({
+      data: {
+        documentNo,
+        customerId: v.customerId,
+        quotationId: v.quotationId ?? null,
+        date: new Date(v.date),
+        deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+        notes: v.notes ?? null,
+        status: "draft" as const,
+        createdBy: Number(user.id),
+      },
+    })
+  })
 
   await logActivity("create", "SalesOrder", salesOrder.id, `Membuat sales order #${salesOrder.id}`)
   revalidatePath("/penjualan/pesanan")
@@ -768,39 +831,18 @@ export async function postInvoice(invoiceId: number) {
     where: { id: invoiceId },
   })
 
-  if (invoice.status !== "draft") {
-    throw new Error("Invoice hanya bisa di-post dari status draft")
+  // Approval workflow gate: if a SalesInvoice workflow is configured, it must
+  // be fully approved before posting. This check is done after loading the
+  // invoice so we have the context (but assertApproved only uses IDs internally).
+  await assertApproved("SalesInvoice", invoiceId);
+
+  if (invoice.status !== "draft" && invoice.status !== "approved") {
+    throw new Error("Invoice hanya bisa di-post dari status draft atau approved")
   }
 
   const itemCount = await prisma.salesInvoiceItem.count({ where: { salesInvoiceId: invoiceId } })
   if (itemCount === 0) {
     throw new Error("Invoice tidak memiliki item")
-  }
-
-  // Credit limit enforcement: block posting if it pushes the customer's
-  // outstanding receivable above their credit limit (0 = no limit).
-  const customer = await prisma.customer.findUnique({
-    where: { id: invoice.customerId },
-    select: { creditLimit: true, name: true },
-  })
-  const creditLimit = Number(customer?.creditLimit ?? 0)
-  if (creditLimit > 0) {
-    const outstanding = await prisma.salesInvoice.aggregate({
-      where: {
-        customerId: invoice.customerId,
-        status: { in: ["posted", "partial"] },
-        id: { not: invoiceId },
-      },
-      _sum: { grandTotal: true, paidAmount: true },
-    })
-    const currentAr = Number(outstanding._sum.grandTotal ?? 0) - Number(outstanding._sum.paidAmount ?? 0)
-    const projected = currentAr + (Number(invoice.grandTotal) - Number(invoice.paidAmount))
-    if (projected > creditLimit) {
-      throw new Error(
-        `Melebihi batas kredit pelanggan ${customer?.name ?? ""}. ` +
-          `Batas: ${creditLimit.toLocaleString("id-ID")}, proyeksi piutang: ${projected.toLocaleString("id-ID")}.`
-      )
-    }
   }
 
   // Atomically claim the post and post GL journal in a single transaction.
@@ -833,33 +875,40 @@ export async function createSalesInvoice(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_invoices")
 
+  const idempotencyKey = formData.get("idempotencyKey") as string | null
+
   const parsed = parseFormData(createSalesInvoiceSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  const documentNo = await generateDocumentNumber("INV")
+  const invoice = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(idempotencyKey, tx, user.id)
 
-  const invoice = await prisma.salesInvoice.create({
-    data: {
-      documentNo,
-      customerId: v.customerId,
-      salesOrderId: v.salesOrderId ?? null,
-      quotationId: v.quotationId ?? null,
-      date: new Date(v.date),
-      dueDate: v.dueDate ? new Date(v.dueDate) : null,
-      subtotal: 0,
-      discount: 0,
-      tax: 0,
-      grandTotal: 0,
-      paidAmount: 0,
-      totalAmount: 0,
-      taxAmount: 0,
-      status: "draft",
-      createdBy: Number(user.id),
-    },
+    const documentNo = await generateDocumentNumber("INV")
+
+    return tx.salesInvoice.create({
+      data: {
+        documentNo,
+        customerId: v.customerId,
+        salesOrderId: v.salesOrderId ?? null,
+        quotationId: v.quotationId ?? null,
+        date: new Date(v.date),
+        dueDate: v.dueDate ? new Date(v.dueDate) : null,
+        subtotal: 0,
+        discount: 0,
+        tax: 0,
+        grandTotal: 0,
+        paidAmount: 0,
+        totalAmount: 0,
+        taxAmount: 0,
+        status: "draft",
+        createdBy: Number(user.id),
+      },
+    })
   })
 
   await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur penjualan #${invoice.id}`)
+  await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id));
   revalidatePath("/penjualan/faktur")
   return { success: true, id: invoice.id }
 
@@ -880,9 +929,10 @@ export async function createSalesPayment(formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  const documentNo = await generateDocumentNumber("PAY")
+  const idempotencyKey = formData.get("idempotencyKey") as string | null
   const salesInvoiceId = v.salesInvoiceId
   const amount = v.amount
+  const documentNo = await generateDocumentNumber("PAY")
 
   // Atomic: lock invoice, validate remaining, create payment + recalc + attach
   // in one transaction. The attachment linkage was previously OUTSIDE the tx —
@@ -891,6 +941,8 @@ export async function createSalesPayment(formData: FormData) {
   // already posted). Move it inside so the payment row only exists when its
   // attachments are linked (all-or-nothing from the caller's perspective).
   const payment = await prisma.$transaction(async (tx) => {
+    await checkIdempotency(idempotencyKey, tx, user.id)
+
     // Lock invoice row to prevent concurrent overpay
     await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${salesInvoiceId} FOR UPDATE`
 
@@ -927,17 +979,9 @@ export async function createSalesPayment(formData: FormData) {
     // (none of which are useful without the supporting docs attached).
     const attachmentIds = v.attachmentIds as string | undefined
     if (attachmentIds) {
-      // The array elements arrive over the wire as JSON numbers OR strings
-      // depending on the form's serializer. Prisma's `in: [...]` clause hits a
-      // typed Int column, so a stray string in the array would crash the
-      // updateMany. Map to Number to keep types honest at the boundary.
-      const ids = (safeJsonParse<number[]>(attachmentIds) ?? []).map(Number)
-      if (ids.length > 0) {
-        await tx.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: created.id },
-        })
-      }
+      await attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "sales_payment", referenceId: created.id, uploadedBy: Number(user.id),
+      })
     }
 
     return created
@@ -1290,19 +1334,15 @@ export async function deleteDownPayment(id: number) {
   try {
   await requirePermission("delete_down_payments")
 
-  const dp = await prisma.downPayment.findUniqueOrThrow({ where: { id } })
-  if (dp.status !== "draft") {
-    throw new Error("Hanya down payment draft yang bisa dihapus")
-  }
-
-  // Atomicity: reversing the journal and deleting the row must commit together.
-  // Without the wrapper, a failed delete after the journal reversal would leave
-  // no journal for the still-existing DP (so a future resync / repost would
-  // double-post) — and conversely a successful delete with a stuck reversal
-  // would orphan the GL entries. Use deleteJournalByReferenceTx to compose
-  // inside our own $transaction; deleteJournalByReference opens its own tx
-  // and Prisma rejects nested $transaction calls.
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM down_payments WHERE id = ${id} FOR UPDATE`
+    }
+    const dp = await tx.downPayment.findUniqueOrThrow({ where: { id } })
+    if (dp.status !== "draft") {
+      throw new Error("Hanya down payment draft yang bisa dihapus")
+    }
+
     // Reverse any journal posted at draft creation before removing the record.
     await deleteJournalByReferenceTx(tx, "DownPayment", id)
     await tx.downPayment.delete({ where: { id } })
@@ -1370,15 +1410,17 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  const existingInvoice = await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
-  if (existingInvoice.status !== "draft") {
-    throw new Error("Hanya invoice draft yang bisa diubah")
-  }
-
   const itemsJson = v.items
   const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null }>>(itemsJson) ?? []) : null
 
   const result = await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${id} FOR UPDATE`
+    }
+    const existingInvoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id } })
+    if (existingInvoice.status !== "draft") {
+      throw new Error("Hanya invoice draft yang bisa diubah")
+    }
     // Update header
     const invoice = await tx.salesInvoice.update({
       where: { id },
@@ -1576,17 +1618,9 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     // leaving a committed payment without its supporting docs.
     const attachmentIds = v.attachmentIds
     if (attachmentIds) {
-      // The array elements arrive over the wire as JSON numbers OR strings
-      // depending on the form's serializer. Prisma's `in: [...]` clause hits a
-      // typed Int column, so a stray string in the array would crash the
-      // updateMany. Map to Number to keep types honest at the boundary.
-      const ids = (safeJsonParse<number[]>(attachmentIds) ?? []).map(Number)
-      if (ids.length > 0) {
-        await tx.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: updated.id },
-        })
-      }
+      await attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "sales_payment", referenceId: updated.id, uploadedBy: Number(user.id),
+      })
     }
 
     return updated
@@ -1847,8 +1881,8 @@ export async function updateDownPayment(id: number, formData: FormData) {
   }
   const quotationId = v.quotationId
   const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
-  if (!["accepted", "converted"].includes(quotation.status)) {
-    throw new Error("DP hanya bisa dibuat untuk quotation accepted/converted")
+  if (!["accepted", "approved", "converted"].includes(quotation.status)) {
+    throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
   }
 
   const amount = v.amount
@@ -2044,21 +2078,24 @@ export async function voidSalesInvoice(id: number) {
 
   try {
   await requirePermission("delete_sales_invoices")
-  const invoice = await prisma.salesInvoice.findUniqueOrThrow({
-    where: { id },
-    include: { payments: { select: { id: true } } },
-  })
-  if (invoice.status === "draft") {
-    throw new Error("Faktur draft tidak perlu dibatalkan. Gunakan hapus.")
-  }
-  if (invoice.status === "cancelled") {
-    throw new Error("Faktur sudah dibatalkan.")
-  }
-  if (invoice.payments.length > 0) {
-    throw new Error("Hapus pembayaran faktur ini terlebih dahulu sebelum membatalkan.")
-  }
-
   await prisma.$transaction(async (tx) => {
+    if (typeof tx.$executeRaw === "function") {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${id} FOR UPDATE`
+    }
+    const invoice = await tx.salesInvoice.findUniqueOrThrow({
+      where: { id },
+      include: { payments: { select: { id: true } } },
+    })
+    if (invoice.status === "draft") {
+      throw new Error("Faktur draft tidak perlu dibatalkan. Gunakan hapus.")
+    }
+    if (invoice.status === "cancelled") {
+      throw new Error("Faktur sudah dibatalkan.")
+    }
+    if (invoice.payments.length > 0) {
+      throw new Error("Hapus pembayaran faktur ini terlebih dahulu sebelum membatalkan.")
+    }
+
     await reverseSalesInvoicePostingTx(tx, id)
     await tx.salesInvoice.update({
       where: { id },

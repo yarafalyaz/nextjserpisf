@@ -9,6 +9,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
+import { CanCreate } from "@/components/auth/can-create"
 
 export const metadata: Metadata = { title: "Pengguna" }
 
@@ -37,9 +38,11 @@ export default async function UsersPage() {
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pengguna & Peran</h1>
-        <Link href="/pengaturan/pengguna/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-user-btn">
+        <CanCreate permission="manage_users">
+          <Link href="/pengaturan/pengguna/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-user-btn">
           + Tambah Pengguna
         </Link>
+        </CanCreate>
       </div>
 
       {/* Users Table */}
@@ -103,6 +106,16 @@ export default async function UsersPage() {
           </div>
         </div>
       </div>
+
+      {users.length >= MAX_LIST_ROWS && (
+        <p
+          role="status"
+          className="rounded-lg border border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
+        >
+          Menampilkan maksimal {MAX_LIST_ROWS} pengguna pertama. Masih ada pengguna lain yang tidak
+          ditampilkan — persempit pencarian untuk melihatnya.
+        </p>
+      )}
     </div>
   )
 }

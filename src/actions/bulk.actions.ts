@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 "use server"
 
 import { prisma } from "@/lib/db/prisma"
@@ -35,6 +35,7 @@ type ModelName =
   | "paymentTerm"
   | "journal"
   | "expense"
+  | "expenseCategory"
   | "pettyCash"
   | "budget"
   | "costCenter"
@@ -65,6 +66,8 @@ type ModelName =
   | "departmentHoliday"
   | "paymentMethod"
   | "shippingMethod"
+  | "lead"
+  | "approval"
 
 const modelPermissionMap: Record<ModelName, string> = {
   purchaseRequest: "delete_purchase_requests",
@@ -76,8 +79,8 @@ const modelPermissionMap: Record<ModelName, string> = {
   salesQuotation: "delete_quotations",
   salesOrder: "delete_sales_orders",
   deliveryOrder: "delete_delivery_orders",
-  salesInvoice: "delete_invoices",
-  salesPayment: "delete_payments",
+  salesInvoice: "delete_sales_invoices",
+  salesPayment: "delete_sales_payments",
   salesReturn: "delete_sales_returns",
   downPayment: "delete_down_payments",
   customer: "delete_customers",
@@ -95,24 +98,25 @@ const modelPermissionMap: Record<ModelName, string> = {
   paymentTerm: "delete_payment_terms",
   journal: "delete_journals",
   expense: "delete_expenses",
+  expenseCategory: "manage_expense_categories",
   pettyCash: "delete_petty_cash",
   budget: "delete_budgets",
   costCenter: "delete_cost_centers",
   statisticalKeyFigure: "delete_statistical_key_figures",
-  leave: "delete_leave",
-  overtime: "delete_overtime",
+  leave: "delete_leave_requests",
+  overtime: "delete_overtime_requests",
   holiday: "delete_holidays",
   loan: "delete_loans",
   timesheet: "delete_timesheets",
   workSchedule: "delete_work_schedules",
-  stockAdjustment: "delete_adjustments",
-  stockTransfer: "delete_transfers",
+  stockAdjustment: "delete_stock_adjustments",
+  stockTransfer: "delete_inventory_transfers",
   materialIssue: "delete_material_issues",
-  rack: "delete_racks",
+  rack: "delete_warehouses",
   rackRow: "manage_inventory",
   productionOrder: "delete_production_orders",
   workOrder: "delete_work_orders",
-  product: "delete_bom_products",
+  product: "delete_products",
   project: "delete_projects",
   assetBrand: "delete_asset_brands",
   assetCategory: "delete_asset_categories",
@@ -125,9 +129,14 @@ const modelPermissionMap: Record<ModelName, string> = {
   departmentHoliday: "delete_holidays",
   paymentMethod: "delete_payment_methods",
   shippingMethod: "delete_shipping_methods",
+  lead: "delete_leads",
+  approval: "approve_workflows",
 }
 
-const modelRevalidateMap: Record<ModelName, string> = {
+// Route to revalidate after a successful bulk delete. `null` means there is no
+// live page for that model (the module was removed from the app), so there is
+// nothing to revalidate — see the nulls at the end of the map.
+const modelRevalidateMap: Record<ModelName, string | null> = {
   purchaseRequest: "/pembelian/permintaan",
   purchaseOrder: "/pembelian/pesanan",
   goodsReceipt: "/pembelian/penerimaan",
@@ -152,20 +161,18 @@ const modelRevalidateMap: Record<ModelName, string> = {
   position: "/master/jabatan",
   bank: "/master/bank",
   tax: "/master/pajak",
-  currency: "/master/mata-uang",
   paymentTerm: "/master/syarat-pembayaran",
   journal: "/keuangan/jurnal",
   expense: "/keuangan/pengeluaran",
+  expenseCategory: "/master/kategori-pengeluaran",
   pettyCash: "/keuangan/kas-kecil",
   budget: "/keuangan/anggaran",
   costCenter: "/keuangan/pusat-biaya",
   statisticalKeyFigure: "/keuangan/angka-kunci-statistik",
   leave: "/sdm/cuti",
   overtime: "/sdm/lembur",
-  holiday: "/sdm/hari-libur",
   loan: "/sdm/pinjaman",
   timesheet: "/sdm/lembar-waktu",
-  workSchedule: "/sdm/jadwal-kerja",
   stockAdjustment: "/inventaris/penyesuaian",
   stockTransfer: "/inventaris/transfer",
   materialIssue: "/inventaris/pengeluaran-material",
@@ -183,9 +190,18 @@ const modelRevalidateMap: Record<ModelName, string> = {
   vehicleModel: "/kendaraan/model",
   vehicle: "/kendaraan",
   appreciation: "/sdm/apresiasi",
-  departmentHoliday: "/sdm/hari-libur-departemen",
   paymentMethod: "/master/metode-pembayaran",
   shippingMethod: "/master/metode-pengiriman",
+  lead: "/crm/leads",
+  approval: "/pengaturan/persetujuan",
+  // Modules removed from the app: their pages no longer exist, so there is no
+  // route to revalidate. Explicit nulls (instead of stale paths like
+  // "/master/mata-uang") so the map stays exhaustive over ModelName and nothing
+  // silently revalidates a route that is not served any more.
+  currency: null,
+  holiday: null,
+  workSchedule: null,
+  departmentHoliday: null,
 }
 
 const dmmfModelMap = new Map(
@@ -194,6 +210,15 @@ const dmmfModelMap = new Map(
     model,
   ])
 )
+
+// Some model aliases don't match the Prisma client property name
+const prismaModelAlias: Record<string, string> = {
+  salesQuotation: "quotation",
+  stockTransfer: "inventoryTransfer",
+  leave: "leaveRequest",
+  overtime: "overtimeRequest",
+  loan: "employeeLoan",
+}
 
 const BULK_DELETE_MAX = 500
 
@@ -208,6 +233,10 @@ const BULK_DELETE_MAX = 500
  * safe for raw bulk delete.
  */
 const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
+  // Sales / purchasing — reverse downstream documents and honor state guards
+  "salesOrder",
+  "purchaseRequest",
+  "purchaseOrder",
   // Finance — post GL journals
   "pettyCash",
   "expense",
@@ -228,7 +257,15 @@ const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
   // Manufacturing / payroll — downstream side effects
   "productionOrder",
   "workOrder",
+  "project",
   "loan",
+  // HR records — preserve employee scope, approval cleanup, and status guards
+  "leave",
+  "overtime",
+  "timesheet",
+  // Rack deletion has a reference guard to preserve item and stock locations
+  "rack",
+  "rackRow",
   // Fixed assets and vehicles — have GL or dependent records guards
   "asset",
   "vehicle",
@@ -263,27 +300,31 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
     return {
       success: false,
       message:
-        "Data ini punya dampak akuntansi/stok dan harus dihapus satu per satu " +
-        "agar jurnal & saldo terkait ikut dibatalkan dengan benar.",
+        "Data ini harus dihapus satu per satu agar pemeriksaan status, cakupan akses, " +
+        "dan pembaruan data terkait tetap dijalankan.",
     }
   }
 
   try {
      
     // Intentional dynamic dispatch — model validated against ALLOWED_MODELS
-    const prismaModel = (prisma as any)[model]
+    const modelName = prismaModelAlias[model] || model
+    const prismaModel = (prisma as any)[modelName]
     if (!prismaModel) {
       return { success: false, message: `Model ${model} tidak ditemukan` }
     }
 
-    const schemaModel = dmmfModelMap.get(model)
+    const schemaModel = dmmfModelMap.get(modelName)
     if (!schemaModel) {
       return { success: false, message: `Skema model ${model} tidak ditemukan` }
     }
 
     const hasSoftDelete = schemaModel.fields.some((field) => field.name === "deletedAt")
 
-    if (hasSoftDelete) {
+    // Lead — hard delete (cascade ke aktivitas otomatis via Prisma)
+    if (model === "lead") {
+      await prismaModel.deleteMany({ where: { id: { in: safeIds } } })
+    } else if (hasSoftDelete) {
       await prismaModel.updateMany({
         where: { id: { in: safeIds } },
         data: { deletedAt: new Date() },

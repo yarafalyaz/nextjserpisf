@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth/auth"
 import { hasPermission } from "@/lib/auth/permissions"
 import { apiError } from "@/lib/api-response"
 import { paymentMethodLabel, shippingMethodLabel } from "@/lib/utils/method-labels"
+import { formatDate } from "@/lib/utils/format"
 
 const PRINT_PERMISSION: Record<string, string> = {
   invoice: "view_sales_invoices",
@@ -27,14 +28,20 @@ export async function GET(request: Request) {
     return apiError("BAD_REQUEST", "Tipe atau ID tidak ditemukan")
   }
 
-  // Permission check per document type (prevents IDOR — any user reading any doc by id)
+  // Permission check per document type (prevents IDOR — any user reading any doc by id).
+  // Fail CLOSED on an unknown type: `requiredPerm` undefined used to skip the check
+  // entirely, so a future document type added to the render switch below without a
+  // matching entry here would be printable by any authenticated user.
   const requiredPerm = PRINT_PERMISSION[type]
-  if (requiredPerm && !(await hasPermission(requiredPerm))) {
+  if (!requiredPerm) {
+    return apiError("BAD_REQUEST", "Tipe tidak didukung")
+  }
+  if (!(await hasPermission(requiredPerm))) {
     return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   const id = Number(idStr)
-  if (isNaN(id)) {
+  if (!Number.isSafeInteger(id) || id <= 0) {
     return apiError("BAD_REQUEST", "ID tidak valid")
   }
 
@@ -57,21 +64,33 @@ export async function GET(request: Request) {
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
+      const itemIds = doc.items.map((it) => it.itemId).filter((id): id is number => id !== null && id > 0)
+      const itemsMap = new Map<number, string>()
+      if (itemIds.length > 0) {
+        const dbItems = await prisma.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, name: true },
+        })
+        for (const di of dbItems) {
+          itemsMap.set(di.id, di.name)
+        }
+      }
+
       return NextResponse.json({
         company: companyInfo,
         docInfo: {
           title: "FAKTUR PENJUALAN / INVOICE",
           documentNo: doc.documentNo,
-          date: doc.date.toISOString().split("T")[0],
-          dueDate: doc.dueDate?.toISOString().split("T")[0] || null,
+          date: formatDate(doc.date),
+          dueDate: doc.dueDate ? formatDate(doc.dueDate) : null,
           customerName: doc.customer.name,
           customerAddress: doc.customer.address || doc.customer.street || "",
           customerPhone: doc.customer.phone || "",
-          notes: doc.notes || "",
+          notes: doc.notes ? doc.notes.replace("Auto-generated dari", "Otomatis dibuat dari") : "",
         },
         items: doc.items.map((it, idx) => ({
           no: idx + 1,
-          description: it.description || "Item",
+          description: it.description || itemsMap.get(it.itemId || 0) || "Item",
           qty: Number(it.qty),
           price: Number(it.unitPrice),
           discount: Number(it.discount || 0),
@@ -100,13 +119,16 @@ export async function GET(request: Request) {
               },
             },
           },
-          sections: { include: { items: true } },
+          sections: {
+            include: { items: { orderBy: { sortOrder: "asc" } } },
+            orderBy: { sortOrder: "asc" },
+          },
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
-      // Flatten items from all sections
-      const allItems = doc.sections.flatMap(sec => sec.items)
+      // Flatten items from all sections for backward compatibility
+      const allItems = doc.sections.flatMap((sec) => sec.items)
       const vehicleModel = doc.customerVehicle?.vehicle?.variant?.model
       const vehicleName = vehicleModel ? `${vehicleModel.brand?.name ?? ""} ${vehicleModel.name}`.trim() : ""
 
@@ -118,16 +140,29 @@ export async function GET(request: Request) {
       const paymentMethodText = pmRow?.name ?? paymentMethodLabel(doc.paymentMethod)
       const shippingMethodText = smRow?.name ?? shippingMethodLabel(doc.shippingMethod)
 
+      const itemIds = allItems.map((it) => it.itemId).filter((id): id is number => id !== null && id > 0)
+      const itemsMap = new Map<number, string>()
+      if (itemIds.length > 0) {
+        const dbItems = await prisma.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, name: true },
+        })
+        for (const di of dbItems) {
+          itemsMap.set(di.id, di.name)
+        }
+      }
+
       return NextResponse.json({
         company: companyInfo,
         docInfo: {
           title: "PENAWARAN HARGA / QUOTATION",
           documentNo: doc.documentNo,
-          date: doc.date.toISOString().split("T")[0],
-          dueDate: doc.validUntil?.toISOString().split("T")[0] || null,
+          date: formatDate(doc.date),
+          dueDate: doc.validUntil ? formatDate(doc.validUntil) : null,
           customerName: doc.customer.name,
           customerAddress: doc.customer.address || doc.customer.street || "",
           customerPhone: doc.customer.phone || "",
+          customerEmail: doc.customer.email || "-",
           vehicleName,
           plateNumber: doc.customerVehicle?.licensePlate || doc.customerVehicle?.vehicle?.plateNumber || "-",
           paymentMethod: paymentMethodText,
@@ -135,11 +170,23 @@ export async function GET(request: Request) {
           footerNotes: settings.quotationFooterNotes || "",
           signatureName: settings.quotationSignatureName || "",
           signatureImage: settings.quotationSignatureImage || "",
-          notes: doc.notes || "",
+          notes: doc.notes ? doc.notes.replace("Auto-generated dari", "Otomatis dibuat dari") : "",
         },
+        sections: doc.sections.map((sec) => ({
+          name: sec.name,
+          items: sec.items.map((it, idx) => ({
+            no: idx + 1,
+            description: it.description || itemsMap.get(it.itemId || 0) || "Item Jasa/Barang",
+            qty: Number(it.qty),
+            unit: it.uom || "Set",
+            price: Number(it.unitPrice),
+            discount: Number(it.discount || 0),
+            total: Number(it.total),
+          })),
+        })),
         items: allItems.map((it, idx) => ({
           no: idx + 1,
-          description: it.description || "Item Jasa/Barang",
+          description: it.description || itemsMap.get(it.itemId || 0) || "Item Jasa/Barang",
           qty: Number(it.qty),
           unit: it.uom || "Set",
           price: Number(it.unitPrice),
@@ -162,21 +209,33 @@ export async function GET(request: Request) {
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
+      const itemIds = doc.items.map((it) => it.itemId).filter((id): id is number => id !== null && id > 0)
+      const itemsMap = new Map<number, string>()
+      if (itemIds.length > 0) {
+        const dbItems = await prisma.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, name: true },
+        })
+        for (const di of dbItems) {
+          itemsMap.set(di.id, di.name)
+        }
+      }
+
       return NextResponse.json({
         company: companyInfo,
         docInfo: {
           title: "PESANAN PENJUALAN / SALES ORDER",
           documentNo: doc.documentNo,
-          date: doc.date.toISOString().split("T")[0],
-          dueDate: doc.deliveryDate?.toISOString().split("T")[0] || null,
+          date: formatDate(doc.date),
+          dueDate: doc.deliveryDate ? formatDate(doc.deliveryDate) : null,
           customerName: doc.customer.name,
           customerAddress: doc.customer.address || doc.customer.street || "",
           customerPhone: doc.customer.phone || "",
-          notes: doc.notes || "",
+          notes: doc.notes ? doc.notes.replace("Auto-generated dari", "Otomatis dibuat dari") : "",
         },
         items: doc.items.map((it, idx) => ({
           no: idx + 1,
-          description: it.description || "Item",
+          description: it.description || itemsMap.get(it.itemId || 0) || "Item",
           qty: Number(it.qty),
           price: Number(it.unitPrice),
           discount: Number(it.discount || 0),
@@ -197,36 +256,47 @@ export async function GET(request: Request) {
         include: {
           customer: true,
           items: true,
+          quotation: { select: { documentNo: true } },
+          project: { select: { name: true } },
         },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
+
+      // Resolve item names from items table
+      const itemIds = doc.items.map((it) => it.itemId).filter((id) => id > 0)
+      const itemsMap = new Map<number, string>()
+      if (itemIds.length > 0) {
+        const dbItems = await prisma.item.findMany({
+          where: { id: { in: itemIds } },
+          select: { id: true, name: true, sku: true },
+        })
+        for (const di of dbItems) {
+          itemsMap.set(di.id, `[${di.sku}] ${di.name}`)
+        }
+      }
 
       return NextResponse.json({
         company: companyInfo,
         docInfo: {
           title: "PERINTAH KERJA / WORK ORDER",
           documentNo: doc.documentNo,
-          date: doc.date.toISOString().split("T")[0],
-          dueDate: doc.endDate?.toISOString().split("T")[0] || null,
+          date: formatDate(doc.date),
+          startDate: doc.startDate ? formatDate(doc.startDate) : null,
+          endDate: doc.endDate ? formatDate(doc.endDate) : null,
+          status: doc.status,
           customerName: doc.customer.name,
           customerAddress: doc.customer.address || doc.customer.street || "",
           customerPhone: doc.customer.phone || "",
-          notes: doc.notes || "",
+          quotationNo: doc.quotation?.documentNo || null,
+          projectName: doc.project?.name || null,
+          notes: doc.notes ? doc.notes.replace("Auto-generated dari", "Otomatis dibuat dari") : "",
         },
         items: doc.items.map((it, idx) => ({
           no: idx + 1,
-          description: it.description || `Material / Servis #${it.itemId}`,
+          description: it.description || itemsMap.get(it.itemId) || `Item #${it.itemId}`,
           qty: Number(it.qty),
-          price: Number(it.cost || 0),
-          discount: 0,
-          total: Number(it.qty) * Number(it.cost || 0),
+          status: it.status || "pending",
         })),
-        summary: {
-          subtotal: doc.items.reduce((sum, it) => sum + (Number(it.qty) * Number(it.cost || 0)), 0),
-          discount: 0,
-          tax: 0,
-          total: doc.items.reduce((sum, it) => sum + (Number(it.qty) * Number(it.cost || 0)), 0),
-        },
       })
     }
 

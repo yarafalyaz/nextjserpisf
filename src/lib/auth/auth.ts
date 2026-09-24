@@ -3,11 +3,16 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
-import { takeRateLimit } from "@/lib/security/rate-limit";
+import { peekRateLimit, takeRateLimit } from "@/lib/security/rate-limit";
 
 // Per-email rate limit: prevents password-spray across many IPs.
 // IP-based limit (10/5min) is handled by proxy.ts middleware.
 const EMAIL_LIMIT = { windowMs: 30 * 60 * 1000, max: 15 } as const
+
+// bcrypt hash (cost 12, same as real hashes) of a random throwaway string. Used
+// to perform equivalent work when the email does not exist, so response time
+// cannot be used to enumerate registered accounts. Not a real credential.
+const DUMMY_PASSWORD_HASH = "$2b$12$/n/40JlEWgcb9E55Lj3QCuecLxKFP9pvaZdJI9wgs3bkZOwepQ9lq"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
@@ -21,12 +26,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (
+          typeof credentials?.email !== "string" ||
+          typeof credentials.password !== "string" ||
+          credentials.email.length > 255 ||
+          credentials.password.length === 0 ||
+          credentials.password.length > 256
+        ) return null;
 
-        const email = credentials.email as string;
+        // Normalize here as well as in form actions: callers can reach the
+        // credentials provider directly, so case variants must share both
+        // the account lookup and the per-email rate limit.
+        const email = (credentials.email as string).trim().toLowerCase();
 
-        // Per-email backstop: returns null regardless (same as wrong password)
-        const emailLimit = await takeRateLimit(`login:email:${email}`, EMAIL_LIMIT)
+        // Per-email backstop: returns null regardless (same as wrong password).
+        // PEEK only — the attempt is recorded further down, and only when the
+        // credentials were wrong, so a user who signs in repeatedly is never
+        // locked out by their own successful logins.
+        const emailLimit = await peekRateLimit(`login:email:${email}`, EMAIL_LIMIT)
         if (!emailLimit.allowed) return null
 
         const user = await prisma.user.findUnique({
@@ -43,14 +60,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           },
         });
 
-        if (!user) return null;
-
+        // Constant work whether or not the account exists. Comparing against a
+        // dummy hash when the email is unknown removes the response-time
+        // difference that allowed account enumeration (a missing user used to
+        // return before any bcrypt work happened).
         const isPasswordValid = await bcrypt.compare(
-          credentials.password as string,
-          user.password
+          credentials.password,
+          user ? user.password : DUMMY_PASSWORD_HASH
         );
 
-        if (!isPasswordValid) return null;
+        if (!user || !isPasswordValid) {
+          // Record the failed attempt against the per-email bucket. Only failures
+          // consume quota, so successful logins never count against the user.
+          await takeRateLimit(`login:email:${email}`, EMAIL_LIMIT)
+          return null
+        }
 
         return {
           id: String(user.id),
@@ -89,12 +113,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token;
       }
 
-      // Re-sync profile, roles & permissions on sign-in or every 5 minutes
-      // so role/permission revocations (and deactivation) take effect without
-      // requiring the user to log out.
+      // Re-sync roles & permissions on EVERY request (cheap query) so DB
+      // changes take effect on the next request instead of waiting up to 5 min.
+      // Avatar fetch is throttled separately to avoid hammering the DB.
       const now = Date.now();
-      const lastFetch = token._avatarFetchedAt as number | undefined;
-      if (token.id && (!lastFetch || now - lastFetch > 5 * 60 * 1000)) {
+      const lastAvatarFetch = token._avatarFetchedAt as number | undefined;
+      if (token.id) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: Number(token.id) },
@@ -126,7 +150,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.roles = [];
             token.permissions = [];
           }
-          token._avatarFetchedAt = now;
+
+          // Throttle only the avatar fetch timestamp (kept for any future avatar logic).
+          if (!lastAvatarFetch || now - lastAvatarFetch > 5 * 60 * 1000) {
+            token._avatarFetchedAt = now;
+          }
         } catch {
           // Silently fail - don't break auth flow
         }

@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/shadcn/dropdown-menu"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showError } from "@/lib/utils/toast"
+import { MAX_LIST_ROWS } from "@/lib/constants/list-rows"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { buildSearchParamsString, buildServerSearchUrl } from "@/components/ui/data-table-utils"
@@ -76,7 +77,7 @@ export interface ServerPagination {
 
 interface DataTableProps<TData> {
   data: TData[]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   columns: ColumnDef<TData, any>[]
   ariaLabel?: string
   pageSize?: number
@@ -110,6 +111,8 @@ interface DataTableProps<TData> {
   mobileColumns?: number
   /** When provided, the table uses URL-based pagination (?halaman=N) instead of client-side. */
   serverPagination?: ServerPagination
+  /** Initial column visibility state. */
+  initialColumnVisibility?: VisibilityState
 }
 
 /** Resolve a human-friendly label for a column (used in the visibility menu). */
@@ -138,11 +141,12 @@ export function DataTable<TData extends { id: number | string }>({
   filters,
   mobileColumns = 3,
   serverPagination,
+  initialColumnVisibility,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility || {})
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([])
@@ -257,10 +261,10 @@ export function DataTable<TData extends { id: number | string }>({
       }
       setColumnVisibility(vis)
     } else {
-      setColumnVisibility({})
+      setColumnVisibility(initialColumnVisibility || {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMobile, mobileColumns])
+  }, [isMobile, mobileColumns, initialColumnVisibility])
 
   // --- Pagination display values ---
   const currentPageSize = isServer ? serverPagination!.pageSize : table.getState().pagination.pageSize
@@ -283,6 +287,7 @@ export function DataTable<TData extends { id: number | string }>({
       const result = await onBulkDelete(pendingDeleteIds)
       if (result.success) {
         setRowSelection({})
+        router.refresh()
       } else {
         showError(result.message || "Gagal menghapus data")
       }
@@ -481,6 +486,19 @@ export function DataTable<TData extends { id: number | string }>({
               </TableBody>
             </Table>
           </div>
+
+          {/* Make the safety cap visible. Server pages fetch with
+              `take: MAX_LIST_ROWS`, so a full page of rows may hide data; without
+              this the list silently looked complete. */}
+          {data.length >= MAX_LIST_ROWS && (
+            <p
+              role="status"
+              className="border-t border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
+            >
+              Menampilkan maksimal {MAX_LIST_ROWS} baris pertama. Masih ada data lain yang tidak
+              ditampilkan — persempit pencarian atau filter untuk melihatnya.
+            </p>
+          )}
         </div>
 
         {/* Pagination (shadcn DataTablePagination layout) */}

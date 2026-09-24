@@ -35,7 +35,6 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/master/bank", edit: "edit_banks", delete: "delete_banks" },
   { prefix: "/master/pajak", edit: "edit_taxes", delete: "delete_taxes" },
   { prefix: "/master/kelompok-pajak", edit: "edit_taxes", delete: "delete_taxes" },
-  { prefix: "/master/mata-uang", edit: "edit_currencies", delete: "delete_currencies" },
   { prefix: "/master/barcode", edit: "edit_barcodes", delete: "delete_barcodes" },
   { prefix: "/master/syarat-pembayaran", edit: "edit_payment_terms", delete: "delete_payment_terms" },
   { prefix: "/master/metode-pembayaran", edit: "edit_payment_methods", delete: "delete_payment_methods" },
@@ -100,7 +99,7 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/master/kategori-pengeluaran", edit: "manage_expense_categories", delete: "manage_expense_categories" },
   { prefix: "/anggaran/alokasi-skf", edit: "edit_accounts", delete: "delete_accounts" },
   { prefix: "/pengaturan/workflow", edit: "manage_settings", delete: "manage_settings" },
-  { prefix: "/keuangan/rekening-koran", edit: "edit_bank_statements", delete: "delete_bank_statements" },
+  { prefix: "/keuangan/laporan-bank", edit: "edit_bank_statements", delete: "delete_bank_statements" },
   { prefix: "/keuangan/rekonsiliasi-bank", edit: "edit_bank_reconciliation", delete: "delete_bank_reconciliation" },
   { prefix: "/keuangan/angka-kunci-statistik", edit: "edit_statistical_key_figures", delete: "delete_statistical_key_figures" },
 

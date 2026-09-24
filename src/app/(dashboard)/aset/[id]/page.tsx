@@ -71,6 +71,11 @@ export default async function AssetDetailPage({
         <DetailField label="Nilai Beli" value={formatCurrency(Number(asset.purchaseCost))} />
         <DetailField label="Nilai Saat Ini" value={formatCurrency(Number(asset.currentValue))} />
         <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrency(depreciation)}</span>} />
+        {/* The asset form labels this field "Deskripsi" and createAsset/
+            updateAsset persist it to `notes` (the `description` column is
+            unused), so read it back from `notes` — otherwise the text a user
+            typed was stored but never shown anywhere. */}
+        <DetailField label="Deskripsi" value={asset.notes || "-"} colSpan="full" />
       </DetailCard>
 
       {/* History */}

@@ -3,12 +3,14 @@ import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { notificationService } from "@/lib/services/notification.service"
 import { apiError } from "@/lib/api-response"
+import { pruneIdempotencyKeys } from "@/lib/utils/idempotency"
 
 const TASKS = [
   "lock-period",
   "low-stock",
   "overdue-invoice",
   "late-checkin",
+  "recover-stuck-reversals",
   "cleanup",
 ] as const
 
@@ -28,11 +30,15 @@ async function handleCron(request: Request) {
   }
 
   const url = new URL(request.url)
-  const taskParam = url.searchParams.get("task") as Task | null
+  const rawTask = url.searchParams.get("task")
+  if (rawTask !== null && (!rawTask || !TASKS.includes(rawTask as Task))) {
+    return apiError("BAD_REQUEST", `Task cron tidak dikenal: ${rawTask}`)
+  }
+  const taskParam = rawTask as Task | null
 
   const tasksToRun: Task[] =
-    taskParam && TASKS.includes(taskParam as Task)
-      ? [taskParam as Task]
+    taskParam
+      ? [taskParam]
       : [...TASKS]
 
   const results: Record<string, { status: string; message?: string; duration: number }> = {}
@@ -84,6 +90,8 @@ async function runTask(task: Task): Promise<string> {
       return await taskOverdueInvoiceAlert()
     case "late-checkin":
       return await taskLateCheckInAlert()
+    case "recover-stuck-reversals":
+      return await taskRecoverStuckReversals()
     case "cleanup":
       return await taskCleanup()
   }
@@ -144,17 +152,27 @@ async function taskLowStockAlert(): Promise<string> {
 async function taskOverdueInvoiceAlert(): Promise<string> {
   const now = new Date()
 
-  const overdueInvoices = await prisma.salesInvoice.findMany({
-    where: {
-      dueDate: { lt: now },
-      paymentStatus: { not: "paid" },
-      deletedAt: null,
-    },
-    include: { customer: { select: { name: true } } },
-    take: 20,
-  })
+  const where = {
+    dueDate: { lt: now },
+    paymentStatus: { not: "paid" },
+    deletedAt: null,
+  }
+  const [summary, overdueInvoices] = await Promise.all([
+    prisma.salesInvoice.aggregate({
+      where,
+      _count: { _all: true },
+      _sum: { grandTotal: true, paidAmount: true },
+    }),
+    prisma.salesInvoice.findMany({
+      where,
+      include: { customer: { select: { name: true } } },
+      orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+      take: 5,
+    }),
+  ])
 
-  if (overdueInvoices.length === 0) {
+  const overdueCount = summary._count._all
+  if (overdueCount === 0) {
     return "Tidak ada invoice overdue"
   }
 
@@ -162,19 +180,18 @@ async function taskOverdueInvoiceAlert(): Promise<string> {
     .slice(0, 5)
     .map((i) => `${i.documentNo} (${i.customer?.name ?? "-"})`)
     .join(", ")
-  const suffix = overdueInvoices.length > 5 ? ` dan ${overdueInvoices.length - 5} lainnya` : ""
-  const totalOverdue = overdueInvoices.reduce(
-    (sum, inv) => sum + (Number(inv.grandTotal) - Number(inv.paidAmount)),
-    0
-  )
+  const suffix = overdueCount > overdueInvoices.length
+    ? ` dan ${overdueCount - overdueInvoices.length} lainnya`
+    : ""
+  const totalOverdue = Number(summary._sum.grandTotal ?? 0) - Number(summary._sum.paidAmount ?? 0)
 
   await notificationService.notifyAdmins(
-    `${overdueInvoices.length} Invoice Jatuh Tempo`,
+    `${overdueCount} Invoice Jatuh Tempo`,
     `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}. Invoice: ${invoiceList}${suffix}`,
     "danger"
   )
 
-  return `${overdueInvoices.length} invoice overdue — notifikasi dikirim ke admin`
+  return `${overdueCount} invoice overdue — notifikasi dikirim ke admin`
 }
 
 // 4. Late Check-in Alert
@@ -202,8 +219,7 @@ async function taskLateCheckInAlert(): Promise<string> {
         },
       },
     },
-    orderBy: { checkIn: "asc" },
-    take: 20,
+    orderBy: [{ checkIn: "asc" }, { id: "asc" }],
   })
 
   if (lateAttendances.length === 0) {
@@ -234,7 +250,32 @@ async function taskLateCheckInAlert(): Promise<string> {
   return `${lateAttendances.length} karyawan telat — notifikasi dikirim ke admin`
 }
 
-// 5. Cleanup Old Sessions
+// 5. Recover journals stuck in REVERSING
+//
+// reverseJournal() claims a journal by flipping POSTED -> REVERSING inside a
+// transaction, then rolls the claim back to POSTED if anything fails. If the
+// process dies between the claim and the completion, the journal stays
+// REVERSING — a state the GL never reads (reports only sum POSTED/REVERSED), so
+// the document silently disappears from the books while still existing. Return
+// old claims to POSTED so an operator can retry the reversal.
+const STUCK_REVERSING_MS = 15 * 60 * 1000
+
+async function taskRecoverStuckReversals(): Promise<string> {
+  const cutoff = new Date(Date.now() - STUCK_REVERSING_MS)
+
+  const result = await prisma.journal.updateMany({
+    where: { status: "REVERSING", updatedAt: { lt: cutoff } },
+    data: { status: "POSTED" },
+  })
+
+  if (result.count === 0) {
+    return "Tidak ada jurnal tertahan di REVERSING"
+  }
+
+  return `${result.count} jurnal dikembalikan dari REVERSING ke POSTED (tertahan >15 menit)`
+}
+
+// 6. Cleanup Old Sessions + expired idempotency keys
 async function taskCleanup(): Promise<string> {
   const ninetyDaysAgo = new Date()
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
@@ -245,5 +286,9 @@ async function taskCleanup(): Promise<string> {
     },
   })
 
-  return `${result.count} log activity (>90 hari) dihapus`
+  // Idempotency keys are written by every guarded mutation and were never
+  // removed, so the table grew without bound.
+  const prunedKeys = await pruneIdempotencyKeys()
+
+  return `${result.count} log activity (>90 hari) dihapus, ${prunedKeys} kunci idempotency kedaluwarsa dihapus`
 }

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 "use server";
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
@@ -10,6 +10,7 @@ import {
   safeRound,
 } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import { Prisma } from "@prisma/client";
 import {
   onPurchaseReturnProcessed,
@@ -31,6 +32,7 @@ import {
   requestApprovalIfConfigured,
   assertApproved,
 } from "@/lib/services/approval-workflow.service";
+import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { PurchaseStatus, Status } from "@/lib/constants";
 import {
@@ -168,6 +170,7 @@ export async function createPurchaseRequest(formData: FormData) {
       pr.id,
       `Membuat permintaan pembelian #${pr.id}`,
     );
+    await requestApprovalIfConfigured("PurchaseRequest", pr.id, Number(user.id));
     revalidatePath("/pembelian/permintaan");
     return { success: true, id: pr.id };
   } catch (e: unknown) {
@@ -215,6 +218,8 @@ export async function createPurchaseOrder(formData: FormData) {
   try {
     const user = await requirePermission("create_purchase_orders");
 
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(purchaseOrderSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -236,57 +241,69 @@ export async function createPurchaseOrder(formData: FormData) {
       0,
     );
     const shippingCost = v.shippingCost ?? 0;
+    const serviceFee = v.serviceFee ?? 0;
     const grandTotal = safeAdd(
       safeSubtract(subtotal, discountTotal, 0),
-      shippingCost,
-      0,
+      safeAdd(shippingCost, serviceFee, 0),
+      0
     );
 
-    const po = await prisma.purchaseOrder.create({
-      data: {
-        documentNo,
-        vendorId: v.vendorId,
-        purchaseRequestId: v.purchaseRequestId ?? null,
-        date: new Date(v.date),
-        expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
-        paymentTerm: v.paymentTerm ?? null,
-        shippingCost,
-        notes: v.notes ?? null,
-        subtotal,
-        discount: discountTotal,
-        tax: 0,
-        grandTotal,
-        status: "draft",
-        createdBy: Number(user.id),
-        items: {
-          create: poItems.map((it) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
-            unitPrice: Number(it.unitPrice),
-            discount: Number(it.discount || 0),
-            total: safeSubtract(
-              safeMultiply(it.qty, it.unitPrice, 0),
-              it.discount || 0,
-              0,
-            ),
-          })),
+    const po = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id);
+
+      const created = await tx.purchaseOrder.create({
+        data: {
+          documentNo,
+          vendorId: v.vendorId,
+          purchaseRequestId: v.purchaseRequestId ?? null,
+          date: new Date(v.date),
+          expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+          paymentTerm: v.paymentTerm ?? null,
+          shippingCost,
+          serviceFee,
+          notes: v.notes ?? null,
+          subtotal,
+          discount: discountTotal,
+          tax: 0,
+          grandTotal,
+          status: "draft",
+          createdBy: Number(user.id),
+          items: {
+            create: poItems.map((it) => ({
+              itemId: Number(it.itemId),
+              qty: Number(it.qty),
+              unitPrice: Number(it.unitPrice),
+              discount: Number(it.discount || 0),
+              total: safeSubtract(
+                safeMultiply(it.qty, it.unitPrice, 0),
+                it.discount || 0,
+                0,
+              ),
+            })),
+          },
         },
-      },
+      });
+
+      // Update PR status if linked
+      if (v.purchaseRequestId) {
+        await onPurchaseOrderCreated(created.id, tx);
+      }
+
+      // Route through approval workflow if one is configured for PurchaseOrder.
+      await requestApprovalIfConfigured("PurchaseOrder", created.id, Number(user.id), tx);
+
+      return created;
     });
 
-    // Update PR status if linked
-    if (v.purchaseRequestId) {
-      await onPurchaseOrderCreated(po.id);
+    // Notify admins (external, do not fail PO if this fails)
+    try {
+      await notificationService.notifyAdmins(
+        "Pesanan Pembelian baru dibuat",
+        `/pembelian/pesanan/${po.id}`,
+      );
+    } catch (err) {
+      console.error("Gagal mengirim notifikasi admin:", err);
     }
-
-    // Notify admins
-    await notificationService.notifyAdmins(
-      "Pesanan Pembelian baru dibuat",
-      `/pembelian/pesanan/${po.id}`,
-    );
-
-    // Route through approval workflow if one is configured for PurchaseOrder.
-    await requestApprovalIfConfigured("PurchaseOrder", po.id, Number(user.id));
 
     await logActivity(
       "create",
@@ -375,17 +392,26 @@ export async function cancelPurchaseOrder(poId: number) {
   try {
     await requirePermission("edit_purchase_orders");
 
-    const po = await prisma.purchaseOrder.findUniqueOrThrow({
-      where: { id: poId },
-    });
+    await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${poId} FOR UPDATE`;
+      }
+      const po = await tx.purchaseOrder.findUniqueOrThrow({
+        where: { id: poId },
+      });
 
-    if (po.status === "received" || po.status === "cancelled") {
-      throw new Error("PO ini tidak dapat dibatalkan");
-    }
+      if (
+        po.status === "received" ||
+        po.status === "cancelled" ||
+        po.status === "partial_received"
+      ) {
+        throw new Error("PO ini tidak dapat dibatalkan");
+      }
 
-    await prisma.purchaseOrder.update({
-      where: { id: poId },
-      data: { status: "cancelled" },
+      await tx.purchaseOrder.update({
+        where: { id: poId },
+        data: { status: "cancelled" },
+      });
     });
 
     await logActivity(
@@ -434,6 +460,9 @@ export async function createGoodsReceipt(formData: FormData) {
       // already received, or cancelled — and the unconditional flip to "received"
       // below would then also block cancelPurchaseOrder. A receipt is only valid
       // against an approved/ordered PO.
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+      }
       const po = await tx.purchaseOrder.findUniqueOrThrow({
         where: { id: v.purchaseOrderId },
         include: { items: { select: { itemId: true, qty: true } } },
@@ -456,7 +485,7 @@ export async function createGoodsReceipt(formData: FormData) {
             purchaseOrderId: v.purchaseOrderId,
             status: { not: "cancelled" },
           },
-          itemId: { in: items.map((i) => i.itemId) },
+          itemId: { in: items.map((i) => Number(i.itemId)) },
         },
         select: { itemId: true, qty: true },
       });
@@ -638,13 +667,9 @@ export async function createVendorBill(formData: FormData) {
       // Associate uploaded attachments with the new vendor bill
       const attachmentIds = v.attachmentIds;
       if (attachmentIds) {
-        const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-        if (ids.length > 0) {
-          await tx.transactionAttachment.updateMany({
-            where: { id: { in: ids }, referenceId: 0 },
-            data: { referenceId: created.id },
-          });
-        }
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "vendor_bill", referenceId: created.id, uploadedBy: Number(user.id),
+        });
       }
 
       return created;
@@ -701,13 +726,9 @@ export async function createVendorPayment(formData: FormData) {
       // Associate uploaded attachments with the new payment
       const attachmentIds = v.attachmentIds;
       if (attachmentIds) {
-        const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-        if (ids.length > 0) {
-          await tx.transactionAttachment.updateMany({
-            where: { id: { in: ids }, referenceId: 0 },
-            data: { referenceId: created.id },
-          });
-        }
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "vendor_payment", referenceId: created.id, uploadedBy: Number(user.id),
+        });
       }
 
       return created;
@@ -1125,6 +1146,9 @@ export async function deletePurchaseRequest(id: number) {
     }
 
     await prisma.purchaseRequest.delete({ where: { id } });
+    await prisma.approval.deleteMany({
+      where: { referenceType: "PurchaseRequest", referenceId: id },
+    });
 
     await logActivity(
       "delete",
@@ -1548,10 +1572,11 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       0,
     );
     const shippingCost = v.shippingCost ?? 0;
+    const serviceFee = v.serviceFee ?? 0;
     const grandTotal = safeAdd(
       safeSubtract(subtotal, discountTotal, 0),
-      shippingCost,
-      0,
+      safeAdd(shippingCost, serviceFee, 0),
+      0
     );
 
     // Keep existing documentNo (do not regenerate on edit)
@@ -1572,6 +1597,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
           shippingCost,
+          serviceFee,
           notes: v.notes ?? null,
           subtotal,
           discount: discountTotal,
@@ -1696,13 +1722,9 @@ export async function updateVendorBill(id: number, formData: FormData) {
       // Associate uploaded attachments with the vendor bill
       const attachmentIds = v.attachmentIds;
       if (attachmentIds) {
-        const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-        if (ids.length > 0) {
-          await tx.transactionAttachment.updateMany({
-            where: { id: { in: ids }, referenceId: 0 },
-            data: { referenceId: updated.id },
-          });
-        }
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "vendor_bill", referenceId: updated.id, uploadedBy: Number(user.id),
+        });
       }
 
       // The bill journal is posted at creation; reverse + repost so the edited
@@ -1974,7 +1996,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_vendor_payments");
+    const user = await requirePermission("edit_vendor_payments");
 
     const parsed = parseFormData(vendorPaymentSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -2008,13 +2030,9 @@ export async function updateVendorPayment(id: number, formData: FormData) {
       // Associate uploaded attachments with the new payment
       const attachmentIds = v.attachmentIds;
       if (attachmentIds) {
-        const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-        if (ids.length > 0) {
-          await tx.transactionAttachment.updateMany({
-            where: { id: { in: ids }, referenceId: 0 },
-            data: { referenceId: updated.id },
-          });
-        }
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "vendor_payment", referenceId: updated.id, uploadedBy: Number(user.id),
+        });
       }
 
       return updated;

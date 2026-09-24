@@ -18,7 +18,8 @@ model User {
   journals      Journal[]
   notifications Notification[]
   roles         Role[]         @relation("UserRoles")
-  employee      Employee[]
+  employee       Employee[]
+  userWarehouses UserWarehouse[]
 
   @@index([createdAt])
   @@map("users")
@@ -32,9 +33,71 @@ model Role {
   updatedAt   DateTime     @updatedAt @map("updated_at")
   permissions Permission[] @relation("RolePermissions")
   users       User[]       @relation("UserRoles")
+  moduleAccess RoleModuleAccess[]
 
   @@index([createdAt])
   @@map("roles")
+}
+
+/// A logical feature area (Inventory, Sales, etc.) used for nav + admin
+/// permission checklist. Each Module groups a set of ModuleActions.
+model Module {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique           // e.g. "inventory", "sales", "master.brands"
+  name      String                     // "Inventaris", "Penjualan"
+  parentKey String?  @map("parent_key") // hierarchy (e.g. "master" → "master.brands")
+  route     String?                    // "/inventaris" (for top-level nav)
+  icon      String?                    // "Package" (lucide icon name)
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)   @map("is_active")
+  createdAt DateTime @default(now())   @map("created_at")
+  updatedAt DateTime @updatedAt        @map("updated_at")
+
+  actions ModuleAction[]
+  access  RoleModuleAccess[]
+
+  @@index([parentKey])
+  @@index([order])
+  @@map("modules")
+}
+
+/// An action exposed by a Module (view, create, update, delete, approve, ...).
+/// `permissionKey` maps to the legacy permission name so existing can() checks
+/// keep working unchanged.
+model ModuleAction {
+  id            Int      @id @default(autoincrement())
+  moduleId      Int      @map("module_id")
+  key           String                       // "view" | "create" | "update" | "delete" | "approve"
+  permissionKey String   @map("permission_key") // e.g. "view_inventory"
+  label         String                       // "Lihat", "Buat", ...
+  order         Int      @default(0)
+
+  module Module              @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  access RoleModuleAccess[]
+
+  @@unique([moduleId, key])
+  @@index([moduleId])
+  @@map("module_actions")
+}
+
+/// Per-role grant for a (module, action) pair. Absence of a row = inherit.
+model RoleModuleAccess {
+  id             Int      @id @default(autoincrement())
+  roleId         Int      @map("role_id")
+  moduleId       Int      @map("module_id")
+  moduleActionId Int      @map("module_action_id")
+  allowed        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt        @map("updated_at")
+
+  role   Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  action ModuleAction @relation(fields: [moduleActionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, moduleId, moduleActionId])
+  @@index([roleId])
+  @@index([moduleId])
+  @@map("role_module_access")
 }
 
 model Permission {
@@ -61,6 +124,7 @@ model SystemSetting {
   companyVillage               String?   @map("company_village")
   companyPostalCode            String?   @map("company_postal_code")
   companyLogo                  String?   @map("company_logo")
+  companyLogoDark              String?   @map("company_logo_dark")
   companyWebsite               String?   @map("company_website")
   companyTaxId                 String?   @map("company_tax_id")
   companyLatitude              Decimal?  @map("company_latitude") @db.Decimal(10, 8)
@@ -163,6 +227,7 @@ model SystemSetting {
   payrollBankAccountId          Int?    @map("payroll_bank_account_id")
   employeeReceivableAccountId   Int?    @map("employee_receivable_account_id")
   payrollJournalTypeId          Int?    @map("payroll_journal_type_id")
+  defaultProjectStages          String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -220,11 +285,13 @@ model Customer {
   city             String?
   gender           String?           @map("gender")
   taxId            String?           @map("tax_id")
-  code             String?           @map("code")
+  code             String?           @unique @map("code")
   creditLimit      Decimal           @default(0.00) @map("credit_limit") @db.Decimal(15, 2)
   contactPerson    String?           @map("contact_person")
   isActive         Boolean           @default(true) @map("is_active")
   deletedAt        DateTime?         @map("deleted_at")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
   customerVehicles CustomerVehicle[]
@@ -234,12 +301,28 @@ model Customer {
   salesInvoices    SalesInvoice[]
   salesOrders      SalesOrder[]
   workOrders       WorkOrder[]
+  customerCategoryId Int?              @map("customer_category_id")
+  customerCategory   CustomerCategory? @relation(fields: [customerCategoryId], references: [id])
 
   @@index([isActive, deletedAt], map: "idx_customers_active_deleted")
   @@index([name], map: "idx_customers_name")
   @@index([code], map: "idx_customers_code")
   @@index([createdAt])
   @@map("customers")
+}
+
+model CustomerCategory {
+  id                 Int        @id @default(autoincrement())
+  name               String     @unique
+  downPaymentPercent Decimal    @default(0.00) @map("down_payment_percent") @db.Decimal(5, 2)
+  isActive           Boolean    @default(true) @map("is_active")
+  deletedAt          DateTime?  @map("deleted_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  customers          Customer[]
+
+  @@index([isActive, deletedAt], map: "idx_cust_cat_active_deleted")
+  @@map("customer_categories")
 }
 
 model Vendor {
@@ -264,6 +347,8 @@ model Vendor {
   paymentTermId     Int?            @map("payment_term_id")
   isActive          Boolean         @default(true) @map("is_active")
   deletedAt         DateTime?       @map("deleted_at")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
   items             Item[]
@@ -279,12 +364,15 @@ model Vendor {
 }
 
 model Brand {
-  id          Int      @id @default(autoincrement())
-  name        String
-  description String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id          Int            @id @default(autoincrement())
+  name        String         @unique
+  description String?        @db.Text
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
   items       Item[]
+  categories  ItemCategory[] @relation("BrandCategories")
 
   @@index([createdAt])
   @@map("brands")
@@ -292,14 +380,18 @@ model Brand {
 
 model ItemCategory {
   id          Int            @id @default(autoincrement())
-  name        String
+  name        String         @unique
   description String?
   parentId    Int?           @map("parent_id")
+  costingMethod String       @default("average") @map("costing_method")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
   parent      ItemCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
   children    ItemCategory[] @relation("CategoryTree")
   items       Item[]
+  brands      Brand[]        @relation("BrandCategories")
 
   @@index([parentId], map: "item_categories_parent_id_fkey")
   @@index([createdAt])
@@ -345,6 +437,7 @@ model Item {
   warehouse          Warehouse?          @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
   vendor             Vendor?             @relation(fields: [vendorId], references: [id])
   stockMoves         StockMove[]
+  manufacturedProducts Product[]          @relation("ProductInventoryItem")
   uomConversions     UomConversion[]
 
   @@index([brandId], map: "items_brand_id_fkey")
@@ -378,6 +471,7 @@ model Warehouse {
   racks            Rack[]
   stockAdjustments StockAdjustment[]
   stockMoves       StockMove[]
+  userWarehouses   UserWarehouse[]
 
   @@index([isActive, deletedAt])
   @@index([name])
@@ -396,6 +490,7 @@ model Rack {
   rows        RackRow[]
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
 
+  @@unique([warehouseId, code])
   @@index([warehouseId], map: "racks_warehouse_id_fkey")
   @@index([createdAt])
   @@map("racks")
@@ -411,6 +506,7 @@ model RackRow {
   items     Item[]
   rack      Rack     @relation(fields: [rackId], references: [id], onDelete: Restrict)
 
+  @@unique([rackId, code])
   @@index([rackId], map: "rack_rows_rack_id_fkey")
   @@index([createdAt])
   @@map("rack_rows")
@@ -418,9 +514,11 @@ model RackRow {
 
 model Department {
   id            Int                 @id @default(autoincrement())
-  name          String
-  code          String?
+  name          String              @unique
+  code          String?             @unique
   description   String?
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt     DateTime            @default(now()) @map("created_at")
   updatedAt     DateTime            @updatedAt @map("updated_at")
   holidays      DepartmentHoliday[]
@@ -438,6 +536,8 @@ model Position {
   code         String?     @unique
   description  String?     @db.Text
   departmentId Int?        @map("department_id")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
   employees    Employee[]
@@ -517,6 +617,7 @@ model Account {
   parent         Account?       @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
   children       Account[]      @relation("AccountTree")
   journalEntries JournalEntry[]
+  allocationRules AllocationRule[]
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
@@ -530,6 +631,8 @@ model PaymentTerm {
   code      String   @unique
   days      Int      @default(0)
   isActive  Boolean  @default(true) @map("is_active")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   vendors   Vendor[]
@@ -543,6 +646,8 @@ model PaymentMethod {
   code      String   @unique
   name      String
   isActive  Boolean  @default(true) @map("is_active")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -555,6 +660,8 @@ model ShippingMethod {
   code      String   @unique
   name      String
   isActive  Boolean  @default(true) @map("is_active")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -904,6 +1011,7 @@ model PurchaseOrder {
   paymentStatus     String              @default("unpaid") @map("payment_status")
   paymentTerm       String?             @map("payment_term")
   shippingCost      Decimal             @default(0.00) @map("shipping_cost") @db.Decimal(15, 2)
+  serviceFee        Decimal             @default(0.00) @map("service_fee") @db.Decimal(15, 2)
   totalAmount       Decimal             @default(0.00) @map("total_amount") @db.Decimal(15, 2)
   documentNo        String              @unique @map("document_no")
   vendorId          Int                 @map("vendor_id")
@@ -1343,11 +1451,14 @@ model MaterialIssue {
   updatedAt   DateTime            @updatedAt @map("updated_at")
   items       MaterialIssueItem[]
   warehouse   Warehouse           @relation(fields: [warehouseId], references: [id])
+  costCenter  CostCenter?         @relation(fields: [costCenterId], references: [id])
+  costCenterId Int?               @map("cost_center_id")
 
   @@index([warehouseId], map: "material_issues_warehouse_id_fkey")
   @@index([status], map: "idx_material_issues_status")
   @@index([projectId])
   @@index([workOrderId])
+  @@index([costCenterId])
   @@index([createdBy])
   @@index([createdAt])
   @@map("material_issues")
@@ -1373,6 +1484,7 @@ model Product {
   sku                  String?               @unique
   description          String?               @db.Text
   standardCost         Decimal               @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
+  inventoryItemId      Int?                  @unique @map("inventory_item_id")
   vehicleBrandId       Int?                  @map("vehicle_brand_id")
   vehicleModelId       Int?                  @map("vehicle_model_id")
   createdAt            DateTime              @default(now()) @map("created_at")
@@ -1380,6 +1492,7 @@ model Product {
   materials            ProductMaterial[]
   productVehicleModels ProductVehicleModel[]
   productionOrders     ProductionOrder[]
+  inventoryItem        Item?                 @relation("ProductInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
   vehicleBrand         VehicleBrand?         @relation(fields: [vehicleBrandId], references: [id], onDelete: SetNull)
   vehicleModel         VehicleModel?         @relation(fields: [vehicleModelId], references: [id], onDelete: SetNull)
 
@@ -1487,6 +1600,24 @@ model WorkOrderItem {
   @@map("work_order_items")
 }
 
+
+
+// Keep legacy attendance tables available to payroll and prevent db push from
+// dropping their data while the attendance UI is absent.
+model Holiday {
+  id                Int      @id @default(autoincrement())
+  name              String
+  date              DateTime
+  description       String?  @db.Text
+  isNationalHoliday Boolean  @default(true) @map("is_national_holiday")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@index([date])
+  @@map("holidays")
+}
+
 model Attendance {
   id                Int       @id @default(autoincrement())
   employeeId        Int       @map("employee_id")
@@ -1512,6 +1643,39 @@ model Attendance {
   @@index([status], map: "idx_attendances_status")
   @@index([createdAt])
   @@map("attendances")
+}
+
+model WorkSchedule {
+  id                   Int          @id @default(autoincrement())
+  name                 String
+  workDays             String       @default("") @map("work_days")
+  startTime            String       @map("start_time")
+  endTime              String       @map("end_time")
+  lateToleranceMinutes Int          @default(0) @map("late_tolerance_minutes")
+  isActive             Boolean      @default(true) @map("is_active")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+  employees            Employee[]   @relation("EmployeeWorkSchedules")
+  departments          Department[] @relation("DepartmentWorkSchedules")
+
+  @@index([createdAt])
+  @@map("work_schedules")
+}
+
+model DepartmentHoliday {
+  id           Int        @id @default(autoincrement())
+  departmentId Int        @map("department_id")
+  name         String
+  date         DateTime
+  isRecurring  Boolean    @default(false) @map("is_recurring")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@index([departmentId], map: "department_holidays_department_id_fkey")
+  @@index([createdAt])
+  @@index([date])
+  @@map("department_holidays")
 }
 
 model LeaveRequest {
@@ -1598,33 +1762,21 @@ model Payroll {
   createdBy              Int?      @map("created_by")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
-  employee               Employee? @relation(fields: [employeeId], references: [id])
+  employee               Employee?  @relation(fields: [employeeId], references: [id])
+  costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
+  costCenterId           Int?        @map("cost_center_id")
 
   @@unique([employeeId, period], map: "uq_payroll_employee_period")
   @@index([employeeId], map: "payrolls_employee_id_fkey")
   @@index([status], map: "idx_payrolls_status")
+  @@index([costCenterId])
   @@index([approvedBy])
   @@index([createdBy])
   @@index([createdAt])
   @@map("payrolls")
 }
 
-model WorkSchedule {
-  id                   Int          @id @default(autoincrement())
-  name                 String
-  workDays             String       @default("") @map("work_days")
-  startTime            String       @map("start_time")
-  endTime              String       @map("end_time")
-  lateToleranceMinutes Int          @default(0) @map("late_tolerance_minutes")
-  isActive             Boolean      @default(true) @map("is_active")
-  createdAt            DateTime     @default(now()) @map("created_at")
-  updatedAt            DateTime     @updatedAt @map("updated_at")
-  employees            Employee[]   @relation("EmployeeWorkSchedules")
-  departments          Department[] @relation("DepartmentWorkSchedules")
 
-  @@index([createdAt])
-  @@map("work_schedules")
-}
 
 model EmployeeLoan {
   id                 Int      @id @default(autoincrement())
@@ -1635,12 +1787,16 @@ model EmployeeLoan {
   remainingAmount    Decimal  @map("remaining_amount") @db.Decimal(15, 2)
   status             String   @default("active")
   notes              String?  @db.Text
+  approvedBy         Int?     @map("approved_by")
+  createdBy          Int?     @map("created_by")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
   employee           Employee @relation(fields: [employeeId], references: [id])
 
   @@index([employeeId], map: "employee_loans_employee_id_fkey")
   @@index([status])
+  @@index([approvedBy])
+  @@index([createdBy])
   @@index([createdAt])
   @@map("employee_loans")
 }
@@ -1715,25 +1871,41 @@ model JournalEntry {
   @@map("journal_entries")
 }
 
+model ExpenseCategory {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  label     String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  expenses  Expense[]
+
+  @@index([sortOrder])
+  @@index([isActive])
+  @@map("expense_categories")
+}
+
 model Expense {
-  id                Int      @id @default(autoincrement())
-  documentNo        String   @unique @map("document_no")
-  employeeId        Int?     @map("employee_id")
-  accountId         Int      @map("account_id")
-  paidFromAccountId Int?     @map("paid_from_account_id")
-  projectId         Int?     @map("project_id")
-  amount            Decimal  @db.Decimal(15, 2)
+  id                Int              @id @default(autoincrement())
+  documentNo        String           @unique @map("document_no")
+  employeeId        Int?             @map("employee_id")
+  accountId         Int              @map("account_id")
+  paidFromAccountId Int?             @map("paid_from_account_id")
+  projectId         Int?             @map("project_id")
+  categoryId        Int?             @map("category_id")
+  amount            Decimal          @db.Decimal(15, 2)
   date              DateTime
-  referenceNo       String?  @map("reference_no")
-  description       String?  @db.Text
-  category          String?
-  receiptImage      String?  @map("receipt_image")
-  status            String   @default("draft")
-  approvedBy        Int?     @map("approved_by")
-  costCenterId      Int?     @map("cost_center_id")
-  createdBy         Int?     @map("created_by")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  referenceNo       String?          @map("reference_no")
+  description       String?          @db.Text
+  receiptImage      String?          @map("receipt_image")
+  status            String           @default("draft")
+  approvedBy        Int?             @map("approved_by")
+  costCenterId      Int?             @map("cost_center_id")
+  createdBy         Int?             @map("created_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  category          ExpenseCategory? @relation(fields: [categoryId], references: [id])
 
   @@index([accountId], map: "expenses_account_id_idx")
   @@index([projectId], map: "expenses_project_id_idx")
@@ -1744,6 +1916,7 @@ model Expense {
   @@index([costCenterId])
   @@index([createdBy])
   @@index([createdAt])
+  @@index([categoryId])
   @@map("expenses")
 }
 
@@ -1800,12 +1973,20 @@ model CostCenter {
   isActive       Boolean    @default(true) @map("is_active")
   departmentId   Int?       @map("department_id")
   profitCenterId Int?       @map("profit_center_id")
+  parentId       Int?       @map("parent_id")
+  parent         CostCenter?  @relation("CostCenterTree", fields: [parentId], references: [id])
+  children       CostCenter[] @relation("CostCenterTree")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
   skfValues      SkfValue[]
+  payrolls       Payroll[]
+  materialIssues MaterialIssue[]
+  projects      Project[]
+  allocationTargets AllocationRuleTarget[]
 
   @@index([departmentId])
   @@index([profitCenterId])
+  @@index([parentId])
   @@index([createdAt])
   @@map("cost_centers")
 }
@@ -2103,6 +2284,10 @@ model Asset {
   id                 Int             @id @default(autoincrement())
   photo              String?         @map("photo")
   serialNumber       String?         @map("serial_number")
+  // Unused: no code path reads or writes this column. The asset form field
+  // labelled "Deskripsi" is persisted to `notes` (see createAsset/updateAsset),
+  // so this column stays NULL forever. Kept only to avoid a destructive
+  // migration; drop it in a dedicated migration when convenient.
   description        String?         @map("description") @db.Text
   residualValue      Decimal         @default(0.00) @map("residual_value") @db.Decimal(15, 2)
   depreciationMethod String          @default("straight_line") @map("depreciation_method")
@@ -2286,11 +2471,14 @@ model Project {
   tasks             Task[]
   timesheets        Timesheet[]
   workOrders        WorkOrder[]
+  costCenter        CostCenter?   @relation(fields: [costCenterId], references: [id])
+  costCenterId      Int?          @map("cost_center_id")
 
   @@index([customerId], map: "projects_customer_id_fkey")
   @@index([customerVehicleId], map: "projects_customer_vehicle_id_fkey")
   @@index([status], map: "idx_projects_status")
   @@index([workOrderId])
+  @@index([costCenterId])
   @@index([createdBy])
   @@index([createdAt])
   @@map("projects")
@@ -2451,6 +2639,8 @@ model Bank {
   type      String   @default("bank")
   accountId Int?     @map("account_id")
   isActive  Boolean  @default(true) @map("is_active")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -2475,6 +2665,8 @@ model Tax {
   displayOrder  Int       @default(0) @map("display_order")
   isActive      Boolean   @default(true) @map("is_active")
   deletedAt     DateTime? @map("deleted_at")
+  createdBy      Int?      @map("created_by")
+  updatedBy      Int?      @map("updated_by")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -2483,40 +2675,9 @@ model Tax {
   @@map("taxes")
 }
 
-model Holiday {
-  id                Int      @id @default(autoincrement())
-  name              String
-  date              DateTime
-  description       String?  @db.Text
-  isNationalHoliday Boolean  @default(true) @map("is_national_holiday")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
 
-  @@index([createdAt])
-  @@index([date])
-  @@map("holidays")
-}
 
-model Currency {
-  id                 Int            @id @default(autoincrement())
-  code               String         @unique
-  name               String
-  symbol             String?
-  symbolPosition     String         @default("before") @map("symbol_position")
-  decimalSeparator   String         @default(".") @map("decimal_separator")
-  thousandsSeparator String         @default(",") @map("thousands_separator")
-  decimalPlaces      Int            @default(2) @map("decimal_places")
-  rate               Decimal        @db.Decimal(15, 4)
-  isBase             Boolean        @default(false) @map("is_base")
-  isActive           Boolean        @default(true) @map("is_active")
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
-  exchangeRatesFrom  ExchangeRate[] @relation("ExchangeRateFrom")
-  exchangeRatesTo    ExchangeRate[] @relation("ExchangeRateTo")
 
-  @@index([createdAt])
-  @@map("currencies")
-}
 
 model Barcode {
   id        Int      @id @default(autoincrement())
@@ -2564,9 +2725,42 @@ model StatisticalKeyFigure {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
   skfValues SkfValue[]
+  allocationRules AllocationRule[]
 
   @@index([createdAt])
   @@map("statistical_key_figures")
+}
+
+model AllocationRule {
+  id             Int                     @id @default(autoincrement())
+  name           String
+  sourceAccountId Int                    @map("source_account_id")
+  skfId          Int                     @map("skf_id")
+  description    String?                 @db.Text
+  isActive       Boolean                 @default(true) @map("is_active")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  sourceAccount  Account                 @relation(fields: [sourceAccountId], references: [id])
+  skf            StatisticalKeyFigure    @relation(fields: [skfId], references: [id])
+  targets        AllocationRuleTarget[]
+
+  @@index([sourceAccountId])
+  @@index([skfId])
+  @@map("allocation_rules")
+}
+
+model AllocationRuleTarget {
+  id           Int            @id @default(autoincrement())
+  ruleId       Int            @map("rule_id")
+  costCenterId Int            @map("cost_center_id")
+  percentage   Decimal?       @db.Decimal(5, 2)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  rule         AllocationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  costCenter   CostCenter     @relation(fields: [costCenterId], references: [id])
+
+  @@unique([ruleId, costCenterId])
+  @@index([costCenterId])
+  @@map("allocation_rule_targets")
 }
 
 model ActivityLog {
@@ -2691,69 +2885,7 @@ model UomConversion {
   @@map("uom_conversions")
 }
 
-model ExchangeRate {
-  id             Int      @id @default(autoincrement())
-  fromCurrencyId Int      @map("from_currency_id")
-  toCurrencyId   Int      @map("to_currency_id")
-  rate           Decimal  @db.Decimal(15, 6)
-  effectiveDate  DateTime @map("effective_date")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  fromCurrency   Currency @relation("ExchangeRateFrom", fields: [fromCurrencyId], references: [id], onDelete: Restrict)
-  toCurrency     Currency @relation("ExchangeRateTo", fields: [toCurrencyId], references: [id], onDelete: Restrict)
 
-  @@index([fromCurrencyId], map: "exchange_rates_from_currency_id_fkey")
-  @@index([toCurrencyId], map: "exchange_rates_to_currency_id_fkey")
-  @@index([createdAt])
-  @@map("exchange_rates")
-}
-
-model CrmPipeline {
-  id          Int                @id @default(autoincrement())
-  name        String
-  description String?
-  isDefault   Boolean            @default(false) @map("is_default")
-  isActive    Boolean            @default(true) @map("is_active")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  stages      CrmPipelineStage[]
-
-  @@index([createdAt])
-  @@map("crm_pipelines")
-}
-
-model CrmPipelineStage {
-  id          Int         @id @default(autoincrement())
-  pipelineId  Int         @map("pipeline_id")
-  name        String
-  order       Int
-  probability Int         @default(0)
-  color       String?
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  pipeline    CrmPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-
-  @@index([pipelineId], map: "crm_pipeline_stages_pipeline_id_fkey")
-  @@index([createdAt])
-  @@map("crm_pipeline_stages")
-}
-
-model ApprovalDelegation {
-  id         Int      @id @default(autoincrement())
-  fromUserId Int      @map("from_user_id")
-  toUserId   Int      @map("to_user_id")
-  startDate  DateTime @map("start_date")
-  endDate    DateTime @map("end_date")
-  reason     String?
-  isActive   Boolean  @default(true) @map("is_active")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  @@index([fromUserId])
-  @@index([toUserId])
-  @@index([createdAt])
-  @@map("approval_delegations")
-}
 
 model SkfValue {
   id                     Int                  @id @default(autoincrement())
@@ -2768,6 +2900,7 @@ model SkfValue {
   profitCenter           ProfitCenter?        @relation(fields: [profitCenterId], references: [id])
   statisticalKeyFigure   StatisticalKeyFigure @relation(fields: [statisticalKeyFigureId], references: [id])
 
+  @@unique([statisticalKeyFigureId, period, costCenterId], map: "skf_value_period_cc_unique")
   @@index([costCenterId], map: "skf_values_cost_center_id_fkey")
   @@index([profitCenterId], map: "skf_values_profit_center_id_fkey")
   @@index([statisticalKeyFigureId], map: "skf_values_statistical_key_figure_id_fkey")
@@ -2829,21 +2962,7 @@ model Task {
   @@map("tasks")
 }
 
-model DepartmentHoliday {
-  id           Int        @id @default(autoincrement())
-  departmentId Int        @map("department_id")
-  name         String
-  date         DateTime
-  isRecurring  Boolean    @default(false) @map("is_recurring")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 
-  @@index([departmentId], map: "department_holidays_department_id_fkey")
-  @@index([createdAt])
-  @@index([date])
-  @@map("department_holidays")
-}
 
 model ProductVehicleModel {
   id             Int          @id @default(autoincrement())
@@ -2864,6 +2983,7 @@ enum SalesInvoiceStatus {
   partial
   paid
   cancelled
+  approved
 }
 
 enum StockMoveImpact {
@@ -2883,4 +3003,24 @@ enum AccountType {
   EQUITY
   REVENUE
   EXPENSE
+}
+
+model UserWarehouse {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  warehouseId Int       @map("warehouse_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  user        User      @relation(fields: [userId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([userId, warehouseId])
+  @@map("user_warehouses")
+}
+
+model IdempotencyKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("idempotency_keys")
 }

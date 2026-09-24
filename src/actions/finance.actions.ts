@@ -517,7 +517,7 @@ export async function createPettyCash(formData: FormData) {
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
     const pettyCash = await prisma.$transaction(async (tx) => {
-      await checkIdempotency(idempotencyKey, tx);
+      await checkIdempotency(idempotencyKey, tx, user.id);
 
       // Calculate balanceBefore from the last petty cash record
       const lastRecord = await tx.pettyCash.findFirst({

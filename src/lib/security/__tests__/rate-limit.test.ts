@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { takeRateLimit, getClientIp } from "../rate-limit"
+import { takeRateLimit, peekRateLimit, getClientIp } from "../rate-limit"
 
 describe("takeRateLimit (in-memory fallback)", () => {
   beforeEach(() => {
@@ -273,5 +273,65 @@ describe("getClientIp", () => {
       headers: { "cf-connecting-ip": "   ", "x-real-ip": "4.4.4.4" },
     })
     expect(getClientIp(req)).toBe("4.4.4.4")
+  })
+})
+
+describe("peekRateLimit (in-memory fallback)", () => {
+  beforeEach(() => {
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-01T00:00:00Z"))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("reports an empty bucket as allowed without consuming an attempt", async () => {
+    const config = { windowMs: 60_000, max: 3 }
+
+    const peeked = await peekRateLimit("peek-empty", config)
+    expect(peeked.allowed).toBe(true)
+    expect(peeked.remaining).toBe(3)
+
+    // A real attempt after the peek still has the full quota → the peek did not count.
+    const taken = await takeRateLimit("peek-empty", config)
+    expect(taken.allowed).toBe(true)
+    expect(taken.remaining).toBe(2)
+  })
+
+  it("stays allowed for every peek below the limit", async () => {
+    const config = { windowMs: 60_000, max: 3 }
+
+    // This is the B12 scenario: a user signing in repeatedly must never exhaust
+    // their own quota, so ten peeks must all be allowed.
+    for (let i = 0; i < 10; i++) {
+      const peeked = await peekRateLimit("peek-repeat", config)
+      expect(peeked.allowed).toBe(true)
+      expect(peeked.remaining).toBe(3)
+    }
+  })
+
+  it("blocks once the limit has been reached", async () => {
+    const config = { windowMs: 60_000, max: 2 }
+
+    await takeRateLimit("peek-full", config)
+    await takeRateLimit("peek-full", config)
+
+    const peeked = await peekRateLimit("peek-full", config)
+    expect(peeked.allowed).toBe(false)
+    expect(peeked.remaining).toBe(0)
+  })
+
+  it("allows again after the window expires", async () => {
+    const config = { windowMs: 60_000, max: 1 }
+
+    await takeRateLimit("peek-window", config)
+    expect((await peekRateLimit("peek-window", config)).allowed).toBe(false)
+
+    vi.setSystemTime(new Date("2026-03-01T00:02:00Z"))
+    const afterWindow = await peekRateLimit("peek-window", config)
+    expect(afterWindow.allowed).toBe(true)
   })
 })
