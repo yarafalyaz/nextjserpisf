@@ -19,6 +19,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface PRFormProps {
   items: { id: number; sku: string; name: string; unitOfMeasure: string }[];
@@ -56,13 +57,13 @@ export function PurchaseRequestForm({
   const [date, setDate] = useState(
     request?.date
       ? new Date(request.date).toISOString().split("T")[0]
-      : new Date().toISOString().split("T")[0],
+      : toLocalDateOnly(new Date()),
   );
   const [notes, setNotes] = useState(request?.notes || "");
   const [requestDate, setRequestDate] = useState(
     request?.requestDate
       ? new Date(request.requestDate).toISOString().split("T")[0]
-      : new Date().toISOString().split("T")[0],
+      : toLocalDateOnly(new Date()),
   );
   const [description, setDescription] = useState(request?.description || "");
   const [prItems, setPrItems] = useState<PRItem[]>(

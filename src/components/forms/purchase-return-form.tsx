@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface PurchaseReturnFormProps {
   purchaseOrders: { id: number; documentNo: string
@@ -25,7 +26,7 @@ interface ReturnItem {
 export function PurchaseReturnForm({ purchaseOrders, items, returnData }: PurchaseReturnFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(returnData?.date ?? new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
   const [purchaseOrderId, setPurchaseOrderId] = useState(returnData?.purchaseOrderId ? String(returnData.purchaseOrderId) : "")
   // Seed returnItems from returnData on edit so updating a return doesn't
   // silently wipe all existing line items to a single empty row.

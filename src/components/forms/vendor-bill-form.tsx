@@ -17,6 +17,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface BillItem {
   itemId: string;
@@ -58,7 +59,7 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [date, setDate] = useState(
-    bill?.date ?? new Date().toISOString().split("T")[0],
+    bill?.date ?? toLocalDateOnly(new Date()),
   );
   const [dueDate, setDueDate] = useState(bill?.dueDate ?? "");
   const [vendorId, setVendorId] = useState<string | null>(

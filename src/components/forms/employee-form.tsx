@@ -18,6 +18,7 @@ import { AddressPicker } from "@/components/ui/address-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface EmployeeFormProps {
   employee?: {
@@ -88,7 +89,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
       maritalStatus: employee?.maritalStatus || "",
       departmentId: employee?.departmentId || undefined,
       positionId: employee?.positionId || undefined,
-      joinDate: toDateInputValue(employee?.joinDate) || new Date().toISOString().split("T")[0],
+      joinDate: toDateInputValue(employee?.joinDate) || toLocalDateOnly(new Date()),
       paymentFrequency: employee?.paymentFrequency || "MONTHLY",
       baseSalary: employee?.baseSalary || 0,
     },

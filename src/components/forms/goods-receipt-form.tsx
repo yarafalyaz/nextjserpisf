@@ -10,12 +10,14 @@ import {
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Combobox } from "@/components/ui/combobox";
+import { AppDatePicker } from "@/components/ui/date-picker";
 import {
   FormCard,
   FormSection,
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface ItemMeta {
   name: string;
@@ -188,7 +190,7 @@ export function GoodsReceiptForm({
     receipt?.referenceNumber ?? "",
   );
   const [date, setDate] = useState<string>(
-    receipt?.date ?? new Date().toISOString().split("T")[0],
+    receipt?.date ?? toLocalDateOnly(new Date()),
   );
 
   function onSubmit(e: React.FormEvent) {
@@ -387,26 +389,16 @@ export function GoodsReceiptForm({
                                         }}
                                       />
                                     </div>
-                                    <div className="flex flex-col gap-1.5">
-                                      <Label htmlFor={expiryId}>
-                                        Kedaluwarsa
-                                      </Label>
-                                      <input
-                                        id={expiryId}
-                                        type="date"
-                                        value={row.expiryDate}
-                                        onChange={(e) =>
-                                          updateItem(index, {
-                                            expiryDate: e.target.value,
-                                          })
-                                        }
-                                        className="form-input"
-                                        style={{
-                                          fontSize: "0.8125rem",
-                                          padding: "6px",
-                                        }}
-                                      />
-                                    </div>
+                                    <AppDatePicker
+                                      name={expiryId}
+                                      value={row.expiryDate}
+                                      onChange={(v) =>
+                                        updateItem(index, {
+                                          expiryDate: v,
+                                        })
+                                      }
+                                      label="Kedaluwarsa"
+                                    />
                                   </div>
                                 )}
                                 {row.trackSerial && (

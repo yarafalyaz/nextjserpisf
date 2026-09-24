@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -13,16 +13,22 @@ import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 export function PettyCashForm({ accounts, pettyCash, currentBalance }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; referenceNo?: string | null; balanceBefore?: number; balanceAfter?: number }; currentBalance?: number }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(pettyCash?.date ?? new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(pettyCash?.date ?? toLocalDateOnly(new Date()))
   const [type, setType] = useState(pettyCash?.type ?? "IN")
   const [accountId, setAccountId] = useState<string | null>(pettyCash?.accountId ? String(pettyCash.accountId) : null)
   const assetAccounts = accounts.filter((a) => a.type === "ASSET")
   const expenseAccounts = accounts.filter((a) => a.type === "EXPENSE")
-  const allAccounts = [...assetAccounts.map((a) => ({ ...a, group: "Kas/Bank" })), ...expenseAccounts.map((a) => ({ ...a, group: "Beban" }))]
+  const filteredOptions = useMemo(() => {
+    if (type === "IN") {
+      return assetAccounts.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))
+    }
+    return expenseAccounts.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))
+  }, [type, assetAccounts, expenseAccounts])
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -74,10 +80,10 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
             <Combobox
               id="accountId"
               name="accountId"
-              options={allAccounts.map((a) => ({ value: String(a.id), label: `${a.group}: ${a.code} - ${a.name}` }))}
+              options={filteredOptions}
               value={accountId}
               onChange={setAccountId}
-              placeholder="Cari akun..."
+              placeholder={type === "IN" ? "Cari akun kas/bank..." : "Cari akun beban..."}
             />
           </div>
         </FormSection>

@@ -22,6 +22,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface PurchaseOrderFormProps {
   vendors: { id: number; name: string }[];
@@ -32,6 +33,7 @@ interface PurchaseOrderFormProps {
     notes?: string | null;
     paymentTerm?: string | null;
     shippingCost?: number;
+    serviceFee?: number;
     items?: Array<{
       itemId: number;
       qty: number;
@@ -86,10 +88,11 @@ export function PurchaseOrderForm({
     resolver: zodResolver(purchaseOrderSchema),
     defaultValues: {
       vendorId: order?.vendorId,
-      date: order?.date ?? new Date().toISOString().split("T")[0],
+      date: order?.date ?? toLocalDateOnly(new Date()),
       notes: order?.notes ?? "",
       paymentTerm: order?.paymentTerm ?? "",
       shippingCost: order?.shippingCost ?? 0,
+      serviceFee: (order as any)?.serviceFee ?? 0,
       purchaseRequestId: defaultPrId,
     },
   });
@@ -117,7 +120,8 @@ export function PurchaseOrderForm({
     0,
   );
   const shippingCost = Number(watch("shippingCost")) || 0;
-  const grandTotal = itemsTotal + shippingCost;
+  const serviceFee = Number(watch("serviceFee")) || 0;
+  const grandTotal = itemsTotal + shippingCost + serviceFee;
 
   function onSubmit(data: PurchaseOrderInput) {
     startTransition(async () => {
@@ -218,6 +222,23 @@ export function PurchaseOrderForm({
               render={({ field }) => (
                 <CurrencyInput
                   id="shippingCost"
+                  value={field.value ?? 0}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  placeholder="0"
+                  prefix="Rp"
+                />
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="serviceFee">Biaya Layanan Platform</Label>
+            <Controller
+              name="serviceFee"
+              control={control}
+              render={({ field }) => (
+                <CurrencyInput
+                  id="serviceFee"
                   value={field.value ?? 0}
                   onChange={field.onChange}
                   onBlur={field.onBlur}

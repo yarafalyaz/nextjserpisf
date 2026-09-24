@@ -1,6 +1,8 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { toLocalDateOnly } from '@/lib/utils/date-only'
 
 const presets = [
   { label: 'Bulan Ini', key: 'this-month' },
@@ -15,38 +17,44 @@ function getPresetDates(key: string): { startDate: string; endDate: string } {
   const y = now.getFullYear()
   const m = now.getMonth()
 
+  // Every value is a LOCAL calendar day. Deriving them with
+  // `toISOString().split('T')[0]` reported the PREVIOUS day under
+  // TZ=Asia/Jakarta (local midnight = 17:00 UTC the day before), so "Bulan Ini"
+  // in September started 31 Aug and "today" was wrong before 07:00 WIB.
+  const today = toLocalDateOnly(now)
+
   switch (key) {
     case 'this-month':
       return {
-        startDate: new Date(y, m, 1).toISOString().split('T')[0],
-        endDate: now.toISOString().split('T')[0],
+        startDate: toLocalDateOnly(new Date(y, m, 1)),
+        endDate: today,
       }
     case 'last-month':
       return {
-        startDate: new Date(y, m - 1, 1).toISOString().split('T')[0],
-        endDate: new Date(y, m, 0).toISOString().split('T')[0],
+        startDate: toLocalDateOnly(new Date(y, m - 1, 1)),
+        endDate: toLocalDateOnly(new Date(y, m, 0)),
       }
     case 'this-quarter': {
       const qStart = Math.floor(m / 3) * 3
       return {
-        startDate: new Date(y, qStart, 1).toISOString().split('T')[0],
-        endDate: now.toISOString().split('T')[0],
+        startDate: toLocalDateOnly(new Date(y, qStart, 1)),
+        endDate: today,
       }
     }
     case 'ytd':
       return {
-        startDate: new Date(y, 0, 1).toISOString().split('T')[0],
-        endDate: now.toISOString().split('T')[0],
+        startDate: toLocalDateOnly(new Date(y, 0, 1)),
+        endDate: today,
       }
     case 'last-year':
       return {
-        startDate: new Date(y - 1, 0, 1).toISOString().split('T')[0],
-        endDate: new Date(y - 1, 11, 31).toISOString().split('T')[0],
+        startDate: toLocalDateOnly(new Date(y - 1, 0, 1)),
+        endDate: toLocalDateOnly(new Date(y - 1, 11, 31)),
       }
     default:
       return {
-        startDate: new Date(y, 0, 1).toISOString().split('T')[0],
-        endDate: now.toISOString().split('T')[0],
+        startDate: toLocalDateOnly(new Date(y, 0, 1)),
+        endDate: today,
       }
   }
 }
@@ -70,15 +78,17 @@ export function DatePresets() {
       className="flex items-center gap-1.5 flex-wrap print:hidden"
     >
       {presets.map((p) => (
-        <button
+        <Button
           key={p.key}
           type="button"
           onClick={() => handlePreset(p.key)}
           aria-label={`Atur rentang ke ${p.label}`}
-          className="px-2.5 py-1 text-xs font-medium rounded-md border border-default bg-surface hover:bg-default/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          variant="secondary"
+          size="sm"
+          className="h-7 text-xs px-2.5"
         >
           {p.label}
-        </button>
+        </Button>
       ))}
     </div>
   )

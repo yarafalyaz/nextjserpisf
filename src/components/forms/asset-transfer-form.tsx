@@ -14,6 +14,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface AssetTransferFormProps {
   assets: { id: number; code: string; name: string; location: string | null }[];
@@ -38,7 +39,7 @@ export function AssetTransferForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [transferDate, setTransferDate] = useState(
-    transfer?.transferDate || new Date().toISOString().split("T")[0],
+    transfer?.transferDate || toLocalDateOnly(new Date()),
   );
   const [assetId, setAssetId] = useState(
     transfer?.assetId ? String(transfer.assetId) : "",

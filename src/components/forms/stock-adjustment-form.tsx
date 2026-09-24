@@ -16,6 +16,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface AdjustmentFormProps {
   warehouses: { id: number; name: string }[];
@@ -108,7 +109,7 @@ export function StockAdjustmentForm({
       try {
         const formData = new FormData();
         formData.append("warehouseId", warehouseId);
-        formData.append("date", new Date().toISOString().split("T")[0]);
+        formData.append("date", toLocalDateOnly(new Date()));
         formData.append("items", JSON.stringify(adjItems));
         formData.append("type", type);
         const notesValue =

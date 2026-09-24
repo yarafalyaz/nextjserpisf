@@ -13,6 +13,7 @@ import { Upload, X, FileText } from "lucide-react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface UploadedFile {
   id: number
@@ -38,7 +39,7 @@ function formatFileSize(bytes: number): string {
 export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = [] }: VendorPaymentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [paymentDate, setPaymentDate] = useState(payment?.date || new Date().toISOString().split("T")[0])
+  const [paymentDate, setPaymentDate] = useState(payment?.date || toLocalDateOnly(new Date()))
   const [vendorId, setVendorId] = useState(payment?.vendorId ? String(payment.vendorId) : "")
   const [paymentMethod, setPaymentMethod] = useState("")
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])

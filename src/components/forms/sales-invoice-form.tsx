@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 const salesInvoiceSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
@@ -40,7 +41,7 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
     defaultValues: {
       customerId: invoice?.customerId,
       salesOrderId: invoice?.salesOrderId ?? undefined,
-      date: invoice?.date ?? new Date().toISOString().split("T")[0],
+      date: invoice?.date ?? toLocalDateOnly(new Date()),
       dueDate: invoice?.dueDate ?? "",
       notes: invoice?.notes ?? "",
     },

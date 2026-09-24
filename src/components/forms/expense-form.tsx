@@ -13,19 +13,20 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface ExpenseFormProps {
   accounts: { id: number; code: string; name: string; type: string }[]
+  categories?: { id: number; name: string; label: string }[]
   costCenters?: { id: number; code: string; name: string }[]
   projects?: { id: number; name: string; documentNo: string | null }[]
-  expense?: { id: number; date: string; description?: string | null; amount: number; accountId: number; paidFromAccountId?: number | null; category?: string | null; costCenterId?: number | null; projectId?: number | null; referenceNo?: string | null; receiptImage?: string | null; notes?: string | null; status?: string }
+  expense?: { id: number; date: string; description?: string | null; amount: number; accountId: number; paidFromAccountId?: number | null; categoryId?: number | null; costCenterId?: number | null; projectId?: number | null; referenceNo?: string | null; receiptImage?: string | null; notes?: string | null; status?: string }
 }
 
-export function ExpenseForm({ accounts, costCenters = [], projects = [], expense }: ExpenseFormProps) {
+export function ExpenseForm({ accounts, categories = [], costCenters = [], projects = [], expense }: ExpenseFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -39,17 +40,17 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
       date: expense.date,
       amount: expense.amount,
       description: expense.description ?? "",
-      category: expense.category ?? "",
+      categoryId: expense.categoryId ?? undefined,
       referenceNo: expense.referenceNo ?? "",
       receiptImage: expense.receiptImage ?? "",
       accountId: expense.accountId,
       paidFromAccountId: expense.paidFromAccountId ?? undefined,
       projectId: expense.projectId ?? undefined,
     } : {
-      date: new Date().toISOString().split("T")[0],
+      date: toLocalDateOnly(new Date()),
       amount: 0,
       description: "",
-      category: "",
+      categoryId: undefined,
       referenceNo: "",
       receiptImage: "",
     }})
@@ -139,25 +140,17 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
 
         <div className="flex flex-col gap-1.5">
           <Controller
-            name="category"
+            name="categoryId"
             control={control}
             render={({ field }) => (
               <>
-                <Label htmlFor="category">Kategori</Label>
-                <FormSelect
-                  id="category"
-                  value={field.value || ""}
-                  onValueChange={field.onChange}
-                  placeholder="Pilih Kategori"
-                  options={[
-                    { value: "operasional", label: "Operasional" },
-                    { value: "transportasi", label: "Transportasi" },
-                    { value: "makan", label: "Makan & Minum" },
-                    { value: "utilitas", label: "Utilitas" },
-                    { value: "marketing", label: "Pemasaran" },
-                    { value: "maintenance", label: "Pemeliharaan" },
-                    { value: "lainnya", label: "Lainnya" },
-                  ]}
+                <Label htmlFor="categoryId">Kategori</Label>
+                <Combobox
+                  id="categoryId"
+                  options={categories.map((cat) => ({ value: String(cat.id), label: cat.label }))}
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                  placeholder="Cari kategori..."
                 />
               </>
             )}
@@ -202,9 +195,8 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
           <Input id="referenceNo" {...register("referenceNo")} placeholder="Nomor referensi..." />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="receiptImage">Bukti / Kwitansi (URL)</Label>
-          <Input id="receiptImage" {...register("receiptImage")} placeholder="URL gambar bukti..." />
+        <div className="flex flex-col gap-1.5 [&_section]:col-span-1">
+          <FormAttachmentUpload referenceType="expense" />
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">
@@ -213,10 +205,9 @@ export function ExpenseForm({ accounts, costCenters = [], projects = [], expense
         </div>
       </div>
 
-      <FormAttachmentUpload referenceType="expense" />
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-expense">
+        <Button type="submit" variant="primary" isDisabled={isPending}  id="submit-expense">
           {isPending ? "Menyimpan..." : expense?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>

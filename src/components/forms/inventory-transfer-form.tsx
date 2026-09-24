@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface TransferFormProps {
   warehouses: { id: number; name: string }[]
@@ -55,7 +56,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         const formData = new FormData()
         formData.append("sourceWarehouseId", sourceId)
         formData.append("destinationWarehouseId", destId)
-        formData.append("date", new Date().toISOString().split("T")[0])
+        formData.append("date", toLocalDateOnly(new Date()))
         if (notes) formData.append("notes", notes)
         formData.append("items", JSON.stringify(transferItems.filter((it) => it.itemId > 0 && it.qty > 0)))
         const result = transfer?.id ? await updateInventoryTransfer(transfer.id, formData) : await createInventoryTransfer(formData)

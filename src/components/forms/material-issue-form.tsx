@@ -11,15 +11,18 @@ import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Combobox } from "@/components/ui/combobox";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface MaterialIssueFormProps {
   warehouses: { id: number; name: string }[];
+  costCenters?: { id: number; code: string; name: string }[];
   issue?: {
     id: number;
     workOrderId: number;
     warehouseId?: number;
     date: string;
     notes?: string | null;
+    costCenterId?: number | null;
     items?: Array<{ itemId: number; qty: number }>;
   };
   items: {
@@ -39,6 +42,7 @@ interface MIItem {
 
 export function MaterialIssueForm({
   warehouses,
+  costCenters = [],
   items,
   issue,
 }: MaterialIssueFormProps) {
@@ -79,7 +83,7 @@ export function MaterialIssueForm({
       try {
         const formData = new FormData();
         formData.append("warehouseId", warehouseId);
-        formData.append("date", new Date().toISOString().split("T")[0]);
+        formData.append("date", toLocalDateOnly(new Date()));
         formData.append("items", JSON.stringify(miItems));
         const result = issue?.id
           ? await updateMaterialIssue(issue.id, formData)
@@ -120,6 +124,18 @@ export function MaterialIssueForm({
             placeholder="Cari gudang..."
           />
         </div>
+        {costCenters.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="costCenterId">Pusat Biaya</Label>
+          <Combobox
+            id="costCenterId"
+            name="costCenterId"
+            options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            value={issue?.costCenterId ? String(issue.costCenterId) : null}
+            placeholder="— Pilih pusat biaya —"
+          />
+        </div>
+        )}
       </div>
 
       <div style={{ marginTop: "24px" }}>

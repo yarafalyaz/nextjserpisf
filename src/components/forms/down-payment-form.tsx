@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 const downPaymentSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
@@ -26,10 +27,26 @@ const downPaymentSchema = z.object({
 type DownPaymentInput = z.infer<typeof downPaymentSchema>
 
 interface DownPaymentFormProps {
-  customers: { id: number; name: string
-}[]
+  customers: { id: number; name: string; customerCategory?: { downPaymentPercent: number } | null }[]
   downPayment?: { id: number; customerId: number; amount: number; date: string; accountId?: number | null; notes?: string | null; salesOrderId?: number | null; quotationId?: number | null }
-  quotations: { id: number; documentNo: string; customerId: number }[]
+  quotations: {
+    id: number
+    documentNo: string
+    customerId: number
+    grandTotal?: number
+    sections?: {
+      id: number
+      name: string
+      items: {
+        id: number
+        description: string | null
+        qty: number
+        uom: string | null
+        unitPrice: number
+        total: number
+      }[]
+    }[]
+  }[]
   defaultQuotationId?: number
   defaultCustomerId?: number
   paymentMethods?: { code: string; name: string }[]
@@ -43,17 +60,33 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<DownPaymentInput>({
     resolver: zodResolver(downPaymentSchema),
     defaultValues: {
-      customerId: downPayment?.customerId,
-      quotationId: downPayment?.quotationId ?? undefined,
+      customerId: downPayment?.customerId ?? _defaultCustomerId,
+      quotationId: downPayment?.quotationId ?? _defaultQuotationId ?? undefined,
       amount: downPayment?.amount,
-      paymentDate: downPayment?.date ?? new Date().toISOString().split("T")[0],
+      paymentDate: downPayment?.date ?? toLocalDateOnly(new Date()),
       paymentMethod: "",
       notes: downPayment?.notes ?? ""}})
 
   const selectedCustomerId = watch("customerId")
+  const selectedQuotationId = watch("quotationId")
+
   const filteredQuotations = quotations.filter(
     (q) => !selectedCustomerId || q.customerId === selectedCustomerId
   )
+
+  useEffect(() => {
+    if (!downPayment && selectedCustomerId && selectedQuotationId) {
+      const customer = customers.find((c) => c.id === selectedCustomerId)
+      const quo = quotations.find((q) => q.id === selectedQuotationId)
+      if (customer && quo) {
+        const dpPercent = Number(customer.customerCategory?.downPaymentPercent ?? 0)
+        if (dpPercent > 0) {
+          const calculatedDp = Math.round(Number(quo.grandTotal || 0) * (dpPercent / 100))
+          setValue("amount", calculatedDp)
+        }
+      }
+    }
+  }, [selectedCustomerId, selectedQuotationId, customers, quotations, setValue, downPayment])
 
   function onSubmit(data: DownPaymentInput) {
     startTransition(async () => {
@@ -115,6 +148,77 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
           />
           {errors.quotationId && <span className="text-xs text-danger mt-1">{errors.quotationId.message}</span>}
         </div>
+
+        {/* Detail Penawaran Preview */}
+        {selectedQuotationId && (() => {
+          const quo = quotations.find((q) => q.id === selectedQuotationId)
+          if (!quo) return null
+          
+          const customer = customers.find((c) => c.id === selectedCustomerId)
+          const dpPercent = Number(customer?.customerCategory?.downPaymentPercent ?? 0)
+
+          return (
+            <div className="col-span-full bg-default/10 rounded-xl border border-default p-5 flex flex-col gap-4">
+              <div className="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-default">
+                <div>
+                  <h4 className="font-semibold text-foreground text-sm">Ringkasan Penawaran</h4>
+                  <p className="text-xs text-muted-foreground">{quo.documentNo}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs text-muted-foreground">Total Penawaran:</span>
+                  <p className="text-base font-bold text-primary">
+                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(quo.grandTotal || 0)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Item List */}
+              {quo.sections && quo.sections.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h5 className="font-medium text-foreground text-xs">Daftar Item:</h5>
+                  <div className="max-h-60 overflow-y-auto border border-default rounded-lg bg-surface">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-default/20 border-b border-default text-muted-foreground font-medium">
+                          <th className="p-2 pl-3">Deskripsi</th>
+                          <th className="p-2 text-right">Jumlah</th>
+                          <th className="p-2">Satuan</th>
+                          <th className="p-2 text-right">Harga Satuan</th>
+                          <th className="p-2 text-right pr-3">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-default">
+                        {quo.sections.flatMap((s) => s.items).map((item) => (
+                          <tr key={item.id} className="hover:bg-default/5">
+                            <td className="p-2 pl-3 font-medium text-foreground">{item.description || "-"}</td>
+                            <td className="p-2 text-right">{item.qty}</td>
+                            <td className="p-2">{item.uom || "-"}</td>
+                            <td className="p-2 text-right">
+                              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(item.unitPrice)}
+                            </td>
+                            <td className="p-2 text-right font-medium pr-3">
+                              {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(item.total)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* DP Info */}
+              {dpPercent > 0 && (
+                <div className="bg-primary/5 rounded-lg border border-primary/20 p-3 text-xs text-primary flex items-center justify-between">
+                  <span>Kategori Pelanggan menetapkan uang muka default sebesar <strong>{dpPercent}%</strong></span>
+                  <span className="font-semibold">
+                    Default DP: {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Math.round((quo.grandTotal || 0) * (dpPercent / 100)))}
+                  </span>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Jumlah DP (Rp) *</Label>

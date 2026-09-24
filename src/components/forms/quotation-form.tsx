@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 "use client"
 /* eslint-disable react-hooks/incompatible-library */
 
@@ -17,6 +17,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 // ==================== TYPES ====================
 
@@ -35,10 +36,27 @@ interface ItemOption {
   unitOfMeasure: string
 }
 
+interface ProductMaterialOption {
+  itemId: number
+  qty: number
+  name: string
+  price: number
+  unitOfMeasure: string
+}
+
+interface ProductOption {
+  id: number
+  code: string | null
+  name: string
+  standardCost: number
+  materials: ProductMaterialOption[]
+}
+
 interface QuotationFormProps {
   customers: { id: number; name: string }[]
   customerVehicles: CustomerVehicle[]
   items: ItemOption[]
+  products?: ProductOption[]
   generatedCode?: string
   paymentMethods?: { code: string; name: string }[]
   shippingMethods?: { code: string; name: string }[]
@@ -53,12 +71,14 @@ function SectionItems({
   items,
   setValue,
   register,
+  products,
 }: {
   sectionIndex: number
   control: any
   items: ItemOption[]
   setValue: any
   register: any
+  products?: ProductOption[]
 }) {
   const { fields, append, remove } = useFieldArray({
     control,
@@ -127,26 +147,57 @@ function SectionItems({
           ))}
         </tbody>
       </table>
-      <Button
-        type="button"
-        onPress={() =>
-          append({
-            itemId: 0,
-            isCustom: false,
-            description: "",
-            qty: 1,
-            uom: "PCS",
-            unitPrice: 0,
-            discountType: "fixed",
-            discount: 0,
-            total: 0,
-          })
-        }
-        variant="secondary" size="sm"
-        className="mt-2"
-      >
-        + Tambah Item
-      </Button>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          onPress={() =>
+            append({
+              itemId: 0,
+              isCustom: false,
+              description: "",
+              qty: 1,
+              uom: "PCS",
+              unitPrice: 0,
+              discountType: "fixed",
+              discount: 0,
+              total: 0,
+            })
+          }
+          variant="secondary" size="sm"
+        >
+          + Tambah Item
+        </Button>
+
+        {products && products.length > 0 && (
+          <div className="flex items-center gap-2 w-72">
+            <Combobox
+              value={null}
+              onChange={(val) => {
+                if (!val) return
+                const prod = products.find(p => p.id === Number(val))
+                if (prod) {
+                  append({
+                    itemId: null,
+                    isCustom: true,
+                    description: prod.code ? `[${prod.code}] ${prod.name}` : prod.name,
+                    qty: 1,
+                    uom: "PCS",
+                    unitPrice: prod.standardCost,
+                    discountType: "fixed",
+                    discount: 0,
+                    total: calculateItemTotal(1, prod.standardCost, "fixed", 0)
+                  })
+                }
+              }}
+              placeholder="Tarik dari Produk (BOM)..."
+              options={products.map(p => ({
+                value: String(p.id),
+                label: p.code ? `[${p.code}] ${p.name}` : p.name
+              }))}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -201,11 +252,13 @@ function SectionItemRow({
             title={isCustomMode ? "Ubah ke Produk Master" : "Tambah Cepat Jasa Bebas"}
             className={`p-1.5 rounded-lg border transition-all text-xs shrink-0 flex items-center justify-center ${
               isCustomMode 
-                ? "bg-warning-soft border-warning text-warning-soft-foreground font-bold" 
+                ? (watchedItem?.uom === "JASA"
+                    ? "bg-warning-soft border-warning text-warning-soft-foreground font-bold"
+                    : "bg-primary-soft border-primary text-primary-soft-foreground font-bold")
                 : "bg-default-soft border-default text-muted-foreground hover:bg-default"
             }`}
           >
-            {isCustomMode ? "Jasa" : "Item"}
+            {isCustomMode ? (watchedItem?.uom === "JASA" ? "Jasa" : "Produk") : "Item"}
           </button>
 
           {isCustomMode ? (
@@ -442,7 +495,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
 
 // ==================== MAIN FORM COMPONENT ====================
 
-export function QuotationForm({ customers, customerVehicles, items, generatedCode, paymentMethods = [], shippingMethods = [], quotation }: QuotationFormProps) {
+export function QuotationForm({ customers, customerVehicles, items, products, generatedCode, paymentMethods = [], shippingMethods = [], quotation }: QuotationFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -460,8 +513,8 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
       : {
           customerId: undefined,
           customerVehicleId: undefined,
-          date: new Date().toISOString().split("T")[0],
-          validUntil: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+          date: toLocalDateOnly(new Date()),
+          validUntil: toLocalDateOnly(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)),
           subtotal: 0,
           discount: 0,
           tax: 0,
@@ -717,6 +770,7 @@ export function QuotationForm({ customers, customerVehicles, items, generatedCod
               items={items}
               setValue={setValue}
               register={register}
+              products={products}
             />
           </div>
         ))}

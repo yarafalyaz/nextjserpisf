@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface DeliveryOrderFormProps {
   salesOrders: { id: number; documentNo: string; customer: { name: string } }[]
@@ -19,7 +20,7 @@ interface DeliveryOrderFormProps {
 export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(deliveryOrder?.date ?? new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(deliveryOrder?.date ?? toLocalDateOnly(new Date()))
   const [deliveryDate, setDeliveryDate] = useState(deliveryOrder?.deliveryDate ?? "")
   const [salesOrderId, setSalesOrderId] = useState(deliveryOrder?.salesOrderId ? String(deliveryOrder.salesOrderId) : "")
 

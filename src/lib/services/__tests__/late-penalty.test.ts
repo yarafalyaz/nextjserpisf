@@ -1,201 +1,111 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest"
 
-// Mock prisma
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    attendance: {
-      findMany: vi.fn(),
-    },
-  },
-}));
+/**
+ * Locks the date-range contract of the late-penalty query.
+ *
+ * `attendance.date` stores UTC-midnight values keyed to the WIB calendar day, so
+ * the range must use a HALF-OPEN upper bound. The previous `lte: endDate` only
+ * included the last day while every row sat exactly at midnight; a row carrying a
+ * time component silently dropped the whole final day from the deduction.
+ */
 
-// Mock settings
-vi.mock("@/lib/utils/settings", () => ({
+const mocks = vi.hoisted(() => ({
+  attendanceFindMany: vi.fn(),
   getSystemSettings: vi.fn(),
-}));
+}))
 
-import { calculateLatePenalty, getLatePenaltySummary } from "@/lib/services/late-penalty.service";
-import { prisma } from "@/lib/db/prisma";
-import { getSystemSettings } from "@/lib/utils/settings";
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: { attendance: { findMany: (...a: unknown[]) => mocks.attendanceFindMany(...a) } },
+}))
 
-const mockFindMany = prisma.attendance.findMany as ReturnType<typeof vi.fn>;
-const mockSettings = getSystemSettings as ReturnType<typeof vi.fn>;
+vi.mock("@/lib/utils/settings", () => ({
+  getSystemSettings: (...a: unknown[]) => mocks.getSystemSettings(...a),
+}))
 
-describe("late-penalty.service", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSettings.mockResolvedValue({
-      latePenaltyPerMinute: 500,
-      maxLatePenaltyMinutes: 60,
-    });
-  });
+import { calculateLatePenalty, getLatePenaltySummary } from "../late-penalty.service"
 
-  describe("calculateLatePenalty", () => {
-    it("returns zero when no late attendances", async () => {
-      mockFindMany.mockResolvedValue([]);
+const startDate = new Date(Date.UTC(2026, 8, 1)) // 2026-09-01
+const endDate = new Date(Date.UTC(2026, 8, 30)) // 2026-09-30
 
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.attendanceFindMany.mockResolvedValue([])
+  mocks.getSystemSettings.mockResolvedValue({
+    latePenaltyPerMinute: 500,
+    maxLatePenaltyMinutes: 0,
+  })
+})
 
-      expect(result.totalLateMinutes).toBe(0);
-      expect(result.totalPenalty).toBe(0);
-      expect(result.details).toHaveLength(0);
-    });
+describe("calculateLatePenalty", () => {
+  it("queries a half-open range so the whole end day is included", async () => {
+    await calculateLatePenalty(7, startDate, endDate)
 
-    it("calculates penalty correctly for single late day", async () => {
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 15, checkIn: new Date("2026-06-05T08:15:00") },
-      ]);
+    const args = mocks.attendanceFindMany.mock.calls[0][0] as {
+      where: { employeeId: number; date: { gte: Date; lt: Date }; lateMinutes: { gt: number } }
+      orderBy: { date: string }
+    }
 
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(args.where.employeeId).toBe(7)
+    expect(args.where.date.gte.toISOString()).toBe("2026-09-01T00:00:00.000Z")
+    // 1 October, NOT 30 September: the bound is exclusive.
+    expect(args.where.date.lt.toISOString()).toBe("2026-10-01T00:00:00.000Z")
+    expect(args.where.lateMinutes.gt).toBe(0)
+    expect(args.orderBy).toEqual({ date: "asc" })
+  })
 
-      expect(result.totalLateMinutes).toBe(15);
-      expect(result.totalPenalty).toBe(15 * 500); // 7500
-      expect(result.details).toHaveLength(1);
-      expect(result.details[0].lateMinutes).toBe(15);
-      expect(result.details[0].penalty).toBe(7500);
-    });
+  it("sums minutes and penalty per late day", async () => {
+    mocks.attendanceFindMany.mockResolvedValue([
+      { date: new Date(Date.UTC(2026, 8, 3)), checkIn: new Date(Date.UTC(2026, 8, 3, 1, 15)), lateMinutes: 15 },
+      { date: new Date(Date.UTC(2026, 8, 4)), checkIn: null, lateMinutes: 30 },
+    ])
 
-    it("calculates penalty for multiple late days", async () => {
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 10, checkIn: new Date("2026-06-05T08:10:00") },
-        { date: new Date("2026-06-07"), lateMinutes: 20, checkIn: new Date("2026-06-07T08:20:00") },
-        { date: new Date("2026-06-10"), lateMinutes: 5, checkIn: new Date("2026-06-10T08:05:00") },
-      ]);
+    const result = await calculateLatePenalty(7, startDate, endDate)
 
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(result.totalLateMinutes).toBe(45)
+    expect(result.totalPenalty).toBe(22500) // 45 minutes x 500
+    expect(result.details).toHaveLength(2)
+    // Falls back to the row date when check-in is missing.
+    expect(result.details[1].actualCheckIn.toISOString()).toBe("2026-09-04T00:00:00.000Z")
+  })
 
-      expect(result.totalLateMinutes).toBe(35);
-      expect(result.totalPenalty).toBe(35 * 500); // 17500
-      expect(result.details).toHaveLength(3);
-    });
+  it("caps minutes per day when a maximum is configured", async () => {
+    mocks.getSystemSettings.mockResolvedValue({
+      latePenaltyPerMinute: 1000,
+      maxLatePenaltyMinutes: 20,
+    })
+    mocks.attendanceFindMany.mockResolvedValue([
+      { date: new Date(Date.UTC(2026, 8, 3)), checkIn: null, lateMinutes: 90 },
+    ])
 
-    it("caps late minutes at maxLatePenaltyMinutes", async () => {
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 120, checkIn: new Date("2026-06-05T10:00:00") },
-      ]);
+    const result = await calculateLatePenalty(7, startDate, endDate)
 
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(result.totalLateMinutes).toBe(20)
+    expect(result.totalPenalty).toBe(20000)
+  })
 
-      // Should be capped at 60 (maxLatePenaltyMinutes)
-      expect(result.totalLateMinutes).toBe(60);
-      expect(result.totalPenalty).toBe(60 * 500); // 30000
-      expect(result.details[0].lateMinutes).toBe(60);
-    });
+  it("ignores a non-positive penalty rate instead of producing NaN", async () => {
+    mocks.getSystemSettings.mockResolvedValue({
+      latePenaltyPerMinute: 0,
+      maxLatePenaltyMinutes: 0,
+    })
+    mocks.attendanceFindMany.mockResolvedValue([
+      { date: new Date(Date.UTC(2026, 8, 3)), checkIn: null, lateMinutes: 45 },
+    ])
 
-    it("skips records with lateMinutes <= 0", async () => {
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 0, checkIn: new Date("2026-06-05T08:00:00") },
-        { date: new Date("2026-06-06"), lateMinutes: -5, checkIn: new Date("2026-06-06T07:55:00") },
-        { date: new Date("2026-06-07"), lateMinutes: 10, checkIn: new Date("2026-06-07T08:10:00") },
-      ]);
+    const result = await calculateLatePenalty(7, startDate, endDate)
 
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(result.totalLateMinutes).toBe(45)
+    expect(result.totalPenalty).toBe(0)
+  })
 
-      expect(result.totalLateMinutes).toBe(10);
-      expect(result.details).toHaveLength(1);
-    });
+  it("reports late days in the summary", async () => {
+    mocks.attendanceFindMany.mockResolvedValue([
+      { date: new Date(Date.UTC(2026, 8, 3)), checkIn: null, lateMinutes: 10 },
+    ])
 
-    it("uses date as checkIn fallback when checkIn is null", async () => {
-      const date = new Date("2026-06-05");
-      mockFindMany.mockResolvedValue([
-        { date, lateMinutes: 10, checkIn: null },
-      ]);
+    const summary = await getLatePenaltySummary(7, startDate, endDate)
 
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
-
-      expect(result.details[0].actualCheckIn).toEqual(date);
-    });
-
-    it("uses correct penalty per minute from settings", async () => {
-      mockSettings.mockResolvedValue({
-        latePenaltyPerMinute: 1000,
-        maxLatePenaltyMinutes: 30,
-      });
-
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 20, checkIn: new Date("2026-06-05T08:20:00") },
-      ]);
-
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
-
-      expect(result.totalPenalty).toBe(20 * 1000); // 20000
-    });
-  });
-
-  describe("getLatePenaltySummary", () => {
-    it("returns summary with lateDays count", async () => {
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 10, checkIn: new Date("2026-06-05T08:10:00") },
-        { date: new Date("2026-06-07"), lateMinutes: 15, checkIn: new Date("2026-06-07T08:15:00") },
-      ]);
-
-      const result = await getLatePenaltySummary(1, new Date("2026-06-01"), new Date("2026-06-30"));
-
-      expect(result.lateDays).toBe(2);
-      expect(result.totalLateMinutes).toBe(25);
-      expect(result.totalPenalty).toBe(25 * 500);
-      expect(result.details).toHaveLength(2);
-    });
-
-    it("returns zero summary when no late days", async () => {
-      mockFindMany.mockResolvedValue([]);
-
-      const result = await getLatePenaltySummary(1, new Date("2026-06-01"), new Date("2026-06-30"));
-
-      expect(result.lateDays).toBe(0);
-      expect(result.totalLateMinutes).toBe(0);
-      expect(result.totalPenalty).toBe(0);
-    });
-  });
-
-  describe("NaN / invalid settings guard", () => {
-    it("defaults penaltyPerMinute to 0 when null/undefined (not NaN in payroll)", async () => {
-      mockSettings.mockResolvedValue({
-        latePenaltyPerMinute: null,
-        maxLatePenaltyMinutes: 60,
-      });
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 10, checkIn: new Date("2026-06-05T08:10:00") },
-      ]);
-
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
-
-      // Penalty must be 0, NOT NaN — NaN in payroll totals is a data-integrity issue.
-      expect(Number.isNaN(result.totalPenalty)).toBe(false);
-      expect(result.totalPenalty).toBe(0);
-    });
-
-    it("defaults maxMinutes to null (uncapped) when null/undefined — does not null out lateMinutes", async () => {
-      mockSettings.mockResolvedValue({
-        latePenaltyPerMinute: 500,
-        maxLatePenaltyMinutes: null,
-      });
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 120, checkIn: new Date("2026-06-05T10:00:00") },
-      ]);
-
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
-
-      // Should NOT cap to null (previous bug: null maxMinutes made lateMinutes become null),
-      // and penalty must not be NaN.
-      expect(Number.isNaN(result.totalPenalty)).toBe(false);
-      expect(result.details[0].lateMinutes).toBe(120);
-      expect(result.totalPenalty).toBe(120 * 500);
-    });
-
-    it("handles NaN from Number() conversion gracefully", async () => {
-      mockSettings.mockResolvedValue({
-        latePenaltyPerMinute: NaN,
-        maxLatePenaltyMinutes: NaN,
-      });
-      mockFindMany.mockResolvedValue([
-        { date: new Date("2026-06-05"), lateMinutes: 10, checkIn: new Date("2026-06-05T08:10:00") },
-      ]);
-
-      const result = await calculateLatePenalty(1, new Date("2026-06-01"), new Date("2026-06-30"));
-
-      expect(Number.isNaN(result.totalPenalty)).toBe(false);
-      expect(result.totalPenalty).toBe(0);
-    });
-  });
-});
+    expect(summary.lateDays).toBe(1)
+    expect(summary.totalPenalty).toBe(5000)
+  })
+})

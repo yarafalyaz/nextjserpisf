@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 const salesOrderSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
@@ -39,7 +40,7 @@ export function SalesOrderForm({ customers, order, quotationId: _quotationId, de
     resolver: zodResolver(salesOrderSchema),
     defaultValues: {
       customerId: order?.customerId,
-      date: order?.date ?? new Date().toISOString().split("T")[0],
+      date: order?.date ?? toLocalDateOnly(new Date()),
       deliveryDate: "",
       notes: order?.notes ?? "",
     },

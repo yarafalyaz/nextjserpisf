@@ -11,12 +11,15 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 export function OvertimeForm({ employees, projects, overtime }: { employees: { id: number; name: string }[]; projects?: { id: number; name: string }[]; overtime?: { id: number; employeeId: number; projectId?: number | null; date: string; hours: number; totalHours?: number | null; mealHours?: number | null; billableHours?: number | null; reason?: string | null } }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [date, setDate] = useState(overtime?.date ? new Date(overtime.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0])
-  const [employeeId, setEmployeeId] = useState<string | null>(overtime?.employeeId ? String(overtime.employeeId) : null)
+  const [date, setDate] = useState(overtime?.date ? new Date(overtime.date).toISOString().split("T")[0] : toLocalDateOnly(new Date()))
+  const [employeeId, setEmployeeId] = useState<string | null>(
+    overtime?.employeeId ? String(overtime.employeeId) : employees.length === 1 ? String(employees[0].id) : null
+  )
   const [projectId, setProjectId] = useState<string | null>(overtime?.projectId ? String(overtime.projectId) : null)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -39,17 +42,27 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
     <form onSubmit={onSubmit}>
       <FormCard>
         <FormSection title="Informasi Umum">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="employeeId">Karyawan *</Label>
-            <Combobox
-              id="employeeId"
-              name="employeeId"
-              options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
-              value={employeeId}
-              onChange={setEmployeeId}
-              placeholder="Cari karyawan..."
-            />
-          </div>
+          {employees.length === 1 ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="employeeId">Karyawan *</Label>
+              <div className="px-3 py-2.5 rounded-lg border border-default bg-default/10 text-foreground font-medium text-sm">
+                {employees[0].name}
+              </div>
+              <input type="hidden" name="employeeId" value={employees[0].id} />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="employeeId">Karyawan *</Label>
+              <Combobox
+                id="employeeId"
+                name="employeeId"
+                options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+                value={employeeId}
+                onChange={setEmployeeId}
+                placeholder="Cari karyawan..."
+              />
+            </div>
+          )}
           {projects && projects.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="projectId">Proyek</Label>

@@ -23,6 +23,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface PaymentFormProps {
   invoices: {
@@ -78,7 +79,7 @@ export function PaymentForm({
             )
           : 0),
       paymentDate:
-        payment?.paymentDate ?? new Date().toISOString().split("T")[0],
+        payment?.paymentDate ?? toLocalDateOnly(new Date()),
       paymentMethod: payment?.paymentMethod ?? "",
       referenceNo: payment?.referenceNo ?? "",
       notes: payment?.notes ?? "",

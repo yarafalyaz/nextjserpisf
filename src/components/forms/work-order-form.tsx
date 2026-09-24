@@ -13,6 +13,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 export function WorkOrderForm({
   customers,
@@ -20,6 +21,10 @@ export function WorkOrderForm({
   workOrder,
   quotationId: _quotationId,
   defaultCustomerId: _defaultCustomerId,
+  defaultItems = [],
+  defaultNotes = "",
+  defaultStartDate = "",
+  defaultEndDate = "",
 }: {
   customers: { id: number; name: string }[];
   items: { id: number; sku: string; name: string; cost: string }[];
@@ -29,6 +34,8 @@ export function WorkOrderForm({
     quotationId?: number | null;
     projectId?: number | null;
     date: string;
+    startDate?: string | null;
+    endDate?: string | null;
     notes?: string | null;
     items?: Array<{
       itemId: number;
@@ -40,14 +47,28 @@ export function WorkOrderForm({
   };
   quotationId?: number;
   defaultCustomerId?: number;
+  defaultItems?: Array<{
+    itemId: number;
+    qty: number;
+    cost: number;
+    description: string;
+    status: string;
+  }>;
+  defaultNotes?: string;
+  defaultStartDate?: string;
+  defaultEndDate?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [date, setDate] = useState(toLocalDateOnly(new Date()));
+  const [startDate, setStartDate] = useState(workOrder?.startDate ?? defaultStartDate);
+  const [endDate, setEndDate] = useState(workOrder?.endDate ?? defaultEndDate);
   const [customerId, setCustomerId] = useState<string | null>(
-    workOrder?.customerId ? String(workOrder.customerId) : null,
+    workOrder?.customerId
+      ? String(workOrder.customerId)
+      : _defaultCustomerId
+      ? String(_defaultCustomerId)
+      : null,
   );
   const [woItems, setWoItems] = useState(
     workOrder?.items && workOrder.items.length > 0
@@ -58,6 +79,8 @@ export function WorkOrderForm({
           description: it.description ?? "",
           status: it.status ?? "pending",
         }))
+      : defaultItems && defaultItems.length > 0
+      ? defaultItems
       : [{ itemId: 0, qty: 1, cost: 0, description: "", status: "pending" }],
   );
 
@@ -112,6 +135,7 @@ export function WorkOrderForm({
 
   return (
     <form onSubmit={onSubmit}>
+      <input type="hidden" name="quotationId" value={workOrder?.quotationId ?? _quotationId ?? ""} />
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
@@ -161,9 +185,9 @@ export function WorkOrderForm({
             <Textarea
               id="notes"
               name="notes"
-              rows={2}
+              rows={8}
               placeholder="Catatan perintah kerja..."
-              defaultValue={workOrder?.notes ?? ""}
+              defaultValue={workOrder?.notes ?? defaultNotes}
             />
           </div>
         </FormSection>
@@ -196,18 +220,6 @@ export function WorkOrderForm({
                     >
                       Jml
                     </th>
-                    <th
-                      className="text-right py-2 px-2 font-medium text-secondary"
-                      style={{ width: "100px" }}
-                    >
-                      Biaya
-                    </th>
-                    <th
-                      className="text-right py-2 px-2 font-medium text-secondary"
-                      style={{ width: "120px" }}
-                    >
-                      Total
-                    </th>
                     <th className="text-left py-2 px-2 font-medium text-secondary">
                       Deskripsi
                     </th>
@@ -225,16 +237,25 @@ export function WorkOrderForm({
                     <tr key={i} className="border-b border-default/50">
                       <td className="py-2 px-2">
                         <Combobox
-                          value={item.itemId ? String(item.itemId) : null}
+                          value={item.itemId ? String(item.itemId) : "0"}
                           onChange={(key) =>
                             updateItem(i, "itemId", key ? Number(key) : 0)
                           }
                           placeholder="Pilih"
                           className="w-full"
-                          options={items.map((it) => ({
-                            value: String(it.id),
-                            label: `${it.sku} - ${it.name}`,
-                          }))}
+                          options={(() => {
+                            const opts = items.map((it) => ({
+                              value: String(it.id),
+                              label: `${it.sku} - ${it.name}`,
+                            }));
+                            if (!item.itemId && item.description) {
+                              opts.unshift({
+                                value: "0",
+                                label: item.description,
+                              });
+                            }
+                            return opts;
+                          })()}
                         />
                       </td>
                       <td className="py-2 px-2">
@@ -252,12 +273,6 @@ export function WorkOrderForm({
                             width: "80px",
                           }}
                         />
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        Rp {item.cost.toLocaleString("id-ID")}
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        Rp {(item.qty * item.cost).toLocaleString("id-ID")}
                       </td>
                       <td className="py-2 px-2">
                         <input
@@ -287,9 +302,9 @@ export function WorkOrderForm({
                       <td className="py-2 px-2 text-center">
                         {woItems.length > 1 && (
                           <Button
-                            type="button"
-                            onPress={() => removeItem(i)}
-                            className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
+                              type="button"
+                              onPress={() => removeItem(i)}
+                              className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             ×
                           </Button>

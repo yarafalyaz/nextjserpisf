@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma"
 import type { Prisma } from "@prisma/client"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 type Db = Prisma.TransactionClient | typeof prisma
 
@@ -14,9 +15,6 @@ export const ANNUAL_LEAVE_QUOTA = 12
  */
 export const QUOTA_LEAVE_TYPES = new Set(["annual"])
 
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
 
 /**
  * Build a per-day "is this a working day?" predicate for an employee over a
@@ -42,13 +40,11 @@ async function buildWorkingDayChecker(
     where: { id: employeeId },
     select: { id: true, departmentId: true },
   })
-
   const start = new Date(rangeStart)
   start.setHours(0, 0, 0, 0)
   const end = new Date(rangeEnd)
   end.setHours(23, 59, 59, 999)
 
-  // Resolve the applicable WorkSchedule (mirrors attendance-summary.service).
   const candidates = employee
     ? await db.workSchedule.findMany({
         where: {
@@ -73,61 +69,44 @@ async function buildWorkingDayChecker(
       })
     : []
 
-  const employeeSchedule = candidates.find((s) => s.employees.length > 0)
-  const deptSchedule =
-    employee?.departmentId != null
-      ? candidates.find(
-          (s) => s._count.employees === 0 && s.departments.length > 0,
-        )
-      : undefined
+  const employeeSchedule = candidates.find((schedule) => schedule.employees.length > 0)
+  const departmentSchedule = employee?.departmentId != null
+    ? candidates.find((schedule) => schedule._count.employees === 0 && schedule.departments.length > 0)
+    : undefined
   const globalSchedule = candidates.find(
-    (s) => s._count.employees === 0 && s._count.departments === 0,
+    (schedule) => schedule._count.employees === 0 && schedule._count.departments === 0,
   )
-  const relevantSchedule = employeeSchedule ?? deptSchedule ?? globalSchedule
-
-  let workingWeekdays = new Set(
-    (relevantSchedule?.workDays || "")
+  const schedule = employeeSchedule ?? departmentSchedule ?? globalSchedule
+  let weekdays = new Set(
+    (schedule?.workDays ?? "")
       .split(",")
-      .map((d) => d.trim())
-      .filter((d) => d !== "")
-      .map((d) => Number(d))
-      .filter((n) => !Number.isNaN(n)),
+      .map((day) => day.trim())
+      .filter(Boolean)
+      .map(Number)
+      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
   )
-  let usedScheduleFallback = false
-  if (workingWeekdays.size === 0) {
-    // No schedule configured → assume a Mon–Fri work week so leave still draws
-    // down quota. (Sun=0 ... Sat=6.)
-    workingWeekdays = new Set([1, 2, 3, 4, 5])
-    usedScheduleFallback = true
-  }
+  const usedScheduleFallback = weekdays.size === 0
+  if (usedScheduleFallback) weekdays = new Set([1, 2, 3, 4, 5])
 
-  const [holidays, deptHolidays] = await Promise.all([
+  const [holidays, departmentHolidays] = await Promise.all([
     db.holiday.findMany({
       where: { date: { gte: start, lte: end } },
       select: { date: true },
     }),
     employee?.departmentId
       ? db.departmentHoliday.findMany({
-          where: {
-            departmentId: employee.departmentId,
-            date: { gte: start, lte: end },
-          },
+          where: { departmentId: employee.departmentId, date: { gte: start, lte: end } },
           select: { date: true },
         })
       : Promise.resolve([] as { date: Date }[]),
   ])
-
   const holidaySet = new Set(
-    [...holidays, ...deptHolidays].map((h) => dateKey(new Date(h.date))),
+    [...holidays, ...departmentHolidays].map((holiday) => toLocalDateOnly(holiday.date)),
   )
-
-  const isWorkingDay = (d: Date): boolean => {
-    if (!workingWeekdays.has(d.getDay())) return false
-    if (holidaySet.has(dateKey(d))) return false
-    return true
+  return {
+    isWorkingDay: (date) => weekdays.has(date.getDay()) && !holidaySet.has(toLocalDateOnly(date)),
+    usedScheduleFallback,
   }
-
-  return { isWorkingDay, usedScheduleFallback }
 }
 
 /**

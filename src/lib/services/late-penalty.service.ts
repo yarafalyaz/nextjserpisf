@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma"
 import { getSystemSettings } from "@/lib/utils/settings"
+import { endOfUtcDayExclusive } from "@/lib/utils/date-only"
 
 interface LatePenaltyResult {
   totalLateMinutes: number
@@ -14,57 +15,51 @@ interface LatePenaltyResult {
 }
 
 /**
- * Calculate late penalty for an employee within a date range.
- *
- * Uses the `lateMinutes` already recorded on each Attendance row at check-in
- * (which is computed in WIB at the time of check-in), rather than recomputing
- * from the work schedule with server-local time. This keeps payroll consistent
- * with what the employee actually saw and avoids timezone drift on UTC hosts.
+ * Calculate late penalties using the minutes recorded at check-in.
  */
 export async function calculateLatePenalty(
   employeeId: number,
   startDate: Date,
   endDate: Date
 ): Promise<LatePenaltyResult> {
-  const settings = await getSystemSettings()
-  const rawPerMinute = Number(settings.latePenaltyPerMinute)
-  // Fail safe to 0 so a missing/invalid setting can never inject NaN into payroll.
-  const penaltyPerMinute = Number.isFinite(rawPerMinute) && rawPerMinute > 0 ? rawPerMinute : 0
-  const rawMax = Number(settings.maxLatePenaltyMinutes)
-  // Only cap when a positive finite max is configured; otherwise leave uncapped
-  // (a null/undefined max previously turned lateMinutes into null -> NaN penalty).
-  const maxMinutes = Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null
+  const [settings, attendances] = await Promise.all([
+    getSystemSettings(),
+    prisma.attendance.findMany({
+      where: {
+        employeeId,
+        // Half-open upper bound. attendance.date holds UTC-midnight values keyed
+        // to the WIB calendar day, so `lte: endDate` only matched the last day
+        // while every row was stored at exactly midnight — a row carrying a time
+        // component (external attendance source) silently dropped the whole day.
+        date: { gte: startDate, lt: endOfUtcDayExclusive(endDate) },
+        lateMinutes: { gt: 0 },
+      },
+      orderBy: { date: "asc" },
+    }),
+  ])
+  const perMinute = Number(settings.latePenaltyPerMinute)
+  const maxConfigured = Number(settings.maxLatePenaltyMinutes)
+  const penaltyPerMinute = Number.isFinite(perMinute) && perMinute > 0 ? perMinute : 0
+  const maxMinutes = Number.isFinite(maxConfigured) && maxConfigured > 0 ? maxConfigured : null
 
-  const attendances = await prisma.attendance.findMany({
-    where: {
-      employeeId,
-      date: { gte: startDate, lte: endDate },
-      lateMinutes: { gt: 0 },
-    },
-    orderBy: { date: "asc" },
-  })
-
-  const details: LatePenaltyResult["details"] = []
-
-  for (const attendance of attendances) {
-    let lateMinutes = attendance.lateMinutes
-    if (lateMinutes <= 0) continue
-    if (maxMinutes !== null && lateMinutes > maxMinutes) lateMinutes = maxMinutes
-
-    const penalty = lateMinutes * penaltyPerMinute
-    details.push({
+  const details = attendances.flatMap((attendance) => {
+    const minutes = maxMinutes == null
+      ? attendance.lateMinutes
+      : Math.min(attendance.lateMinutes, maxMinutes)
+    if (minutes <= 0) return []
+    return [{
       date: attendance.date,
       scheduledStart: "",
       actualCheckIn: attendance.checkIn ?? attendance.date,
-      lateMinutes,
-      penalty,
-    })
+      lateMinutes: minutes,
+      penalty: minutes * penaltyPerMinute,
+    }]
+  })
+  return {
+    totalLateMinutes: details.reduce((sum, detail) => sum + detail.lateMinutes, 0),
+    totalPenalty: details.reduce((sum, detail) => sum + detail.penalty, 0),
+    details,
   }
-
-  const totalLateMinutes = details.reduce((sum, d) => sum + d.lateMinutes, 0)
-  const totalPenalty = details.reduce((sum, d) => sum + d.penalty, 0)
-
-  return { totalLateMinutes, totalPenalty, details }
 }
 
 /**

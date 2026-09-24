@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface JournalFormProps {
   accounts: { id: number; code: string; name: string
@@ -37,7 +38,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
         ],
   )
   const [description, setDescription] = useState(journal?.description ?? "")
-  const [date, setDate] = useState(journal?.date ?? new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(journal?.date ?? toLocalDateOnly(new Date()))
 
   function addEntry() { setEntries([...entries, { accountId: 0, debit: 0, credit: 0, memo: "" }]) }
   function removeEntry(i: number) { setEntries(entries.filter((_, idx) => idx !== i)) }
