@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
 
 
 test.beforeEach(async ({}, testInfo) => {
@@ -34,8 +35,7 @@ test.describe("Kendaraan Model CRUD", () => {
     await waitForHydration(page)
 
     // Choose brand via the ComboBox input — type brandName, wait for filtered option, then pick
-    const brandInput = page.locator("input[placeholder='Cari merek...']").first()
-    await brandInput.click()
+    const brandInput = await openCombobox(page, { placeholder: "Cari merek..." })
     await brandInput.fill(brandName)
     await page.waitForTimeout(1000)
     await brandInput.press("ArrowDown")
@@ -64,8 +64,9 @@ test.describe("Kendaraan Model CRUD", () => {
 
     await nameInput.fill(updated)
     await expect(nameInput).toHaveValue(updated)
-    const editBrandInput = page.locator("input[placeholder='Cari merek...']").first()
-    await editBrandInput.click()
+    // On the edit page a brand is already selected, so the trigger shows its
+    // name instead of the placeholder: identify it by the bound Label instead.
+    const editBrandInput = await openCombobox(page, { name: /merek kendaraan/i })
     await editBrandInput.fill(brandName)
     await page.waitForTimeout(1000)
     await editBrandInput.press("ArrowDown")

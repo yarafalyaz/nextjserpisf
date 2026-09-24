@@ -224,6 +224,14 @@ async function main() {
   console.log(`4. Manual Journal: ${manualJournal.journalNumber} ✓ (balanced + posted)`);
 
   // ─── 5. Expense Approval ─────────────────────────────────────────────
+  // Expense.category is a relation to ExpenseCategory (categoryId) now; passing
+  // the old free-text "operational" raised a PrismaClientValidationError, which
+  // made this seed - and therefore the whole CI e2e job - fail before a single
+  // test ran.
+  const expenseCategory = await prisma.expenseCategory.findFirst({
+    where: { name: { in: ["operasional", "operational"] } },
+    select: { id: true },
+  });
   const expense = await prisma.expense.create({
     data: {
       documentNo: await generateDocumentNumber("EXP"),
@@ -232,7 +240,7 @@ async function main() {
       amount: 75000,
       date: new Date("2026-05-28"),
       description: "E2E operational expense",
-      category: "operational",
+      categoryId: expenseCategory?.id ?? null,
       status: "approved",
       approvedBy: userId,
     },

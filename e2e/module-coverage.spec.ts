@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
+import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
 
 
 async function waitForHydration(page: Page) {
@@ -57,9 +58,7 @@ test.describe("Inventaris - Rak CRUD", () => {
     await page.locator("#name").first().fill(name)
 
     // Warehouse is a searchable combobox; pick the first available warehouse.
-    const warehouseInput = page.locator("input[placeholder='Cari gudang...']").first()
-    await warehouseInput.click()
-    await page.locator("[role='option']").first().click()
+    await selectFirstComboboxOption(page, { placeholder: "Cari gudang..." })
 
     await page.locator("#submit-rack, button[type='submit']").first().click()
 

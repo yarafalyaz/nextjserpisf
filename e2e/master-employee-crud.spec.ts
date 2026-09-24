@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
 
 
 test.beforeEach(async ({}, testInfo) => {
@@ -18,15 +19,8 @@ test.describe("Master Karyawan CRUD", () => {
     // CREATE
     await page.goto("/master/karyawan/tambah", { waitUntil: "domcontentloaded" })
 
-    const deptInput = page.locator("input[placeholder='Cari departemen...']").first()
-    await deptInput.click()
-    await deptInput.press("ArrowDown")
-    await deptInput.press("Enter")
-
-    const positionInput = page.locator("input[placeholder='Cari jabatan...']").first()
-    await positionInput.click()
-    await positionInput.press("ArrowDown")
-    await positionInput.press("Enter")
+    await selectFirstComboboxOption(page, { placeholder: "Cari departemen..." })
+    await selectFirstComboboxOption(page, { placeholder: "Cari jabatan..." })
 
     await page.locator("#name").fill(name)
     await page.locator("#email").fill(email)

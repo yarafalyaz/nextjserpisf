@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
 
 
 test.beforeEach(async ({}, testInfo) => {
@@ -13,9 +14,9 @@ async function waitForHydration(page: Page) {
 }
 
 async function selectFirstComboBoxOption(page: Page, placeholder: string) {
-  const input = page.locator(`input[placeholder='${placeholder}']`).first()
-  await expect(input).toBeVisible({ timeout: 10000 })
-  await input.click()
+  // The Combobox renders as a role="combobox" trigger labelled with the
+  // placeholder; the searchable input only exists inside the popup it opens.
+  const input = await openCombobox(page, { placeholder })
   await page.waitForTimeout(300)
 
   // Type to trigger filtering

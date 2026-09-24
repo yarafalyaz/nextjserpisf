@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
@@ -20,9 +21,8 @@ async function closeMobileSidebarIfOpen(page: Page) {
   await expect(overlay).toBeHidden({ timeout: 10000 })
 }
 
-async function selectOptionBySearch(page: Page, input: string, query: string, optionPattern: RegExp) {
-  const search = page.locator(input).first()
-  await search.click()
+async function selectOptionBySearch(page: Page, placeholder: string, query: string, optionPattern: RegExp) {
+  const search = await openCombobox(page, { placeholder })
   await search.fill(query)
 
   const option = page.getByRole("option", { name: optionPattern }).first()
@@ -57,11 +57,10 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
-    await selectOptionBySearch(page, "input[placeholder='Cari gudang...']", "Gudang", /Gudang/i)
+    await selectOptionBySearch(page, "Cari gudang...", "Gudang", /Gudang/i)
 
-    const rackInput = page.locator("input[placeholder='Cari rak...']").first()
+    const rackInput = await openCombobox(page, { placeholder: "Cari rak..." })
     await expect(rackInput).toBeEnabled({ timeout: 10000 })
-    await rackInput.click()
 
     const rackOptions = page.getByRole("option")
     await expect(rackOptions.first()).toBeVisible({ timeout: 10000 })

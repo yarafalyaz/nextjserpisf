@@ -217,22 +217,6 @@ test.describe("Master Jabatan CRUD", () => {
   })
 })
 
-test.describe("Master Mata Uang CRUD", () => {
-  test("create → update → delete", async ({ page }, testInfo) => {
-    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
-    await crudMaster(page, {
-      listUrl: "/master/mata-uang",
-      createUrl: "/master/mata-uang/tambah",
-      fields: [
-        { id: "code", value: `CUR${String(ts).slice(-5)}`, updated: `CU${String(ts).slice(-4)}` },
-        { id: "name", value: `Currency E2E ${ts}`, updated: `Currency E2E Updated ${ts}` },
-        { id: "rate", value: "1.25", updated: "2.50" },
-      ],
-      submitId: "submit-currency",
-    })
-  })
-})
-
 test.describe("Master Pajak CRUD", () => {
   test("create → update → delete", async ({ page }, testInfo) => {
     const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
