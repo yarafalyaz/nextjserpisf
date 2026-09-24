@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { takeRateLimit, getClientIp } from "@/lib/security/rate-limit";
+import { isSecureRequest } from "@/lib/security/secure-request";
 
 // Fix #24: Only allow actual static file extensions, not any URL with a dot
 const STATIC_EXTENSIONS =
@@ -14,7 +15,7 @@ const RATE_LIMITS = {
   auth: { windowMs: 300_000, max: 10 }, // 10 login attempts/5min
 } as const;
 
-function addSecurityHeaders(response: NextResponse): NextResponse {
+function addSecurityHeaders(req: NextRequest, response: NextResponse): NextResponse {
   // CSP keeps 'unsafe-inline' for scripts because Next.js emits inline
   // bootstrap <script> tags that are NOT nonce-tagged unless the nonce is
   // plumbed through `NextResponse.next({ request: { headers }})` AND verified
@@ -23,6 +24,12 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   // dropped in production. Tighten to nonce-based CSP only after verifying a
   // prod build end-to-end (login + hydration).
   const isProd = process.env.NODE_ENV === "production";
+  // `upgrade-insecure-requests` (and HSTS) may only be sent over TLS. Emitting
+  // them on a plain-HTTP production build - the e2e/CI server on
+  // http://localhost:4101, or an on-prem install without a certificate - makes
+  // the browser rewrite same-origin navigations to https://localhost:4101 and
+  // every page load after login dies with ERR_SSL_PROTOCOL_ERROR.
+  const isHttps = isSecureRequest(req);
   const scriptSrc = isProd
     ? "script-src 'self' 'unsafe-inline'"
     : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
@@ -38,7 +45,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
-    ...(isProd ? ["upgrade-insecure-requests"] : []),
+    ...(isProd && isHttps ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -48,10 +55,12 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(self)",
   );
-  response.headers.set(
-    "Strict-Transport-Security",
-    "max-age=63072000; includeSubDomains; preload",
-  );
+  if (isHttps) {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload",
+    );
+  }
   response.headers.set("Content-Security-Policy", csp);
 
   return response;
@@ -76,7 +85,7 @@ export async function proxy(req: NextRequest) {
   if (pathname === "/login" && req.method === "POST") {
     const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
     if (!result.allowed) {
-      return addSecurityHeaders(
+      return addSecurityHeaders(req, 
         NextResponse.json(
           { error: "Too many attempts, coba lagi nanti" },
           { status: 429 },
@@ -93,7 +102,7 @@ export async function proxy(req: NextRequest) {
       if (req.method === "POST") {
         const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
         if (!result.allowed) {
-          return addSecurityHeaders(
+          return addSecurityHeaders(req, 
             NextResponse.json(
               { error: "Too many attempts, coba lagi nanti" },
               { status: 429 },
@@ -101,26 +110,26 @@ export async function proxy(req: NextRequest) {
           );
         }
       }
-      return addSecurityHeaders(NextResponse.next());
+      return addSecurityHeaders(req, NextResponse.next());
     }
 
     // Cron routes use their own CRON_SECRET verification
     if (pathname.startsWith("/api/cron")) {
-      return addSecurityHeaders(NextResponse.next());
+      return addSecurityHeaders(req, NextResponse.next());
     }
 
     // Health check must be reachable without a session — it's the liveness
     // probe for monitors / load balancers / k8s / CI. It exposes no sensitive
     // data (DB SELECT 1 + status) and returns 200/503 by design.
     if (pathname === "/api/health") {
-      return addSecurityHeaders(NextResponse.next());
+      return addSecurityHeaders(req, NextResponse.next());
     }
 
     // Rate limit upload endpoints more strictly
     if (pathname.startsWith("/api/upload")) {
       const result = await takeRateLimit(`upload:${ip}`, RATE_LIMITS.upload);
       if (!result.allowed) {
-        return addSecurityHeaders(
+        return addSecurityHeaders(req, 
           NextResponse.json(
             { error: "Upload rate limit exceeded" },
             { status: 429 },
@@ -131,7 +140,7 @@ export async function proxy(req: NextRequest) {
       // General API rate limit
       const result = await takeRateLimit(`api:${ip}`, RATE_LIMITS.api);
       if (!result.allowed) {
-        return addSecurityHeaders(
+        return addSecurityHeaders(req, 
           NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 }),
         );
       }
@@ -140,16 +149,28 @@ export async function proxy(req: NextRequest) {
     // All other API routes: check auth at proxy level
     // Fix C1: also enforce isActive — deactivated users must be blocked here so
     // they cannot use a still-valid JWT to hit routes that only call auth().
-    const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+    //
+    // `secureCookie` must follow the REQUEST SCHEME, exactly like Auth.js does
+    // when it decides between `authjs.session-token` and
+    // `__Secure-authjs.session-token`. Deriving it from NODE_ENV instead meant a
+    // production build served over plain HTTP (the e2e/CI server, or an on-prem
+    // install without TLS) wrote non-prefixed cookies while this code looked for
+    // the `__Secure-` ones: getToken always returned null, every page bounced
+    // back to /login and the app was unusable behind a login loop.
+    const secureCookie = isSecureRequest(req);
+    const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
     if (!token || (token as { isActive?: boolean }).isActive === false) {
-      return addSecurityHeaders(
+      return addSecurityHeaders(req, 
         NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 }),
       );
     }
-    return addSecurityHeaders(NextResponse.next());
+    return addSecurityHeaders(req, NextResponse.next());
   }
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  // Same request-scheme rule as above: NODE_ENV does not tell us whether Auth.js
+  // prefixed the session cookie with `__Secure-`.
+  const secureCookie = isSecureRequest(req);
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
   // Treat a deactivated user as not-logged-in for page routing. Otherwise the
   // dashboard layout redirects them to /login (deactivated), but the "logged-in
   // -> away from /login" rule below would bounce them back to / -> infinite loop.
@@ -171,7 +192,7 @@ export async function proxy(req: NextRequest) {
   // instead of redirecting away.
   const reason = req.nextUrl.searchParams.get("reason");
   if (isAuthPage && isLoggedIn && reason) {
-    const res = addSecurityHeaders(NextResponse.next());
+    const res = addSecurityHeaders(req, NextResponse.next());
     res.cookies.delete("authjs.session-token");
     res.cookies.delete("__Secure-authjs.session-token");
     return res;
@@ -194,11 +215,11 @@ export async function proxy(req: NextRequest) {
     const userRoles = (token?.roles as string[] | undefined) ?? [];
     const isSuperAdmin = userRoles.includes("super_admin");
     const sensitiveRoutes = [
-      "/master/roles",
-      "/master/users",
+      "/pengaturan/peran",
+      "/pengaturan/pengguna",
       "/pengaturan/database",
       "/pengaturan/system",
-      "/pengaturan/audit-log",
+      "/pengaturan/log-aktivitas",
     ];
     for (const pattern of sensitiveRoutes) {
       if (pathname.startsWith(pattern) && !isSuperAdmin) {
@@ -207,7 +228,7 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  return addSecurityHeaders(NextResponse.next());
+  return addSecurityHeaders(req, NextResponse.next());
 }
 
 export const config = {
