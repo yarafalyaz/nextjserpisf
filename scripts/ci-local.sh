@@ -32,6 +32,12 @@ E2E_PORT="${E2E_PORT:-4101}"
 LOG_DIR="$PROJECT_DIR/.ci-logs"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
+# Mirror the deployment timezone (docker-compose sets TZ=Asia/Jakarta). Running
+# the pipeline in UTC hides date bugs where a local-time derivation differs from
+# the UTC one - e.g. report presets and the "today" default of create forms were
+# off by one day only east of UTC. Override with TZ=UTC ... if ever needed.
+export TZ="${TZ:-Asia/Jakarta}"
+
 SKIP_E2E=false
 E2E_ONLY=false
 

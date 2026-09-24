@@ -8,6 +8,11 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  # Mirror the deployment timezone (docker-compose sets TZ=Asia/Jakarta for the app
+  # and the DB). Without it CI runs in UTC and misses the whole class of date bugs
+  # where a local-time derivation differs from the UTC one: the report presets and
+  # the "today" default of every create form were off by one day only east of UTC.
+  TZ: Asia/Jakarta
 
 jobs:
   lint:
