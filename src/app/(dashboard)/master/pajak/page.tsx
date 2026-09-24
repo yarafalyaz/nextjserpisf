@@ -10,6 +10,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Pajak" }
 
 export default async function TaxesPage({
@@ -26,6 +27,10 @@ export default async function TaxesPage({
   const { page, pageSize, take } = parsePagination(params)
 
   const where = {
+    // Taxes are soft-deleted when a hard delete hits a FK (deleteTax), so the
+    // list must exclude them or "deleted" rows keep showing up (and stay
+    // editable/deletable).
+    deletedAt: null,
     ...(params.cari && {
       name: { contains: params.cari },
     }),
@@ -52,9 +57,11 @@ export default async function TaxesPage({
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Pajak" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pajak</h1>
-        <Link href="/master/pajak/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-tax-btn">
+        <CanCreate permission="create_taxes">
+          <Link href="/master/pajak/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-tax-btn">
           + Tambah Pajak
         </Link>
+        </CanCreate>
       </div>
 
       <TaxTable data={tableData} />

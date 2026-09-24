@@ -208,7 +208,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
           </div>
           <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
             <div className="flex flex-col gap-1.5">
-            <Label>Gambar Item</Label>
+            <Label>Gambar Item *</Label>
             <input type="hidden" {...register("image")} />
             <div className="image-upload-area">
               {imagePreview ? (
@@ -237,6 +237,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               )}
               {uploading && <div className="image-upload-loading">Mengunggah...</div>}
             </div>
+            {errors.image && <span className="text-xs text-danger mt-1">{errors.image.message}</span>}
             <input
               ref={fileInputRef}
               type="file"
@@ -246,7 +247,9 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
             />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="qr">QR Code</Label>
+              {/* Not a form control - was a <Label htmlFor="qr"> pointing at a
+                  non-existent id (QrCodeDisplay renders an image, not an input). */}
+              <span className="text-sm leading-none font-medium">QR Code</span>
               {watch("sku")
                 ? <QrCodeDisplay value={`${baseUrl}/inventaris/scan?code=${encodeURIComponent(watch("sku") || "")}`} />
                 : <span className="text-xs text-muted-foreground">QR Code dibuat dari SKU barang.</span>}
@@ -264,7 +267,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="brandId">Merek</Label>
+                  <Label htmlFor="brandId">Merek *</Label>
                   <Combobox
                     id="brandId"
                     options={brands.map((b) => ({ value: String(b.id), label: b.name }))}
@@ -272,6 +275,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari merek..."
                   />
+                  {errors.brandId && <span className="text-xs text-danger mt-1">{errors.brandId.message}</span>}
                 </>
               )}
             />
@@ -290,6 +294,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari kategori..."
                   />
+                  {errors.categoryId && <span className="text-xs text-danger mt-1">{errors.categoryId.message}</span>}
                 </>
               )}
             />
@@ -300,7 +305,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="vendorId">Pemasok</Label>
+                  <Label htmlFor="vendorId">Pemasok *</Label>
                   <Combobox
                     id="vendorId"
                     options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
@@ -308,6 +313,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari pemasok..."
                   />
+                  {errors.vendorId && <span className="text-xs text-danger mt-1">{errors.vendorId.message}</span>}
                 </>
               )}
             />
@@ -344,11 +350,12 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
 
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cost">Harga Beli (Rp)</Label>
+            <Label htmlFor="cost">Harga Beli (Rp) *</Label>
             <Controller name="cost" control={control} render={({ field: f }) => <CurrencyInput id="cost" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
+            {errors.cost && <span className="text-xs text-danger mt-1">{errors.cost.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="price">Harga Jual (Rp)</Label>
+            <Label htmlFor="price">Harga Jual (Rp) *</Label>
             <Controller name="price" control={control} render={({ field: f }) => <CurrencyInput id="price" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
             {!priceBelowCost && watchedPrice > 0 && (
               <span className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
@@ -366,6 +373,29 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               </AlertDescription>
             </Alert>
           )}
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Controller
+              name="costingMethod"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <Label htmlFor="costingMethod">Metode Costing (Penilaian HPP)</Label>
+                  <FormSelect
+                    id="costingMethod"
+                    value={field.value || "average"}
+                    onValueChange={field.onChange}
+                    options={[
+                      { value: "average", label: "Moving Average (Rata-rata Bergerak)" },
+                      { value: "fifo", label: "FIFO (First-In, First-Out)" },
+                    ]}
+                  />
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Metode perhitungan HPP persediaan saat terjadi transaksi barang masuk &amp; keluar.
+                  </p>
+                </>
+              )}
+            />
+          </div>
         </FormSection>
 
         <FormSection title="Lokasi Penyimpanan">
@@ -375,18 +405,19 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="defaultWarehouseId">Gudang Bawaan</Label>
+                  <Label htmlFor="defaultWarehouseId">Gudang Bawaan *</Label>
                   <Combobox
                     id="defaultWarehouseId"
                     options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => {
                       field.onChange(key ? Number(key) : undefined)
-                      setValue("defaultRackId", undefined)
+                      setValue("defaultRackId", undefined as any)
                       setValue("defaultRackRowId", undefined)
                     }}
                     placeholder="Cari gudang..."
                   />
+                  {errors.defaultWarehouseId && <span className="text-xs text-danger mt-1">{errors.defaultWarehouseId.message}</span>}
                 </>
               )}
             />
@@ -397,7 +428,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="defaultRackId">Rak</Label>
+                  <Label htmlFor="defaultRackId">Rak *</Label>
                   <Combobox
                     id="defaultRackId"
                     options={filteredRacks.map((r) => ({ value: String(r.id), label: r.name }))}
@@ -409,6 +440,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                     disabled={!selectedWarehouseId}
                     placeholder="Cari rak..."
                   />
+                  {errors.defaultRackId && <span className="text-xs text-danger mt-1">{errors.defaultRackId.message}</span>}
                 </>
               )}
             />

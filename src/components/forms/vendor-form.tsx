@@ -139,7 +139,7 @@ export function VendorForm({ vendor, generatedCode, enableAutoCode = true, payme
 
         <FormSection title="Alamat">
           <div className="flex flex-col gap-1.5 col-span-full">
-            <Label htmlFor="street">Alamat Jalan</Label>
+            <Label htmlFor="address">Alamat Jalan</Label>
             <Textarea id="address" {...register("address")} rows={2} placeholder="Alamat jalan lengkap" />
           </div>
           <AddressPicker defaultValues={{ province: vendor?.province ?? undefined, city: vendor?.city ?? undefined, district: vendor?.districtVendor ?? undefined, village: vendor?.villageVendor ?? undefined, postalCode: vendor?.postalCode ?? undefined }} />

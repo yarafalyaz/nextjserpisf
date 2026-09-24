@@ -241,18 +241,57 @@ describe("updateEmployee — create login account for existing employee", () => 
 })
 
 describe("deleteEmployee — revoke linked login account", () => {
-  it("deactivates the linked user account when the employee is deleted", async () => {
+  it("deactivates the linked login BEFORE deleting the employee", async () => {
     employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
     employeeDeleteMock.mockResolvedValue({ id: 50 }) // hard delete succeeds
-    txUserUpdateMock.mockResolvedValue({ id: 7 })
+    userUpdateMock.mockResolvedValue({ id: 7 })
 
     const res = await deleteEmployee(50)
 
     expect(res).toEqual({ success: true })
-    // deleteEmployee now wraps the delete + user deactivation in a
-    // $transaction; the user.update runs against the tx client (txUserUpdateMock),
-    // not the global prisma.user.update.
-    expect(txUserUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
+    // Security-first ordering. The previous version deactivated the user last,
+    // inside a transaction that the employee delete had already escaped (the
+    // helper used the global client), so a failure there produced a deleted
+    // employee whose login still authenticated.
+    expect(userUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
+    expect(userUpdateMock.mock.invocationCallOrder[0]).toBeLessThan(
+      employeeDeleteMock.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("revokes the login before falling back to a soft delete on FK conflict", async () => {
+    const { Prisma } = await import("@prisma/client")
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
+    // P2003 instance so hardDeleteOrSoftDelete recognizes the FK restriction.
+    const p2003 = Object.assign(
+      Object.create(Prisma.PrismaClientKnownRequestError.prototype),
+      { code: "P2003", message: "FK constraint failed" },
+    )
+    employeeDeleteMock.mockRejectedValue(p2003)
+    employeeUpdateMock.mockResolvedValue({ id: 50 })
+    userUpdateMock.mockResolvedValue({ id: 7 })
+
+    const res = await deleteEmployee(50)
+
+    expect(res).toEqual({ success: true })
+    expect(employeeUpdateMock).toHaveBeenCalled()
+    expect(userUpdateMock).toHaveBeenCalledWith({ where: { id: 7 }, data: { isActive: false } })
+    expect(userUpdateMock.mock.invocationCallOrder[0]).toBeLessThan(
+      employeeUpdateMock.mock.invocationCallOrder[0],
+    )
+  })
+
+  it("leaves the employee intact when revoking the login fails", async () => {
+    employeeFindUniqueMock.mockResolvedValue({ userId: 7 })
+    userUpdateMock.mockRejectedValue(new Error("db down"))
+
+    const res = await deleteEmployee(50)
+
+    expect(res.success).toBe(false)
+    // Revoking the login comes first, so a failure there must not remove the
+    // employee row (otherwise we would recreate the orphaned-login state).
+    expect(employeeDeleteMock).not.toHaveBeenCalled()
+    expect(employeeUpdateMock).not.toHaveBeenCalled()
   })
 
   it("does not touch any user when the employee has no login account", async () => {
@@ -262,6 +301,7 @@ describe("deleteEmployee — revoke linked login account", () => {
     const res = await deleteEmployee(51)
 
     expect(res).toEqual({ success: true })
+    expect(userUpdateMock).not.toHaveBeenCalled()
     expect(txUserUpdateMock).not.toHaveBeenCalled()
   })
 })

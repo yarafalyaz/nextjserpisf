@@ -18,6 +18,7 @@ import {
 import { logActivity } from "@/lib/services/activity-log.service";
 import {
   customerSchema,
+  customerCategorySchema,
   vendorSchema,
   itemSchema,
   warehouseServerSchema,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/validations/crm.schemas";
 import { employeeSchema } from "@/lib/validators";
 import bcrypt from "bcryptjs";
+import { getHrScope } from "@/lib/auth/hr-scope";
 
 /**
  * Privilege-escalation guard for Employee → User creation/sync flows.
@@ -132,7 +134,7 @@ async function hardDeleteOrSoftDelete(
 
 export async function createCustomer(formData: FormData) {
   try {
-    await requirePermission("create_customers");
+    const user = await requirePermission("create_customers");
 
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -152,6 +154,7 @@ export async function createCustomer(formData: FormData) {
         address: v.address ?? null,
         city: v.city ?? null,
         contactPerson: v.contactPerson ?? null,
+        createdBy: Number(user.id),
         gender: v.gender ?? null,
         code,
         street: v.street ?? null,
@@ -159,9 +162,9 @@ export async function createCustomer(formData: FormData) {
         district: v.district ?? null,
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
-        creditLimit: v.creditLimit ?? 0,
         isActive: true,
         taxId: v.taxId ?? null,
+        customerCategoryId: v.customerCategoryId ?? null,
       },
     });
 
@@ -199,8 +202,8 @@ export async function updateCustomer(customerId: number, formData: FormData) {
         district: v.district ?? null,
         village: v.village ?? null,
         postalCode: v.postalCode ?? null,
-        creditLimit: v.creditLimit ?? 0,
         taxId: v.taxId ?? null,
+        customerCategoryId: v.customerCategoryId ?? null,
       },
     });
 
@@ -246,7 +249,7 @@ export async function deleteCustomer(customerId: number) {
 
 export async function createVendor(formData: FormData) {
   try {
-    await requirePermission("create_vendors");
+    const user = await requirePermission("create_vendors");
 
     const parsed = parseFormData(vendorSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -268,6 +271,7 @@ export async function createVendor(formData: FormData) {
         city: v.city ?? null,
         npwp: v.npwp ?? null,
         contactPerson: v.contactPerson ?? null,
+        createdBy: Number(user.id),
         paymentTermId: v.paymentTermId ?? null,
         street: v.street ?? null,
         province: v.province ?? null,
@@ -363,6 +367,20 @@ export async function createItem(formData: FormData) {
     // "phantom" items missing the multi-UoM data the operator just typed in.
     // Wrapping both in one tx ties item existence to conversion existence.
     const item = await prisma.$transaction(async (tx) => {
+      let finalCostingMethod = v.costingMethod;
+      if (!finalCostingMethod && v.categoryId) {
+        const cat = await tx.itemCategory.findUnique({
+          where: { id: v.categoryId },
+          select: { costingMethod: true },
+        });
+        if (cat) {
+          finalCostingMethod = cat.costingMethod;
+        }
+      }
+      if (!finalCostingMethod) {
+        finalCostingMethod = "average";
+      }
+
       const created = await tx.item.create({
         data: {
           sku,
@@ -381,7 +399,7 @@ export async function createItem(formData: FormData) {
           cost: itemCost,
           price: itemPrice,
           standardCost: v.standardCost ?? undefined,
-          costingMethod: v.costingMethod ?? undefined,
+          costingMethod: finalCostingMethod,
           purchasePrice: v.purchasePrice ?? undefined,
           isProduct: v.isProduct ?? false,
           trackBatch: v.trackBatch ?? false,
@@ -514,7 +532,41 @@ export async function createWarehouse(formData: FormData) {
     const settings = await getSystemSettings();
     let code = v.code || null;
     if (settings.enableAutoWarehouseCode !== false || !code) {
-      code = await generateDocumentNumber("WH", "simple");
+      const prefix = settings.warehouseCodePrefix || "WH-";
+      // Only count non-deleted warehouses so soft-deleted codes can be reused
+      const existingCodes = await prisma.warehouse.findMany({
+        where: { deletedAt: null, code: { startsWith: prefix } },
+        select: { code: true },
+      });
+      let maxNum = 0;
+      for (const w of existingCodes) {
+        const num = parseInt(w.code.slice(prefix.length), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+      let nextId = maxNum + 1;
+      while (
+        await prisma.warehouse.findFirst({
+          where: { deletedAt: null, code: prefix + String(nextId).padStart(4, "0") },
+          select: { id: true },
+        })
+      ) {
+        nextId++;
+      }
+      code = prefix + String(nextId).padStart(4, "0");
+    }
+
+    // Free up code if it's held by a soft-deleted warehouse (UNIQUE collision)
+    if (code) {
+      const existingDeleted = await prisma.warehouse.findFirst({
+        where: { deletedAt: { not: null }, code },
+        select: { id: true },
+      });
+      if (existingDeleted) {
+        await prisma.warehouse.update({
+          where: { id: existingDeleted.id },
+          data: { code: `DELETED-${existingDeleted.id}-${Date.now()}` },
+        });
+      }
     }
 
     const warehouse = await prisma.warehouse.create({
@@ -568,6 +620,16 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
 export async function createEmployee(formData: FormData) {
   try {
     const actor = await requirePermission("create_employees");
+
+    const scope = await getHrScope(actor);
+    if (scope.kind === "self") {
+      throw new Error("Anda tidak memiliki akses untuk membuat data karyawan.");
+    } else if (scope.kind === "department") {
+      const deptId = safeId(formData.get("departmentId"));
+      if (deptId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan membuat data karyawan di departemen Anda sendiri.");
+      }
+    }
 
     const settings = await getSystemSettings();
     let employeeNo = (formData.get("employeeNo") as string) || null;
@@ -684,6 +746,24 @@ export async function createEmployee(formData: FormData) {
 export async function updateEmployee(employeeId: number, formData: FormData) {
   try {
     const actor = await requirePermission("edit_employees");
+
+    const scope = await getHrScope(actor);
+    if (scope.kind === "self" && scope.employeeId !== employeeId) {
+      throw new Error("Anda hanya diperbolehkan mengupdate data diri Anda sendiri.");
+    } else if (scope.kind === "department") {
+      const currentEmployee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { departmentId: true }
+      });
+      if (!currentEmployee || currentEmployee.departmentId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan mengupdate data karyawan se-departemen Anda.");
+      }
+
+      const newDeptId = safeId(formData.get("departmentId"));
+      if (newDeptId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan mengupdate data karyawan ke departemen Anda sendiri.");
+      }
+    }
 
     // Optional: create a login account for an employee that does not have one yet.
     const wantsLogin =
@@ -888,13 +968,15 @@ export async function createAccount(formData: FormData) {
 
 export async function createItemCategory(formData: FormData) {
   try {
-    await requirePermission("create_item_categories");
+    const user = await requirePermission("create_item_categories");
 
     const category = await prisma.itemCategory.create({
       data: {
         name: requireString(formData.get("name"), "name"),
         description: formData.get("description") as string | null,
         parentId: safeNumber(formData.get("parentId")),
+        costingMethod: (formData.get("costingMethod") as string) || "average",
+        createdBy: Number(user.id),
       },
     });
 
@@ -909,6 +991,9 @@ export async function createItemCategory(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createItemCategory]", getErrorMessage(e) || e);
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Kategori dengan nama tersebut sudah ada." };
+    }
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -923,6 +1008,7 @@ export async function updateItemCategory(id: number, formData: FormData) {
         name: requireString(formData.get("name"), "name"),
         description: formData.get("description") as string | null,
         parentId: safeNumber(formData.get("parentId")),
+        costingMethod: (formData.get("costingMethod") as string) || "average",
       },
     });
 
@@ -937,6 +1023,9 @@ export async function updateItemCategory(id: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateItemCategory]", getErrorMessage(e) || e);
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Kategori dengan nama tersebut sudah ada." };
+    }
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -1200,7 +1289,7 @@ export async function updateLead(id: number, formData: FormData) {
 
 export async function createBank(formData: FormData) {
   try {
-    await requirePermission("create_banks");
+    const user = await requirePermission("create_banks");
 
     const bank = await prisma.bank.create({
       data: {
@@ -1209,6 +1298,7 @@ export async function createBank(formData: FormData) {
         accountId: safeId(formData.get("accountId")),
         type: (formData.get("type") as string) || "bank",
         isActive: true,
+        createdBy: Number(user.id),
       },
     });
 
@@ -1250,7 +1340,7 @@ export async function updateBank(id: number, formData: FormData) {
 
 export async function createTax(formData: FormData) {
   try {
-    await requirePermission("create_taxes");
+    const user = await requirePermission("create_taxes");
 
     const tax = await prisma.tax.create({
       data: {
@@ -1269,6 +1359,7 @@ export async function createTax(formData: FormData) {
           ? new Date(formData.get("effectiveTo") as string)
           : undefined,
         isActive: true,
+        createdBy: Number(user.id),
       },
     });
 
@@ -1316,93 +1407,7 @@ export async function updateTax(id: number, formData: FormData) {
   }
 }
 
-// ==================== CURRENCY ACTIONS ====================
 
-export async function createCurrency(formData: FormData) {
-  try {
-    await requirePermission("create_currencies");
-
-    const isBase = formData.get("isBase") === "on";
-
-    const currency = await prisma.$transaction(async (tx) => {
-      // Guard: only one currency may be base — clear all others first.
-      if (isBase) {
-        await tx.currency.updateMany({
-          where: { isBase: true },
-          data: { isBase: false },
-        });
-      }
-      return tx.currency.create({
-        data: {
-          code: formData.get("code") as string,
-          name: requireString(formData.get("name"), "name"),
-          rate: safeNumber(formData.get("rate")) ?? 0,
-          symbol: (formData.get("symbol") as string) || undefined,
-          symbolPosition:
-            (formData.get("symbolPosition") as string) || undefined,
-          decimalSeparator:
-            (formData.get("decimalSeparator") as string) || undefined,
-          thousandsSeparator:
-            (formData.get("thousandsSeparator") as string) || undefined,
-          decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
-          isBase,
-          isActive: true,
-        },
-      });
-    });
-
-    revalidatePath("/master/mata-uang");
-    await logActivity("create", "Currency", currency.id, "Membuat mata uang");
-    return { success: true, id: currency.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createCurrency]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function updateCurrency(id: number, formData: FormData) {
-  try {
-    await requirePermission("edit_currencies");
-
-    const isBase = formData.get("isBase") === "on";
-
-    await prisma.$transaction(async (tx) => {
-      // Guard: only one currency may be base — clear all others first.
-      if (isBase) {
-        await tx.currency.updateMany({
-          where: { isBase: true, id: { not: id } },
-          data: { isBase: false },
-        });
-      }
-      await tx.currency.update({
-        where: { id },
-        data: {
-          code: formData.get("code") as string,
-          name: requireString(formData.get("name"), "name"),
-          rate: safeNumber(formData.get("rate")) ?? 0,
-          symbol: (formData.get("symbol") as string) || undefined,
-          symbolPosition:
-            (formData.get("symbolPosition") as string) || undefined,
-          decimalSeparator:
-            (formData.get("decimalSeparator") as string) || undefined,
-          thousandsSeparator:
-            (formData.get("thousandsSeparator") as string) || undefined,
-          decimalPlaces: safeNumber(formData.get("decimalPlaces")) ?? undefined,
-          isBase,
-        },
-      });
-    });
-
-    revalidatePath("/master/mata-uang");
-    await logActivity("update", "Currency", id, "Memperbarui mata uang");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateCurrency]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
 
 // ==================== BARCODE ACTIONS ====================
 
@@ -1551,7 +1556,9 @@ export async function createStatisticalKeyFigure(formData: FormData) {
     const figure = await prisma.statisticalKeyFigure.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        code: (formData.get("code") as string) || null,
         unit: formData.get("unit") as string,
+        type: (formData.get("type") as string) || null,
         value: safeNumber(formData.get("value")) ?? 0,
       },
     });
@@ -1581,8 +1588,11 @@ export async function updateStatisticalKeyFigure(
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        code: (formData.get("code") as string) || null,
         unit: formData.get("unit") as string,
+        type: (formData.get("type") as string) || null,
         value: safeNumber(formData.get("value")) ?? 0,
+        isActive: formData.get("isActive") === "on",
       },
     });
     revalidatePath("/keuangan/angka-kunci-statistik");
@@ -1604,7 +1614,7 @@ export async function updateStatisticalKeyFigure(
 
 export async function createPaymentTerm(formData: FormData) {
   try {
-    await requirePermission("create_payment_terms");
+    const user = await requirePermission("create_payment_terms");
 
     const paymentTerm = await prisma.paymentTerm.create({
       data: {
@@ -1612,6 +1622,7 @@ export async function createPaymentTerm(formData: FormData) {
         code: formData.get("code") as string,
         days: safeNumber(formData.get("days")) ?? 0,
         isActive: true,
+        createdBy: Number(user.id),
       },
     });
 
@@ -1772,39 +1783,34 @@ export async function deleteEmployee(id: number) {
       select: { userId: true },
     });
 
-    // ATOMICITY: the employee delete (or soft-delete fallback) + the linked
-    // user account deactivation must commit together. Previously the
-    // user.update ran AFTER the employee delete committed — a failure there
-    // would leave a "deleted" employee whose login still authenticated,
-    // a security gap (the linked user is still in `users` with isActive=true
-    // and can hit /api/auth/*). Wrapping both in one tx guarantees the login
-    // is revoked iff the employee row is gone.
+    // SECURITY-FIRST ORDERING: revoke the linked login BEFORE the employee row
+    // is deleted, and commit that on its own.
     //
-    // Note: hardDeleteOrSoftDelete hardDelete/softDelete callbacks currently
-    // use the global `prisma` client (not `tx`). Refactoring that helper to
-    // accept a txClient is the next step; the most important invariant —
-    // the user deactivation — IS atomic with whatever path the employee
-    // delete ends up taking.
-    await prisma.$transaction(async (tx) => {
-      await hardDeleteOrSoftDelete(
-        () => prisma.employee.delete({ where: { id } }),
-        () =>
-          prisma.employee.update({
-            where: { id },
-            data: { deletedAt: new Date() },
-          }),
-      );
+    // The previous version wrapped both writes in one `$transaction` but handed
+    // hardDeleteOrSoftDelete the global prisma client, so the employee delete
+    // committed on a separate connection while the transaction was still open. If
+    // `tx.user.update` then failed, the transaction rolled back into exactly the
+    // state the code claimed to prevent: employee gone, login still authenticating.
+    //
+    // Deactivating first makes that state unreachable: if deactivation fails the
+    // employee row simply remains (an admin retries), and if the delete then fails
+    // the login is already revoked - safe and recoverable. The reverse order can
+    // never be repaired automatically.
+    if (existing?.userId) {
+      await prisma.user.update({
+        where: { id: existing.userId },
+        data: { isActive: false },
+      });
+    }
 
-      // Security: a deleted employee must not retain a working login. Deactivate
-      // the linked user account so their credentials stop authenticating
-      // (auth enforces isActive and re-syncs tokens, so this revokes access).
-      if (existing?.userId) {
-        await tx.user.update({
-          where: { id: existing.userId },
-          data: { isActive: false },
-        });
-      }
-    });
+    await hardDeleteOrSoftDelete(
+      () => prisma.employee.delete({ where: { id } }),
+      () =>
+        prisma.employee.update({
+          where: { id },
+          data: { deletedAt: new Date() },
+        }),
+    );
 
     revalidatePath("/master/karyawan");
     await logActivity(
@@ -1899,9 +1905,17 @@ export async function deleteTax(id: number) {
     // Tax has a deletedAt column; fall back to soft-delete on FK conflict
     // (e.g. when referenced by a TaxGroup line) to mirror the convention
     // used by deleteCustomer / deleteVendor / deleteItem.
+    //
+    // isActive is cleared alongside deletedAt (same as deleteCustomerCategory):
+    // the "Kelompok Pajak" pickers load taxes with `where: { isActive: true }`,
+    // so without this a soft-deleted tax stayed selectable in new tax groups.
     await hardDeleteOrSoftDelete(
       () => prisma.tax.delete({ where: { id } }),
-      () => prisma.tax.update({ where: { id }, data: { deletedAt: new Date() } }),
+      () =>
+        prisma.tax.update({
+          where: { id },
+          data: { deletedAt: new Date(), isActive: false },
+        }),
     );
 
     revalidatePath("/master/pajak");
@@ -1930,21 +1944,7 @@ export async function deleteTaxGroup(id: number) {
   }
 }
 
-export async function deleteCurrency(id: number) {
-  try {
-    await requirePermission("delete_currencies");
 
-    await prisma.currency.delete({ where: { id } });
-
-    revalidatePath("/master/mata-uang");
-    await logActivity("delete", "Currency", id, "Menghapus mata uang");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[deleteCurrency]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
 
 export async function deleteBarcode(id: number) {
   try {
@@ -2036,12 +2036,22 @@ export async function updateAccount(id: number, formData: FormData) {
 
 export async function createBrand(formData: FormData) {
   try {
-    await requirePermission("create_brands");
+    const user = await requirePermission("create_brands");
+
+    // categoryIds is a comma-separated string of category IDs e.g. "1,3,5"
+    const categoryIds = (formData.get("categoryIds") as string || "")
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => n > 0)
 
     const brand = await prisma.brand.create({
       data: {
         name: requireString(formData.get("name"), "name"),
         description: (formData.get("description") as string) || null,
+        categories: categoryIds.length > 0
+          ? { connect: categoryIds.map((id) => ({ id })) }
+          : undefined,
+        createdBy: Number(user.id),
       },
     });
 
@@ -2051,6 +2061,9 @@ export async function createBrand(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createBrand]", getErrorMessage(e) || e);
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Merek dengan nama tersebut sudah ada." };
+    }
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -2059,11 +2072,18 @@ export async function updateBrand(id: number, formData: FormData) {
   try {
     await requirePermission("edit_brands");
 
+    const categoryIds = (formData.get("categoryIds") as string || "")
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => n > 0)
+
     await prisma.brand.update({
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
         description: (formData.get("description") as string) || null,
+        // `set` replaces all existing relations with the new list
+        categories: { set: categoryIds.map((cid) => ({ id: cid })) },
       },
     });
 
@@ -2073,6 +2093,9 @@ export async function updateBrand(id: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateBrand]", getErrorMessage(e) || e);
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Merek dengan nama tersebut sudah ada." };
+    }
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -2148,6 +2171,86 @@ export async function deleteUom(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteUom]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function createCustomerCategory(formData: FormData) {
+  try {
+    await requirePermission("create_customers");
+
+    const parsed = parseFormData(customerCategorySchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const category = await prisma.customerCategory.create({
+      data: {
+        name: v.name,
+        downPaymentPercent: v.downPaymentPercent ?? 0,
+        isActive: true,
+      },
+    });
+
+    revalidatePath("/master/kategori-pelanggan");
+    await logActivity("create", "CustomerCategory", category.id, "Membuat kategori pelanggan");
+    return { success: true, id: category.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createCustomerCategory]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateCustomerCategory(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_customers");
+
+    const parsed = parseFormData(customerCategorySchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    await prisma.customerCategory.update({
+      where: { id },
+      data: {
+        name: v.name,
+        downPaymentPercent: v.downPaymentPercent ?? 0,
+      },
+    });
+
+    revalidatePath("/master/kategori-pelanggan");
+    await logActivity("update", "CustomerCategory", id, "Memperbarui kategori pelanggan");
+    return { success: true, id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateCustomerCategory]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteCustomerCategory(id: number) {
+  try {
+    await requirePermission("delete_customers");
+
+    await prisma.$transaction([
+      prisma.customer.updateMany({
+        where: { customerCategoryId: id },
+        data: { customerCategoryId: null },
+      }),
+      prisma.customerCategory.update({
+        where: { id },
+        data: {
+          isActive: false,
+          deletedAt: new Date(),
+        },
+      }),
+    ]);
+
+    revalidatePath("/master/kategori-pelanggan");
+    await logActivity("delete", "CustomerCategory", id, "Menghapus kategori pelanggan");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteCustomerCategory]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

@@ -7,31 +7,34 @@ import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { ReportDateFilter } from "@/components/reports/report-date-filter"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
+import { BudgetFilterBar } from "./budget-filter-bar"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Anggaran Vs Aktual" }
+export const metadata: Metadata = { title: "Anggaran vs Realisasi" }
 
-export default async function BudgetVsActualPage({
+export default async function BudgetVsRealisasiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tanggalMulai?: string; tanggalSelesai?: string }>
+  searchParams: Promise<{ costCenterId?: string; tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
   await requirePermission('view_reports')
-  const params = await searchParams
+  const sp = await searchParams
 
   const now = new Date()
-  const currentQuarter = Math.floor(now.getMonth() / 3)
-  const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), currentQuarter * 3, 1)
-  const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : new Date(now.getFullYear(), currentQuarter * 3 + 3, 0)
+  const startDate = sp.tanggalMulai ? new Date(sp.tanggalMulai) : new Date(now.getFullYear(), 0, 1)
+  const endDate = sp.tanggalSelesai ? new Date(sp.tanggalSelesai) : now
   endDate.setHours(23, 59, 59, 999)
 
   const budgets = await prisma.budget.findMany({
-    where: { startDate: { lte: endDate }, endDate: { gte: startDate } },
+    where: { 
+      costCenterId: sp.costCenterId ? Number(sp.costCenterId) : undefined,
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+    },
     orderBy: { name: 'asc' },
   })
 
@@ -60,7 +63,8 @@ export default async function BudgetVsActualPage({
     const variance = budgetAmount - actual
     const percentage = budgetAmount > 0 ? (actual / budgetAmount) * 100 : 0
     return { id: budget.id, name: budget.name, accountName: account ? `${account.code} - ${account.name}` : '-',
-      costCenterName: costCenter ? costCenter.name : '-', budget: budgetAmount, actual, variance, percentage }
+      costCenterName: costCenter ? `${costCenter.code} - ${costCenter.name}` : '-',
+      budget: budgetAmount, actual, variance, percentage }
   })
 
   const totalBudget = rows.reduce((sum, r) => sum + r.budget, 0)
@@ -68,25 +72,23 @@ export default async function BudgetVsActualPage({
   const totalVariance = totalBudget - totalActual
   const avgPercentage = rows.length > 0 ? rows.reduce((sum, r) => sum + r.percentage, 0) / rows.length : 0
 
-  const getColorClass = (pct: number) => {
-    if (pct > 100) return 'text-danger'
-    if (pct >= 80) return 'text-warning'
-    return 'text-success'
-  }
+  const allCostCenters = await prisma.costCenter.findMany({
+    where: { isActive: true },
+    select: { id: true, code: true, name: true },
+    orderBy: { code: "asc" },
+  })
 
   const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
-  return (
+return (
     <div className="flex flex-col gap-6">
       <div className="print:hidden">
-        <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Laporan", href: "/laporan" }, { label: "Anggaran vs Aktual" }]} />
+        <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Laporan", href: "/laporan" }, { label: "Anggaran vs Realisasi" }]} />
       </div>
-      <div className="flex items-center justify-end print:hidden"><ExportButtons title="Anggaran_vs_Aktual" /></div>
-      <div className="print:hidden">
-        <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
-      </div>
+      <div className="flex items-center justify-end print:hidden"><ExportButtons title="Anggaran_vs_Realisasi" /></div>
+      <BudgetFilterBar costCenters={allCostCenters} />
       <ReportLetterhead title="Anggaran vs Realisasi" subtitle="Budget vs Actual" periodLabel={periodLabel} />
-      <ReportNarration text="Laporan Anggaran vs Aktual membandingkan realisasi keuangan dengan anggaran yang telah ditetapkan untuk periode berjalan. Perbandingan ini membantu mengidentifikasi deviasi atau selisih antara anggaran dan realisasi, sehingga manajemen dapat mengambil tindakan korektif yang diperlukan." />
+      <ReportNarration text="Laporan Anggaran vs Realisasi membandingkan realisasi keuangan dengan anggaran yang telah ditetapkan untuk periode berjalan, dengan filter per pusat biaya." />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 print:hidden">
         <ReportKpiCard label="Total Anggaran" value={formatCurrency(totalBudget)} />
         <ReportKpiCard label="Total Realisasi" value={formatCurrency(totalActual)} />
@@ -95,7 +97,7 @@ export default async function BudgetVsActualPage({
       </div>
       <ReportSection title="Detail Anggaran vs Realisasi">
         {rows.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground text-sm">Tidak ada budget dalam periode ini</p>
+          <p className="text-center py-8 text-muted-foreground text-sm">Tidak ada budget dalam periode ini.</p>
         ) : (
           <DetailTable data-report-table="Budget vs Actual">
             <DetailTableHead>
@@ -113,7 +115,7 @@ export default async function BudgetVsActualPage({
                   <DetailTableTd align="right">{formatAccounting(row.budget)}</DetailTableTd>
                   <DetailTableTd align="right">{formatAccounting(row.actual)}</DetailTableTd>
                   <DetailTableTd align="right">{formatAccounting(row.variance)}</DetailTableTd>
-                  <DetailTableTd align="right" className={getColorClass(row.percentage)}>{row.percentage.toFixed(1)}%</DetailTableTd>
+                  <DetailTableTd align="right" className={row.percentage > 100 ? 'text-danger' : row.percentage >= 80 ? 'text-warning' : 'text-success'}>{row.percentage.toFixed(1)}%</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>

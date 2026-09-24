@@ -6,6 +6,11 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { SafeImage } from "./safe-image"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useSession } from "next-auth/react"
+// Imported from the dependency-free maps module on purpose: pulling in
+// @/lib/auth/attachment-permissions would drag prisma (needing fs/net/tls) into
+// this browser bundle and break `next build`.
+import { ATTACHMENT_WRITE_PERMISSION } from "@/lib/auth/attachment-permission-maps"
 
 interface Attachment {
   id: number
@@ -33,6 +38,9 @@ function isImage(mimeType: string): boolean {
 }
 
 export function TransactionAttachments({ referenceType, referenceId }: TransactionAttachmentsProps) {
+  const { data: session } = useSession()
+  const canModify = session?.user?.roles?.includes("super_admin") === true ||
+    Boolean(session?.user?.permissions?.includes(ATTACHMENT_WRITE_PERMISSION[referenceType] ?? ""))
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -132,7 +140,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
           <FileText className="size-4" aria-hidden="true" />
           Bukti / Lampiran
         </h3>
-        <Button
+        {canModify && <Button
           type="button"
           variant="secondary" size="sm"
           onPress={() => fileInputRef.current?.click()}
@@ -141,8 +149,8 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         >
           <Upload className="size-3" aria-hidden="true" />
           {uploading ? "Mengupload..." : "Upload Bukti"}
-        </Button>
-        <input
+        </Button>}
+        {canModify && <input
           id={fileInputId}
           ref={fileInputRef}
           type="file"
@@ -151,7 +159,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
           className="sr-only"
           aria-label="Pilih file bukti atau lampiran (JPG, PNG, WebP, GIF, atau PDF, maksimal 10MB)"
           tabIndex={-1}
-        />
+        />}
       </div>
 
       <div role="status" aria-live="polite" aria-busy={loading} className="sr-only">
@@ -213,7 +221,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
                 >
                   <Download className="size-3.5" aria-hidden="true" />
                 </a>
-                <Button
+                {canModify && <Button
                   onPress={() => handleDeleteClick(att.id)}
                   variant="danger-soft"
                   size="sm"
@@ -221,14 +229,14 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
                   aria-label={`Hapus lampiran ${att.originalName}`}
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />
-                </Button>
+                </Button>}
               </div>
             </li>
           ))}
         </ul>
       )}
 
-      <ConfirmDialog
+      {canModify && <ConfirmDialog
         isOpen={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Hapus lampiran?"
@@ -237,7 +245,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         cancelLabel="Batal"
         variant="danger"
         onConfirm={executeDelete}
-      />
+      />}
     </section>
   )
 }

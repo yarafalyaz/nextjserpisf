@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
   const revalidateMock = vi.fn()
   const logActivityMock = vi.fn()
   const assertApprovedMock = vi.fn()
+  const requestApprovalMock = vi.fn().mockResolvedValue(true)
   const notifyAdminsMock = vi.fn()
   const createNotificationMock = vi.fn()
   const sendEmailMock = vi.fn()
@@ -29,23 +30,25 @@ const mocks = vi.hoisted(() => {
   })
 
   const prismaMock = {
-    attendance: buildModelMock(),
-    holiday: buildModelMock(),
-    workSchedule: buildModelMock(),
     timesheet: buildModelMock(),
     employeeLoan: buildModelMock(),
     leaveRequest: buildModelMock(),
     overtimeRequest: buildModelMock(),
     appreciation: buildModelMock(),
-    departmentHoliday: buildModelMock(),
     payroll: buildModelMock(),
     employee: buildModelMock(),
+    attendance: buildModelMock(),
+    workSchedule: buildModelMock(),
+    holiday: buildModelMock(),
+    departmentHoliday: buildModelMock(),
     notification: buildModelMock(),
     setting: buildModelMock(),
     systemSetting: buildModelMock(),
+    approval: buildModelMock(),
     journal: buildModelMock(),
     journalEntry: buildModelMock(),
     user: buildModelMock(),
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") {
         return ops(prismaMock)
@@ -58,6 +61,7 @@ const mocks = vi.hoisted(() => {
     revalidateMock,
     logActivityMock,
     assertApprovedMock,
+    requestApprovalMock,
     notifyAdminsMock,
     createNotificationMock,
     sendEmailMock,
@@ -72,6 +76,7 @@ const {
   revalidateMock,
   logActivityMock,
   assertApprovedMock,
+  requestApprovalMock,
   notifyAdminsMock,
   createNotificationMock,
   sendEmailMock,
@@ -98,6 +103,7 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 
 vi.mock("@/lib/services/approval-workflow.service", () => ({
   assertApproved: (...a: unknown[]) => mocks.assertApprovedMock(...a),
+  requestApprovalIfConfigured: (...a: unknown[]) => mocks.requestApprovalMock(...a),
 }))
 
 vi.mock("@/lib/services/notification.service", () => ({
@@ -133,35 +139,20 @@ function fd(entries: Record<string, string | string[]>): FormData {
 import * as actions from "../hrm.actions"
 
 const EXPORTED_FN_NAMES = [
-  "checkIn", "checkOut", "createAttendance", "updateAttendance",
   "createLeaveRequest", "approveLeave", "rejectLeave",
   "createOvertimeRequest", "approveOvertime",
-  "createEmployeeLoan", "createTimesheet", "createWorkSchedule",
-  "createHoliday", "updateHoliday",
+  "createEmployeeLoan", "createTimesheet",
   "deleteLeaveRequest", "deleteOvertimeRequest", "deleteTimesheet",
-  "deleteEmployeeLoan", "deleteWorkSchedule", "deleteHoliday",
-  "syncNationalHolidays",
+  "deleteEmployeeLoan",
   "updateLeaveRequest", "updateOvertimeRequest", "updateEmployeeLoan",
-  "updateTimesheet", "updateWorkSchedule",
-  "createDepartmentHoliday", "updateDepartmentHoliday", "deleteDepartmentHoliday",
+  "updateTimesheet",
   "createAppreciation", "updateAppreciation", "deleteAppreciation",
 ]
 
 describe("HRM Actions exports smoke test", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
-    prismaMock.attendance.findFirst.mockResolvedValue(null)
-    prismaMock.attendance.create.mockResolvedValue({ id: 1 })
-    prismaMock.holiday.findFirst.mockResolvedValue(null)
-    prismaMock.holiday.findUnique.mockResolvedValue(null)
-    prismaMock.holiday.create.mockResolvedValue({ id: 1 })
-    prismaMock.holiday.update.mockResolvedValue({})
-    prismaMock.holiday.delete.mockResolvedValue({})
-    prismaMock.holiday.findMany.mockResolvedValue([])
-    prismaMock.workSchedule.create.mockResolvedValue({ id: 1 })
-    prismaMock.workSchedule.update.mockResolvedValue({})
-    prismaMock.workSchedule.delete.mockResolvedValue({})
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.timesheet.create.mockResolvedValue({ id: 1 })
     prismaMock.timesheet.update.mockResolvedValue({})
     prismaMock.timesheet.delete.mockResolvedValue({})
@@ -181,10 +172,6 @@ describe("HRM Actions exports smoke test", () => {
     prismaMock.appreciation.create.mockResolvedValue({ id: 1 })
     prismaMock.appreciation.update.mockResolvedValue({})
     prismaMock.appreciation.delete.mockResolvedValue({})
-    prismaMock.departmentHoliday.findFirst.mockResolvedValue(null)
-    prismaMock.departmentHoliday.create.mockResolvedValue({ id: 1 })
-    prismaMock.departmentHoliday.update.mockResolvedValue({})
-    prismaMock.departmentHoliday.delete.mockResolvedValue({})
     prismaMock.payroll.findFirst.mockResolvedValue(null)
     prismaMock.payroll.findUnique.mockResolvedValue(null)
     prismaMock.payroll.create.mockResolvedValue({ id: 1 })
@@ -194,6 +181,10 @@ describe("HRM Actions exports smoke test", () => {
       id: 1, basicSalary: 5000000, employeeLoan: [],
     })
     prismaMock.employee.findMany.mockResolvedValue([])
+    prismaMock.attendance.findMany.mockResolvedValue([])
+    prismaMock.workSchedule.findMany.mockResolvedValue([])
+    prismaMock.holiday.findMany.mockResolvedValue([])
+    prismaMock.departmentHoliday.findMany.mockResolvedValue([])
     prismaMock.user.findMany.mockResolvedValue([])
     generateDocNumMock.mockResolvedValue("PAY-202606-0001")
   })
@@ -205,92 +196,16 @@ describe("HRM Actions exports smoke test", () => {
   })
 })
 
-describe("Attendance Actions", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
-    prismaMock.attendance.findFirst.mockResolvedValue(null)
-    prismaMock.attendance.create.mockResolvedValue({ id: 1 })
-    prismaMock.attendance.update.mockResolvedValue({})
-  })
-
-  it("checkIn creates attendance", async () => {
-    const res = await actions.checkIn(1)
-    expect(res).toBeDefined()
-    expect(prismaMock.attendance.create).toHaveBeenCalled()
-  })
-
-  it("checkOut updates existing attendance", async () => {
-    prismaMock.attendance.findFirst.mockResolvedValue({
-      id: 1, employeeId: 1, checkIn: new Date(), checkOut: null, status: "present", date: new Date(),
-    })
-    prismaMock.attendance.updateMany.mockResolvedValue({ count: 1 })
-    prismaMock.employee.findUnique.mockResolvedValue({ id: 1, departmentId: 1 })
-    const res = await actions.checkOut(1)
-    expect(res).toBeDefined()
-    expect(prismaMock.attendance.updateMany).toHaveBeenCalled()
-  })
-
-  it("createAttendance validates form data", async () => {
-    const res = await actions.createAttendance(fd({}))
-    expect(res?.success).toBe(false)
-  })
-
-  it("createAttendance succeeds with valid data", async () => {
-    const res = await actions.createAttendance(fd({
-      employeeId: "1",
-      date: "2026-06-12",
-      checkIn: "08:00",
-      checkOut: "17:00",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("updateAttendance updates record", async () => {
-    const res = await actions.updateAttendance(1, fd({
-      employeeId: "1",
-      date: "2026-06-12",
-      checkIn: "09:00",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("updateAttendance rejects missing employeeId", async () => {
-    prismaMock.attendance.update.mockClear()
-    const res = await actions.updateAttendance(1, fd({
-      date: "2026-06-12",
-    }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toMatch(/Validasi gagal/)
-    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
-  })
-
-  it("updateAttendance rejects missing date", async () => {
-    prismaMock.attendance.update.mockClear()
-    const res = await actions.updateAttendance(1, fd({
-      employeeId: "1",
-    }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toMatch(/Validasi gagal/)
-    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
-  })
-})
-
 describe("Leave Request Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.leaveRequest.create.mockResolvedValue({ id: 1 })
     prismaMock.leaveRequest.findUniqueOrThrow.mockResolvedValue({
       id: 1, employeeId: 1, status: "pending", startDate: new Date(), endDate: new Date(),
     })
     prismaMock.leaveRequest.update.mockResolvedValue({})
     prismaMock.leaveRequest.delete.mockResolvedValue({})
-    // Annual-leave quota gate (getLeaveQuota) reads employee.joinDate to check
-    // tenure ≥ 1 year. Provide an employee joined well over a year ago so the
-    // eligibility gate passes; workSchedule.findMany defaults to [] → the quota
-    // service falls back to a Mon–Fri work week, and leaveRequest.findMany
-    // defaults to [] → 0 days already used.
     prismaMock.employee.findUnique.mockResolvedValue({
       id: 1, departmentId: null, joinDate: new Date("2020-01-01"),
     })
@@ -310,6 +225,7 @@ describe("Leave Request Actions", () => {
       reason: "vacation",
     }))
     expect(res?.success).toBe(true)
+    expect(prismaMock.$queryRaw).toHaveBeenCalled()
   })
 
   it("createLeaveRequest fails if startDate is after endDate", async () => {
@@ -352,30 +268,46 @@ describe("Leave Request Actions", () => {
   it("approveLeave updates status", async () => {
     const res = await actions.approveLeave(1)
     expect(res?.success).toBe(true)
-    expect(prismaMock.leaveRequest.update).toHaveBeenCalled()
+    expect(assertApprovedMock).toHaveBeenCalledWith("LeaveRequest", 1)
+    expect(prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "pending" } }),
+    )
   })
 
   it("rejectLeave updates status with reason", async () => {
     const res = await actions.rejectLeave(1, "Tidak cukup karyawan")
     expect(res?.success).toBe(true)
+    expect(assertApprovedMock).toHaveBeenCalledWith("LeaveRequest", 1)
+    expect(prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "pending" } }),
+    )
   })
 
   it("updateLeaveRequest updates record", async () => {
     const res = await actions.updateLeaveRequest(1, fd({
       employeeId: "1",
-      // leaveRequestSchema requires `type` (the real form sends it); without
-      // it the migrated parseFormData validation rejects the edit.
       type: "annual",
       startDate: "2026-06-15",
       endDate: "2026-06-20",
     }))
     expect(res?.success).toBe(true)
-    // Regression: updateLeaveRequest must gate on edit_leave_requests, not
-    // create_leave_requests. The latter would let any user with create rights
-    // edit any pending leave, bypassing the dedicated edit gate used by
-    // approveLeave/rejectLeave. Same class as the sales/purchase/budget
-    // create-vs-edit fix.
     expect(requirePermissionMock).toHaveBeenCalledWith("edit_leave_requests")
+    expect(prismaMock.$queryRaw).toHaveBeenCalled()
+  })
+
+  it("updateLeaveRequest rechecks pending status after locking the request", async () => {
+    prismaMock.leaveRequest.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, employeeId: 1, status: "pending" })
+      .mockResolvedValueOnce({ id: 1, status: "approved" })
+    const res = await actions.updateLeaveRequest(1, fd({
+      employeeId: "1",
+      type: "annual",
+      startDate: "2026-06-15",
+      endDate: "2026-06-20",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("berstatus menunggu")
+    expect(prismaMock.leaveRequest.update).not.toHaveBeenCalled()
   })
 
   it("deleteLeaveRequest removes record", async () => {
@@ -387,7 +319,7 @@ describe("Leave Request Actions", () => {
 describe("Overtime Request Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.overtimeRequest.create.mockResolvedValue({ id: 1 })
     prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending" })
     prismaMock.overtimeRequest.update.mockResolvedValue({})
@@ -411,6 +343,10 @@ describe("Overtime Request Actions", () => {
   it("approveOvertime updates status", async () => {
     const res = await actions.approveOvertime(1)
     expect(res?.success).toBe(true)
+    expect(assertApprovedMock).toHaveBeenCalledWith("OvertimeRequest", 1)
+    expect(prismaMock.overtimeRequest.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "pending" } }),
+    )
   })
 
   it("updateOvertimeRequest updates record", async () => {
@@ -420,10 +356,8 @@ describe("Overtime Request Actions", () => {
       hours: "3",
     }))
     expect(res?.success).toBe(true)
-    // Regression: updateOvertimeRequest must gate on edit_overtime_requests,
-    // not create_overtime_requests. Mirrors updateLeaveRequest / sales /
-    // purchase / budget create-vs-edit fix.
     expect(requirePermissionMock).toHaveBeenCalledWith("edit_overtime_requests")
+    expect(prismaMock.$queryRaw).toHaveBeenCalled()
   })
 
   it("updateOvertimeRequest rejects editing an already-approved request", async () => {
@@ -438,6 +372,20 @@ describe("Overtime Request Actions", () => {
     expect(prismaMock.overtimeRequest.update).not.toHaveBeenCalled()
   })
 
+  it("updateOvertimeRequest rechecks status inside the locked transaction", async () => {
+    prismaMock.overtimeRequest.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, employeeId: 1, status: "pending" })
+      .mockResolvedValueOnce({ id: 1, status: "approved" })
+    const res = await actions.updateOvertimeRequest(1, fd({
+      employeeId: "1",
+      date: "2026-06-12",
+      hours: "3",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("menunggu")
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
+  })
+
   it("deleteOvertimeRequest removes record", async () => {
     const res = await actions.deleteOvertimeRequest(1)
     expect(res?.success).toBe(true)
@@ -447,13 +395,9 @@ describe("Overtime Request Actions", () => {
 describe("Employee Loan Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employeeLoan.create.mockResolvedValue({ id: 1 })
-    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "active" })
-    // createEmployeeLoan now posts a disbursement journal via onEmployeeLoanDisbursed.
-    // Provide a settings row WITHOUT GL accounts → hook returns early (skips GL),
-    // keeping these CRUD tests focused. journal mock covers deleteEmployeeLoan's
-    // reversal (deleteJournalByReferenceTx) which finds 0 journals.
+    prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending" })
     prismaMock.systemSetting.findFirst.mockResolvedValue({ id: 1 })
     prismaMock.journal.findMany.mockResolvedValue([])
   })
@@ -476,6 +420,22 @@ describe("Employee Loan Actions", () => {
       monthlyInstallment: "400000",
     }))
     expect(res?.success).toBe(true)
+    expect(prismaMock.$queryRaw).toHaveBeenCalled()
+  })
+
+  it("updateEmployeeLoan rechecks status inside the locked transaction", async () => {
+    prismaMock.employeeLoan.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, employeeId: 1, totalAmount: 1_000_000, remainingAmount: 1_000_000, status: "pending" })
+      .mockResolvedValueOnce({ id: 1, status: "active" })
+    const res = await actions.updateEmployeeLoan(1, fd({
+      employeeId: "1",
+      loanDate: "2026-06-12",
+      totalAmount: "2000000",
+      monthlyInstallment: "400000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("menunggu")
+    expect(prismaMock.employeeLoan.updateMany).not.toHaveBeenCalled()
   })
 
   it("deleteEmployeeLoan removes record", async () => {
@@ -487,7 +447,8 @@ describe("Employee Loan Actions", () => {
 describe("Timesheet Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    prismaMock.timesheet.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1 })
   })
 
   it("createTimesheet succeeds", async () => {
@@ -518,104 +479,10 @@ describe("Timesheet Actions", () => {
   })
 })
 
-describe("Work Schedule Actions", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
-  })
-
-  it("createWorkSchedule succeeds", async () => {
-    const res = await actions.createWorkSchedule(fd({
-      name: "Schedule A",
-      startTime: "09:00",
-      endTime: "18:00",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("updateWorkSchedule succeeds", async () => {
-    const res = await actions.updateWorkSchedule(1, fd({
-      name: "Schedule B",
-      startTime: "08:00",
-      endTime: "17:00",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("deleteWorkSchedule removes record", async () => {
-    const res = await actions.deleteWorkSchedule(1)
-    expect(res?.success).toBe(true)
-  })
-})
-
-describe("Holiday & Department Holiday Actions", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
-  })
-
-  it("createHoliday succeeds", async () => {
-    const res = await actions.createHoliday(fd({
-      date: "2026-12-25",
-      name: "Christmas",
-      isNational: "true",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("updateHoliday succeeds", async () => {
-    const res = await actions.updateHoliday(1, fd({
-      date: "2026-12-25",
-      name: "Christmas Day",
-      isNational: "true",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("deleteHoliday removes record", async () => {
-    const res = await actions.deleteHoliday(1)
-    expect(res?.success).toBe(true)
-  })
-
-  it("syncNationalHolidays succeeds", async () => {
-    // Mock global fetch for this test
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => [{ holiday_date: "2026-08-17", holiday_name: "Independence Day", is_national_holiday: true }]
-    })
-    const res = await actions.syncNationalHolidays(2026)
-    expect(res?.success).toBe(true)
-  })
-
-  it("createDepartmentHoliday succeeds", async () => {
-    const res = await actions.createDepartmentHoliday(fd({
-      departmentId: "1",
-      date: "2026-06-12",
-      name: "Dept Off",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("updateDepartmentHoliday succeeds", async () => {
-    const res = await actions.updateDepartmentHoliday(fd({
-      id: "1",
-      departmentId: "1",
-      date: "2026-06-12",
-      name: "Dept Off 2",
-    }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("deleteDepartmentHoliday removes record", async () => {
-    const res = await actions.deleteDepartmentHoliday(1)
-    expect(res?.success).toBe(true)
-  })
-})
-
 describe("Appreciation Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
   })
 
   it("createAppreciation succeeds", async () => {
@@ -650,7 +517,7 @@ describe("Appreciation Actions", () => {
 describe("Payroll Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findUnique.mockResolvedValue({
       id: 1, basicSalary: 5000000, employeeLoan: [],
       workingDaysPerMonth: 22, overtimeRate: 25000, transportAllowance: 300000,
@@ -670,10 +537,6 @@ describe("Payroll Actions", () => {
       id: 1, basicSalary: 5000000, workingDaysPerMonth: 22, overtimeRate: 25000, transportAllowance: 300000,
       department: { name: "IT" },
     }])
-    prismaMock.attendance.findMany.mockResolvedValue([
-      { date: new Date("2026-05-04"), status: "present" },
-      { date: new Date("2026-05-05"), status: "present" },
-    ])
     const defaultPayroll = {
       id: 1, status: "draft", netPay: 5000000, employeeId: 1, period: "2026-05",
       loanDeduction: 0,
@@ -724,8 +587,6 @@ describe("Payroll Actions", () => {
 
   it("updatePayroll succeeds", async () => {
     const res = await actions.updatePayroll(1, fd({
-      // payrollSchema requires period/startDate/endDate (the real edit form
-      // sends them); include them so the migrated validation passes.
       period: "2026-05",
       startDate: "2026-05-01",
       endDate: "2026-05-31",
@@ -740,6 +601,10 @@ describe("Payroll Actions", () => {
   it("approvePayroll updates status", async () => {
     const res = await actions.approvePayroll(1)
     expect(res?.success).toBe(true)
+    expect(assertApprovedMock).toHaveBeenCalledWith("Payroll", 1)
+    expect(prismaMock.payroll.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "draft" } }),
+    )
   })
 
   it("markPayrollPaid updates status and posts journal", async () => {
@@ -754,42 +619,6 @@ describe("Payroll Actions", () => {
 
 
 describe('Global Error Paths (Permission Reject)', () => {
-  it("checkIn handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).checkIn(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("checkOut handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).checkOut(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("createAttendance handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).createAttendance(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("updateAttendance handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).updateAttendance(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
   it("createLeaveRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
@@ -797,7 +626,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createLeaveRequest(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("approveLeave handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -806,7 +634,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).approveLeave(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("rejectLeave handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -815,7 +642,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).rejectLeave(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -824,7 +650,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createOvertimeRequest(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("approveOvertime handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -833,7 +658,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).approveOvertime(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("getPayrollEstimation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -842,7 +666,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).getPayrollEstimation(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("generateBulkPayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -851,7 +674,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).generateBulkPayroll(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("processPayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -860,7 +682,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).processPayroll(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updatePayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -869,7 +690,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePayroll(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("approvePayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -878,7 +698,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).approvePayroll(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("markPayrollPaid handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -887,7 +706,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).markPayrollPaid(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -896,7 +714,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createEmployeeLoan(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -905,34 +722,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createTimesheet(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("createWorkSchedule handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).createWorkSchedule(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("createHoliday handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).createHoliday(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("updateHoliday handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).updateHoliday(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteLeaveRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -941,7 +730,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteLeaveRequest(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -950,7 +738,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteOvertimeRequest(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -959,7 +746,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteTimesheet(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -968,34 +754,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteEmployeeLoan(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("deleteWorkSchedule handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).deleteWorkSchedule(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("deleteHoliday handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).deleteHoliday(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("syncNationalHolidays handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).syncNationalHolidays(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateLeaveRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1004,7 +762,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateLeaveRequest(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1013,7 +770,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateOvertimeRequest(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1022,7 +778,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateEmployeeLoan(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1031,43 +786,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateTimesheet(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("updateWorkSchedule handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).updateWorkSchedule(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("createDepartmentHoliday handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).createDepartmentHoliday(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("updateDepartmentHoliday handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).updateDepartmentHoliday(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("deleteDepartmentHoliday handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).deleteDepartmentHoliday(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1076,7 +794,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createAppreciation(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1085,7 +802,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateAppreciation(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1094,75 +810,13 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteAppreciation(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-})
-
-describe("HRM Actions Extra Coverage Inline", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
-    prismaMock.attendance.findFirst.mockResolvedValue(null)
-    prismaMock.attendance.create.mockResolvedValue({ id: 1 })
-    prismaMock.attendance.updateMany.mockResolvedValue({ count: 1 })
-    prismaMock.employee.findUnique.mockResolvedValue({ id: 1, departmentId: 1 })
-    prismaMock.workSchedule.findMany.mockResolvedValue([])
-    prismaMock.systemSetting.findFirst.mockResolvedValue({
-      restBreakStart: "12:00",
-      restBreakEnd: "13:00"
-    })
-  })
-
-  it("checkIn/checkOut breakOverlapMinutes coverage & branches", async () => {
-    // 1. checkIn with P2002 error — returns structured error (mirrors checkOut)
-    prismaMock.attendance.create.mockRejectedValueOnce({ code: "P2002" })
-    const resDup = await actions.checkIn(1)
-    expect(resDup.success).toBe(false)
-    expect(resDup.error).toContain("Sudah check-in hari ini")
-
-    // 2. checkOut with no attendance
-    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
-    const resNoAtt = await actions.checkOut(1)
-    expect(resNoAtt.success).toBe(false)
-    expect(resNoAtt.error).toContain("Belum check-in")
-
-    // 3. checkOut claim count 0 (race condition branch)
-    prismaMock.attendance.findFirst.mockResolvedValueOnce({
-      id: 1,
-      employeeId: 1,
-      checkIn: new Date(),
-      checkOut: null,
-      status: "present",
-      date: new Date()
-    })
-    prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 0 })
-    const resClaim0 = await actions.checkOut(1)
-    expect(resClaim0.success).toBe(false)
-    expect(resClaim0.error).toBe("Sudah check-out")
-
-    // 4. checkOut on Overtime Day with break overlapping
-    const checkInTime = new Date()
-    checkInTime.setHours(8, 0, 0, 0) // 08:00 WIB-ish
-    prismaMock.attendance.findFirst.mockResolvedValueOnce({
-      id: 1,
-      employeeId: 1,
-      checkIn: checkInTime,
-      checkOut: null,
-      status: "overtime",
-      date: new Date()
-    })
-    prismaMock.attendance.updateMany.mockResolvedValueOnce({ count: 1 })
-    const resOvertimeBreak = await actions.checkOut(1)
-    expect(resOvertimeBreak.success).toBe(true)
   })
 })
 
 describe("generateBulkPayroll edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
-    // Default employee shape now needs baseSalary/maritalStatus/employeeLoans
-    // because getBulkPayrollEstimations fetches them in a single findMany.
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findMany.mockResolvedValue([{
       id: 1, baseSalary: 100, maritalStatus: "single", employeeLoans: []
     }])
@@ -1173,8 +827,6 @@ describe("generateBulkPayroll edge cases", () => {
   })
 
   it("handles getBulkPayrollEstimations returning empty (no employees match)", async () => {
-    // If the bulk fetch returns no employees, no rows are inserted
-    prismaMock.attendance.findMany.mockResolvedValue([])
     prismaMock.employee.findMany.mockResolvedValue([])
     const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
     expect(res?.success).toBe(true)
@@ -1182,9 +834,6 @@ describe("generateBulkPayroll edge cases", () => {
   })
 
   it("handles payroll.createMany skipDuplicates (P2002 silent skip)", async () => {
-    // createMany with skipDuplicates silently swallows unique-constraint
-    // races (replaces the old per-row try/catch P2002 path). count reflects
-    // the rows we built (1 eligible employee), and the insert is batched.
     prismaMock.payroll.createMany.mockResolvedValueOnce({ count: 1 })
     const res = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
     expect(res?.success).toBe(true)
@@ -1198,7 +847,7 @@ describe("generateBulkPayroll edge cases", () => {
 describe("markPayrollPaid edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
   })
 
   it("amortizes active loans", async () => {
@@ -1212,7 +861,6 @@ describe("markPayrollPaid edge cases", () => {
       { id: 2, employeeId: 1, status: "active", loanDate: new Date(2020,1,1), monthlyInstallment: 300000, remainingAmount: 50 },
     ])
 
-    // Override $transaction to execute the callback with prismaMock
     prismaMock.$transaction.mockImplementationOnce(async (ops: any) => {
       return ops(prismaMock)
     })
@@ -1222,86 +870,14 @@ describe("markPayrollPaid edge cases", () => {
   })
 })
 
-describe("breakOverlapMinutes / resolveWorkSchedule paths", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
-    prismaMock.systemSetting.findFirst.mockResolvedValue({
-      restBreakStart: "13:00",
-      restBreakEnd: "12:00" // be <= bs
-    })
-  })
-
-  it("handles be <= bs in breakOverlapMinutes", async () => {
-    const today = new Date();
-    today.setHours(8, 0, 0, 0); 
-    prismaMock.attendance.findFirst.mockResolvedValue({
-      id: 1, employeeId: 1, checkIn: today, checkOut: null, status: "overtime", date: today,
-    })
-    prismaMock.employee.findUnique.mockResolvedValue({ departmentId: 1 })
-    prismaMock.workSchedule.findMany.mockResolvedValue([])
-    prismaMock.attendance.updateMany.mockResolvedValue({ count: 1 })
-    
-    // Now call checkout, breakOverlapMinutes is hit with 13:00 and 12:00
-    const res = await actions.checkOut(1)
-    expect(res.success).toBe(true)
-  })
-
-  it("handles resolveWorkSchedule with department match and global match", async () => {
-    const today = new Date();
-    // department match
-    prismaMock.workSchedule.findMany.mockResolvedValueOnce([
-      { workDays: "0,1,2,3,4,5,6", employees: [], departments: [{ id: 1 }], startTime: "08:00", lateToleranceMinutes: 10 }
-    ])
-    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
-    prismaMock.employee.findUnique.mockResolvedValueOnce({ departmentId: 1 })
-    
-    const res = await actions.checkIn(1)
-    expect(res.success).toBe(true)
-
-    // global match
-    prismaMock.workSchedule.findMany.mockResolvedValueOnce([
-      { workDays: "0,1,2,3,4,5,6", employees: [], departments: [], startTime: "09:00", lateToleranceMinutes: 10 }
-    ])
-    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
-    prismaMock.employee.findUnique.mockResolvedValueOnce({ departmentId: 1 })
-    
-    const res2 = await actions.checkIn(1)
-    expect(res2.success).toBe(true)
-  })
-
-  it("checkIn rejects if employee not found", async () => {
-    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
-    prismaMock.employee.findUnique.mockResolvedValueOnce(null)
-    const res = await actions.checkIn(1)
-    expect(res.success).toBe(false)
-    expect(res.error).toContain("Karyawan tidak ditemukan")
-  })
-
-  it("checkIn rejects if employee is on approved leave", async () => {
-    prismaMock.attendance.findFirst.mockResolvedValueOnce(null)
-    prismaMock.employee.findUnique.mockResolvedValueOnce({ departmentId: 1 })
-
-    // The second call to findFirst is for leaveRequest. We need to mock implementation properly
-    prismaMock.leaveRequest.findFirst.mockResolvedValueOnce({ id: 1, status: "approved" })
-
-    const res = await actions.checkIn(1)
-    expect(res.success).toBe(false)
-    expect(res.error).toContain("Anda sedang dalam masa cuti")
-  })
-})
-
 describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["employee"] }) // Non-admin for IDOR coverage
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["employee"] })
   })
 
   it("getPayrollEstimation with IDOR paths and employeeLoans reduction", async () => {
-    // 1. IDOR: user is employee, matches requested employeeId
     prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 1 })
-    
-    // employee mock with active loans to cover the map/reduce in getPayrollEstimation
     prismaMock.employee.findUnique.mockResolvedValueOnce({
       baseSalary: 5000000,
       maritalStatus: "single",
@@ -1310,12 +886,10 @@ describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
         { monthlyInstallment: 500000, remainingAmount: 100 }
       ]
     })
-
     prismaMock.overtimeRequest.findMany.mockResolvedValueOnce([
       { calculatedValue: 150000 },
       { calculatedValue: 200000 }
     ])
-
     prismaMock.appreciation.findMany.mockResolvedValueOnce([
       { amount: 50000 },
       { amount: 100000 }
@@ -1324,37 +898,52 @@ describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
     const res = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
     expect(res).toBeDefined()
 
-    // 2. IDOR: user is employee, but does NOT match employeeId
     prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 2 })
     const resIdor = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
     if (!resIdor || !("error" in resIdor)) throw new Error("expected error result")
-    expect(resIdor.error).toContain("Anda hanya bisa melihat estimasi gaji Anda sendiri")
+    expect(resIdor.error).toContain("Anda tidak memiliki akses ke data karyawan ini")
   })
 
-  it("create/update workSchedule with arrays of departments and employees", async () => {
-    const f = new FormData()
-    f.set("name", "Sched X")
-    f.set("startTime", "08:00")
-    f.set("endTime", "17:00")
-    f.append("days", "1")
-    f.append("days", "2")
-    f.append("departmentId", "10")
-    f.append("departmentId", "20")
-    f.append("employeeId", "100")
-    f.append("employeeId", "200")
+  it("blocks bulk payroll estimates for employees outside the caller's scope", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 1, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([])
 
-    const resCreate = await actions.createWorkSchedule(f)
-    expect(resCreate?.success).toBe(true)
+    await expect(
+      actions.getBulkPayrollEstimations([2], "2026-05-01", "2026-05-31"),
+    ).rejects.toThrow("Anda tidak memiliki akses ke data karyawan yang diminta")
+    expect(prismaMock.employee.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [2] }, AND: [{ id: 1 }] },
+      select: { id: true },
+    })
+  })
 
-    const resUpdate = await actions.updateWorkSchedule(1, f)
-    expect(resUpdate?.success).toBe(true)
+  it("blocks leave balance lookup for another employee", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+
+    const result = await actions.getEmployeeLeaveBalance(8, 2026)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("Anda tidak memiliki akses")
+  })
+
+  it("limits all leave balances to the caller's employee scope", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce({ id: 3, departmentId: 4 })
+    prismaMock.employee.findMany.mockResolvedValueOnce([])
+
+    const result = await actions.getAllLeaveBalances(2026)
+    expect(result.success).toBe(true)
+    expect(prismaMock.employee.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { isActive: true, deletedAt: null, id: 3 },
+    }))
   })
 })
 
 describe("Payroll extra branches", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
   })
 
@@ -1381,7 +970,7 @@ describe("Payroll extra branches", () => {
 
   it("updatePayroll branches (recalc late)", async () => {
     const f = new FormData()
-    f.set("recalcLate", "true") // branch 815 -> true
+    f.set("recalcLate", "true")
     f.set("employeeId", "1")
     f.set("period", "2026-05")
     f.set("startDate", "2026-05-01")
@@ -1394,7 +983,7 @@ describe("Payroll extra branches", () => {
 describe("Payroll errors and limits", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    requirePermissionMock.mockResolvedValue({ id: 1 })
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findUnique.mockResolvedValue({ id: 1 })
     prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
   })
@@ -1418,10 +1007,6 @@ describe("Next.js redirect error handling", () => {
   ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
 
   const fnsToTest = [
-    { name: "checkIn", fn: () => actions.checkIn(1) },
-    { name: "checkOut", fn: () => actions.checkOut(1) },
-    { name: "createAttendance", fn: () => actions.createAttendance(new FormData()) },
-    { name: "updateAttendance", fn: () => actions.updateAttendance(1, new FormData()) },
     { name: "createLeaveRequest", fn: () => actions.createLeaveRequest(new FormData()) },
     { name: "approveLeave", fn: () => actions.approveLeave(1) },
     { name: "rejectLeave", fn: () => actions.rejectLeave(1) },
@@ -1433,24 +1018,14 @@ describe("Next.js redirect error handling", () => {
     { name: "markPayrollPaid", fn: () => actions.markPayrollPaid(1) },
     { name: "createEmployeeLoan", fn: () => actions.createEmployeeLoan(new FormData()) },
     { name: "createTimesheet", fn: () => actions.createTimesheet(new FormData()) },
-    { name: "createWorkSchedule", fn: () => actions.createWorkSchedule(new FormData()) },
-    { name: "createHoliday", fn: () => actions.createHoliday(new FormData()) },
-    { name: "updateHoliday", fn: () => actions.updateHoliday(1, new FormData()) },
     { name: "deleteLeaveRequest", fn: () => actions.deleteLeaveRequest(1) },
     { name: "deleteOvertimeRequest", fn: () => actions.deleteOvertimeRequest(1) },
     { name: "deleteTimesheet", fn: () => actions.deleteTimesheet(1) },
     { name: "deleteEmployeeLoan", fn: () => actions.deleteEmployeeLoan(1) },
-    { name: "deleteWorkSchedule", fn: () => actions.deleteWorkSchedule(1) },
-    { name: "deleteHoliday", fn: () => actions.deleteHoliday(1) },
-    { name: "syncNationalHolidays", fn: () => actions.syncNationalHolidays() },
     { name: "updateLeaveRequest", fn: () => actions.updateLeaveRequest(1, new FormData()) },
     { name: "updateOvertimeRequest", fn: () => actions.updateOvertimeRequest(1, new FormData()) },
     { name: "updateEmployeeLoan", fn: () => actions.updateEmployeeLoan(1, new FormData()) },
     { name: "updateTimesheet", fn: () => actions.updateTimesheet(1, new FormData()) },
-    { name: "updateWorkSchedule", fn: () => actions.updateWorkSchedule(1, new FormData()) },
-    { name: "createDepartmentHoliday", fn: () => actions.createDepartmentHoliday(new FormData()) },
-    { name: "updateDepartmentHoliday", fn: () => actions.updateDepartmentHoliday(new FormData()) },
-    { name: "deleteDepartmentHoliday", fn: () => actions.deleteDepartmentHoliday(1) },
     { name: "createAppreciation", fn: () => actions.createAppreciation(new FormData()) },
     { name: "updateAppreciation", fn: () => actions.updateAppreciation(new FormData()) },
     { name: "deleteAppreciation", fn: () => actions.deleteAppreciation(1) },
@@ -1463,4 +1038,3 @@ describe("Next.js redirect error handling", () => {
     }
   })
 })
-

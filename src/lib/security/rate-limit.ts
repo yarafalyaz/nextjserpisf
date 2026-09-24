@@ -151,37 +151,66 @@ export async function takeRateLimit(
  * Resolve the actual client IP from a request.
  *
  * Priority:
- *   1. `req.ip` — NextRequest's TCP connection IP (always trustworthy)
- *   2. `cf-connecting-ip` — Cloudflare, tamper-proof (set by CF edge)
- *   3. `x-real-ip` — nginx / reverse proxy (only if TRUSTED_PROXY is set)
- *   4. `x-forwarded-for` — rightmost IP, i.e. the closest proxy.
- *      Only read when TRUSTED_PROXY=1 is set in env; otherwise an attacker
- *      can spoof the header and rotate the rate-limit key.
- *   5. `"unknown"` — nothing available
+ *   1. `req.ip` — TCP connection IP, only populated by some runtimes. Next.js
+ *      removed it in v15, so on Next 16 this branch is effectively dead and the
+ *      headers below are the only source.
+ *   2. …all header sources: `cf-connecting-ip`, `x-real-ip` (nginx/proxy) and
+ *      `x-forwarded-for` (rightmost entry).
+ *
+ * SECURITY: every header above is attacker-controlled unless a reverse proxy is
+ * guaranteed to overwrite (or strip) it. A direct-to-app deployment that honored
+ * `cf-connecting-ip` unconditionally let any client rotate its rate-limit bucket
+ * per request by sending a fresh value, defeating every limit in proxy.ts
+ * (login/auth/upload/API). Header trust is therefore gated behind an explicit
+ * `TRUSTED_PROXY=1` opt-in; without it no header is trusted and every untrusted
+ * caller shares the `"unknown"` bucket.
+ *
+ * When `TRUSTED_PROXY` is unset and the app IS behind a proxy, rate limiting
+ * degrades to a single shared counter. Set `TRUSTED_PROXY=1` (see .env.example)
+ * in that deployment so per-client limits work.
  */
+
+let warnedAboutUntrustedProxy = false
+
+/**
+ * Returns the shared fallback bucket key. Emits a one-time production warning so
+ * an operator who forgot TRUSTED_PROXY notices, instead of silently serving every
+ * client from a single rate-limit counter (which would both weaken per-client
+ * limiting and let one abusive client exhaust the shared bucket).
+ */
+function warnUntrustedOnce(): string {
+  if (!warnedAboutUntrustedProxy && process.env.NODE_ENV === "production") {
+    warnedAboutUntrustedProxy = true
+    console.warn(
+      "[rate-limit] TRUSTED_PROXY is not set: client-IP headers are ignored, so every " +
+        "caller shares one rate-limit bucket. Set TRUSTED_PROXY=1 when the app runs " +
+        "behind a reverse proxy / Cloudflare so per-client limits work.",
+    )
+  }
+  return "unknown"
+}
+
 export function getClientIp(req: Request & { ip?: string }): string {
-  // 1. NextRequest.ip — direct TCP address, can't be spoofed
+  // 1. Direct TCP address — trustworthy when the runtime provides it.
   if (req.ip) return req.ip
+
+  // 2-4: Only trust reverse-proxy headers when explicitly gated.
+  if (process.env.TRUSTED_PROXY !== "1") return warnUntrustedOnce()
 
   // 2. Cloudflare
   const cf = req.headers.get("cf-connecting-ip")
-  if (cf) return cf
+  if (cf?.trim()) return cf.trim()
 
-  // 3-4: Only trust reverse-proxy headers when explicitly gated
-  const trusted = process.env.TRUSTED_PROXY === "1"
+  // 3. X-Real-IP (nginx / reverse proxy)
+  const xri = req.headers.get("x-real-ip")
+  if (xri?.trim()) return xri.trim()
 
-  if (trusted) {
-    // 3. X-Real-IP (nginx / reverse proxy)
-    const xri = req.headers.get("x-real-ip")
-    if (xri) return xri.trim()
-
-    // 4. X-Forwarded-For — take the RIGHTMOST IP (last proxy in chain)
-    const xff = req.headers.get("x-forwarded-for")
-    if (xff) {
-      const ips = xff.split(",").map((s) => s.trim()).filter(Boolean)
-      const rightmost = ips[ips.length - 1]
-      if (rightmost) return rightmost
-    }
+  // 4. X-Forwarded-For — take the RIGHTMOST IP (last proxy in chain)
+  const xff = req.headers.get("x-forwarded-for")
+  if (xff) {
+    const ips = xff.split(",").map((s) => s.trim()).filter(Boolean)
+    const rightmost = ips[ips.length - 1]
+    if (rightmost) return rightmost
   }
 
   // 5. Nothing

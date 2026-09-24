@@ -1,0 +1,57 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: silengkap_dev_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - TZ=Asia/Jakarta
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+      - DATABASE_URL=mysql://${DB_USER:-silengkap_user}:${DB_PASSWORD:-silengkap_pass123}@db:3306/${DB_NAME:-silengkap}?allowPublicKeyRetrieval=true
+      - AUTH_SECRET=${AUTH_SECRET:-your-secret-key-change-in-production}
+      - NEXTAUTH_URL=http://localhost:3005
+      - AUTH_TRUST_HOST=true
+      # Deliberately NOT setting TRUSTED_PROXY: the dev app is reached directly on
+      # :3005 with no proxy in front, so client-IP headers must stay untrusted.
+      # See .env.example for the production guidance.
+    ports:
+      - "3005:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+      - ./public/uploads:/app/public/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.0
+    container_name: silengkap_dev_db
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_DATABASE=${DB_NAME:-silengkap}
+      - MYSQL_USER=${DB_USER:-silengkap_user}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-silengkap_pass123}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root_password_change_me}
+      - TZ=Asia/Jakarta
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_dev_data:

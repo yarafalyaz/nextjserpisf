@@ -63,17 +63,23 @@ test.describe("Inventaris - Rak CRUD", () => {
 
     await page.locator("#submit-rack, button[type='submit']").first().click()
 
-    // Wait for redirect or stay on page (might get validation error)
+    // Wait for the redirect to the rack list. A visible form error means the
+    // create path is broken (validation, a permission redirect such as
+    // requirePermission -> "/", or a 500). This used to be `test.skip(...)`,
+    // which converted every broken create into a green "skipped" run and hid
+    // the defect from CI - the whole point of this suite is to catch it.
     try {
       await page.waitForURL("**/inventaris/rak", { timeout: 30000 })
     } catch {
-      // If form has error, skip
-      const errorText = await page.locator(".text-danger, [role='alert']").first().textContent().catch(() => "")
-      if (errorText) {
-        test.skip(true, `Form error: ${errorText}`)
-        return
-      }
-      throw new Error("Navigation timeout without visible form error")
+      const errorText = (await page
+        .locator(".text-danger, [role='alert']")
+        .first()
+        .textContent()
+        .catch(() => "")) || ""
+      throw new Error(
+        "Tambah rak tidak mengarah ke /inventaris/rak" +
+          (errorText.trim() ? ` - pesan form: ${errorText.trim()}` : " (tanpa pesan error yang terlihat)"),
+      )
     }
 
     await page.waitForLoadState("networkidle")
@@ -229,13 +235,6 @@ test.describe("SDM - Lembur CRUD", () => {
     await page.goto("/sdm/lembur/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await expect(page.locator("body")).toContainText("Lembur")
-  })
-})
-
-test.describe("SDM - Jadwal Kerja CRUD", () => {
-  test("list loads", async ({ page }) => {
-    await page.goto("/sdm/jadwal-kerja", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Jadwal Kerja")
   })
 })
 

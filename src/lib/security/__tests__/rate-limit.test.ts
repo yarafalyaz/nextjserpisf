@@ -237,10 +237,41 @@ describe("getClientIp", () => {
     expect(getClientIp(req)).toBe("unknown")
   })
 
+  // Regression: cf-connecting-ip was read BEFORE the TRUSTED_PROXY gate, so a
+  // direct-to-app deployment could rotate its bucket key per request by sending a
+  // fresh header value, defeating every limit in proxy.ts (login brute-force,
+  // auth, upload, API). Verified against a running app: without the gate, 125/125
+  // requests with unique values passed while the un-spoofed run was limited.
+  it("ignores cf-connecting-ip when TRUSTED_PROXY is unset (spoofing prevention)", () => {
+    delete process.env.TRUSTED_PROXY
+    const req = new Request("http://localhost", {
+      headers: { "cf-connecting-ip": "203.0.113.7" },
+    })
+    expect(getClientIp(req)).toBe("unknown")
+  })
+
+  it("returns the same bucket for rotating cf-connecting-ip values when untrusted", () => {
+    delete process.env.TRUSTED_PROXY
+    const first = getClientIp(
+      new Request("http://localhost", { headers: { "cf-connecting-ip": "203.0.113.1" } }),
+    )
+    const second = getClientIp(
+      new Request("http://localhost", { headers: { "cf-connecting-ip": "203.0.113.2" } }),
+    )
+    expect(first).toBe(second)
+  })
+
   it("trims whitespace from IP", () => {
     const req = new Request("http://localhost", {
       headers: { "x-real-ip": "  9.8.7.6  " },
     })
     expect(getClientIp(req)).toBe("9.8.7.6")
+  })
+
+  it("ignores a blank cf-connecting-ip and falls through to x-real-ip", () => {
+    const req = new Request("http://localhost", {
+      headers: { "cf-connecting-ip": "   ", "x-real-ip": "4.4.4.4" },
+    })
+    expect(getClientIp(req)).toBe("4.4.4.4")
   })
 })

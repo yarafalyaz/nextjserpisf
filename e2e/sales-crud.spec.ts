@@ -48,8 +48,10 @@ test.describe("Penjualan - Sales Order CRUD", () => {
     // Select customer
     const selected = await selectFirstComboBoxOption(page, "Cari pelanggan...")
     if (!selected) {
-      test.skip(true, "No customers available in database — seeding issue")
-      return
+      // CI seeds an "E2E Customer" via scripts/seed-remaining-e2e.ts, so an empty
+      // picker means the fixture/seed regressed. Failing here keeps the whole
+      // create -> detail -> delete flow from silently disappearing from CI.
+      throw new Error("Fixture hilang: tidak ada pelanggan untuk dipilih (cek scripts/seed-remaining-e2e.ts)")
     }
 
     await page.locator("#submit-sales-order, button[type='submit']").first().click()
@@ -71,8 +73,7 @@ test.describe("Penjualan - Sales Invoice CRUD", () => {
     // Select customer
     const selected = await selectFirstComboBoxOption(page, "Cari pelanggan...")
     if (!selected) {
-      test.skip(true, "No customers available in database — seeding issue")
-      return
+      throw new Error("Fixture hilang: tidak ada pelanggan untuk dipilih (cek scripts/seed-remaining-e2e.ts)")
     }
 
     await page.locator("#submit-sales-invoice, button[type='submit']").first().click()

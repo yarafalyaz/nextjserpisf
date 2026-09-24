@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { computeProjectStatus } from "@/lib/services/project-status"
+import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import type { TxClient } from "@/lib/db/prisma"
 import { parseFormData } from "@/lib/validations/parse-form"
 import {
@@ -35,6 +36,7 @@ export async function createProject(formData: FormData) {
       customerId: data.customerId,
       customerVehicleId: data.customerVehicleId ?? null,
       workOrderId: data.workOrderId ?? null,
+      costCenterId: data.costCenterId ?? null,
       startDate: data.startDate ? new Date(data.startDate) : null,
       endDate: data.endDate ? new Date(data.endDate) : null,
       notes: data.notes ?? null,
@@ -43,7 +45,11 @@ export async function createProject(formData: FormData) {
     },
   })
 
+  // Auto-initialize default project stages
+  await doInitializeProjectStages(project.id)
+
   await logActivity("create", "Project", project.id, "Membuat proyek")
+  await requestApprovalIfConfigured("Project", project.id, Number(user.id));
   revalidatePath("/proyek")
   return { success: true, id: project.id }
 
@@ -62,6 +68,10 @@ export async function updateProject(projectId: number, formData: FormData) {
 
   await requirePermission("edit_projects")
 
+  // Approval workflow gate: if a Project approval workflow is configured,
+  // it must be fully approved before allowing edits.
+  await assertApproved("Project", projectId)
+
   await prisma.project.update({
     where: { id: projectId },
     data: {
@@ -70,6 +80,11 @@ export async function updateProject(projectId: number, formData: FormData) {
       customerId: data.customerId,
       customerVehicleId: data.customerVehicleId ?? null,
       workOrderId: data.workOrderId ?? null,
+      // Cost center must be written here too: the edit form renders the
+      // "Pusat Biaya" select (project-form.tsx) and the create path already
+      // persists it. Omitting it made the change silently no-op while the UI
+      // reported success, which also corrupted profit-center reporting.
+      costCenterId: data.costCenterId ?? null,
       startDate: data.startDate ? new Date(data.startDate) : null,
       endDate: data.endDate ? new Date(data.endDate) : null,
       notes: data.notes ?? null,
@@ -148,21 +163,42 @@ const STAGE_STATUS_LABELS: Record<string, string> = {
 }
 
 async function doInitializeProjectStages(projectId: number) {
-  const existingStages = await prisma.projectStage.findMany({
-    where: { projectId },
-  })
-  if (existingStages.length > 0) {
-    return { success: true, message: "Stages already initialized" }
+  if (!Number.isSafeInteger(projectId) || projectId <= 0) {
+    throw new Error("Project tidak valid")
   }
 
-  await prisma.projectStage.createMany({
-    data: [
-      { projectId, name: "Persiapan", sortOrder: 1, status: "pending" },
-      { projectId, name: "Pengerjaan", sortOrder: 2, status: "pending" },
-      { projectId, name: "Quality Check", sortOrder: 3, status: "pending" },
-      { projectId, name: "Selesai", sortOrder: 4, status: "pending" },
-    ],
+  let initialized = false
+  await prisma.$transaction(async (tx) => {
+    // Lock the parent row so concurrent page loads cannot both observe an
+    // empty stage list and insert duplicate defaults.
+    const projectRows = await tx.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+    `
+    if (projectRows.length === 0) throw new Error("Project tidak ditemukan")
+
+    const existingStages = await tx.projectStage.findMany({ where: { projectId } })
+    if (existingStages.length > 0) return
+
+    const settings = await tx.systemSetting.findFirst()
+    const stageNames = settings?.defaultProjectStages
+      ? settings.defaultProjectStages.split(",").map((s) => s.trim()).filter(Boolean)
+      : ["Persiapan", "Pengerjaan", "Quality Check", "Selesai"]
+    const defaultStages = stageNames.length > 0
+      ? stageNames
+      : ["Persiapan", "Pengerjaan", "Quality Check", "Selesai"]
+
+    await tx.projectStage.createMany({
+      data: defaultStages.map((name, index) => ({
+        projectId,
+        name,
+        sortOrder: index + 1,
+        status: "pending",
+      })),
+    })
+    initialized = true
   })
+
+  if (!initialized) return { success: true, message: "Stages already initialized" }
 
   await logActivity("initialize", "ProjectStage", projectId, "Inisialisasi tahapan proyek")
   return { success: true }
@@ -197,10 +233,17 @@ export async function updateProjectStageProgress(
   projectId: number,
   stageId: number,
   status: string,
-  notes?: string
+  notes?: string,
+  percentage?: number
 ) {
   try {
-  await requirePermission("edit_projects")
+  const user = await requirePermission("edit_projects")
+
+  if (percentage !== undefined) {
+    if (typeof percentage !== "number" || percentage < 0 || percentage > 100 || isNaN(percentage)) {
+      throw new Error("Persentase progres harus berupa angka antara 0 dan 100.")
+    }
+  }
 
   const stage = await prisma.projectStage.findUniqueOrThrow({
     where: { id: stageId },
@@ -210,9 +253,14 @@ export async function updateProjectStageProgress(
     throw new Error("Stage tidak ditemukan pada project ini.")
   }
 
+  let targetStatus = status
+  if (percentage === 100 && targetStatus !== "skipped") {
+    targetStatus = "completed"
+  }
+
   const validStatuses = ["pending", "in_progress", "completed", "skipped"]
-  if (!validStatuses.includes(status)) {
-    throw new Error(`Status '${status}' tidak valid. Gunakan: ${validStatuses.join(", ")}`)
+  if (!validStatuses.includes(targetStatus)) {
+    throw new Error(`Status '${targetStatus}' tidak valid. Gunakan: ${validStatuses.join(", ")}`)
   }
 
   // Guard: cannot start/complete if previous stage is not completed
@@ -225,30 +273,37 @@ export async function updateProjectStageProgress(
     orderBy: { sortOrder: "desc" },
   })
 
-  if (previousStage && status !== "pending") {
+  if (previousStage && targetStatus !== "pending") {
     throw new Error(
       `Tahap '${previousStage.name}' belum selesai. Selesaikan tahap sebelumnya terlebih dahulu.`
     )
   }
 
   // Set timestamps based on status transition
-  const updateData: Record<string, unknown> = { status }
-  if (status === "in_progress") {
+  const updateData: Record<string, unknown> = { status: targetStatus }
+  let calculatedPercentage = 0
+
+  if (targetStatus === "in_progress") {
     if (!stage.startedAt) {
       updateData.startedAt = new Date()
     }
     updateData.completedAt = null
-  } else if (status === "completed") {
+    calculatedPercentage = percentage !== undefined ? percentage : 50
+  } else if (targetStatus === "completed") {
     if (!stage.startedAt) {
       updateData.startedAt = new Date()
     }
     updateData.completedAt = new Date()
-  } else if (status === "pending") {
+    calculatedPercentage = 100
+  } else if (targetStatus === "pending") {
     updateData.startedAt = null
     updateData.completedAt = null
-  } else if (status === "skipped") {
+    calculatedPercentage = 0
+  } else if (targetStatus === "skipped") {
     updateData.completedAt = new Date()
+    calculatedPercentage = 100
   }
+
   if (notes !== undefined) {
     updateData.notes = notes
   }
@@ -269,6 +324,16 @@ export async function updateProjectStageProgress(
     await tx.projectStage.update({
       where: { id: stageId },
       data: updateData,
+    })
+
+    // Create a progress record inside transaction
+    await tx.projectStageProgress.create({
+      data: {
+        projectStageId: stageId,
+        percentage: calculatedPercentage,
+        notes: notes ?? null,
+        createdBy: Number(user.id),
+      },
     })
 
     // Auto-update project + WO status (in same tx via the TxClient variant)

@@ -58,8 +58,10 @@ test.describe("Proyek CRUD", () => {
 
     const selected = await selectFirstComboBoxOption(page, "Cari pelanggan...")
     if (!selected) {
-      test.skip(true, "No customers available in database — seeding issue")
-      return
+      // CI seeds an "E2E Customer" via scripts/seed-remaining-e2e.ts, so an empty
+      // picker means the fixture/seed regressed. Failing here keeps the project
+      // create -> detail -> delete flow from silently vanishing from CI.
+      throw new Error("Fixture hilang: tidak ada pelanggan untuk dipilih (cek scripts/seed-remaining-e2e.ts)")
     }
 
     await page.locator("#name").fill(name)

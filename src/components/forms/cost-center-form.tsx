@@ -8,10 +8,27 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/button"
+import { Combobox } from "@/components/ui/combobox"
 
-export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code: string; name: string; description?: string | null; isActive?: boolean } } = {}) {
+interface CostCenterItem {
+  id: number
+  code: string
+  name: string
+}
+
+export function CostCenterForm({ 
+  costCenter,
+  costCenters = [],
+}: { 
+  costCenter?: { id: number; code: string; name: string; description?: string | null; isActive?: boolean; parentId?: number | null }
+  costCenters?: CostCenterItem[]
+} = {}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  const parentOptions = costCenters
+    .filter((cc) => costCenter ? cc.id !== costCenter.id : true)
+    .map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -40,6 +57,20 @@ export function CostCenterForm({ costCenter }: { costCenter?: { id: number; code
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama *</Label>
           <Input id="name" name="name" placeholder="Nama pusat biaya" required defaultValue={costCenter?.name ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="parentId">Induk</Label>
+          <Combobox
+            id="parentId"
+            name="parentId"
+            options={parentOptions}
+            value={costCenter?.parentId ? String(costCenter.parentId) : null}
+            onChange={(v) => {
+              const input = document.querySelector<HTMLInputElement>(`input[name="parentId"]`)
+              if (input) input.value = v || ""
+            }}
+            placeholder="— Pilih induk —"
+          />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>

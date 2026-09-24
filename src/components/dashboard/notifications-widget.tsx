@@ -83,7 +83,7 @@ export function NotificationsWidget() {
     },
     {
       icon: FileText,
-      label: "Invoice Overdue",
+      label: "Faktur Jatuh Tempo",
       count: data.overdueInvoiceCount,
       href: "/penjualan/faktur",
       color: "text-danger",
@@ -91,7 +91,7 @@ export function NotificationsWidget() {
     },
     {
       icon: ClipboardCheck,
-      label: "Pending Approval",
+      label: "Menunggu Persetujuan",
       count: data.pendingApprovalCount,
       href: "/pengaturan/persetujuan",
       color: "text-info",
@@ -101,7 +101,10 @@ export function NotificationsWidget() {
       icon: Clock,
       label: "Telat Absen",
       count: data.lateAttendanceCount,
-      href: "/sdm/absensi",
+      // The attendance module (/sdm/absensi) no longer exists in this app -
+      // absensi is fed by an external system - so the old href 404'd. Late
+      // attendance surfaces as a payroll deduction, so point there.
+      href: "/sdm/penggajian",
       color: "text-warning",
       bg: "bg-warning/10",
     },

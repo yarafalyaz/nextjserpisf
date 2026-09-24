@@ -16,15 +16,38 @@ const employeeFindUniqueMock = vi.fn()
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/db/prisma", () => {
+  // The action wraps its writes in prisma.$transaction(async (tx) => ...), so the
+  // tx client must expose the same delegates as the global client. Without this
+  // the mock threw "$transaction is not a function" and both the happy path and
+  // the P2002 translation regressed silently.
+  const txDelegates = () => ({
     payroll: {
       findFirst: (...a: unknown[]) => payrollFindFirstMock(...a),
       create: (...a: unknown[]) => payrollCreateMock(...a),
     },
     employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
-  },
-}))
+    approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
+    approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
+    // requestApprovalIfConfigured locks the workflow row first and bails out when
+    // no workflow is configured; an empty result keeps this test on the create path.
+    $queryRaw: vi.fn().mockResolvedValue([]),
+  })
+
+  return {
+    prisma: {
+      payroll: {
+        findFirst: (...a: unknown[]) => payrollFindFirstMock(...a),
+        create: (...a: unknown[]) => payrollCreateMock(...a),
+      },
+      employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
+      approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
+      approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      $transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(txDelegates()),
+    },
+  }
+})
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn(async () => "PAYROLL-0001") }))
 vi.mock("@/lib/services/late-penalty.service", () => ({
   calculateLatePenalty: vi.fn(async () => ({ totalPenalty: 0, totalLateMinutes: 0 })),

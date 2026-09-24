@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
+import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { BookOpen } from 'lucide-react'
@@ -8,6 +9,8 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
+import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
+import { ReportNarration } from "@/components/reports/report-narration"
 import { FormSelect } from "@/components/ui/form-select"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
@@ -33,14 +36,12 @@ export default async function GeneralLedgerPage({
   endDate.setHours(23, 59, 59, 999)
   const accountId = params.accountId ? parseInt(params.accountId) : null
 
-  // Fetch all active accounts for dropdown
   const allAccounts = await prisma.account.findMany({
     where: { isActive: true },
     orderBy: { code: 'asc' },
     select: { id: true, code: true, name: true },
   })
 
-  // Fetch journal entries for selected account
   let entries: { id: number; date: Date; journalNumber: string; memo: string | null; description: string | null; debit: number; credit: number }[] = []
   let selectedAccount: { code: string; name: string } | null = null
   let openingBalance = 0
@@ -51,15 +52,9 @@ export default async function GeneralLedgerPage({
       selectedAccount = { code: account.code, name: account.name }
     }
 
-    // Opening balance: sum of all entries before startDate
-    const openingEntries = await prisma.journalEntry.findMany({
-      where: {
-        accountId,
-        journal: { status: { in: ['POSTED', 'REVERSED'] }, transactionDate: { lt: startDate } },
-      },
-      select: { debit: true, credit: true },
-    })
-    openingBalance = openingEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0)
+    // Opening balance is a single SUM over prior postings - loading every earlier
+    // journal line into Node just to add them up does not scale.
+    openingBalance = await sumNetForAccount(accountId, { date: { lt: startDate } })
 
     const journalEntries = await prisma.journalEntry.findMany({
       where: {
@@ -74,10 +69,6 @@ export default async function GeneralLedgerPage({
           select: { journalNumber: true, transactionDate: true, description: true },
         },
       },
-      // Deterministic ordering: date first, then entry id as a stable tiebreaker.
-      // Without the id tiebreaker, same-day entries render in arbitrary order and
-      // the running-balance column shows inconsistent intermediate values across
-      // refreshes (the final balance is unaffected, but the per-row saldo isn't).
       orderBy: [
         { journal: { transactionDate: 'asc' } },
         { id: 'asc' },
@@ -140,86 +131,67 @@ export default async function GeneralLedgerPage({
       </form>
 
       {!accountId && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-8 text-center print:hidden">
-          <BookOpen size={48} className="mx-auto text-muted-foreground mb-3" />
+        <div className="flex flex-col items-center gap-3 py-16 text-center print:hidden">
+          <BookOpen size={48} className="text-muted-foreground" />
           <p className="text-muted-foreground text-sm">Pilih akun untuk melihat buku besar</p>
         </div>
       )}
 
       {accountId && selectedAccount && (
         <>
-          {/* Professional letterhead (screen + print) */}
           <ReportLetterhead title="Buku Besar" subtitle={ledgerSubtitle} periodLabel={periodLabel} />
+      <ReportNarration text="Laporan Buku Besar menyajikan mutasi setiap akun secara kronologis selama satu periode. Setiap baris menampilkan tanggal transaksi, keterangan, referensi jurnal, serta jumlah debit dan kredit yang memengaruhi saldo akun. Laporan ini bermanfaat untuk menelusuri riwayat transaksi dan memverifikasi posting ke masing-masing akun secara detail." />
 
-          <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6">
-            <div className="p-4 px-5">
-              <div className="overflow-x-auto">
-                <DetailTable data-report-table="Buku Besar">
-                  <DetailTableHead>
-                    <DetailTableTh>Tanggal</DetailTableTh>
-                    <DetailTableTh>No. Jurnal</DetailTableTh>
-                    <DetailTableTh>Keterangan</DetailTableTh>
-                    <DetailTableTh align="right">Debit (Rp)</DetailTableTh>
-                    <DetailTableTh align="right">Kredit (Rp)</DetailTableTh>
-                    <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
-                  </DetailTableHead>
-                  <DetailTableBody>
-                    <DetailTableRow className="bg-muted/30">
-                      <DetailTableTd colSpan={5} className="font-semibold">Saldo Awal</DetailTableTd>
-                      <DetailTableTd align="right" className="font-semibold">{formatAccounting(openingBalance)}</DetailTableTd>
-                    </DetailTableRow>
-                    {rows.length === 0 && (
-                      <DetailTableRow>
-                        <DetailTableTd colSpan={6} className="text-center text-muted-foreground">Tidak ada transaksi dalam periode ini</DetailTableTd>
-                      </DetailTableRow>
-                    )}
-                    {rows.map((row) => (
-                      <DetailTableRow key={row.id}>
-                        <DetailTableTd>{row.date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}</DetailTableTd>
-                        <DetailTableTd>{row.journalNumber}</DetailTableTd>
-                        <DetailTableTd>{row.memo || row.description || '-'}</DetailTableTd>
-                        <DetailTableTd align="right">{formatAccounting(row.debit)}</DetailTableTd>
-                        <DetailTableTd align="right">{formatAccounting(row.credit)}</DetailTableTd>
-                        <DetailTableTd align="right">{formatAccounting(row.balance)}</DetailTableTd>
-                      </DetailTableRow>
-                    ))}
-                    {rows.length > 0 && (
-                      <DetailTableRow className="font-bold border-t-2 border-default">
-                        <DetailTableTd colSpan={3}>TOTAL & Saldo Akhir</DetailTableTd>
-                        <DetailTableTd align="right">{formatAccounting(totalDebit)}</DetailTableTd>
-                        <DetailTableTd align="right">{formatAccounting(totalCredit)}</DetailTableTd>
-                        <DetailTableTd align="right">{formatAccounting(finalBalance)}</DetailTableTd>
-                      </DetailTableRow>
-                    )}
-                  </DetailTableBody>
-                </DetailTable>
-              </div>
+          <ReportSection title="Transaksi">
+            <DetailTable data-report-table="Buku Besar">
+              <DetailTableHead>
+                <DetailTableTh>Tanggal</DetailTableTh>
+                <DetailTableTh>No. Jurnal</DetailTableTh>
+                <DetailTableTh>Keterangan</DetailTableTh>
+                <DetailTableTh align="right">Debit (Rp)</DetailTableTh>
+                <DetailTableTh align="right">Kredit (Rp)</DetailTableTh>
+                <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                <DetailTableRow className="bg-muted/30">
+                  <DetailTableTd colSpan={5} className="font-semibold">Saldo Awal</DetailTableTd>
+                  <DetailTableTd align="right" className="font-semibold">{formatAccounting(openingBalance)}</DetailTableTd>
+                </DetailTableRow>
+                {rows.length === 0 && (
+                  <DetailTableRow>
+                    <DetailTableTd colSpan={6} className="text-center text-muted-foreground">Tidak ada transaksi dalam periode ini</DetailTableTd>
+                  </DetailTableRow>
+                )}
+                {rows.map((row) => (
+                  <DetailTableRow key={row.id}>
+                    <DetailTableTd>{row.date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}</DetailTableTd>
+                    <DetailTableTd>{row.journalNumber}</DetailTableTd>
+                    <DetailTableTd>{row.memo || row.description || '-'}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(row.debit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(row.credit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(row.balance)}</DetailTableTd>
+                  </DetailTableRow>
+                ))}
+                {rows.length > 0 && (
+                  <DetailTableRow className="font-bold border-t-2 border-default">
+                    <DetailTableTd colSpan={3}>TOTAL & Saldo Akhir</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(totalDebit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(totalCredit)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatAccounting(finalBalance)}</DetailTableTd>
+                  </DetailTableRow>
+                )}
+              </DetailTableBody>
+            </DetailTable>
+          </ReportSection>
 
-              {/* Summary (screen only) */}
-              {rows.length > 0 && (
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 print:hidden">
-                  <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Total Debit</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(totalDebit)}</p>
-                    </div>
-                  </div>
-                  <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Total Kredit</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(totalCredit)}</p>
-                    </div>
-                  </div>
-                  <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Saldo Akhir</p>
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(finalBalance)}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+          {/* Summary (screen only) */}
+          {rows.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 print:hidden">
+              <ReportKpiCard label="Total Debit" value={formatCurrency(totalDebit)} />
+              <ReportKpiCard label="Total Kredit" value={formatCurrency(totalCredit)} />
+              <ReportKpiCard label="Saldo Akhir" value={formatCurrency(finalBalance)} />
             </div>
-          </div>
+          )}
         </>
       )}
     </div>

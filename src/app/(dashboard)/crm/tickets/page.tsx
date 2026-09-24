@@ -12,7 +12,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tickets" }
+export const metadata: Metadata = { title: "Tiket Bantuan" }
 
 export default async function TicketsPage({
   searchParams,
@@ -29,6 +29,9 @@ export default async function TicketsPage({
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
+    // deleteTicket falls back to a soft delete when a FK blocks the hard delete,
+    // so soft-deleted tickets must be filtered out of the list.
+    deletedAt: null,
     ...(params.cari && {
       OR: [
         { subject: { contains: params.cari } },

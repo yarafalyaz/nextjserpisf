@@ -4,6 +4,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeAdd, safeSubtract, compareAmounts } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
+import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
   onExpenseApproved,
   onPettyCashCreated,
@@ -27,6 +28,7 @@ import {
   costCenterSchema,
 } from "@/lib/validations/finance.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
+import { getSystemSettings } from "@/lib/utils/settings";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
   requestApprovalIfConfigured,
@@ -36,6 +38,7 @@ import {
   computePettyCashChain,
   findFirstNegativeBalance,
 } from "@/lib/finance/petty-cash-chain";
+import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 
 // ==================== BANK STATEMENT ACTIONS ====================
 
@@ -174,13 +177,9 @@ export async function createJournal(formData: FormData) {
     // Associate uploaded attachments with the new journal
     const attachmentIds = formData.get("attachmentIds") as string | null;
     if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: journal.id },
-        });
-      }
+      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "journal", referenceId: journal.id, uploadedBy: Number(user.id),
+      }));
     }
 
     await logActivity("create", "Journal", journal.id, "Membuat jurnal");
@@ -268,7 +267,7 @@ export async function createExpense(formData: FormData) {
         date: v.date,
         referenceNo: v.referenceNo ?? null,
         description: v.description ?? null,
-        category: v.category ?? null,
+        categoryId: v.categoryId ?? null,
         receiptImage: v.receiptImage ?? null,
         status: "draft",
         createdBy: Number(user.id),
@@ -278,13 +277,9 @@ export async function createExpense(formData: FormData) {
     // Associate uploaded attachments with the new expense
     const attachmentIds = formData.get("attachmentIds") as string | null;
     if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: expense.id },
-        });
-      }
+      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "expense", referenceId: expense.id, uploadedBy: Number(user.id),
+      }));
     }
 
     await logActivity("create", "Expense", expense.id, "Membuat pengeluaran");
@@ -493,25 +488,55 @@ export async function createPettyCash(formData: FormData) {
     const type = v.type;
     const amount = v.amount;
 
-    // Calculate balanceBefore from the last petty cash record
-    const lastRecord = await prisma.pettyCash.findFirst({
-      orderBy: { createdAt: "desc" },
-    });
-    const balanceBefore = lastRecord ? Number(lastRecord.balanceAfter) : 0;
-
-    // Laravel parity: OUT can't exceed current balance
-    if (type === "OUT" && amount > balanceBefore) {
-      throw new Error(
-        `Saldo kas kecil tidak cukup: tersedia ${balanceBefore}, dibutuhkan ${amount}`,
-      );
+    // Validate GL mapping before creating record
+    const settings = await getSystemSettings();
+    if (!settings.pettyCashAccountId) {
+      return { success: false, error: "Akun Kas Kecil belum dikonfigurasi. Isi di Pengaturan > Mapping Akun terlebih dahulu." };
+    }
+    if (type === "IN" && !settings.cashBankAccountId) {
+      return { success: false, error: "Akun Kas/Bank belum dikonfigurasi. Isi di Pengaturan > Mapping Akun terlebih dahulu." };
+    }
+    if (type === "OUT" && !settings.generalExpenseAccountId) {
+      return { success: false, error: "Akun Beban Umum belum dikonfigurasi. Isi di Pengaturan > Mapping Akun terlebih dahulu." };
     }
 
-    const balanceAfter =
-      type === "IN"
-        ? safeAdd(balanceBefore, amount, 0)
-        : safeSubtract(balanceBefore, amount, 0);
+    // IN: cek saldo sumber dana (kas/bank)
+    if (type === "IN") {
+      const sourceId = settings.cashBankAccountId;
+      if (sourceId) {
+        const sourceEntries = await prisma.journalEntry.findMany({
+          where: { accountId: sourceId, journal: { status: "POSTED" } },
+        });
+        const sourceBalance = sourceEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0);
+        if (sourceBalance < amount) {
+          return { success: false, error: `Saldo akun Kas/Bank tidak mencukupi: tersedia ${sourceBalance.toLocaleString("id-ID")}, dibutuhkan ${amount.toLocaleString("id-ID")}` };
+        }
+      }
+    }
+
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
     const pettyCash = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx);
+
+      // Calculate balanceBefore from the last petty cash record
+      const lastRecord = await tx.pettyCash.findFirst({
+        orderBy: { createdAt: "desc" },
+      });
+      const balanceBefore = lastRecord ? Number(lastRecord.balanceAfter) : 0;
+
+      // Laravel parity: OUT can't exceed current balance
+      if (type === "OUT" && amount > balanceBefore) {
+        throw new Error(
+          `Saldo kas kecil tidak cukup: tersedia ${balanceBefore}, dibutuhkan ${amount}`,
+        );
+      }
+
+      const balanceAfter =
+        type === "IN"
+          ? safeAdd(balanceBefore, amount, 0)
+          : safeSubtract(balanceBefore, amount, 0);
+
       const created = await tx.pettyCash.create({
         data: {
           documentNo,
@@ -538,13 +563,9 @@ export async function createPettyCash(formData: FormData) {
     // Associate uploaded attachments with the new petty cash record
     const attachmentIds = v.attachmentIds as string | undefined;
     if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: pettyCash.id },
-        });
-      }
+      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "petty_cash", referenceId: pettyCash.id, uploadedBy: Number(user.id),
+      }));
     }
 
     await logActivity(
@@ -801,6 +822,7 @@ export async function createCostCenter(formData: FormData) {
         name: v.name,
         description: v.description ?? null,
         isActive: v.isActive,
+        parentId: v.parentId ?? null,
       },
     });
 
@@ -835,6 +857,10 @@ export async function updateCostCenter(id: number, formData: FormData) {
         name: v.name,
         description: v.description ?? null,
         isActive: v.isActive,
+        // Must be written on update as well: cost-center-form renders the "Induk"
+        // combobox and createCostCenter already persists parentId. Without this the
+        // hierarchy edit was silently discarded (UI still reported success).
+        parentId: v.parentId ?? null,
       },
     });
 
@@ -901,6 +927,9 @@ export async function deleteExpense(id: number) {
         where: { referenceType: "Expense", referenceId: id },
       });
       await tx.expense.delete({ where: { id } });
+      await tx.approval.deleteMany({
+        where: { referenceType: "Expense", referenceId: id },
+      });
     });
 
     await logActivity("delete", "Expense", id, "Menghapus pengeluaran");
@@ -977,7 +1006,7 @@ export async function deleteCostCenter(id: number) {
 
 export async function deleteStatisticalKeyFigure(id: number) {
   try {
-    await requirePermission("delete_accounts");
+    await requirePermission("delete_statistical_key_figures");
 
     await prisma.statisticalKeyFigure.delete({ where: { id } });
 
@@ -1000,7 +1029,7 @@ export async function updateJournal(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("create_journals");
+    const user = await requirePermission("create_journals");
 
     // Laravel parity: only DRAFT journals can be edited
     const existing = await prisma.journal.findUniqueOrThrow({ where: { id } });
@@ -1103,13 +1132,9 @@ export async function updateJournal(id: number, formData: FormData) {
     // Associate uploaded attachments
     const attachmentIds = formData.get("attachmentIds") as string | null;
     if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: journal.id },
-        });
-      }
+      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "journal", referenceId: journal.id, uploadedBy: Number(user.id),
+      }));
     }
 
     await logActivity("update", "Journal", journal.id, "Memperbarui jurnal");
@@ -1231,7 +1256,7 @@ export async function updateExpense(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_expenses");
+    const user = await requirePermission("edit_expenses");
 
     // Validate input with the same Zod schema as createExpense — the edit path
     // previously hand-parsed formData (safeId/requireNumber), bypassing the
@@ -1264,7 +1289,7 @@ export async function updateExpense(id: number, formData: FormData) {
         date: v.date,
         referenceNo: v.referenceNo ?? null,
         description: v.description ?? null,
-        category: v.category ?? null,
+        categoryId: v.categoryId ?? null,
         receiptImage: v.receiptImage ?? null,
         status: "draft",
       },
@@ -1273,13 +1298,9 @@ export async function updateExpense(id: number, formData: FormData) {
     // Associate uploaded attachments with the new expense
     const attachmentIds = v.attachmentIds as string | undefined;
     if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: expense.id },
-        });
-      }
+      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "expense", referenceId: expense.id, uploadedBy: Number(user.id),
+      }));
     }
 
     await logActivity(
@@ -1346,13 +1367,9 @@ export async function updatePettyCash(id: number, formData: FormData) {
     // Associate uploaded attachments with the new petty cash record
     const attachmentIds = v.attachmentIds as string | undefined;
     if (attachmentIds) {
-      const ids = safeJsonParse<number[]>(attachmentIds) ?? [];
-      if (ids.length > 0) {
-        await prisma.transactionAttachment.updateMany({
-          where: { id: { in: ids }, referenceId: 0 },
-          data: { referenceId: pettyCash.id },
-        });
-      }
+      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+        attachmentIds, referenceType: "petty_cash", referenceId: pettyCash.id, uploadedBy: Number(user.id),
+      }));
     }
 
     await logActivity(

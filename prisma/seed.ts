@@ -248,6 +248,7 @@ async function main() {
       "create_vehicles",
       "edit_vehicles",
       "delete_vehicles",
+      "view_vehicle_brands",
       "create_vehicle_brands",
       "edit_vehicle_brands",
       "delete_vehicle_brands",
@@ -288,6 +289,7 @@ async function main() {
       "edit_taxes",
       "delete_taxes",
       "create_holidays",
+      "manage_holidays",
       "delete_holidays",
       "create_loans",
       "delete_loans",
@@ -301,6 +303,7 @@ async function main() {
       "manage_users",
       "manage_roles",
       "manage_inventory",
+      "manage_expense_categories",
       "approve_workflows",
       // --- Backfill: permissions yang dicek di action (requirePermission/hasPermission)
       // tapi sebelumnya tak pernah di-seed, sehingga role non-admin fail-CLOSED
@@ -315,6 +318,12 @@ async function main() {
       "edit_petty_cash",
       "edit_production",
       "edit_production_orders",
+      // Key Figure Statistik: edit/delete are enforced by skf-values.actions.ts,
+      // finance.actions.ts (deleteStatisticalKeyFigure) and bulk.actions.ts, but
+      // were missed by the backfill below, so every role except super_admin was
+      // redirected out of the feature (requirePermission -> redirect("/")).
+      "edit_statistical_key_figures",
+      "delete_statistical_key_figures",
       "edit_tax_groups",
       "edit_units",
       "view_asset_brands",
@@ -344,239 +353,401 @@ async function main() {
     console.log(`✅ ${permissions.length} permissions created`);
 
     // Create roles
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('super_admin', NOW(), NOW())",
-    );
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('admin', NOW(), NOW())",
-    );
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('staff', NOW(), NOW())",
-    );
-    console.log("✅ Roles created: super_admin, admin, staff");
+    const roles = [
+      "super_admin",
+      "admin",
+      "staff",
+      "ga",
+      "kepala_bengkel",
+      "karyawan",
+      "purchasing",
+      "warehouse",
+      "finance"
+    ];
+    for (const name of roles) {
+      await conn.query(
+        "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES (?, NOW(), NOW())",
+        [name],
+      );
+    }
+    console.log(`✅ ${roles.length} roles created/ensured`);
 
-    // Assign all permissions to super_admin
-    const [superAdminRole] = await conn.query(
-      "SELECT id FROM roles WHERE name = 'super_admin'",
-    );
-    const allPerms = await conn.query("SELECT id FROM permissions");
+    const allPerms = await conn.query("SELECT id, name FROM permissions");
+    const permIdByName = new Map<string, number>();
     for (const perm of allPerms) {
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [perm.id, superAdminRole.id],
-      );
+      permIdByName.set(perm.name, Number(perm.id));
     }
 
-    // Assign all permissions to admin
-    const [adminRole] = await conn.query(
-      "SELECT id FROM roles WHERE name = 'admin'",
-    );
-    for (const perm of allPerms) {
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [perm.id, adminRole.id],
-      );
+    const dbRoles = await conn.query("SELECT id, name FROM roles");
+    const roleIdByName = new Map<string, number>();
+    for (const role of dbRoles) {
+      roleIdByName.set(role.name, Number(role.id));
     }
 
-    // Assign view/create permissions to staff
-    const [staffRole] = await conn.query(
-      "SELECT id FROM roles WHERE name = 'staff'",
-    );
-    const staffPerms = await conn.query(
-      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'create_%'",
-    );
-    for (const perm of staffPerms) {
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [perm.id, staffRole.id],
-      );
-    }
+    // Explicit whitelists for each role
+    const staffWhitelist = [
+      "view_dashboard",
+      "view_customers",
+      "create_customers",
+      "edit_customers",
+      "view_vendors",
+      "create_vendors",
+      "edit_vendors",
+      "view_items",
+      "create_items",
+      "edit_items",
+      "view_item_categories",
+      "create_item_categories",
+      "edit_item_categories",
+      "view_brands",
+      "create_brands",
+      "edit_brands",
+      "view_barcodes",
+      "create_barcodes",
+      "edit_barcodes",
+      "view_currencies",
+      "view_payment_terms",
+      "view_warehouses",
+      "view_employees",
+      "view_quotations",
+      "create_quotations",
+      "edit_quotations",
+      "confirm_quotations",
+      "view_sales_orders",
+      "create_sales_orders",
+      "edit_sales_orders",
+      "view_sales_invoices",
+      "create_sales_invoices",
+      "edit_sales_invoices",
+      "view_sales_payments",
+      "create_sales_payments",
+      "edit_sales_payments",
+      "view_sales_returns",
+      "create_sales_returns",
+      "edit_sales_returns",
+      "view_purchase_requests",
+      "create_purchase_requests",
+      "edit_purchase_requests",
+      "view_purchase_orders",
+      "create_purchase_orders",
+      "edit_purchase_orders",
+      "view_goods_receipts",
+      "create_goods_receipts",
+      "edit_goods_receipts",
+      "view_delivery_orders",
+      "create_delivery_orders",
+      "edit_delivery_orders",
+      "view_projects",
+      "create_projects",
+      "edit_projects",
+      "view_vehicles",
+      "view_vehicle_brands",
+      "view_attendance",
+      "create_attendance"
+    ];
 
-    // === ADDITIONAL ROLES ===
+    const gaWhitelist = [
+      "view_dashboard",
+      "view_assets",
+      "create_assets",
+      "edit_assets",
+      "delete_assets",
+      "manage_assets",
+      "view_asset_brands",
+      "create_asset_brands",
+      "edit_asset_brands",
+      "delete_asset_brands",
+      "view_asset_categories",
+      "create_asset_categories",
+      "edit_asset_categories",
+      "delete_asset_categories",
+      "view_asset_transfers",
+      "create_asset_transfers",
+      "edit_asset_transfers",
+      "delete_asset_transfers",
+      "view_vehicles",
+      "create_vehicles",
+      "edit_vehicles",
+      "delete_vehicles",
+      "view_vehicle_brands",
+      "create_vehicle_brands",
+      "edit_vehicle_brands",
+      "delete_vehicle_brands",
+      "view_attendance",
+      "create_attendance",
+      "edit_attendance",
+      "manage_attendance",
+      "view_leave_requests",
+      "create_leave_requests",
+      "edit_leave_requests",
+      "approve_leave_requests",
+      "delete_leave_requests",
+      "view_projects",
+      "create_projects",
+      "edit_projects",
+      "delete_projects",
+      "manage_projects",
+      "create_holidays",
+      "edit_holidays",
+      "manage_holidays",
+      "delete_holidays",
+      "view_employees",
+      "view_departments",
+      "view_positions"
+    ];
 
-    // General Affairs (GA) — office management, assets, vehicles
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('ga', NOW(), NOW())",
-    );
-    const [gaRole] = await conn.query("SELECT id FROM roles WHERE name = 'ga'");
-    const gaPerms = await conn.query(
-      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'edit_%' OR name LIKE 'delete_%' OR name LIKE 'manage_%'",
-    );
-    // GA gets most view/edit/delete but NOT financial or HR sensitive ops
-    for (const perm of gaPerms) {
-      const pname = String((perm as Record<string, unknown>).name ?? '');
-      if (pname.includes('journal') || pname.includes('payroll') || pname.includes('salary') || pname.includes('settings') || pname.includes('users') || pname.includes('roles')) continue;
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [(perm as Record<string, unknown>).id as number, (gaRole as Record<string, unknown>).id as number],
-      );
-    }
+    const kabengWhitelist = [
+      "view_dashboard",
+      "view_customers",
+      "view_vendors",
+      "view_items",
+      "view_item_categories",
+      "view_brands",
+      "view_units",
+      "view_warehouses",
+      "view_employees",
+      "view_projects",
+      "view_vehicles",
+      "view_vehicle_brands",
+      "view_work_orders",
+      "create_work_orders",
+      "edit_work_orders",
+      "complete_work_orders",
+      "view_material_issues",
+      "view_production",
+      "create_production_orders",
+      "edit_production_orders",
+      "create_products",
+      "edit_products",
+      "view_timesheets",
+      "create_timesheets",
+      "view_overtime",
+      "create_overtime_requests",
+      "edit_overtime_requests",
+      "approve_overtime_requests",
+      "view_leave_requests",
+      "create_leave_requests",
+      "edit_leave_requests",
+      "approve_leave_requests",
+      "view_attendance",
+      "create_attendance",
+      "edit_attendance",
+      "view_purchase_requests",
+      "create_purchase_requests",
+      "edit_purchase_requests"
+    ];
 
-    // Kepala Bengkel — manufacturing, work orders, production
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('kepala_bengkel', NOW(), NOW())",
-    );
-    const [kbRole] = await conn.query("SELECT id FROM roles WHERE name = 'kepala_bengkel'");
-    const kbPerms = await conn.query(
-      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'create_%' OR name LIKE 'edit_%'",
-    );
-    for (const perm of kbPerms) {
-      const pname = String((perm as Record<string, unknown>).name ?? '');
-      if (pname.includes('settings') || pname.includes('users') || pname.includes('roles') || pname.includes('journal') || pname.includes('payroll')) continue;
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [(perm as Record<string, unknown>).id as number, (kbRole as Record<string, unknown>).id as number],
-      );
-    }
+    const karyawanWhitelist = [
+      "view_dashboard",
+      "view_items",
+      "view_item_categories",
+      "view_units",
+      "view_projects",
+      "view_work_orders",
+      "view_attendance",
+      "view_work_schedules",
+      "view_leave_requests",
+      "view_overtime",
+      "view_payroll",
+      "view_timesheets",
+      "view_employee_loans"
+    ];
 
-    // Karyawan (Employee) — self-service only
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('karyawan', NOW(), NOW())",
-    );
-    const [karyawanRole] = await conn.query("SELECT id FROM roles WHERE name = 'karyawan'");
-    const karyawanPerms = await conn.query(
-      "SELECT id FROM permissions WHERE name LIKE 'view_%'",
-    );
-    // Karyawan gets read-only access to most modules
-    for (const perm of karyawanPerms) {
-      const pname = String((perm as Record<string, unknown>).name ?? '');
-      if (pname.includes('settings') || pname.includes('users') || pname.includes('roles') || pname.includes('journal')) continue;
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [(perm as Record<string, unknown>).id as number, (karyawanRole as Record<string, unknown>).id as number],
-      );
-    }
+    const purchasingWhitelist = [
+      "view_dashboard",
+      "view_items",
+      "view_item_categories",
+      "view_units",
+      "view_brands",
+      "view_vendors",
+      "create_vendors",
+      "edit_vendors",
+      "view_purchase_requests",
+      "create_purchase_requests",
+      "edit_purchase_requests",
+      "view_purchase_orders",
+      "create_purchase_orders",
+      "edit_purchase_orders",
+      "view_purchase_returns",
+      "create_purchase_returns",
+      "edit_purchase_returns",
+      "view_vendor_bills",
+      "create_vendor_bills",
+      "edit_vendor_bills",
+      "view_goods_receipts"
+    ];
 
-    // Purchasing — purchase requests, orders, vendor bills
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('purchasing', NOW(), NOW())",
-    );
-    const [purchasingRole] = await conn.query("SELECT id FROM roles WHERE name = 'purchasing'");
-    const purchasingPerms = await conn.query(
-      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'create_%' OR name LIKE 'edit_%'",
-    );
-    for (const perm of purchasingPerms) {
-      const pname = String((perm as Record<string, unknown>).name ?? '');
-      if (!pname.includes('purchase') && !pname.includes('vendor') && !pname.includes('item') && !pname.includes('warehouse') && !pname.includes('inventory') && !pname.startsWith('view_')) continue;
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [(perm as Record<string, unknown>).id as number, (purchasingRole as Record<string, unknown>).id as number],
-      );
-    }
+    const warehouseWhitelist = [
+      "view_dashboard",
+      "view_items",
+      "view_item_categories",
+      "view_units",
+      "view_warehouses",
+      "view_stock_adjustments",
+      "create_stock_adjustments",
+      "edit_stock_adjustments",
+      "process_stock_adjustments",
+      "view_inventory_transfers",
+      "create_inventory_transfers",
+      "edit_inventory_transfers",
+      "view_goods_receipts",
+      "create_goods_receipts",
+      "edit_goods_receipts",
+      "verify_goods_receipts",
+      "view_delivery_orders",
+      "create_delivery_orders",
+      "edit_delivery_orders",
+      "view_material_issues",
+      "create_material_issues",
+      "edit_material_issues",
+      "view_purchase_orders",
+      "view_sales_orders"
+    ];
 
-    // Warehouse — inventory, stock, transfers, goods receipt
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('warehouse', NOW(), NOW())",
-    );
-    const [warehouseRole] = await conn.query("SELECT id FROM roles WHERE name = 'warehouse'");
-    const warehousePerms = await conn.query(
-      "SELECT id FROM permissions WHERE name LIKE 'view_%' OR name LIKE 'create_%' OR name LIKE 'edit_%'",
-    );
-    for (const perm of warehousePerms) {
-      const pname = String((perm as Record<string, unknown>).name ?? '');
-      if (!pname.includes('inventory') && !pname.includes('warehouse') && !pname.includes('stock') && !pname.includes('transfer') && !pname.includes('rack') && !pname.includes('material') && !pname.includes('receipt') && !pname.includes('item') && !pname.startsWith('view_')) continue;
-      await conn.query(
-        "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
-        [(perm as Record<string, unknown>).id as number, (warehouseRole as Record<string, unknown>).id as number],
-      );
-    }
+    const financeWhitelist = [
+      "view_dashboard",
+      "view_accounts",
+      "create_accounts",
+      "edit_accounts",
+      "delete_accounts",
+      "view_journals",
+      "create_journals",
+      "edit_journals",
+      "post_journals",
+      "delete_journals",
+      "view_expenses",
+      "create_expenses",
+      "edit_expenses",
+      "approve_expenses",
+      "delete_expenses",
+      "view_petty_cash",
+      "create_petty_cash",
+      "edit_petty_cash",
+      "delete_petty_cash",
+      "view_bank_reconciliation",
+      "manage_bank_reconciliation",
+      "view_bank_statements",
+      "view_budgets",
+      "create_budgets",
+      "edit_budgets",
+      "delete_budgets",
+      "view_cost_centers",
+      "create_cost_centers",
+      "edit_cost_centers",
+      "delete_cost_centers",
+      "view_down_payments",
+      "create_down_payments",
+      "edit_down_payments",
+      "confirm_down_payments",
+      "delete_down_payments",
+      "view_payroll",
+      "create_payroll",
+      "edit_payroll",
+      "process_payroll",
+      "update_payroll",
+      "view_employee_loans",
+      "create_loans",
+      "delete_loans",
+      "view_taxes",
+      "create_taxes",
+      "edit_taxes",
+      "delete_taxes",
+      "view_tax_groups",
+      "edit_tax_groups",
+      "view_payment_terms",
+      "create_payment_terms",
+      "edit_payment_terms",
+      "delete_payment_terms",
+      "view_payment_methods",
+      "create_payment_methods",
+      "edit_payment_methods",
+      "delete_payment_methods",
+      "view_vendor_bills",
+      "create_vendor_bills",
+      "edit_vendor_bills",
+      "approve_vendor_bills",
+      "delete_vendor_bills",
+      "view_vendor_payments",
+      "create_vendor_payments",
+      "edit_vendor_payments",
+      "approve_vendor_payments",
+      "delete_vendor_payments",
+      "view_sales_invoices",
+      "create_sales_invoices",
+      "edit_sales_invoices",
+      "post_sales_invoices",
+      "delete_sales_invoices",
+      "approve_sales_invoices",
+      "view_sales_payments",
+      "create_sales_payments",
+      "edit_sales_payments",
+      "delete_sales_payments",
+      "view_quotations",
+      "approve_quotations",
+      "view_sales_orders",
+      "approve_sales_orders",
+      "view_purchase_requests",
+      "approve_purchase_requests",
+      "view_purchase_orders",
+      "approve_purchase_orders",
+      "view_reports",
+      "view_customers",
+      "view_vendors",
+      "view_items",
+      "view_warehouses",
+      "view_employees",
+      "view_projects",
+      "view_departments",
+      "view_positions"
+    ];
 
-    console.log("✅ Roles created: super_admin, admin, staff, ga, kepala_bengkel, karyawan, purchasing, warehouse");
-
-    // === FINANCE ROLE + EXPLICIT APPROVAL GRANTS (Separation of Duties) ===
-    // The LIKE-based grants above only match view_/create_/edit_/delete_/manage_,
-    // so the dedicated approval permissions (approve_*/post_*/verify_*/process_*/
-    // confirm_*/complete_*) are NOT granted by them. Without this block every
-    // approval/posting action would be locked to super_admin/admin only. We grant
-    // them explicitly per the agreed RBAC matrix.
-
-    // Finance role: keuangan view/create/edit + all financial approvals.
-    await conn.query(
-      "INSERT IGNORE INTO roles (name, created_at, updated_at) VALUES ('finance', NOW(), NOW())",
-    );
-    const [financeRole] = await conn.query("SELECT id FROM roles WHERE name = 'finance'");
-    const financeBasePerms = await conn.query(
-      "SELECT id, name FROM permissions WHERE name LIKE 'view_%' OR ((name LIKE 'create_%' OR name LIKE 'edit_%') AND (name LIKE '%journal%' OR name LIKE '%expense%' OR name LIKE '%account%' OR name LIKE '%budget%' OR name LIKE '%petty%' OR name LIKE '%reconciliation%' OR name LIKE '%tax%' OR name LIKE '%payment%' OR name LIKE '%invoice%' OR name LIKE '%payroll%' OR name LIKE '%down_payment%' OR name LIKE '%cost_center%' OR name LIKE '%bank%'))",
-    );
-    for (const perm of financeBasePerms) {
-      await conn.query("INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)", [
-        (perm as Record<string, unknown>).id as number,
-        (financeRole as Record<string, unknown>).id as number,
-      ]);
-    }
-
-    // approval permission -> roles that may perform it (super_admin/admin already
-    // hold everything via the all-permissions grant above).
-    const approvalMatrix: Record<string, string[]> = {
-      post_journals: ["finance"],
-      approve_expenses: ["finance"],
-      approve_vendor_bills: ["finance"],
-      approve_vendor_payments: ["finance"],
-      post_sales_invoices: ["finance"],
-      process_payroll: ["finance"],
-      confirm_down_payments: ["finance"],
-      approve_quotations: ["finance"],
-      approve_sales_orders: ["finance"],
-      approve_purchase_requests: ["purchasing"],
-      approve_purchase_orders: ["purchasing"],
-      approve_purchase_returns: ["purchasing"],
-      verify_goods_receipts: ["purchasing", "warehouse"],
-      process_stock_adjustments: ["warehouse"],
-      complete_work_orders: ["kepala_bengkel"],
-      approve_overtime_requests: ["kepala_bengkel"],
-      approve_leave_requests: ["kepala_bengkel", "ga"],
-    };
-    for (const [permName, roleNames] of Object.entries(approvalMatrix)) {
-      const [permRow] = await conn.query("SELECT id FROM permissions WHERE name = ?", [permName]);
-      if (!permRow) {
-        console.warn(`⚠️  approval permission '${permName}' tidak ditemukan — skip`);
-        continue;
+    async function assignPermissionsToRole(roleName: string, whitelistedPerms: string[] | "ALL") {
+      const roleId = roleIdByName.get(roleName);
+      if (!roleId) {
+        console.warn(`⚠️ Role '${roleName}' not found in database, skipping permissions assignment`);
+        return;
       }
-      for (const roleName of roleNames) {
-        const [roleRow] = await conn.query("SELECT id FROM roles WHERE name = ?", [roleName]);
-        if (!roleRow) continue;
-        await conn.query("INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)", [
-          (permRow as Record<string, unknown>).id as number,
-          (roleRow as Record<string, unknown>).id as number,
-        ]);
+
+      await conn.query("DELETE FROM _RolePermissions WHERE B = ?", [roleId]);
+
+      if (whitelistedPerms === "ALL") {
+        for (const pid of permIdByName.values()) {
+          await conn.query(
+            "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
+            [pid, roleId]
+          );
+        }
+      } else {
+        for (const pname of whitelistedPerms) {
+          const pid = permIdByName.get(pname);
+          if (!pid) {
+            console.warn(`⚠️ Permission '${pname}' not found, skipping for role '${roleName}'`);
+            continue;
+          }
+          await conn.query(
+            "INSERT IGNORE INTO _RolePermissions (A, B) VALUES (?, ?)",
+            [pid, roleId]
+          );
+        }
       }
     }
-    console.log("✅ Finance role + approval grants applied (RBAC matrix)");
 
-    // Create default super-admin user.
-    // Credentials come from env so production never ships a known password.
-    const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@yaraerp.app";
-    const adminPassword = process.env.SEED_ADMIN_PASSWORD || "password123";
-    const usingDefaultPassword = !process.env.SEED_ADMIN_PASSWORD;
-    // Stabilize hash for default password to prevent E2E session invalidation due to non-deterministic salts on different runners.
-    const hashedPassword = usingDefaultPassword
-      ? "$2b$12$9xrLycAwOhmZKQRhnkKJUOpE1UZzoQbT1qjDtJaznL0lMVzoKU.5i"
-      : await bcrypt.hash(adminPassword, 12);
-    await conn.query(
-      `INSERT IGNORE INTO users (name, email, password, is_active, created_at, updated_at) 
-       VALUES ('Super Admin', ?, ?, true, NOW(), NOW())`,
-      [adminEmail, hashedPassword],
-    );
-    const [adminUser] = await conn.query(
-      "SELECT id FROM users WHERE email = ?",
-      [adminEmail],
-    );
-    await conn.query("INSERT IGNORE INTO _UserRoles (A, B) VALUES (?, ?)", [
-      superAdminRole.id,
-      adminUser.id,
-    ]);
-    console.log(`✅ Default user created: ${adminEmail}`);
-    if (usingDefaultPassword) {
-      console.warn(
-        "PERINGATAN: admin memakai password default 'password123'. " +
-          "WAJIB diganti, atau set SEED_ADMIN_PASSWORD sebelum seed di produksi.",
-      );
-    }
+    await assignPermissionsToRole("super_admin", "ALL");
+    await assignPermissionsToRole("admin", "ALL");
+    await assignPermissionsToRole("staff", staffWhitelist);
+    await assignPermissionsToRole("ga", gaWhitelist);
+    await assignPermissionsToRole("kepala_bengkel", kabengWhitelist);
+    await assignPermissionsToRole("karyawan", karyawanWhitelist);
+    await assignPermissionsToRole("purchasing", purchasingWhitelist);
+    await assignPermissionsToRole("warehouse", warehouseWhitelist);
+    await assignPermissionsToRole("finance", financeWhitelist);
+
+    console.log("✅ All roles whitelists successfully mapped");
 
     // Create system settings
     await conn.query(
       `INSERT IGNORE INTO system_settings (id, company_name, company_email, costing_method, fiscal_year_start_month, currency_code, currency_symbol, created_at, updated_at)
-       VALUES (1, 'Yara ERP', 'admin@yaraerp.app', 'FIFO', 1, 'IDR', 'Rp ', NOW(), NOW())`,
+       VALUES (1, 'Yara ERP', 'admin@erp.yarasoft.net', 'FIFO', 1, 'IDR', 'Rp ', NOW(), NOW())`,
     );
     console.log("✅ System settings created");
 
@@ -622,7 +793,7 @@ async function main() {
     // Create default warehouse
     await conn.query(
       `INSERT IGNORE INTO warehouses (code, name, address, is_active, created_at, updated_at)
-       VALUES ('WH-MAIN', 'Gudang Utama', 'Jl. Industri No. 1', true, NOW(), NOW())`,
+       VALUES ('WH-0001', 'Gudang Utama', 'Jl. Industri No. 1', true, NOW(), NOW())`,
     );
     console.log("✅ Default warehouse created");
 
@@ -667,6 +838,7 @@ async function main() {
       ["POS-0009", "Drafter", "Kantor"],
       ["POS-0010", "Gudang & Pembelian", "Kantor"],
     ];
+    const positionIdByName: Record<string, number> = {};
     for (const [code, name, deptName] of positions) {
       const departmentId = departmentIdByName[deptName] ?? null;
       const existingPos = await conn.query(
@@ -685,8 +857,151 @@ async function main() {
           [departmentId, existingPos[0].id],
         );
       }
+      const [pos] = await conn.query(
+        "SELECT id FROM positions WHERE name = ? LIMIT 1",
+        [name],
+      );
+      positionIdByName[name] = Number(pos.id);
     }
     console.log("✅ Positions created");
+
+    // === SEED 9 DEMO USERS AND EMPLOYEES ===
+    console.log("🌱 Seeding demo users and employees...");
+    const DEMO_PASSWORD_HASH = "$2b$12$/V3/9lxsoHgIJKxD9TbQCu05dcR/UKyOoJNpAhMKlJBiLn1cXwEa."; // 'demo1234'
+
+    const demoUsers = [
+      {
+        name: "Super Admin",
+        email: "admin@erp.yarasoft.net",
+        roleName: "super_admin",
+        employeeNo: "EMP-00001",
+        departmentName: "Kantor",
+        positionName: "Manajer Umum",
+        baseSalary: 10000000.00
+      },
+      {
+        name: "Dewi Admin",
+        email: "admin.dewi@erp.yarasoft.net",
+        roleName: "admin",
+        employeeNo: "EMP-00002",
+        departmentName: "Kantor",
+        positionName: "Admin Keuangan",
+        baseSalary: 7000000.00
+      },
+      {
+        name: "Siti Staff",
+        email: "staff@erp.yarasoft.net",
+        roleName: "staff",
+        employeeNo: "EMP-00003",
+        departmentName: "Kantor",
+        positionName: "Admin Keuangan",
+        baseSalary: 5500000.00
+      },
+      {
+        name: "Gani GA",
+        email: "ga@erp.yarasoft.net",
+        roleName: "ga",
+        employeeNo: "EMP-00004",
+        departmentName: "Kantor",
+        positionName: "General Affair",
+        baseSalary: 6000000.00
+      },
+      {
+        name: "Bambang Kabeng",
+        email: "kabeng@erp.yarasoft.net",
+        roleName: "kepala_bengkel",
+        employeeNo: "EMP-00005",
+        departmentName: "Lapangan",
+        positionName: "Kepala Bengkel",
+        baseSalary: 8500000.00
+      },
+      {
+        name: "Karyawan Demo",
+        email: "karyawan@erp.yarasoft.net",
+        roleName: "karyawan",
+        employeeNo: "EMP-00006",
+        departmentName: "Lapangan",
+        positionName: "Helper",
+        baseSalary: 4500000.00
+      },
+      {
+        name: "Putri Purchasing",
+        email: "pembelian@erp.yarasoft.net",
+        roleName: "purchasing",
+        employeeNo: "EMP-00007",
+        departmentName: "Kantor",
+        positionName: "Gudang & Pembelian",
+        baseSalary: 6500000.00
+      },
+      {
+        name: "Wawan Warehouse",
+        email: "gudang@erp.yarasoft.net",
+        roleName: "warehouse",
+        employeeNo: "EMP-00008",
+        departmentName: "Lapangan",
+        positionName: "Gudang & Pembelian",
+        baseSalary: 6000000.00
+      },
+      {
+        name: "Fani Finance",
+        email: "keuangan@erp.yarasoft.net",
+        roleName: "finance",
+        employeeNo: "EMP-00009",
+        departmentName: "Kantor",
+        positionName: "Admin Keuangan",
+        baseSalary: 7500000.00
+      }
+    ];
+
+    for (const demo of demoUsers) {
+      let hashedPassword = DEMO_PASSWORD_HASH;
+      if (demo.email === (process.env.SEED_ADMIN_EMAIL || "admin@erp.yarasoft.net") && process.env.SEED_ADMIN_PASSWORD) {
+        hashedPassword = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD, 12);
+      }
+
+      const existingUser = await conn.query("SELECT id FROM users WHERE email = ? LIMIT 1", [demo.email]);
+      let userId: number;
+      if (!existingUser || existingUser.length === 0) {
+        await conn.query(
+          "INSERT INTO users (name, email, password, is_active, created_at, updated_at) VALUES (?, ?, ?, true, NOW(), NOW())",
+          [demo.name, demo.email, hashedPassword]
+        );
+        const [usr] = await conn.query("SELECT id FROM users WHERE email = ? LIMIT 1", [demo.email]);
+        userId = Number(usr.id);
+      } else {
+        userId = Number(existingUser[0].id);
+        await conn.query(
+          "UPDATE users SET name = ?, password = ?, is_active = true, updated_at = NOW() WHERE id = ?",
+          [demo.name, hashedPassword, userId]
+        );
+      }
+
+      const roleId = roleIdByName.get(demo.roleName);
+      if (roleId) {
+        await conn.query("DELETE FROM _UserRoles WHERE B = ?", [userId]);
+        await conn.query("INSERT IGNORE INTO _UserRoles (A, B) VALUES (?, ?)", [roleId, userId]);
+      }
+
+      const deptId = departmentIdByName[demo.departmentName] ?? null;
+      const posId = positionIdByName[demo.positionName] ?? null;
+
+      const existingEmployee = await conn.query("SELECT id FROM employees WHERE employee_no = ? LIMIT 1", [demo.employeeNo]);
+      if (!existingEmployee || existingEmployee.length === 0) {
+        await conn.query(
+          `INSERT INTO employees (user_id, employee_no, name, email, department_id, position_id, join_date, payment_frequency, base_salary, is_active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, NOW(), 'MONTHLY', ?, true, NOW(), NOW())`,
+          [userId, demo.employeeNo, demo.name, demo.email, deptId, posId, demo.baseSalary]
+        );
+      } else {
+        await conn.query(
+          `UPDATE employees 
+           SET user_id = ?, name = ?, email = ?, department_id = ?, position_id = ?, base_salary = ?, is_active = true, updated_at = NOW()
+           WHERE employee_no = ?`,
+          [userId, demo.name, demo.email, deptId, posId, demo.baseSalary, demo.employeeNo]
+        );
+      }
+    }
+    console.log(`✅ ${demoUsers.length} demo users and employee mappings seeded successfully`);
 
     // Create default payment methods (codes follow the auto-generated MTP- scheme)
     const paymentMethods: [string, string][] = [
@@ -784,6 +1099,33 @@ async function main() {
     } else {
       console.log("⚠️ vehicles.json not found, skipping vehicle seeding");
     }
+
+    // === EXPENSE CATEGORIES ===
+    const expenseCategories = [
+      { name: "operasional", label: "Operasional", sort: 10 },
+      { name: "transportasi", label: "Transportasi", sort: 20 },
+      { name: "makan", label: "Makan & Minum", sort: 30 },
+      { name: "utilitas", label: "Utilitas", sort: 40 },
+      { name: "marketing", label: "Pemasaran", sort: 50 },
+      { name: "maintenance", label: "Pemeliharaan", sort: 60 },
+      { name: "csr", label: "CSR / Donasi", sort: 70 },
+      { name: "perbaikan_gedung", label: "Perbaikan Gedung", sort: 80 },
+      { name: "iuran_lingkungan", label: "Iuran Lingkungan", sort: 90 },
+      { name: "keamanan", label: "Keamanan & Kebersihan", sort: 100 },
+      { name: "pendidikan", label: "Pendidikan & Pelatihan", sort: 110 },
+      { name: "perjalanan_dinas", label: "Perjalanan Dinas", sort: 120 },
+      { name: "sewa", label: "Sewa", sort: 130 },
+      { name: "asuransi", label: "Asuransi", sort: 140 },
+      { name: "konsumsi", label: "Konsumsi", sort: 150 },
+      { name: "lainnya", label: "Lainnya", sort: 999 },
+    ];
+    for (const cat of expenseCategories) {
+      await conn.query(
+        "INSERT IGNORE INTO expense_categories (name, label, sort_order, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
+        [cat.name, cat.label, cat.sort],
+      );
+    }
+    console.log(`✅ ${expenseCategories.length} expense categories seeded/checked`);
 
     console.log("\n🎉 Seeding completed!");
   } finally {
