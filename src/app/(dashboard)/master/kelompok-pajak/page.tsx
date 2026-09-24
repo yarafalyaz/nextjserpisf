@@ -28,7 +28,9 @@ export default async function TaxGroupsPage({
       take,
     skip: (page - 1) * pageSize,
     }),
-    prisma.tax.findMany({ where: { isActive: true } }),
+    // deletedAt guard covers rows soft-deleted before the delete path started
+    // clearing isActive as well.
+    prisma.tax.findMany({ where: { isActive: true, deletedAt: null } }),
   ])
 
   const taxMap = new Map(allTaxes.map((t) => [t.id, t.name]))

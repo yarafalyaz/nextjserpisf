@@ -40,7 +40,10 @@ vi.mock("@prisma/client", () => ({
         models: [
           { name: "Customer", fields: [{ name: "id" }, { name: "name" }] },
           { name: "Item", fields: [{ name: "id" }] },
-          { name: "Employee", fields: [{ name: "id" }, { name: "deletedAt" }] },
+          {
+            name: "Employee",
+            fields: [{ name: "id" }, { name: "deletedAt" }, { name: "isActive" }],
+          },
           { name: "Journal", fields: [{ name: "id" }] },
           { name: "PurchaseRequest", fields: [{ name: "id" }] },
           { name: "Bank", fields: [{ name: "id" }] },
@@ -62,23 +65,38 @@ describe("Bulk Actions", () => {
     const res = await bulkDelete("customer", [0, -1, NaN])
     expect(res?.success).toBe(false)
   })
-  it("bulkDelete fails on individual-required models", async () => {
-    const res = await bulkDelete("purchaseRequest" as any, [1]) // Not individual required. Wait, purchaseRequest is not in BULK_DELETE_REQUIRES_INDIVIDUAL.
-    expect(res?.success).toBe(true)
+  it("blocks models whose single-delete actions reverse dependencies or enforce status", async () => {
+    for (const model of ["purchaseRequest", "purchaseOrder", "salesOrder", "project", "rack", "rackRow"] as const) {
+      const result = await bulkDelete(model, [1])
+      expect(result.success).toBe(false)
+      expect(result.message).toMatch(/harus dihapus satu per satu/)
+    }
   })
   it("bulkDelete fails on strict individual models", async () => {
     const res = await bulkDelete("journal", [1])
     expect(res?.success).toBe(false)
-    expect(res?.message).toMatch(/dampak akuntansi/)
+    expect(res?.message).toMatch(/harus dihapus satu per satu/)
+  })
+  it("prevents bulk deletion from bypassing HR scope and approval guards", async () => {
+    for (const [model, permission] of [
+      ["leave", "delete_leave_requests"],
+      ["overtime", "delete_overtime_requests"],
+      ["timesheet", "delete_timesheets"],
+    ] as const) {
+      const result = await bulkDelete(model, [1])
+      expect(result.success).toBe(false)
+      expect(result.message).toMatch(/harus dihapus satu per satu/)
+      expect(mocks.requirePermissionMock).toHaveBeenLastCalledWith(permission)
+    }
   })
   it("bulkDelete fails on asset and vehicle", async () => {
     const resAsset = await bulkDelete("asset", [1])
     expect(resAsset?.success).toBe(false)
-    expect(resAsset?.message).toMatch(/dampak akuntansi/)
+    expect(resAsset?.message).toMatch(/harus dihapus satu per satu/)
 
     const resVehicle = await bulkDelete("vehicle", [1])
     expect(resVehicle?.success).toBe(false)
-    expect(resVehicle?.message).toMatch(/dampak akuntansi/)
+    expect(resVehicle?.message).toMatch(/harus dihapus satu per satu/)
   })
   it("bulkDelete fails on unknown model", async () => {
     const res = await bulkDelete("unknownModel" as any, [1])
@@ -107,9 +125,11 @@ describe("Bulk Actions", () => {
   it("bulkDelete uses soft delete when deletedAt exists", async () => {
     const res = await bulkDelete("employee", [1])
     expect(res?.success).toBe(true)
+    // isActive is cleared as well: pickers and lists filter by isActive alone, so a
+    // soft-deleted row that stayed active kept being offered for new documents.
     expect(mocks.prismaMock.employee.updateMany).toHaveBeenCalledWith({
       where: { id: { in: [1] } },
-      data: { deletedAt: expect.any(Date) }
+      data: { deletedAt: expect.any(Date), isActive: false }
     })
   })
   it("bulkDelete catches and logs errors during deletion", async () => {

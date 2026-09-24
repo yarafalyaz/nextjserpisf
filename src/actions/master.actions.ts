@@ -111,6 +111,10 @@ async function assertCanModifyEmployeeTarget(
  * Safe by schema design: no transaction->master relation uses onDelete: Cascade,
  * so a hard delete can never wipe transactional data — it is always Restricted
  * (or SetNull for nullable, non-historical links such as Task.assignedTo).
+ *
+ * The soft-delete fallback also clears `isActive`. A row that keeps isActive=true
+ * while deletedAt is set stays visible in every picker and list that filters by
+ * isActive alone, so the "deleted" master could still be chosen for new documents.
  */
 async function hardDeleteOrSoftDelete(
   hardDelete: () => Promise<unknown>,
@@ -231,7 +235,7 @@ export async function deleteCustomer(customerId: number) {
       () =>
         prisma.customer.update({
           where: { id: customerId },
-          data: { deletedAt: new Date() },
+          data: { deletedAt: new Date(), isActive: false },
         }),
     );
 
@@ -1716,7 +1720,7 @@ export async function deleteVendor(id: number) {
       () =>
         prisma.vendor.update({
           where: { id },
-          data: { deletedAt: new Date() },
+          data: { deletedAt: new Date(), isActive: false },
         }),
     );
 
@@ -1737,7 +1741,7 @@ export async function deleteItem(id: number) {
     await hardDeleteOrSoftDelete(
       () => prisma.item.delete({ where: { id } }),
       () =>
-        prisma.item.update({ where: { id }, data: { deletedAt: new Date() } }),
+        prisma.item.update({ where: { id }, data: { deletedAt: new Date(), isActive: false } }),
     );
 
     revalidatePath("/master/barang");
@@ -1759,7 +1763,7 @@ export async function deleteWarehouse(id: number) {
       () =>
         prisma.warehouse.update({
           where: { id },
-          data: { deletedAt: new Date() },
+          data: { deletedAt: new Date(), isActive: false },
         }),
     );
 
@@ -1808,7 +1812,7 @@ export async function deleteEmployee(id: number) {
       () =>
         prisma.employee.update({
           where: { id },
-          data: { deletedAt: new Date() },
+          data: { deletedAt: new Date(), isActive: false },
         }),
     );
 
