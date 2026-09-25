@@ -4,7 +4,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeMultiply, safeAdd, safeSubtract } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
-import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
@@ -16,6 +16,11 @@ import {
   parseMaterialRows,
 } from "@/lib/validations/manufacturing.schemas";
 import { computeProjectStatus } from "@/lib/services/project-status";
+import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-scope";
+import { Prisma } from "@prisma/client";
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
 
@@ -26,6 +31,17 @@ export async function createProduct(formData: FormData) {
     const parsed = parseFormData(createProductSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    if (v.inventoryItemId) {
+      const outputItem = await prisma.item.findFirst({
+        where: { id: v.inventoryItemId, isActive: true, deletedAt: null, isProduct: true },
+        select: { id: true },
+      });
+      if (!outputItem) return { success: false, error: "Pilih item persediaan aktif yang ditandai sebagai produk jadi." };
+      if (await prisma.product.findFirst({ where: { inventoryItemId: v.inventoryItemId }, select: { id: true } })) {
+        return { success: false, error: "Item persediaan tersebut sudah terhubung ke produk manufaktur lain." };
+      }
+    }
 
     let code = v.code ?? null;
     if (!code) {
@@ -53,6 +69,7 @@ export async function createProduct(formData: FormData) {
         description: v.description ?? null,
         vehicleBrandId: v.vehicleBrandId,
         vehicleModelId: v.vehicleModelId,
+        inventoryItemId: v.inventoryItemId ?? null,
         materials: {
           create: materialsParsed.data.map((m) => ({
             itemId: m.itemId,
@@ -85,6 +102,18 @@ export async function updateProduct(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    if (v.inventoryItemId) {
+      const outputItem = await prisma.item.findFirst({
+        where: { id: v.inventoryItemId, isActive: true, deletedAt: null, isProduct: true },
+        select: { id: true },
+      });
+      if (!outputItem) return { success: false, error: "Pilih item persediaan aktif yang ditandai sebagai produk jadi." };
+      if (await prisma.product.findFirst({
+        where: { inventoryItemId: v.inventoryItemId, id: { not: id } },
+        select: { id: true },
+      })) return { success: false, error: "Item persediaan tersebut sudah terhubung ke produk manufaktur lain." };
+    }
+
     // Parse dynamic material rows (see createProduct for the rationale — the
     // legacy `Number(itemId) > 0 && Number(qty) > 0` filter let partially-malicious
     // payloads through). parseMaterialRows also de-dupes by itemId.
@@ -109,6 +138,7 @@ export async function updateProduct(id: number, formData: FormData) {
           description: v.description ?? null,
           vehicleBrandId: v.vehicleBrandId,
           vehicleModelId: v.vehicleModelId,
+          inventoryItemId: v.inventoryItemId ?? null,
           materials: {
             deleteMany: {},
             create: materialsParsed.data.map((m) => ({
@@ -167,6 +197,14 @@ export async function calculateStandardCost(productId: number) {
       where: { id: productId },
       data: { standardCost: total },
     });
+
+    // Persisted rollup is rendered by the product pages, so refresh them. (This
+    // action is not wired to any UI yet: production-order flows deliberately
+    // derive the rollup inline - see createProductionOrder - to avoid this
+    // action's `edit_products` check. Revalidating here keeps a future
+    // "recalculate" button from leaving the pages stale.)
+    revalidatePath("/produksi/products");
+    revalidatePath(`/produksi/products/${productId}`);
 
     return { success: true, standardCost: total };
   } catch (e: unknown) {
@@ -295,20 +333,29 @@ export async function confirmProductionOrder(id: number) {
 }
 
 /**
- * Issue material against a confirmed/in-progress production order. Accumulates
- * actual_qty + actual_cost per material (creating an unplanned-material row when
- * the issued item is not in the BOM) and rolls up total_actual_cost on the order.
- * Flips confirmed → in_progress on first issue. Mirrors Laravel issueMaterial.
- * NOTE: no GL/stock posting here — Laravel left the WIP/inventory journal as a
- * TODO, so this preserves source parity (material issue does not yet move stock).
+ * Issue material against a confirmed/in-progress production order. Posts FIFO
+ * stock out and a WIP/inventory journal in the same transaction, then rolls up
+ * actual material cost on the order.
  */
 export async function issueMaterial(
   productionOrderId: number,
   items: { itemId: number; qty: number }[],
 ) {
   try {
-    await requirePermission("edit_production_orders");
+    const user = await requirePermission("edit_production_orders");
     if (!items?.length) throw new Error("Tidak ada material yang dikeluarkan");
+
+    const requested = new Map<number, number>();
+    for (const row of items) {
+      const itemId = Number(row.itemId);
+      const qty = Number(row.qty);
+      if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isFinite(qty) || qty <= 0) {
+        throw new Error("Item dan kuantitas material harus valid dan lebih dari 0");
+      }
+      requested.set(itemId, safeAdd(requested.get(itemId) ?? 0, qty, 2));
+    }
+    const warehouseScope = await getWarehouseScope(user);
+    if (warehouseScope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.");
 
     await prisma.$transaction(async (tx) => {
       // Lock the order row so concurrent issueMaterial calls serialise — without
@@ -317,7 +364,7 @@ export async function issueMaterial(
       await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`;
       const order = await tx.productionOrder.findUniqueOrThrow({
         where: { id: productionOrderId },
-        select: { id: true, status: true, totalActualCost: true },
+        select: { id: true, documentNo: true, status: true, totalActualCost: true },
       });
       if (order.status !== "confirmed" && order.status !== "in_progress") {
         throw new Error(
@@ -331,31 +378,72 @@ export async function issueMaterial(
         });
       }
 
-      const itemIds = items.map((i) => Number(i.itemId));
+      const itemIds = [...requested.keys()].sort((a, b) => a - b);
+      await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
       const itemRows = await tx.item.findMany({
         where: { id: { in: itemIds } },
-        select: { id: true, standardCost: true, purchasePrice: true },
+        select: { id: true, standardCost: true, purchasePrice: true, defaultWarehouseId: true },
       });
       const itemMap = new Map(itemRows.map((i) => [i.id, i]));
 
+      const fallbackWarehouseWhere: Prisma.WarehouseWhereInput = {
+        isActive: true,
+        deletedAt: null,
+        ...(warehouseScope.kind === "assigned"
+          ? { id: { in: warehouseScope.warehouseIds } }
+          : {}),
+      };
+      const fallbackWarehouse = await tx.warehouse.findFirst({
+        where: fallbackWarehouseWhere,
+        orderBy: { id: "asc" },
+        select: { id: true },
+      });
+      if (!fallbackWarehouse) throw new Error("Tidak ada gudang aktif yang dapat digunakan.");
+
+      const defaultWarehouseIds = itemRows
+        .map((item) => item.defaultWarehouseId)
+        .filter((id): id is number => id !== null);
+      const validDefaultWarehouses = defaultWarehouseIds.length
+        ? await tx.warehouse.findMany({
+            where: { id: { in: defaultWarehouseIds }, isActive: true, deletedAt: null },
+            select: { id: true },
+          })
+        : [];
+      const validWarehouseIds = new Set(validDefaultWarehouses.map((warehouse) => warehouse.id));
+
       let runningActual = 0;
-      for (const { itemId, qty } of items) {
-        const itm = itemMap.get(Number(itemId));
+      const movementLines: { itemId: number; qty: number; cost: number; warehouseId: number }[] = [];
+      for (const [itemId, qty] of requested) {
+        const itm = itemMap.get(itemId);
         if (!itm) throw new Error(`Item #${itemId} tidak ditemukan`);
-        const q = Math.max(0, Number(qty) || 0);
-        if (q <= 0) continue;
-        const cost = resolveItemCost(itm);
-        const lineCost = safeMultiply(q, cost, 2);
+        const warehouseId = itm.defaultWarehouseId && validWarehouseIds.has(itm.defaultWarehouseId)
+          ? itm.defaultWarehouseId
+          : fallbackWarehouse.id;
+        assertWarehouseAccess(warehouseScope, warehouseId);
+        if (itm.defaultWarehouseId && !validWarehouseIds.has(itm.defaultWarehouseId)) {
+          throw new Error(`Gudang default item #${itemId} tidak aktif.`);
+        }
+        const { consumedCost } = await consumeFifoLayers(tx, {
+          itemId,
+          warehouseId,
+          qty,
+          label: `perintah produksi ${order.documentNo}`,
+        });
+        const unitCost = qty > 0 ? consumedCost / qty : resolveItemCost(itm);
+        const lineCost = safeMultiply(qty, unitCost, 2);
+        movementLines.push({ itemId, qty, cost: unitCost, warehouseId });
+
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${itemId}`;
 
         const existing = await tx.productionOrderMaterial.findFirst({
-          where: { productionOrderId, itemId: Number(itemId) },
+          where: { productionOrderId, itemId },
           select: { id: true, actualQty: true, actualCost: true },
         });
         if (existing) {
           await tx.productionOrderMaterial.update({
             where: { id: existing.id },
             data: {
-              actualQty: safeAdd(Number(existing.actualQty ?? 0), q, 2),
+              actualQty: safeAdd(Number(existing.actualQty ?? 0), qty, 2),
               actualCost: safeAdd(Number(existing.actualCost), lineCost, 2),
             },
           });
@@ -364,15 +452,49 @@ export async function issueMaterial(
           await tx.productionOrderMaterial.create({
             data: {
               productionOrderId,
-              itemId: Number(itemId),
+              itemId,
               qty: 0,
-              standardCost: cost,
-              actualQty: q,
+              standardCost: resolveItemCost(itm),
+              actualQty: qty,
               actualCost: lineCost,
             },
           });
         }
         runningActual = safeAdd(runningActual, lineCost, 2);
+      }
+
+      await assertPeriodOpen(new Date(), tx);
+      const stockMoveDocumentNos = await generateDocumentNumberBatch("SM", movementLines.length);
+      const postedMoves = [];
+      for (let index = 0; index < movementLines.length; index++) {
+        const line = movementLines[index];
+        const move = await tx.stockMove.create({
+          data: {
+            documentNo: stockMoveDocumentNos[index],
+            itemId: line.itemId,
+            warehouseId: line.warehouseId,
+            qty: line.qty,
+            cost: line.cost,
+            impact: "OUT",
+            status: "posted",
+            moveType: "production_issue",
+            referenceType: "ProductionOrder",
+            referenceId: productionOrderId,
+            notes: `Pemakaian material perintah produksi ${order.documentNo}`,
+            createdBy: Number(user.id),
+          },
+          select: { id: true },
+        });
+        postedMoves.push(move);
+      }
+      if (postedMoves[0]) {
+        await stockJournalService.onProductionOrderMaterialIssue(
+          tx,
+          movementLines,
+          order.documentNo,
+          postedMoves[0].id,
+          Number(user.id),
+        );
       }
 
       await tx.productionOrder.update({
@@ -398,43 +520,174 @@ export async function issueMaterial(
   }
 }
 
-/**
- * Complete an in-progress production order. Computes variance = actual − standard
- * and persists it (favourable < 0, unfavourable > 0). Atomic status claim
- * prevents double-completion. Mirrors Laravel complete() (its WIP/variance GL
- * journals were TODO, so none are posted here).
- */
-export async function completeProductionOrder(id: number) {
+/** Complete production, receive the finished item into inventory, and settle WIP. */
+export async function completeProductionOrder(id: number, serialNumbers: string[] = []) {
   try {
-    await requirePermission("edit_production_orders");
+    const user = await requirePermission("edit_production_orders");
+    const warehouseScope = await getWarehouseScope(user);
+    if (warehouseScope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.");
 
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${id} FOR UPDATE`;
+      const order = await tx.productionOrder.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          documentNo: true,
+          status: true,
+          qty: true,
+          totalActualCost: true,
+          totalStandardCost: true,
+          product: {
+            select: {
+              inventoryItem: {
+                select: {
+                  id: true,
+                  isActive: true,
+                  deletedAt: true,
+                  defaultWarehouseId: true,
+                  trackBatch: true,
+                  trackSerial: true,
+                  isProduct: true,
+                },
+              },
+            },
+          },
+        },
+      });
+      if (order.status !== "in_progress") {
+        throw new Error(`Perintah produksi berstatus '${order.status}', hanya 'in_progress' yang bisa diselesaikan`);
+      }
+      const outputItem = order.product.inventoryItem;
+      if (!outputItem || !outputItem.isProduct || !outputItem.isActive || outputItem.deletedAt) {
+        throw new Error("Hubungkan produk manufaktur ke item persediaan aktif sebelum menyelesaikan order.");
+      }
+
+      let warehouseId = outputItem.defaultWarehouseId;
+      if (warehouseId == null) {
+        const fallbackWarehouse = await tx.warehouse.findFirst({
+          where: {
+            isActive: true,
+            deletedAt: null,
+            ...(warehouseScope.kind === "assigned" ? { id: { in: warehouseScope.warehouseIds } } : {}),
+          },
+          orderBy: { id: "asc" },
+          select: { id: true },
+        });
+        if (!fallbackWarehouse) throw new Error("Item hasil produksi belum memiliki gudang default dan tidak ada gudang aktif yang dapat digunakan.");
+        warehouseId = fallbackWarehouse.id;
+      }
+      assertWarehouseAccess(warehouseScope, warehouseId);
+      const validWarehouse = await tx.warehouse.findFirst({
+        where: { id: warehouseId, isActive: true, deletedAt: null },
+        select: { id: true },
+      });
+      if (!validWarehouse) throw new Error("Gudang default item hasil produksi tidak aktif.");
+
+      const qty = Number(order.qty);
+      const actualCost = Number(order.totalActualCost);
+      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(actualCost) || actualCost < 0) {
+        throw new Error("Kuantitas hasil atau biaya aktual produksi tidak valid.");
+      }
+      const unitCost = Math.round((actualCost / qty) * 100) / 100;
+      const inventoryValue = safeMultiply(qty, unitCost, 2);
+      const serials = serialNumbers.map((serial) => String(serial).trim()).filter(Boolean);
+      if (outputItem.trackSerial) {
+        if (!Number.isInteger(qty) || serials.length !== qty) {
+          throw new Error(`Masukkan tepat ${qty} serial number unik untuk hasil produksi.`);
+        }
+        if (new Set(serials).size !== serials.length) throw new Error("Serial number tidak boleh duplikat.");
+        const duplicateSerials = await tx.itemSerial.findMany({
+          where: { serialNumber: { in: serials } },
+          select: { serialNumber: true },
+        });
+        if (duplicateSerials.length) {
+          throw new Error(`Serial number sudah digunakan: ${duplicateSerials.map((row) => row.serialNumber).join(", ")}`);
+        }
+      } else if (serials.length) {
+        throw new Error("Serial number hanya dapat dikirim untuk item yang melacak serial.");
+      }
+      await assertPeriodOpen(new Date(), tx);
+      const moveNo = await generateDocumentNumber("SM");
+      const move = await tx.stockMove.create({
+        data: {
+          documentNo: moveNo,
+          itemId: outputItem.id,
+          warehouseId,
+          qty,
+          cost: unitCost,
+          impact: "IN",
+          status: "posted",
+          moveType: "production_receipt",
+          referenceType: "ProductionOrder",
+          referenceId: id,
+          notes: `Penerimaan hasil produksi ${order.documentNo}`,
+          createdBy: Number(user.id),
+        },
+        select: { id: true },
+      });
+      await createInLayer(tx, {
+        itemId: outputItem.id,
+        warehouseId,
+        batchNumber: outputItem.trackBatch ? order.documentNo : null,
+        stockMoveId: move.id,
+        qty,
+        unitCost,
+      });
+      if (outputItem.trackBatch) {
+        await tx.itemBatch.create({
+          data: {
+            itemId: outputItem.id,
+            batchNumber: order.documentNo,
+            manufacturingDate: new Date(),
+            qty,
+            warehouseId,
+            notes: `Hasil perintah produksi ${order.documentNo}`,
+          },
+        });
+      }
+      if (outputItem.trackSerial) {
+        await tx.itemSerial.createMany({
+          data: serials.map((serialNumber) => ({
+            itemId: outputItem.id,
+            serialNumber,
+            status: "available",
+            warehouseId,
+            notes: `Hasil perintah produksi ${order.documentNo}`,
+          })),
+        });
+      }
+      await tx.item.update({
+        where: { id: outputItem.id },
+        data: { qtyOnHand: { increment: qty } },
+      });
+      await stockJournalService.onProductionOrderCompleted(
+        tx,
+        [{ qty, cost: unitCost }],
+        order.documentNo,
+        id,
+        Number(user.id),
+      );
+      await stockJournalService.onProductionOrderCostRoundingVariance(
+        tx,
+        safeSubtract(actualCost, inventoryValue, 2),
+        order.documentNo,
+        id,
+        Number(user.id),
+      );
+
       const claim = await tx.productionOrder.updateMany({
         where: { id, status: "in_progress" },
         data: { status: "completed" },
       });
-      if (claim.count === 0) {
-        const cur = await tx.productionOrder.findUnique({
-          where: { id },
-          select: { status: true },
-        });
-        throw new Error(
-          cur
-            ? `Perintah produksi berstatus '${cur.status}', hanya 'in_progress' yang bisa diselesaikan`
-            : "Perintah produksi tidak ditemukan",
-        );
-      }
-      const order = await tx.productionOrder.findUniqueOrThrow({
-        where: { id },
-        select: { totalActualCost: true, totalStandardCost: true },
-      });
+      if (claim.count === 0) throw new Error("Perintah produksi sudah diproses oleh pengguna lain.");
       const variance = safeSubtract(
         Number(order.totalActualCost),
         Number(order.totalStandardCost),
         2,
       );
       await tx.productionOrder.update({ where: { id }, data: { variance } });
-      return { variance, totalActualCost: Number(order.totalActualCost), totalStandardCost: Number(order.totalStandardCost) };
+      return { variance, totalActualCost: actualCost, totalStandardCost: Number(order.totalStandardCost) };
     });
 
     await logActivity("complete", "ProductionOrder", id, `Menyelesaikan perintah produksi #${id}`);
@@ -661,7 +914,7 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number) {
       date: new Date(),
       deliveryDate: new Date(),
       status: "draft",
-      notes: `Auto-generated dari Work Order ${wo.documentNo}`,
+      notes: `Otomatis dibuat dari Work Order ${wo.documentNo}`,
       createdBy: userId,
     },
   });
