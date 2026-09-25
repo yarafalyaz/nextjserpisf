@@ -23,11 +23,16 @@ YaraERP (`silengkap`) — integrated ERP on Next.js 16 (App Router), Prisma 7/Ma
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Turbopack dev server on `:3001` |
-| `npm run build` / `npm start` | Production build and serve |
+| `npm run build` / `npm start` | Production build; serve the standalone output (`next start` is unsupported with `output: "standalone"`) |
 | `npm run db:generate` \| `db:push` \| `db:seed` \| `db:studio` | Prisma client, schema sync, seed, Studio |
 | `npm run lint` / `npm run typecheck` | ESLint / `tsc --noEmit` |
 | `npm test` / `npm run test:e2e` | Vitest; Playwright (needs seeded DB + build, port `4101`) |
 | `npm run ci:quick` / `npm run ci` | Local pipeline lint → types → unit → build (+ E2E); logs in `.ci-logs/` |
+
+Playwright serves the app through `scripts/prepare-standalone.mjs` + `node .next/standalone/server.js`
+— the same runtime as the Docker image — so E2E exercises production behaviour. Run the pipeline
+with `TZ=Asia/Jakarta` (CI does): the app and DB are deployed in WIB, and UTC hides the whole class
+of off-by-one-day bugs (report presets, the "today" default of every create form).
 
 ## Coding Style & Naming Conventions
 

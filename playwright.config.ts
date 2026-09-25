@@ -48,7 +48,11 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: `AUTH_TRUST_HOST=true NEXTAUTH_URL=${E2E_BASE_URL} npx next start -p ${E2E_PORT}`,
+    // Run the SAME runtime as production (Dockerfile: `node server.js` from the
+    // standalone output). `next start` is unsupported with output: "standalone"
+    // - it warns on every run - and it would mean e2e never exercises the
+    // standalone server, so a standalone-only breakage could ship unnoticed.
+    command: `node scripts/prepare-standalone.mjs && AUTH_TRUST_HOST=true NEXTAUTH_URL=${E2E_BASE_URL} PORT=${E2E_PORT} HOSTNAME=127.0.0.1 node .next/standalone/server.js`,
     url: E2E_BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,
