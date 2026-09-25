@@ -113,7 +113,7 @@ jobs:
   e2e:
     name: "E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     needs: [lint, unit, e2e-setup]
     strategy:
       fail-fast: false
@@ -166,7 +166,10 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - name: Run E2E Tests
-        run: npx playwright test --project=chromium --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        # Both viewports: the mobile project guards a whole surface (drawers,
+        # card lists, `lg:hidden` toolbars) that chromium alone never touches -
+        # 331 mobile tests were previously never executed anywhere.
+        run: npx playwright test --project=chromium --project=mobile-chrome --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
