@@ -42,15 +42,18 @@ test.describe("Finance — Journal & Reports", () => {
     await expect(page.locator("#create-journal-btn")).toBeVisible()
     await expect(page.locator("#create-journal-btn")).toHaveAttribute("href", "/keuangan/jurnal/tambah")
 
-    // Status filter chips exist (Semua / Konsep / Diposting)
-    // On mobile the chips live inside a FilterDrawer; on desktop they're inline.
-    // Either way, the "Semua" link must be in the DOM as an actual <a>.
+    // Status filter chips exist (Semua / Konsep / Diposting).
+    // Desktop: rendered inline (lg:flex). Mobile: inside the FilterDrawer, and the
+    // Radix Sheet does not mount its content while closed - so on a small viewport
+    // the chips are neither in the a11y tree (the desktop copy is display:none via
+    // `hidden lg:flex`) nor attached. Open the drawer first when it is present.
+    const drawerTrigger = page.getByRole("button", { name: /Buka filter laci/i })
+    if (await drawerTrigger.isVisible().catch(() => false)) {
+      await drawerTrigger.click()
+    }
     const semuaChip = page.getByRole("link", { name: "Semua" }).first()
     await expect(semuaChip).toBeAttached()
-    // On desktop the chip is visible; on mobile it lives behind the drawer.
-    if (await semuaChip.isVisible().catch(() => false)) {
-      await expect(semuaChip).toBeVisible()
-    }
+    await expect(semuaChip).toBeVisible()
   })
 
   test("journal create form exposes date, description and entry rows", async ({ page }) => {
