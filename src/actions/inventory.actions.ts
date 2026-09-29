@@ -4,6 +4,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
+import { getWarehouseScope, assertWarehouseAccess, assertWarehouseAccessMulti } from "@/lib/auth/warehouse-scope";
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook";
 import {
   onTransferProcessed as onInventoryTransferProcessed,
@@ -24,6 +25,41 @@ import {
   rackRowSchema,
 } from "@/lib/validations/inventory.schemas";
 
+type WarehouseActionUser = { id: number | string; roles: string[] };
+
+async function warehouseScopeFor(user: WarehouseActionUser) {
+  return getWarehouseScope({ id: String(user.id), roles: user.roles });
+}
+
+async function assertRackIdInScope(user: WarehouseActionUser, rackId: number) {
+  if (!Number.isSafeInteger(rackId) || rackId <= 0) throw new Error("Rak tidak valid");
+  const scope = await warehouseScopeFor(user);
+  if (scope.kind === "all") return;
+  const rack = await prisma.rack.findUnique({
+    where: { id: rackId },
+    select: { warehouseId: true },
+  });
+  if (!rack) throw new Error("Rak tidak ditemukan");
+  assertWarehouseAccess(scope, rack.warehouseId);
+}
+
+async function assertRackRowIdInScope(user: WarehouseActionUser, rowId: number) {
+  if (!Number.isSafeInteger(rowId) || rowId <= 0) throw new Error("Baris rak tidak valid");
+  const scope = await warehouseScopeFor(user);
+  if (scope.kind === "all") return;
+  const rackRow = await prisma.rackRow.findUnique({
+    where: { id: rowId },
+    select: { rack: { select: { warehouseId: true } } },
+  });
+  if (!rackRow) throw new Error("Baris rak tidak ditemukan");
+  assertWarehouseAccess(scope, rackRow.rack.warehouseId);
+}
+
+async function assertWarehouseIdInScope(user: WarehouseActionUser, warehouseId: number) {
+  if (!Number.isSafeInteger(warehouseId) || warehouseId <= 0) throw new Error("Gudang tidak valid");
+  assertWarehouseAccess(await warehouseScopeFor(user), warehouseId);
+}
+
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
 
 export async function createStockAdjustment(formData: FormData) {
@@ -33,6 +69,9 @@ export async function createStockAdjustment(formData: FormData) {
     const parsed = parseFormData(stockAdjustmentSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccess(warehouseScope, v.warehouseId);
 
     const documentNo = await generateDocumentNumber("ADJ");
 
@@ -51,7 +90,7 @@ export async function createStockAdjustment(formData: FormData) {
     // Fetch latest system quantity for each item in the warehouse to prevent
     // client-side tampering of 'currentQty'.
     // Since Silengkap calculates stock dynamically from StockMove:
-    const itemIds = adjItems.map((it) => it.itemId);
+    const itemIds = adjItems.map((it) => Number(it.itemId));
     const stockMoves = await prisma.stockMove.groupBy({
       by: ["itemId", "impact"],
       where: {
@@ -125,6 +164,9 @@ export async function processStockAdjustment(adjustmentId: number) {
       where: { id: adjustmentId },
       include: { items: true },
     });
+
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccess(warehouseScope, adjustment.warehouseId);
 
     if (adjustment.status !== "draft") {
       throw new Error("Adjustment hanya bisa diproses dari status draft");
@@ -200,6 +242,9 @@ export async function createInventoryTransfer(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccessMulti(warehouseScope, [v.sourceWarehouseId, v.destinationWarehouseId]);
+
     const documentNo = await generateDocumentNumber("TRF");
 
     const transferItems = (
@@ -246,6 +291,9 @@ export async function processInventoryTransfer(transferId: number) {
     const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
     });
+
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccess(warehouseScope, transfer.sourceWarehouseId);
 
     if (transfer.status !== "draft") {
       throw new Error("Transfer hanya bisa diproses dari status draft");
@@ -314,6 +362,9 @@ export async function receiveInventoryTransfer(transferId: number) {
     const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
     });
+
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccess(warehouseScope, transfer.destinationWarehouseId);
 
     if (transfer.status !== "processed") {
       throw new Error("Transfer hanya bisa di-receive dari status processed");
@@ -388,6 +439,9 @@ export async function createMaterialIssue(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccess(warehouseScope, v.warehouseId);
+
     const documentNo = await generateDocumentNumber("MI");
 
     const miItems = (
@@ -408,6 +462,7 @@ export async function createMaterialIssue(formData: FormData) {
         warehouseId: v.warehouseId,
         projectId: v.projectId ?? null,
         workOrderId: v.workOrderId ?? null,
+        costCenterId: v.costCenterId ?? null,
         date: new Date(v.date),
         notes: v.notes ?? null,
         status: "draft",
@@ -444,6 +499,9 @@ export async function completeMaterialIssue(issueId: number) {
     const issue = await prisma.materialIssue.findUniqueOrThrow({
       where: { id: issueId },
     });
+
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccess(warehouseScope, issue.warehouseId);
 
     if (issue.status !== "draft") {
       throw new Error(
@@ -671,11 +729,75 @@ export async function updateWorkOrder(id: number, formData: FormData) {
   }
 }
 
+export async function getNextRackCode(warehouseId: number) {
+  const user = await requirePermission("create_warehouses");
+  if (!Number.isSafeInteger(warehouseId) || warehouseId <= 0) {
+    throw new Error("Gudang tidak valid");
+  }
+  assertWarehouseAccess(await getWarehouseScope(user), warehouseId);
+
+  const settings = await prisma.systemSetting.findFirst();
+  const prefix = settings?.rackCodePrefix || "RCK-";
+
+  const existingCodes = await prisma.rack.findMany({
+    where: { warehouseId, code: { startsWith: prefix } },
+    select: { code: true },
+  });
+  let maxNum = 0;
+  for (const r of existingCodes) {
+    const num = parseInt(r.code.slice(prefix.length), 10);
+    if (!isNaN(num) && num > maxNum) maxNum = num;
+  }
+  let nextId = maxNum + 1;
+
+  while (
+    await prisma.rack.findFirst({
+      where: { warehouseId, code: prefix + String(nextId).padStart(4, "0") },
+      select: { id: true },
+    })
+  ) {
+    nextId++;
+  }
+  return { code: prefix + String(nextId).padStart(4, "0") };
+}
+
+export async function getNextRowCode(rackId: number) {
+  const user = await requirePermission("manage_inventory");
+  if (!Number.isSafeInteger(rackId) || rackId <= 0) {
+    throw new Error("Rak tidak valid");
+  }
+  const rack = await prisma.rack.findUnique({
+    where: { id: rackId },
+    select: { warehouseId: true },
+  });
+  if (!rack) throw new Error("Rak tidak ditemukan");
+  assertWarehouseAccess(await getWarehouseScope(user), rack.warehouseId);
+
+  const settings = await prisma.systemSetting.findFirst();
+  const enableAutoCode = settings?.enableAutoRowCode !== false;
+  if (!enableAutoCode) return { code: null };
+
+  const prefix = settings?.rowCodePrefix || "ROW-";
+  // Match createRackRow: row codes are globally sequenced from the row ID,
+  // so the preview must not restart at 1 for each rack.
+  const maxId = await prisma.rackRow.aggregate({ _max: { id: true } });
+  let nextId = (maxId._max.id ?? 0) + 1;
+  while (
+    await prisma.rackRow.findFirst({
+      where: { code: prefix + String(nextId).padStart(4, "0") },
+      select: { id: true },
+    })
+  ) {
+    nextId++;
+  }
+  return { code: prefix + String(nextId).padStart(4, "0") };
+}
+
 // ==================== RACK ACTIONS ====================
 
 export async function createRack(formData: FormData) {
   try {
-    await requirePermission("create_warehouses");
+    const user = await requirePermission("create_warehouses");
 
     // Migrated to parseFormData(rackSchema) — the previous hand-parsed path
     // (`formData.get("name") as string`) bypassed required-name and positive-id
@@ -684,6 +806,7 @@ export async function createRack(formData: FormData) {
     const parsed = parseFormData(rackSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+    await assertWarehouseIdInScope(user, v.warehouseId);
 
     const settings = await prisma.systemSetting.findFirst();
     const enableAutoCode = settings?.enableAutoRackCode !== false;
@@ -691,16 +814,22 @@ export async function createRack(formData: FormData) {
 
     let code = v.code ?? null;
     if (enableAutoCode || !code) {
-      // Derive next code from the current max id, then bump past any existing
-      // collision. Rack.code has no DB unique constraint, so a plain max+1 could
-      // produce duplicate codes under concurrent creation — this loop guarantees
-      // the generated code is free before insert.
-      const maxId = await prisma.rack.aggregate({ _max: { id: true } });
-      let nextId = (maxId._max.id ?? 0) + 1;
-      // eslint-disable-next-line no-await-in-loop
+      // Derive next code scoped **per warehouse** so every warehouse
+      // starts its own counter (RCK-001, RCK-002, …).
+      const existingCodes = await prisma.rack.findMany({
+        where: { warehouseId: v.warehouseId, code: { startsWith: prefix } },
+        select: { code: true },
+      });
+      let maxNum = 0;
+      for (const r of existingCodes) {
+        const num = parseInt(r.code.slice(prefix.length), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+      let nextId = maxNum + 1;
+
       while (
         await prisma.rack.findFirst({
-          where: { code: prefix + String(nextId).padStart(4, "0") },
+          where: { warehouseId: v.warehouseId, code: prefix + String(nextId).padStart(4, "0") },
           select: { id: true },
         })
       ) {
@@ -729,7 +858,7 @@ export async function createRack(formData: FormData) {
 
 export async function updateRack(id: number, formData: FormData) {
   try {
-    await requirePermission("create_warehouses");
+    const user = await requirePermission("create_warehouses");
 
     // Migrated to parseFormData(rackSchema) — the previous hand-parsed path
     // (raw `as string` cast + requireId) bypassed schema validation: blank
@@ -738,6 +867,8 @@ export async function updateRack(id: number, formData: FormData) {
     const parsed = parseFormData(rackSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+    await assertRackIdInScope(user, id);
+    await assertWarehouseIdInScope(user, v.warehouseId);
 
     await prisma.rack.update({
       where: { id },
@@ -762,11 +893,12 @@ export async function updateRack(id: number, formData: FormData) {
 
 export async function deleteStockAdjustment(id: number) {
   try {
-    await requirePermission("delete_stock_adjustments");
+    const user = await requirePermission("delete_stock_adjustments");
 
     const adjustment = await prisma.stockAdjustment.findUniqueOrThrow({
       where: { id: id },
     });
+    assertWarehouseAccess(await getWarehouseScope(user), adjustment.warehouseId);
     if (adjustment.status !== "draft") {
       throw new Error("Hanya stock adjustment draft yang dapat dihapus");
     }
@@ -790,11 +922,12 @@ export async function deleteStockAdjustment(id: number) {
 
 export async function deleteInventoryTransfer(id: number) {
   try {
-    await requirePermission("delete_inventory_transfers");
+    const user = await requirePermission("delete_inventory_transfers");
 
     const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id },
     });
+    assertWarehouseAccessMulti(await getWarehouseScope(user), [transfer.sourceWarehouseId, transfer.destinationWarehouseId]);
     if (transfer.status !== "draft") {
       throw new Error("Hanya transfer draft yang dapat dihapus");
     }
@@ -818,11 +951,12 @@ export async function deleteInventoryTransfer(id: number) {
 
 export async function deleteMaterialIssue(id: number) {
   try {
-    await requirePermission("delete_material_issues");
+    const user = await requirePermission("delete_material_issues");
 
     const issue = await prisma.materialIssue.findUniqueOrThrow({
       where: { id },
     });
+    assertWarehouseAccess(await getWarehouseScope(user), issue.warehouseId);
     if (issue.status !== "draft") {
       throw new Error("Hanya material issue draft yang dapat dihapus");
     }
@@ -846,7 +980,8 @@ export async function deleteMaterialIssue(id: number) {
 
 export async function deleteRack(id: number) {
   try {
-    await requirePermission("delete_warehouses");
+    const user = await requirePermission("delete_warehouses");
+    await assertRackIdInScope(user, id);
 
     // Guard: prevent hard-delete if Rack is referenced by transactional records.
     const [itemCount, stockMoveCount, rackRowCount] = await Promise.all([
@@ -877,7 +1012,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_stock_adjustments");
+    const user = await requirePermission("edit_stock_adjustments");
 
     // Validate via the same Zod schema as createStockAdjustment. The previous
     // hand-parse (requireId / new Date(formData.get("date")) / raw formData.get)
@@ -891,6 +1026,8 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     const adj = await prisma.stockAdjustment.findUniqueOrThrow({
       where: { id },
     });
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccessMulti(warehouseScope, [adj.warehouseId, v.warehouseId]);
     if (adj.status !== "draft") {
       throw new Error("Hanya stock adjustment draft yang dapat diedit");
     }
@@ -909,7 +1046,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     ).filter((it) => Number(it.itemId) > 0);
 
     const warehouseId = v.warehouseId;
-    const itemIds = adjItems.map((it) => it.itemId);
+    const itemIds = adjItems.map((it) => Number(it.itemId));
     const stockMoves = await prisma.stockMove.groupBy({
       by: ["itemId", "impact"],
       where: { warehouseId, itemId: { in: itemIds }, status: "posted" },
@@ -992,7 +1129,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_material_issues");
+    const user = await requirePermission("edit_material_issues");
 
     // Validate via the same Zod schema as createMaterialIssue. The previous
     // hand-parse (requireId / safeId / new Date(formData.get("date"))) bypassed
@@ -1004,6 +1141,8 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     const v = parsed.data;
 
     const mi = await prisma.materialIssue.findUniqueOrThrow({ where: { id } });
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccessMulti(warehouseScope, [mi.warehouseId, v.warehouseId]);
     if (mi.status !== "draft") {
       throw new Error("Hanya material issue draft yang dapat diedit");
     }
@@ -1033,6 +1172,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
           warehouseId: v.warehouseId,
           projectId: v.projectId ?? null,
           workOrderId: v.workOrderId ?? null,
+          costCenterId: v.costCenterId ?? null,
           date: new Date(v.date),
           notes: v.notes ?? null,
           items: {
@@ -1065,7 +1205,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_inventory_transfers");
+    const user = await requirePermission("edit_inventory_transfers");
 
     const parsed = parseFormData(inventoryTransferSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -1074,6 +1214,13 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     const tf = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id },
     });
+    const warehouseScope = await getWarehouseScope(user);
+    assertWarehouseAccessMulti(warehouseScope, [
+      tf.sourceWarehouseId,
+      tf.destinationWarehouseId,
+      v.sourceWarehouseId,
+      v.destinationWarehouseId,
+    ]);
     if (tf.status !== "draft") {
       throw new Error("Hanya transfer draft yang dapat diedit");
     }
@@ -1133,7 +1280,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
 
 export async function createRackRow(formData: FormData) {
   try {
-    await requirePermission("manage_inventory");
+    const user = await requirePermission("manage_inventory");
 
     // Migrated to parseFormData(rackRowSchema) — the previous hand-parsed path
     // bypassed required-rackId and required-name validation, letting empty
@@ -1141,6 +1288,7 @@ export async function createRackRow(formData: FormData) {
     const parsed = parseFormData(rackRowSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+    await assertRackIdInScope(user, v.rackId);
 
     const settings = await prisma.systemSetting.findFirst();
     const enableAutoCode = settings?.enableAutoRowCode !== false;
@@ -1153,7 +1301,7 @@ export async function createRackRow(formData: FormData) {
       let nextId = (maxId._max.id ?? 0) + 1;
       // RackRow.code has no DB unique constraint — bump past collisions so
       // concurrent creates don't produce duplicate codes.
-      // eslint-disable-next-line no-await-in-loop
+
       while (
         await prisma.rackRow.findFirst({
           where: { code: prefix + String(nextId).padStart(4, "0") },
@@ -1190,7 +1338,7 @@ export async function createRackRow(formData: FormData) {
 
 export async function updateRackRow(id: number, formData: FormData) {
   try {
-    await requirePermission("manage_inventory");
+    const user = await requirePermission("manage_inventory");
 
     // Migrated to parseFormData(rackRowSchema) — mirrors the create path so
     // the edit route enforces the same required-rackId / required-name
@@ -1200,6 +1348,8 @@ export async function updateRackRow(id: number, formData: FormData) {
     const parsed = parseFormData(rackRowSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+    await assertRackRowIdInScope(user, id);
+    await assertRackIdInScope(user, v.rackId);
 
     await prisma.rackRow.update({
       where: { id },
@@ -1222,7 +1372,8 @@ export async function updateRackRow(id: number, formData: FormData) {
 
 export async function deleteRackRow(id: number) {
   try {
-    await requirePermission("manage_inventory");
+    const user = await requirePermission("manage_inventory");
+    await assertRackRowIdInScope(user, id);
 
     // Guard: prevent hard-delete if RackRow is referenced by transactional
     // records. Item.defaultRackRowId is an FK with onDelete: SetNull (so a raw

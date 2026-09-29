@@ -11,8 +11,9 @@ import { LeadTable } from "./_components/lead-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
+import { CanCreate } from "@/components/auth/can-create"
 
-export const metadata: Metadata = { title: "Leads" }
+export const metadata: Metadata = { title: "Prospek (Leads)" }
 
 export default async function LeadsPage({
   searchParams,
@@ -29,6 +30,7 @@ export default async function LeadsPage({
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
+    deletedAt: null,
     ...(params.cari && {
       OR: [
         { name: { contains: params.cari } },
@@ -70,9 +72,11 @@ export default async function LeadsPage({
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Prospek</h1>
-        <Link href="/crm/leads/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-lead-btn">
+        <CanCreate permission="create_leads">
+          <Link href="/crm/leads/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-lead-btn">
           + Tambah Prospek
         </Link>
+        </CanCreate>
       </div>
 
       <LeadTable

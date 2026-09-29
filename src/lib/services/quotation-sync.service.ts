@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { SalesInvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { onSalesPaymentUpdated } from '@/lib/hooks/sales-payment.hook'

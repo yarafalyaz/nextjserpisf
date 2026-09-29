@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { StockMoveImpact } from "@prisma/client"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
@@ -31,9 +32,11 @@ export default async function StockMovesPage({
       OR: [
         { documentNo: { contains: params.cari } },
         { item: { name: { contains: params.cari } } },
+        { warehouse: { name: { contains: params.cari } } },
       ],
     }),
-    ...(params.dampak && { impact: params.dampak as "IN" | "OUT" }),
+    ...(params.dampak === "masuk" ? { impact: StockMoveImpact.IN } : {}),
+    ...(params.dampak === "keluar" ? { impact: StockMoveImpact.OUT } : {}),
   }
 
   const rawMoves = await prisma.stockMove.findMany({
@@ -44,20 +47,28 @@ export default async function StockMovesPage({
     orderBy: { createdAt: "desc" },
   })
 
-  const moves = rawMoves.map((m) => ({
-    ...m,
-    qty: Number(m.qty),
-  }))
+  const tableData = toPlain(rawMoves)
 
-  const tableData = toPlain(moves)
-
-  const statusChips = (
-    <>
-      <Link href="/inventaris/mutasi-stok" className={`filter-chip ${!params.dampak ? "active" : ""}`}>Semua</Link>
-      <Link href="/inventaris/mutasi-stok?dampak=IN" className={`filter-chip ${params.dampak === "IN" ? "active" : ""}`}>Masuk</Link>
-      <Link href="/inventaris/mutasi-stok?dampak=OUT" className={`filter-chip ${params.dampak === "OUT" ? "active" : ""}`}>Keluar</Link>
-    </>
-  )
+  const dampakFilter = (() => {
+    const items: { label: string; url: string; check: string }[] = [
+      { label: "Semua", url: "", check: "" },
+      { label: "Masuk", url: "masuk", check: "masuk" },
+      { label: "Keluar", url: "keluar", check: "keluar" },
+    ]
+    return (
+      <div className="flex gap-1.5 flex-wrap">
+        {items.map((item) => (
+          <Link
+            key={item.label}
+            href={`/inventaris/mutasi-stok${item.url ? `?dampak=${item.url}` : ""}`}
+            className={`filter-chip ${params.dampak === item.check || (!params.dampak && !item.check) ? "active" : ""}`}
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
+    )
+  })()
 
   return (
     <div className="flex flex-col gap-6">
@@ -72,8 +83,8 @@ export default async function StockMovesPage({
 
       <StockMoveTable
         data={tableData}
-        toolbar={<AppSearchField placeholder="Cari no. dokumen atau item..." action="/inventaris/mutasi-stok" />}
-        filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen, item, atau gudang..." action="/inventaris/mutasi-stok" />}
+        filters={<div className="flex gap-1.5 flex-wrap">{dampakFilter}</div>}
       />
     </div>
   )

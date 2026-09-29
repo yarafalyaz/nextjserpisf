@@ -43,6 +43,14 @@ export default async function PurchaseOrderDetailPage({
 
   if (!po) notFound()
 
+  // Fetch item names dynamically
+  const itemIds = po.items.map((i) => i.itemId)
+  const items = await prisma.item.findMany({
+    where: { id: { in: itemIds } },
+    select: { id: true, name: true },
+  })
+  const itemNameMap = new Map(items.map((i) => [i.id, i.name]))
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -105,7 +113,7 @@ export default async function PurchaseOrderDetailPage({
                 <div className="p-4 px-5">
                   <DetailTable>
                     <DetailTableHead>
-                      <DetailTableTh>ID Barang</DetailTableTh>
+                      <DetailTableTh>Nama Barang</DetailTableTh>
                       <DetailTableTh align="right">Jml</DetailTableTh>
                       <DetailTableTh align="right">Diterima</DetailTableTh>
                       <DetailTableTh align="right">Harga</DetailTableTh>
@@ -114,7 +122,7 @@ export default async function PurchaseOrderDetailPage({
                     <DetailTableBody>
                       {po.items.map((item) => (
                         <DetailTableRow key={item.id}>
-                          <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                          <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                           <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
                           <DetailTableTd align="right">{Number(item.receivedQty)}</DetailTableTd>
                           <DetailTableTd align="right">{formatCurrency(Number(item.unitPrice))}</DetailTableTd>

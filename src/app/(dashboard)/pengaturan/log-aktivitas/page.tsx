@@ -7,6 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatsCards } from "@/components/activity-log/stats-cards"
 import { Suspense } from "react"
 import { ActivityLogController } from "./_components/activity-log-controller"
+import { ClearLogButton } from "./_components/clear-log-button"
 
 import type { Metadata } from "next"
 
@@ -136,7 +137,13 @@ export default async function ActivityLogPage({
     modelType: log.modelType,
     modelId: log.modelId,
     description: log.description ?? "-",
-    createdAt: log.createdAt.toISOString(),
+    createdAt: log.createdAt.toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
     ipAddress: log.ipAddress ?? "-",
     oldValues: log.oldValues,
     newValues: log.newValues,
@@ -152,11 +159,14 @@ export default async function ActivityLogPage({
         ]}
       />
 
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Log Aktivitas</h1>
-        <p className="text-sm text-muted-foreground">
-          Riwayat semua perubahan data di sistem
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Log Aktivitas</h1>
+          <p className="text-sm text-muted-foreground">
+            Riwayat semua perubahan data di sistem
+          </p>
+        </div>
+        <ClearLogButton />
       </div>
 
       <StatsCards
@@ -177,7 +187,7 @@ export default async function ActivityLogPage({
             tone: activeUsersCount > 0 ? "good" : "default",
           },
           {
-            label: "Total records",
+            label: "Total Data",
             value: total.toLocaleString("id-ID"),
             hint: `${modelTypes.length} model dilacak`,
           },

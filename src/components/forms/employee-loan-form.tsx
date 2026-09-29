@@ -34,7 +34,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [employeeId, setEmployeeId] = useState(
-    loan ? String(loan.employeeId) : "",
+    loan ? String(loan.employeeId) : employees.length === 1 ? String(employees[0].id) : "",
   );
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -66,19 +66,29 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
     <form onSubmit={onSubmit}>
       <FormCard>
         <FormSection title="Informasi Umum">
-          <div className="flex flex-col gap-1.5">
-            <Label>Karyawan *</Label>
-            <Combobox
-              name="employeeId"
-              value={employeeId || null}
-              onChange={(key) => setEmployeeId(key ?? "")}
-              placeholder="Cari karyawan..."
-              options={employees.map((e) => ({
-                value: String(e.id),
-                label: e.name,
-              }))}
-            />
-          </div>
+          {employees.length === 1 ? (
+            <div className="flex flex-col gap-1.5">
+              <Label>Karyawan *</Label>
+              <div className="px-3 py-2.5 rounded-lg border border-default bg-default/10 text-foreground font-medium text-sm">
+                {employees[0].name}
+              </div>
+              <input type="hidden" name="employeeId" value={employees[0].id} />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <Label>Karyawan *</Label>
+              <Combobox
+                name="employeeId"
+                value={employeeId || null}
+                onChange={(key) => setEmployeeId(key ?? "")}
+                placeholder="Cari karyawan..."
+                options={employees.map((e) => ({
+                  value: String(e.id),
+                  label: e.name,
+                }))}
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <AppDatePicker
               label="Tanggal Pinjaman *"

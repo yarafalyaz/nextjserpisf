@@ -32,8 +32,16 @@ export const customerSchema = z.object({
   district: z.string().optional(),
   village: z.string().optional(),
   postalCode: z.string().optional(),
-  creditLimit: z.number().min(0).optional(),
   taxId: z.string().max(50).optional(),
+  customerCategoryId: z.number().optional().nullable(),
+})
+
+export const customerCategorySchema = z.object({
+  name: z.string().min(1, "Nama kategori wajib diisi"),
+  downPaymentPercent: z.number({ error: "Persentase DP wajib diisi" })
+    .min(0, "Persentase minimal 0")
+    .max(100, "Persentase maksimal 100")
+    .default(0),
 })
 
 export const vendorSchema = z.object({
@@ -60,17 +68,17 @@ export const itemSchema = z.object({
   sku: z.string().optional(),
   name: z.string().min(1, "Nama wajib diisi"),
   description: z.string().optional(),
-  image: z.string().optional(),
-  categoryId: z.number().optional(),
-  brandId: z.number().optional(),
-  vendorId: z.number().optional(),
-  defaultWarehouseId: z.number().optional(),
-  defaultRackId: z.number().optional(),
-  defaultRackRowId: z.number().optional(),
-  unitOfMeasure: z.string().default("PCS"),
+  image: z.string().min(1, "Foto item wajib diunggah"),
+  categoryId: z.number({ error: "Kategori wajib dipilih" }).int().positive("Kategori wajib dipilih"),
+  brandId: z.number({ error: "Merek wajib dipilih" }).int().positive("Merek wajib dipilih"),
+  vendorId: z.number({ error: "Pemasok wajib dipilih" }).int().positive("Pemasok wajib dipilih"),
+  defaultWarehouseId: z.number({ error: "Gudang wajib dipilih" }).int().positive("Gudang wajib dipilih"),
+  defaultRackId: z.number({ error: "Rak wajib dipilih" }).int().positive("Rak wajib dipilih"),
+  defaultRackRowId: z.number().int().positive().optional(),
+  unitOfMeasure: z.string().min(1, "Satuan wajib dipilih").default("PCS"),
   minStock: z.number().min(0).default(0),
-  cost: z.number().min(0).default(0),
-  price: z.number().min(0).default(0),
+  cost: z.number().min(1, "Harga beli wajib diisi dan harus lebih dari 0"),
+  price: z.number().min(1, "Harga jual wajib diisi dan harus lebih dari 0"),
   standardCost: z.number().min(0).optional(),
   purchasePrice: z.number().min(0).optional(),
   costingMethod: z.string().optional(),
@@ -186,6 +194,7 @@ export const purchaseOrderSchema = z.object({
   expectedDate: z.string().optional(),
   paymentTerm: z.string().optional(),
   shippingCost: z.number().min(0).optional(),
+  serviceFee: z.number().min(0).optional(),
   notes: z.string().optional(),
 })
 
@@ -260,7 +269,7 @@ export const expenseSchema = z.object({
   date: z.string().min(1, "Tanggal wajib diisi"),
   referenceNo: z.string().optional(),
   description: z.string().optional(),
-  category: z.string().optional(),
+  categoryId: z.number().optional(),
   receiptImage: z.string().optional(),
 })
 
@@ -299,6 +308,7 @@ export const payrollSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>
 export type CustomerInput = z.infer<typeof customerSchema>
+export type CustomerCategoryInput = z.infer<typeof customerCategorySchema>
 export type VendorInput = z.infer<typeof vendorSchema>
 export type ItemInput = z.infer<typeof itemSchema>
 export type WarehouseInput = z.infer<typeof warehouseSchema>

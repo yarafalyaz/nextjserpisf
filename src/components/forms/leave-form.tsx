@@ -19,6 +19,7 @@ import { FormGrid, FormGroup } from "@/components/ui/form-layout"
 interface LeaveFormProps {
   employees: { id: number; name: string
 }[]
+  scopeKind: string
   leave?: { id: number; employeeId: number; leaveType: string; startDate: string; endDate: string; reason?: string | null }
 }
 
@@ -39,10 +40,12 @@ interface QuotaState {
   failed: boolean
 }
 
-export function LeaveForm({ employees, leave }: LeaveFormProps) {
+export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [employeeId, setEmployeeId] = useState<string | null>(leave?.employeeId ? String(leave.employeeId) : null)
+  const [employeeId, setEmployeeId] = useState<string | null>(
+    leave?.employeeId ? String(leave.employeeId) : null
+  )
   const [leaveType, setLeaveType] = useState(leave?.leaveType ?? "annual")
   const [quota, setQuota] = useState<QuotaState | null>(null)
 
@@ -113,20 +116,32 @@ export function LeaveForm({ employees, leave }: LeaveFormProps) {
       className="bg-surface rounded-xl border border-default shadow-sm p-6"
     >
         <FormGrid>
-          <FormGroup>
-            <Label htmlFor="employeeId">
-              Karyawan <span className="text-destructive" aria-hidden="true">*</span>
-            </Label>
-            <Combobox
-              id="employeeId"
-              name="employeeId"
-              required
-              options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
-              value={employeeId}
-              onChange={setEmployeeId}
-              placeholder="Cari karyawan..."
-            />
-          </FormGroup>
+          {scopeKind === "self" ? (
+            <FormGroup>
+              <Label htmlFor="employeeId">
+                Karyawan <span className="text-destructive" aria-hidden="true">*</span>
+              </Label>
+              <div className="px-3 py-2.5 rounded-lg border border-default bg-default/10 text-foreground font-medium text-sm">
+                {employees[0].name}
+              </div>
+              <input type="hidden" name="employeeId" value={employees[0].id} />
+            </FormGroup>
+          ) : (
+            <FormGroup>
+              <Label htmlFor="employeeId">
+                Karyawan <span className="text-destructive" aria-hidden="true">*</span>
+              </Label>
+              <Combobox
+                id="employeeId"
+                name="employeeId"
+                required
+                options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+                value={employeeId}
+                onChange={setEmployeeId}
+                placeholder="Cari karyawan..."
+              />
+            </FormGroup>
+          )}
           <FormGroup>
             <Label htmlFor="type">
               Tipe Cuti <span className="text-destructive" aria-hidden="true">*</span>

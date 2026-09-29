@@ -1,8 +1,12 @@
+import type { Metadata } from "next"
 import { GalleryVerticalEnd } from "lucide-react"
 import { Suspense } from "react"
 import { LoginForm } from "@/components/login-form"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { SafeImage } from "@/components/ui/safe-image"
+
+export const dynamic = "force-dynamic"
+export const metadata: Metadata = { title: "Login" }
 
 export default async function LoginPage() {
   const settings = await getSystemSettings()
@@ -10,22 +14,21 @@ export default async function LoginPage() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
       <div className="flex w-full max-w-sm flex-col gap-6">
-        <div className="flex items-center gap-2 self-center font-medium">
+        <div className="flex justify-center">
           {settings.companyLogo ? (
             <SafeImage
               src={settings.companyLogo}
-              alt={settings.companyName || "Logo"}
-              width={24}
-              height={24}
+              alt="Logo"
+              width={192}
+              height={192}
               priority
-              className="size-6 object-contain"
+              className="size-48 object-contain"
             />
           ) : (
-            <div className="flex size-6 items-center justify-center rounded-md bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900">
-              <GalleryVerticalEnd className="size-4" aria-hidden="true" />
+            <div className="flex size-48 items-center justify-center rounded-xl bg-zinc-900 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900">
+              <GalleryVerticalEnd className="size-16" aria-hidden="true" />
             </div>
           )}
-          <span>{settings.companyName || "Silengkap"}</span>
         </div>
         <Suspense fallback={<LoginFallback />}>
           <LoginForm />

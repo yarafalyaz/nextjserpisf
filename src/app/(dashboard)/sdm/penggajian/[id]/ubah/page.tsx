@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/permissions";
+import { getHrScope, hrEmployeeScopeWhere, hrScopeWhere } from "@/lib/auth/hr-scope";
 import { PayrollForm } from "@/components/forms/payroll-form";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 
@@ -15,14 +16,15 @@ export default async function EditPayrollPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("edit_payroll");
+  const user = await requirePermission("edit_payroll");
+  const scope = await getHrScope(user);
 
   const { id } = await params;
   const numId = Number(id);
-  if (Number.isNaN(numId)) notFound();
+  if (!Number.isSafeInteger(numId) || numId <= 0) notFound();
 
   const payroll = await prisma.payroll.findUnique({
-    where: { id: numId },
+    where: { id: numId, ...hrScopeWhere(scope) },
   });
 
   if (!payroll) notFound();
@@ -66,10 +68,17 @@ export default async function EditPayrollPage({
     updatedAt: payroll.updatedAt.toISOString(),
   };
 
-  const employees = await prisma.employee.findMany({
-    where: { isActive: true, deletedAt: null },
-    select: { id: true, name: true },
-  });
+  const [employees, costCenters] = await Promise.all([
+    prisma.employee.findMany({
+      where: { ...hrEmployeeScopeWhere(scope), isActive: true, deletedAt: null },
+      select: { id: true, name: true },
+    }),
+    prisma.costCenter.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true },
+      orderBy: { code: "asc" },
+    }),
+  ])
 
   return (
     <div className="flex flex-col gap-6 max-w-4xl">
@@ -84,7 +93,7 @@ export default async function EditPayrollPage({
         ]}
       />
 
-      <PayrollForm employees={employees} initialData={plainPayroll} />
+      <PayrollForm employees={employees} initialData={plainPayroll} costCenters={costCenters} />
     </div>
   );
 }

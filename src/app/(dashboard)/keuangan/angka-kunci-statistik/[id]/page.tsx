@@ -44,6 +44,10 @@ export default async function DetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Kode</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{String(data.code ?? "-")}</span>
+          </div>
+          <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nama</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{String(data.name ?? "-")}</span>
           </div>
@@ -52,12 +56,16 @@ export default async function DetailPage({
             <span className="text-[0.9375rem] text-foreground font-medium">{String(data.unit ?? "-")}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nilai</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nilai Default</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{String(data.value ?? "-")}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tipe</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{String(data.type ?? "-")}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{data.isActive ? "Aktif" : "Nonaktif"}</span>
           </div>
         </div>
       </div>

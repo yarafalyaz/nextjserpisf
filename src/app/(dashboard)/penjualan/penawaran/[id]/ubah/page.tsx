@@ -28,7 +28,7 @@ export default async function EditQuotationPage({
 
   if (!data) notFound()
 
-  const [customers, customerVehicles, items, paymentMethods, shippingMethods] = await Promise.all([
+  const [customers, customerVehicles, itemsList, paymentMethods, shippingMethods, productsList] = await Promise.all([
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -56,6 +56,10 @@ export default async function EditQuotationPage({
     }),
     prisma.paymentMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } }),
     prisma.shippingMethod.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { code: true, name: true } }),
+    prisma.product.findMany({
+      orderBy: { name: "asc" },
+      include: { materials: true },
+    }),
   ])
 
   const quotation = {
@@ -85,7 +89,7 @@ export default async function EditQuotationPage({
     })),
   }
 
-  const itemOptions = items.map((item) => ({
+  const itemOptions = itemsList.map((item) => ({
     ...item,
     price: Number(item.price),
   }))
@@ -102,6 +106,34 @@ export default async function EditQuotationPage({
     }
   })
 
+  // Map items to lookup map for product materials
+  const itemsMap = new Map(itemsList.map((item) => [item.id, item]))
+
+  // Map products to include item info in materials
+  const products = productsList.map((p) => {
+    const totalPrice = p.materials.reduce((sum, m) => {
+      const item = itemsMap.get(m.itemId)
+      return sum + (item ? Number(m.qty) * Number(item.price) : 0)
+    }, 0)
+
+    return {
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      standardCost: totalPrice > 0 ? totalPrice : Number(p.standardCost),
+      materials: p.materials.map((m) => {
+        const item = itemsMap.get(m.itemId)
+        return {
+          itemId: m.itemId,
+          qty: Number(m.qty),
+          name: item?.name || "Unknown Item",
+          price: item ? Number(item.price) : 0,
+          unitOfMeasure: item?.unitOfMeasure || "PCS",
+        }
+      }),
+    }
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -113,11 +145,15 @@ export default async function EditQuotationPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah Penawaran</h1>
       </div>
-      <QuotationForm quotation={quotation} customers={customers}
+      <QuotationForm
+        quotation={quotation}
+        customers={customers}
         customerVehicles={customerVehicleOptions}
         items={itemOptions}
+        products={products}
         paymentMethods={paymentMethods}
-        shippingMethods={shippingMethods} />
+        shippingMethods={shippingMethods}
+      />
     </div>
   )
 }

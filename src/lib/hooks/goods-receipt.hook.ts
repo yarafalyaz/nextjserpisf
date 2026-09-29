@@ -27,7 +27,11 @@ export async function onGoodsReceiptVerified(
       where: { id: goodsReceiptId },
       include: {
         items: true,
-        purchaseOrder: true,
+        purchaseOrder: {
+          include: {
+            items: true,
+          },
+        },
       },
     });
 
@@ -99,7 +103,21 @@ export async function onGoodsReceiptVerified(
     const grItemMetas = grItemIds.length
       ? await tx.item.findMany({
           where: { id: { in: grItemIds } },
-          select: { id: true, unitOfMeasure: true, trackBatch: true, trackSerial: true },
+          select: {
+            id: true,
+            unitOfMeasure: true,
+            trackBatch: true,
+            trackSerial: true,
+            cost: true,
+            qtyOnHand: true,
+            categoryId: true,
+            costingMethod: true,
+            category: {
+              select: {
+                costingMethod: true,
+              },
+            },
+          },
         })
       : [];
     const metaByItem = new Map(grItemMetas.map((it) => [it.id, it]));
@@ -213,6 +231,15 @@ export async function onGoodsReceiptVerified(
     // the stock subledger for every multi-UoM GR.
     const journalLines: { qty: number; cost: number }[] = [];
 
+    // Initialize running map of item quantities and costs to handle duplicate item IDs in the GR
+    const itemRunningData = new Map<number, { qtyOnHand: number; cost: number }>();
+    for (const meta of grItemMetas) {
+      itemRunningData.set(meta.id, {
+        qtyOnHand: Number(meta.qtyOnHand ?? 0),
+        cost: Number(meta.cost ?? 0),
+      });
+    }
+
     let docIdx = 0;
     for (const item of goodsReceipt.items) {
       const smDocNo = smDocNos[docIdx++];
@@ -236,13 +263,36 @@ export async function onGoodsReceiptVerified(
       const baseUnitCost = factor > 0 ? enteredUnitCost / factor : enteredUnitCost;
       const batchNumber = itemMeta?.trackBatch ? (item.batchNumber ?? null) : null;
 
+      // Landed Cost allocation: shippingCost & serviceFee from PO
+      const po = goodsReceipt.purchaseOrder;
+      const totalLandedCost = Number(po?.shippingCost ?? 0) + Number(po?.serviceFee ?? 0);
+      let landedCostPerUnit = 0;
+
+      if (po && totalLandedCost > 0 && po.items.length > 0) {
+        const poTotalValue = po.items.reduce((s, it) => s + Number(it.total), 0);
+        const poItem = po.items.find((pi) => pi.itemId === item.itemId);
+        if (poItem) {
+          let itemLandedCostShare = 0;
+          if (poTotalValue > 0) {
+            itemLandedCostShare = (Number(poItem.total) / poTotalValue) * totalLandedCost;
+          } else {
+            itemLandedCostShare = totalLandedCost / po.items.length;
+          }
+          if (Number(poItem.qty) > 0) {
+            landedCostPerUnit = itemLandedCostShare / Number(poItem.qty);
+          }
+        }
+      }
+
+      const baseUnitCostWithLanded = baseUnitCost + landedCostPerUnit;
+
       const sm = await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
           itemId: item.itemId,
           warehouseId: lineWarehouseId,
           qty: baseQty,
-          cost: baseUnitCost,
+          cost: baseUnitCostWithLanded,
           impact: "IN",
           status: "posted",
           referenceType: "GoodsReceipt",
@@ -254,10 +304,41 @@ export async function onGoodsReceiptVerified(
 
       // Capture the BASE-converted values for the GL journal so it matches
       // the stock subledger (qty*cost invariant under UoM conversion).
-      journalLines.push({ qty: baseQty, cost: baseUnitCost });
+      journalLines.push({ qty: baseQty, cost: baseUnitCostWithLanded });
 
       // Update item qtyOnHand (global total, in base units)
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${baseQty} WHERE id = ${item.itemId}`;
+
+      // Recalculate average cost if item uses average costing method
+      if (itemMeta) {
+        const costingMethod = (itemMeta.category?.costingMethod || itemMeta.costingMethod || "average").toLowerCase();
+        
+        const running = itemRunningData.get(item.itemId) || { qtyOnHand: Number(itemMeta.qtyOnHand ?? 0), cost: Number(itemMeta.cost ?? 0) };
+        const oldQty = running.qtyOnHand;
+        const oldCost = running.cost;
+        const newQty = baseQty;
+        const newCost = baseUnitCostWithLanded;
+
+        const totalQty = oldQty + newQty;
+        let newAverageCost = oldCost;
+        if (costingMethod === "average" && totalQty > 0) {
+          newAverageCost = (oldQty * oldCost + newQty * newCost) / totalQty;
+        }
+
+        // Update running map
+        itemRunningData.set(item.itemId, {
+          qtyOnHand: totalQty,
+          cost: newAverageCost,
+        });
+
+        // Write to database if using average method
+        if (costingMethod === "average") {
+          await tx.item.update({
+            where: { id: item.itemId },
+            data: { cost: newAverageCost },
+          });
+        }
+      }
 
       // Create FIFO inventory layer scoped to the receiving warehouse (+ batch)
       await createInLayer(tx, {
@@ -266,7 +347,7 @@ export async function onGoodsReceiptVerified(
         batchNumber,
         stockMoveId: sm.id,
         qty: baseQty,
-        unitCost: baseUnitCost,
+        unitCost: baseUnitCostWithLanded,
       });
 
       // Batch tracking: register/accumulate the batch lot

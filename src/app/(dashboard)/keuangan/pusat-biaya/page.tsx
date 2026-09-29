@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
-import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { CostCenterTable } from "./_components/cost-center-table"
@@ -11,36 +10,16 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Pusat Biaya" }
 
-export default async function CostCentersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ cari?: string 
-  halaman?: string
-  pageSize?: string}>
-}) {
+export default async function CostCentersPage() {
   await requirePermission("view_cost_centers")
 
-  const params = await searchParams
-
-  const { page, pageSize, take } = parsePagination(params)
-
-  const where = {
-    ...(params.cari && {
-      OR: [
-        { code: { contains: params.cari } },
-        { name: { contains: params.cari } },
-      ],
-    }),
-  }
-
-  const costCenters = await prisma.costCenter.findMany({
-    where,
-    take,
-    skip: (page - 1) * pageSize,
-    orderBy: { name: "asc" },
+  const all = await prisma.costCenter.findMany({
+    include: { children: { include: { children: { include: { children: true } } } } },
+    where: { parentId: null },
+    orderBy: { code: "asc" },
   })
 
-  const data = toPlain(costCenters)
+  const data = toPlain(all)
 
   return (
     <div className="flex flex-col gap-6">

@@ -1,8 +1,8 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useMemo, useState, useTransition } from "react"
-import { createRackRow, updateRackRow } from "@/actions/inventory.actions"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useState, useTransition } from "react"
+import { createRackRow, updateRackRow, getNextRowCode } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -31,17 +31,29 @@ interface RackRowFormProps {
 
 export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
-  const initialWarehouseId = rackRow ? String(rackRow.rack.warehouseId) : ""
+  const initialWarehouseId = rackRow
+    ? String(rackRow.rack.warehouseId)
+    : searchParams.get("warehouseId") || ""
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId)
   const [rackId, setRackId] = useState(rackRow ? String(rackRow.rackId) : "")
+  const [autoCode, setAutoCode] = useState("")
 
   const selectedWarehouse = useMemo(
     () => warehouses.find((w) => String(w.id) === warehouseId),
     [warehouses, warehouseId],
   )
   const racks = selectedWarehouse?.racks ?? []
+
+  // Fetch next code when rack changes
+  useEffect(() => {
+    if (!enableAutoCode || !rackId) return
+    getNextRowCode(Number(rackId)).then((res) => {
+      setAutoCode(res.code ?? "")
+    })
+  }, [rackId, enableAutoCode])
 
   function handleWarehouseChange(key: string | null) {
     const nextWarehouseId = String(key ?? "")
@@ -52,6 +64,11 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
     if (!nextWarehouse || !nextWarehouse.racks.some((r) => String(r.id) === rackId)) {
       setRackId("")
     }
+  }
+
+  function handleRackChange(key: string | null) {
+    setAutoCode("")
+    setRackId(key ?? "")
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -100,6 +117,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
       <form onSubmit={onSubmit}>
         <FormCard>
           <input type="hidden" name="rackId" value={rackId} />
+          {enableAutoCode && <input type="hidden" name="code" value={autoCode} />}
 
           <FormSection title="Informasi Umum">
             {/* Warehouse select */}
@@ -120,7 +138,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
               <Combobox
                 id="rackIdSelect"
                 value={rackId || null}
-                onChange={(key) => setRackId(key ?? "")}
+                onChange={handleRackChange}
                 placeholder="Cari rak..."
                 disabled={!warehouseId}
                 options={racks.map((r) => ({ value: String(r.id), label: r.name }))}
@@ -128,29 +146,19 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
             </div>
 
             {/* Code input */}
-            {!enableAutoCode && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="code">Kode</Label>
-                <Input
-                  id="code"
-                  name="code"
-                  placeholder="Kode baris rak"
-                  defaultValue={rackRow?.code || ""}
-                />
-              </div>
-            )}
-
-            {enableAutoCode && (
-              <div className="flex flex-col gap-1.5">
-                <Label>Kode</Label>
-                <Input
-                  disabled
-                  placeholder="Dibuat otomatis"
-                  defaultValue={rackRow?.code || ""}
-                />
-                <input type="hidden" name="code" value={rackRow?.code || ""} />
-              </div>
-            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="code">Kode</Label>
+              <Input
+                id="code"
+                name="code"
+                readOnly={enableAutoCode}
+                value={enableAutoCode ? autoCode : undefined}
+                onChange={() => {}}
+                className={enableAutoCode ? "bg-muted font-mono" : undefined}
+                placeholder={enableAutoCode ? "Pilih rak dulu..." : "Masukkan kode manual"}
+                required={!enableAutoCode}
+              />
+            </div>
 
             {/* Name input */}
             <div className="flex flex-col gap-1.5">

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
-import { getErrorMessage } from "@/lib/utils/error"
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import {
   createBackup,
   restoreBackup,
@@ -38,6 +38,7 @@ export async function createDatabaseBackup(): Promise<BackupResult> {
     revalidatePath("/pengaturan/database")
     return { success: true, message: `Backup berhasil dibuat: ${file.filename}` }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     return { success: false, message: getErrorMessage(e) || "Gagal membuat backup" }
   }
 }
@@ -65,6 +66,7 @@ export async function restoreDatabaseBackup(
     revalidatePath("/pengaturan/database")
     return { success: true, message: `Database berhasil di-restore dari ${safeFilename}.${safetyNet}` }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     return { success: false, message: getErrorMessage(e) || "Gagal restore database" }
   }
 }
@@ -78,6 +80,7 @@ export async function deleteDatabaseBackup(filename: string): Promise<BackupResu
     revalidatePath("/pengaturan/database")
     return { success: true, message: "Backup berhasil dihapus" }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     return { success: false, message: getErrorMessage(e) || "Gagal menghapus backup" }
   }
 }

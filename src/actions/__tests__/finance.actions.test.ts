@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => {
     bankReconciliationItem: buildModelMock(),
     user: buildModelMock(),
     paymentMethod: buildModelMock(),
+    approvalWorkflow: buildModelMock(),
+    approval: buildModelMock(),
     
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -82,6 +84,13 @@ vi.mock("@/lib/services/approval-workflow.service", () => ({
   requestApprovalIfConfigured: vi.fn().mockResolvedValue({}),
   assertApproved: vi.fn().mockResolvedValue({}),
 }))
+vi.mock("@/lib/utils/settings", () => ({
+  getSystemSettings: vi.fn(async () => ({
+    pettyCashAccountId: 1,
+    cashBankAccountId: 2,
+    generalExpenseAccountId: 3,
+  })),
+}))
 
 import * as actions from "../finance.actions"
 
@@ -125,6 +134,7 @@ beforeEach(() => {
   mocks.generateDocNumMock.mockResolvedValue("DOC-001")
   vi.mocked(findFirstNegativeBalance).mockReset().mockReturnValue(null)
   vi.mocked(computePettyCashChain).mockReset().mockReturnValue([])
+  mocks.prismaMock.journalEntry.findMany.mockResolvedValue([{ debit: 9999999, credit: 0 }])
 })
 
 describe("Bank Statement Actions", () => {
@@ -430,6 +440,7 @@ describe("Statistical Key Figure Actions", () => {
   it("deleteStatisticalKeyFigure succeeds", async () => {
     const res = await (actions as any).deleteStatisticalKeyFigure(1)
     expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("delete_statistical_key_figures")
   })
 })
 

@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { runCronTask } from "@/actions/cron.actions"
 import { formatDate } from "@/lib/utils/format"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/shadcn/badge"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 type TaskStatus = {
   key: string
@@ -56,15 +59,9 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-foreground">{task.name}</h3>
                   {task.lastRun && (
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold ${
-                        task.lastRun.status === "success"
-                          ? "bg-success/10 text-success"
-                          : "bg-danger/10 text-danger"
-                      }`}
-                    >
+                    <Badge variant={task.lastRun.status === "success" ? "default" : "destructive"}>
                       {task.lastRun.status === "success" ? "Sukses" : "Gagal"}
-                    </span>
+                    </Badge>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>
@@ -80,23 +77,14 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
                   <p className="text-xs text-muted-foreground mt-1 truncate max-w-lg">{task.lastRun.message}</p>
                 )}
               </div>
-              <button
-                disabled={running === task.key}
-                onClick={() => handleRun(task.key)}
-                className="ml-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              <Button
+                variant="primary"
+                size="sm"
+                isDisabled={running === task.key}
+                onPress={() => handleRun(task.key)}
               >
-                {running === task.key ? (
-                  <>
-                    <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Berjalan…
-                  </>
-                ) : (
-                  "Jalankan Sekarang"
-                )}
-              </button>
+                {running === task.key ? "Berjalan…" : "Jalankan Sekarang"}
+              </Button>
             </div>
           ))}
         </div>
@@ -116,40 +104,28 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
         {logs.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada riwayat</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-default text-left">
-                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Waktu</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tugas</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Durasi</th>
-                  <th className="px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pesan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {logs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="px-5 py-3 text-foreground whitespace-nowrap">{formatDate(log.ranAt)}</td>
-                    <td className="px-5 py-3 text-foreground font-mono text-xs">{log.task}</td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold ${
-                          log.status === "success"
-                            ? "bg-success/10 text-success"
-                            : "bg-danger/10 text-danger"
-                        }`}
-                      >
-                        {log.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{log.duration !== null ? `${log.duration}ms` : "-"}</td>
-                    <td className="px-5 py-3 text-muted-foreground max-w-xs truncate">{log.message || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Waktu</DetailTableTh>
+              <DetailTableTh>Tugas</DetailTableTh>
+              <DetailTableTh>Status</DetailTableTh>
+              <DetailTableTh>Durasi</DetailTableTh>
+              <DetailTableTh>Pesan</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {logs.map((log) => (
+                <DetailTableRow key={log.id}>
+                  <DetailTableTd className="whitespace-nowrap">{formatDate(log.ranAt)}</DetailTableTd>
+                  <DetailTableTd className="font-mono text-xs">{log.task}</DetailTableTd>
+                  <DetailTableTd>
+                    <Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge>
+                  </DetailTableTd>
+                  <DetailTableTd className="text-muted-foreground">{log.duration !== null ? `${log.duration}ms` : "-"}</DetailTableTd>
+                  <DetailTableTd className="text-muted-foreground max-w-xs truncate">{log.message || "-"}</DetailTableTd>
+                </DetailTableRow>
+              ))}
+            </DetailTableBody>
+          </DetailTable>
         )}
       </div>
     </div>

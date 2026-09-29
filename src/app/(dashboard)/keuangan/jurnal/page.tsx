@@ -4,7 +4,7 @@ import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { indoToStatus } from "@/lib/utils/status-labels"
+import { indoToStatus, statusToIndo, statusLabel } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { JournalTable } from "./_components/journal-table"
 import { FilterDrawer } from "@/components/ui/filter-drawer"
@@ -51,13 +51,25 @@ export default async function JournalsPage({
   const totalPages = Math.ceil(total / perPage)
   const data = toPlain(journals)
 
-  const statusChips = (
-    <>
-      <Link href="/keuangan/jurnal" className={`filter-chip ${!params.status ? "active" : ""}`}>Semua</Link>
-      <Link href="/keuangan/jurnal?status=DRAFT" className={`filter-chip ${params.status === "DRAFT" ? "active" : ""}`}>Konsep</Link>
-      <Link href="/keuangan/jurnal?status=POSTED" className={`filter-chip ${params.status === "POSTED" ? "active" : ""}`}>Diposting</Link>
-    </>
-  )
+  const statusChips = (() => {
+    const statuses = ["", "draft", "posted"]
+    return (
+      <>
+        {statuses.map((dbStatus) => {
+          const urlStatus = dbStatus ? statusToIndo[dbStatus] : ""
+          return (
+            <Link
+              key={dbStatus || "all"}
+              href={`/keuangan/jurnal${urlStatus ? `?status=${urlStatus}` : ""}`}
+              className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
+            >
+              {dbStatus ? statusLabel(dbStatus) : "Semua"}
+            </Link>
+          )
+        })}
+      </>
+    )
+  })()
 
   return (
     <div className="flex flex-col gap-6">

@@ -66,7 +66,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     // 4. Wait for confirm dialog to appear
     await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
     // 5. Click confirm Hapus button (inside AlertDialog footer)
-    const confirmDialog = page.getByRole('alertdialog', { name: 'Hapus data ini?' })
+    const confirmDialog = page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: 'Hapus data ini?' }).first()
     await expect(confirmDialog).toBeVisible({ timeout: 5000 })
     await confirmDialog.getByRole("button", { name: /^hapus$/i }).first().click()
     // 6. Wait for network to settle

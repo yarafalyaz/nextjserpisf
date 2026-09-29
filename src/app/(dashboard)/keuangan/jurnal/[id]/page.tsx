@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { formatDate, formatCurrency, formatReferenceType } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -58,7 +58,7 @@ export default async function JournalDetailPage({
         <DetailField label="Tanggal Transaksi" value={formatDate(journal.transactionDate)} />
         <DetailField label="Tipe" value={journal.type} />
         <DetailField label="Status" value={<StatusChip status={journal.status.toLowerCase()} />} />
-        {journal.referenceType && <DetailField label="Referensi" value={`${journal.referenceType} #${journal.referenceId}`} />}
+        {journal.referenceType && <DetailField label="Referensi" value={`${formatReferenceType(journal.referenceType)} #${journal.referenceId}`} />}
         {journal.creator && <DetailField label="Dibuat Oleh" value={journal.creator.name} />}
         {journal.description && <DetailField label="Deskripsi" value={journal.description} colSpan="full" />}
       </DetailCard>

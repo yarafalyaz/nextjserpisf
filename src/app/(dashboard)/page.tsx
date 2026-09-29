@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic"
 
+import { auth } from "@/lib/auth/auth"
 import Link from "next/link"
 import { AlertTriangle, ArrowUpRight, Car } from "lucide-react"
 import { requirePermission } from "@/lib/auth/permissions"
@@ -32,10 +33,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/shadcn/table"
+import EmployeeDashboard from "@/components/dashboard/employee-dashboard"
+import WorkshopDashboard from "@/components/dashboard/workshop-dashboard"
+import PurchaseDashboard from "@/components/dashboard/purchase-dashboard"
+import WarehouseDashboard from "@/components/dashboard/warehouse-dashboard"
+import FinanceDashboard from "@/components/dashboard/finance-dashboard"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Dashboard" }
+export const metadata: Metadata = { title: "Dasbor" }
 
 
 const DONE_STATES = ["completed", "cancelled", "done", "closed"]
@@ -257,11 +263,25 @@ async function getDashboardData() {
 }
 
 export default async function DashboardPage() {
+  const session = await auth()
+  const roles = (session?.user as { roles?: string[] })?.roles ?? []
+
+  // Role-based dashboard routing
+  const isAdmin = roles.includes("super_admin") || roles.includes("admin")
+  if (!isAdmin) {
+    if (roles.includes("kepala_bengkel")) return <WorkshopDashboard />
+    if (roles.includes("purchasing")) return <PurchaseDashboard />
+    if (roles.includes("warehouse")) return <WarehouseDashboard />
+    if (roles.includes("finance")) return <FinanceDashboard />
+    return <EmployeeDashboard />
+  }
+
   await requirePermission("view_dashboard")
 
   const [data, charts] = await Promise.all([getDashboardData(), getCharts()])
 
   const today = new Date().toLocaleDateString("id-ID", {
+    timeZone: "Asia/Jakarta",
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -336,7 +356,7 @@ export default async function DashboardPage() {
                         </TableHead>
                         <TableHead className="px-4 lg:px-6">Tahap</TableHead>
                         <TableHead className="w-[170px] px-4 lg:px-6">
-                          Progress
+                          Progres
                         </TableHead>
                         <TableHead className="px-4 lg:px-6">Target</TableHead>
                       </TableRow>

@@ -53,6 +53,12 @@ export const STATUS_LABELS: Record<string, string> = {
   qualified: "Terkualifikasi",
   proposal: "Proposal",
 
+  // Additional
+  skipped: "Dilewati",
+  overdue: "Terlambat",
+  running: "Berjalan",
+  planned: "Direncanakan",
+
   // HRM
   bonus: "Bonus",
   reward: "Penghargaan",
@@ -68,7 +74,7 @@ export const STATUS_LABELS: Record<string, string> = {
 
 export function statusLabel(status: string | null | undefined): string {
   if (!status) return "-";
-  return STATUS_LABELS[status] ?? status;
+  return STATUS_LABELS[status] ?? STATUS_LABELS[status.toLowerCase()] ?? status;
 }
 
 export const statusToIndo: Record<string, string> = {

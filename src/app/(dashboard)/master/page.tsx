@@ -31,6 +31,12 @@ const masterModules: ModuleItem[] = [
     desc: "Kelola data pelanggan",
   },
   {
+    label: "Kategori Pelanggan",
+    href: "/master/kategori-pelanggan",
+    icon: Tag,
+    desc: "Kelola kategori pelanggan & presentasi DP",
+  },
+  {
     label: "Pemasok",
     href: "/master/pemasok",
     icon: Factory,
@@ -101,12 +107,6 @@ const masterModules: ModuleItem[] = [
     href: "/master/kelompok-pajak",
     icon: ListOrdered,
     desc: "Grup pajak",
-  },
-  {
-    label: "Mata Uang",
-    href: "/master/mata-uang",
-    icon: Globe,
-    desc: "Kelola mata uang",
   },
   {
     label: "Barcode",

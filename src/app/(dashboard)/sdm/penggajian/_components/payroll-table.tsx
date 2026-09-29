@@ -1,6 +1,7 @@
 "use client"
 
 import { createColumnHelper } from "@tanstack/react-table"
+import { useMemo } from "react"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
@@ -80,13 +81,22 @@ interface PayrollTableProps {
   data: PayrollData[]
   toolbar?: React.ReactNode
   filters?: React.ReactNode
+  showActions?: boolean
+  showEmployeeColumn?: boolean
 }
 
-export function PayrollTable({ data, toolbar, filters }: PayrollTableProps) {
+export function PayrollTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: PayrollTableProps) {
+  const visibleColumns = useMemo(() => {
+    let cols = columns
+    if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
+    if (!showEmployeeColumn) cols = cols.filter((c: any) => c.id !== "employeeName")
+    return cols
+  }, [showActions, showEmployeeColumn])
+
   return (
     <DataTable
       data={data}
-      columns={columns}
+      columns={visibleColumns}
       ariaLabel="Daftar penggajian"
       pageSize={20}
       selectable={false}

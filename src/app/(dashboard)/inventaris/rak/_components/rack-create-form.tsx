@@ -1,8 +1,8 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useTransition } from "react"
-import { createRack } from "@/actions/inventory.actions"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useTransition, useEffect } from "react"
+import { createRack, getNextRackCode } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
@@ -18,13 +18,27 @@ interface Warehouse {
 interface RackCreateFormProps {
   enableAutoCode: boolean
   warehouses: Warehouse[]
-  generatedCode?: string
 }
 
-export function RackCreateForm({ enableAutoCode, warehouses, generatedCode }: RackCreateFormProps) {
+export function RackCreateForm({ enableAutoCode, warehouses }: RackCreateFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
-  const [warehouseId, setWarehouseId] = useState("")
+  const [warehouseId, setWarehouseId] = useState(searchParams.get("warehouseId") || "")
+  const [autoCode, setAutoCode] = useState("")
+
+  // Fetch next code when warehouse changes
+  useEffect(() => {
+    if (!enableAutoCode || !warehouseId) return
+    getNextRackCode(Number(warehouseId)).then((res) => {
+      setAutoCode(res.code)
+    })
+  }, [warehouseId, enableAutoCode])
+
+  function handleWarehouseChange(key: string | null) {
+    setAutoCode("")
+    setWarehouseId(key ?? "")
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -56,9 +70,10 @@ export function RackCreateForm({ enableAutoCode, warehouses, generatedCode }: Ra
             id="code"
             name="code"
             readOnly={enableAutoCode}
-            defaultValue={enableAutoCode ? generatedCode : undefined}
+            value={enableAutoCode ? autoCode : undefined}
+            onChange={() => {}}
             className={enableAutoCode ? "bg-muted font-mono" : undefined}
-            placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"}
+            placeholder={enableAutoCode ? "Pilih gudang dulu..." : "Masukkan kode manual"}
             required={!enableAutoCode}
           />
         </div>
@@ -73,7 +88,7 @@ export function RackCreateForm({ enableAutoCode, warehouses, generatedCode }: Ra
           <Combobox
             id="warehouseIdSelect"
             value={warehouseId || null}
-            onChange={(key) => setWarehouseId(key ?? "")}
+            onChange={handleWarehouseChange}
             placeholder="Cari gudang..."
             options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
           />

@@ -3,16 +3,22 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { LeaveForm } from "@/components/forms/leave-form"
+import { getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Tambah Cuti" }
 
 export default async function CreateLeavePage() {
-  await requirePermission("view_leave_requests")
+  const user = await requirePermission("create_leave_requests")
+  const scope = await getHrScope(user)
 
   const employees = await prisma.employee.findMany({
-    where: { isActive: true, deletedAt: null },
+    where: {
+      isActive: true,
+      deletedAt: null,
+      ...hrEmployeeScopeWhere(scope),
+    },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   })
@@ -22,7 +28,7 @@ export default async function CreateLeavePage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ajukan Cuti</h1>
       </div>
-      <LeaveForm employees={employees} />
+      <LeaveForm employees={employees} scopeKind={scope.kind} />
     </div>
   )
 }

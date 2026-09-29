@@ -7,6 +7,7 @@ import {
   SheetTitle,
 } from "@/components/ui/shadcn/sheet"
 import { Badge } from "@/components/ui/shadcn/badge"
+import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 interface DetailDrawerProps {
   open: boolean
@@ -132,7 +133,6 @@ export function DetailDrawer({
 }: DetailDrawerProps) {
   if (!row) return null
 
-  const d = new Date(row.createdAt)
   const actionText = actionLabel[row.action] || row.action
 
   return (
@@ -143,55 +143,28 @@ export function DetailDrawer({
         </SheetHeader>
 
         <div className="mt-4 space-y-5">
-          {/* Meta — proper <dl> for term/description pairs */}
-          <dl
-            className="grid grid-cols-1 gap-x-3 gap-y-3 text-sm sm:grid-cols-2"
-            aria-label="Metadata log aktivitas"
-          >
-            <div className="space-y-0.5">
-              <dt className="text-muted-foreground">Waktu</dt>
-              <dd className="font-medium">
-                <time dateTime={row.createdAt}>
-                  {d.toLocaleDateString("id-ID", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}{" "}
-                  {d.toLocaleTimeString("id-ID", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+          {/* Meta — DetailCard with DetailField pairs */}
+          <DetailCard columns={2} className="gap-0!">
+            <DetailField
+              label="Waktu"
+              value={
+                <time>
+                  {row.createdAt}
                 </time>
-              </dd>
-            </div>
-            <div className="space-y-0.5">
-              <dt className="text-muted-foreground">Pengguna</dt>
-              <dd className="font-medium">{row.userName}</dd>
-            </div>
-            <div className="space-y-0.5">
-              <dt className="text-muted-foreground">Aksi</dt>
-              <dd>
-                <Badge variant="secondary" aria-label={`Aksi: ${actionText}`}>
-                  {actionText}
-                </Badge>
-              </dd>
-            </div>
-            <div className="space-y-0.5">
-              <dt className="text-muted-foreground">Model</dt>
-              <dd className="font-medium">
-                {row.modelType}
-                {row.modelId ? ` #${row.modelId}` : ""}
-              </dd>
-            </div>
-            <div className="space-y-0.5 sm:col-span-2">
-              <dt className="text-muted-foreground">Deskripsi</dt>
-              <dd className="font-medium">{row.description}</dd>
-            </div>
-            <div className="space-y-0.5 sm:col-span-2">
-              <dt className="text-muted-foreground">Alamat IP</dt>
-              <dd className="font-mono text-xs">{row.ipAddress}</dd>
-            </div>
-          </dl>
+              }
+            />
+            <DetailField label="Pengguna" value={row.userName} />
+            <DetailField
+              label="Aksi"
+              value={<Badge variant="secondary">{actionText}</Badge>}
+            />
+            <DetailField
+              label="Model"
+              value={row.modelType + (row.modelId ? ` #${row.modelId}` : "")}
+            />
+            <DetailField label="Deskripsi" value={row.description} colSpan="full" />
+            <DetailField label="Alamat IP" value={row.ipAddress} colSpan="full" />
+          </DetailCard>
 
           {/* Diff */}
           <section aria-labelledby="activity-diff-heading">

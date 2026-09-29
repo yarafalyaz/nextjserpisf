@@ -19,7 +19,7 @@ export default async function LeaveBalancePage({
 }: {
   searchParams: Promise<{ tahun?: string; cari?: string }>
 }) {
-  await requirePermission("view_leave_requests")
+  const user = await requirePermission("view_leave_requests")
 
   const params = await searchParams
   const now = new Date()
@@ -59,6 +59,14 @@ export default async function LeaveBalancePage({
     { label: "Total Terpakai", value: `${totalUsed} hari`, hint: "Cuti tahunan disetujui + menunggu" },
     { label: "Total Sisa", value: `${totalRemaining} hari`, hint: "Hangus akhir tahun" },
   ]
+
+  // Hide Karyawan/Departemen columns for non-privileged users
+  const userPerms: string[] = (user as any).permissions ?? [];
+  const userRoles: string[] = user.roles ?? [];
+  const showEmployeeColumn =
+    userRoles.includes("super_admin") ||
+    userPerms.includes("edit_leave_requests") ||
+    userPerms.includes("delete_leave_requests");
 
   return (
     <div className="flex flex-col gap-6">
@@ -101,6 +109,7 @@ export default async function LeaveBalancePage({
 
       <LeaveBalanceTable
         data={balances}
+        showEmployeeColumn={showEmployeeColumn}
         toolbar={
           <AppSearchField
             placeholder="Cari nama / no. karyawan..."

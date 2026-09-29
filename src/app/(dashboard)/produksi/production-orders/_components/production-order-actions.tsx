@@ -6,6 +6,7 @@ import { CheckCircle2, PackageMinus, Flag } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
+import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -20,9 +21,11 @@ interface Props {
   status: string
   // items selectable for material issue (id + label)
   items: { id: number; label: string }[]
+  outputQty: number
+  outputTracksSerial: boolean
 }
 
-export function ProductionOrderActions({ orderId, status, items }: Props) {
+export function ProductionOrderActions({ orderId, status, items, outputQty, outputTracksSerial }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -30,6 +33,7 @@ export function ProductionOrderActions({ orderId, status, items }: Props) {
   const [issueOpen, setIssueOpen] = useState(false)
   const [issueItemId, setIssueItemId] = useState<string | null>(null)
   const [issueQty, setIssueQty] = useState("")
+  const [serialNumbersText, setSerialNumbersText] = useState("")
 
   function doConfirm() {
     startTransition(async () => {
@@ -42,8 +46,12 @@ export function ProductionOrderActions({ orderId, status, items }: Props) {
   }
 
   function doComplete() {
+    const serialNumbers = serialNumbersText
+      .split(/[\n,]+/)
+      .map((serial) => serial.trim())
+      .filter(Boolean)
     startTransition(async () => {
-      const res = await completeProductionOrder(orderId)
+      const res = await completeProductionOrder(orderId, serialNumbers)
       if (!res.success) return showError(res.error || "Gagal menyelesaikan")
       const variance = "variance" in res ? res.variance : 0
       showSuccess(`Selesai. Varians: ${variance.toLocaleString("id-ID")}`)
@@ -107,7 +115,23 @@ export function ProductionOrderActions({ orderId, status, items }: Props) {
         variant="accent"
         isPending={isPending}
         onConfirm={doComplete}
-      />
+      >
+        <div className="space-y-2">
+          <p>Hasil produksi akan masuk ke persediaan dan biaya dipindahkan dari WIP.</p>
+          {outputTracksSerial && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="productionSerials">Serial number ({outputQty} baris)</Label>
+              <Textarea
+                id="productionSerials"
+                value={serialNumbersText}
+                onChange={(event) => setSerialNumbersText(event.target.value)}
+                placeholder="Satu serial number per baris"
+                rows={Math.min(Math.max(outputQty, 3), 8)}
+              />
+            </div>
+          )}
+        </div>
+      </ConfirmDialog>
 
       {/* Issue-material mini dialog: custom content via children */}
       <ConfirmDialog

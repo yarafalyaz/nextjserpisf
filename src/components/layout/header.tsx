@@ -29,9 +29,10 @@ import {
 
 interface HeaderProps {
   companyLogo?: string
+  companyLogoDark?: string
 }
 
-export function Header({ companyLogo }: HeaderProps = {}) {
+export function Header({ companyLogo, companyLogoDark }: HeaderProps = {}) {
   const { data: session } = useSession()
 
   return (
@@ -47,8 +48,18 @@ export function Header({ companyLogo }: HeaderProps = {}) {
               width={28}
               height={28}
               style={{ width: "auto", height: "28px" }}
-              className="object-contain"
+              className="object-contain dark:hidden"
             />
+            {companyLogoDark && (
+              <SafeImage
+                src={companyLogoDark}
+                alt="Logo"
+                width={28}
+                height={28}
+                style={{ width: "auto", height: "28px" }}
+                className="object-contain hidden dark:block"
+              />
+            )}
           </div>
         )}
 
@@ -89,7 +100,7 @@ export function Header({ companyLogo }: HeaderProps = {}) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Menu pengguna">
                 <Avatar className="size-7 rounded-lg">
-                  <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
+                  <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "Pengguna"} />
                   <AvatarFallback className="rounded-lg text-xs">
                     {getInitials(session?.user?.name)}
                   </AvatarFallback>
@@ -100,7 +111,7 @@ export function Header({ companyLogo }: HeaderProps = {}) {
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="size-8 rounded-lg">
-                    <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "User"} />
+                    <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "Pengguna"} />
                     <AvatarFallback className="rounded-lg">
                       {getInitials(session?.user?.name)}
                     </AvatarFallback>

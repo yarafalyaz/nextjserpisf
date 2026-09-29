@@ -5,7 +5,8 @@ import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteInventoryTransfer } from "@/actions/inventory.actions"
+import { ProcessButton } from "@/components/ui/process-button"
+import { deleteInventoryTransfer, processInventoryTransfer, receiveInventoryTransfer } from "@/actions/inventory.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -38,6 +39,14 @@ export default async function InventoryTransferDetailPage({
 
   if (!transfer) notFound()
 
+  // Fetch item names dynamically
+  const itemIds = transfer.items.map((i) => i.itemId)
+  const items = await prisma.item.findMany({
+    where: { id: { in: itemIds } },
+    select: { id: true, name: true },
+  })
+  const itemNameMap = new Map(items.map((i) => [i.id, i.name]))
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -51,8 +60,28 @@ export default async function InventoryTransferDetailPage({
         badge={<StatusChip status={transfer.status} />}
         actions={
           <>
-            <Button href={`/inventaris/transfer/${transfer.id}/ubah`} variant="primary">Ubah</Button>
-            <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
+            {transfer.status === "draft" && (
+              <>
+                <ProcessButton
+                  id={transfer.id}
+                  action={processInventoryTransfer}
+                  successMessage="Transfer stok berhasil dikirim"
+                  label="Kirim"
+                />
+                <Button href={`/inventaris/transfer/${transfer.id}/ubah`} variant="secondary">Ubah</Button>
+                <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
+              </>
+            )}
+            {transfer.status === "processed" && (
+              <ProcessButton
+                id={transfer.id}
+                action={receiveInventoryTransfer}
+                confirmTitle="Terima transfer barang ini?"
+                confirmBody="Menerima transfer barang akan memperbarui stok di gudang tujuan."
+                successMessage="Transfer stok berhasil diterima"
+                label="Terima"
+              />
+            )}
             <BackButton href="/inventaris/transfer" />
           </>
         }
@@ -80,13 +109,13 @@ export default async function InventoryTransferDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Nama Barang</DetailTableTh>
                 <DetailTableTh align="right">Jml</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {transfer.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
                   </DetailTableRow>
                 ))}

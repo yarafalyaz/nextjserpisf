@@ -10,6 +10,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Metode Pengiriman" }
 
 export default async function ShippingMethodsPage({
@@ -43,9 +44,11 @@ export default async function ShippingMethodsPage({
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Metode Pengiriman" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Metode Pengiriman</h1>
-        <Link href="/master/metode-pengiriman/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-shipping-method-btn">
+        <CanCreate permission="create_shipping_methods">
+          <Link href="/master/metode-pengiriman/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-shipping-method-btn">
           + Tambah Metode Pengiriman
         </Link>
+        </CanCreate>
       </div>
 
       <ShippingMethodTable data={tableData} />

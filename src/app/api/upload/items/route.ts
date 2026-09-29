@@ -2,11 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/auth/permissions"
 import { uploadToStorage } from "@/lib/storage/storage"
 import { apiError } from "@/lib/api-response"
+import { assertCSRF } from "@/lib/security/csrf"
 
 export async function POST(req: NextRequest) {
   const canUpload = (await hasPermission("create_items")) || (await hasPermission("edit_items"))
   if (!canUpload) {
     return apiError("FORBIDDEN", "Forbidden")
+  }
+  try {
+    await assertCSRF()
+  } catch {
+    return apiError("FORBIDDEN", "Permintaan lintas situs ditolak")
   }
 
   const formData = await req.formData()

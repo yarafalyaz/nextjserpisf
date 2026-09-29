@@ -10,6 +10,7 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { TaskTable } from "./_components/task-table"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -67,9 +68,11 @@ export default async function TasksPage({
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Proyek",href:"/proyek"},{label:"Tugas"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tugas Proyek</h1>
-        <Link href="/proyek/tugas/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-task-btn">
-          <ListTodo size={16} /> Tambah Tugas
-        </Link>
+        <CanCreate permission="create_projects">
+          <Link href="/proyek/tugas/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-task-btn">
+            <ListTodo size={16} /> Tambah Tugas
+          </Link>
+        </CanCreate>
       </div>
 
       <TaskTable

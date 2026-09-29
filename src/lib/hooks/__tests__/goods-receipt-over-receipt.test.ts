@@ -80,6 +80,7 @@ function wireTx(opts: {
     itemSerialCreate: vi.fn().mockResolvedValue({}),
     itemSerialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
     systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
+    itemUpdate: vi.fn().mockResolvedValue({}),
   }
   const tx = {
     $queryRaw: spies.queryRaw,
@@ -89,7 +90,7 @@ function wireTx(opts: {
     purchaseOrderItem: { findMany: spies.poItemFindMany },
     goodsReceiptItem: { findMany: spies.grItemFindMany },
     purchaseOrder: { update: spies.poUpdate },
-    item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany },
+    item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany, update: spies.itemUpdate },
     uomConversion: { findMany: spies.uomConversionFindMany },
     itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
     itemSerial: { create: spies.itemSerialCreate, createMany: spies.itemSerialCreateMany },
@@ -420,6 +421,7 @@ describe("onGoodsReceiptVerified over-receipt guard with multi-UoM", () => {
       itemSerialCreate: vi.fn().mockResolvedValue({}),
       itemSerialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
       systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
+      itemUpdate: vi.fn().mockResolvedValue({}),
     }
     const tx = {
       $queryRaw: spies.queryRaw,
@@ -429,7 +431,7 @@ describe("onGoodsReceiptVerified over-receipt guard with multi-UoM", () => {
       purchaseOrderItem: { findMany: spies.poItemFindMany },
       goodsReceiptItem: { findMany: spies.grItemFindMany },
       purchaseOrder: { update: spies.poUpdate },
-      item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany },
+      item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany, update: spies.itemUpdate },
       uomConversion: { findMany: spies.uomConversionFindMany },
       itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
       itemSerial: { create: spies.itemSerialCreate, createMany: spies.itemSerialCreateMany },

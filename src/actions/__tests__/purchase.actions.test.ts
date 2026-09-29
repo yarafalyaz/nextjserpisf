@@ -40,6 +40,8 @@ const mocks = vi.hoisted(() => {
     vendor: buildModelMock(),
     item: buildModelMock(),
     transactionAttachment: buildModelMock(),
+    approvalWorkflow: buildModelMock(),
+    approval: buildModelMock(),
     
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)

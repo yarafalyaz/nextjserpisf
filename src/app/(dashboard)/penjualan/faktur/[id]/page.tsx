@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 export const dynamic = "force-dynamic"
 
 import type { Metadata } from "next"
@@ -50,7 +50,7 @@ export default async function InvoiceDetailPage({
 
   // Fetch available items for the editor (termasuk metadata UoM & serial)
   const availableItems = await prisma.item.findMany({
-    where: { isActive: true },
+    where: { isActive: true, deletedAt: null },
     select: {
       id: true,
       name: true,

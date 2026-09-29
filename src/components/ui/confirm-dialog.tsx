@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/shadcn/alert-dialog";
 import { cn } from "@/lib/utils";
 
-export type ConfirmVariant = "danger" | "warning" | "accent" | "success";
+export type ConfirmVariant = "danger" | "warning" | "accent" | "success" | "primary";
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -60,6 +60,12 @@ const variantConfig: Record<
     Icon: TriangleAlert,
   },
   accent: {
+    confirmClass:
+      "bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary/30",
+    mediaClass: "bg-primary/10 text-primary",
+    Icon: Info,
+  },
+  primary: {
     confirmClass:
       "bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary/30",
     mediaClass: "bg-primary/10 text-primary",

@@ -2,11 +2,18 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker } from "react-day-picker"
+import { DayPicker, type DropdownProps } from "react-day-picker"
 import { id as idLocale } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/shadcn/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/shadcn/select"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
@@ -16,16 +23,23 @@ function Calendar({
   showOutsideDays = true,
   ...props
 }: CalendarProps) {
+  const isDropdown = props.captionLayout === "dropdown" || props.captionLayout === "dropdown-months" || props.captionLayout === "dropdown-years";
+
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
       locale={idLocale}
+      captionLayout="dropdown"
+      fromYear={2000}
+      toYear={2099}
       className={cn("p-3", className)}
       classNames={{
         months: "relative flex flex-col sm:flex-row gap-2",
         month: "flex flex-col gap-4",
-        month_caption: "flex h-9 items-center justify-center",
-        caption_label: "text-sm font-medium",
+        month_caption: "flex h-9 items-center justify-center px-9",
+        caption_label: cn("text-sm font-medium", isDropdown && "hidden"),
+        dropdowns: "flex justify-center gap-1.5 items-center z-10",
+        caption_dropdowns: "flex justify-center gap-1.5 items-center z-10",
         nav: "absolute top-0 inset-x-0 flex items-center justify-between px-1 h-9",
         button_previous: cn(
           buttonVariants({ variant: "outline" }),
@@ -66,6 +80,30 @@ function Calendar({
           ) : (
             <ChevronRight className="size-4" {...chevronProps} />
           ),
+        Dropdown: ({ value, onChange, options, ...dropdownProps }: DropdownProps) => {
+          const selected = options?.find((option) => option.value === value)
+          const handleChange = (newValue: string) => {
+            const changeEvent = {
+              target: { value: newValue },
+            } as React.ChangeEvent<HTMLSelectElement>
+            onChange?.(changeEvent)
+          }
+
+          return (
+            <Select value={value?.toString()} onValueChange={handleChange}>
+              <SelectTrigger className="h-7 pr-1.5 focus:ring-0 text-xs min-w-[70px] bg-transparent border-none font-medium hover:bg-accent hover:text-accent-foreground [&_svg]:size-3">
+                <SelectValue>{selected?.label}</SelectValue>
+              </SelectTrigger>
+              <SelectContent position="popper" className="max-h-60 overflow-y-auto">
+                {options?.map((option, id: number) => (
+                  <SelectItem key={`${option.value}-${id}`} value={option.value?.toString() ?? ""}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        }
       }}
       {...props}
     />

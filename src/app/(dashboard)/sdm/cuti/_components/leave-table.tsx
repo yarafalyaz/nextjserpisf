@@ -1,6 +1,7 @@
 "use client"
 
 import { createColumnHelper } from "@tanstack/react-table"
+import { useMemo } from "react"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
@@ -19,10 +20,11 @@ interface LeaveRequest {
 }
 
 const leaveTypeLabels: Record<string, string> = {
-  Annual: "Cuti Tahunan",
-  Sick: "Cuti Sakit",
-  Unpaid: "Cuti Tanpa Gaji",
-  Maternity: "Cuti Melahirkan",
+  annual: "Cuti Tahunan",
+  sick: "Cuti Sakit",
+  personal: "Cuti Pribadi",
+  maternity: "Cuti Melahirkan",
+  unpaid: "Cuti Tidak Dibayar",
 }
 
 function calculateDays(startDate: Date | string, endDate: Date | string): number {
@@ -100,13 +102,22 @@ interface LeaveTableProps {
   data: LeaveRequest[]
   toolbar?: React.ReactNode
   filters?: React.ReactNode
+  showActions?: boolean
+  showEmployeeColumn?: boolean
 }
 
-export function LeaveTable({ data, toolbar, filters }: LeaveTableProps) {
+export function LeaveTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: LeaveTableProps) {
+  const visibleColumns = useMemo(() => {
+    let cols = columns
+    if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
+    if (!showEmployeeColumn) cols = cols.filter((c: any) => c.id !== "employeeName")
+    return cols
+  }, [showActions, showEmployeeColumn])
+
   return (
     <DataTable
       data={data}
-      columns={columns}
+      columns={visibleColumns}
       ariaLabel="Daftar cuti"
       pageSize={20}
       selectable={true}

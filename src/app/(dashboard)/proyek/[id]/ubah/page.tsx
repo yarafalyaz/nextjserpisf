@@ -15,12 +15,12 @@ export default async function EditProjectPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_projects")
+  await requirePermission("edit_projects")
 
   const { id } = await params
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()
-  const [project, customersRaw, customerVehiclesRaw] = await Promise.all([
+  const [project, customersRaw, customerVehiclesRaw, costCenters] = await Promise.all([
     prisma.project.findUnique({ where: { id: numId } }),
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
@@ -31,6 +31,11 @@ export default async function EditProjectPage({
       where: { isActive: true },
       include: { vehicle: { include: { variant: { include: { model: { include: { brand: true } } } } } } },
       orderBy: { licensePlate: "asc" },
+    }),
+    prisma.costCenter.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true },
+      orderBy: { code: "asc" },
     }),
   ])
 
@@ -73,8 +78,10 @@ export default async function EditProjectPage({
       <ProjectForm
         customers={customers}
         customerVehicles={customerVehicles}
+        costCenters={costCenters}
         project={{
           ...project,
+          costCenterId: project.costCenterId,
           startDate: project.startDate?.toISOString().split("T")[0] ?? null,
           endDate: project.endDate?.toISOString().split("T")[0] ?? null,
         }}

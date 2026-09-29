@@ -56,13 +56,22 @@ describe("customerSchema", () => {
 })
 
 describe("itemSchema", () => {
+  const baseItem = {
+    image: "item.jpg",
+    categoryId: 1,
+    brandId: 1,
+    vendorId: 1,
+    defaultWarehouseId: 1,
+    defaultRackId: 1,
+  }
+
   it("accepts valid item", () => {
-    const result = itemSchema.safeParse({ name: "Oli Mesin", cost: 50000, price: 75000 })
+    const result = itemSchema.safeParse({ ...baseItem, name: "Oli Mesin", cost: 50000, price: 75000 })
     expect(result.success).toBe(true)
   })
 
   it("rejects price lower than cost", () => {
-    const result = itemSchema.safeParse({ name: "Oli", cost: 100000, price: 50000 })
+    const result = itemSchema.safeParse({ ...baseItem, name: "Oli", cost: 100000, price: 50000 })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues[0].path).toContain("price")
@@ -70,12 +79,12 @@ describe("itemSchema", () => {
   })
 
   it("accepts price equal to cost", () => {
-    const result = itemSchema.safeParse({ name: "Item", cost: 10000, price: 10000 })
+    const result = itemSchema.safeParse({ ...baseItem, name: "Item", cost: 10000, price: 10000 })
     expect(result.success).toBe(true)
   })
 
   it("rejects negative cost", () => {
-    const result = itemSchema.safeParse({ name: "Item", cost: -1, price: 0 })
+    const result = itemSchema.safeParse({ ...baseItem, name: "Item", cost: -1, price: 0 })
     expect(result.success).toBe(false)
   })
 })

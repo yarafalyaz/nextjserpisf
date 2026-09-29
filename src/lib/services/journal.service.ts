@@ -7,6 +7,7 @@ interface JournalEntryInput {
   debit: number
   credit: number
   memo?: string
+  costCenterId?: number | null
 }
 
 interface CreateJournalInput {
@@ -60,8 +61,7 @@ export class JournalService {
       }
     }
 
-    return await this.prisma.$transaction(
-      async (tx) => {
+    const persist = async (tx: Prisma.TransactionClient) => {
         // Validate all account IDs exist
         const accountIds = [...new Set(input.entries.map((e) => e.accountId))]
         const accounts = await tx.account.findMany({
@@ -103,11 +103,18 @@ export class JournalService {
         })
 
         return { id: journal.id, journalNumber: journal.journalNumber }
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      }
-    )
+    }
+
+    // Stock hooks pass their outer transaction client here. Starting another
+    // Prisma transaction from that client is unsupported and would either fail
+    // at runtime or detach the journal from the stock update's atomic commit.
+    const rootClient = this.prisma as PrismaClient
+    if (typeof rootClient.$transaction !== "function") {
+      return persist(this.prisma as Prisma.TransactionClient)
+    }
+    return rootClient.$transaction(persist, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    })
   }
 
   /**
@@ -136,6 +143,7 @@ export class JournalService {
           debit: Number(e.credit),
           credit: Number(e.debit),
           memo: `Reversal: ${e.memo ?? ''}`.trim(),
+          costCenterId: e.costCenterId ?? null,
         }))
 
         // Create reversal journal

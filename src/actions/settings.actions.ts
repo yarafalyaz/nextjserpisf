@@ -118,6 +118,7 @@ export async function updateSystemSettings(formData: FormData) {
       companyWebsite: strNull("companyWebsite"),
       companyTaxId: strNull("companyTaxId"),
       companyLogo: strNull("companyLogo"),
+      companyLogoDark: strNull("companyLogoDark"),
       companyLatitude: decimalNull("companyLatitude"),
       companyLongitude: decimalNull("companyLongitude"),
 
@@ -131,6 +132,7 @@ export async function updateSystemSettings(formData: FormData) {
       periodLockDate: dateNull("periodLockDate"),
       showIsActiveField: bool("showIsActiveField"),
       showTaxId: bool("showTaxId"),
+      defaultProjectStages: strDefault("defaultProjectStages", "Persiapan, Pengerjaan, Quality Check, Selesai"),
 
       // Auto-Code Prefixes
       itemCodePrefix: strNull("itemCodePrefix"),

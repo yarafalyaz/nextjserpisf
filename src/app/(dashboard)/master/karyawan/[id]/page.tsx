@@ -40,7 +40,6 @@ export default async function EmployeeDetailPage({
           roles: true,
         },
       },
-      attendances: { take: 10, orderBy: { date: "desc" } },
       leaveRequests: { take: 10, orderBy: { createdAt: "desc" } },
       overtimeRequests: { take: 10, orderBy: { date: "desc" } },
       payrolls: { take: 12, orderBy: { createdAt: "desc" } },
@@ -148,42 +147,6 @@ export default async function EmployeeDetailPage({
                   </DetailSection>
                 )}
               </>
-            ),
-          },
-          {
-            id: "attendance",
-            label: `Attendance (${employee.attendances.length})`,
-            content: (
-              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Kehadiran</h2>
-                  <Link href={`/sdm/absensi?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
-                </div>
-                <div className="p-4 px-5">
-                  {employee.attendances.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada data absensi</p>
-                  ) : (
-                    <DetailTable>
-                      <DetailTableHead>
-                        <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>Jam Masuk</DetailTableTh>
-                        <DetailTableTh>Jam Keluar</DetailTableTh>
-                        <DetailTableTh>Status</DetailTableTh>
-                      </DetailTableHead>
-                      <DetailTableBody>
-                        {employee.attendances.map((a) => (
-                          <DetailTableRow key={a.id}>
-                            <DetailTableTd>{formatDate(a.date)}</DetailTableTd>
-                            <DetailTableTd>{a.checkIn ? new Date(a.checkIn).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}</DetailTableTd>
-                            <DetailTableTd>{a.checkOut ? new Date(a.checkOut).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "-"}</DetailTableTd>
-                            <DetailTableTd><StatusChip status={a.status} /></DetailTableTd>
-                          </DetailTableRow>
-                        ))}
-                      </DetailTableBody>
-                    </DetailTable>
-                  )}
-                </div>
-              </div>
             ),
           },
           {

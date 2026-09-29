@@ -63,6 +63,9 @@ export async function ReportLetterhead({
         </div>
       </div>
 
+      {/* Hidden div for PDF export to pick up the period label */}
+      <div data-report-period={periodLabel} hidden />
+
       {/* Statement title block */}
       <div className="report-letterhead-title-block">
         <h1 className="report-letterhead-title">{title}</h1>

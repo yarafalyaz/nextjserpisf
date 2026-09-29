@@ -9,7 +9,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Apresiasi" }
 
 export default async function CreateAppreciationPage() {
-  await requirePermission("view_appreciations")
+  await requirePermission("create_appreciations")
 
   const employees = await prisma.employee.findMany({
     where: { isActive: true, deletedAt: null },

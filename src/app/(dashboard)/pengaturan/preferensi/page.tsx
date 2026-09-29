@@ -64,6 +64,22 @@ export default async function PreferencesPage() {
             <Field label="Tanggal Kunci Periode" value={settings?.periodLockDate ? settings.periodLockDate.toISOString().split("T")[0] : null} />
             <BoolBadge label="Tampilkan Is Active" value={settings?.showIsActiveField !== false} />
             <BoolBadge label="Tampilkan NPWP" value={settings?.showTaxId !== false} />
+            <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-3 border-t border-default/50 pt-4 mt-2">
+              <span className="text-xs text-muted-foreground">Tahapan Proyek Default</span>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {(settings?.defaultProjectStages || "Persiapan, Pengerjaan, Quality Check, Selesai")
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .map((stage, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-2.5 py-1 rounded-md">
+                      <span className="text-[10px] text-primary/60 font-black">{idx + 1}</span>
+                      {stage}
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

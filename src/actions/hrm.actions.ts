@@ -19,14 +19,10 @@ import {
 } from "@/lib/utils/safe-parse";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
-  attendanceSchema,
   leaveRequestSchema,
   overtimeRequestSchema,
   employeeLoanSchema,
   timesheetSchema,
-  workScheduleSchema,
-  holidaySchema,
-  departmentHolidaySchema,
   appreciationSchema,
   payrollSchema,
 } from "@/lib/validations/hrm.schemas";
@@ -37,10 +33,12 @@ import {
   countLeaveWorkingDays,
   QUOTA_LEAVE_TYPES,
 } from "@/lib/services/leave-quota.service";
-import { syncNationalHolidays as syncNationalHolidaysService } from "@/lib/services/holiday-sync.service";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, onEmployeeLoanDisbursed, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
+import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
+import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
+
 
 function getWibNow(now = new Date()) {
   const wibOffset = 7 * 60 * 60 * 1000;
@@ -77,335 +75,11 @@ function breakOverlapMinutes(
   return Math.max(0, Math.min(outMin, be) - Math.max(inMin, bs));
 }
 
-async function resolveWorkSchedule(
-  employeeId: number | null | undefined,
-  departmentId: number | null | undefined,
-  dayOfWeek: number,
-) {
-  const schedules = await prisma.workSchedule.findMany({
-    where: { isActive: true },
-    include: {
-      employees: { select: { id: true } },
-      departments: { select: { id: true } },
-    },
-  });
-  const onDay = schedules.filter((s) =>
-    s.workDays
-      .split(",")
-      .map((d) => Number(d.trim()))
-      .includes(dayOfWeek),
-  );
-  return (
-    onDay.find(
-      (s) => employeeId != null && s.employees.some((e) => e.id === employeeId),
-    ) ??
-    onDay.find(
-      (s) =>
-        s.employees.length === 0 &&
-        departmentId != null &&
-        s.departments.some((d) => d.id === departmentId),
-    ) ??
-    onDay.find((s) => s.employees.length === 0 && s.departments.length === 0) ??
-    null
-  );
-}
-
-// ==================== ATTENDANCE ACTIONS ====================
-
-export async function checkIn(
-  employeeId: number,
-  latitude?: number,
-  longitude?: number,
-) {
-  await requirePermission("create_attendance");
-
-  try {
-    const now = new Date();
-    const wibNow = getWibNow(now);
-    const today = getWibDateOnly(now);
-
-    // Check if already checked in today
-    const existing = await prisma.attendance.findFirst({
-      where: { employeeId, date: today },
-    });
-    if (existing) {
-      throw new Error("Sudah check-in hari ini");
-    }
-
-    const employee = await prisma.employee.findUnique({
-      where: { id: employeeId },
-      select: { departmentId: true },
-    });
-    if (!employee) throw new Error("Karyawan tidak ditemukan");
-
-    // Hari libur (Minggu / libur nasional / libur departemen) → kerja dicatat
-    // sebagai lembur dan otomatis jadi pengajuan lembur saat check-out.
-    const dayOfWeek = wibNow.getUTCDay();
-    const holiday = await prisma.holiday.findFirst({ where: { date: today } });
-    const deptHoliday = await prisma.departmentHoliday.findFirst({
-      where: { departmentId: employee.departmentId ?? undefined, date: today },
-    });
-    const isOvertimeDay = dayOfWeek === 0 || !!holiday || !!deptHoliday;
-
-    // Guard: approved leave check
-    const approvedLeave = await prisma.leaveRequest.findFirst({
-      where: {
-        employeeId,
-        status: "approved",
-        startDate: { lte: today },
-        endDate: { gte: today },
-      },
-    });
-    if (approvedLeave) {
-      throw new Error("Anda sedang dalam masa cuti. Tidak dapat check-in.");
-    }
-
-    // Atomic create — if two requests race past the findFirst above, the second
-    // hits the @@unique([employeeId, date]) constraint and gets P2002; translate
-    // it to the same friendly message so both callers get a clean error.
-
-    const schedule = await resolveWorkSchedule(
-      employeeId,
-      employee.departmentId,
-      dayOfWeek,
-    );
-    const startTime = schedule?.startTime ?? "08:00";
-    const tolerance = schedule?.lateToleranceMinutes ?? 0;
-    const nowMinutes = wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes();
-    const startMinutes = toMinutes(startTime);
-    const deadlineMinutes = startMinutes + tolerance;
-    const isLate = !isOvertimeDay && nowMinutes > deadlineMinutes;
-    const lateMinutes = isLate ? nowMinutes - deadlineMinutes : 0;
-
-    const attendance = await prisma.attendance.create({
-      data: {
-        employeeId,
-        date: today,
-        checkIn: now,
-        status: isOvertimeDay ? "overtime" : isLate ? "late" : "present",
-        lateMinutes,
-        checkInLatitude: latitude ?? null,
-        checkInLongitude: longitude ?? null,
-      },
-    });
-
-    await logActivity(
-      "checkin",
-      "Attendance",
-      attendance.id,
-      "Check-in absensi",
-    );
-    revalidatePath("/sdm/absensi");
-    return { success: true, id: attendance.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    // Atomic create race: if two requests slip past the findFirst above, the
-    // second hits @@unique([employeeId, date]) → P2002. Surface the same friendly
-    // message as the pre-check, but as a structured error (not a throw) so the
-    // caller gets a consistent { success, error } shape.
-    if (
-      typeof e === "object" &&
-      e !== null &&
-      "code" in e &&
-      (e as { code: string }).code === "P2002"
-    ) {
-      return { success: false, error: "Sudah check-in hari ini" };
-    }
-    console.error("[checkIn]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function checkOut(
-  employeeId: number,
-  latitude?: number,
-  longitude?: number,
-) {
-  try {
-    await requirePermission("edit_attendance");
-
-    const now = new Date();
-    const wibNow = getWibNow(now);
-
-    // Find the most recent open attendance for this employee regardless of date
-    // (handles overnight shifts that cross midnight).
-    const attendance = await prisma.attendance.findFirst({
-      where: { employeeId, checkOut: null },
-      orderBy: { date: "desc" },
-    });
-    if (!attendance) {
-      throw new Error("Belum check-in atau sudah check-out");
-    }
-
-    const employee = await prisma.employee.findUnique({
-      where: { id: employeeId },
-      select: { departmentId: true },
-    });
-    const dayOfWeek = wibNow.getUTCDay();
-    const schedule = await resolveWorkSchedule(
-      employeeId,
-      employee?.departmentId,
-      dayOfWeek,
-    );
-    const endTime = schedule?.endTime ?? "17:00";
-    const endMinutes = toMinutes(endTime);
-    const nowMinutes = wibNow.getUTCHours() * 60 + wibNow.getUTCMinutes();
-    const isOvertimeDay = attendance.status === "overtime";
-    const isHalfDay = !isOvertimeDay && nowMinutes < endMinutes;
-
-    // Jam kerja di hari libur → otomatis jadi pengajuan lembur (menunggu persetujuan).
-    let overtimeMinutes: number | null = null;
-    let overtimeHours = 0;
-    if (isOvertimeDay && attendance.checkIn) {
-      const grossMinutes = Math.max(
-        0,
-        Math.round((now.getTime() - attendance.checkIn.getTime()) / 60000),
-      );
-      // Potong jam istirahat (ISOMA) yang beririsan dengan jam kerja.
-      const settings = await getSystemSettings();
-      const inWib = getWibNow(attendance.checkIn);
-      const inMin = inWib.getUTCHours() * 60 + inWib.getUTCMinutes();
-      const overlap = breakOverlapMinutes(
-        inMin,
-        nowMinutes,
-        settings.restBreakStart,
-        settings.restBreakEnd,
-      );
-      overtimeMinutes = Math.max(0, grossMinutes - overlap);
-      overtimeHours = Math.round((overtimeMinutes / 60) * 100) / 100;
-    }
-
-    // Atomically claim the check-out: only the request that flips checkOut from
-    // null wins. Serializes concurrent double check-outs so the overtime request
-    // below is created at most once (mirrors selfCheckOut).
-    const claim = await prisma.attendance.updateMany({
-      where: { id: attendance.id, checkOut: null },
-      data: {
-        checkOut: now,
-        checkOutLatitude: latitude ?? null,
-        checkOutLongitude: longitude ?? null,
-        overtimeMinutes: overtimeMinutes ?? attendance.overtimeMinutes,
-        status: isHalfDay ? "half_day" : attendance.status,
-      },
-    });
-    if (claim.count === 0) {
-      throw new Error("Sudah check-out");
-    }
-
-    // Only the winner of the claim reaches here → overtime created exactly once.
-    if (isOvertimeDay && overtimeHours > 0) {
-      await prisma.overtimeRequest.create({
-        data: {
-          employeeId,
-          date: attendance.date,
-          hours: overtimeHours,
-          totalHours: overtimeHours,
-          reason: "Otomatis dari absensi hari libur",
-          status: "pending",
-        },
-      });
-    }
-
-    await logActivity(
-      "checkout",
-      "Attendance",
-      attendance.id,
-      "Check-out absensi",
-    );
-    revalidatePath("/sdm/absensi");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[checkOut]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function createAttendance(formData: FormData) {
-  try {
-    await requirePermission("create_attendance");
-
-    const parsed = parseFormData(attendanceSchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const attendance = await prisma.attendance.create({
-      data: {
-        employeeId: v.employeeId,
-        date: new Date(v.date),
-        checkIn: v.checkIn ? new Date(v.checkIn) : null,
-        checkOut: v.checkOut ? new Date(v.checkOut) : null,
-        status: v.status,
-        checkInLatitude: v.checkInLatitude ?? null,
-        checkInLongitude: v.checkInLongitude ?? null,
-        checkOutLatitude: v.checkOutLatitude ?? null,
-        checkOutLongitude: v.checkOutLongitude ?? null,
-        overtimeMinutes: v.overtimeMinutes ?? null,
-        overtimeApproved: v.overtimeApproved ?? false,
-      },
-    });
-
-    await logActivity("create", "Attendance", attendance.id, "Membuat absensi");
-    revalidatePath("/sdm/absensi");
-    return { success: true, id: attendance.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createAttendance]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function updateAttendance(id: number, formData: FormData) {
-  try {
-    await requirePermission("edit_attendance");
-
-    // Validation parity with createAttendance: route through the same Zod schema
-    // so blank employeeId, empty date, malformed coordinates, or an arbitrary
-    // status string are rejected on the edit path, not just on create. The
-    // previous hand-parsed formData left these holes open.
-    const parsed = parseFormData(attendanceSchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const attendance = await prisma.attendance.update({
-      where: { id },
-      data: {
-        employeeId: v.employeeId,
-        date: new Date(v.date),
-        checkIn: v.checkIn ? new Date(v.checkIn) : null,
-        checkOut: v.checkOut ? new Date(v.checkOut) : null,
-        status: v.status,
-        checkInLatitude: v.checkInLatitude ?? null,
-        checkInLongitude: v.checkInLongitude ?? null,
-        checkOutLatitude: v.checkOutLatitude ?? null,
-        checkOutLongitude: v.checkOutLongitude ?? null,
-        overtimeMinutes: v.overtimeMinutes ?? null,
-        overtimeApproved: v.overtimeApproved ?? false,
-      },
-    });
-
-    await logActivity(
-      "update",
-      "Attendance",
-      attendance.id,
-      "Memperbarui absensi",
-    );
-    revalidatePath("/sdm/absensi");
-    return { success: true, id: attendance.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateAttendance]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
 // ==================== LEAVE REQUEST ACTIONS ====================
 
 export async function createLeaveRequest(formData: FormData) {
   try {
-    await requirePermission("create_leave_requests");
+    const user = await requirePermission("create_leave_requests");
 
     const parsed = parseFormData(leaveRequestSchema, formData);
     if (!parsed.success)
@@ -413,6 +87,19 @@ export async function createLeaveRequest(formData: FormData) {
     const v = parsed.data;
 
     const employeeId = v.employeeId;
+
+    const scope = await getHrScope(user);
+    if (scope.kind === "self" && scope.employeeId !== employeeId) {
+      throw new Error("Anda hanya diperbolehkan membuat pengajuan cuti untuk diri sendiri");
+    } else if (scope.kind === "department") {
+      const targetEmployee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { departmentId: true }
+      });
+      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan membuat pengajuan cuti untuk karyawan se-departemen");
+      }
+    }
     const startDate = new Date(v.startDate);
     const endDate = new Date(v.endDate);
 
@@ -427,9 +114,13 @@ export async function createLeaveRequest(formData: FormData) {
     // Guard: overlap — no pending/approved leave can overlap [startDate, endDate].
     // Wrap the overlap check + insert in a single $transaction. Without this,
     // two concurrent submissions for the same employee / same week both pass
-    // the check (TOCTOU) and create duplicate pending leaves — the schedule
-    // becomes ambiguous when one is approved and the other is blocked.
+    // the check (TOCTOU) and create duplicate pending leaves. A transaction
+    // alone does not serialize these reads at the default isolation level, so
+    // lock the employee row before checking overlap/quota. Requests for the
+    // same employee now proceed one at a time.
     const leave = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+
       const overlap = await tx.leaveRequest.findFirst({
         where: {
           employeeId,
@@ -486,7 +177,7 @@ export async function createLeaveRequest(formData: FormData) {
         }
       }
 
-      return await tx.leaveRequest.create({
+      const created = await tx.leaveRequest.create({
         data: {
           employeeId,
           type: v.type,
@@ -496,6 +187,13 @@ export async function createLeaveRequest(formData: FormData) {
           status: "pending",
         },
       });
+      await requestApprovalIfConfigured(
+        "LeaveRequest",
+        created.id,
+        Number(user.id),
+        tx,
+      );
+      return created;
     });
 
     await logActivity(
@@ -516,6 +214,7 @@ export async function createLeaveRequest(formData: FormData) {
 export async function approveLeave(leaveId: number) {
   try {
     const user = await requirePermission("approve_leave_requests");
+    await assertApproved("LeaveRequest", leaveId);
 
     const leave = await prisma.leaveRequest.findUniqueOrThrow({
       where: { id: leaveId },
@@ -527,10 +226,13 @@ export async function approveLeave(leaveId: number) {
       );
     }
 
-    await prisma.leaveRequest.update({
-      where: { id: leaveId },
+    const claim = await prisma.leaveRequest.updateMany({
+      where: { id: leaveId, status: "pending" },
       data: { status: "approved", approvedBy: Number(user.id) },
     });
+    if (claim.count === 0) {
+      throw new Error("Leave request sudah diproses atau status tidak valid");
+    }
 
     await logActivity(
       "approve",
@@ -550,6 +252,7 @@ export async function approveLeave(leaveId: number) {
 export async function rejectLeave(leaveId: number, reason?: string) {
   try {
     const user = await requirePermission("edit_leave_requests");
+    await assertApproved("LeaveRequest", leaveId);
 
     const leave = await prisma.leaveRequest.findUniqueOrThrow({
       where: { id: leaveId },
@@ -561,14 +264,17 @@ export async function rejectLeave(leaveId: number, reason?: string) {
       );
     }
 
-    await prisma.leaveRequest.update({
-      where: { id: leaveId },
+    const claim = await prisma.leaveRequest.updateMany({
+      where: { id: leaveId, status: "pending" },
       data: {
         status: "rejected",
         approvedBy: Number(user.id),
         rejectionReason: reason,
       },
     });
+    if (claim.count === 0) {
+      throw new Error("Pengajuan cuti sudah diproses atau status tidak valid");
+    }
 
     await logActivity(
       "reject",
@@ -589,25 +295,36 @@ export async function rejectLeave(leaveId: number, reason?: string) {
 
 export async function createOvertimeRequest(formData: FormData) {
   try {
-    await requirePermission("create_overtime_requests");
+    const user = await requirePermission("create_overtime_requests");
+    const scope = await getHrScope(user);
 
     const parsed = parseFormData(overtimeRequestSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
+    await assertHrEmployeeAccess(scope, v.employeeId);
 
-    const overtime = await prisma.overtimeRequest.create({
-      data: {
-        employeeId: v.employeeId,
-        projectId: v.projectId ?? null,
-        date: new Date(v.date),
-        hours: v.hours,
-        totalHours: v.totalHours ?? null,
-        mealHours: v.mealHours ?? null,
-        billableHours: v.billableHours ?? null,
-        reason: v.reason ?? null,
-        status: "pending",
-      },
+    const overtime = await prisma.$transaction(async (tx) => {
+      const created = await tx.overtimeRequest.create({
+        data: {
+          employeeId: v.employeeId,
+          projectId: v.projectId ?? null,
+          date: new Date(v.date),
+          hours: v.hours,
+          totalHours: v.totalHours ?? null,
+          mealHours: v.mealHours ?? null,
+          billableHours: v.billableHours ?? null,
+          reason: v.reason ?? null,
+          status: "pending",
+        },
+      });
+      await requestApprovalIfConfigured(
+        "OvertimeRequest",
+        created.id,
+        Number(user.id),
+        tx,
+      );
+      return created;
     });
 
     await logActivity(
@@ -628,6 +345,7 @@ export async function createOvertimeRequest(formData: FormData) {
 export async function approveOvertime(overtimeId: number) {
   try {
     const user = await requirePermission("approve_overtime_requests");
+    await assertApproved("OvertimeRequest", overtimeId);
 
     const ot = await prisma.overtimeRequest.findUniqueOrThrow({
       where: { id: overtimeId },
@@ -652,14 +370,17 @@ export async function approveOvertime(overtimeId: number) {
       hours * baseSalary * multiplier * coefficient,
     );
 
-    await prisma.overtimeRequest.update({
-      where: { id: overtimeId },
+    const claim = await prisma.overtimeRequest.updateMany({
+      where: { id: overtimeId, status: "pending" },
       data: {
         status: "approved",
         approvedBy: Number(user.id),
         calculatedValue,
       },
     });
+    if (claim.count === 0) {
+      throw new Error("Pengajuan lembur sudah diproses atau status tidak valid");
+    }
 
     await logActivity(
       "approve",
@@ -708,30 +429,25 @@ interface PayrollEstimationResult {
 
 type PayrollSessionUser = { id: number | string; roles: readonly string[] };
 
+function assertPayrollDateRange(startDateStr: string, endDateStr: string): void {
+  const startDate = new Date(startDateStr);
+  const endDate = new Date(endDateStr);
+  const rangeMs = endDate.getTime() - startDate.getTime();
+  if (!Number.isFinite(rangeMs) || rangeMs < 0) {
+    throw new Error("Rentang tanggal penggajian tidak valid");
+  }
+  if (rangeMs > 90 * 24 * 60 * 60 * 1000) {
+    throw new Error("Rentang tanggal penggajian maksimal 90 hari");
+  }
+}
+
 async function computePayrollEstimation(
   employeeId: number,
   startDateStr: string,
   endDateStr: string,
-  sessionUser: PayrollSessionUser,
 ): Promise<PayrollEstimationResult> {
   const startDate = new Date(startDateStr);
   const endDate = new Date(endDateStr);
-
-  // IDOR guard — scoped user sessions (non-admin) can only view their own
-  // payroll estimation. Super-admin and HR admin retain full access for
-  // organisational reporting purposes.
-  const isAdmin =
-    sessionUser.roles.includes("super_admin") ||
-    sessionUser.roles.includes("hr_admin");
-  if (!isAdmin) {
-    const employee = await prisma.employee.findFirst({
-      where: { userId: Number(sessionUser.id) },
-      select: { id: true },
-    });
-    if (!employee || employee.id !== Number(employeeId)) {
-      throw new Error("Anda hanya bisa melihat estimasi gaji Anda sendiri");
-    }
-  }
 
   // Queries 1–5 are mutually independent (each keyed only on employeeId and the
   // date range), so fire them in a single Promise.all instead of five sequential
@@ -838,11 +554,19 @@ export async function getPayrollEstimation(
 ) {
   try {
     const sessionUser = await requirePermission("view_payroll");
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0) {
+      throw new Error("Karyawan tidak valid");
+    }
+    assertPayrollDateRange(startDateStr, endDateStr);
+    const scope = await getHrScope({
+      id: String(sessionUser.id),
+      roles: Array.isArray(sessionUser.roles) ? [...sessionUser.roles] : [],
+    });
+    await assertHrEmployeeAccess(scope, employeeId);
     return await computePayrollEstimation(
       employeeId,
       startDateStr,
       endDateStr,
-      sessionUser,
     );
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -912,12 +636,8 @@ async function computeBulkPayrollEstimations(
   rangeStart.setHours(0, 0, 0, 0);
   const rangeEnd = new Date(endDate);
   rangeEnd.setHours(23, 59, 59, 999);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  const evalEnd = rangeEnd < today ? rangeEnd : today;
 
   // Fan-out: fetch EVERYTHING the per-employee estimator needs, once.
-  // Replaces 5×N round-trips with 9.
   const [
     settings,
     workSchedules,
@@ -974,12 +694,7 @@ async function computeBulkPayrollEstimations(
         employeeId: { in: employeeIds },
         date: { gte: rangeStart, lte: rangeEnd },
       },
-      select: {
-        employeeId: true,
-        date: true,
-        checkIn: true,
-        lateMinutes: true,
-      },
+      select: { employeeId: true, date: true, checkIn: true, lateMinutes: true },
     }),
     prisma.leaveRequest.findMany({
       where: {
@@ -991,12 +706,6 @@ async function computeBulkPayrollEstimations(
       select: { employeeId: true, startDate: true, endDate: true },
     }),
   ]);
-
-  const rawPerMinute = Number(settings.latePenaltyPerMinute);
-  const penaltyPerMinute =
-    Number.isFinite(rawPerMinute) && rawPerMinute > 0 ? rawPerMinute : 0;
-  const rawMax = Number(settings.maxLatePenaltyMinutes);
-  const maxMinutes = Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null;
 
   // Index per-employee slices in O(N)
   const overtimeMap = new Map<number, typeof overtimes>();
@@ -1012,27 +721,30 @@ async function computeBulkPayrollEstimations(
     appreciationMap.set(ap.employeeId, arr);
   }
   const attendanceMap = new Map<number, typeof attendances>();
-  for (const at of attendances) {
-    const arr = attendanceMap.get(at.employeeId) ?? [];
-    arr.push(at);
-    attendanceMap.set(at.employeeId, arr);
+  for (const attendance of attendances) {
+    const arr = attendanceMap.get(attendance.employeeId) ?? [];
+    arr.push(attendance);
+    attendanceMap.set(attendance.employeeId, arr);
   }
   const leaveMap = new Map<number, typeof leaves>();
-  for (const lv of leaves) {
-    const arr = leaveMap.get(lv.employeeId) ?? [];
-    arr.push(lv);
-    leaveMap.set(lv.employeeId, arr);
+  for (const leave of leaves) {
+    const arr = leaveMap.get(leave.employeeId) ?? [];
+    arr.push(leave);
+    leaveMap.set(leave.employeeId, arr);
   }
-
-  const publicHolidaySet = new Set(
-    holidays.map((h) => dateKey(new Date(h.date))),
-  );
-  const deptHolidaySet = new Map<number, Set<string>>();
-  for (const dh of departmentHolidays) {
-    if (dh.departmentId == null) continue;
-    const set = deptHolidaySet.get(dh.departmentId) ?? new Set<string>();
-    set.add(dateKey(new Date(dh.date)));
-    deptHolidaySet.set(dh.departmentId, set);
+  const rawPerMinute = Number(settings.latePenaltyPerMinute);
+  const penaltyPerMinute = Number.isFinite(rawPerMinute) && rawPerMinute > 0 ? rawPerMinute : 0;
+  const rawMax = Number(settings.maxLatePenaltyMinutes);
+  const maxMinutes = Number.isFinite(rawMax) && rawMax > 0 ? rawMax : null;
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const evalEnd = rangeEnd < today ? rangeEnd : today;
+  const publicHolidaySet = new Set(holidays.map((holiday) => dateKey(holiday.date)));
+  const departmentHolidaySet = new Map<number, Set<string>>();
+  for (const holiday of departmentHolidays) {
+    const dates = departmentHolidaySet.get(holiday.departmentId) ?? new Set<string>();
+    dates.add(dateKey(holiday.date));
+    departmentHolidaySet.set(holiday.departmentId, dates);
   }
 
   for (const employee of employees) {
@@ -1066,94 +778,79 @@ async function computeBulkPayrollEstimations(
       0,
     );
 
-    // 4. Late penalty (mirrors calculateLatePenalty, in-memory).
-    const empAttendances = attendanceMap.get(employee.id) ?? [];
-    let totalLateMinutes = 0;
-    let totalPenalty = 0;
-    for (const attendance of empAttendances) {
-      let lateMinutes = Number(attendance.lateMinutes ?? 0);
-      if (lateMinutes <= 0) continue;
-      if (maxMinutes !== null && lateMinutes > maxMinutes)
-        lateMinutes = maxMinutes;
-      totalLateMinutes += lateMinutes;
-      totalPenalty += lateMinutes * penaltyPerMinute;
+    // 4. Late penalty from the minutes recorded at check-in.
+    const employeeAttendances = attendanceMap.get(employee.id) ?? [];
+    let lateMinutes = 0;
+    let lateDeduction = 0;
+    for (const attendance of employeeAttendances) {
+      let minutes = Number(attendance.lateMinutes ?? 0);
+      if (minutes <= 0) continue;
+      if (maxMinutes != null) minutes = Math.min(minutes, maxMinutes);
+      lateMinutes += minutes;
+      lateDeduction += minutes * penaltyPerMinute;
     }
 
-    // 5. Attendance summary (mirrors calculateAttendanceSummary, in-memory).
-    const employeeSchedule = workSchedules.find((s) =>
-      s.employees.some((e) => e.id === employee.id),
+    // 5. Attendance summary, using the same employee/department/global schedule precedence.
+    const employeeSchedule = workSchedules.find((schedule) =>
+      schedule.employees.some((assigned) => assigned.id === employee.id),
     );
-    const deptSchedule = workSchedules.find(
-      (s) =>
-        s.employees.length === 0 &&
+    const departmentSchedule = workSchedules.find(
+      (schedule) =>
+        schedule.employees.length === 0 &&
         employee.departmentId != null &&
-        s.departments.some((d) => d.id === employee.departmentId),
+        schedule.departments.some((assigned) => assigned.id === employee.departmentId),
     );
     const globalSchedule = workSchedules.find(
-      (s) => s.employees.length === 0 && s.departments.length === 0,
+      (schedule) => schedule.employees.length === 0 && schedule.departments.length === 0,
     );
-    const relevantSchedule = employeeSchedule ?? deptSchedule ?? globalSchedule;
+    const schedule = employeeSchedule ?? departmentSchedule ?? globalSchedule;
     const workingWeekdays = new Set(
-      (relevantSchedule?.workDays || "")
+      (schedule?.workDays ?? "")
         .split(",")
-        .map((d) => d.trim())
-        .filter((d) => d !== "")
-        .map((d) => Number(d))
-        .filter((n) => !Number.isNaN(n)),
+        .map((day) => Number(day.trim()))
+        .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
     );
-
+    if (workingWeekdays.size === 0) {
+      for (const day of [1, 2, 3, 4, 5]) workingWeekdays.add(day);
+    }
+    const presentSet = new Set(
+      employeeAttendances
+        .filter((attendance) => attendance.checkIn != null)
+        .map((attendance) => dateKey(attendance.date)),
+    );
+    const leaveSet = new Set<string>();
+    for (const leave of leaveMap.get(employee.id) ?? []) {
+      const from = new Date(Math.max(new Date(leave.startDate).setHours(0, 0, 0, 0), rangeStart.getTime()));
+      const to = new Date(Math.min(new Date(leave.endDate).setHours(0, 0, 0, 0), rangeEnd.getTime()));
+      for (const day = new Date(from); day <= to; day.setDate(day.getDate() + 1)) {
+        leaveSet.add(dateKey(day));
+      }
+    }
+    const employeeDepartmentHolidays = employee.departmentId == null
+      ? new Set<string>()
+      : departmentHolidaySet.get(employee.departmentId) ?? new Set<string>();
     let totalWorkingDays = 0;
     let workingDays = 0;
     let presentDays = 0;
     let leaveDays = 0;
     let holidayDays = 0;
     let absentDays = 0;
-    let dailyRate = 0;
-    let absentDeduction = 0;
-
-    if (workingWeekdays.size > 0) {
-      const presentSet = new Set(
-        empAttendances
-          .filter((a) => a.checkIn != null)
-          .map((a) => dateKey(new Date(a.date))),
-      );
-      const empLeaves = leaveMap.get(employee.id) ?? [];
-      const leaveSet = new Set<string>();
-      for (const lv of empLeaves) {
-        const s = new Date(lv.startDate);
-        s.setHours(0, 0, 0, 0);
-        const e = new Date(lv.endDate);
-        e.setHours(0, 0, 0, 0);
-        for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
-          leaveSet.add(dateKey(d));
-        }
+    for (let day = new Date(rangeStart); day <= rangeEnd; day.setDate(day.getDate() + 1)) {
+      if (!workingWeekdays.has(day.getDay())) continue;
+      const key = dateKey(day);
+      if (publicHolidaySet.has(key) || employeeDepartmentHolidays.has(key)) {
+        if (day <= evalEnd) holidayDays++;
+        continue;
       }
-      const empDeptHolidays =
-        employee.departmentId != null
-          ? (deptHolidaySet.get(employee.departmentId) ?? new Set<string>())
-          : new Set<string>();
-
-      for (
-        let d = new Date(rangeStart);
-        d <= rangeEnd;
-        d.setDate(d.getDate() + 1)
-      ) {
-        if (!workingWeekdays.has(d.getDay())) continue;
-        const key = dateKey(d);
-        if (publicHolidaySet.has(key) || empDeptHolidays.has(key)) {
-          if (d <= evalEnd) holidayDays++;
-          continue;
-        }
-        totalWorkingDays++;
-        if (d > evalEnd) continue;
-        workingDays++;
-        if (presentSet.has(key)) presentDays++;
-        else if (leaveSet.has(key)) leaveDays++;
-        else absentDays++;
-      }
-      dailyRate = totalWorkingDays > 0 ? baseSalary / totalWorkingDays : 0;
-      absentDeduction = Math.round(absentDays * dailyRate);
+      totalWorkingDays++;
+      if (day > evalEnd) continue;
+      workingDays++;
+      if (presentSet.has(key)) presentDays++;
+      else if (leaveSet.has(key)) leaveDays++;
+      else absentDays++;
     }
+    const dailyRate = totalWorkingDays > 0 ? baseSalary / totalWorkingDays : 0;
+    const absentDeduction = Math.round(absentDays * dailyRate);
 
     // 6. Statutory deductions.
     const grossSalary = safeSum(
@@ -1172,8 +869,8 @@ async function computeBulkPayrollEstimations(
       overtimeTotal,
       appreciationTotal,
       loanDeduction,
-      lateDeduction: totalPenalty,
-      lateMinutes: totalLateMinutes,
+      lateDeduction,
+      lateMinutes,
       workingDays,
       presentDays,
       leaveDays,
@@ -1196,8 +893,31 @@ export async function getBulkPayrollEstimations(
   startDateStr: string,
   endDateStr: string,
 ): Promise<Map<number, BulkPayrollEstimation>> {
-  await requirePermission("view_payroll");
-  return computeBulkPayrollEstimations(employeeIds, startDateStr, endDateStr);
+  const sessionUser = await requirePermission("view_payroll");
+  if (!Array.isArray(employeeIds) || employeeIds.length > 500 || employeeIds.some(
+    (id) => !Number.isSafeInteger(id) || id <= 0,
+  )) {
+    throw new Error("Daftar karyawan tidak valid");
+  }
+  assertPayrollDateRange(startDateStr, endDateStr);
+
+  const requestedIds = Array.from(new Set(employeeIds));
+  if (requestedIds.length === 0) return new Map();
+  const scope = await getHrScope({
+    id: String(sessionUser.id),
+    roles: Array.isArray(sessionUser.roles) ? [...sessionUser.roles] : [],
+  });
+  const accessibleEmployees = await prisma.employee.findMany({
+    where: {
+      id: { in: requestedIds },
+      ...(scope.kind === "all" ? {} : { AND: [hrEmployeeScopeWhere(scope)] }),
+    },
+    select: { id: true },
+  });
+  if (accessibleEmployees.length !== requestedIds.length) {
+    throw new Error("Anda tidak memiliki akses ke data karyawan yang diminta");
+  }
+  return computeBulkPayrollEstimations(requestedIds, startDateStr, endDateStr);
 }
 
 export async function generateBulkPayroll(
@@ -1468,8 +1188,9 @@ export async function processPayroll(formData: FormData) {
     const totalAmount = netSalary;
     const paymentDateRaw = v.paymentDate ?? null;
 
-    const payroll = await prisma.payroll.create({
-      data: {
+    const payroll = await prisma.$transaction(async (tx) => {
+      const created = await tx.payroll.create({
+        data: {
         documentNo,
         employeeId,
         period,
@@ -1496,7 +1217,15 @@ export async function processPayroll(formData: FormData) {
         paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
         status: "draft",
         createdBy: Number(user.id),
-      },
+        },
+      });
+      await requestApprovalIfConfigured(
+        "Payroll",
+        created.id,
+        Number(user.id),
+        tx,
+      );
+      return created;
     });
 
     await logActivity("process", "Payroll", payroll.id, "Memproses penggajian");
@@ -1628,6 +1357,7 @@ export async function updatePayroll(id: number, formData: FormData) {
       where: { id },
       data: {
         employeeId,
+        costCenterId: v.costCenterId ?? null,
         period: v.period,
         startDate,
         endDate,
@@ -1671,6 +1401,7 @@ export async function updatePayroll(id: number, formData: FormData) {
 export async function approvePayroll(payrollId: number) {
   try {
     const user = await requirePermission("process_payroll");
+    await assertApproved("Payroll", payrollId);
 
     const payroll = await prisma.payroll.findUniqueOrThrow({
       where: { id: payrollId },
@@ -1680,10 +1411,13 @@ export async function approvePayroll(payrollId: number) {
       throw new Error("Payroll hanya bisa di-approve dari status draft");
     }
 
-    await prisma.payroll.update({
-      where: { id: payrollId },
+    const claim = await prisma.payroll.updateMany({
+      where: { id: payrollId, status: "draft" },
       data: { status: "approved", approvedBy: Number(user.id) },
     });
+    if (claim.count === 0) {
+      throw new Error("Penggajian sudah diproses atau status tidak valid");
+    }
 
     await logActivity("approve", "Payroll", payrollId, "Menyetujui penggajian");
     revalidatePath("/sdm/penggajian");
@@ -1702,6 +1436,10 @@ export async function markPayrollPaid(payrollId: number) {
     const payroll = await prisma.payroll.findUniqueOrThrow({
       where: { id: payrollId },
     });
+
+    // Approval workflow gate: if a Payroll workflow is configured, it must
+    // be fully approved before marking as paid.
+    await assertApproved("Payroll", payrollId);
 
     if (payroll.status !== "approved") {
       throw new Error(
@@ -1796,13 +1534,26 @@ export async function createEmployeeLoan(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
+    const employeeId = v.employeeId;
+
+    const scope = await getHrScope(user);
+    if (scope.kind === "self" && scope.employeeId !== employeeId) {
+      throw new Error("Anda hanya diperbolehkan membuat pinjaman untuk diri sendiri");
+    } else if (scope.kind === "department") {
+      const targetEmployee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { departmentId: true }
+      });
+      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan membuat pinjaman untuk karyawan se-departemen");
+      }
+    }
+
     const totalAmount = v.totalAmount;
 
-    // Create the loan row + post the disbursement journal atomically. Loan is
-    // created active = cash already disbursed, so the GL must recognise it now.
-    // Wrapping both in one tx means a posting failure (closed period, missing
-    // account) rolls back the loan row instead of leaving an active loan with
-    // no Piutang Karyawan entry (which a retry would then duplicate).
+    // Create the loan row in pending status.
+    // Wrap in tx to keep database constraints, but do not post the GL disbursement journal yet.
+    // The journal is only posted after the loan is approved (via the approval workflow or bypass).
     const loan = await prisma.$transaction(async (tx) => {
       const created = await tx.employeeLoan.create({
         data: {
@@ -1811,11 +1562,17 @@ export async function createEmployeeLoan(formData: FormData) {
           totalAmount,
           monthlyInstallment: v.monthlyInstallment,
           remainingAmount: totalAmount,
-          status: "active",
+          status: "pending",
           notes: v.notes ?? null,
+          createdBy: Number(user.id),
         },
       });
-      await onEmployeeLoanDisbursed(created.id, Number(user.id), tx);
+      await requestApprovalIfConfigured(
+        "EmployeeLoan",
+        created.id,
+        Number(user.id),
+        tx,
+      );
       return created;
     });
 
@@ -1838,12 +1595,14 @@ export async function createEmployeeLoan(formData: FormData) {
 
 export async function createTimesheet(formData: FormData) {
   try {
-    await requirePermission("create_timesheets");
+    const user = await requirePermission("create_timesheets");
+    const scope = await getHrScope(user);
 
     const parsed = parseFormData(timesheetSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
+    await assertHrEmployeeAccess(scope, v.employeeId);
 
     const timesheet = await prisma.timesheet.create({
       data: {
@@ -1873,142 +1632,41 @@ export async function createTimesheet(formData: FormData) {
   }
 }
 
-// ==================== WORK SCHEDULE ACTIONS ====================
 
-export async function createWorkSchedule(formData: FormData) {
-  try {
-    await requirePermission("create_work_schedules");
-
-    const parsed = parseFormData(workScheduleSchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const name = v.name;
-    const days = formData.getAll("days") as string[];
-    const startTime = v.startTime;
-    const endTime = v.endTime;
-    const departmentIds = (formData.getAll("departmentId") as string[])
-      .map((d) => safeNumber(d))
-      .filter((n): n is number => n != null);
-    const employeeIds = (formData.getAll("employeeId") as string[])
-      .map((d) => safeNumber(d))
-      .filter((n): n is number => n != null);
-    const lateToleranceMinutes = v.lateToleranceMinutes ?? 0;
-    const isActive = v.isActive ?? false;
-
-    await prisma.workSchedule.create({
-      data: {
-        name,
-        workDays: days.join(","),
-        startTime,
-        endTime,
-        lateToleranceMinutes,
-        isActive,
-        departments:
-          departmentIds.length > 0
-            ? { connect: departmentIds.map((id) => ({ id })) }
-            : undefined,
-        employees:
-          employeeIds.length > 0
-            ? { connect: employeeIds.map((id) => ({ id })) }
-            : undefined,
-      },
-    });
-
-    await logActivity("create", "WorkSchedule", 0, "Membuat jadwal kerja");
-    revalidatePath("/sdm/jadwal-kerja");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createWorkSchedule]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-// ==================== HOLIDAY ACTIONS ====================
-
-export async function createHoliday(formData: FormData) {
-  try {
-    await requirePermission("create_holidays");
-
-    const parsed = parseFormData(holidaySchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const holiday = await prisma.holiday.create({
-      data: {
-        name: v.name,
-        date: new Date(v.date),
-        description: v.description ?? null,
-        isNationalHoliday: v.isNationalHoliday ?? true,
-      },
-    });
-
-    await logActivity("create", "Holiday", holiday.id, "Membuat hari libur");
-    revalidatePath("/sdm/hari-libur");
-    return { success: true, id: holiday.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createHoliday]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function updateHoliday(id: number, formData: FormData) {
-  try {
-    await requirePermission("edit_holidays");
-
-    // Validation parity with createHoliday: route through Zod schema so blank
-    // names / missing dates / 500+ char descriptions are rejected on the edit
-    // path, not just on create. Without this, the form layer can store
-    // unvalidated holiday rows.
-    const parsed = parseFormData(holidaySchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    await prisma.holiday.update({
-      where: { id },
-      data: {
-        name: v.name,
-        date: new Date(v.date),
-        description: v.description ?? null,
-        isNationalHoliday: v.isNationalHoliday ?? true,
-      },
-    });
-
-    await logActivity("update", "Holiday", id, "Memperbarui hari libur");
-    revalidatePath("/sdm/hari-libur");
-    return { success: true, id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateHoliday]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
 
 // ==================== DELETE ACTIONS ====================
 
 export async function deleteLeaveRequest(id: number) {
   try {
-    await requirePermission("delete_leave_requests");
+    const user = await requirePermission("delete_leave_requests");
+    const scope = await getHrScope(user);
 
     // Guard: cannot delete approved leave — it bypasses the approval workflow
-    const leave = await prisma.leaveRequest.findUniqueOrThrow({
-      where: { id },
-      select: { status: true },
+    const deleted = await prisma.$transaction(async (tx) => {
+      // Approval actions lock approval rows before their source document.
+      // Keep the same lock order to avoid deadlocks during concurrent delete/approve.
+      await tx.$queryRaw`SELECT id FROM approvals WHERE reference_type = ${"LeaveRequest"} AND reference_id = ${id} ORDER BY id FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM leave_requests WHERE id = ${id} FOR UPDATE`;
+      const leave = await tx.leaveRequest.findUniqueOrThrow({
+        where: { id },
+        select: { status: true, employeeId: true },
+      });
+      await assertHrEmployeeAccess(scope, leave.employeeId);
+      if (leave.status === "approved") return false;
+
+      await tx.leaveRequest.delete({ where: { id } });
+      await tx.approval.deleteMany({
+        where: { referenceType: "LeaveRequest", referenceId: id },
+      });
+      return true;
     });
-    if (leave.status === "approved") {
+    if (!deleted) {
       return {
         success: false,
         error:
           "Tidak bisa menghapus cuti yang sudah disetujui. Tolak terlebih dahulu.",
       };
     }
-
-    await prisma.leaveRequest.delete({ where: { id } });
 
     await logActivity("delete", "LeaveRequest", id, "Menghapus pengajuan cuti");
     revalidatePath("/sdm/cuti");
@@ -2031,10 +1689,18 @@ export async function getEmployeeLeaveBalance(
   year?: number,
 ) {
   try {
-    await requirePermission("view_leave_requests");
-    if (!employeeId || Number.isNaN(employeeId)) {
+    const user = await requirePermission("view_leave_requests");
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0) {
       return { success: false as const, error: "Karyawan tidak valid" };
     }
+    if (year !== undefined && (!Number.isSafeInteger(year) || year < 1900 || year > 2200)) {
+      return { success: false as const, error: "Tahun tidak valid" };
+    }
+    const scope = await getHrScope({
+      id: String(user.id),
+      roles: Array.isArray(user.roles) ? [...user.roles] : [],
+    });
+    await assertHrEmployeeAccess(scope, employeeId);
     const quota = await getLeaveQuota(employeeId, { year });
     return { success: true as const, quota };
   } catch (e: unknown) {
@@ -2048,17 +1714,28 @@ export async function getEmployeeLeaveBalance(
 }
 
 /**
- * Annual-leave balance for every active employee (used by the leave-balance
- * dashboard). One getLeaveQuota call per employee — fine for typical SME
+ * Annual-leave balance for active employees inside the caller's HR scope
+ * (used by the leave-balance dashboard). One getLeaveQuota call per employee — fine for typical SME
  * headcounts; revisit with a batched query if the roster grows large.
  */
 export async function getAllLeaveBalances(year?: number) {
   try {
-    await requirePermission("view_leave_requests");
+    const user = await requirePermission("view_leave_requests");
     const targetYear = year ?? new Date().getFullYear();
+    if (!Number.isSafeInteger(targetYear) || targetYear < 1900 || targetYear > 2200) {
+      return { success: false as const, error: "Tahun tidak valid", balances: [] };
+    }
+    const scope = await getHrScope({
+      id: String(user.id),
+      roles: Array.isArray(user.roles) ? [...user.roles] : [],
+    });
 
     const employees = await prisma.employee.findMany({
-      where: { isActive: true, deletedAt: null },
+      where: {
+        isActive: true,
+        deletedAt: null,
+        ...hrEmployeeScopeWhere(scope),
+      },
       orderBy: { name: "asc" },
       select: {
         id: true,
@@ -2100,9 +1777,31 @@ export async function getAllLeaveBalances(year?: number) {
 
 export async function deleteOvertimeRequest(id: number) {
   try {
-    await requirePermission("delete_overtime_requests");
+    const user = await requirePermission("delete_overtime_requests");
+    const scope = await getHrScope(user);
 
-    await prisma.overtimeRequest.delete({ where: { id } });
+    const deleted = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM approvals WHERE reference_type = ${"OvertimeRequest"} AND reference_id = ${id} ORDER BY id FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM overtime_requests WHERE id = ${id} FOR UPDATE`;
+      const overtime = await tx.overtimeRequest.findUniqueOrThrow({
+        where: { id },
+        select: { employeeId: true, status: true },
+      });
+      await assertHrEmployeeAccess(scope, overtime.employeeId);
+      if (overtime.status === "approved") return false;
+
+      await tx.overtimeRequest.delete({ where: { id } });
+      await tx.approval.deleteMany({
+        where: { referenceType: "OvertimeRequest", referenceId: id },
+      });
+      return true;
+    });
+    if (!deleted) {
+      return {
+        success: false,
+        error: "Lembur yang sudah disetujui tidak dapat dihapus karena dapat memengaruhi penggajian.",
+      };
+    }
 
     await logActivity(
       "delete",
@@ -2121,7 +1820,13 @@ export async function deleteOvertimeRequest(id: number) {
 
 export async function deleteTimesheet(id: number) {
   try {
-    await requirePermission("delete_timesheets");
+    const user = await requirePermission("delete_timesheets");
+    const scope = await getHrScope(user);
+    const timesheet = await prisma.timesheet.findUniqueOrThrow({
+      where: { id },
+      select: { employeeId: true },
+    });
+    await assertHrEmployeeAccess(scope, timesheet.employeeId);
 
     await prisma.timesheet.delete({ where: { id } });
 
@@ -2137,15 +1842,35 @@ export async function deleteTimesheet(id: number) {
 
 export async function deleteEmployeeLoan(id: number) {
   try {
-    await requirePermission("delete_loans");
+    const user = await requirePermission("delete_loans");
+    const scope = await getHrScope(user);
+    const deleted = await prisma.$transaction(async (tx) => {
+      // Match approveStep's approval → source-document lock order.
+      await tx.$queryRaw`SELECT id FROM approvals WHERE reference_type = ${"EmployeeLoan"} AND reference_id = ${id} ORDER BY id FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${id} FOR UPDATE`;
+      const loan = await tx.employeeLoan.findUniqueOrThrow({
+        where: { id },
+        select: { employeeId: true, status: true },
+      });
+      await assertHrEmployeeAccess(scope, loan.employeeId);
+      if (loan.status !== "pending" && loan.status !== "rejected") return false;
 
-    // Reverse the disbursement journal + delete the loan atomically. Loans now
-    // post a GL journal on creation (onEmployeeLoanDisbursed); deleting without
-    // reversing would orphan the journal and overstate Piutang Karyawan.
-    await prisma.$transaction(async (tx) => {
+      // Reverse the disbursement journal + delete the loan atomically. Loans now
+      // post a GL journal on creation (onEmployeeLoanDisbursed); deleting without
+      // reversing would orphan the journal and overstate Piutang Karyawan.
       await deleteJournalByReferenceTx(tx, "EmployeeLoan", id);
       await tx.employeeLoan.delete({ where: { id } });
+      await tx.approval.deleteMany({
+        where: { referenceType: "EmployeeLoan", referenceId: id },
+      });
+      return true;
     });
+    if (!deleted) {
+      return {
+        success: false,
+        error: "Pinjaman yang sudah disetujui atau dicairkan tidak dapat dihapus.",
+      };
+    }
 
     await logActivity(
       "delete",
@@ -2162,80 +1887,36 @@ export async function deleteEmployeeLoan(id: number) {
   }
 }
 
-export async function deleteWorkSchedule(id: number) {
-  try {
-    await requirePermission("delete_work_schedules");
-
-    await prisma.workSchedule.delete({ where: { id } });
-
-    await logActivity("delete", "WorkSchedule", id, "Menghapus jadwal kerja");
-    revalidatePath("/sdm/jadwal-kerja");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[deleteWorkSchedule]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function deleteHoliday(id: number) {
-  try {
-    await requirePermission("delete_holidays");
-
-    await prisma.holiday.delete({ where: { id } });
-
-    await logActivity("delete", "Holiday", id, "Menghapus hari libur");
-    revalidatePath("/sdm/hari-libur");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[deleteHoliday]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-/**
- * Sync Indonesian national holidays for a given year from a public calendar API.
- * Idempotent — safe to run repeatedly.
- */
-export async function syncNationalHolidays(year?: number) {
-  try {
-    await requirePermission("create_holidays");
-    const targetYear = year && year > 2000 ? year : new Date().getFullYear();
-    const result = await syncNationalHolidaysService(targetYear);
-    await logActivity(
-      "sync",
-      "Holiday",
-      0,
-      `Sinkronisasi libur nasional tahun ${targetYear}`,
-    );
-    revalidatePath("/sdm/hari-libur");
-    return { success: true, ...result };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[syncNationalHolidays]", getErrorMessage(e) || e);
-    return {
-      success: false,
-      error: getErrorMessage(e, "Gagal sinkronisasi libur nasional"),
-    };
-  }
-}
 
 export async function updateLeaveRequest(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_leave_requests");
+    const user = await requirePermission("edit_leave_requests");
+
+    const scope = await getHrScope(user);
 
     // Only pending requests can be edited. Approved/rejected leave must not be re-opened.
     const existing = await prisma.leaveRequest.findUniqueOrThrow({
       where: { id },
-      select: { status: true },
+      select: { status: true, employeeId: true },
     });
     if (existing.status !== "pending") {
       throw new Error(
         "Hanya pengajuan cuti berstatus menunggu yang dapat diedit",
       );
+    }
+
+    if (scope.kind === "self" && scope.employeeId !== existing.employeeId) {
+      throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk diri sendiri");
+    } else if (scope.kind === "department") {
+      const existingEmployee = await prisma.employee.findUnique({
+        where: { id: existing.employeeId },
+        select: { departmentId: true }
+      });
+      if (!existingEmployee || existingEmployee.departmentId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk karyawan se-departemen");
+      }
     }
 
     // Migrated to parseFormData(leaveRequestSchema) — the previous hand-parsed
@@ -2249,6 +1930,19 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
     const v = parsed.data;
 
     const employeeId = v.employeeId;
+
+    if (scope.kind === "self" && scope.employeeId !== employeeId) {
+      throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk diri sendiri");
+    } else if (scope.kind === "department") {
+      const targetEmployee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { departmentId: true }
+      });
+      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan mengedit pengajuan cuti untuk karyawan se-departemen");
+      }
+    }
+
     const startDate = new Date(v.startDate);
     const endDate = new Date(v.endDate);
 
@@ -2257,10 +1951,23 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
     }
 
     // Overlap check + quota gate + update run in one $transaction (mirrors
-    // createLeaveRequest) so the reads backing the guards and the write are
-    // atomic. The quota check excludes THIS request's id so its own existing
-    // days are not double-counted against the balance when editing.
+    // createLeaveRequest). Lock and re-read this request so a concurrent
+    // approval cannot race the pending-only guard; then lock the target
+    // employee to serialize overlap/quota checks with other requests.
+    // The quota check excludes THIS request's id so its existing days are
+    // not double-counted against the balance when editing.
     const leave = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM leave_requests WHERE id = ${id} FOR UPDATE`;
+      const current = await tx.leaveRequest.findUniqueOrThrow({
+        where: { id },
+        select: { status: true },
+      });
+      if (current.status !== "pending") {
+        throw new Error("Hanya pengajuan cuti berstatus menunggu yang dapat diedit");
+      }
+
+      await tx.$queryRaw`SELECT id FROM employees WHERE id = ${employeeId} FOR UPDATE`;
+
       const overlap = await tx.leaveRequest.findFirst({
         where: {
           employeeId,
@@ -2339,7 +2046,8 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_overtime_requests");
+    const user = await requirePermission("edit_overtime_requests");
+    const scope = await getHrScope(user);
 
     // Integrity guard: an approved/rejected overtime has a calculatedValue that
     // feeds payroll and an audit trail (approvedBy/approvedAt/rejectionReason).
@@ -2349,8 +2057,9 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
     // pending-only guard.
     const existing = await prisma.overtimeRequest.findUniqueOrThrow({
       where: { id },
-      select: { status: true },
+      select: { status: true, employeeId: true },
     });
+    await assertHrEmployeeAccess(scope, existing.employeeId);
     if (existing.status !== "pending") {
       throw new Error(
         "Hanya pengajuan lembur berstatus menunggu yang dapat diedit",
@@ -2366,20 +2075,35 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
+    await assertHrEmployeeAccess(scope, v.employeeId);
 
-    const overtime = await prisma.overtimeRequest.update({
-      where: { id },
-      data: {
-        employeeId: v.employeeId,
-        projectId: v.projectId ?? null,
-        date: new Date(v.date),
-        hours: v.hours,
-        totalHours: v.totalHours ?? null,
-        mealHours: v.mealHours ?? null,
-        billableHours: v.billableHours ?? null,
-        reason: v.reason ?? null,
-        status: "pending",
-      },
+    const overtime = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM overtime_requests WHERE id = ${id} FOR UPDATE`;
+      const current = await tx.overtimeRequest.findUniqueOrThrow({
+        where: { id },
+        select: { status: true },
+      });
+      if (current.status !== "pending") {
+        throw new Error("Hanya pengajuan lembur berstatus menunggu yang dapat diedit");
+      }
+
+      const changed = await tx.overtimeRequest.updateMany({
+        where: { id, status: "pending" },
+        data: {
+          employeeId: v.employeeId,
+          projectId: v.projectId ?? null,
+          date: new Date(v.date),
+          hours: v.hours,
+          totalHours: v.totalHours ?? null,
+          mealHours: v.mealHours ?? null,
+          billableHours: v.billableHours ?? null,
+          reason: v.reason ?? null,
+        },
+      });
+      if (changed.count === 0) {
+        throw new Error("Pengajuan lembur sudah diproses atau status tidak valid");
+      }
+      return { id };
     });
 
     await logActivity(
@@ -2401,57 +2125,80 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("create_loans");
+    const user = await requirePermission("create_loans");
+    const scope = await getHrScope(user);
 
-    // Migrated to parseFormData(employeeLoanSchema) — the previous hand-parsed
-    // path (requireNumber / new Date(raw) / requireId) bypassed schema
-    // validation: negative amounts could reach the DB, blank loanDates crashed
-    // new Date() into Invalid Date, and the loanDate / totalAmount / installment
-    // required guards were not enforced. Mirrors createEmployeeLoan for
-    // validation parity.
     const parsed = parseFormData(employeeLoanSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
     const totalAmount = v.totalAmount;
+    const employeeId = v.employeeId;
 
-    // Only adjust remainingAmount if totalAmount was actually changed. This prevents
-    // wiping amortization progress when editing other fields (notes, installment).
-    // Status is NOT accepted from client — it's managed only by markPayrollPaid.
     const existing = await prisma.employeeLoan.findUniqueOrThrow({
       where: { id },
-      select: { totalAmount: true, remainingAmount: true, status: true },
+      select: { totalAmount: true, remainingAmount: true, status: true, employeeId: true },
     });
-    // Integrity guard: a paid_off loan is a completed financial record (all
-    // installments already deducted from payroll runs). Allowing edits would
-    // silently mutate totalAmount/remainingAmount/instalment without restarting
-    // the amortization cycle, and could resurrect amortization on a settled loan
-    // by shifting remainingAmount back above 0 while keeping status='paid_off'
-    // (markPayrollPaid only touches 'active' loans, so the resurrected balance
-    // would never be deducted). Mirrors updateLeaveRequest / updateOvertimeRequest
-    // (both reject edits on non-pending statuses).
-    if (existing.status !== "active") {
-      throw new Error("Hanya pinjaman berstatus aktif yang dapat diedit");
-    }
-    const oldTotal = Number(existing.totalAmount);
-    const oldRemaining = Number(existing.remainingAmount);
-    const delta = totalAmount - oldTotal;
-    // If totalAmount changed, shift remaining by the same delta (can't go below 0).
-    const newRemaining =
-      delta !== 0 ? Math.max(0, oldRemaining + delta) : oldRemaining;
 
-    const loan = await prisma.employeeLoan.update({
-      where: { id },
-      data: {
-        employeeId: v.employeeId,
-        loanDate: new Date(v.loanDate),
-        totalAmount,
-        monthlyInstallment: v.monthlyInstallment,
-        remainingAmount: newRemaining,
-        // Status stays unchanged (managed by markPayrollPaid / system only).
-        notes: v.notes ?? null,
-      },
+    if (existing.status !== "pending") {
+      throw new Error("Hanya pinjaman berstatus menunggu yang dapat diedit");
+    }
+
+    if (scope.kind === "self" && scope.employeeId !== existing.employeeId) {
+      throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk diri sendiri");
+    } else if (scope.kind === "department") {
+      const existingEmployee = await prisma.employee.findUnique({
+        where: { id: existing.employeeId },
+        select: { departmentId: true }
+      });
+      if (!existingEmployee || existingEmployee.departmentId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk karyawan se-departemen");
+      }
+    }
+
+    if (scope.kind === "self" && scope.employeeId !== employeeId) {
+      throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk diri sendiri");
+    } else if (scope.kind === "department") {
+      const targetEmployee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        select: { departmentId: true }
+      });
+      if (!targetEmployee || targetEmployee.departmentId !== scope.departmentId) {
+        throw new Error("Anda hanya diperbolehkan mengedit pinjaman untuk karyawan se-departemen");
+      }
+    }
+
+    const loan = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM employee_loans WHERE id = ${id} FOR UPDATE`;
+      const current = await tx.employeeLoan.findUniqueOrThrow({
+        where: { id },
+        select: { totalAmount: true, remainingAmount: true, status: true },
+      });
+      if (current.status !== "pending") {
+        throw new Error("Hanya pinjaman berstatus menunggu yang dapat diedit");
+      }
+
+      const oldTotal = Number(current.totalAmount);
+      const oldRemaining = Number(current.remainingAmount);
+      const delta = totalAmount - oldTotal;
+      // Preserve the amount already repaid when the pending principal changes.
+      const newRemaining = delta !== 0 ? Math.max(0, oldRemaining + delta) : oldRemaining;
+      const changed = await tx.employeeLoan.updateMany({
+        where: { id, status: "pending" },
+        data: {
+          employeeId: v.employeeId,
+          loanDate: new Date(v.loanDate),
+          totalAmount,
+          monthlyInstallment: v.monthlyInstallment,
+          remainingAmount: newRemaining,
+          notes: v.notes ?? null,
+        },
+      });
+      if (changed.count === 0) {
+        throw new Error("Pinjaman sudah diproses atau status tidak valid");
+      }
+      return { id };
     });
 
     await logActivity(
@@ -2473,7 +2220,13 @@ export async function updateTimesheet(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("create_timesheets");
+    const user = await requirePermission("create_timesheets");
+    const scope = await getHrScope(user);
+    const existing = await prisma.timesheet.findUniqueOrThrow({
+      where: { id },
+      select: { employeeId: true },
+    });
+    await assertHrEmployeeAccess(scope, existing.employeeId);
 
     // Validation parity with createTimesheet: route the same Zod schema so the
     // edit path cannot be used to write values the create-guard rejects (e.g.
@@ -2484,6 +2237,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
+    await assertHrEmployeeAccess(scope, v.employeeId);
 
     const timesheet = await prisma.timesheet.update({
       where: { id },
@@ -2514,152 +2268,6 @@ export async function updateTimesheet(id: number, formData: FormData) {
   }
 }
 
-export async function updateWorkSchedule(id: number, formData: FormData) {
-  "use server";
-
-  try {
-    await requirePermission("create_work_schedules");
-
-    // Validation parity with createWorkSchedule: route through Zod schema.
-    // The edit path bypassed this, allowing blank names or malformed times
-    // that crashed downstream payroll scheduling and formatting logic.
-    const parsed = parseFormData(workScheduleSchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const name = v.name;
-    const days = formData.getAll("days") as string[];
-    const startTime = v.startTime;
-    const endTime = v.endTime;
-    const departmentIds = (formData.getAll("departmentId") as string[])
-      .map((d) => safeNumber(d))
-      .filter((n): n is number => n != null);
-    const employeeIds = (formData.getAll("employeeId") as string[])
-      .map((d) => safeNumber(d))
-      .filter((n): n is number => n != null);
-    const lateToleranceMinutes = v.lateToleranceMinutes ?? 0;
-    const isActive = v.isActive ?? false;
-
-    await prisma.workSchedule.update({
-      where: { id },
-      data: {
-        name,
-        workDays: days.join(","),
-        startTime,
-        endTime,
-        lateToleranceMinutes,
-        isActive,
-        departments: { set: departmentIds.map((did) => ({ id: did })) },
-        employees: { set: employeeIds.map((eid) => ({ id: eid })) },
-      },
-    });
-
-    await logActivity("update", "WorkSchedule", id, "Memperbarui jadwal kerja");
-    revalidatePath("/sdm/jadwal-kerja");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateWorkSchedule]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-// ==================== DEPARTMENT HOLIDAY ACTIONS ====================
-
-export async function createDepartmentHoliday(formData: FormData) {
-  try {
-    await requirePermission("create_holidays");
-
-    const parsed = parseFormData(departmentHolidaySchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const holiday = await prisma.departmentHoliday.create({
-      data: {
-        departmentId: v.departmentId,
-        name: v.name,
-        date: new Date(v.date),
-        isRecurring: v.isRecurring ?? false,
-      },
-    });
-
-    await logActivity(
-      "create",
-      "DepartmentHoliday",
-      holiday.id,
-      "Membuat hari libur departemen",
-    );
-    revalidatePath("/sdm/hari-libur-departemen");
-    return { success: true, id: holiday.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createDepartmentHoliday]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function updateDepartmentHoliday(formData: FormData) {
-  try {
-    await requirePermission("create_holidays");
-
-    // Validation parity with createDepartmentHoliday: route through Zod schema.
-    // The edit path was reading raw formData values with no length / required /
-    // type guards, allowing blank names, missing dates, or non-numeric
-    // departmentId values to be persisted.
-    const parsed = parseFormData(departmentHolidaySchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const id = v.id ?? requireId(formData.get("id"), "id");
-
-    const holiday = await prisma.departmentHoliday.update({
-      where: { id },
-      data: {
-        departmentId: v.departmentId,
-        name: v.name,
-        date: new Date(v.date),
-        isRecurring: v.isRecurring ?? false,
-      },
-    });
-
-    await logActivity(
-      "update",
-      "DepartmentHoliday",
-      holiday.id,
-      "Memperbarui hari libur departemen",
-    );
-    revalidatePath("/sdm/hari-libur-departemen");
-    return { success: true, id: holiday.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateDepartmentHoliday]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function deleteDepartmentHoliday(id: number) {
-  try {
-    await requirePermission("delete_holidays");
-
-    await prisma.departmentHoliday.delete({ where: { id } });
-
-    await logActivity(
-      "delete",
-      "DepartmentHoliday",
-      id,
-      "Menghapus hari libur departemen",
-    );
-    revalidatePath("/sdm/hari-libur-departemen");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[deleteDepartmentHoliday]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
 
 // ==================== APPRECIATION ACTIONS ====================
 

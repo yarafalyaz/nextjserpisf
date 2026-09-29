@@ -20,12 +20,17 @@ const mocks = vi.hoisted(() => {
   const prismaMock: any = {
     project: buildModelMock(),
     projectStage: buildModelMock(),
+    projectStageProgress: buildModelMock(),
     task: buildModelMock(),
     systemSetting: buildModelMock(),
     item: buildModelMock(),
     workOrder: buildModelMock(),
     workOrderItem: buildModelMock(),
     materialIssue: buildModelMock(),
+    approvalWorkflow: buildModelMock(),
+    approval: buildModelMock(),
+
+    $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -151,6 +156,12 @@ describe("Project Stages Extended Branches", () => {
     const res = await actions.updateProjectStageProgress(1, 1, "invalid_status")
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak valid")
+  })
+  it("updateProjectStageProgress rejects invalid percentage range", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.updateProjectStageProgress(1, 1, "in_progress", "Notes", 150)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Persentase progres harus berupa angka")
   })
   it("updateProjectStageProgress rejects wrong project id", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -280,6 +291,19 @@ describe("Project Actions", () => {
     mocks.prismaMock.projectStage.findMany.mockResolvedValue([{ id: 1 }])
     const res = await actions.initializeProjectStages(1)
     expect(res?.success).toBe(true)
+  })
+  it("locks and validates the project before initializing stages", async () => {
+    mocks.prismaMock.projectStage.findMany.mockResolvedValueOnce([])
+    const res = await actions.initializeProjectStages(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.$queryRaw).toHaveBeenCalledOnce()
+    expect(mocks.prismaMock.projectStage.createMany).toHaveBeenCalledOnce()
+  })
+  it("does not initialize stages for a missing project", async () => {
+    mocks.prismaMock.$queryRaw.mockResolvedValueOnce([])
+    const res = await actions.initializeProjectStages(99)
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.projectStage.createMany).not.toHaveBeenCalled()
   })
   it("updateProjectStageProgress succeeds", async () => {
     mocks.prismaMock.projectStage.findUniqueOrThrow.mockResolvedValue({ id: 1, projectId: 1, sortOrder: 1 })

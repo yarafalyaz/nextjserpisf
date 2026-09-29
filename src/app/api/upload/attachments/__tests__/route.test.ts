@@ -5,10 +5,12 @@ import { NextRequest } from "next/server"
 const mocks = vi.hoisted(() => ({
   authFn: vi.fn(),
   canAccessAttachment: vi.fn(),
+  canModifyAttachment: vi.fn(),
   attachmentCreate: vi.fn(),
   attachmentFindMany: vi.fn(),
   writeFile: vi.fn(),
   mkdir: vi.fn(),
+  unlink: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/auth", () => ({
@@ -17,11 +19,12 @@ vi.mock("@/lib/auth/auth", () => ({
 
 vi.mock("@/lib/auth/attachment-permissions", () => ({
   canAccessAttachment: (...a: unknown[]) => mocks.canAccessAttachment(...a),
+  canModifyAttachment: (...a: unknown[]) => mocks.canModifyAttachment(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    transactionAttachment: {
+  transactionAttachment: {
       create: (...a: unknown[]) => mocks.attachmentCreate(...a),
       findMany: (...a: unknown[]) => mocks.attachmentFindMany(...a),
     },
@@ -31,6 +34,7 @@ vi.mock("@/lib/db/prisma", () => ({
 vi.mock("fs/promises", () => ({
   writeFile: (...a: unknown[]) => mocks.writeFile(...a),
   mkdir: (...a: unknown[]) => mocks.mkdir(...a),
+  unlink: (...a: unknown[]) => mocks.unlink(...a),
 }))
 
 function makeFile(name: string, type: string, size = 1024): File {
@@ -59,9 +63,11 @@ describe("POST /api/upload/attachments", () => {
     vi.clearAllMocks()
     mocks.authFn.mockResolvedValue({ user: { id: 3 } })
     mocks.canAccessAttachment.mockResolvedValue(true)
+    mocks.canModifyAttachment.mockResolvedValue(true)
     mocks.attachmentCreate.mockResolvedValue({ id: 1, filename: "x" })
     mocks.writeFile.mockResolvedValue(undefined)
     mocks.mkdir.mockResolvedValue(undefined)
+    mocks.unlink.mockResolvedValue(undefined)
   })
 
   it("returns 401 when no session", async () => {
@@ -111,8 +117,8 @@ describe("POST /api/upload/attachments", () => {
     expect(res.status).toBe(400)
   })
 
-  it("returns 403 when canAccessAttachment denies", async () => {
-    mocks.canAccessAttachment.mockResolvedValue(false)
+  it("returns 403 when upload permission denies", async () => {
+    mocks.canModifyAttachment.mockResolvedValue(false)
     const file = makeFile("a.pdf", "application/pdf")
     const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "1" }))
     expect(res.status).toBe(403)
@@ -131,6 +137,15 @@ describe("POST /api/upload/attachments", () => {
         originalName: "invoice.pdf",
         uploadedBy: 3,
       }),
+    }))
+  })
+
+  it("accepts an owned temporary upload for a new journal", async () => {
+    const file = makeFile("journal.pdf", "application/pdf")
+    const res = await POST(makePostReq({ file, referenceType: "journal", referenceId: "0" }))
+    expect(res.status).toBe(200)
+    expect(mocks.attachmentCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ referenceType: "journal", referenceId: 0, uploadedBy: 3 }),
     }))
   })
 
@@ -183,9 +198,10 @@ describe("GET /api/upload/attachments", () => {
     expect(res.status).toBe(400)
   })
 
-  it("returns 400 for zero referenceId", async () => {
+  it("rejects zero referenceId for temporary types without create access", async () => {
+    mocks.canModifyAttachment.mockResolvedValue(false)
     const res = await GET(makeGetReq("http://localhost/api/upload/attachments?tipeReferensi=quotation&referensiId=0"))
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(403)
   })
 
   it("returns attachment list on success", async () => {

@@ -14,7 +14,7 @@ interface ExpenseData {
   documentNo: string
   date: string
   description: string | null
-  category: string | null
+  categoryName: string | null
   amount: number
   status: string
 }
@@ -38,7 +38,7 @@ const columns = [
     header: "Deskripsi",
     cell: (info) => info.getValue() || "-",
   }),
-  columnHelper.accessor("category", {
+  columnHelper.accessor("categoryName", {
     header: "Kategori",
     cell: (info) => info.getValue() || "-",
   }),

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
+import { Button } from "@/components/ui/button"
 
 export default function AppError({
   error,
@@ -24,13 +25,14 @@ export default function AppError({
         <p className="text-muted-foreground mb-6">
           Sistem mengalami gangguan. Silakan coba lagi.
         </p>
-        <button
+        <Button
           type="button"
           onClick={reset}
-          className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+          variant="primary"
+          size="sm"
         >
           Coba Lagi
-        </button>
+        </Button>
       </div>
     </div>
   )

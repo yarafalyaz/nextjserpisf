@@ -34,7 +34,7 @@ export default async function EditKeyFigurePage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah Angka Kunci Statistik</h1>
       </div>
-      <KeyFigureEditForm id={data.id} name={data.name} unit={data.unit} value={Number(data.value)} />
+      <KeyFigureEditForm id={data.id} name={data.name} unit={data.unit} value={Number(data.value)} code={data.code} type={data.type} isActive={data.isActive} />
     </div>
   )
 }

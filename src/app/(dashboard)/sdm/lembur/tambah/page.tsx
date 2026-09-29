@@ -3,16 +3,22 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { OvertimeForm } from "@/components/forms/overtime-form"
+import { getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Tambah Lembur" }
 
 export default async function CreateOvertimePage() {
-  await requirePermission("view_overtime")
+  const user = await requirePermission("create_overtime_requests")
+  const scope = await getHrScope(user)
 
   const employees = await prisma.employee.findMany({
-    where: { isActive: true, deletedAt: null },
+    where: {
+      isActive: true,
+      deletedAt: null,
+      ...hrEmployeeScopeWhere(scope),
+    },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   })

@@ -10,7 +10,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Model Kendaraan" }
 
 export default async function CreateVehicleModelPage() {
-  await requirePermission("view_vehicles")
+  await requirePermission("create_vehicle_models")
 
   const brands = await prisma.vehicleBrand.findMany({
     orderBy: { name: "asc" },

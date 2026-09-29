@@ -1,6 +1,7 @@
 "use client"
 
 import { createColumnHelper } from "@tanstack/react-table"
+import { useMemo } from "react"
 import { DataTable } from "@/components/ui/data-table"
 
 export interface LeaveBalanceRow {
@@ -30,6 +31,7 @@ function tenureLabel(months: number): string {
 
 const columns = [
   columnHelper.accessor("name", {
+    id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
       <div className="flex flex-col">
@@ -80,14 +82,21 @@ const columns = [
 export function LeaveBalanceTable({
   data,
   toolbar,
+  showEmployeeColumn = true,
 }: {
   data: LeaveBalanceRow[]
   toolbar?: React.ReactNode
+  showEmployeeColumn?: boolean
 }) {
+  const visibleColumns = useMemo(() => {
+    if (!showEmployeeColumn) return columns.filter((c: any) => c.id !== "employeeName" && c.id !== "department")
+    return columns
+  }, [showEmployeeColumn])
+
   return (
     <DataTable
       data={data}
-      columns={columns}
+      columns={visibleColumns}
       ariaLabel="Saldo cuti karyawan"
       pageSize={20}
       toolbar={toolbar}

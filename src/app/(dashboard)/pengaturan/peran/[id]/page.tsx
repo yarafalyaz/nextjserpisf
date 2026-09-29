@@ -40,11 +40,17 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
         { label: "Peran", href: "/pengaturan/peran" },
         { label: role.name },
       ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-foreground capitalize">{role.name}</h1>
-        <Link href={`/pengaturan/peran/${role.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
-          Ubah Peran
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href={`/pengaturan/peran/${role.id}/modul`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all hover:bg-surface-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+            Modul
+          </Link>
+          <Link href={`/pengaturan/peran/${role.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
+            Ubah Peran
+          </Link>
+        </div>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden p-6">
@@ -54,7 +60,7 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ id:
             <p className="text-sm font-medium text-foreground mt-1 capitalize">{role.name}</p>
           </div>
           <div>
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Guard</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pengaman</span>
             <p className="text-sm font-mono text-foreground mt-1">{role.guardName}</p>
           </div>
           <div>

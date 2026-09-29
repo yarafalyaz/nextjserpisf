@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/detail-table";
 import { ReportSingleDateFilter } from "@/components/reports/report-date-filter";
 import { ReportLetterhead } from "@/components/reports/report-letterhead";
+import { ReportSection } from "@/components/reports/report-section";
+import { ReportNarration } from "@/components/reports/report-narration";
 import { computeBalanceSheet } from "@/lib/finance/balance-sheet";
 
 import type { Metadata } from "next";
@@ -28,9 +30,6 @@ export default async function BalanceSheetPage({
 }) {
   await requirePermission("view_reports");
   const params = await searchParams;
-  // Include the whole "as of" day: new Date("YYYY-MM-DD") is midnight, so a bare
-  // `lte` would drop same-day transactions (which carry a full timestamp). Other
-  // reports already use end-of-day; match that here.
   const _asOf = params.date ? new Date(params.date) : new Date();
   const asOfDate = Number.isNaN(_asOf.getTime()) ? new Date() : _asOf;
   if (params.date) asOfDate.setHours(23, 59, 59, 999);
@@ -45,7 +44,6 @@ export default async function BalanceSheetPage({
     include: { account: true },
   });
 
-  // Aggregation + net-income roll-up lives in computeBalanceSheet (unit-tested).
   const {
     assets,
     liabilities,
@@ -93,133 +91,111 @@ export default async function BalanceSheetPage({
         />
       </div>
 
-      {/* Professional letterhead (screen + print) */}
       <ReportLetterhead
         title="Neraca"
         subtitle="Laporan Posisi Keuangan"
         periodLabel={`Per ${asOfLabel}`}
       />
 
-      {/* ASET */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            ASET
-          </h2>
-        </div>
-        <div className="p-4 px-5">
-          <DetailTable data-report-table="Aset">
-            <DetailTableHead>
-              <DetailTableTh>Kode</DetailTableTh>
-              <DetailTableTh>Nama Akun</DetailTableTh>
-              <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {assets.map((a) => (
-                <DetailTableRow key={a.code}>
-                  <DetailTableTd>{a.code}</DetailTableTd>
-                  <DetailTableTd>{a.name}</DetailTableTd>
-                  <DetailTableTd align="right">
-                    {formatAccounting(a.balance)}
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
-              <DetailTableRow className="font-bold border-t-2 border-default">
-                <DetailTableTd colSpan={2}>Total Aset</DetailTableTd>
-                <DetailTableTd align="right">
-                  {formatAccounting(totalAssets)}
-                </DetailTableTd>
-              </DetailTableRow>
-            </DetailTableBody>
-          </DetailTable>
-        </div>
-      </div>
+      <ReportNarration
+        text={`Laporan Neraca menyajikan posisi keuangan perusahaan per ${asOfLabel}. Laporan ini terdiri dari tiga komponen utama: Aset (sumber daya ekonomi yang dimiliki perusahaan), Kewajiban (pendanaan dari pihak ketiga), dan Ekuitas (hak residual pemilik). Berdasarkan data keuangan, total aset tercatat sebesar ${formatAccounting(totalAssets, { showSymbol: true })} yang dibiayai oleh kewajiban sebesar ${formatAccounting(totalLiabilities, { showSymbol: true })} dan ekuitas sebesar ${formatAccounting(totalEquity, { showSymbol: true })}. Neraca dinyatakan ${isBalanced ? "seimbang (balance)" : "belum seimbang — harap periksa kembali pencatatan transaksi"} sesuai dengan persamaan akuntansi: Aset = Kewajiban + Ekuitas.`}
+      />
 
-      {/* KEWAJIBAN */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            KEWAJIBAN
-          </h2>
-        </div>
-        <div className="p-4 px-5">
-          <DetailTable data-report-table="Kewajiban">
-            <DetailTableHead>
-              <DetailTableTh>Kode</DetailTableTh>
-              <DetailTableTh>Nama Akun</DetailTableTh>
-              <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {liabilities.map((a) => (
-                <DetailTableRow key={a.code}>
-                  <DetailTableTd>{a.code}</DetailTableTd>
-                  <DetailTableTd>{a.name}</DetailTableTd>
-                  <DetailTableTd align="right">
-                    {formatAccounting(a.balance)}
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
-              <DetailTableRow className="font-bold border-t-2 border-default">
-                <DetailTableTd colSpan={2}>Total Kewajiban</DetailTableTd>
+      <ReportSection title="Aset">
+        <DetailTable data-report-table="Aset">
+          <DetailTableHead>
+            <DetailTableTh>Kode</DetailTableTh>
+            <DetailTableTh>Nama Akun</DetailTableTh>
+            <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {assets.map((a) => (
+              <DetailTableRow key={a.code}>
+                <DetailTableTd>{a.code}</DetailTableTd>
+                <DetailTableTd>{a.name}</DetailTableTd>
                 <DetailTableTd align="right">
-                  {formatAccounting(totalLiabilities)}
+                  {formatAccounting(a.balance)}
                 </DetailTableTd>
               </DetailTableRow>
-            </DetailTableBody>
-          </DetailTable>
-        </div>
-      </div>
+            ))}
+            <DetailTableRow className="font-bold border-t-2 border-default">
+              <DetailTableTd colSpan={2}>Total Aset</DetailTableTd>
+              <DetailTableTd align="right">
+                {formatAccounting(totalAssets)}
+              </DetailTableTd>
+            </DetailTableRow>
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
 
-      {/* EKUITAS */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            EKUITAS
-          </h2>
-        </div>
-        <div className="p-4 px-5">
-          <DetailTable data-report-table="Ekuitas">
-            <DetailTableHead>
-              <DetailTableTh>Kode</DetailTableTh>
-              <DetailTableTh>Nama Akun</DetailTableTh>
-              <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {equity.map((a) => (
-                <DetailTableRow key={a.code}>
-                  <DetailTableTd>{a.code}</DetailTableTd>
-                  <DetailTableTd>{a.name}</DetailTableTd>
-                  <DetailTableTd align="right">
-                    {formatAccounting(a.balance)}
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
-              <DetailTableRow className="font-bold border-t-2 border-default">
-                <DetailTableTd colSpan={2}>Total Ekuitas</DetailTableTd>
+      <ReportSection title="Kewajiban">
+        <DetailTable data-report-table="Kewajiban">
+          <DetailTableHead>
+            <DetailTableTh>Kode</DetailTableTh>
+            <DetailTableTh>Nama Akun</DetailTableTh>
+            <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {liabilities.map((a) => (
+              <DetailTableRow key={a.code}>
+                <DetailTableTd>{a.code}</DetailTableTd>
+                <DetailTableTd>{a.name}</DetailTableTd>
                 <DetailTableTd align="right">
-                  {formatAccounting(totalEquity)}
+                  {formatAccounting(a.balance)}
                 </DetailTableTd>
               </DetailTableRow>
-            </DetailTableBody>
-          </DetailTable>
-        </div>
-      </div>
+            ))}
+            <DetailTableRow className="font-bold border-t-2 border-default">
+              <DetailTableTd colSpan={2}>Total Kewajiban</DetailTableTd>
+              <DetailTableTd align="right">
+                {formatAccounting(totalLiabilities)}
+              </DetailTableTd>
+            </DetailTableRow>
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
+
+      <ReportSection title="Ekuitas">
+        <DetailTable data-report-table="Ekuitas">
+          <DetailTableHead>
+            <DetailTableTh>Kode</DetailTableTh>
+            <DetailTableTh>Nama Akun</DetailTableTh>
+            <DetailTableTh align="right">Saldo (Rp)</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {equity.map((a) => (
+              <DetailTableRow key={a.code}>
+                <DetailTableTd>{a.code}</DetailTableTd>
+                <DetailTableTd>{a.name}</DetailTableTd>
+                <DetailTableTd align="right">
+                  {formatAccounting(a.balance)}
+                </DetailTableTd>
+              </DetailTableRow>
+            ))}
+            <DetailTableRow className="font-bold border-t-2 border-default">
+              <DetailTableTd colSpan={2}>Total Ekuitas</DetailTableTd>
+              <DetailTableTd align="right">
+                {formatAccounting(totalEquity)}
+              </DetailTableTd>
+            </DetailTableRow>
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
 
       {/* Balance Check */}
       <div
-        className={`bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border no-break ${isBalanced ? "border-success" : "border-danger"}`}
+        className={`report-section ${isBalanced ? "border-success" : "border-danger"}`}
+        style={{ borderLeft: "4px solid", paddingLeft: 16 }}
       >
-        <div
-          className={`text-xl font-bold ${isBalanced ? "text-success" : "text-danger"}`}
-        >
-          {isBalanced ? "SEIMBANG" : "TIDAK SEIMBANG"}
-        </div>
-        <div className="text-[0.8125rem] text-muted-foreground font-medium">
-          Aset: {formatAccounting(totalAssets, { showSymbol: true })} |
-          Kewajiban + Ekuitas:{" "}
-          {formatAccounting(totalLiabilities + totalEquity, {
-            showSymbol: true,
-          })}
+        <div className="flex items-center gap-4">
+          <div className={`text-sm font-bold ${isBalanced ? "text-success" : "text-danger"}`}>
+            {isBalanced ? "SEIMBANG" : "TIDAK SEIMBANG"}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Aset: {formatAccounting(totalAssets, { showSymbol: true })} |
+            Kewajiban + Ekuitas:{" "}
+            {formatAccounting(totalLiabilities + totalEquity, { showSymbol: true })}
+          </div>
         </div>
       </div>
     </div>

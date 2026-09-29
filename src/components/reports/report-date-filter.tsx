@@ -40,7 +40,7 @@ export function ReportDateFilter({ defaultStartDate, defaultEndDate, extraParams
     >
       <AppDatePicker label="Dari" name="tanggalMulai" value={startDate} onChange={setStartDate} className="w-[180px]" />
       <AppDatePicker label="Sampai" name="tanggalSelesai" value={endDate} onChange={setEndDate} className="w-[180px]" />
-      <Button variant="primary" size="sm" onPress={handleGenerate} aria-label="Terapkan filter">Generate</Button>
+      <Button variant="primary" size="sm" onPress={handleGenerate} aria-label="Terapkan filter">Tampilkan</Button>
     </div>
   )
 }
@@ -68,7 +68,7 @@ export function ReportSingleDateFilter({ defaultDate, paramName = "date" }: Repo
       className="flex items-end gap-4 flex-wrap print:hidden"
     >
       <AppDatePicker label="Tanggal" name={paramName} value={date} onChange={setDate} className="w-[180px]" />
-      <Button variant="primary" size="sm" onPress={handleGenerate} aria-label="Terapkan filter">Generate</Button>
+      <Button variant="primary" size="sm" onPress={handleGenerate} aria-label="Terapkan filter">Tampilkan</Button>
     </div>
   )
 }

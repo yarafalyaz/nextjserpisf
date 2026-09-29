@@ -1,0 +1,34 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install required system packages, create non-root user matching Mac host UID 501, and prepare volume mount points
+RUN apk add --no-cache \
+    libc6-compat \
+    mysql-client \
+    tzdata && \
+    addgroup --system --gid 501 nodejs && \
+    adduser --system --uid 501 -G nodejs nextjs && \
+    mkdir -p /app/.next /app/node_modules && \
+    chown -R nextjs:nodejs /app/.next /app/node_modules
+
+COPY package.json package-lock.json ./
+RUN npm install
+
+# Copy application configuration and Prisma schema
+COPY --chown=root:root --chmod=755 src/ ./src/
+COPY --chown=root:root --chmod=755 public/ ./public/
+COPY --chown=root:root --chmod=755 prisma/ ./prisma/
+COPY --chown=root:root --chmod=644 next.config.ts tsconfig.json postcss.config.mjs next-env.d.ts eslint.config.js prisma.config.ts ./
+
+# Generate Prisma Client
+ENV DATABASE_URL="mysql://build:build@localhost:3306/build"
+RUN npx prisma generate
+
+EXPOSE 3001
+
+# Switch to non-root user
+USER nextjs
+
+# Start the application in development mode
+CMD ["npm", "run", "dev"]

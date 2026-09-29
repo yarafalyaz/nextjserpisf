@@ -19,12 +19,6 @@ test.describe("Payroll module flows", () => {
     await expect(page.locator("body")).toContainText("Pinjaman")
   })
 
-  test("Attendance list loads", async ({ page }) => {
-    await page.goto("/sdm/absensi")
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText("Absensi")
-  })
-
   test("Leave request list loads", async ({ page }) => {
     await page.goto("/sdm/cuti")
     await page.waitForLoadState("networkidle")

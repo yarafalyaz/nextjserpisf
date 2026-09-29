@@ -8,6 +8,8 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportDateFilter } from "@/components/reports/report-date-filter"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
+import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
+import { ReportNarration } from "@/components/reports/report-narration"
 
 import type { Metadata } from "next"
 
@@ -26,46 +28,25 @@ export default async function ProjectPnLPage({
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
   endDate.setHours(23, 59, 59, 999)
 
-  // Period-activity P&L: financials are filtered by their own transaction date
-  // within the period, and we show every project that has activity in that
-  // window. Previously projects were filtered by createdAt while their revenue/
-  // cost were NOT date-filtered, so a Q1 project with Q2 invoices vanished from a
-  // Q2 report and a Q2 project wrongly absorbed future-quarter invoices.
   const [invoices, materialIssues, expenses] = await Promise.all([
     prisma.salesInvoice.findMany({
-      where: {
-        projectId: { not: null },
-        status: { in: ['posted', 'partial', 'paid'] },
-        date: { gte: startDate, lte: endDate },
-      },
+      where: { projectId: { not: null }, status: { in: ['posted', 'partial', 'paid'] }, date: { gte: startDate, lte: endDate } },
       select: { projectId: true, subtotal: true },
     }),
     prisma.materialIssue.findMany({
-      where: {
-        projectId: { not: null },
-        status: 'completed',
-        date: { gte: startDate, lte: endDate },
-      },
+      where: { projectId: { not: null }, status: 'completed', date: { gte: startDate, lte: endDate } },
       include: { items: true },
     }),
     prisma.expense.findMany({
-      where: {
-        projectId: { not: null },
-        status: 'approved',
-        date: { gte: startDate, lte: endDate },
-      },
+      where: { projectId: { not: null }, status: 'approved', date: { gte: startDate, lte: endDate } },
       select: { projectId: true, amount: true },
     }),
   ])
 
-  // Aggregate per project
   const revenueByProject = new Map<number, number>()
   for (const inv of invoices) {
-    if (inv.projectId) {
-      revenueByProject.set(inv.projectId, (revenueByProject.get(inv.projectId) || 0) + Number(inv.subtotal))
-    }
+    if (inv.projectId) revenueByProject.set(inv.projectId, (revenueByProject.get(inv.projectId) || 0) + Number(inv.subtotal))
   }
-
   const cogsByProject = new Map<number, number>()
   for (const mi of materialIssues) {
     if (mi.projectId) {
@@ -73,30 +54,17 @@ export default async function ProjectPnLPage({
       cogsByProject.set(mi.projectId, (cogsByProject.get(mi.projectId) || 0) + totalCost)
     }
   }
-
   const expenseByProject = new Map<number, number>()
   for (const exp of expenses) {
-    if (exp.projectId) {
-      expenseByProject.set(exp.projectId, (expenseByProject.get(exp.projectId) || 0) + Number(exp.amount))
-    }
+    if (exp.projectId) expenseByProject.set(exp.projectId, (expenseByProject.get(exp.projectId) || 0) + Number(exp.amount))
   }
 
-  // Only projects with activity in the period appear in the report.
-  const activeProjectIds = [
-    ...new Set<number>([
-      ...revenueByProject.keys(),
-      ...cogsByProject.keys(),
-      ...expenseByProject.keys(),
-    ]),
-  ]
+  const activeProjectIds = [...new Set<number>([...revenueByProject.keys(), ...cogsByProject.keys(), ...expenseByProject.keys()])]
 
   const projects = activeProjectIds.length
     ? await prisma.project.findMany({
         where: { id: { in: activeProjectIds } },
-        include: {
-          customer: { select: { name: true } },
-          customerVehicle: { select: { licensePlate: true } },
-        },
+        include: { customer: { select: { name: true } }, customerVehicle: { select: { licensePlate: true } } },
         orderBy: { createdAt: 'desc' },
       })
     : []
@@ -109,20 +77,8 @@ export default async function ProjectPnLPage({
     const profit = revenue - totalCost
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0
     const vehicle = project.customerVehicle?.licensePlate || "-"
-    return {
-      id: project.id,
-      documentNo: project.documentNo || '-',
-      name: project.name,
-      customer: project.customer.name,
-      vehicle,
-      status: project.status,
-      revenue,
-      cogs,
-      expense,
-      totalCost,
-      profit,
-      margin,
-    }
+    return { id: project.id, documentNo: project.documentNo || '-', name: project.name, customer: project.customer.name,
+      vehicle, status: project.status, revenue, cogs, expense, totalCost, profit, margin }
   })
 
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0)
@@ -134,100 +90,59 @@ export default async function ProjectPnLPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Laba Rugi per Proyek" },
-        ]} />
+        <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Laporan", href: "/laporan" }, { label: "Laba Rugi per Proyek" }]} />
       </div>
-
-      <div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="PnL_by_Project" />
-      </div>
-
+      <div className="flex items-center justify-end print:hidden"><ExportButtons title="Laba_Rugi_per_Proyek" /></div>
       <div className="print:hidden">
         <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
       </div>
-
-      {/* Professional letterhead (screen + print) */}
       <ReportLetterhead title="Laba Rugi per Proyek / Perintah Kerja" periodLabel={periodLabel} />
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6 print:hidden">
-        <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Pendapatan</div>
-          <div className="text-xl font-bold text-success">{formatCurrency(totalRevenue)}</div>
-        </div>
-        <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Biaya</div>
-          <div className="text-xl font-bold text-danger">{formatCurrency(totalCost)}</div>
-        </div>
-        <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted-foreground font-medium">Total Laba</div>
-          <div className={`text-xl font-bold ${totalProfit >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(totalProfit)}</div>
-        </div>
-        <div className="bg-surface rounded-xl p-5 px-6 flex flex-col gap-1 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-[0.8125rem] text-muted-foreground font-medium">Rata-rata Margin</div>
-          <div className={`text-xl font-bold ${avgMargin >= 0 ? 'text-success' : 'text-danger'}`}>{avgMargin.toFixed(1)}%</div>
-        </div>
+      <ReportNarration text="Laporan Laba Rugi Proyek menyajikan kinerja keuangan setiap proyek yang sedang berjalan. Laporan ini menampilkan pendapatan, biaya langsung, dan laba bersih per proyek, sehingga manajemen dapat mengevaluasi profitabilitas dan efisiensi masing-masing proyek." />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
+        <ReportKpiCard label="Total Pendapatan" value={formatCurrency(totalRevenue)} valueClassName="text-success" />
+        <ReportKpiCard label="Total Biaya" value={formatCurrency(totalCost)} valueClassName="text-danger" />
+        <ReportKpiCard label="Total Laba" value={formatCurrency(totalProfit)} valueClassName={totalProfit >= 0 ? 'text-success' : 'text-danger'} />
+        <ReportKpiCard label="Rata-rata Margin" value={`${avgMargin.toFixed(1)}%`} valueClassName={avgMargin >= 0 ? 'text-success' : 'text-danger'} />
       </div>
-
-      {/* Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Detail per Proyek</h2>
-          <span className="text-sm text-muted-foreground">{rows.length} proyek</span>
-        </div>
-        <div className="p-4 px-5 overflow-x-auto">
-          <DetailTable data-report-table="P&L by Project">
-            <DetailTableHead>
-              <DetailTableTh>No. Dok</DetailTableTh>
-              <DetailTableTh>Proyek</DetailTableTh>
-              <DetailTableTh>Pelanggan</DetailTableTh>
-              <DetailTableTh>Kendaraan</DetailTableTh>
-              <DetailTableTh>Status</DetailTableTh>
-              <DetailTableTh align="right">Pendapatan</DetailTableTh>
-              <DetailTableTh align="right">Material</DetailTableTh>
-              <DetailTableTh align="right">Beban</DetailTableTh>
-              <DetailTableTh align="right">Laba</DetailTableTh>
-              <DetailTableTh align="right">Margin</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {rows.map((row) => (
-                <DetailTableRow key={row.id}>
-                  <DetailTableTd className="font-mono text-sm">{row.documentNo}</DetailTableTd>
-                  <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
-                  <DetailTableTd>{row.customer}</DetailTableTd>
-                  <DetailTableTd className="text-sm">{row.vehicle}</DetailTableTd>
-                  <DetailTableTd>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${row.status === 'completed' ? 'bg-success/10 text-success' : row.status === 'active' ? 'bg-primary/10 text-primary' : 'bg-default/50 text-muted-foreground'}`}>
-                      {row.status}
-                    </span>
-                  </DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(row.revenue)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(row.cogs)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(row.expense)}</DetailTableTd>
-                  <DetailTableTd align="right" className={row.profit >= 0 ? 'text-success font-medium' : 'text-danger font-medium'}>{formatAccounting(row.profit)}</DetailTableTd>
-                  <DetailTableTd align="right" className={row.margin >= 20 ? 'text-success' : row.margin >= 0 ? 'text-warning' : 'text-danger'}>{row.margin.toFixed(1)}%</DetailTableTd>
-                </DetailTableRow>
-              ))}
-              {rows.length === 0 && (
-                <DetailTableRow><DetailTableTd colSpan={10} className="text-center text-muted-foreground py-8">Tidak ada proyek dalam periode ini</DetailTableTd></DetailTableRow>
-              )}
-              {rows.length > 0 && (
-                <DetailTableRow className="font-bold border-t-2 border-default">
-                  <DetailTableTd colSpan={5}>TOTAL</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(totalRevenue)}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(rows.reduce((s, r) => s + r.cogs, 0))}</DetailTableTd>
-                  <DetailTableTd align="right">{formatAccounting(rows.reduce((s, r) => s + r.expense, 0))}</DetailTableTd>
-                  <DetailTableTd align="right" className={totalProfit >= 0 ? 'text-success' : 'text-danger'}>{formatAccounting(totalProfit)}</DetailTableTd>
-                  <DetailTableTd align="right">{avgMargin.toFixed(1)}%</DetailTableTd>
-                </DetailTableRow>
-              )}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
-      </div>
+      <ReportSection title={`Detail per Proyek (${rows.length} proyek)`}>
+        <DetailTable data-report-table="P&L by Project">
+          <DetailTableHead>
+            <DetailTableTh>No. Dok</DetailTableTh><DetailTableTh>Proyek</DetailTableTh><DetailTableTh>Pelanggan</DetailTableTh>
+            <DetailTableTh>Kendaraan</DetailTableTh><DetailTableTh>Status</DetailTableTh>
+            <DetailTableTh align="right">Pendapatan</DetailTableTh><DetailTableTh align="right">Material</DetailTableTh>
+            <DetailTableTh align="right">Beban</DetailTableTh><DetailTableTh align="right">Laba</DetailTableTh><DetailTableTh align="right">Margin</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {rows.map((row) => (
+              <DetailTableRow key={row.id}>
+                <DetailTableTd className="font-mono text-sm">{row.documentNo}</DetailTableTd>
+                <DetailTableTd className="font-medium">{row.name}</DetailTableTd>
+                <DetailTableTd>{row.customer}</DetailTableTd>
+                <DetailTableTd className="text-sm">{row.vehicle}</DetailTableTd>
+                <DetailTableTd>{row.status}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.revenue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.cogs)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.expense)}</DetailTableTd>
+                <DetailTableTd align="right" className={row.profit >= 0 ? 'text-success font-medium' : 'text-danger font-medium'}>{formatAccounting(row.profit)}</DetailTableTd>
+                <DetailTableTd align="right" className={row.margin >= 20 ? 'text-success' : row.margin >= 0 ? 'text-warning' : 'text-danger'}>{row.margin.toFixed(1)}%</DetailTableTd>
+              </DetailTableRow>
+            ))}
+            {rows.length === 0 && (
+              <DetailTableRow><DetailTableTd colSpan={10} className="text-center text-muted-foreground py-8">Tidak ada proyek dalam periode ini</DetailTableTd></DetailTableRow>
+            )}
+            {rows.length > 0 && (
+              <DetailTableRow className="font-bold border-t-2 border-default">
+                <DetailTableTd colSpan={5}>TOTAL</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalRevenue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(rows.reduce((s, r) => s + r.cogs, 0))}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(rows.reduce((s, r) => s + r.expense, 0))}</DetailTableTd>
+                <DetailTableTd align="right" className={totalProfit >= 0 ? 'text-success' : 'text-danger'}>{formatAccounting(totalProfit)}</DetailTableTd>
+                <DetailTableTd align="right">{avgMargin.toFixed(1)}%</DetailTableTd>
+              </DetailTableRow>
+            )}
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
     </div>
   )
 }

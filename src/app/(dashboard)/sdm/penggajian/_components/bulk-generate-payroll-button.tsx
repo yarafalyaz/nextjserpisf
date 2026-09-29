@@ -113,11 +113,11 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
               <div className="grid grid-cols-2 gap-4 bg-default-100/50 p-3 rounded-lg border border-default/50 text-xs">
                 <div>
                   <span className="text-muted-foreground block mb-0.5">Mulai Cut-off</span>
-                  <span className="font-semibold text-foreground text-sm">{startDate ? new Date(startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : "-"}</span>
+                  <span className="font-semibold text-foreground text-sm">{startDate ? new Date(startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }) : "-"}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block mb-0.5">Selesai Cut-off</span>
-                  <span className="font-semibold text-foreground text-sm">{endDate ? new Date(endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : "-"}</span>
+                  <span className="font-semibold text-foreground text-sm">{endDate ? new Date(endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }) : "-"}</span>
                 </div>
               </div>
             ) : (

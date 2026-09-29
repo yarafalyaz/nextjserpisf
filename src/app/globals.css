@@ -94,12 +94,17 @@
   --radius: 0.625rem;
 
   --background: #ffffff;
+  --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
   --popover: #ffffff;
   --popover-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #475569;
 
+  --primary: #171717;
   --primary-foreground: #fafafa;
+  --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
 
   /* shadcn neutral hover surface (distinct from HeroUI red --accent bridge) */
@@ -133,12 +138,17 @@
 
 html.dark {
   --background: #0f1219;
+  --foreground: #f1f5f9;
   --card: #161b26;
   --card-foreground: #f1f5f9;
   --popover: #161b26;
   --popover-foreground: #f1f5f9;
+  --muted: #242938;
+  --muted-foreground: #94a3b8;
 
+  --primary: #fafafa;
   --primary-foreground: #171717;
+  --secondary: #242938;
   --secondary-foreground: #f1f5f9;
 
   --accent-bg: #242938;
@@ -609,8 +619,8 @@ html.dark .filter-chip:hover {
 }
 
 html.dark .filter-chip.active {
-  background: var(--color-primary);
-  color: white;
+  background: var(--primary-foreground);
+  color: var(--color-primary);
   border-color: var(--color-primary);
 }
 
@@ -2597,4 +2607,60 @@ html.dark [cmdk-group-heading] {
   --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
   --sidebar-border: hsl(240 3.7% 15.9%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+/* Narrative description block for reports */
+.report-narration {
+  margin-bottom: 20px;
+  padding: 0;
+}
+.report-narration p {
+  font-size: 0.8125rem;
+  line-height: 1.65;
+  color: var(--text-secondary, #475569);
+  margin: 0;
+}
+
+@media print {
+  .report-narration p {
+    font-size: 9pt;
+    color: #333 !important;
+  }
+}
+
+/* ── React Day Picker — dropdown month/year selectors ────────────────── */
+.rdp-dropdown_month,
+.rdp-dropdown_year {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.rdp-dropdown_month select,
+.rdp-dropdown_year select {
+  appearance: auto;
+  -webkit-appearance: auto;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 6px;
+  padding: 2px 6px 2px 4px;
+  font-size: 0.8rem;
+  color: var(--text-primary, #0f172a);
+  cursor: pointer;
+  outline: none;
+  width: auto;
+  min-width: 80px;
+}
+.rdp-dropdown_month select:hover,
+.rdp-dropdown_year select:hover {
+  border-color: var(--text-muted, #94a3b8);
+}
+.rdp-dropdown_month select:focus-visible,
+.rdp-dropdown_year select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring, #3b82f6);
+}
+.dark .rdp-dropdown_month select,
+.dark .rdp-dropdown_year select {
+  background: var(--bg-card, #1e293b);
+  color: var(--text-primary, #f1f5f9);
+  border-color: var(--border-color, #334155);
 }

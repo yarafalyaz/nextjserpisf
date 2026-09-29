@@ -46,6 +46,94 @@ describe("stockJournalService", () => {
     mocks.createJournal.mockResolvedValue({ id: 1, journalNumber: "JRN-001" });
   });
 
+  describe("onProductionOrderMaterialIssue", () => {
+    it("posts material value from Inventory to WIP for every issue batch", async () => {
+      await stockJournalService.onProductionOrderMaterialIssue(
+        tx,
+        [{ itemId: 2, qty: 3, cost: 12 }],
+        "MO-2",
+        77,
+        42,
+      );
+
+      expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({
+        referenceType: "ProductionOrderMaterialIssue",
+        referenceId: 77,
+        type: "PROD",
+        entries: [
+          expect.objectContaining({ accountId: 400, debit: 36, credit: 0 }),
+          expect.objectContaining({ accountId: 100, debit: 0, credit: 36 }),
+        ],
+      }));
+    });
+
+    it("refuses posting if WIP or Inventory account is not configured", async () => {
+      mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, wipAccountId: null });
+      await expect(stockJournalService.onProductionOrderMaterialIssue(
+        tx,
+        [{ qty: 1, cost: 10 }],
+        "MO-2",
+        77,
+      )).rejects.toThrow("Akun Persediaan dan Barang Dalam Proses");
+      expect(mocks.createJournal).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("onProductionOrderCompleted", () => {
+    it("debits finished goods and credits WIP when a production order completes", async () => {
+      await stockJournalService.onProductionOrderCompleted(
+        tx,
+        [{ qty: 1, cost: 125 }],
+        "MO-9",
+        9,
+        42,
+      );
+
+      expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({
+        referenceType: "ProductionOrder",
+        referenceId: 9,
+        entries: [
+          expect.objectContaining({ accountId: 100, debit: 125, credit: 0 }),
+          expect.objectContaining({ accountId: 400, debit: 0, credit: 125 }),
+        ],
+      }));
+    });
+
+    it("requires WIP and inventory accounts for completion", async () => {
+      mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, inventoryAccountId: null });
+      await expect(stockJournalService.onProductionOrderCompleted(
+        tx,
+        [{ qty: 1, cost: 125 }],
+        "MO-9",
+        9,
+      )).rejects.toThrow("Akun Persediaan dan Barang Dalam Proses");
+    });
+  });
+
+  describe("onProductionOrderCostRoundingVariance", () => {
+    it("debits the variance expense when actual WIP is above rounded stock value", async () => {
+      await stockJournalService.onProductionOrderCostRoundingVariance(tx, 0.01, "MO-9", 9);
+      expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({
+        referenceType: "ProductionOrderCostVariance",
+        referenceId: 9,
+        entries: [
+          expect.objectContaining({ accountId: 500, debit: 0.01, credit: 0 }),
+          expect.objectContaining({ accountId: 400, debit: 0, credit: 0.01 }),
+        ],
+      }));
+    });
+
+    it("credits the variance expense when rounded stock value is above actual WIP", async () => {
+      await stockJournalService.onProductionOrderCostRoundingVariance(tx, -0.01, "MO-9", 9);
+      expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({
+        entries: [
+          expect.objectContaining({ accountId: 400, debit: 0.01, credit: 0 }),
+          expect.objectContaining({ accountId: 500, debit: 0, credit: 0.01 }),
+        ],
+      }));
+    });
+  });
+
   describe("onGoodsReceipt", () => {
     it("creates balanced Dr Inventory / Cr PurchaseInventory journal", async () => {
       await stockJournalService.onGoodsReceipt(tx, [{ qty: 10, cost: 5 }], "GR-1", 1, 42);

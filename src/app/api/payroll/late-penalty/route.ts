@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { hasPermission } from "@/lib/auth/permissions"
+import { assertHrEmployeeAccess, getHrScope } from "@/lib/auth/hr-scope"
 import { apiError } from "@/lib/api-response"
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service"
 
@@ -24,11 +25,21 @@ export async function GET(request: NextRequest) {
     const startDateStr = searchParams.get("tanggalMulai")
     const endDateStr = searchParams.get("tanggalSelesai")
 
-    if (!employeeId || !startDateStr || !endDateStr) {
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0 || !startDateStr || !endDateStr) {
       return NextResponse.json(
         { error: "employeeId, startDate, and endDate are required" },
         { status: 400 }
       )
+    }
+
+    const scope = await getHrScope({
+      id: String(session.user?.id ?? ""),
+      roles: Array.isArray(session.user?.roles) ? session.user.roles : [],
+    })
+    try {
+      await assertHrEmployeeAccess(scope, employeeId)
+    } catch {
+      return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
     }
 
     const startDate = new Date(startDateStr)

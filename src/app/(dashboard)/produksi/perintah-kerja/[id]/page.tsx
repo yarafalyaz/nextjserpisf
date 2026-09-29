@@ -49,6 +49,14 @@ export default async function WorkOrderDetailPage({
 
   if (!wo) notFound();
 
+  // Fetch item names dynamically
+  const itemIds = wo.items.map((i) => i.itemId);
+  const items = await prisma.item.findMany({
+    where: { id: { in: itemIds } },
+    select: { id: true, name: true },
+  });
+  const itemNameMap = new Map(items.map((i) => [i.id, i.name]));
+
   const [completedMi, defaultWarehouse] = await Promise.all([
     prisma.materialIssue.findFirst({
       where: { workOrderId: wo.id, status: "completed" },
@@ -150,7 +158,7 @@ export default async function WorkOrderDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Nama Barang</DetailTableTh>
                 <DetailTableTh>Deskripsi</DetailTableTh>
                 <DetailTableTh>Status</DetailTableTh>
                 <DetailTableTh align="right">Jml</DetailTableTh>
@@ -160,7 +168,7 @@ export default async function WorkOrderDetailPage({
               <DetailTableBody>
                 {wo.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd>{item.description || "-"}</DetailTableTd>
                     <DetailTableTd>
                       <StatusChip status={item.status || "pending"} />

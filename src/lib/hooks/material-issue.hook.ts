@@ -116,7 +116,8 @@ export async function onMaterialIssueCompleted(
       journalItems,
       issue.documentNo ?? `MI-${issueId}`,
       issueId,
-      userId
+      userId,
+      issue.costCenterId
     );
 
     // Update Material Issue status

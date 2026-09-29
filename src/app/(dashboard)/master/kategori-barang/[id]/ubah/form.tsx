@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
 
 interface ItemCategoryEditFormProps {
-  category: { id: number; name: string; description: string | null; parentId: number | null }
+  category: { id: number; name: string; description: string | null; parentId: number | null; costingMethod?: string }
 }
 
 export function ItemCategoryEditForm({ category }: ItemCategoryEditFormProps) {

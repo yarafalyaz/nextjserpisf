@@ -3,16 +3,12 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/ui/data-table"
 import { Badge } from "@/components/ui/shadcn/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/shadcn/select"
+
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { Download, Eye } from "lucide-react"
+import { AppDatePicker } from "@/components/ui/date-picker"
+import { Combobox } from "@/components/ui/combobox"
 import { DetailDrawer } from "@/components/activity-log/detail-drawer"
 
 interface LogRow {
@@ -38,6 +34,9 @@ const actionBadge: Record<string, string> = {
   DELETE: "border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
   login: "border-transparent bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
   LOGIN: "border-transparent bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
+  grant: "border-transparent bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400",
+  revoke: "border-transparent bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-400",
+  initialize: "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
 }
 
 const actionLabel: Record<string, string> = {
@@ -49,6 +48,9 @@ const actionLabel: Record<string, string> = {
   DELETE: "Hapus",
   login: "Login",
   LOGIN: "Login",
+  grant: "Izinkan",
+  revoke: "Cabut",
+  initialize: "Inisialisasi",
 }
 
 const modelLabel: Record<string, string> = {
@@ -161,15 +163,11 @@ export function ActivityLogTable({
     {
       accessorKey: "createdAt",
       header: "Waktu",
-      cell: ({ row }) => {
-        const d = new Date(row.original.createdAt)
-        return (
-          <span className="whitespace-nowrap text-xs tabular-nums">
-            {d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}{" "}
-            {d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        )
-      },
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs tabular-nums">
+          {row.original.createdAt}
+        </span>
+      ),
     },
     {
       accessorKey: "userName",
@@ -246,65 +244,53 @@ export function ActivityLogTable({
       <div className="flex items-center gap-2">
         {/* Date range */}
         <div className="flex items-center gap-1">
-          <input
-            type="date"
+          <AppDatePicker
+            name="dateFrom"
             value={filterDateFrom}
-            onChange={(e) => onFilterChange("dateFrom", e.target.value)}
-            className="h-8 rounded-md border bg-background px-2 text-xs"
+            onChange={(v) => onFilterChange("dateFrom", v)}
+            placeholder="Dari tanggal"
           />
           <span className="text-xs text-muted-foreground">–</span>
-          <input
-            type="date"
+          <AppDatePicker
+            name="dateTo"
             value={filterDateTo}
-            onChange={(e) => onFilterChange("dateTo", e.target.value)}
-            className="h-8 rounded-md border bg-background px-2 text-xs"
+            onChange={(v) => onFilterChange("dateTo", v)}
+            placeholder="Sampai tanggal"
           />
         </div>
 
         {/* User filter */}
-        <Select value={filterUser} onValueChange={(v) => onFilterChange("userId", v)}>
-          <SelectTrigger className="w-[140px]" size="sm">
-            <SelectValue placeholder="Semua pengguna" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua pengguna</SelectItem>
-            {users.map((u) => (
-              <SelectItem key={u.id} value={String(u.id)}>
-                {u.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={[
+            { value: "all", label: "Semua pengguna" },
+            ...users.map((u) => ({ value: String(u.id), label: u.name })),
+          ]}
+          value={filterUser}
+          onChange={(v) => onFilterChange("userId", v ?? "all")}
+          placeholder="Semua pengguna"
+        />
 
         {/* Action filter */}
-        <Select value={filterAction} onValueChange={(v) => onFilterChange("action", v)}>
-          <SelectTrigger className="w-[120px]" size="sm">
-            <SelectValue placeholder="Semua aksi" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua aksi</SelectItem>
-            {actionList.map((a) => (
-              <SelectItem key={a} value={a}>
-                {actionLabel[a] || a}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={[
+            { value: "all", label: "Semua aksi" },
+            ...actionList.map((a) => ({ value: a, label: actionLabel[a] || a })),
+          ]}
+          value={filterAction}
+          onChange={(v) => onFilterChange("action", v ?? "all")}
+          placeholder="Semua aksi"
+        />
 
         {/* Model filter */}
-        <Select value={filterModel} onValueChange={(v) => onFilterChange("modelType", v)}>
-          <SelectTrigger className="w-[150px]" size="sm">
-            <SelectValue placeholder="Semua model" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua model</SelectItem>
-            {modelTypes.map((m) => (
-              <SelectItem key={m} value={m}>
-                {modelLabel[m] || m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={[
+            { value: "all", label: "Semua model" },
+            ...modelTypes.map((m) => ({ value: m, label: modelLabel[m] || m })),
+          ]}
+          value={filterModel}
+          onChange={(v) => onFilterChange("modelType", v ?? "all")}
+          placeholder="Semua model"
+        />
 
         {/* Export */}
         <a

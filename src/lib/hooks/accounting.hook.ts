@@ -600,6 +600,7 @@ export async function onExpenseApproved(
           debit: expense.amount,
           credit: 0,
           memo: `Biaya: ${expense.description ?? ""}`,
+          costCenterId: expense.costCenterId ?? null,
         },
         {
           journalId: journal.id,
@@ -1386,6 +1387,7 @@ export async function onPayrollPaid(
       debit: number;
       credit: number;
       memo: string;
+      costCenterId?: number | null;
     }> = [
       // Dr. Salary Expense
       {
@@ -1393,6 +1395,7 @@ export async function onPayrollPaid(
         debit: totalExpense,
         credit: 0,
         memo: "Beban Gaji",
+        costCenterId: payroll.costCenterId ?? null,
       },
       // Cr. Bank/Cash (net paid to employee)
       {

@@ -49,11 +49,19 @@ const toneClasses: Record<Tone, string> = {
   default: 'border-transparent bg-muted text-muted-foreground',
 }
 
-export function StatusChip({ status }: { status: string }) {
-  const tone = statusColors[status.toLowerCase().replace(/\s+/g, '_')] || 'default'
+export function StatusChip({
+  status,
+  customLabel,
+  customTone,
+}: {
+  status: string
+  customLabel?: string
+  customTone?: Tone
+}) {
+  const tone = customTone || statusColors[status.toLowerCase().replace(/\s+/g, '_')] || 'default'
   return (
     <Badge variant="outline" className={cn('font-medium', toneClasses[tone])}>
-      {statusLabel(status)}
+      {customLabel || statusLabel(status)}
     </Badge>
   )
 }

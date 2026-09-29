@@ -49,6 +49,14 @@ export default async function OvertimePage({
 
   const data = toPlain(overtimes)
 
+  const userRoles: string[] = user.roles ?? [];
+  const userPerms: string[] = (user as any).permissions ?? [];
+  const showActions =
+    userRoles.includes("super_admin") ||
+    userPerms.includes("edit_overtime_requests") ||
+    userPerms.includes("delete_overtime_requests");
+  const showEmployeeColumn = scope.kind !== "self";
+
   const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
     return (
@@ -73,6 +81,8 @@ export default async function OvertimePage({
 
       <OvertimeTable
         data={data}
+        showActions={showActions}
+        showEmployeeColumn={showEmployeeColumn}
         toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/lembur" />}
         filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
       />

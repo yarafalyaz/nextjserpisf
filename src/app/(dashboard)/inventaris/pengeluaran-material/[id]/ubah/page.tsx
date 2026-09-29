@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
@@ -29,7 +29,7 @@ export default async function EditPage({
 
   if (!data) notFound();
 
-  const [warehouses, items] = await Promise.all([
+  const [warehouses, items, costCenters] = await Promise.all([
     prisma.warehouse.findMany({ orderBy: { name: "asc" } }),
     prisma.item
       .findMany({
@@ -50,6 +50,7 @@ export default async function EditPage({
           cost: String(i.cost),
         })),
       ),
+    prisma.costCenter.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true }, orderBy: { code: "asc" } }),
   ]);
 
   return (
@@ -67,6 +68,7 @@ export default async function EditPage({
       <MaterialIssueForm
         issue={data as any}
         warehouses={warehouses as any}
+        costCenters={JSON.parse(JSON.stringify(costCenters))}
         items={items as any}
       />
     </div>

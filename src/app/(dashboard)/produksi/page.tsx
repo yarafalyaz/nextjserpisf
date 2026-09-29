@@ -9,7 +9,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Manufaktur" }
 
 const manufacturingModules: ModuleItem[] = [
-  { label: "Produk (BOM)", href: "/produksi/products", icon: Package, desc: "Bill of Materials" },
+  { label: "Produk (BOM)", href: "/produksi/products", icon: Package, desc: "Rincian kebutuhan material (BOM)" },
   { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, desc: "Perintah kerja" },
   { label: "Perintah Produksi", href: "/produksi/production-orders", icon: Hammer, desc: "Perintah produksi" },
 ]

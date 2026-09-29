@@ -70,9 +70,40 @@ export async function consumeFifoLayers(
                FOR UPDATE`
   )
 
+  // Fetch effective costing method (per category, fallback to item costingMethod)
+  const item = await tx.item.findUnique({
+    where: { id: itemId },
+    select: {
+      costingMethod: true,
+      category: {
+        select: {
+          costingMethod: true
+        }
+      }
+    }
+  })
+  const costingMethod = (item?.category?.costingMethod || item?.costingMethod || "fifo").toLowerCase()
+
+  let averageCost = 0
+  if (costingMethod === "average") {
+    const totalValue = layers.reduce((s, l) => {
+      const uCost = l.unitCost !== undefined ? l.unitCost : (l as any).unit_cost
+      const rem = l.remaining !== undefined ? l.remaining : (l as any).remaining
+      return s + Number(rem) * Number(uCost)
+    }, 0)
+    const totalQty = layers.reduce((s, l) => {
+      const rem = l.remaining !== undefined ? l.remaining : (l as any).remaining
+      return s + Number(rem)
+    }, 0)
+    averageCost = totalQty > 0 ? totalValue / totalQty : 0
+  }
+
   // Shortfall guard computed from the locked (fresh) rows.
   if (!allowShortfall) {
-    const available = layers.reduce((s, l) => s + Number(l.remaining), 0)
+    const available = layers.reduce((s, l) => {
+      const rem = l.remaining !== undefined ? l.remaining : (l as any).remaining
+      return s + Number(rem)
+    }, 0)
     if (available < qty) {
       const where = warehouseId != null ? ` di gudang #${warehouseId}` : ""
       const ctx = label ? ` (${label})` : ""
@@ -89,8 +120,12 @@ export async function consumeFifoLayers(
 
   for (const layer of layers) {
     if (toConsume <= 0) break
-    const consume = Math.min(Number(layer.remaining), toConsume)
-    consumedCost += consume * Number(layer.unitCost)
+    const rem = layer.remaining !== undefined ? layer.remaining : (layer as any).remaining
+    const consume = Math.min(Number(rem), toConsume)
+    if (costingMethod === "fifo") {
+      const uCost = layer.unitCost !== undefined ? layer.unitCost : (layer as any).unit_cost
+      consumedCost += consume * Number(uCost)
+    }
     layerUpdates.push(
       tx.inventoryLayer.update({
         where: { id: layer.id },
@@ -102,7 +137,12 @@ export async function consumeFifoLayers(
       const key = `${layer.batchNumber}|${layer.warehouseId ?? ""}`
       batchConsumption.set(key, (batchConsumption.get(key) ?? 0) + consume)
     }
-    toConsume -= consume
+    toConsume = Math.round((toConsume - consume) * 100) / 100
+  }
+
+  if (costingMethod === "average") {
+    const consumedQty = Math.round((qty - Math.max(0, toConsume)) * 100) / 100
+    consumedCost = consumedQty * averageCost
   }
 
   await Promise.all(layerUpdates)
@@ -121,6 +161,12 @@ export async function consumeFifoLayers(
           // Filter by warehouse in memory since the IN clause covers all batches
         }
       })
+
+      if (typeof tx.$executeRaw === "function" && batchesData.length > 0) {
+        for (const batch of batchesData) {
+          await tx.$executeRaw`SELECT id FROM item_batches WHERE id = ${batch.id} FOR UPDATE`
+        }
+      }
       
       const batchUpdates: Promise<any>[] = []
       
@@ -186,12 +232,15 @@ export async function consumeFifoLayers(
             take: need,
             select: { id: true },
           })
-          if (serials.length > 0) {
-            await tx.itemSerial.updateMany({
-              where: { id: { in: serials.map((s) => s.id) } },
-              data: { status: "used" },
-            })
+          if (serials.length !== need) {
+            throw new Error(
+              `Nomor seri tidak mencukupi untuk item #${itemId}. Tersedia: ${serials.length}, dibutuhkan: ${need}.`,
+            )
           }
+          await tx.itemSerial.updateMany({
+            where: { id: { in: serials.map((s) => s.id) }, status: "available" },
+            data: { status: "used" },
+          })
         }
       }
     }

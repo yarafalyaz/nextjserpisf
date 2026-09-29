@@ -13,6 +13,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 export const metadata: Metadata = { title: "Pinjaman" }
 
 export default async function EmployeeLoanDetailPage({
@@ -20,14 +21,15 @@ export default async function EmployeeLoanDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_employees")
+  const user = await requirePermission("view_employee_loans")
+  const scope = await getHrScope(user)
 
   const { id } = await params
   const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  if (!Number.isSafeInteger(numId) || numId <= 0) notFound()
 
   const loan = await prisma.employeeLoan.findUnique({
-    where: { id: numId },
+    where: { id: numId, ...hrScopeWhere(scope) },
     include: {
       employee: true,
     },

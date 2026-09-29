@@ -3,8 +3,10 @@
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { auth } from "@/lib/auth/auth";
+import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook";
 import { revalidatePath } from "next/cache";
-import { logActivity } from "@/lib/services/activity-log.service";
+import { logActivity } from "@/lib/services/activity-log.service"
+import { assertCSRF } from "@/lib/security/csrf";
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
@@ -15,6 +17,7 @@ import {
   workflowStepsSchema,
 } from "@/lib/validations/approval.schemas";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
+import type { Prisma } from "@prisma/client";
 
 type WorkflowStepInput = {
   name?: string;
@@ -22,6 +25,49 @@ type WorkflowStepInput = {
   userId?: number | null;
   approverType?: string | null;
 };
+
+const APPROVED_BY_MODELS = new Set([
+  "PurchaseRequest",
+  "PurchaseOrder",
+  "VendorBill",
+  "LeaveRequest",
+  "OvertimeRequest",
+  "EmployeeLoan",
+]);
+const REJECTION_REASON_MODELS = new Set([
+  "PurchaseRequest",
+  "LeaveRequest",
+  "OvertimeRequest",
+]);
+
+const APPROVAL_REFERENCE_PERMISSIONS: Record<string, string> = {
+  Quotation: "approve_quotations",
+  SalesOrder: "approve_sales_orders",
+  SalesInvoice: "approve_sales_invoices",
+  PurchaseRequest: "approve_purchase_requests",
+  PurchaseOrder: "approve_purchase_orders",
+  VendorBill: "approve_vendor_bills",
+  LeaveRequest: "approve_leave_requests",
+  OvertimeRequest: "approve_overtime_requests",
+  EmployeeLoan: "create_loans",
+  Expense: "approve_expenses",
+};
+
+function assertApprovalPermission(
+  user: { roles?: string[]; permissions?: string[]; isActive?: boolean },
+  referenceType: string,
+): void {
+  if (user.isActive === false) throw new Error("Unauthorized");
+  if (user.roles?.includes("super_admin")) return;
+  const permissions = user.permissions ?? [];
+  const referencePermission = APPROVAL_REFERENCE_PERMISSIONS[referenceType];
+  if (
+    !permissions.includes("approve_workflows") &&
+    !(referencePermission && permissions.includes(referencePermission))
+  ) {
+    throw new Error("Forbidden: Anda tidak memiliki izin menyetujui dokumen ini.");
+  }
+}
 
 /**
  * Parse + Zod-validate the workflow steps JSON blob from formData.
@@ -99,8 +145,10 @@ async function assertStepApprover(
 
 export async function approveStep(approvalId: number, formData: FormData) {
   try {
-    const user = await requirePermission("approve_workflows");
+    await assertCSRF();
     const session = await auth();
+    const user = session?.user;
+    if (!user) throw new Error("Unauthorized");
 
     const parsed = parseFormData(approveStepSchema, formData);
     if (!parsed.success) throw new Error(parsed.error);
@@ -123,10 +171,25 @@ export async function approveStep(approvalId: number, formData: FormData) {
       if (approval.status !== "pending")
         throw new Error("Approval sudah diproses");
 
+      const totalSteps = approval.workflow.steps.length;
+      if (
+        totalSteps === 0 ||
+        !Number.isSafeInteger(approval.currentStep) ||
+        approval.currentStep < 1 ||
+        approval.currentStep > totalSteps
+      ) {
+        throw new Error("Langkah approval tidak valid pada alur persetujuan ini");
+      }
+
+      assertApprovalPermission(user, approval.referenceType);
+
       // Only the designated approver for the current step may approve it.
       await assertStepApprover(approval, user);
 
-      const totalSteps = approval.workflow.steps.length;
+      // Maker-Checker: prevent approving own request (super_admin bypasses)
+      if (!user.roles.includes("super_admin") && approval.requestedBy !== null && approval.requestedBy === Number(user.id)) {
+        throw new Error("Maker-Checker Constraint: Anda tidak diperbolehkan menyetujui transaksi yang Anda buat sendiri.");
+      }
 
       // Create history entry
       await tx.approvalHistory.create({
@@ -139,7 +202,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
         },
       });
 
-      // If last step, mark as approved
+      // If last step, mark as approved + update source document
       if (approval.currentStep >= totalSteps) {
         await tx.approval.update({
           where: { id: approval.id },
@@ -149,6 +212,22 @@ export async function approveStep(approvalId: number, formData: FormData) {
             completedAt: new Date(),
           },
         });
+        const modelKey = approval.referenceType.charAt(0).toLowerCase() + approval.referenceType.slice(1);
+        const docModel = (tx as any)[modelKey];
+        if (docModel?.update) {
+          const docStatus = approval.referenceType === "EmployeeLoan" ? "active" : "approved";
+          const approvedBy = session?.user?.id ? Number(session.user.id) : null;
+          await docModel.update({
+            where: { id: approval.referenceId },
+            data: {
+              status: docStatus,
+              ...(APPROVED_BY_MODELS.has(approval.referenceType) ? { approvedBy } : {}),
+            },
+          });
+          if (approval.referenceType === "EmployeeLoan") {
+            await onEmployeeLoanDisbursed(approval.referenceId, approvedBy ?? undefined, tx);
+          }
+        }
       } else {
         // Advance to next step
         await tx.approval.update({
@@ -177,8 +256,10 @@ export async function approveStep(approvalId: number, formData: FormData) {
 
 export async function rejectStep(approvalId: number, formData: FormData) {
   try {
-    const user = await requirePermission("approve_workflows");
+    await assertCSRF();
     const session = await auth();
+    const user = session?.user;
+    if (!user) throw new Error("Unauthorized");
 
     const parsed = parseFormData(rejectStepSchema, formData);
     if (!parsed.success) throw new Error(parsed.error);
@@ -199,8 +280,25 @@ export async function rejectStep(approvalId: number, formData: FormData) {
       if (approval.status !== "pending")
         throw new Error("Approval sudah diproses");
 
+      const totalSteps = approval.workflow.steps.length;
+      if (
+        totalSteps === 0 ||
+        !Number.isSafeInteger(approval.currentStep) ||
+        approval.currentStep < 1 ||
+        approval.currentStep > totalSteps
+      ) {
+        throw new Error("Langkah approval tidak valid pada alur persetujuan ini");
+      }
+
+      assertApprovalPermission(user, approval.referenceType);
+
       // Only the designated approver for the current step may reject it.
       await assertStepApprover(approval, user);
+
+      // Maker-Checker: prevent rejecting own request (super_admin bypasses)
+      if (!user.roles.includes("super_admin") && approval.requestedBy !== null && approval.requestedBy === Number(user.id)) {
+        throw new Error("Maker-Checker Constraint: Anda tidak diperbolehkan menolak transaksi yang Anda buat sendiri.");
+      }
 
       // Create history entry
       await tx.approvalHistory.create({
@@ -221,6 +319,20 @@ export async function rejectStep(approvalId: number, formData: FormData) {
           completedAt: new Date(),
         },
       });
+
+      // Update source document status to rejected
+      const modelKey = approval.referenceType.charAt(0).toLowerCase() + approval.referenceType.slice(1);
+      const docModel = (tx as any)[modelKey];
+      if (docModel?.update) {
+        const data: Record<string, unknown> = { status: "rejected" };
+        if (REJECTION_REASON_MODELS.has(approval.referenceType)) {
+          data.rejectionReason = notes || null;
+        }
+        await docModel.update({
+          where: { id: approval.referenceId },
+          data,
+        });
+      }
     });
 
     await logActivity(
@@ -253,6 +365,12 @@ export async function createApprovalWorkflow(formData: FormData) {
     const steps = stepsResult.steps.filter(
       (s) => s.roleId || s.userId || s.approverType || s.name,
     );
+    if (isActive !== false && steps.length === 0) {
+      return {
+        success: false,
+        error: "Alur persetujuan aktif minimal harus memiliki satu langkah.",
+      };
+    }
 
     const wf = await prisma.approvalWorkflow.create({
       data: {
@@ -300,21 +418,23 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
     const steps = stepsResult.steps.filter(
       (s) => s.roleId || s.userId || s.approverType || s.name,
     );
-
-    // Guard: refuse to rewrite steps while approvals are in-flight. Deleting
-    // steps mid-approval could make the currentStep point to a different
-    // approver (or no approver), allowing the wrong person to approve.
-    const pendingApprovals = await prisma.approval.count({
-      where: { workflowId: id, status: "pending" },
-    });
-    if (pendingApprovals > 0) {
+    if (isActive !== false && steps.length === 0) {
       return {
         success: false,
-        error: `Tidak bisa mengubah langkah alur — masih ada ${pendingApprovals} persetujuan yang sedang berjalan. Selesaikan atau tolak terlebih dahulu.`,
+        error: "Alur persetujuan aktif minimal harus memiliki satu langkah.",
       };
     }
 
-    await prisma.$transaction(async (tx) => {
+    // Lock the workflow before checking pending approvals. requestApprovalIfConfigured
+    // takes the same lock before inserting, so a new approval cannot appear
+    // between the guard and step replacement.
+    const pendingApprovals = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM approval_workflows WHERE id = ${id} FOR UPDATE`;
+      const pendingCount = await tx.approval.count({
+        where: { workflowId: id, status: "pending" },
+      });
+      if (pendingCount > 0) return pendingCount;
+
       await tx.approvalWorkflowStep.deleteMany({ where: { workflowId: id } });
       await tx.approvalWorkflow.update({
         where: { id },
@@ -334,7 +454,14 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
           },
         },
       });
+      return 0;
     });
+    if (pendingApprovals > 0) {
+      return {
+        success: false,
+        error: `Tidak bisa mengubah langkah alur — masih ada ${pendingApprovals} persetujuan yang sedang berjalan. Selesaikan atau tolak terlebih dahulu.`,
+      };
+    }
 
     await logActivity(
       "update",
@@ -355,9 +482,19 @@ export async function deleteApprovalWorkflow(id: number) {
   try {
     await requirePermission("manage_settings");
 
-    // Guard: refuse to delete while approvals are in-flight
-    const pendingApprovals = await prisma.approval.count({
-      where: { workflowId: id, status: "pending" },
+    // Match approval creation's workflow lock to prevent a new pending approval
+    // from being inserted after the in-flight check.
+    const pendingApprovals = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM approval_workflows WHERE id = ${id} FOR UPDATE`;
+      const pendingCount = await tx.approval.count({
+        where: { workflowId: id, status: "pending" },
+      });
+      if (pendingCount > 0) return pendingCount;
+      await tx.approvalWorkflow.update({
+        where: { id },
+        data: { deletedAt: new Date(), isActive: false },
+      });
+      return 0;
     });
     if (pendingApprovals > 0) {
       return {
@@ -366,10 +503,6 @@ export async function deleteApprovalWorkflow(id: number) {
       };
     }
 
-    await prisma.approvalWorkflow.update({
-      where: { id },
-      data: { deletedAt: new Date(), isActive: false },
-    });
     await logActivity(
       "delete",
       "ApprovalWorkflow",

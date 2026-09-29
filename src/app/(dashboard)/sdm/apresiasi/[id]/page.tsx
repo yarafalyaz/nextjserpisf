@@ -25,11 +25,11 @@ export default async function AppreciationDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_employees")
+  await requirePermission("view_appreciations")
 
   const { id } = await params
   const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  if (!Number.isSafeInteger(numId) || numId <= 0) notFound()
 
   const appreciation = await prisma.appreciation.findUnique({
     where: { id: numId },

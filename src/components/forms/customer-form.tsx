@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { Combobox } from "@/components/ui/combobox"
 
 interface CustomerFormProps {
   customer?: {
@@ -32,13 +33,14 @@ interface CustomerFormProps {
     gender: string | null
     code: string | null
     taxId?: string | null
-    creditLimit?: number | string | null
+    customerCategoryId?: number | null
   }
   generatedCode?: string
   enableAutoCode?: boolean
+  categories?: { id: number; name: string }[]
 }
 
-export function CustomerForm({ customer, generatedCode, enableAutoCode = true }: CustomerFormProps) {
+export function CustomerForm({ customer, generatedCode, enableAutoCode = true, categories = [] }: CustomerFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!customer
@@ -55,7 +57,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
       gender: customer?.gender || "",
       code: customer?.code || (enableAutoCode ? generatedCode : "") || "",
       taxId: customer?.taxId || "",
-      creditLimit: customer?.creditLimit != null ? Number(customer.creditLimit) : 0,
+      customerCategoryId: customer?.customerCategoryId ?? null,
     },
   })
 
@@ -97,6 +99,22 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
             <Input id="code" {...register("code")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"} />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label>Kategori Pelanggan</Label>
+            <Controller
+              name="customerCategoryId"
+              control={control}
+              render={({ field }) => (
+                <Combobox
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => field.onChange(key ? Number(key) : null)}
+                  placeholder="Pilih kategori..."
+                  options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+                />
+              )}
+            />
+            {errors.customerCategoryId && <span className="text-xs text-danger mt-1">{errors.customerCategoryId.message}</span>}
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Nama Pelanggan *</Label>
             <Input id="name" {...register("name")} placeholder="Nama lengkap" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
@@ -115,16 +133,6 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true }:
             <Label htmlFor="taxId">NPWP</Label>
             <Input id="taxId" {...register("taxId")} placeholder="Nomor Pokok Wajib Pajak" />
             {errors.taxId && <span className="text-xs text-danger mt-1">{errors.taxId.message}</span>}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="creditLimit">Batas Kredit (Rp)</Label>
-            <Controller
-              name="creditLimit"
-              control={control}
-              render={({ field }) => (
-                <CurrencyInput id="creditLimit" value={field.value} onChange={field.onChange} onBlur={field.onBlur} min={0} prefix="Rp" placeholder="0 = tanpa batas" />
-              )}
-            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Controller

@@ -58,7 +58,13 @@ const columns = [
     header: "Status",
     cell: (info) => {
       const val = info.getValue()
-      return <StatusChip status={val} />
+      return (
+        <StatusChip
+          status={val}
+          customLabel={val === "processed" ? "Diposting" : undefined}
+          customTone={val === "processed" ? "success" : undefined}
+        />
+      )
     },
   }),
   columnHelper.display({

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
+import { canModifyAttachment } from "@/lib/auth/attachment-permissions"
 import { apiError } from "@/lib/api-response"
 import { unlink } from "fs/promises"
 import path from "path"
+import { assertCSRF } from "@/lib/security/csrf"
 
 export async function DELETE(
   _req: NextRequest,
@@ -13,12 +15,17 @@ export async function DELETE(
   if (!session?.user?.id) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
+  try {
+    await assertCSRF()
+  } catch {
+    return apiError("FORBIDDEN", "Permintaan lintas situs ditolak")
+  }
 
   const { id } = await params
-  const attachmentId = Number.parseInt(id, 10)
-  const userId = Number.parseInt(String(session.user.id), 10)
-  if (!Number.isInteger(attachmentId) || attachmentId <= 0) return apiError("BAD_REQUEST", "Invalid attachment id")
-  if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
+  const attachmentId = Number(id)
+  const userId = Number(session.user.id)
+  if (!/^\d+$/.test(id) || !Number.isSafeInteger(attachmentId) || attachmentId <= 0) return apiError("BAD_REQUEST", "Invalid attachment id")
+  if (!Number.isSafeInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
 
   try {
     const attachment = await prisma.transactionAttachment.findUnique({
@@ -31,6 +38,9 @@ export async function DELETE(
 
     // Ownership guard: only uploader can delete
     if (attachment.uploadedBy !== userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+    if (!(await canModifyAttachment(attachment.referenceType, attachment.referenceId))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

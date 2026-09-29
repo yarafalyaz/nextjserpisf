@@ -35,7 +35,6 @@ const menuItems = [
   { label: "Bank", href: "/master/bank", icon: Landmark, group: "Master Data" },
   { label: "Pajak", href: "/master/pajak", icon: BadgeDollarSign, group: "Master Data" },
   { label: "Grup Pajak", href: "/master/kelompok-pajak", icon: ListOrdered, group: "Master Data" },
-  { label: "Mata Uang", href: "/master/mata-uang", icon: Globe, group: "Master Data" },
   { label: "Barcode", href: "/master/barcode", icon: ScanBarcode, group: "Master Data" },
   { label: "Satuan", href: "/master/satuan", icon: Scale, group: "Master Data" },
   // Penjualan
@@ -63,15 +62,11 @@ const menuItems = [
   { label: "Produk (BOM)", href: "/produksi/products", icon: Package, group: "Manufaktur" },
   { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, group: "Manufaktur" },
   { label: "Perintah Produksi", href: "/produksi/production-orders", icon: Hammer, group: "Manufaktur" },
-  // SDM
-  { label: "Absensi", href: "/sdm/absensi", icon: Clock, group: "SDM" },
   { label: "Cuti", href: "/sdm/cuti", icon: Palmtree, group: "SDM" },
   { label: "Lembur", href: "/sdm/lembur", icon: Timer, group: "SDM" },
   { label: "Penggajian", href: "/sdm/penggajian", icon: Banknote, group: "SDM" },
-  { label: "Jadwal Kerja", href: "/sdm/jadwal-kerja", icon: CalendarDays, group: "SDM" },
   { label: "Timesheet", href: "/sdm/lembar-waktu", icon: Clock, group: "SDM" },
   { label: "Pinjaman Karyawan", href: "/sdm/pinjaman", icon: PiggyBank, group: "SDM" },
-  { label: "Hari Libur", href: "/sdm/hari-libur", icon: Palmtree, group: "SDM" },
   // Keuangan
   { label: "Jurnal", href: "/keuangan/jurnal", icon: BookOpenCheck, group: "Keuangan" },
   { label: "Biaya", href: "/keuangan/pengeluaran", icon: DollarSign, group: "Keuangan" },
@@ -80,7 +75,8 @@ const menuItems = [
   { label: "Pusat Biaya", href: "/keuangan/pusat-biaya", icon: Target, group: "Keuangan" },
   { label: "Rekening Koran", href: "/keuangan/laporan-bank", icon: FileSpreadsheet, group: "Keuangan" },
   { label: "Rekonsiliasi Bank", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, group: "Keuangan" },
-  { label: "Key Figure Statistik", href: "/keuangan/angka-kunci-statistik", icon: BarChart3, group: "Keuangan" },
+  { label: "Nilai Key Figure", href: "/keuangan/angka-kunci-statistik/nilai", icon: BarChart3, group: "Keuangan" },
+  { label: "Alokasi Key Figure", href: "/anggaran/alokasi-skf", icon: PiggyBank, group: "Keuangan" },
   // CRM
   { label: "Prospek", href: "/crm/leads", icon: Target, group: "CRM" },
   { label: "Tiket", href: "/crm/tickets", icon: Ticket, group: "CRM" },

@@ -10,14 +10,13 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Merek Kendaraan" }
+import { CanCreate } from "@/components/auth/can-create"
+export const metadata: Metadata = { title: "Merek" }
 
 export default async function BrandsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string 
-  halaman?: string
-  pageSize?: string}>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_brands")
 
@@ -34,7 +33,10 @@ export default async function BrandsPage({
   const brands = await prisma.brand.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    include: { _count: { select: { items: true } } },
+    include: {
+      _count: { select: { items: true } },
+      categories: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+    },
     take,
     skip: (page - 1) * pageSize,
   })
@@ -46,9 +48,11 @@ export default async function BrandsPage({
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Merek" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Merek</h1>
-        <Link href="/master/merek/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-brand-btn">
+        <CanCreate permission="create_brands">
+          <Link href="/master/merek/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-brand-btn">
           + Tambah Merek
         </Link>
+        </CanCreate>
       </div>
 
       <BrandTable data={tableData} />

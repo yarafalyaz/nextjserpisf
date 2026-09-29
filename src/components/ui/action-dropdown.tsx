@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/shadcn/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useSession } from "next-auth/react"
+import { resolveEditPerm, resolveDeletePerm } from "@/lib/auth/action-perms"
 
 interface ActionDropdownProps {
   viewHref?: string
@@ -33,8 +34,23 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
   const userRoles = session?.user?.roles ?? []
   const userPerms = session?.user?.permissions ?? []
   const isSuperAdmin = userRoles.includes("super_admin")
-  const canEdit = !editPermission || isSuperAdmin || userPerms.includes(editPermission)
-  const canDelete = !deletePermission || isSuperAdmin || userPerms.includes(deletePermission)
+
+  // Resolve permissions from the resource path even when a row has no edit link.
+  const permissionHref = editHref ?? viewHref
+  const derivedEditPerm = editPermission ?? resolveEditPerm(permissionHref)
+  const derivedDeletePerm = deletePermission ?? resolveDeletePerm(permissionHref)
+
+  if (process.env.NODE_ENV !== "production") {
+    if (editHref && derivedEditPerm === undefined) {
+      console.warn(`[ActionDropdown] No ROUTE_PERMS entry for edit href "${permissionHref}". Edit button will show for all users. Add an entry to src/lib/auth/action-perms.ts.`)
+    }
+    if (deleteAction && permissionHref && derivedDeletePerm === undefined) {
+      console.warn(`[ActionDropdown] No ROUTE_PERMS delete entry for resource href "${permissionHref}". Delete button will show for all users.`)
+    }
+  }
+
+  const canEdit = isSuperAdmin || (derivedEditPerm !== undefined && userPerms.includes(derivedEditPerm))
+  const canDelete = isSuperAdmin || (derivedDeletePerm !== undefined && userPerms.includes(derivedDeletePerm))
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
@@ -54,6 +70,14 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
       setIsDeleteOpen(false)
     })
   }
+
+  const hasView = !!viewHref
+  const hasEdit = !!editHref && canEdit
+  const hasDelete = !!deleteAction && !!deleteId && canDelete
+  const hasPrint = !!printAction
+  const hasAnyAction = hasEdit || hasDelete || hasPrint
+
+  if (!hasAnyAction) return null
 
   return (
     <>

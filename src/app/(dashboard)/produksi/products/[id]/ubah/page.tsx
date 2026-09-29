@@ -8,7 +8,7 @@ import { ProductForm } from "../../_components/product-form"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Ubah Products" }
+export const metadata: Metadata = { title: "Ubah Produk (BOM)" }
 
 export default async function EditProductPage({
   params,
@@ -28,7 +28,7 @@ export default async function EditProductPage({
 
   const items = await prisma.item.findMany({
     where: { isActive: true, deletedAt: null },
-    select: { id: true, sku: true, name: true, unitOfMeasure: true },
+    select: { id: true, sku: true, name: true, unitOfMeasure: true, isProduct: true },
     orderBy: { name: "asc" },
   })
 
@@ -53,6 +53,7 @@ export default async function EditProductPage({
           description: product.description,
           vehicleBrandId: product.vehicleBrandId,
           vehicleModelId: product.vehicleModelId,
+          inventoryItemId: product.inventoryItemId,
           materials: product.materials.map((m) => ({ itemId: m.itemId, qty: Number(m.qty) })),
         }}
       />

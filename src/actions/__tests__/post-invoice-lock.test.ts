@@ -61,14 +61,12 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, onSalesInvoicePostedMock,
     invoiceFindUniqueOrThrowMock, invoiceItemCountMock, invoiceUpdateManyMock,
-    customerFindUniqueMock, invoiceAggregateMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 3 })
   invoiceFindUniqueOrThrowMock.mockResolvedValue({
     id: 11, status: "draft", customerId: 8, grandTotal: 1000, paidAmount: 0,
   })
   invoiceItemCountMock.mockResolvedValue(2)
-  customerFindUniqueMock.mockResolvedValue({ creditLimit: 0, name: "PT X" }) // 0 = no limit
   invoiceUpdateManyMock.mockResolvedValue({ count: 1 })
   onSalesInvoicePostedMock.mockResolvedValue(undefined)
 })

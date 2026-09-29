@@ -34,12 +34,18 @@ export default async function ExpensesPage({
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * perPage,
       take: perPage,
+      include: { category: { select: { label: true } } },
     }),
     prisma.expense.count({ where }),
   ])
 
   const totalPages = Math.ceil(total / perPage)
-  const data = toPlain(expenses)
+  const data = toPlain(expenses).map((e) => ({
+    ...e,
+    categoryName: (e as Record<string, unknown>).category
+      ? ((e as Record<string, unknown>).category as { label: string }).label
+      : null,
+  }))
 
   const statusChips = ["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""

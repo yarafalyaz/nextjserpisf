@@ -4,11 +4,13 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { deleteRole } from "@/actions/roles.actions"
 
 import type { Metadata } from "next"
+import { CanCreate } from "@/components/auth/can-create"
 
 export const metadata: Metadata = { title: "Peran" }
 
@@ -29,9 +31,11 @@ export default async function RolesPage() {
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Peran & Izin</h1>
-        <Link href="/pengaturan/peran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
+        <CanCreate permission="manage_roles">
+          <Link href="/pengaturan/peran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
           + Tambah Peran
         </Link>
+        </CanCreate>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -39,7 +43,7 @@ export default async function RolesPage() {
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Nama Peran</DetailTableTh>
-              <DetailTableTh>Guard</DetailTableTh>
+              <DetailTableTh>Pengaman</DetailTableTh>
               <DetailTableTh>Hak Akses</DetailTableTh>
               <DetailTableTh>Pengguna</DetailTableTh>
               <DetailTableTh>Dibuat</DetailTableTh>
@@ -74,9 +78,9 @@ export default async function RolesPage() {
                           "use server"
                           await deleteRole(role.id)
                         }}>
-                          <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-danger/30 text-danger transition-all hover:bg-danger/10">
+                          <Button type="submit" variant="danger" size="sm" className="border border-danger/30">
                             Hapus
-                          </button>
+                          </Button>
                         </form>
                       </div>
                     </DetailTableTd>

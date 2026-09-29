@@ -15,7 +15,7 @@ export default async function EditTaskPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_projects")
+  await requirePermission("edit_projects")
 
   const { id } = await params
   const numId = Number(id)

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteJournal } from "@/actions/finance.actions"
-import { formatDate } from "@/lib/utils/format"
+import { formatDate, formatReferenceType } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 
 interface JournalData {
@@ -34,7 +34,7 @@ const columns = [
   }),
   columnHelper.accessor("referenceType", {
     header: "Referensi",
-    cell: (info) => info.getValue() || "-",
+    cell: (info) => formatReferenceType(info.getValue()) || "-",
   }),
   columnHelper.accessor("description", {
     header: "Deskripsi",

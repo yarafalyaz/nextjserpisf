@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db/prisma";
+import { prisma, TxClient } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
@@ -33,12 +33,12 @@ interface FlatItem {
 
 export async function onDownPaymentConfirmed(
   dpId: number,
-  userId?: number
+  userId?: number,
+  txClient?: TxClient
 ): Promise<void> {
   const readyDocuments: Array<{ type: "WorkOrder" | "SalesOrder" | "SalesInvoice"; documentNo: string; context: string }> = []
-  let postedInvoiceId: number | null = null
 
-  await prisma.$transaction(async (tx) => {
+  const execute = async (tx: TxClient) => {
     // Serialize concurrent confirmDownPayment calls so the idempotency checks below
     // cannot both pass and double-create WO/SO/Invoice (+ double revenue).
     await tx.$queryRaw`SELECT id FROM down_payments WHERE id = ${dpId} FOR UPDATE`;
@@ -79,7 +79,9 @@ export async function onDownPaymentConfirmed(
         where: { quotationId: dp.quotationId },
         select: { id: true },
       });
-      postedInvoiceId = orphanInv?.id ?? null;
+      if (orphanInv) {
+        await onSalesInvoicePosted(orphanInv.id, userId, tx);
+      }
       return;
     }
 
@@ -88,7 +90,11 @@ export async function onDownPaymentConfirmed(
       throw new Error("Quotation tidak ditemukan untuk Down Payment ini.");
     }
 
-    if (quotation.status !== SalesStatus.ACCEPTED && quotation.status !== SalesStatus.CONVERTED) {
+    if (
+      quotation.status !== SalesStatus.ACCEPTED &&
+      quotation.status !== SalesStatus.CONVERTED &&
+      quotation.status !== SalesStatus.APPROVED
+    ) {
       throw new Error("Quotation belum di-accept.");
     }
 
@@ -149,6 +155,17 @@ export async function onDownPaymentConfirmed(
         data: { status: SalesStatus.CONFIRMED },
       });
 
+      if (tx.quotationHistory) {
+        await tx.quotationHistory.create({
+          data: {
+            quotationId: quotation.id,
+            action: "down_payment",
+            description: `Pembayaran uang muka DP ${dp.documentNo} diterima sebesar ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(dp.amount))}`,
+            userId: userId ?? null,
+          }
+        });
+      }
+
       return; // Stop here; do not re-create WO/SO/Invoice!
     }
 
@@ -176,15 +193,25 @@ export async function onDownPaymentConfirmed(
       }))
     );
 
-    // ─── Generate BOM Material Stock Notes & Services ─────────────────
-    // Pass 1: batch-resolve all products and items in two queries (eliminates
-    // the N+1 of product.findFirst + productMaterial.findMany + item.findMany
-    // + item.findUnique per quotation line).
-    let bomNotes = `Auto-generated dari DP ${dp.documentNo}\n`;
+    // ─── Project Info ───────────────────────────────────────────────────
+    let bomNotes = `Otomatis dibuat dari DP ${dp.documentNo}\n`;
     let serviceList = "";
     let materialHeaderAdded = false;
 
     try {
+      // Look up project info from quotation
+      const projectName = quotation.projectId
+        ? (await tx.project.findUnique({ where: { id: quotation.projectId }, select: { name: true, startDate: true, endDate: true } }))?.name ?? "-"
+        : "-";
+      const customerName = quotation.customer?.name ?? "-";
+      const fmtDate = (d: Date | null) => !d ? "-" : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+
+      bomNotes += `\n[INFORMASI PROYEK]\n`;
+      bomNotes += `Nama Proyek  : ${projectName}\n`;
+      bomNotes += `Pelanggan    : ${customerName}\n`;
+      bomNotes += `Tanggal Mulai: -\n`;
+      bomNotes += `Tanggal Selesai: -\n`;
+
       const validItemNames = Array.from(
         new Set(
           allItems
@@ -196,17 +223,23 @@ export async function onDownPaymentConfirmed(
       // OR-contains on every distinct item name. We pick the first matching
       // product per line below — same semantics as the old per-line
       // product.findFirst({ name: { contains: item.itemName } }).
+      // Also fetch by code pattern (descriptions often contain "[PRD-0001] OKE").
       const matchedProducts = validItemNames.length === 0
         ? []
         : await tx.product.findMany({
-            where: { OR: validItemNames.map((n) => ({ name: { contains: n } })) },
             include: { materials: true },
           });
       const productByName = new Map<string, typeof matchedProducts[number] | null>();
       for (const n of validItemNames) {
+        const nl = n.toLowerCase();
         productByName.set(
           n,
-          matchedProducts.find((p) => p.name.includes(n)) ?? null
+          matchedProducts.find((p) => {
+            const pName = p.name.toLowerCase();
+            const pCode = (p.code ?? "").toLowerCase();
+            // Bidirectional: description contains product name/code, OR product name contains description
+            return nl.includes(pName) || nl.includes(pCode) || pName.includes(nl);
+          }) ?? null
         );
       }
 
@@ -225,11 +258,13 @@ export async function onDownPaymentConfirmed(
           ? []
           : await tx.item.findMany({
               where: { id: { in: Array.from(neededItemIds) } },
-              select: { id: true, name: true, qtyOnHand: true, unitOfMeasure: true },
+              select: { id: true, name: true, qtyOnHand: true, unitOfMeasure: true, minStock: true },
             });
       const stockById = new Map(stockItems.map((s) => [s.id, s]));
 
       // Pass 2: render notes using the pre-fetched maps. Zero DB round-trips.
+      bomNotes += `\n[DAFTAR ITEM PERINTAH KERJA]\n`;
+
       for (const item of allItems) {
         // Cari produk BOM berdasarkan nama item/deskripsi quotation. Lewati jika
         // nama kosong — `contains: ""` akan cocok dengan produk pertama mana pun
@@ -238,45 +273,56 @@ export async function onDownPaymentConfirmed(
           ? null
           : productByName.get(item.itemName.trim()) ?? null;
 
-        if (matchedProduct) {
-          // materials are already eager-loaded via productByName; no second
-          // productMaterial.findMany needed.
-          const materialsWithStock = matchedProduct.materials;
-
-          if (materialsWithStock.length > 0) {
-            if (!materialHeaderAdded) {
-              bomNotes += `\n[RINCIAN KEBUTUHAN MATERIAL & CEK STOK]\n`;
-              materialHeaderAdded = true;
-            }
-            bomNotes += `\nProduk Perakitan: ${matchedProduct.name} (Qty: ${item.qty})\n`;
-            materialsWithStock.forEach(mat => {
-              const dbItem = stockById.get(mat.itemId);
-              const qtyNeeded = Number(mat.qty) * item.qty;
-              const stock = dbItem ? Number(dbItem.qtyOnHand) : 0;
-              const uom = dbItem ? dbItem.unitOfMeasure : "PCS";
-              const isShortage = stock < qtyNeeded;
-
-              bomNotes += `- ${dbItem?.name || `Item #${mat.itemId}`}: Butuh ${qtyNeeded} ${uom} | Stok Saat Ini: ${stock} ${uom} ${isShortage ? "(Stok Kurang!)" : "(Cukup)"}\n`;
-            });
+        if (matchedProduct && matchedProduct.materials.length > 0) {
+          // BOM product — show bullet + material breakdown
+          if (!materialHeaderAdded) {
+            materialHeaderAdded = true;
           }
-        } else {
-          // Non-BOM item: check stock if it has a valid itemId
-          if (item.itemId !== null) {
-            const stockItem = stockById.get(item.itemId);
-            if (stockItem) {
-              if (!materialHeaderAdded) {
-                bomNotes += `\n[RINCIAN KEBUTUHAN MATERIAL & CEK STOK]\n`;
-                materialHeaderAdded = true;
-              }
-              const isShortage = Number(stockItem.qtyOnHand) < item.qty;
-              bomNotes += `- ${stockItem.name}: Butuh ${item.qty} ${stockItem.unitOfMeasure ?? "PCS"} | Stok Saat Ini: ${stockItem.qtyOnHand} ${stockItem.unitOfMeasure ?? "PCS"} ${isShortage ? "(Stok Kurang!)" : "(Cukup)"}\n`;
-            } else if (item.itemName.trim() !== "") {
-              serviceList += `- ${item.itemName} (Volume/Qty: ${item.qty})\n`;
+          bomNotes += `\n● ${item.itemName} (Qty: ${item.qty})\n`;
+          bomNotes += `  Breakdown Material:\n`;
+
+          matchedProduct.materials.forEach(mat => {
+            const dbItem = stockById.get(mat.itemId);
+            const qtyNeeded = Number(mat.qty) * item.qty;
+            const stock = dbItem ? Number(dbItem.qtyOnHand) : 0;
+            const uom = dbItem ? dbItem.unitOfMeasure : "PCS";
+            const minStock = dbItem ? Number(dbItem.minStock) : 0;
+
+            let statusLabel: string;
+            if (stock <= 0) {
+              statusLabel = "Habis";
+            } else if (stock < qtyNeeded || stock <= minStock) {
+              statusLabel = `Tinggal sedikit (Stok: ${stock} ${uom})`;
+            } else {
+              statusLabel = `Stok ada (Stok: ${stock} ${uom})`;
             }
+
+            bomNotes += `  - ${dbItem?.name || `Item #${mat.itemId}`}: Butuh ${qtyNeeded} ${uom} → ${statusLabel}\n`;
+          });
+        } else if (item.itemId !== null) {
+          // Direct item (non-BOM) — check stock
+          const stockItem = stockById.get(item.itemId);
+          if (stockItem) {
+            const stock = Number(stockItem.qtyOnHand);
+            const uom = stockItem.unitOfMeasure ?? "PCS";
+            const minStockVal = Number(stockItem.minStock);
+
+            let statusLabel: string;
+            if (stock <= 0) {
+              statusLabel = "Habis";
+            } else if (stock < item.qty || stock <= minStockVal) {
+              statusLabel = `Tinggal sedikit (Stok: ${stock} ${uom})`;
+            } else {
+              statusLabel = `Stok ada (Stok: ${stock} ${uom})`;
+            }
+
+            bomNotes += `- ${stockItem.name}: Butuh ${item.qty} ${uom} → ${statusLabel}\n`;
           } else if (item.itemName.trim() !== "") {
-            // Pure service item (no itemId) — log as service
             serviceList += `- ${item.itemName} (Volume/Qty: ${item.qty})\n`;
           }
+        } else if (item.itemName.trim() !== "") {
+          // Pure service item (no itemId) — log as service
+          serviceList += `- ${item.itemName} (Volume/Qty: ${item.qty})\n`;
         }
       }
 
@@ -303,16 +349,18 @@ export async function onDownPaymentConfirmed(
       },
     });
 
-    // Create Work Order Items
+    // Create Work Order Items — include BOM/custom items (itemId=null) with
+    // description so they appear in the WO items table.
     if (allItems.length > 0) {
       await tx.workOrderItem.createMany({
         data: allItems
-          .filter((item) => item.itemId !== null)
+          .filter((item) => item.itemId !== null || (item.itemName && item.itemName.trim() !== ""))
           .map((item) => ({
             workOrderId: workOrder.id,
-            itemId: item.itemId!,
+            itemId: item.itemId ?? 0,
             qty: item.qty,
             cost: item.unitPrice,
+            description: item.itemName || null,
           })),
       });
     }
@@ -327,7 +375,7 @@ export async function onDownPaymentConfirmed(
         customerId: quotation.customerId,
         status: "active",
         startDate: new Date(),
-        notes: `Auto-generated dari DP ${dp.documentNo}. Quotation: ${quotation.documentNo}`,
+        notes: `Otomatis dibuat dari DP ${dp.documentNo}. Quotation: ${quotation.documentNo}`,
         createdBy: userId ?? null,
       },
     });
@@ -357,7 +405,7 @@ export async function onDownPaymentConfirmed(
         grandTotal: quotation.grandTotal,
         totalAmount: quotation.grandTotal,
         status: SalesStatus.CONFIRMED,
-        notes: `Auto-generated dari DP ${dp.documentNo}`,
+        notes: `Otomatis dibuat dari DP ${dp.documentNo}`,
         createdBy: userId ?? null,
       },
     });
@@ -394,7 +442,7 @@ export async function onDownPaymentConfirmed(
         paidAmount: dp.amount,
         status: "posted",
         paymentStatus: Number(dp.amount) >= Number(quotation.grandTotal) ? "paid" : "partial",
-        notes: `Auto-generated dari DP ${dp.documentNo}`,
+        notes: `Otomatis dibuat dari DP ${dp.documentNo}`,
         createdBy: userId ?? null,
       },
     });
@@ -431,7 +479,9 @@ export async function onDownPaymentConfirmed(
         },
       });
     }
-    postedInvoiceId = invoice.id;
+    // Recognize revenue + COGS + stock-out for the auto-generated invoice (it is
+    // created already "posted", so trigger the posting hook inside the transaction).
+    await onSalesInvoicePosted(invoice.id, userId, tx);
 
     // ─── 5. Update Down Payment status ───────────────────────────────
     await tx.downPayment.update({
@@ -447,12 +497,38 @@ export async function onDownPaymentConfirmed(
       data: { status: SalesStatus.CONVERTED },
     });
 
+    if (tx.quotationHistory) {
+      await tx.quotationHistory.create({
+        data: {
+          quotationId: quotation.id,
+          action: "down_payment",
+          description: `Pembayaran uang muka DP ${dp.documentNo} diterima sebesar ${new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Number(dp.amount))}`,
+          userId: userId ?? null,
+        }
+      });
+
+      await tx.quotationHistory.create({
+        data: {
+          quotationId: quotation.id,
+          action: "converted",
+          description: `Penawaran dikonversi menjadi Pesanan Penjualan (${salesOrder.documentNo}), Perintah Kerja (${workOrder.documentNo}), dan Faktur (${invoice.documentNo})`,
+          userId: userId ?? null,
+        }
+      });
+    }
+
     readyDocuments.push(
       { type: "WorkOrder", documentNo: workOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
       { type: "SalesOrder", documentNo: salesOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
       { type: "SalesInvoice", documentNo: invoice.documentNo, context: `Dari DP ${dp.documentNo}` },
     );
-  });
+  };
+
+  if (txClient) {
+    await execute(txClient);
+  } else {
+    await prisma.$transaction(execute);
+  }
 
   // Batch the ready-document notifications: a single admin lookup + a single
   // createMany, instead of one (admin findMany + notification createMany) per
@@ -461,9 +537,4 @@ export async function onDownPaymentConfirmed(
     await notificationService.notifyDocumentsReadyBatch(readyDocuments)
   }
 
-  // Recognize revenue + COGS + stock-out for the auto-generated invoice (it is
-  // created already "posted", so trigger the posting hook once after commit).
-  if (postedInvoiceId !== null) {
-    await onSalesInvoicePosted(postedInvoiceId, userId)
-  }
 }

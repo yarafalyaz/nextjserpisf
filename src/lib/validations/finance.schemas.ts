@@ -66,7 +66,7 @@ export const expenseSchema = z.object({
   date: requiredDate,
   referenceNo: optionalString(100),
   description: optionalString(1000),
-  category: optionalString(100),
+  categoryId: optionalNumber(),
   receiptImage: optionalString(500),
   attachmentIds: optionalString(5000),
 });
@@ -130,6 +130,7 @@ export const costCenterSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi").max(200),
   description: optionalString(500),
   isActive: z.boolean().default(false),
+  parentId: optionalNumber(),
 });
 
 // ==================== UPDATE JOURNAL ====================

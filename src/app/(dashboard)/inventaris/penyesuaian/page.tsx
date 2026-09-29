@@ -55,7 +55,7 @@ export default async function StockAdjustmentsPage({
         href={`/inventaris/penyesuaian${urlStatus ? `?status=${urlStatus}` : ""}`}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
-        {dbStatus ? statusLabel(dbStatus) : "Semua"}
+        {dbStatus ? (dbStatus === "processed" ? "Diposting" : statusLabel(dbStatus)) : "Semua"}
       </Link>
     )
   })

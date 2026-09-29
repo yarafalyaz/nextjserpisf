@@ -31,11 +31,6 @@ describe("validations/schemas", () => {
       expect(customerSchema.safeParse({ name: "X", gender: "male" }).success).toBe(true);
       expect(customerSchema.safeParse({ name: "X", gender: "other" }).success).toBe(false);
     });
-
-    it("rejects negative credit limit", () => {
-      const result = customerSchema.safeParse({ name: "X", creditLimit: -100 });
-      expect(result.success).toBe(false);
-    });
   });
 
   describe("vendorSchema", () => {

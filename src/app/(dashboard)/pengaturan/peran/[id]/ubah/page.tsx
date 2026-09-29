@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { updateRole } from "@/actions/roles.actions"
 import { notFound } from "next/navigation"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 
@@ -94,12 +96,12 @@ export default async function EditRolePage({ params }: { params: Promise<{ id: s
         </div>
 
         <div className="flex items-center gap-3">
-          <button type="submit" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
+          <Button type="submit" variant="primary">
             Perbarui Peran
-          </button>
-          <a href={`/pengaturan/peran/${role.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all hover:bg-surface-secondary">
+          </Button>
+          <Link href={`/pengaturan/peran/${role.id}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all hover:bg-surface-secondary">
             Batal
-          </a>
+          </Link>
         </div>
       </form>
     </div>

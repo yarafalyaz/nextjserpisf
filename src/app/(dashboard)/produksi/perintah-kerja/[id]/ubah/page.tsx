@@ -44,6 +44,8 @@ export default async function EditPage({
     quotationId: data.quotationId,
     projectId: data.projectId,
     date: data.date.toISOString().split("T")[0],
+    startDate: data.startDate ? data.startDate.toISOString().split("T")[0] : null,
+    endDate: data.endDate ? data.endDate.toISOString().split("T")[0] : null,
     notes: data.notes,
     items: data.items.map((it) => ({
       itemId: it.itemId,
@@ -55,7 +57,7 @@ export default async function EditPage({
   };
 
   const [customers, items] = await Promise.all([
-    prisma.customer.findMany({ orderBy: { name: "asc" } }),
+    prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
     prisma.item
       .findMany({
         where: { isActive: true, deletedAt: null },

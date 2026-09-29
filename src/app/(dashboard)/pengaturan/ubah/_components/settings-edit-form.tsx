@@ -16,6 +16,7 @@ import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { SafeImage } from "@/components/ui/safe-image"
+import { Plus, Trash2 } from "lucide-react"
 
 interface Account {
   id: number
@@ -41,6 +42,7 @@ interface SettingsFormValues {
   companyEmail?: string | null
   companyLatitude?: number | null
   companyLogo?: string | null
+  companyLogoDark?: string | null
   companyLongitude?: number | null
   companyName?: string | null
   companyPhone?: string | null
@@ -131,6 +133,7 @@ interface SettingsFormValues {
   salesTaxAccountId?: number | null
   showIsActiveField?: boolean | null
   showTaxId?: boolean | null
+  defaultProjectStages?: string | null
   stockAdjustmentAccountId?: number | null
   stockAdjustmentPrefix?: string | null
   stockMovementPrefix?: string | null
@@ -224,6 +227,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [logoPreview, setLogoPreview] = useState<string | null>(settings.companyLogo || null)
+  const [logoDarkPreview, setLogoDarkPreview] = useState<string | null>(settings.companyLogoDark || null)
   const [latitude, setLatitude] = useState(settings.companyLatitude ? String(settings.companyLatitude) : "")
   const [longitude, setLongitude] = useState(settings.companyLongitude ? String(settings.companyLongitude) : "")
   const [address, setAddress] = useState(settings.companyAddress || "")
@@ -263,6 +267,27 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [payrollJournalType, setPayrollJournalType] = useState(settings.payrollJournalTypeId ? String(settings.payrollJournalTypeId) : "")
   const logoInputRef = useRef<HTMLInputElement>(null)
   const signatureInputRef = useRef<HTMLInputElement>(null)
+
+  const [stagesList, setStagesList] = useState<string[]>(() => {
+    const raw = settings.defaultProjectStages || "Persiapan, Pengerjaan, Quality Check, Selesai"
+    return raw.split(",").map((s) => s.trim()).filter(Boolean)
+  })
+
+  const handleAddStage = () => {
+    setStagesList([...stagesList, ""])
+  }
+
+  const handleStageChange = (index: number, val: string) => {
+    const next = [...stagesList]
+    next[index] = val
+    setStagesList(next)
+  }
+
+  const handleRemoveStage = (index: number) => {
+    if (stagesList.length <= 1) return
+    const next = stagesList.filter((_, i) => i !== index)
+    setStagesList(next)
+  }
 
   const mappingSections: AccountMappingSection[] = [
     {
@@ -433,6 +458,13 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     if (url) setLogoPreview(url)
   }
 
+  async function handleLogoDarkChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = await uploadFile(file, "logos")
+    if (url) setLogoDarkPreview(url)
+  }
+
   async function handleSignatureChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -454,6 +486,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       try {
         const formData = new FormData(e.currentTarget)
         if (logoPreview) formData.set("companyLogo", logoPreview)
+        if (logoDarkPreview) formData.set("companyLogoDark", logoDarkPreview)
         if (signaturePreview) formData.set("quotationSignatureImage", signaturePreview)
         await updateSystemSettings(formData)
         showSuccess("Pengaturan berhasil disimpan")
@@ -513,7 +546,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="companyLatitude">Latitude</Label>
-                    <button type="button" onClick={handleGetLocation} className="text-xs font-semibold text-primary hover:underline" data-print-keep>Ambil Lokasi</button>
+                    <Button type="button" onClick={handleGetLocation} variant="tertiary" className="text-xs font-semibold text-primary hover:underline h-auto p-0" data-print-keep>Ambil Lokasi</Button>
                   </div>
                   <Input id="companyLatitude" name="companyLatitude" type="number" step="any" placeholder="-6.xxxxx" value={latitude} onChange={(e) => setLatitude((e.target as HTMLInputElement).value)} className="w-full" />
                 </div>
@@ -526,13 +559,48 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <Label>Logo Perusahaan</Label>
-                  <div className="flex items-center gap-4">
-                    {logoPreview && (
-                    <SafeImage src={logoPreview} alt="Logo" width={64} height={64} className="w-16 h-16 object-contain rounded border border-default" />
-                  )}
-                  <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoChange} className="text-sm" />
+                <p className="text-xs text-muted-foreground -mt-1">
+                  Logo untuk sidebar & header. Unggah dua varian agar tetap terbaca di latar terang dan gelap.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Tile outer identik (themed) — biar pair-nya konsisten.
+                      Inner swatch pakai literal zinc-50/zinc-900 biar preview kontras selalu sama
+                      apapun tema aplikasi. */}
+                  <div className="flex flex-col gap-2 rounded-lg border border-default bg-card p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-foreground">Mode Terang</span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">default</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-md border border-zinc-200 bg-zinc-50 flex items-center justify-center overflow-hidden">
+                        {logoPreview ? (
+                          <SafeImage src={logoPreview} alt="Logo terang" width={48} height={48} className="max-w-full max-h-full object-contain" />
+                        ) : (
+                          <span className="text-[10px] text-zinc-400">Belum ada</span>
+                        )}
+                      </div>
+                      <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoChange} className="text-xs file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-2 file:py-1 file:text-xs" />
+                    </div>
+                    <input type="hidden" name="companyLogo" value={logoPreview || ""} />
+                  </div>
+                  <div className="flex flex-col gap-2 rounded-lg border border-default bg-card p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-foreground">Mode Gelap</span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">opsional</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-md border border-zinc-800 bg-zinc-900 flex items-center justify-center overflow-hidden">
+                        {logoDarkPreview ? (
+                          <SafeImage src={logoDarkPreview} alt="Logo gelap" width={48} height={48} className="max-w-full max-h-full object-contain" />
+                        ) : (
+                          <span className="text-[10px] text-zinc-500">Belum ada</span>
+                        )}
+                      </div>
+                      <Input type="file" accept="image/*" onChange={handleLogoDarkChange} className="text-xs file:mr-2 file:rounded file:border-0 file:bg-primary file:text-primary-foreground file:px-2 file:py-1 file:text-xs" />
+                    </div>
+                    <input type="hidden" name="companyLogoDark" value={logoDarkPreview || ""} />
+                  </div>
                 </div>
-                <input type="hidden" name="companyLogo" value={logoPreview || ""} />
               </div>
             </div>
           </div>
@@ -593,6 +661,47 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <div className="flex items-center gap-3">
                   <SettingSwitch name="showTaxId" label="Tampilkan NPWP" defaultSelected={settings.showTaxId !== false} />
                 </div>
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2 border-t border-default/50 pt-4">
+                <Label>Tahapan Proyek Default</Label>
+                <p className="text-[10px] text-muted-foreground -mt-0.5 mb-2">
+                  Atur urutan tahapan pengerjaan karoseri default untuk proyek baru.
+                </p>
+                <div className="flex flex-col gap-2 max-w-xl">
+                  {stagesList.map((stage, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground w-16 shrink-0">Tahap {idx + 1}:</span>
+                      <Input
+                        type="text"
+                        value={stage}
+                        onChange={(e) => handleStageChange(idx, e.target.value)}
+                        placeholder={`Nama tahapan ke-${idx + 1}`}
+                        className="flex-1 text-xs"
+                      />
+                      <Button
+                        variant="ghost"
+                        isDisabled={stagesList.length <= 1}
+                        onClick={() => handleRemoveStage(idx)}
+                        className="text-danger hover:bg-danger/10 p-2 size-8 flex items-center justify-center rounded-lg border border-transparent hover:border-danger/25 shrink-0"
+                        isIconOnly
+                        aria-label="Hapus tahapan"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="mt-2.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddStage}
+                      className="border-primary/40 text-primary hover:bg-primary/5 text-xs font-semibold px-4"
+                    >
+                      <Plus className="size-3.5 mr-1.5" /> Tambah Tahap
+                    </Button>
+                  </div>
+                </div>
+                <input type="hidden" name="defaultProjectStages" value={stagesList.filter((s) => s.trim() !== "").join(", ")} />
               </div>
             </div>
           </div>
@@ -906,14 +1015,15 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                       : `${unmappedCount} akun belum dipilih. Lengkapi supaya posting jurnal lebih aman.`}
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
                   onClick={handleAutoMap}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-all"
+                  variant="primary"
+                  size="sm"
                   data-print-keep
                 >
                   Auto-Map Akun
-                </button>
+                </Button>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full border border-default bg-surface">
                 <div className="h-full bg-primary transition-all" style={{ width: `${mappingProgress}%` }} />

@@ -8,6 +8,8 @@ import { deleteDownPayment } from "@/actions/sales.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 
+import { statusLabel } from "@/lib/utils/status-labels"
+
 interface DownPayment {
   id: number
   quotation: { documentNo: string; customer: { name: string } }
@@ -41,7 +43,7 @@ const columns = [
     header: "Status",
     cell: (info) => {
       const val = info.getValue()
-      return <span className={`status-badge status-${val}`}>{val}</span>
+      return <span className={`status-badge status-${val}`}>{statusLabel(val)}</span>
     },
   }),
   columnHelper.accessor("createdAt", {

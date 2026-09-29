@@ -30,7 +30,7 @@ export default async function ProductionOrderDetailPage({
   const order = await prisma.productionOrder.findUnique({
     where: { id: numId },
     include: {
-      product: true,
+      product: { include: { inventoryItem: { select: { trackSerial: true } } } },
       materials: true,
     },
   })
@@ -65,7 +65,13 @@ export default async function ProductionOrderDetailPage({
         <div className="flex gap-2 items-center">
           <StatusChip status={order.status} />
   <div className="flex gap-2">
-          <ProductionOrderActions orderId={order.id} status={order.status} items={issuableItems} />
+          <ProductionOrderActions
+            orderId={order.id}
+            status={order.status}
+            items={issuableItems}
+            outputQty={Number(order.qty)}
+            outputTracksSerial={order.product.inventoryItem?.trackSerial ?? false}
+          />
           <Link href={`/produksi/production-orders/${order.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
           <DeleteButton id={order.id} action={deleteProductionOrder} />
                   <Link href="/produksi/production-orders" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>

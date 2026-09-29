@@ -1,31 +1,40 @@
 import { cn } from "@/lib/utils"
+import type { ReactNode, TableHTMLAttributes } from "react"
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+  TableFooter,
+} from "@/components/ui/shadcn/table"
 
-interface DetailTableProps extends React.TableHTMLAttributes<HTMLTableElement> {
-  children: React.ReactNode
+/* ── DetailTable (formal accounting style) ────────────────────────────────
+   Matches the Accurate / Jurnal / Zahir printed-statement look.
+   Built on shadcn/ui Table primitives.
+   ──────────────────────────────────────────────────────────────────────── */
+
+interface DetailTableProps extends TableHTMLAttributes<HTMLTableElement> {
+  children: ReactNode
   className?: string
 }
 
 export function DetailTable({ children, className, ...rest }: DetailTableProps) {
-  // Forward arbitrary table attributes (notably `data-report-table`, which the
-  // PDF/CSV exporter scans for via document.querySelectorAll). Previously these
-  // were swallowed, so Export PDF/CSV silently produced "no data" on every
-  // report built with this primitive.
   return (
     <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full border-collapse text-sm" {...rest}>
-        {children}
-      </table>
+      <Table {...rest}>{children}</Table>
     </div>
   )
 }
 
 export function DetailTableHead({ children }: { children: React.ReactNode }) {
   return (
-    <thead>
-      <tr className="border-b border-default bg-surface-secondary/50">
+    <TableHeader>
+      <TableRow className="border-b border-default hover:bg-transparent">
         {children}
-      </tr>
-    </thead>
+      </TableRow>
+    </TableHeader>
   )
 }
 
@@ -34,12 +43,6 @@ export function DetailTableTh({
   align = "left",
   className,
   colSpan,
-  /**
-   * Accessible scope for the header cell. Defaults to `"col"` because every
-   * consumer in the codebase uses `DetailTableTh` exclusively inside a
-   * `DetailTableHead` (the `<thead>`) — they are always column headers.
-   * Pass `"row"` if a consumer ever needs to mark a row-header `<th>`.
-   */
   scope = "col",
 }: {
   children: React.ReactNode
@@ -49,7 +52,7 @@ export function DetailTableTh({
   scope?: "col" | "row" | "colgroup" | "rowgroup"
 }) {
   return (
-    <th
+    <TableHead
       scope={scope}
       colSpan={colSpan}
       className={cn(
@@ -60,12 +63,12 @@ export function DetailTableTh({
       )}
     >
       {children}
-    </th>
+    </TableHead>
   )
 }
 
 export function DetailTableBody({ children }: { children: React.ReactNode }) {
-  return <tbody className="divide-y divide-default/50">{children}</tbody>
+  return <TableBody>{children}</TableBody>
 }
 
 export function DetailTableRow({
@@ -75,11 +78,7 @@ export function DetailTableRow({
   children: React.ReactNode
   className?: string
 }) {
-  return (
-    <tr className={cn("hover:bg-surface-secondary/30 transition-colors", className)}>
-      {children}
-    </tr>
-  )
+  return <TableRow className={cn("hover:bg-transparent", className)}>{children}</TableRow>
 }
 
 export function DetailTableTd({
@@ -94,7 +93,7 @@ export function DetailTableTd({
   colSpan?: number
 }) {
   return (
-    <td
+    <TableCell
       colSpan={colSpan}
       className={cn(
         "py-2.5 px-3 text-[0.8125rem] text-foreground",
@@ -104,12 +103,12 @@ export function DetailTableTd({
       )}
     >
       {children}
-    </td>
+    </TableCell>
   )
 }
 
 export function DetailTableFoot({ children }: { children: React.ReactNode }) {
-  return <tfoot className="border-t border-default">{children}</tfoot>
+  return <TableFooter className="border-t border-default">{children}</TableFooter>
 }
 
 export function DetailTableFootRow({
@@ -119,5 +118,5 @@ export function DetailTableFootRow({
   children: React.ReactNode
   className?: string
 }) {
-  return <tr className={cn("", className)}>{children}</tr>
+  return <TableRow className={cn("hover:bg-transparent", className)}>{children}</TableRow>
 }

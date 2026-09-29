@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/ui/form-select";
 
 import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button";
+import { CanCreate } from "@/components/auth/can-create";
 
 import type { Metadata } from "next";
 
@@ -95,6 +96,14 @@ export default async function PayrollPage({
     status: p.status,
   }));
 
+  const userRoles: string[] = user.roles ?? [];
+  const userPerms: string[] = (user as any).permissions ?? [];
+  const showActions =
+    userRoles.includes("super_admin") ||
+    userPerms.includes("edit_payroll") ||
+    userPerms.includes("delete_payroll");
+  const showEmployeeColumn = scope.kind !== "self";
+
   const settings = await prisma.systemSetting.findFirst();
   const cutoffDay = settings?.payrollCutoffDay ?? 25;
 
@@ -121,19 +130,25 @@ export default async function PayrollPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Penggajian</h1>
         <div className="flex gap-2 items-center flex-wrap">
-          <BulkGeneratePayrollButton cutoffDay={cutoffDay} />
-          <Link
-            href="/sdm/penggajian/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface text-foreground border border-default hover:bg-surface-secondary hover:-translate-y-px hover:shadow-md transition-all"
-            id="create-payroll-btn"
-          >
-            + Proses Manual
-          </Link>
+          <CanCreate permission="process_payroll">
+            <BulkGeneratePayrollButton cutoffDay={cutoffDay} />
+          </CanCreate>
+          <CanCreate permission="create_payroll">
+            <Link
+              href="/sdm/penggajian/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface text-foreground border border-default hover:bg-surface-secondary hover:-translate-y-px hover:shadow-md transition-all"
+              id="create-payroll-btn"
+            >
+              + Proses Manual
+            </Link>
+          </CanCreate>
         </div>
       </div>
 
       <PayrollTable
         data={data}
+        showActions={showActions}
+        showEmployeeColumn={showEmployeeColumn}
         toolbar={
           <AppSearchField
             placeholder="Cari nama karyawan..."

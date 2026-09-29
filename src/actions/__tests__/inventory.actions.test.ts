@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
     },
     systemSetting: buildModelMock(),
     warehouse: buildModelMock(),
+    userWarehouse: buildModelMock(),
     item: buildModelMock(),
     stockMove: {
       ...buildModelMock(),
@@ -95,7 +96,7 @@ function fdMap(
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requirePermissionMock.mockResolvedValue({ id: 1 });
+  mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] });
 });
 
 describe("Stock Adjustment Actions", () => {
@@ -410,6 +411,44 @@ describe("Rack & WorkOrder & Others", () => {
     const res = await actions.deleteRackRow(1);
     expect(res?.success).toBe(false);
     expect(res?.error).toBe("db err");
+  });
+
+  it("getNextRackCode requires warehouse-create permission and returns scoped format", async () => {
+    const result = await actions.getNextRackCode(3);
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_warehouses");
+    expect(result.code).toBe("RCK-0001");
+  });
+
+  it("getNextRowCode matches the global sequence used when creating a row", async () => {
+    mocks.prismaMock.rack.findUnique.mockResolvedValueOnce({ warehouseId: 3 });
+    mocks.prismaMock.rackRow.aggregate.mockResolvedValueOnce({ _max: { id: 12 } });
+
+    const result = await actions.getNextRowCode(9);
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("manage_inventory");
+    expect(mocks.prismaMock.rackRow.findFirst).toHaveBeenCalledWith({
+      where: { code: "ROW-0013" },
+      select: { id: true },
+    });
+    expect(result.code).toBe("ROW-0013");
+  });
+
+  it("prevents creating racks outside the caller's warehouse assignments", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["warehouse_staff"] });
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValueOnce([{ warehouseId: 1 }]);
+
+    const result = await actions.createRack(fdMap({ warehouseId: 2, name: "Foreign rack" }));
+    expect(result?.success).toBe(false);
+    expect(mocks.prismaMock.rack.create).not.toHaveBeenCalled();
+  });
+
+  it("prevents moving an assigned rack into an unassigned warehouse", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["warehouse_staff"] });
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 1 }]);
+    mocks.prismaMock.rack.findUnique.mockResolvedValueOnce({ warehouseId: 1 });
+
+    const result = await actions.updateRack(4, fdMap({ warehouseId: 2, name: "Moved" }));
+    expect(result?.success).toBe(false);
+    expect(mocks.prismaMock.rack.update).not.toHaveBeenCalled();
   });
 });
 

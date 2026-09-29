@@ -11,9 +11,9 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Proyek" }
 
 export default async function CreateProjectPage() {
-  await requirePermission("view_projects")
+  await requirePermission("create_projects")
 
-  const [customers, customerVehiclesRaw, generatedCode] = await Promise.all([
+  const [customers, customerVehiclesRaw, generatedCode, costCenters] = await Promise.all([
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -25,6 +25,11 @@ export default async function CreateProjectPage() {
       orderBy: { licensePlate: "asc" },
     }),
     peekNextDocumentNumber("PRJ"),
+    prisma.costCenter.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true },
+      orderBy: { code: "asc" },
+    }),
   ])
 
   const customerVehicles = customerVehiclesRaw.map((cv) => ({
@@ -40,7 +45,7 @@ export default async function CreateProjectPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Proyek</h1>
       </div>
-      <ProjectForm customers={customers} customerVehicles={customerVehicles} generatedCode={generatedCode} />
+      <ProjectForm customers={customers} customerVehicles={customerVehicles} costCenters={costCenters} generatedCode={generatedCode} />
     </div>
   )
 }

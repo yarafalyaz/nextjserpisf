@@ -6,6 +6,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatDate } from "@/lib/utils/format"
+import { bulkDelete } from "@/actions/bulk.actions"
 
 interface LeadData {
   id: number
@@ -79,9 +80,10 @@ export function LeadTable({ data, toolbar, filters }: LeadTableProps) {
       columns={columns}
       ariaLabel="Daftar leads"
       pageSize={20}
-      selectable={false}
+      selectable={true}
       toolbar={toolbar}
       filters={filters}
+      onBulkDelete={(ids) => bulkDelete("lead", ids)}
     />
   )
 }

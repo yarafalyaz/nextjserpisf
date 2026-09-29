@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { TimesheetForm } from "@/components/forms/timesheet-form"
 
@@ -10,11 +11,12 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Lembar Waktu" }
 
 export default async function CreateTimesheetPage() {
-  await requirePermission("view_timesheets")
+  const user = await requirePermission("create_timesheets")
+  const scope = await getHrScope(user)
 
   const [employees, projects, settings] = await Promise.all([
     prisma.employee.findMany({
-      where: { isActive: true, deletedAt: null },
+      where: { ...hrEmployeeScopeWhere(scope), isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),

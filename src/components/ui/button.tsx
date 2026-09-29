@@ -14,6 +14,7 @@ type ButtonVariant =
   | "ghost"
   | "danger"
   | "danger-soft"
+  | "success"
 
 type ShadVariant = React.ComponentProps<typeof ShadButton>["variant"]
 
@@ -25,6 +26,7 @@ const variantMap: Record<ButtonVariant, ShadVariant> = {
   ghost: "ghost",
   danger: "destructive",
   "danger-soft": "outline",
+  success: "default",
 }
 
 const sizeMap: Record<"sm" | "md" | "lg", React.ComponentProps<typeof ShadButton>["size"]> = {
@@ -49,7 +51,11 @@ interface ButtonProps {
   isPending?: boolean
   isIconOnly?: boolean
   "aria-label"?: string
+  role?: string
+  "aria-expanded"?: boolean
+  "aria-required"?: boolean | "true" | "false"
   slot?: string
+  formAction?: string | ((formData: FormData) => void | Promise<void>)
 }
 
 export function Button({
@@ -70,13 +76,17 @@ export function Button({
   const shadVariant = variantMap[variant] ?? "secondary"
   const shadSize = isIconOnly ? "icon" : (sizeMap[size] ?? "default")
 
+  const variantClass = variant === "success"
+    ? "bg-success text-white hover:bg-success/90 focus-visible:ring-success/20 dark:bg-success/60 dark:focus-visible:ring-success/40"
+    : ""
+
   if (href) {
     return (
       <ShadButton
         asChild
         variant={shadVariant}
         size={shadSize}
-        className={className}
+        className={cn(variantClass, className)}
         id={id}
         {...rest}
       >
@@ -90,7 +100,7 @@ export function Button({
       type={type}
       variant={shadVariant}
       size={shadSize}
-      className={cn(className)}
+      className={cn(variantClass, className)}
       id={id}
       disabled={isDisabled || isPending}
       onClick={(e) => {

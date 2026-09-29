@@ -5,6 +5,7 @@ import { CustomerForm } from "@/components/forms/customer-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { peekNextDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
+import { prisma } from "@/lib/db/prisma"
 
 import type { Metadata } from "next"
 
@@ -17,6 +18,12 @@ export default async function CreateCustomerPage() {
   const settings = await getSystemSettings()
   const enableAutoCode = settings.enableAutoCustomerCode !== false
 
+  const categories = await prisma.customerCategory.findMany({
+    where: { deletedAt: null, isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -28,7 +35,7 @@ export default async function CreateCustomerPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Pelanggan</h1>
       </div>
-      <CustomerForm generatedCode={generatedCode} enableAutoCode={enableAutoCode} />
+      <CustomerForm generatedCode={generatedCode} enableAutoCode={enableAutoCode} categories={categories} />
     </div>
   )
 }

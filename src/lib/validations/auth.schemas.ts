@@ -17,6 +17,8 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const emailField = z
   .string()
+  .trim()
+  .toLowerCase()
   .min(1, "Email wajib diisi")
   .max(255, "Email terlalu panjang")
   .regex(emailRegex, "Format email tidak valid")

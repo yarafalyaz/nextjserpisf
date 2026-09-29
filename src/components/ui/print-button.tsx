@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Printer, Loader2 } from "lucide-react"
 import { showError, showSuccess } from "@/lib/utils/toast"
-import { generateQuotationPDF, generateTransactionPDF } from "@/lib/pdf/generator"
+import { generateQuotationPDF, generateTransactionPDF, generateWorkOrderPDF } from "@/lib/pdf/generator"
 
 interface PrintButtonProps {
   title?: string
@@ -32,7 +32,9 @@ export function PrintButton({ title = "Cetak", documentType, documentId, disable
       }
 
       if (documentType === "quotation") {
-        await generateQuotationPDF(data.company, data.docInfo, data.items, data.summary)
+        await generateQuotationPDF(data.company, data.docInfo, data.items, data.summary, data.sections)
+      } else if (documentType === "work-order") {
+        generateWorkOrderPDF(data.company, data.docInfo, data.items)
       } else {
         generateTransactionPDF(data.company, data.docInfo, data.items, data.summary)
       }

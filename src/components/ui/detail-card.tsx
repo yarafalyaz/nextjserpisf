@@ -1,4 +1,5 @@
 import { ReactNode, useId } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/shadcn/card"
 
 interface DetailCardProps {
   title?: string
@@ -15,31 +16,26 @@ interface DetailCardProps {
  */
 export function DetailCard({ title, children, className = "", columns = 3 }: DetailCardProps) {
   const colClass = {
-    2: "grid-cols-[repeat(auto-fit,minmax(250px,1fr))]",
-    3: "grid-cols-[repeat(auto-fit,minmax(200px,1fr))]",
-    4: "grid-cols-[repeat(auto-fit,minmax(180px,1fr))]",
+    2: "grid-cols-1 md:grid-cols-2",
+    3: "grid-cols-1 sm:grid-cols-2 md:grid-cols-3",
+    4: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4",
   }
 
   const headerId = useId()
-  const labelledBy = title ? headerId : undefined
 
   return (
-    <section
-      aria-labelledby={labelledBy}
-      className={`bg-surface rounded-xl border border-default shadow-sm p-6 ${className}`}
-    >
+    <Card className={`gap-0 ${className}`} aria-labelledby={title ? headerId : undefined}>
       {title && (
-        <h2
-          id={headerId}
-          className="text-base font-semibold text-foreground mb-4 pb-3 border-b border-default"
-        >
-          {title}
-        </h2>
+        <CardHeader className="border-b border-default pb-3">
+          <CardTitle id={headerId} className="text-base">{title}</CardTitle>
+        </CardHeader>
       )}
-      <dl className={`grid ${colClass[columns]} gap-4`}>
-        {children}
-      </dl>
-    </section>
+      <CardContent className="pt-6">
+        <dl className={`grid ${colClass[columns]} gap-x-8 lg:gap-x-16 gap-y-6`}>
+          {children}
+        </dl>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -81,16 +77,16 @@ interface DetailSectionProps {
 export function DetailSection({ title, children, className = "" }: DetailSectionProps) {
   const headerId = useId()
   return (
-    <section
+    <Card
+      className={`gap-0 overflow-hidden ${className}`}
       aria-labelledby={headerId}
-      className={`bg-surface rounded-xl border border-default shadow-sm overflow-hidden ${className}`}
     >
       <div className="px-6 py-4 border-b border-default bg-surface-secondary/50">
         <h2 id={headerId} className="text-sm font-semibold text-foreground uppercase tracking-wide">
           {title}
         </h2>
       </div>
-      <div className="p-6">{children}</div>
-    </section>
+      <CardContent className="pt-6">{children}</CardContent>
+    </Card>
   )
 }

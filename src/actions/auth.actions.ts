@@ -3,6 +3,7 @@
 import { signIn, signOut } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
 import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { isNextRedirectError } from "@/lib/utils/error"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
 import {
@@ -124,6 +125,7 @@ export async function changePassword(formData: FormData) {
     revalidatePath("/profil")
     return { success: true }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     console.error("[changePassword]", e)
     return { error: "Terjadi kesalahan saat mengubah password" }
   }
@@ -184,6 +186,7 @@ export async function createUser(formData: FormData) {
     revalidatePath("/pengaturan/pengguna")
     return { success: true, id: user.id }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     // Handle unique constraint violation (race condition on email)
     if (e instanceof Error && e.message.includes("Unique constraint")) {
       return { error: "Email sudah terdaftar" }
@@ -234,6 +237,7 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     revalidatePath("/pengaturan/pengguna")
     return { success: true }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     console.error("[updateUserRoles]", e)
     return { error: "Terjadi kesalahan saat memperbarui role" }
   }
@@ -263,6 +267,7 @@ export async function toggleUserActive(userId: number) {
     revalidatePath("/pengaturan/pengguna")
     return { success: true }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     console.error("[toggleUserActive]", e)
     return { error: "Terjadi kesalahan saat mengubah status pengguna" }
   }
@@ -296,6 +301,7 @@ export async function updateProfile(formData: FormData) {
     revalidatePath("/")
     return { success: true }
   } catch (e) {
+    if (isNextRedirectError(e)) throw e
     // Handle unique constraint violation (duplicate email)
     if (e instanceof Error && e.message.includes("Unique constraint")) {
       return { error: "Email sudah digunakan" }

@@ -4,6 +4,7 @@ import { NextRequest } from "next/server"
 
 const mocks = vi.hoisted(() => ({
   authFn: vi.fn(),
+  canModifyAttachment: vi.fn(),
   findUnique: vi.fn(),
   delete: vi.fn(),
   unlink: vi.fn(),
@@ -11,6 +12,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth/auth", () => ({
   auth: (...a: unknown[]) => mocks.authFn(...a),
+}))
+
+vi.mock("@/lib/auth/attachment-permissions", () => ({
+  canModifyAttachment: (...a: unknown[]) => mocks.canModifyAttachment(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -40,9 +45,11 @@ describe("DELETE /api/upload/attachments/[id]", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.authFn.mockResolvedValue({ user: { id: 5 } })
+    mocks.canModifyAttachment.mockResolvedValue(true)
     mocks.findUnique.mockResolvedValue({
       id: 1,
       fileUrl: "/api/attachments/quotation/quotation-1-123.pdf",
+      referenceId: 5,
       uploadedBy: 5,
       referenceType: "quotation",
     })
@@ -67,6 +74,14 @@ describe("DELETE /api/upload/attachments/[id]", () => {
     expect(res.status).toBe(400)
   })
 
+  it("rejects attachment ids with suffixes or unsafe integer values", async () => {
+    for (const id of ["1junk", "9007199254740992"]) {
+      const res = await DELETE(makeReq(), makeParams(id))
+      expect(res.status).toBe(400)
+    }
+    expect(mocks.findUnique).not.toHaveBeenCalled()
+  })
+
   it("returns 400 for invalid user id", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: "xyz" } })
     const res = await DELETE(makeReq(), makeParams("1"))
@@ -83,6 +98,7 @@ describe("DELETE /api/upload/attachments/[id]", () => {
     mocks.findUnique.mockResolvedValue({
       id: 1,
       fileUrl: "/api/attachments/q/file.pdf",
+      referenceId: 5,
       uploadedBy: 99, // different user
       referenceType: "quotation",
     })

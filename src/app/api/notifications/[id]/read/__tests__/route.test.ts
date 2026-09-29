@@ -48,6 +48,15 @@ describe("POST /api/notifications/[id]/read", () => {
     expect(res.status).toBe(400)
   })
 
+  it("rejects notification ids with suffixes or unsafe integer values", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    for (const id of ["5junk", "9007199254740992"]) {
+      const res = await POST(makeReq(), makeParams(id))
+      expect(res.status).toBe(400)
+    }
+    expect(mocks.markAsRead).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when user id is invalid", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: "xyz" } })
     const res = await POST(makeReq(), makeParams("5"))

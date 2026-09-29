@@ -1,6 +1,7 @@
 "use client"
 
 import { createColumnHelper } from "@tanstack/react-table"
+import { useMemo } from "react"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
@@ -23,6 +24,7 @@ const columnHelper = createColumnHelper<LoanData>()
 
 const columns = [
   columnHelper.accessor("employee", {
+    id: "employee",
     header: "Karyawan",
     cell: (info) => (
       <Link href={`/sdm/pinjaman/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
@@ -71,14 +73,23 @@ interface LoanTableProps {
   data: LoanData[]
   toolbar?: React.ReactNode
   filters?: React.ReactNode
+  showActions?: boolean
+  showEmployeeColumn?: boolean
 }
 
-export function LoanTable({ data, toolbar, filters }: LoanTableProps) {
+export function LoanTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: LoanTableProps) {
+  const visibleColumns = useMemo(() => {
+    let cols = columns
+    if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
+    if (!showEmployeeColumn) cols = cols.filter((c: any) => c.id !== "employee")
+    return cols
+  }, [showActions, showEmployeeColumn])
+
   return (
     <DataTable
       data={data}
-      columns={columns}
-      ariaLabel="Daftar pinjaman karyawan"
+      columns={visibleColumns}
+      ariaLabel="Daftar pinjaman"
       pageSize={20}
       selectable={true}
       toolbar={toolbar}

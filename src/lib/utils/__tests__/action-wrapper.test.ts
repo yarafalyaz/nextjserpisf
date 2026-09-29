@@ -9,6 +9,9 @@ vi.mock("@/lib/auth/auth", () => ({
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
+vi.mock("@/lib/security/csrf", () => ({
+  assertCSRF: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { action } from "../action-wrapper"
 

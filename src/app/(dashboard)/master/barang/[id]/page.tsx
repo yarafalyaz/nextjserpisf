@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatCurrency, formatDate, formatReferenceType } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DetailTabs } from "@/components/ui/detail-tabs"
@@ -48,7 +48,7 @@ export default async function ItemDetailPage({
 
   if (!item) notFound()
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? ""
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL || process.env.NEXTAUTH_URL || ""
   const trackCode = item.sku
   const qrUrl = `${baseUrl}/inventaris/scan?code=${encodeURIComponent(trackCode)}`
 
@@ -390,7 +390,7 @@ export default async function ItemDetailPage({
                               ) : sm.documentNo}
                             </DetailTableTd>
                             <DetailTableTd>
-                              <span className="text-xs text-muted-foreground">{sm.referenceType || sm.moveType || "-"}</span>
+                              <span className="text-xs text-muted-foreground">{formatReferenceType(sm.referenceType || sm.moveType)}</span>
                             </DetailTableTd>
                             <DetailTableTd>
                               <StatusChip status={sm.impact === "IN" ? "received" : "returned"} />

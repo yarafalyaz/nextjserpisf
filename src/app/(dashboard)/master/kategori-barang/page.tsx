@@ -10,6 +10,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Kategori Barang" }
 
 export default async function ItemCategoriesPage({
@@ -46,9 +47,11 @@ export default async function ItemCategoriesPage({
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Kategori Item" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Kategori Barang</h1>
-        <Link href="/master/kategori-barang/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-item-category-btn">
+        <CanCreate permission="create_item_categories">
+          <Link href="/master/kategori-barang/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-item-category-btn">
           + Tambah Kategori
         </Link>
+        </CanCreate>
       </div>
 
       <ItemCategoryTable data={tableData} />

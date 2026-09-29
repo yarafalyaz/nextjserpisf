@@ -149,7 +149,7 @@ export function LoginForm({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <FieldLabel htmlFor="password">Kata Sandi</FieldLabel>
                 <Input
                   id="password"
                   name="password"

@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 
 import { PrismaClient, Prisma, StockMove } from '@prisma/client'
 import { notificationService } from './notification.service'
 import { safeAdd, safeSubtract, safeMultiply, safeDivide } from '@/lib/utils/math'
+import { consumeFifoLayers } from './inventory-fifo'
 
 type TxClient = Omit<
   PrismaClient,
@@ -76,11 +77,45 @@ export class InventoryService {
       },
     })
 
+    // Fetch item meta to check costing method and current cost/qty
+    const item = await tx.item.findUnique({
+      where: { id: move.itemId },
+      select: {
+        qtyOnHand: true,
+        cost: true,
+        costingMethod: true,
+        category: {
+          select: {
+            costingMethod: true,
+          },
+        },
+      },
+    })
+
     // Atomic increment on item quantity
     await tx.$executeRaw`
       UPDATE items SET qty_on_hand = qty_on_hand + ${move.qty}
       WHERE id = ${move.itemId}
     `
+
+    if (item) {
+      const costingMethod = (item.category?.costingMethod || item.costingMethod || "average").toLowerCase()
+      if (costingMethod === "average") {
+        const oldQty = Number(item.qtyOnHand ?? 0)
+        const oldCost = Number(item.cost ?? 0)
+        const newQty = Number(move.qty)
+        const newCost = Number(move.cost)
+        const totalQty = oldQty + newQty
+        let newAverageCost = oldCost
+        if (totalQty > 0) {
+          newAverageCost = (oldQty * oldCost + newQty * newCost) / totalQty
+        }
+        await tx.item.update({
+          where: { id: move.itemId },
+          data: { cost: newAverageCost },
+        })
+      }
+    }
   }
 
   /**
@@ -103,53 +138,20 @@ export class InventoryService {
       )
     }
 
-    // FIFO consumption — lock layers ordered by creation date, scoped to the
-    // move's warehouse so stock physically in another warehouse is never drawn.
-    const layers = move.warehouseId != null
-      ? await tx.$queryRaw<any[]>`
-          SELECT * FROM inventory_layers
-          WHERE item_id = ${move.itemId} AND warehouse_id = ${move.warehouseId} AND remaining > 0
-          ORDER BY created_at ASC, id ASC
-          FOR UPDATE
-        `
-      : await tx.$queryRaw<any[]>`
-          SELECT * FROM inventory_layers
-          WHERE item_id = ${move.itemId} AND remaining > 0
-          ORDER BY created_at ASC, id ASC
-          FOR UPDATE
-        `
+    const { consumedCost, shortfall } = await consumeFifoLayers(tx as any, {
+      itemId: move.itemId,
+      warehouseId: move.warehouseId,
+      qty: Number(move.qty),
+      allowShortfall: true,
+    })
 
-    let qtyToConsume = Number(move.qty)
-    let totalCost = 0
-
-    for (const layer of layers) {
-      if (qtyToConsume <= 0) break
-
-      const consume = Math.min(Number(layer.remaining), qtyToConsume)
-
-      await tx.inventoryLayer.update({
-        where: { id: layer.id },
-        data: {
-          qtyOut: { increment: consume },
-          remaining: { decrement: consume },
-        },
-      })
-
-      totalCost = safeAdd(totalCost, safeMultiply(consume, Number(layer.unit_cost), 0), 0)
-      qtyToConsume = safeSubtract(qtyToConsume, consume, 2)
-    }
-
-    // qtyToConsume is now rounded to 2 decimal places (the DB column scale). This
-    // absorbs the float subtraction drift (e.g. 0.4 - 0.3 - 0.1 yields 2.77e-17
-    // in plain JS, which would otherwise falsely trip the "Kurang" branch below
-    // and reject a perfectly balanced FIFO draw against Decimal(15,2) layers).
-    if (qtyToConsume > 0) {
+    if (shortfall > 0) {
       const where = move.warehouseId != null ? ` di gudang #${move.warehouseId}` : ''
-      throw new Error(`Stok tidak mencukupi untuk item ${item.sku}${where}. Kurang ${qtyToConsume}.`)
+      throw new Error(`Stok tidak mencukupi untuk item ${item.sku}${where}. Kurang ${shortfall}.`)
     }
 
     // Update cost on move (weighted average from consumed layers)
-    const unitCost = safeDivide(totalCost, Number(move.qty), 0)
+    const unitCost = Number(move.qty) > 0 ? safeDivide(consumedCost, Number(move.qty), 0) : 0
     await tx.stockMove.update({
       where: { id: move.id },
       data: { cost: unitCost },
@@ -166,7 +168,7 @@ export class InventoryService {
     }
 
     // Check low stock threshold and notify asynchronously
-        const updatedItem = await tx.item.findUnique({ where: { id: move.itemId } })
+    const updatedItem = await tx.item.findUnique({ where: { id: move.itemId } })
     if (
       updatedItem &&
       Number(updatedItem.minStock) > 0 &&

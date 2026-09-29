@@ -28,22 +28,6 @@ const optionalDate = z.string().optional()
 
 const optionalBool = z.boolean().optional()
 
-// ==================== Attendance ====================
-
-export const attendanceSchema = z.object({
-  employeeId: requiredId("Karyawan"),
-  date: requiredDate("Tanggal"),
-  checkIn: optionalDate,
-  checkOut: optionalDate,
-  status: z.string().default("present"),
-  checkInLatitude: optionalNum(),
-  checkInLongitude: optionalNum(),
-  checkOutLatitude: optionalNum(),
-  checkOutLongitude: optionalNum(),
-  overtimeMinutes: optionalNum(0),
-  overtimeApproved: optionalBool,
-})
-
 // ==================== Leave Request ====================
 
 export const leaveRequestSchema = z.object({
@@ -90,35 +74,6 @@ export const timesheetSchema = z.object({
   description: optionalStr(1000),
 })
 
-// ==================== Work Schedule ====================
-
-export const workScheduleSchema = z.object({
-  name: requiredStr("Nama jadwal wajib diisi"),
-  startTime: requiredStr("Jam masuk wajib diisi", 10),
-  endTime: requiredStr("Jam keluar wajib diisi", 10),
-  lateToleranceMinutes: optionalNum(0),
-  isActive: optionalBool,
-})
-
-// ==================== Holiday ====================
-
-export const holidaySchema = z.object({
-  name: requiredStr("Nama hari libur wajib diisi"),
-  date: requiredDate("Tanggal"),
-  description: optionalStr(500),
-  isNationalHoliday: z.boolean().optional().default(true),
-})
-
-// ==================== Department Holiday ====================
-
-export const departmentHolidaySchema = z.object({
-  id: optionalId,
-  departmentId: requiredId("Departemen"),
-  name: requiredStr("Nama wajib diisi"),
-  date: requiredDate("Tanggal"),
-  isRecurring: optionalBool,
-})
-
 // ==================== Appreciation ====================
 
 export const appreciationSchema = z.object({
@@ -152,17 +107,14 @@ export const payrollSchema = z.object({
   totalAmount: optionalNum(0),
   paymentDate: optionalDate,
   recalcLate: optionalBool,
+  costCenterId: optionalId,
 })
 
 // ==================== Inferred Types ====================
 
-export type AttendanceInput = z.infer<typeof attendanceSchema>
 export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>
 export type OvertimeRequestInput = z.infer<typeof overtimeRequestSchema>
 export type EmployeeLoanInput = z.infer<typeof employeeLoanSchema>
 export type TimesheetInput = z.infer<typeof timesheetSchema>
-export type WorkScheduleInput = z.infer<typeof workScheduleSchema>
-export type HolidayInput = z.infer<typeof holidaySchema>
-export type DepartmentHolidayInput = z.infer<typeof departmentHolidaySchema>
 export type AppreciationInput = z.infer<typeof appreciationSchema>
 export type PayrollInput = z.infer<typeof payrollSchema>

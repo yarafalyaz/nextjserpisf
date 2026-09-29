@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { notificationService } from "@/lib/services/notification.service"
 import { apiError } from "@/lib/api-response"
+import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service"
 
 /**
  * Cron: Send daily notifications to admins.
@@ -160,52 +161,22 @@ export async function GET(request: Request) {
     results.lateAttendance = count
   }
 
-  // 5. Absent employees (after 10 AM, skip weekends/holidays/leaves)
+  // 5. Absent employees after 10 AM, based on employee, department, or global schedules.
   if (now.getHours() >= 10) {
-    // Skip weekends. The daily-notifications UI on /api/dashboard/notifications
-    // does the same — both views must agree or admins get a Saturday/Sunday
-    // notification listing employees who are not actually scheduled to work.
-    // Tenants with a 6-day WorkSchedule can extend this later.
-    const dow = now.getDay()
-    if (dow !== 0 && dow !== 6) {
-      const isHoliday = await prisma.holiday.findFirst({ where: { date: dayStart }, select: { id: true } })
-
-      if (!isHoliday) {
-        const [activeEmployees, allAttendances, leaves] = await Promise.all([
-          prisma.employee.findMany({
-            where: { isActive: true, deletedAt: null },
-            include: { department: true },
-          }),
-          prisma.attendance.findMany({
-            where: { date: { gte: dayStart, lt: dayEnd } },
-            select: { employeeId: true },
-          }),
-          prisma.leaveRequest.findMany({
-            where: { status: "approved", startDate: { lte: dayStart }, endDate: { gte: dayStart } },
-            select: { employeeId: true },
-          }),
-        ])
-
-        const presentIds = new Set(allAttendances.map((a) => a.employeeId))
-        const onLeaveIds = new Set(leaves.map((l) => l.employeeId))
-        const absentEmployees = activeEmployees.filter((e) => !presentIds.has(e.id) && !onLeaveIds.has(e.id))
-
-        if (absentEmployees.length > 0) {
-          const count = absentEmployees.length
-          const names = absentEmployees
-            .slice(0, 5)
-            .map((e) => `• ${e.name}${e.department ? ` (${e.department.name})` : ""}`)
-            .join("\n")
-
-          await notificationService.notifyUsers(
-            adminIds,
-            `${count} Karyawan Belum Absen`,
-            names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
-            "danger"
-          )
-          results.absentEmployees = count
-        }
-      }
+    const { absentEmployees } = await getDailyAttendanceMetrics(now)
+    if (absentEmployees.length > 0) {
+      const count = absentEmployees.length
+      const names = absentEmployees
+        .slice(0, 5)
+        .map((e) => `• ${e.name}${e.department ? ` (${e.department.name})` : ""}`)
+        .join("\n")
+      await notificationService.notifyUsers(
+        adminIds,
+        `${count} Karyawan Belum Absen`,
+        names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
+        "danger",
+      )
+      results.absentEmployees = count
     }
   }
 

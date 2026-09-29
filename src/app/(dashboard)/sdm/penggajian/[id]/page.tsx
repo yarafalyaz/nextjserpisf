@@ -8,7 +8,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { requirePermission } from "@/lib/auth/permissions";
-import { auth } from "@/lib/auth/auth";
+import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope";
 import { Pencil } from "lucide-react";
 import { ApprovePayrollButton } from "./_components/approve-button";
 import { MarkPaidPayrollButton } from "./_components/mark-paid-button";
@@ -29,31 +29,19 @@ export default async function PayrollDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requirePermission("view_payroll");
-  const session = await auth();
+  const scope = await getHrScope(user);
 
   const { id } = await params;
 
   const numId = Number(id);
-  if (Number.isNaN(numId)) notFound();
+  if (!Number.isSafeInteger(numId) || numId <= 0) notFound();
 
   const payroll = await prisma.payroll.findUnique({
-    where: { id: numId },
+    where: { id: numId, ...hrScopeWhere(scope) },
     include: { employee: true },
   });
 
   if (!payroll) notFound();
-
-  const isPrivileged =
-    user.roles.includes("super_admin") || user.roles.includes("hr");
-  if (!isPrivileged) {
-    const myEmployee = session?.user?.id
-      ? await prisma.employee.findFirst({
-          where: { userId: Number(session.user.id) },
-          select: { id: true },
-        })
-      : null;
-    if (!myEmployee || payroll.employeeId !== myEmployee.id) notFound();
-  }
 
   const fmt = (val: unknown) => Number(val ?? 0).toLocaleString("id-ID");
 

@@ -4,6 +4,10 @@ const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
 
 const optionalNumber = () => z.coerce.number().optional()
+const optionalPositiveId = () => z.preprocess(
+  (value) => value === "" || value === null ? undefined : value,
+  z.coerce.number().int().positive().optional(),
+)
 
 // ==================== PRODUCT (BOM) ====================
 
@@ -13,6 +17,7 @@ export const createProductSchema = z.object({
   description: optionalString(1000),
   vehicleBrandId: optionalNumber(),
   vehicleModelId: optionalNumber(),
+  inventoryItemId: optionalPositiveId(),
 })
 
 export type CreateProductInput = z.infer<typeof createProductSchema>
@@ -23,6 +28,7 @@ export const updateProductSchema = z.object({
   description: optionalString(1000),
   vehicleBrandId: optionalNumber(),
   vehicleModelId: optionalNumber(),
+  inventoryItemId: optionalPositiveId(),
 })
 
 export type UpdateProductInput = z.infer<typeof updateProductSchema>

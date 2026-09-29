@@ -5,6 +5,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createTicketSchema, updateTicketSchema, leadActivitySchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
@@ -159,7 +160,7 @@ export async function deleteLead(id: number) {
   )
   revalidatePath("/crm/leads")
   await logActivity("delete", "Lead", id, "Menghapus lead")
-  return { success: true }
+  redirect("/crm/leads")
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e

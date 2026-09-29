@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -10,6 +10,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrEmployeeScopeWhere, hrScopeWhere } from "@/lib/auth/hr-scope"
 export const metadata: Metadata = { title: "Ubah Lembar Waktu" }
 
 export default async function EditPage({
@@ -17,19 +18,20 @@ export default async function EditPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("edit_employees")
+  const user = await requirePermission("create_timesheets")
+  const scope = await getHrScope(user)
 
   const { id } = await params
   const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  if (!Number.isSafeInteger(numId) || numId <= 0) notFound()
 
   const data = await prisma.timesheet.findUnique({
-    where: { id: numId },
+    where: { id: numId, ...hrScopeWhere(scope) },
   })
 
   if (!data) notFound()
 
-  const [employees, projects, settings] = await Promise.all([prisma.employee.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.project.findMany({ orderBy: { name: "asc" } }), getSystemSettings()])
+  const [employees, projects, settings] = await Promise.all([prisma.employee.findMany({ where: { ...hrEmployeeScopeWhere(scope), deletedAt: null }, orderBy: { name: "asc" } }), prisma.project.findMany({ orderBy: { name: "asc" } }), getSystemSettings()])
 
   return (
     <div className="flex flex-col gap-6">

@@ -5,7 +5,8 @@ import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteStockAdjustment } from "@/actions/inventory.actions"
+import { ProcessButton } from "@/components/ui/process-button"
+import { deleteStockAdjustment, processStockAdjustment } from "@/actions/inventory.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -37,6 +38,29 @@ export default async function StockAdjustmentDetailPage({
 
   if (!adjustment) notFound()
 
+  // Fetch item names dynamically
+  const itemIds = adjustment.items.map((i) => i.itemId)
+  const items = await prisma.item.findMany({
+    where: { id: { in: itemIds } },
+    select: { id: true, name: true },
+  })
+  const itemNameMap = new Map(items.map((i) => [i.id, i.name]))
+
+  // Fetch approver name dynamically if set
+  let approverName: string | null = null
+  if (adjustment.approvedBy) {
+    const approver = await prisma.user.findUnique({
+      where: { id: adjustment.approvedBy },
+      select: { name: true },
+    })
+    approverName = approver?.name || null
+  }
+
+  const typeMap: Record<string, string> = {
+    increase: "Penambahan",
+    decrease: "Pengurangan",
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -47,11 +71,27 @@ export default async function StockAdjustmentDetailPage({
           { label: "Penyesuaian", href: "/inventaris/penyesuaian" },
           { label: adjustment.documentNo },
         ]}
-        badge={<StatusChip status={adjustment.status} />}
+        badge={
+          <StatusChip
+            status={adjustment.status}
+            customLabel={adjustment.status === "processed" ? "Diposting" : undefined}
+            customTone={adjustment.status === "processed" ? "success" : undefined}
+          />
+        }
         actions={
           <>
-            <Button href={`/inventaris/penyesuaian/${adjustment.id}/ubah`} variant="primary">Ubah</Button>
-            <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
+            {adjustment.status === "draft" && (
+              <>
+                <ProcessButton
+                  id={adjustment.id}
+                  action={processStockAdjustment}
+                  successMessage="Penyesuaian stok berhasil diposting"
+                  label="Posting"
+                />
+                <Button href={`/inventaris/penyesuaian/${adjustment.id}/ubah`} variant="secondary">Ubah</Button>
+                <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
+              </>
+            )}
             <BackButton href="/inventaris/penyesuaian" />
           </>
         }
@@ -61,8 +101,17 @@ export default async function StockAdjustmentDetailPage({
         <DetailField label="No. Dokumen" value={adjustment.documentNo} mono />
         <DetailField label="Gudang" value={adjustment.warehouse.name} />
         <DetailField label="Tanggal" value={formatDate(adjustment.date)} />
-        <DetailField label="Status" value={<StatusChip status={adjustment.status} />} />
-        <DetailField label="Tipe" value={<span className="capitalize">{adjustment.type}</span>} />
+        <DetailField
+          label="Status"
+          value={
+            <StatusChip
+              status={adjustment.status}
+              customLabel={adjustment.status === "processed" ? "Diposting" : undefined}
+              customTone={adjustment.status === "processed" ? "success" : undefined}
+            />
+          }
+        />
+        <DetailField label="Tipe" value={typeMap[adjustment.type.toLowerCase()] || adjustment.type} />
         {adjustment.reason && (
           <DetailField label="Alasan" value={adjustment.reason} colSpan="full" />
         )}
@@ -70,7 +119,7 @@ export default async function StockAdjustmentDetailPage({
           <DetailField label="Catatan" value={adjustment.notes} colSpan="full" />
         )}
         {adjustment.approvedBy && (
-          <DetailField label="Disetujui Oleh" value={`User #${adjustment.approvedBy}`} />
+          <DetailField label="Disetujui Oleh" value={approverName || `User #${adjustment.approvedBy}`} />
         )}
         {adjustment.approvedAt && (
           <DetailField label="Disetujui Pada" value={formatDate(adjustment.approvedAt)} />
@@ -88,7 +137,7 @@ export default async function StockAdjustmentDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Nama Barang</DetailTableTh>
                 <DetailTableTh align="right">Qty Sistem</DetailTableTh>
                 <DetailTableTh align="right">Qty Aktual</DetailTableTh>
                 <DetailTableTh align="right">Selisih</DetailTableTh>
@@ -96,7 +145,7 @@ export default async function StockAdjustmentDetailPage({
               <DetailTableBody>
                 {adjustment.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.systemQty)}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.actualQty)}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.difference)}</DetailTableTd>

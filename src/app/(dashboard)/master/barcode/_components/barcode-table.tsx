@@ -33,7 +33,11 @@ const columns = [
     header: "Aksi",
     enableSorting: false,
     cell: (info) => (
-      <ActionDropdown deleteAction={deleteBarcode} deleteId={info.row.original.id} />
+      <ActionDropdown
+        deleteAction={deleteBarcode}
+        deleteId={info.row.original.id}
+        deletePermission="delete_barcodes"
+      />
     ),
   }),
 ]

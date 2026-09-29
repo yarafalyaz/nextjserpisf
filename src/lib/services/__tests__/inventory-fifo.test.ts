@@ -225,7 +225,7 @@ describe("inventory-fifo", () => {
       await consumeFifoLayers(tx, { itemId: 1, qty: 3 });
 
       expect(tx._spies.serialUpdateMany).toHaveBeenCalledWith({
-        where: { id: { in: [11, 12, 13] } },
+        where: { id: { in: [11, 12, 13] }, status: "available" },
         data: { status: "used" },
       });
     });

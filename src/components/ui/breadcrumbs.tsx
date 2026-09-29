@@ -1,33 +1,39 @@
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/shadcn/breadcrumb"
 
-export interface BreadcrumbItem {
+export interface BreadcrumbItemData {
   label: string
   href?: string
 }
 
-export function AppBreadcrumbs({ items, ariaLabel = "Navigasi breadcrumb" }: { items: BreadcrumbItem[]; ariaLabel?: string }) {
+export function AppBreadcrumbs({ items, ariaLabel = "Navigasi breadcrumb" }: { items: BreadcrumbItemData[]; ariaLabel?: string }) {
   return (
-    <nav aria-label={ariaLabel} className="mb-4">
-      <ol className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        {items.map((item, index) => {
+    <Breadcrumb aria-label={ariaLabel} className="mb-4">
+      <BreadcrumbList>
+        {items.flatMap((item, index) => {
           const isLast = index === items.length - 1
-          return (
-            <li key={index} className="flex items-center gap-1.5">
+          const crumb = (
+            <BreadcrumbItem key={index}>
               {isLast || !item.href ? (
-                <span className={isLast ? 'font-medium text-foreground' : ''} aria-current={isLast ? 'page' : undefined}>
-                  {item.label}
-                </span>
+                <BreadcrumbPage>{item.label}</BreadcrumbPage>
               ) : (
-                <Link href={item.href} className="transition-colors hover:text-foreground">
-                  {item.label}
-                </Link>
+                <BreadcrumbLink asChild>
+                  <Link href={item.href}>{item.label}</Link>
+                </BreadcrumbLink>
               )}
-              {!isLast && <ChevronRight className="size-3.5 opacity-50" aria-hidden="true" />}
-            </li>
+            </BreadcrumbItem>
           )
+          if (isLast) return [crumb]
+          return [crumb, <BreadcrumbSeparator key={`sep-${index}`} />]
         })}
-      </ol>
-    </nav>
+      </BreadcrumbList>
+    </Breadcrumb>
   )
 }

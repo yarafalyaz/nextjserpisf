@@ -10,7 +10,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Tugas" }
 
 export default async function CreateTaskPage() {
-  await requirePermission("view_projects")
+  await requirePermission("create_projects")
 
   const [projects, employees] = await Promise.all([
     prisma.project.findMany({

@@ -33,6 +33,7 @@ interface ItemOption {
   sku: string
   name: string
   unitOfMeasure: string
+  isProduct: boolean
 }
 
 interface ProductEdit {
@@ -42,6 +43,7 @@ interface ProductEdit {
   description: string | null
   vehicleBrandId: number | null
   vehicleModelId: number | null
+  inventoryItemId: number | null
   materials: { itemId: number; qty: number }[]
 }
 
@@ -65,6 +67,7 @@ export function ProductForm({
   const [vehicleModels, setVehicleModels] = useState<VehicleModel[]>([])
   const [selectedBrandId, setSelectedBrandId] = useState<number | null>(product?.vehicleBrandId ?? null)
   const [selectedModelId, setSelectedModelId] = useState<number | null>(product?.vehicleModelId ?? null)
+  const [inventoryItemId, setInventoryItemId] = useState<number | null>(product?.inventoryItemId ?? null)
 
   useEffect(() => {
     // The /api/vehicle-brands and /api/vehicle-models endpoints return
@@ -88,6 +91,10 @@ export function ProductForm({
   const itemOptions = useMemo(
     () => items.map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name}` })),
     [items]
+  )
+  const outputItemOptions = useMemo(
+    () => items.filter((it) => it.isProduct).map((it) => ({ value: String(it.id), label: `${it.sku} - ${it.name}` })),
+    [items],
   )
 
   const uomById = useMemo(() => {
@@ -117,6 +124,7 @@ export function ProductForm({
     // Append vehicle brand/model
     if (selectedBrandId) formData.set("vehicleBrandId", String(selectedBrandId))
     if (selectedModelId) formData.set("vehicleModelId", String(selectedModelId))
+    formData.set("inventoryItemId", inventoryItemId ? String(inventoryItemId) : "")
 
     // Append material rows
     materials.forEach((m) => {
@@ -173,6 +181,18 @@ export function ProductForm({
             disabled={!selectedBrandId}
             options={filteredModels.map((m) => ({ value: String(m.id), label: m.name }))}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5 col-span-full">
+          <Label htmlFor="inventory-item">Item Persediaan Hasil Produksi</Label>
+          <Combobox
+            id="inventory-item"
+            value={inventoryItemId ? String(inventoryItemId) : null}
+            onChange={(key) => setInventoryItemId(key ? Number(key) : null)}
+            placeholder="Pilih item produk jadi (opsional)"
+            options={outputItemOptions}
+          />
+          <p className="text-xs text-muted-foreground">Hubungkan ke item persediaan bertanda Produk agar penyelesaian order dapat menambah stok barang jadi.</p>
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">

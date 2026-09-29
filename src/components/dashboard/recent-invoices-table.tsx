@@ -67,7 +67,7 @@ interface InvoiceRow {
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "border-transparent bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400" },
+  draft: { label: "Konsep", className: "border-transparent bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400" },
   posted: { label: "Diterbitkan", className: "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400" },
   partial: { label: "Sebagian", className: "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" },
   paid: { label: "Lunas", className: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400" },
@@ -79,7 +79,7 @@ function formatRp(n: number) {
 }
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })
+  return new Date(d).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" })
 }
 
 function SortButton({
@@ -301,7 +301,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
               <TabsTrigger value="all">Semua ({counts.all})</TabsTrigger>
               <TabsTrigger value="unpaid">Terbuka ({counts.unpaid})</TabsTrigger>
               <TabsTrigger value="paid">Lunas ({counts.paid})</TabsTrigger>
-              <TabsTrigger value="draft">Draft ({counts.draft})</TabsTrigger>
+              <TabsTrigger value="draft">Konsep ({counts.draft})</TabsTrigger>
             </TabsList>
 
             <div className="flex items-center gap-2">
@@ -333,7 +333,19 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                         checked={column.getIsVisible()}
                         onCheckedChange={(value) => column.toggleVisibility(!!value)}
                       >
-                        {column.id === "documentNo" ? "dokumen" : column.id}
+                        {column.id === "documentNo"
+                          ? "No. Dokumen"
+                          : column.id === "customerName"
+                          ? "Pelanggan"
+                          : column.id === "date"
+                          ? "Tanggal"
+                          : column.id === "grandTotal"
+                          ? "Total"
+                          : column.id === "paidAmount"
+                          ? "Terbayar"
+                          : column.id === "status"
+                          ? "Status"
+                          : column.id}
                       </DropdownMenuCheckboxItem>
                     ))}
                 </DropdownMenuContent>

@@ -5,6 +5,8 @@ import { NextRequest } from "next/server"
 const mocks = vi.hoisted(() => ({
   authFn: vi.fn(),
   canAccessAttachment: vi.fn(),
+  canModifyAttachment: vi.fn(),
+  attachmentFindFirst: vi.fn(),
   stat: vi.fn(),
   readFile: vi.fn(),
 }))
@@ -15,6 +17,15 @@ vi.mock("@/lib/auth/auth", () => ({
 
 vi.mock("@/lib/auth/attachment-permissions", () => ({
   canAccessAttachment: (...a: unknown[]) => mocks.canAccessAttachment(...a),
+  canModifyAttachment: (...a: unknown[]) => mocks.canModifyAttachment(...a),
+}))
+
+vi.mock("@/lib/db/prisma", () => ({
+  prisma: {
+    transactionAttachment: {
+      findFirst: (...a: unknown[]) => mocks.attachmentFindFirst(...a),
+    },
+  },
 }))
 
 vi.mock("fs/promises", () => ({
@@ -35,6 +46,8 @@ describe("GET /api/attachments/[...path]", () => {
     vi.clearAllMocks()
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
     mocks.canAccessAttachment.mockResolvedValue(true)
+    mocks.canModifyAttachment.mockResolvedValue(true)
+    mocks.attachmentFindFirst.mockResolvedValue({ referenceId: 1 })
     mocks.stat.mockResolvedValue({})
     mocks.readFile.mockResolvedValue(Buffer.from("file-bytes"))
   })
@@ -85,6 +98,13 @@ describe("GET /api/attachments/[...path]", () => {
     expect(res.headers.get("Content-Type")).toBe("application/pdf")
     const bytes = await res.arrayBuffer()
     expect(Buffer.from(bytes).toString()).toBe("file-bytes")
+  })
+
+  it("serves a temporary preview only to the uploading user", async () => {
+    mocks.attachmentFindFirst.mockResolvedValue({ referenceId: 0, uploadedBy: 1 })
+    const res = await GET(makeReq(), makeParams(["journal", "file.pdf"]))
+    expect(res.status).toBe(200)
+    expect(mocks.canModifyAttachment).toHaveBeenCalledWith("journal", 0)
   })
 
   it("returns file content with correct Content-Type (png)", async () => {

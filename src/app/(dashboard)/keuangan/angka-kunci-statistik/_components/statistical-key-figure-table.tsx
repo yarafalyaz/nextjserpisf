@@ -9,14 +9,20 @@ import { bulkDelete } from "@/actions/bulk.actions"
 
 interface StatisticalKeyFigureData {
   id: number
+  code: string | null
   name: string
   unit: string | null
+  type: string | null
   value: number
 }
 
 const columnHelper = createColumnHelper<StatisticalKeyFigureData>()
 
 const columns = [
+  columnHelper.accessor("code", {
+    header: "Kode",
+    cell: (info) => info.getValue() || "-",
+  }),
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
@@ -27,6 +33,10 @@ const columns = [
   }),
   columnHelper.accessor("unit", {
     header: "Satuan",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor("type", {
+    header: "Tipe",
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("value", {

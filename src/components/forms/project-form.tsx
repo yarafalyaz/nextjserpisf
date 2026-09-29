@@ -21,6 +21,7 @@ interface CustomerVehicleOption {
 interface ProjectFormProps {
   customers: { id: number; name: string }[]
   customerVehicles?: CustomerVehicleOption[]
+  costCenters?: { id: number; code: string; name: string }[]
   generatedCode?: string
   project?: {
     id: number
@@ -30,6 +31,7 @@ interface ProjectFormProps {
     customerId: number
     customerVehicleId: number | null
     workOrderId: number | null
+    costCenterId?: number | null
     startDate: string | null
     endDate: string | null
     notes: string | null
@@ -37,7 +39,7 @@ interface ProjectFormProps {
   }
 }
 
-export function ProjectForm({ customers, customerVehicles = [], generatedCode, project }: ProjectFormProps) {
+export function ProjectForm({ customers, customerVehicles = [], costCenters = [], generatedCode, project }: ProjectFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const isEdit = !!project
@@ -115,6 +117,18 @@ export function ProjectForm({ customers, customerVehicles = [], generatedCode, p
             onChange={() => {}}
           />
         </div>
+        {costCenters.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="costCenterId">Pusat Biaya</Label>
+          <Combobox
+            id="costCenterId"
+            name="costCenterId"
+            options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            value={project?.costCenterId ? String(project.costCenterId) : null}
+            placeholder="— Pilih pusat biaya —"
+          />
+        </div>
+        )}
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
           <Textarea id="description" name="description" rows={3} placeholder="Deskripsi proyek..." defaultValue={project?.description || ""} />

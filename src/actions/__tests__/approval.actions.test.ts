@@ -45,6 +45,9 @@ vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: any) => mocks.requirePermissionMock(...a),
 }));
 vi.mock("@/lib/auth/auth", () => ({ auth: mocks.authMock }));
+vi.mock("@/lib/hooks/accounting.hook", () => ({
+  onEmployeeLoanDisbursed: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }));
 vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: mocks.logActivityMock,
@@ -69,7 +72,7 @@ beforeEach(() => {
     permissions: ["approve_workflows", "manage_approvals"],
     roles: ["super_admin"],
   });
-  mocks.authMock.mockResolvedValue({ user: { id: "1" } });
+  mocks.authMock.mockResolvedValue({ user: { id: "1", roles: ["super_admin"], permissions: [] } });
 });
 
 describe("Approval Progression Actions", () => {
@@ -108,6 +111,35 @@ describe("Approval Progression Actions", () => {
       // Throws production error
     }
   });
+
+  it("rejects approval records whose workflow has no steps", async () => {
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      status: "pending",
+      currentStep: 1,
+      requestedBy: 2,
+      referenceType: "PurchaseRequest",
+      workflow: { steps: [] },
+    });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow(
+      "Langkah approval tidak valid",
+    );
+    expect(mocks.prismaMock.approvalHistory.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an approval whose current step is outside the workflow", async () => {
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      status: "pending",
+      currentStep: 2,
+      referenceType: "PurchaseRequest",
+      workflow: { steps: [{ stepOrder: 1, roleId: 1, userId: null }] },
+    });
+    await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow(
+      "Langkah approval tidak valid",
+    );
+    expect(mocks.prismaMock.approvalHistory.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("Approval Workflow CRUD", () => {
@@ -130,6 +162,18 @@ describe("Approval Workflow CRUD", () => {
       }),
     );
     expect(res?.success).toBe(false);
+  });
+  it("does not create an active workflow without effective approval steps", async () => {
+    const res = await actions.createApprovalWorkflow(
+      fdMap({
+        name: "WF tanpa langkah",
+        modelType: "PurchaseRequest",
+        steps: JSON.stringify([{}]),
+      }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("minimal harus memiliki satu langkah");
+    expect(mocks.prismaMock.approvalWorkflow.create).not.toHaveBeenCalled();
   });
   it("createApprovalWorkflow handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -277,6 +321,42 @@ describe("Approval Workflow CRUD", () => {
 });
 
 describe("approveStep / rejectStep branches", () => {
+  it("allows a document-specific approver without the generic workflow permission", async () => {
+    mocks.authMock.mockResolvedValue({
+      user: { id: "2", roles: ["finance"], permissions: ["approve_sales_orders"] },
+    });
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      referenceType: "SalesOrder",
+      referenceId: 8,
+      status: "pending",
+      currentStep: 1,
+      requestedBy: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: null, userId: 2 }] },
+    });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 1 },
+      data: expect.objectContaining({ status: "approved" }),
+    }));
+  });
+
+  it("rejects a specific approver who lacks permission for the document type", async () => {
+    mocks.authMock.mockResolvedValue({
+      user: { id: "2", roles: ["finance"], permissions: ["approve_vendor_bills"] },
+    });
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      referenceType: "SalesOrder",
+      status: "pending",
+      currentStep: 1,
+      requestedBy: 1,
+      workflow: { steps: [{ stepOrder: 1, roleId: null, userId: 2 }] },
+    });
+    await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow("Forbidden");
+    expect(mocks.prismaMock.approval.update).not.toHaveBeenCalled();
+  });
+
   it("approveStep fails when approval not found", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.prismaMock.approval.findUnique.mockResolvedValue(null);
@@ -333,6 +413,7 @@ describe("approveStep / rejectStep branches", () => {
   it("approveStep rejects non-approver (roleId path)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.requirePermissionMock.mockResolvedValue({ id: 99, roles: ["user"] });
+    mocks.authMock.mockResolvedValue({ user: { id: "99", roles: ["user"], permissions: ["approve_workflows"] } });
     mocks.prismaMock.approval.findUnique.mockResolvedValue({
       id: 1,
       status: "pending",
@@ -353,6 +434,7 @@ describe("approveStep / rejectStep branches", () => {
   it("approveStep rejects non-approver (userId path)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     mocks.requirePermissionMock.mockResolvedValue({ id: 99, roles: ["user"] });
+    mocks.authMock.mockResolvedValue({ user: { id: "99", roles: ["user"], permissions: ["approve_workflows"] } });
     mocks.prismaMock.approval.findUnique.mockResolvedValue({
       id: 1,
       status: "pending",
@@ -412,8 +494,53 @@ describe("approveStep / rejectStep branches", () => {
     } catch {}
   });
 
+  it("approveStep fails due to Maker-Checker SoD constraint", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["user"] });
+    mocks.authMock.mockResolvedValue({ user: { id: "7", roles: ["user"], permissions: ["approve_workflows"] } });
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      status: "pending",
+      currentStep: 1,
+      documentType: "PR",
+      documentId: 1,
+      requestedBy: 7,
+      workflow: {
+        steps: [
+          { stepOrder: 1, roleId: null, userId: 7, approverType: "specific" },
+        ],
+      },
+    });
+    await expect(
+      actions.approveStep(1, fdMap({ notes: "OK" })),
+    ).rejects.toThrow("Maker-Checker Constraint");
+  });
+
+  it("rejectStep fails due to Maker-Checker SoD constraint", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["user"] });
+    mocks.authMock.mockResolvedValue({ user: { id: "7", roles: ["user"], permissions: ["approve_workflows"] } });
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      status: "pending",
+      currentStep: 1,
+      documentType: "PR",
+      documentId: 1,
+      requestedBy: 7,
+      workflow: {
+        steps: [
+          { stepOrder: 1, roleId: null, userId: 7, approverType: "specific" },
+        ],
+      },
+    });
+    await expect(
+      actions.rejectStep(1, fdMap({ notes: "NO" })),
+    ).rejects.toThrow("Maker-Checker Constraint");
+  });
+
   it("approveStep succeeds when userId matches (assertStepApprover)", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["user"] });
+    mocks.authMock.mockResolvedValue({ user: { id: "7", roles: ["user"], permissions: ["approve_workflows"] } });
     mocks.prismaMock.approval.findUnique.mockResolvedValue({
       id: 1,
       status: "pending",
@@ -433,6 +560,7 @@ describe("approveStep / rejectStep branches", () => {
 
   it("approveStep succeeds when stepDef not found (assertStepApprover)", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["user"] });
+    mocks.authMock.mockResolvedValue({ user: { id: "7", roles: ["user"], permissions: ["approve_workflows"] } });
     mocks.prismaMock.approval.findUnique.mockResolvedValue({
       id: 1,
       status: "pending",
@@ -493,6 +621,7 @@ describe("Next.js redirect error handling", () => {
 
   it("should rethrow NEXT_REDIRECT errors", async () => {
     mocks.requirePermissionMock.mockRejectedValue(redirectErr);
+    mocks.authMock.mockRejectedValue(redirectErr);
 
     for (const { fn } of fnsToTest) {
       await expect(fn()).rejects.toThrow(redirectErr);

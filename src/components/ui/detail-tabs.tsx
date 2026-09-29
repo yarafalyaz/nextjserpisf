@@ -22,7 +22,7 @@ export function DetailTabs({ tabs, ariaLabel }: { tabs: TabItem[]; ariaLabel: st
         </TabsList>
       </div>
       {tabs.map((tab) => (
-        <TabsContent key={tab.id} value={tab.id} className="pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md">
+        <TabsContent key={tab.id} value={tab.id} className="pt-4 flex flex-col gap-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md">
           {tab.content}
         </TabsContent>
       ))}

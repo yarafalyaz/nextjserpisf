@@ -1,1 +1,6 @@
-export default function Loading() { return <div className="animate-pulse p-6">Memuat laporan...</div> }
+import { ReportSkeleton } from "@/components/ui/skeletons"
+
+export default function Loading() {
+  return <ReportSkeleton />
+}
+

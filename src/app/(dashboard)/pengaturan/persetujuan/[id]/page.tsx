@@ -14,6 +14,9 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table";
 import { approveStep, rejectStep } from "@/actions/approval.actions";
+import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval";
+import { statusLabel } from "@/lib/utils/status-labels";
+import { Button } from "@/components/ui/button";
 
 import type { Metadata } from "next";
 
@@ -24,10 +27,11 @@ export default async function ApprovalDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_dashboard");
+  // Approval details and history can contain data from unrelated modules.
+  await requirePermission("approve_workflows");
   const { id } = await params;
   const numId = Number(id);
-  if (Number.isNaN(numId)) notFound();
+  if (!Number.isSafeInteger(numId) || numId <= 0) notFound();
 
   const approval = await prisma.approval.findUnique({
     where: { id: numId },
@@ -57,7 +61,7 @@ export default async function ApprovalDetailPage({
           Detail Persetujuan
         </h1>
         <span className={`status-badge status-${approval.status}`}>
-          {approval.status}
+          {statusLabel(approval.status)}
         </span>
       </div>
 
@@ -77,7 +81,7 @@ export default async function ApprovalDetailPage({
               Referensi
             </span>
             <p className="text-sm font-mono text-foreground mt-1">
-              {approval.referenceType} #{approval.referenceId}
+              {APPROVAL_MODEL_LABELS[approval.referenceType] || approval.referenceType} #{approval.referenceId}
             </p>
           </div>
           <div>
@@ -173,20 +177,20 @@ export default async function ApprovalDetailPage({
               />
             </div>
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 type="submit"
                 formAction={approveWithId}
-                className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-success text-white hover:bg-success/90 hover:-translate-y-px hover:shadow-md transition-all"
+                variant="success"
               >
                 Setujui
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 formAction={rejectWithId}
-                className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-lg text-sm font-medium bg-danger text-white hover:bg-danger/90 hover:-translate-y-px hover:shadow-md transition-all"
+                variant="danger"
               >
                 Tolak
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -225,7 +229,7 @@ export default async function ApprovalDetailPage({
                       <span
                         className={`status-badge ${h.action === "approve" ? "status-approved" : "status-rejected"}`}
                       >
-                        {h.action}
+                        {h.action === "approve" ? "Disetujui" : "Ditolak"}
                       </span>
                     </DetailTableTd>
                     <DetailTableTd>{h.notes || "-"}</DetailTableTd>

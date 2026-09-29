@@ -21,9 +21,14 @@ export default async function EditPage({
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()
 
-  const data = await prisma.costCenter.findUnique({
-    where: { id: numId },
-  })
+  const [data, costCenters] = await Promise.all([
+    prisma.costCenter.findUnique({ where: { id: numId } }),
+    prisma.costCenter.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ])
 
   if (!data) notFound()
 
@@ -37,7 +42,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <CostCenterForm costCenter={data ? { id: data.id, code: data.code, name: data.name, description: data.description, isActive: data.isActive ?? undefined } : undefined} />
+      <CostCenterForm costCenter={{ id: data.id, code: data.code, name: data.name, description: data.description, isActive: data.isActive ?? undefined, parentId: data.parentId }} costCenters={costCenters} />
     </div>
   )
 }

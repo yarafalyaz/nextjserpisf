@@ -7,6 +7,12 @@ vi.mock("@/lib/auth/auth", () => ({ auth: mocks.auth }));
 // when the alias is configured, but be explicit by also mocking the relative path.
 vi.mock("./auth", () => ({ auth: mocks.auth }));
 
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error(`Redirected to ${url}`);
+  }),
+}));
+
 import {
   requireAuth,
   requirePermission,
@@ -29,17 +35,17 @@ describe("auth/permissions", () => {
 
     it("throws when no session", async () => {
       mocks.auth.mockResolvedValue(null);
-      await expect(requireAuth()).rejects.toThrow("Unauthorized");
+      await expect(requireAuth()).rejects.toThrow("Redirected to /login");
     });
 
     it("throws when no user in session", async () => {
       mocks.auth.mockResolvedValue({});
-      await expect(requireAuth()).rejects.toThrow("Unauthorized");
+      await expect(requireAuth()).rejects.toThrow("Redirected to /login");
     });
 
     it("throws when user is inactive", async () => {
       mocks.auth.mockResolvedValue({ user: { id: "1", isActive: false, roles: [], permissions: [] } });
-      await expect(requireAuth()).rejects.toThrow("Unauthorized");
+      await expect(requireAuth()).rejects.toThrow("Redirected to /login");
     });
   });
 
@@ -63,13 +69,13 @@ describe("auth/permissions", () => {
       mocks.auth.mockResolvedValue({ user });
 
       await expect(requirePermission("delete_items")).rejects.toThrow(
-        "Forbidden: Anda tidak memiliki izin 'delete_items'"
+        "Redirected to /"
       );
     });
 
     it("throws when unauthenticated", async () => {
       mocks.auth.mockResolvedValue(null);
-      await expect(requirePermission("edit_items")).rejects.toThrow("Unauthorized");
+      await expect(requirePermission("edit_items")).rejects.toThrow("Redirected to /login");
     });
   });
 
@@ -93,7 +99,7 @@ describe("auth/permissions", () => {
       mocks.auth.mockResolvedValue({ user });
 
       await expect(requireRole("manager")).rejects.toThrow(
-        "Forbidden: Anda tidak memiliki role 'manager'"
+        "Redirected to /"
       );
     });
   });

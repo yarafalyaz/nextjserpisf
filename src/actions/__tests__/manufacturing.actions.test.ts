@@ -29,6 +29,9 @@ const mocks = vi.hoisted(() => {
     customer: buildModelMock(),
     item: buildModelMock(),
     productionOrderMaterial: buildModelMock(),
+    warehouse: buildModelMock(),
+    itemBatch: buildModelMock(),
+    itemSerial: buildModelMock(),
     salesOrder: buildModelMock(),
     deliveryOrder: buildModelMock(),
     deliveryOrderItem: buildModelMock(),
@@ -47,6 +50,13 @@ const mocks = vi.hoisted(() => {
 
   return {
     requirePermissionMock: vi.fn(),
+    consumeFifoLayersMock: vi.fn(),
+    productionIssueJournalMock: vi.fn(),
+    assertPeriodOpenMock: vi.fn(),
+    warehouseScopeMock: vi.fn(),
+    createInLayerMock: vi.fn(),
+    productionCompletionJournalMock: vi.fn(),
+    productionRoundingJournalMock: vi.fn(),
     prismaMock,
     revalidateMock: vi.fn(),
     logActivityMock: vi.fn(),
@@ -57,7 +67,28 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
-vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("DOC-001") }))
+vi.mock("@/lib/utils/document-number", () => ({
+  generateDocumentNumber: vi.fn().mockResolvedValue("DOC-001"),
+  generateDocumentNumberBatch: vi.fn(async (_prefix: string, count: number) => Array.from({ length: count }, (_, i) => `SM-${i + 1}`)),
+}))
+vi.mock("@/lib/services/inventory-fifo", () => ({
+  consumeFifoLayers: (...args: any[]) => mocks.consumeFifoLayersMock(...args),
+  createInLayer: (...args: any[]) => mocks.createInLayerMock(...args),
+}))
+vi.mock("@/lib/services/stock-journal.service", () => ({
+  stockJournalService: {
+    onProductionOrderMaterialIssue: (...args: any[]) => mocks.productionIssueJournalMock(...args),
+    onProductionOrderCompleted: (...args: any[]) => mocks.productionCompletionJournalMock(...args),
+    onProductionOrderCostRoundingVariance: (...args: any[]) => mocks.productionRoundingJournalMock(...args),
+  },
+}))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: (...args: any[]) => mocks.assertPeriodOpenMock(...args),
+}))
+vi.mock("@/lib/auth/warehouse-scope", () => ({
+  getWarehouseScope: (...args: any[]) => mocks.warehouseScopeMock(...args),
+  assertWarehouseAccess: vi.fn(),
+}))
 
 import * as actions from "../manufacturing.actions"
 
@@ -72,6 +103,10 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  mocks.warehouseScopeMock.mockResolvedValue({ kind: "all" })
+  mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 42, shortfall: 0 })
+  mocks.assertPeriodOpenMock.mockResolvedValue(undefined)
+  mocks.createInLayerMock.mockResolvedValue(undefined)
 })
 
 describe("Product Actions", () => {
@@ -228,6 +263,92 @@ describe("Product Actions", () => {
 })
 
 describe("Production Order Actions", () => {
+  it("issues material through FIFO stock moves and journals the value to WIP", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(true)
+    expect(mocks.consumeFifoLayersMock).toHaveBeenCalledWith(
+      mocks.prismaMock,
+      expect.objectContaining({ itemId: 4, warehouseId: 5, qty: 3 }),
+    )
+    expect(mocks.prismaMock.stockMove.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        itemId: 4, warehouseId: 5, qty: 3, cost: 14, impact: "OUT",
+        status: "posted", referenceType: "ProductionOrder", referenceId: 8,
+      }),
+    }))
+    expect(mocks.productionIssueJournalMock).toHaveBeenCalledWith(
+      mocks.prismaMock, [{ itemId: 4, qty: 3, cost: 14, warehouseId: 5 }], "MO-008", 99, 1,
+    )
+    expect(mocks.prismaMock.$executeRaw).toHaveBeenCalledOnce()
+  })
+
+  it("rejects non-positive or invalid issued quantities", async () => {
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 0 }])
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("receives finished output, updates inventory layers, and transfers WIP on completion", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8,
+      documentNo: "MO-008",
+      status: "in_progress",
+      qty: 2,
+      totalActualCost: 20,
+      totalStandardCost: 18,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: true, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+
+    const res = await actions.completeProductionOrder(8)
+
+    expect(res).toMatchObject({ success: true, variance: 2 })
+    expect(mocks.prismaMock.stockMove.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        itemId: 10, warehouseId: 5, qty: 2, cost: 10,
+        impact: "IN", status: "posted", referenceType: "ProductionOrder", referenceId: 8,
+      }),
+    }))
+    expect(mocks.createInLayerMock).toHaveBeenCalledWith(mocks.prismaMock, expect.objectContaining({
+      itemId: 10, warehouseId: 5, batchNumber: "MO-008", stockMoveId: 456, qty: 2, unitCost: 10,
+    }))
+    expect(mocks.prismaMock.itemBatch.create).toHaveBeenCalled()
+    expect(mocks.prismaMock.item.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 10 }, data: { qtyOnHand: { increment: 2 } },
+    }))
+    expect(mocks.productionCompletionJournalMock).toHaveBeenCalledWith(
+      mocks.prismaMock, [{ qty: 2, cost: 10 }], "MO-008", 8, 1,
+    )
+    expect(mocks.productionRoundingJournalMock).toHaveBeenCalledWith(
+      mocks.prismaMock, 0, "MO-008", 8, 1,
+    )
+  })
+
+  it("does not complete an order without a linked finished-goods inventory item", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 2,
+      totalActualCost: 20, totalStandardCost: 18, product: { inventoryItem: null },
+    })
+    const res = await actions.completeProductionOrder(8)
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
+  })
+
   it("createProductionOrder succeeds", async () => {
     mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })
     const res = await actions.createProductionOrder(fdMap({

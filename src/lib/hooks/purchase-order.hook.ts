@@ -10,8 +10,9 @@ import { PurchaseStatus, Status } from "@/lib/constants";
 
 export async function onPurchaseOrderCreated(
   purchaseOrderId: number,
+  txClient?: any,
 ): Promise<void> {
-  await prisma.$transaction(async (tx) => {
+  const run = async (tx: any) => {
     const po = await tx.purchaseOrder.findUniqueOrThrow({
       where: { id: purchaseOrderId },
       include: { items: true },
@@ -60,7 +61,7 @@ export async function onPurchaseOrderCreated(
     }
 
     // Determine if fully ordered
-    const allOrdered = prItems.every((prItem) => {
+    const allOrdered = prItems.every((prItem: any) => {
       const ordered = orderedMap.get(prItem.itemId) ?? 0;
       return ordered >= Number(prItem.qty);
     });
@@ -81,5 +82,11 @@ export async function onPurchaseOrderCreated(
       where: { id: po.purchaseRequestId },
       data: { status: newStatus },
     });
-  });
+  };
+
+  if (txClient) {
+    await run(txClient);
+  } else {
+    await prisma.$transaction(run);
+  }
 }

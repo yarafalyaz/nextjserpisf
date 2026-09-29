@@ -80,6 +80,8 @@ const mocks = vi.hoisted(() => {
     stockMove: buildModelMock(),
     inventoryLayer: buildModelMock(),
     transactionAttachment: buildModelMock(),
+    approvalWorkflow: buildModelMock(),
+    approval: buildModelMock(),
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") {
         return ops(prismaMock)
@@ -528,19 +530,9 @@ describe("Sales Invoice Actions", () => {
     const res = await actions.postInvoice(1)
     expect(res?.success).toBe(false)
   })
-  it("postInvoice fails if credit limit exceeded", async () => {
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", grandTotal: 1000, paidAmount: 0 })
-    mocks.prismaMock.salesInvoiceItem.count.mockResolvedValue(1)
-    mocks.prismaMock.customer.findUnique.mockResolvedValue({ creditLimit: 500 }) // AR Limit
-    mocks.prismaMock.salesInvoice.aggregate.mockResolvedValue({ _sum: { grandTotal: 0, paidAmount: 0 } })
-    const res = await actions.postInvoice(1)
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("Melebihi batas kredit")
-  })
   it("postInvoice fails if concurrent post happens", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", grandTotal: 0, paidAmount: 0 })
     mocks.prismaMock.salesInvoiceItem.count.mockResolvedValue(1)
-    mocks.prismaMock.customer.findUnique.mockResolvedValue(null) // No limit
     mocks.prismaMock.salesInvoice.updateMany.mockResolvedValue({ count: 0 }) // Concurrency check fail
     const res = await actions.postInvoice(1)
     expect(res?.success).toBe(false)

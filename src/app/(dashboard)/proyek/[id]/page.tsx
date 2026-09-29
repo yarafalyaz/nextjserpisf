@@ -16,7 +16,11 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/aler
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
+import { initializeProjectStages } from "@/actions/project.actions"
+import { ProjectStages } from "../_components/project-stages"
+
 export const metadata: Metadata = { title: "Proyek" }
 
 export default async function ProjectDetailPage({
@@ -48,6 +52,22 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound()
 
+  // Auto-initialize stages on detail view if empty and user has edit permission
+  let stages = project.stages
+  const canEdit = await hasPermission("edit_projects")
+  if (stages.length === 0 && canEdit) {
+    try {
+      await initializeProjectStages(project.id)
+      stages = await prisma.projectStage.findMany({
+        where: { projectId: numId },
+        orderBy: { sortOrder: "asc" },
+        include: { progress: { orderBy: { createdAt: "desc" }, take: 1 } },
+      })
+    } catch (e) {
+      console.error("[ProjectDetailPage] Failed to auto-initialize stages:", e)
+    }
+  }
+
   // Fetch linked work order if exists
   const workOrder = project.workOrderId
     ? await prisma.workOrder.findUnique({ where: { id: project.workOrderId }, select: { id: true, documentNo: true, status: true } })
@@ -73,9 +93,17 @@ export default async function ProjectDetailPage({
   const profitMarginPercent = totalQuotation > 0 ? (estimatedProfit / totalQuotation) * 100 : 0
 
   // Cari tahapan aktif saat ini
-  const activeStage = project.stages.find(s => s.status === "active") || project.stages[0]
-  const overallProgress = project.stages.length > 0 
-    ? Math.round(project.stages.reduce((sum, s) => sum + (s.progress[0]?.percentage ?? 0), 0) / project.stages.length)
+  const activeStage = stages.find(s => s.status === "in_progress") || stages.find(s => s.status === "pending") || stages[0]
+  const overallProgress = stages.length > 0 
+    ? Math.round(
+        stages.reduce((sum, s) => {
+          const recordPercent = s.progress?.[0]?.percentage
+          if (recordPercent !== undefined) return sum + recordPercent
+          if (s.status === "completed" || s.status === "skipped") return sum + 100
+          if (s.status === "in_progress") return sum + 50
+          return sum
+        }, 0) / stages.length
+      )
     : 0
 
   return (
@@ -90,7 +118,9 @@ export default async function ProjectDetailPage({
         badge={<StatusChip status={project.status} />}
         actions={
           <>
-            <Button href={`/proyek/${project.id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            <CanCreate permission="edit_projects">
+              <Button href={`/proyek/${project.id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            </CanCreate>
             <BackButton href="/proyek" />
           </>
         }
@@ -243,60 +273,11 @@ export default async function ProjectDetailPage({
             id: "stages",
             label: "Tahapan & Progres",
             content: (
-              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Timeline & Tahapan Pengerjaan Fisik</h2>
-                </div>
-                <div className="p-4 px-5">
-                  {project.stages.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada tahapan</p>
-                  ) : (
-                    <div className="relative border-l-2 border-primary/20 ml-4 my-2 flex flex-col gap-6">
-                      {project.stages.map((stage) => {
-                        const isStageActive = stage.status === "active"
-                        const isStageDone = stage.status === "completed"
-                        const currentPercent = stage.progress[0]?.percentage ?? 0
-
-                        return (
-                          <div key={stage.id} className="relative pl-7">
-                            {/* Line Dot Indicator */}
-                            <span className={`absolute -left-[9px] top-1.5 size-4 rounded-full border-2 transition-all flex items-center justify-center ${
-                              isStageDone ? "bg-success border-success" : 
-                              isStageActive ? "bg-primary border-primary animate-pulse" : "bg-surface border-default-hover"
-                            }`}>
-                              {isStageDone && <span className="size-1 rounded-full bg-white" />}
-                            </span>
-                            <div className="flex justify-between flex-wrap gap-2">
-                              <div>
-                                <h3 className={`text-sm font-bold ${isStageActive ? "text-primary" : "text-foreground"}`}>
-                                  {stage.name}
-                                </h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {isStageDone ? "Tahapan Selesai" : isStageActive ? "Sedang Dikerjakan" : "Menunggu Antrean"}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  isStageDone ? "bg-success-soft text-success-soft-foreground" :
-                                  isStageActive ? "bg-primary-soft text-primary-soft-foreground" : "bg-default-soft text-default-soft-foreground"
-                                }`}>
-                                  {stage.status.toUpperCase()}
-                                </span>
-                                <span className="text-sm font-semibold">{currentPercent}%</span>
-                              </div>
-                            </div>
-                            
-                            {/* Horizontal Mini Bar */}
-                            <div className="w-full bg-default/30 rounded-full h-1 mt-3.5">
-                              <div className={`h-full rounded-full ${isStageDone ? "bg-success" : "bg-primary"}`} style={{ width: `${currentPercent}%` }} />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ProjectStages
+                projectId={project.id}
+                stages={stages}
+                canEdit={canEdit}
+              />
             ),
           },
           {

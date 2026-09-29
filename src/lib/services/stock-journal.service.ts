@@ -67,7 +67,8 @@ export const stockJournalService = {
     items: JournalItemInput[],
     grDocumentNo: string,
     grId: number,
-    userId?: number
+    userId?: number,
+    costCenterId?: number | null
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.purchaseInventory) return null
@@ -118,7 +119,8 @@ export const stockJournalService = {
     items: Array<JournalItemInput & { difference: number }>,
     adjDocumentNo: string,
     adjId: number,
-    userId?: number
+    userId?: number,
+    costCenterId?: number | null
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.stockAdj) return null
@@ -172,7 +174,8 @@ export const stockJournalService = {
     items: JournalItemInput[],
     miDocumentNo: string,
     miId: number,
-    userId?: number
+    userId?: number,
+    costCenterId?: number | null
   ) {
     const accounts = await getAccountIds()
     const expenseAcct = accounts.materialIssueExpense ?? accounts.materialExpense ?? accounts.cogs
@@ -197,6 +200,7 @@ export const stockJournalService = {
           debit: totalValue,
           credit: 0,
           memo: `Debit Beban Material - MI ${miDocumentNo}`,
+          costCenterId: costCenterId ?? null,
         },
         {
           accountId: accounts.inventory,
@@ -219,7 +223,8 @@ export const stockJournalService = {
     items: JournalItemInput[],
     srDocumentNo: string,
     srId: number,
-    userId?: number
+    userId?: number,
+    costCenterId?: number | null
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.salesReturn) return null
@@ -265,7 +270,8 @@ export const stockJournalService = {
     items: JournalItemInput[],
     prDocumentNo: string,
     prId: number,
-    userId?: number
+    userId?: number,
+    costCenterId?: number | null
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.purchaseReturn) return null
@@ -311,7 +317,8 @@ export const stockJournalService = {
     items: JournalItemInput[],
     woDocumentNo: string,
     woId: number,
-    userId?: number
+    userId?: number,
+    costCenterId?: number | null
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.wip) return null
@@ -343,6 +350,131 @@ export const stockJournalService = {
           memo: `Kredit Persediaan (material) - WO ${woDocumentNo}`,
         },
       ],
+    })
+  },
+
+  /** Production-order material issue — transfer material value from inventory to WIP. */
+  async onProductionOrderMaterialIssue(
+    tx: Prisma.TransactionClient,
+    items: JournalItemInput[],
+    productionOrderNo: string,
+    referenceStockMoveId: number,
+    userId?: number,
+  ) {
+    const accounts = await getAccountIds()
+    if (!accounts.inventory || !accounts.wip) {
+      throw new Error("Akun Persediaan dan Barang Dalam Proses harus diatur sebelum material produksi dikeluarkan.")
+    }
+
+    const totalValue = sumValue(items)
+    if (totalValue <= 0) return null
+
+    const journalNumber = await generateDocumentNumber('JRN')
+    const journalSvc = new JournalService(tx)
+    return journalSvc.createJournal({
+      journalNumber,
+      transactionDate: new Date(),
+      referenceType: 'ProductionOrderMaterialIssue',
+      // A stock move ID is unique per issue transaction and provides a stable
+      // journal reference even when one order is issued in several batches.
+      referenceId: referenceStockMoveId,
+      type: 'PROD',
+      description: `Pemakaian Material Produksi ${productionOrderNo}`,
+      createdBy: userId,
+      entries: [
+        {
+          accountId: accounts.wip,
+          debit: totalValue,
+          credit: 0,
+          memo: `Debit Barang Dalam Proses - ${productionOrderNo}`,
+        },
+        {
+          accountId: accounts.inventory,
+          debit: 0,
+          credit: totalValue,
+          memo: `Kredit Persediaan - ${productionOrderNo}`,
+        },
+      ],
+    })
+  },
+
+  /** Finished goods receipt — transfer accumulated production cost out of WIP. */
+  async onProductionOrderCompleted(
+    tx: Prisma.TransactionClient,
+    items: JournalItemInput[],
+    productionOrderNo: string,
+    productionOrderId: number,
+    userId?: number,
+  ) {
+    const accounts = await getAccountIds()
+    if (!accounts.inventory || !accounts.wip) {
+      throw new Error("Akun Persediaan dan Barang Dalam Proses harus diatur sebelum order produksi diselesaikan.")
+    }
+    const totalValue = sumValue(items)
+    if (totalValue <= 0) return null
+
+    const journalNumber = await generateDocumentNumber('JRN')
+    const journalSvc = new JournalService(tx)
+    return journalSvc.createJournal({
+      journalNumber,
+      transactionDate: new Date(),
+      referenceType: 'ProductionOrder',
+      referenceId: productionOrderId,
+      type: 'PROD',
+      description: `Penerimaan Hasil Produksi ${productionOrderNo}`,
+      createdBy: userId,
+      entries: [
+        {
+          accountId: accounts.inventory,
+          debit: totalValue,
+          credit: 0,
+          memo: `Debit Persediaan Produk Jadi - ${productionOrderNo}`,
+        },
+        {
+          accountId: accounts.wip,
+          debit: 0,
+          credit: totalValue,
+          memo: `Kredit Barang Dalam Proses - ${productionOrderNo}`,
+        },
+      ],
+    })
+  },
+
+  /** Settle sub-cent/unit-cost rounding left between WIP and stock valuation. */
+  async onProductionOrderCostRoundingVariance(
+    tx: Prisma.TransactionClient,
+    variance: number,
+    productionOrderNo: string,
+    productionOrderId: number,
+    userId?: number,
+  ) {
+    if (Math.abs(variance) < 0.005) return null
+    const accounts = await getAccountIds()
+    const varianceAccount = accounts.materialExpense ?? accounts.cogs
+    if (!accounts.wip || !varianceAccount) {
+      throw new Error("Akun WIP dan Beban Material/COGS harus diatur untuk membukukan selisih pembulatan biaya produksi.")
+    }
+    const amount = Math.abs(variance)
+    const journalNumber = await generateDocumentNumber('JRN')
+    const journalSvc = new JournalService(tx)
+    const actualCostExceedsInventoryValue = variance > 0
+    return journalSvc.createJournal({
+      journalNumber,
+      transactionDate: new Date(),
+      referenceType: 'ProductionOrderCostVariance',
+      referenceId: productionOrderId,
+      type: 'PROD',
+      description: `Selisih pembulatan biaya produksi ${productionOrderNo}`,
+      createdBy: userId,
+      entries: actualCostExceedsInventoryValue
+        ? [
+            { accountId: varianceAccount, debit: amount, credit: 0, memo: `Selisih pembulatan biaya ${productionOrderNo}` },
+            { accountId: accounts.wip, debit: 0, credit: amount, memo: `Penyelesaian selisih WIP ${productionOrderNo}` },
+          ]
+        : [
+            { accountId: accounts.wip, debit: amount, credit: 0, memo: `Penyelesaian selisih WIP ${productionOrderNo}` },
+            { accountId: varianceAccount, debit: 0, credit: amount, memo: `Selisih pembulatan biaya ${productionOrderNo}` },
+          ],
     })
   },
 }

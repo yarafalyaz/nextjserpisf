@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { statusLabel } from "@/lib/utils/status-labels";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
@@ -41,12 +42,102 @@ export default async function QuotationDetailPage({
     include: {
       customer: true,
       sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },
-      downPayments: true,
+      downPayments: { orderBy: { createdAt: "desc" } },
+      salesOrders: { orderBy: { createdAt: "desc" } },
+      workOrders: { orderBy: { createdAt: "desc" } },
+      salesInvoices: { orderBy: { createdAt: "desc" } },
       histories: { orderBy: { createdAt: "desc" }, take: 10 },
     },
   });
 
   if (!quotation) notFound();
+
+  const itemIds = quotation.sections
+    .flatMap((section) => section.items.map((item) => item.itemId))
+    .filter((itemId): itemId is number => itemId !== null);
+
+  const dbItems = itemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, name: true, sku: true },
+      })
+    : [];
+
+  const itemMap = new Map(dbItems.map((i) => [i.id, i]));
+
+  const totalDP = quotation.downPayments
+    .filter((dp) => dp.status === "confirmed")
+    .reduce((sum, dp) => sum + Number(dp.amount), 0);
+  const remaining = Math.max(0, Number(quotation.grandTotal) - totalDP);
+
+  // Synthesize timeline/history items
+  const historyItems: Array<{
+    id: string;
+    createdAt: Date;
+    action: string;
+    description: string;
+  }> = [];
+
+  // 1. Initial creation
+  historyItems.push({
+    id: `created-${quotation.id}`,
+    createdAt: quotation.createdAt,
+    action: "Pembuatan",
+    description: `Penawaran dibuat dengan status ${statusLabel(quotation.status)}`,
+  });
+
+  // 2. Database histories (revisions)
+  quotation.histories.forEach((h) => {
+    historyItems.push({
+      id: `h-${h.id}`,
+      createdAt: h.createdAt,
+      action: h.action === "revised" ? "Revisi" : h.action,
+      description: h.description ?? "",
+    });
+  });
+
+  // 3. Down payments
+  quotation.downPayments.forEach((dp) => {
+    historyItems.push({
+      id: `dp-${dp.id}`,
+      createdAt: dp.createdAt,
+      action: "Uang Muka",
+      description: `Uang muka sebesar ${formatCurrency(Number(dp.amount))} diterima dengan status ${statusLabel(dp.status)} (${dp.documentNo})`,
+    });
+  });
+
+  // 4. Sales Orders
+  quotation.salesOrders.forEach((so) => {
+    historyItems.push({
+      id: `so-${so.id}`,
+      createdAt: so.createdAt,
+      action: "Pesanan Penjualan",
+      description: `Dikonversi menjadi Pesanan Penjualan ${so.documentNo} sebesar ${formatCurrency(Number(so.grandTotal))}`,
+    });
+  });
+
+  // 5. Work Orders
+  quotation.workOrders.forEach((wo) => {
+    historyItems.push({
+      id: `wo-${wo.id}`,
+      createdAt: wo.createdAt,
+      action: "Perintah Kerja",
+      description: `Perintah Kerja ${wo.documentNo} dibuat`,
+    });
+  });
+
+  // 6. Sales Invoices
+  quotation.salesInvoices.forEach((inv) => {
+    historyItems.push({
+      id: `inv-${inv.id}`,
+      createdAt: inv.createdAt,
+      action: "Faktur",
+      description: `Dikonversi menjadi Faktur ${inv.documentNo} sebesar ${formatCurrency(Number(inv.grandTotal))} - ${statusLabel(inv.status)}`,
+    });
+  });
+
+  // Sort descending by createdAt
+  historyItems.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,13 +159,21 @@ export default async function QuotationDetailPage({
               <Pencil size={14} /> Ubah
             </Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
-            {quotation.status === "accepted" && (
-              <Button
-                href={`/penjualan/pesanan/tambah?quotationId=${id}`}
-                variant="primary"
-              >
-                + Pesanan Penjualan
-              </Button>
+            {["accepted", "approved"].includes(quotation.status) && (
+              <>
+                <Button
+                  href={`/penjualan/uang-muka/tambah?quotationId=${id}`}
+                  variant="secondary"
+                >
+                  + Uang Muka
+                </Button>
+                <Button
+                  href={`/penjualan/pesanan/tambah?quotationId=${id}`}
+                  variant="primary"
+                >
+                  + Pesanan Penjualan
+                </Button>
+              </>
             )}
             <BackButton href="/penjualan/penawaran" />
           </>
@@ -94,7 +193,7 @@ export default async function QuotationDetailPage({
                   id={quotation.id}
                   module="penjualan/penawaran"
                 />
-                <DetailCard>
+                <DetailCard columns={4}>
                   <DetailField
                     label="Pelanggan"
                     value={
@@ -118,7 +217,7 @@ export default async function QuotationDetailPage({
                 </DetailCard>
 
                 {/* Summary */}
-                <DetailCard columns={4}>
+                <DetailCard columns={3}>
                   <DetailField
                     label="Subtotal"
                     value={formatCurrency(Number(quotation.subtotal))}
@@ -133,13 +232,60 @@ export default async function QuotationDetailPage({
                   />
                   <DetailField
                     label="Total Keseluruhan"
+                    value={formatCurrency(Number(quotation.grandTotal))}
+                  />
+                  <DetailField
+                    label="Uang Muka (DP) Terbayar"
                     value={
-                      <span className="text-xl">
-                        {formatCurrency(Number(quotation.grandTotal))}
+                      <span className="text-emerald-600 font-semibold">
+                        {formatCurrency(totalDP)}
+                      </span>
+                    }
+                  />
+                  <DetailField
+                    label="Sisa Pembayaran"
+                    value={
+                      <span className="text-lg font-bold text-foreground">
+                        {formatCurrency(remaining)}
                       </span>
                     }
                   />
                 </DetailCard>
+
+                {/* Down Payments */}
+                {quotation.downPayments.length > 0 && (
+                  <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                      <h2 className="text-[0.9375rem] font-semibold text-foreground">
+                        Riwayat Pembayaran Uang Muka
+                      </h2>
+                    </div>
+                    <div className="p-4 px-5">
+                      <DetailTable>
+                        <DetailTableHead>
+                          <DetailTableTh>Jumlah</DetailTableTh>
+                          <DetailTableTh>Status</DetailTableTh>
+                          <DetailTableTh>Dibuat</DetailTableTh>
+                        </DetailTableHead>
+                        <DetailTableBody>
+                          {quotation.downPayments.map((dp) => (
+                            <DetailTableRow key={dp.id}>
+                              <DetailTableTd>
+                                {formatCurrency(Number(dp.amount))}
+                              </DetailTableTd>
+                              <DetailTableTd>
+                                <StatusChip status={dp.status} />
+                              </DetailTableTd>
+                              <DetailTableTd>
+                                {formatDate(dp.createdAt)}
+                              </DetailTableTd>
+                            </DetailTableRow>
+                          ))}
+                        </DetailTableBody>
+                      </DetailTable>
+                    </div>
+                  </div>
+                )}
 
                 {/* Notes */}
                 {quotation.notes && (
@@ -173,6 +319,7 @@ export default async function QuotationDetailPage({
                     <div className="p-4 px-5">
                       <DetailTable>
                         <DetailTableHead>
+                          <DetailTableTh>Produk</DetailTableTh>
                           <DetailTableTh>Deskripsi</DetailTableTh>
                           <DetailTableTh align="right">Jml</DetailTableTh>
                           <DetailTableTh>Satuan</DetailTableTh>
@@ -181,66 +328,44 @@ export default async function QuotationDetailPage({
                           <DetailTableTh align="right">Total</DetailTableTh>
                         </DetailTableHead>
                         <DetailTableBody>
-                          {section.items.map((item) => (
-                            <DetailTableRow key={item.id}>
-                              <DetailTableTd>
-                                {item.description || "-"}
-                              </DetailTableTd>
-                              <DetailTableTd align="right">
-                                {Number(item.qty)}
-                              </DetailTableTd>
-                              <DetailTableTd>{item.uom || "-"}</DetailTableTd>
-                              <DetailTableTd align="right">
-                                {formatCurrency(Number(item.unitPrice))}
-                              </DetailTableTd>
-                              <DetailTableTd align="right">
-                                {formatCurrency(Number(item.discount))}
-                              </DetailTableTd>
-                              <DetailTableTd align="right">
-                                {formatCurrency(Number(item.total))}
-                              </DetailTableTd>
-                            </DetailTableRow>
-                          ))}
+                          {section.items.map((item) => {
+                            const matchedItem = item.itemId ? itemMap.get(item.itemId) : null;
+                            return (
+                              <DetailTableRow key={item.id}>
+                                <DetailTableTd>
+                                  {matchedItem ? (
+                                    <div className="flex flex-col">
+                                      <span className="font-medium text-foreground">{matchedItem.name}</span>
+                                      <span className="text-xs text-muted-foreground">{matchedItem.sku}</span>
+                                    </div>
+                                  ) : (
+                                    `Item #${item.itemId}`
+                                  )}
+                                </DetailTableTd>
+                                <DetailTableTd>
+                                  {item.description || "-"}
+                                </DetailTableTd>
+                                <DetailTableTd align="right">
+                                  {Number(item.qty)}
+                                </DetailTableTd>
+                                <DetailTableTd>{item.uom || "-"}</DetailTableTd>
+                                <DetailTableTd align="right">
+                                  {formatCurrency(Number(item.unitPrice))}
+                                </DetailTableTd>
+                                <DetailTableTd align="right">
+                                  {formatCurrency(Number(item.discount))}
+                                </DetailTableTd>
+                                <DetailTableTd align="right">
+                                  {formatCurrency(Number(item.total))}
+                                </DetailTableTd>
+                              </DetailTableRow>
+                            );
+                          })}
                         </DetailTableBody>
                       </DetailTable>
                     </div>
                   </div>
                 ))}
-
-                {/* Down Payments */}
-                {quotation.downPayments.length > 0 && (
-                  <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                      <h2 className="text-[0.9375rem] font-semibold text-foreground">
-                        Uang Muka
-                      </h2>
-                    </div>
-                    <div className="p-4 px-5">
-                      <DetailTable>
-                        <DetailTableHead>
-                          <DetailTableTh>Jumlah</DetailTableTh>
-                          <DetailTableTh>Status</DetailTableTh>
-                          <DetailTableTh>Dibuat</DetailTableTh>
-                        </DetailTableHead>
-                        <DetailTableBody>
-                          {quotation.downPayments.map((dp) => (
-                            <DetailTableRow key={dp.id}>
-                              <DetailTableTd>
-                                {formatCurrency(Number(dp.amount))}
-                              </DetailTableTd>
-                              <DetailTableTd>
-                                <StatusChip status={dp.status} />
-                              </DetailTableTd>
-                              <DetailTableTd>
-                                {formatDate(dp.createdAt)}
-                              </DetailTableTd>
-                            </DetailTableRow>
-                          ))}
-                        </DetailTableBody>
-                      </DetailTable>
-                    </div>
-                  </div>
-                )}
               </>
             ),
           },
@@ -255,19 +380,19 @@ export default async function QuotationDetailPage({
                   </h2>
                 </div>
                 <div className="p-4 px-5">
-                  {quotation.histories.length === 0 ? (
+                  {historyItems.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
                       Belum ada riwayat
                     </p>
                   ) : (
-                    quotation.histories.map((h) => (
+                    historyItems.map((item) => (
                       <div
-                        key={h.id}
+                        key={item.id}
                         className="py-2 border-b border-default text-[0.8125rem]"
                       >
-                        <strong>{h.action}</strong> — {h.description || ""}{" "}
+                        <strong className="capitalize">{item.action}</strong> — {item.description || ""}{" "}
                         <span className="text-muted-foreground">
-                          ({formatDate(h.createdAt)})
+                          ({formatDate(item.createdAt, { includeTime: true })})
                         </span>
                       </div>
                     ))

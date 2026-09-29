@@ -46,6 +46,14 @@ export default async function LeaveRequestsPage({
 
   const data = toPlain(leaves)
 
+  const userRoles: string[] = user.roles ?? [];
+  const userPerms: string[] = (user as any).permissions ?? [];
+  const showActions =
+    userRoles.includes("super_admin") ||
+    userPerms.includes("edit_leave_requests") ||
+    userPerms.includes("delete_leave_requests");
+  const showEmployeeColumn = scope.kind !== "self";
+
   const statusChips = ["", "pending", "approved", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
     return (
@@ -75,6 +83,8 @@ export default async function LeaveRequestsPage({
 
       <LeaveTable
         data={data}
+        showActions={showActions}
+        showEmployeeColumn={showEmployeeColumn}
         toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/cuti" />}
         filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
       />

@@ -24,7 +24,7 @@ export default async function EditItemPage({
     prisma.item.findUnique({ where: { id: numId }, include: { uomConversions: true } }),
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
-    prisma.vendor.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.rack.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, warehouseId: true } }),
     prisma.rackRow.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, rackId: true } }),
@@ -32,7 +32,7 @@ export default async function EditItemPage({
 
   if (!item) notFound()
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? ""
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL || process.env.NEXTAUTH_URL || ""
 
   return (
     <div className="flex flex-col gap-6">

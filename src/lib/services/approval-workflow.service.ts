@@ -18,31 +18,42 @@ import { prisma } from "@/lib/db/prisma"
 export async function requestApprovalIfConfigured(
   referenceType: string,
   referenceId: number,
-  requestedBy?: number
+  requestedBy?: number,
+  txClient?: any,
 ): Promise<boolean> {
-  const workflow = await prisma.approvalWorkflow.findFirst({
-    where: { modelType: referenceType, isActive: true, deletedAt: null },
-    orderBy: { priority: "desc" },
-  })
-  if (!workflow) return false
+  const request = async (db: any): Promise<boolean> => {
+    // This locking read both selects and serializes the active workflow. It
+    // must run before ordinary reads: under repeatable-read isolation a prior
+    // snapshot could otherwise hide a concurrent workflow deactivation.
+    const [lockedWorkflow] = await db.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM approval_workflows
+      WHERE model_type = ${referenceType} AND is_active = 1 AND deleted_at IS NULL
+      ORDER BY priority DESC
+      LIMIT 1 FOR UPDATE
+    `
+    if (!lockedWorkflow) return false
 
-  const existing = await prisma.approval.findFirst({
-    where: { referenceType, referenceId },
-  })
-  if (existing) return existing.status === "pending"
+    const existing = await db.approval.findFirst({
+      where: { referenceType, referenceId },
+    })
+    if (existing) return existing.status === "pending"
 
-  await prisma.approval.create({
-    data: {
-      workflowId: workflow.id,
-      referenceType,
-      referenceId,
-      currentStep: 1,
-      status: "pending",
-      requestedBy: requestedBy ?? null,
-      requestedAt: new Date(),
-    },
-  })
-  return true
+    await db.approval.create({
+      data: {
+        workflowId: lockedWorkflow.id,
+        referenceType,
+        referenceId,
+        currentStep: 1,
+        status: "pending",
+        requestedBy: requestedBy ?? null,
+        requestedAt: new Date(),
+      },
+    })
+    return true
+  }
+
+  if (txClient) return request(txClient)
+  return prisma.$transaction((tx) => request(tx))
 }
 
 /**
@@ -50,6 +61,7 @@ export async function requestApprovalIfConfigured(
  * No approval record (no workflow configured) → allowed.
  */
 export async function assertApproved(referenceType: string, referenceId: number): Promise<void> {
+  if (!prisma.approval) return
   const approval = await prisma.approval.findFirst({
     where: { referenceType, referenceId },
     orderBy: { id: "desc" },

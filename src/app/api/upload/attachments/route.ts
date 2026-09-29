@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
-import { canAccessAttachment } from "@/lib/auth/attachment-permissions"
-import { writeFile, mkdir } from "fs/promises"
+import { canAccessAttachment, canModifyAttachment } from "@/lib/auth/attachment-permissions"
+import { writeFile, mkdir, unlink } from "fs/promises"
+import { randomUUID } from "crypto"
 import path from "path"
 import { apiError } from "@/lib/api-response"
+import { assertCSRF } from "@/lib/security/csrf"
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +14,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
+  await assertCSRF()
 
   const formData = await req.formData()
   const file = formData.get("file") as File | null
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
   const userId = Number.parseInt(String(session.user.id), 10)
-  if (!Number.isInteger(referenceIdNum) || referenceIdNum < 0) {
+  if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
     return apiError("BAD_REQUEST", "Invalid referenceId")
   }
   if (!Number.isInteger(userId) || userId <= 0) {
@@ -67,15 +70,15 @@ export async function POST(req: NextRequest) {
     "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
     "journal", "expense", "material_issue", "work_order", "project",
     "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment",
+    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash",
   ]
   if (!allowedRefTypes.includes(safeRefType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
 
-  // Resource-level authz: must be allowed to view this document type, not just
-  // be logged in (closes IDOR — attaching files to any document by id).
-  if (!(await canAccessAttachment(safeRefType))) {
+  // Existing records require write access and resource scope. New-form uploads
+  // use referenceId=0 and are restricted to types with an explicit create grant.
+  if (!(await canModifyAttachment(safeRefType, referenceIdNum))) {
     return apiError("FORBIDDEN", "Akses ditolak")
   }
 
@@ -86,7 +89,7 @@ export async function POST(req: NextRequest) {
   // Sanitize extension - only allow alphanumeric
   const rawExt = (file.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "")
   const ext = rawExt.slice(0, 10) || "bin"
-  const filename = `${safeRefType}-${referenceId}-${Date.now()}.${ext}`
+  const filename = `${safeRefType}-${referenceIdNum}-${randomUUID()}.${ext}`
   const filepath = path.join(uploadDir, filename)
 
   // Final path traversal guard
@@ -95,26 +98,35 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "Invalid file path")
   }
 
-  await writeFile(filepath, buffer)
+  await writeFile(filepath, buffer, { flag: "wx" })
 
   const fileUrl = `/api/attachments/${safeRefType}/${filename}`
 
   // Save to database
-  const attachment = await prisma.transactionAttachment.create({
-    data: {
-      referenceType,
-      referenceId: referenceIdNum,
-      filename,
-      originalName: file.name,
-      fileUrl,
-      fileSize: file.size,
-      mimeType: file.type,
-      uploadedBy: userId,
-    },
-  })
+  let attachment
+  try {
+    attachment = await prisma.transactionAttachment.create({
+      data: {
+        referenceType,
+        referenceId: referenceIdNum,
+        filename,
+        originalName: file.name,
+        fileUrl,
+        fileSize: file.size,
+        mimeType: file.type,
+        uploadedBy: userId,
+      },
+    })
+  } catch (error) {
+    await unlink(filepath).catch(() => undefined)
+    throw error
+  }
 
   return NextResponse.json(attachment)
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("CSRF validation failed:")) {
+      return apiError("FORBIDDEN", "Permintaan lintas situs ditolak")
+    }
     return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }
@@ -140,30 +152,33 @@ export async function GET(req: NextRequest) {
     "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
     "journal", "expense", "material_issue", "work_order", "project",
     "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment",
+    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash",
   ]
   if (!allowedRefTypes.includes(referenceType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
-  }
-
-  // Resource-level authz: must be allowed to view this document type, not just
-  // be logged in (closes IDOR — listing attachment metadata of any document).
-  if (!(await canAccessAttachment(referenceType))) {
-    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   if (!/^\d+$/.test(referenceId)) {
     return apiError("BAD_REQUEST", "Invalid referenceId")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
-  if (!Number.isInteger(referenceIdNum) || referenceIdNum <= 0) {
+  if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
     return apiError("BAD_REQUEST", "Invalid referenceId")
+  }
+
+  // Check the specific document and its warehouse scope, not only its module.
+  const allowed = referenceIdNum === 0
+    ? await canModifyAttachment(referenceType, referenceIdNum)
+    : await canAccessAttachment(referenceType, referenceIdNum)
+  if (!allowed) {
+    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   const attachments = await prisma.transactionAttachment.findMany({
     where: {
       referenceType,
       referenceId: referenceIdNum,
+      ...(referenceIdNum === 0 ? { uploadedBy: Number(session.user.id) } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 200,

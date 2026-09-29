@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/detail-table";
 import { ReportDateFilter } from "@/components/reports/report-date-filter";
 import { ReportLetterhead } from "@/components/reports/report-letterhead";
+import { ReportSection, ReportKpiCard } from "@/components/reports/report-section";
+import { ReportNarration } from "@/components/reports/report-narration";
 
 import type { Metadata } from "next";
 
@@ -86,26 +88,16 @@ export default async function CashFlowPage({
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
     const existing = monthlyData.get(monthKey) || { inflow: 0, outflow: 0 };
-
-    // Debit to cash = inflow, Credit from cash = outflow
     existing.inflow += debit;
     existing.outflow += credit;
     totalInflow += debit;
     totalOutflow += credit;
-
     monthlyData.set(monthKey, existing);
   }
 
   const netCashFlow = totalInflow - totalOutflow;
 
-  // ── Activity classification (Operating / Investing / Financing) ─────────────
-  // Robust approach (better than YaraERP's description substring-matching):
-  // classify each cash journal by the TYPE of its non-cash counterpart account.
-  //   REVENUE / EXPENSE / current-asset (AR, inventory) / current-liability (AP,
-  //     tax)                         → Operating
-  //   Fixed-asset counterpart (Aset Tetap, code 1-3*) → Investing
-  //   EQUITY / loan-liability counterpart            → Financing
-  // Cash delta of the journal (Σ cash debit − credit) is attributed to that bucket.
+  // Activity classification
   const journalIds = Array.from(new Set(entries.map((e) => e.journalId)));
   const fullJournals = journalIds.length
     ? await prisma.journal.findMany({
@@ -119,7 +111,6 @@ export default async function CashFlowPage({
     const name = (acc.name || "").toLowerCase();
     if (acc.type === "EQUITY") return "financing";
     if (acc.type === "ASSET") {
-      // Fixed/non-current assets = investing; current assets (AR, inventory) = operating.
       if (code.startsWith("1-3") || code.startsWith("13") || name.includes("aset tetap") || name.includes("tetap"))
         return "investing";
       return "operating";
@@ -129,7 +120,6 @@ export default async function CashFlowPage({
         return "financing";
       return "operating";
     }
-    // REVENUE / EXPENSE / COGS
     return "operating";
   }
 
@@ -141,13 +131,12 @@ export default async function CashFlowPage({
       const d = Number(e.debit);
       const c = Number(e.credit);
       if (cashIdSet.has(e.accountId)) {
-        cashDelta += d - c; // + = cash in, − = cash out
+        cashDelta += d - c;
       } else if (e.account) {
         counterparts.push({ type: e.account.type, code: e.account.code, name: e.account.name, weight: Math.abs(d - c) });
       }
     }
     if (cashDelta === 0 || counterparts.length === 0) continue;
-    // Pick the dominant counterpart (largest amount) to classify the journal.
     const dominant = counterparts.reduce((a, b) => (b.weight > a.weight ? b : a));
     activity[classifyCounterpart(dominant)] += cashDelta;
   }
@@ -186,7 +175,6 @@ export default async function CashFlowPage({
         />
       </div>
 
-      {/* Professional letterhead (screen + print) */}
       <ReportLetterhead
         title="Laporan Arus Kas"
         subtitle="Cash Flow"
@@ -194,172 +182,111 @@ export default async function CashFlowPage({
       />
 
       {/* KPI Summary (screen only) */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6 print:hidden">
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-xl font-bold text-success">
-            {formatCurrency(totalInflow)}
-          </div>
-          <div className="text-[0.8125rem] text-muted-foreground font-medium">
-            Total Penerimaan Kas
-          </div>
-        </div>
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="text-xl font-bold text-danger">
-            {formatCurrency(totalOutflow)}
-          </div>
-          <div className="text-[0.8125rem] text-muted-foreground font-medium">
-            Total Pengeluaran Kas
-          </div>
-        </div>
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div
-            className={`text-xl font-bold ${netCashFlow >= 0 ? "text-success" : "text-danger"}`}
-          >
-            {formatCurrency(netCashFlow)}
-          </div>
-          <div className="text-[0.8125rem] text-muted-foreground font-medium">
-            Arus Kas Bersih
-          </div>
-        </div>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2 print:hidden">
+        <ReportKpiCard label="Total Penerimaan Kas" value={formatCurrency(totalInflow)} />
+        <ReportKpiCard label="Total Pengeluaran Kas" value={formatCurrency(totalOutflow)} />
+        <ReportKpiCard
+          label="Arus Kas Bersih"
+          value={formatCurrency(netCashFlow)}
+          valueClassName={netCashFlow >= 0 ? "text-success" : "text-danger"}
+        />
       </div>
 
       {/* Cash Accounts */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            Akun Kas/Bank
-          </h2>
-        </div>
-        <div className="p-4 px-5">
-          <DetailTable data-report-table="Akun Kas/Bank">
-            <DetailTableHead>
-              <DetailTableTh>Kode</DetailTableTh>
-              <DetailTableTh>Nama Akun</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {cashAccounts.map((acc) => (
-                <DetailTableRow key={acc.id}>
-                  <DetailTableTd>{acc.code}</DetailTableTd>
-                  <DetailTableTd>{acc.name}</DetailTableTd>
-                </DetailTableRow>
-              ))}
-              {cashAccounts.length === 0 && (
-                <DetailTableRow>
-                  <DetailTableTd colSpan={2} className="text-center">
-                    Tidak ada akun kas/bank ditemukan
-                  </DetailTableTd>
-                </DetailTableRow>
-              )}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
-      </div>
-
-      {/* Cash flow by activity (Operating / Investing / Financing) */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden mb-6 no-break">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            Arus Kas per Aktivitas
-          </h2>
-        </div>
-        <div className="p-4 px-5">
-          <DetailTable data-report-table="Arus Kas per Aktivitas">
-            <DetailTableHead>
-              <DetailTableTh>Aktivitas</DetailTableTh>
-              <DetailTableTh align="right">Arus Kas Bersih (Rp)</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {activityRows.map((row) => (
-                <DetailTableRow key={row.key}>
-                  <DetailTableTd>{row.label}</DetailTableTd>
-                  <DetailTableTd
-                    align="right"
-                    className={row.value >= 0 ? "text-success" : "text-danger"}
-                  >
-                    {formatAccounting(row.value)}
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
-              <DetailTableRow className="font-bold border-t-2 border-default">
-                <DetailTableTd>Kenaikan/(Penurunan) Kas Bersih</DetailTableTd>
-                <DetailTableTd align="right">
-                  {formatAccounting(activity.operating + activity.investing + activity.financing)}
+      <ReportSection title="Akun Kas/Bank">
+        <DetailTable data-report-table="Akun Kas/Bank">
+          <DetailTableHead>
+            <DetailTableTh>Kode</DetailTableTh>
+            <DetailTableTh>Nama Akun</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {cashAccounts.map((acc) => (
+              <DetailTableRow key={acc.id}>
+                <DetailTableTd>{acc.code}</DetailTableTd>
+                <DetailTableTd>{acc.name}</DetailTableTd>
+              </DetailTableRow>
+            ))}
+            {cashAccounts.length === 0 && (
+              <DetailTableRow>
+                <DetailTableTd colSpan={2} className="text-center">
+                  Tidak ada akun kas/bank ditemukan
                 </DetailTableTd>
               </DetailTableRow>
-            </DetailTableBody>
-          </DetailTable>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Klasifikasi otomatis berdasarkan tipe akun lawan tiap transaksi kas
-            (operasi: pendapatan/beban/piutang/utang usaha; investasi: aset tetap;
-            pendanaan: ekuitas/pinjaman).
-          </p>
-        </div>
-      </div>
+            )}
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
+
+      {/* Cash flow by activity */}
+      <ReportSection title="Arus Kas per Aktivitas" description="Klasifikasi otomatis berdasarkan tipe akun lawan tiap transaksi kas">
+        <DetailTable data-report-table="Arus Kas per Aktivitas">
+          <DetailTableHead>
+            <DetailTableTh>Aktivitas</DetailTableTh>
+            <DetailTableTh align="right">Arus Kas Bersih (Rp)</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {activityRows.map((row) => (
+              <DetailTableRow key={row.key}>
+                <DetailTableTd>{row.label}</DetailTableTd>
+                <DetailTableTd
+                  align="right"
+                  className={row.value >= 0 ? "text-success" : "text-danger"}
+                >
+                  {formatAccounting(row.value)}
+                </DetailTableTd>
+              </DetailTableRow>
+            ))}
+            <DetailTableRow className="font-bold border-t-2 border-default">
+              <DetailTableTd>Kenaikan/(Penurunan) Kas Bersih</DetailTableTd>
+              <DetailTableTd align="right">
+                {formatAccounting(activity.operating + activity.investing + activity.financing)}
+              </DetailTableTd>
+            </DetailTableRow>
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
 
       {/* Monthly Breakdown */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            Arus Kas per Bulan
-          </h2>
-        </div>
-        <div className="p-4 px-5">
-          <div className="overflow-x-auto">
-            <DetailTable data-report-table="Arus Kas per Bulan">
-              <DetailTableHead>
-                <DetailTableTh>Bulan</DetailTableTh>
-                <DetailTableTh align="right">Penerimaan (Rp)</DetailTableTh>
-                <DetailTableTh align="right">Pengeluaran (Rp)</DetailTableTh>
-                <DetailTableTh align="right">Arus Bersih (Rp)</DetailTableTh>
-              </DetailTableHead>
-              <DetailTableBody>
-                {sortedMonths.map(([month, data]) => (
-                  <DetailTableRow key={month}>
-                    <DetailTableTd>{formatPeriod(month)}</DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatAccounting(data.inflow)}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatAccounting(data.outflow)}
-                    </DetailTableTd>
-                    <DetailTableTd
-                      align="right"
-                      className={
-                        data.inflow - data.outflow >= 0
-                          ? "text-success"
-                          : "text-danger"
-                      }
-                    >
-                      {formatAccounting(data.inflow - data.outflow)}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                ))}
-                {sortedMonths.length === 0 && (
-                  <DetailTableRow>
-                    <DetailTableTd colSpan={4} className="text-center">
-                      Tidak ada data arus kas pada periode ini
-                    </DetailTableTd>
-                  </DetailTableRow>
-                )}
-                {sortedMonths.length > 0 && (
-                  <DetailTableRow className="font-bold border-t-2 border-default">
-                    <DetailTableTd>Total</DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatAccounting(totalInflow)}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatAccounting(totalOutflow)}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatAccounting(netCashFlow)}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                )}
-              </DetailTableBody>
-            </DetailTable>
-          </div>
-        </div>
-      </div>
+      <ReportSection title="Arus Kas per Bulan">
+        <DetailTable data-report-table="Arus Kas per Bulan">
+          <DetailTableHead>
+            <DetailTableTh>Bulan</DetailTableTh>
+            <DetailTableTh align="right">Penerimaan (Rp)</DetailTableTh>
+            <DetailTableTh align="right">Pengeluaran (Rp)</DetailTableTh>
+            <DetailTableTh align="right">Arus Bersih (Rp)</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {sortedMonths.map(([month, data]) => (
+              <DetailTableRow key={month}>
+                <DetailTableTd>{formatPeriod(month)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(data.inflow)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(data.outflow)}</DetailTableTd>
+                <DetailTableTd
+                  align="right"
+                  className={data.inflow - data.outflow >= 0 ? "text-success" : "text-danger"}
+                >
+                  {formatAccounting(data.inflow - data.outflow)}
+                </DetailTableTd>
+              </DetailTableRow>
+            ))}
+            {sortedMonths.length === 0 && (
+              <DetailTableRow>
+                <DetailTableTd colSpan={4} className="text-center">
+                  Tidak ada data arus kas pada periode ini
+                </DetailTableTd>
+              </DetailTableRow>
+            )}
+            {sortedMonths.length > 0 && (
+              <DetailTableRow className="font-bold border-t-2 border-default">
+                <DetailTableTd>Total</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalInflow)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalOutflow)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(netCashFlow)}</DetailTableTd>
+              </DetailTableRow>
+            )}
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
     </div>
   );
 }

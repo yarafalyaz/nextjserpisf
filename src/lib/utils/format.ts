@@ -112,12 +112,12 @@ export function formatDate(
   const dateOptions: Intl.DateTimeFormatOptions = (() => {
     switch (format) {
       case "short":
-        return { day: "2-digit", month: "short", year: "numeric" } as const;
+        return { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Jakarta" } as const;
       case "numeric":
-        return { day: "2-digit", month: "2-digit", year: "numeric" } as const;
+        return { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Jakarta" } as const;
       case "long":
       default:
-        return { day: "numeric", month: "long", year: "numeric" } as const;
+        return { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" } as const;
     }
   })();
 
@@ -288,4 +288,27 @@ export function formatPeriod(period: string | null | undefined): string {
   }
 
   return period;
+}
+
+/**
+ * Translate database reference type names to friendly Indonesian terms.
+ * Example: "SalesInvoice" -> "Faktur Penjualan"
+ */
+export function formatReferenceType(refType: string | null | undefined): string {
+  if (!refType) return "-";
+  
+  const refTypeMap: Record<string, string> = {
+    SalesInvoice: "Faktur Penjualan",
+    PurchaseOrder: "Pesanan Pembelian",
+    GoodsReceipt: "Penerimaan Barang",
+    MaterialIssue: "Pengeluaran Bahan",
+    StockAdjustment: "Penyesuaian Stok",
+    InventoryTransfer: "Transfer Stok",
+    SalesReturn: "Retur Penjualan",
+    PurchaseReturn: "Retur Pembelian",
+    ManufacturingOrder: "Perintah Produksi",
+    WorkOrder: "Perintah Kerja",
+  };
+  
+  return refTypeMap[refType] || refType;
 }

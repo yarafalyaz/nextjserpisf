@@ -1,6 +1,7 @@
 "use client"
 
 import { createColumnHelper } from "@tanstack/react-table"
+import { useMemo } from "react"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
@@ -74,13 +75,19 @@ interface AppreciationTableProps {
   data: AppreciationData[]
   toolbar?: React.ReactNode
   filters?: React.ReactNode
+  showActions?: boolean
 }
 
-export function AppreciationTable({ data, toolbar, filters }: AppreciationTableProps) {
+export function AppreciationTable({ data, toolbar, filters, showActions = true }: AppreciationTableProps) {
+  const visibleColumns = useMemo(() => {
+    if (!showActions) return columns.filter((c: any) => c.id !== "actions")
+    return columns
+  }, [showActions])
+
   return (
     <DataTable
       data={data}
-      columns={columns}
+      columns={visibleColumns}
       ariaLabel="Daftar apresiasi karyawan"
       pageSize={20}
       selectable={true}

@@ -1,11 +1,15 @@
 import type { Metadata } from "next"
 import Script from "next/script"
+
+export const dynamic = "force-dynamic"
 import { Inter, JetBrains_Mono } from "next/font/google"
 import { AuthProvider } from "@/components/providers/auth-provider"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { UIProvider } from "@/components/providers/ui-provider"
 import "./globals.css"
 import "./print.css"
+
+import { getSystemSettings } from "@/lib/utils/settings"
 
 const inter = Inter({
   variable: "--font-sans",
@@ -19,20 +23,24 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "YaraERP - Enterprise Resource Planning",
+    default: "YaraERP",
     template: "%s | YaraERP",
   },
-  description: "Sistem ERP terintegrasi untuk manajemen bisnis - Sales, Purchase, Inventory, HRM, Finance",
+  description: "Sistem ERP terintegrasi untuk manajemen bisnis - Penjualan, Pembelian, Inventaris, SDM, Keuangan",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const settings = await getSystemSettings()
+  const logoUrl = settings.companyLogo ?? "/favicon.ico"
+
   return (
     <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
+        <link rel="icon" href={logoUrl} />
         <Script id="theme-init" strategy="beforeInteractive">{`
           (function() {
             try {

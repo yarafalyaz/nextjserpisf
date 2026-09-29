@@ -3,12 +3,13 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
+import Link from "next/link"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteCostCenter } from "@/actions/finance.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { Pencil } from "lucide-react"
+import { Pencil, ChevronRight } from "lucide-react"
 
 import type { Metadata } from "next"
 
@@ -28,6 +29,10 @@ export default async function CostCenterDetailPage({
 
   const costCenter = await prisma.costCenter.findUnique({
     where: { id: numId },
+    include: {
+      parent: { select: { id: true, code: true, name: true } },
+      children: { select: { id: true, code: true, name: true }, orderBy: { code: "asc" } },
+    },
   })
 
   if (!costCenter) notFound()
@@ -52,9 +57,36 @@ export default async function CostCenterDetailPage({
       <DetailCard>
         <DetailField label="Kode" value={costCenter.code} mono />
         <DetailField label="Nama" value={costCenter.name} />
+        <DetailField label="Deskripsi" value={costCenter.description || "-"} />
+        <DetailField label="Status" value={costCenter.isActive ? "Aktif" : "Nonaktif"} />
+        <DetailField label="Induk" value={
+          costCenter.parent
+            ? <Link href={`/keuangan/pusat-biaya/${costCenter.parent.id}`} className="text-primary hover:underline">{costCenter.parent.code} — {costCenter.parent.name}</Link>
+            : "-"
+        } />
         <DetailField label="Dibuat" value={formatDate(costCenter.createdAt)} />
         <DetailField label="Diperbarui" value={formatDate(costCenter.updatedAt)} />
       </DetailCard>
+
+      {costCenter.children.length > 0 && (
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground mb-4">
+            Sub Pusat Biaya ({costCenter.children.length})
+          </h2>
+          <div className="divide-y border-t">
+            {costCenter.children.map((child) => (
+              <Link key={child.id} href={`/keuangan/pusat-biaya/${child.id}`} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
+                  <span className="font-mono text-xs text-muted-foreground">{child.code}</span>
+                  <span className="text-sm font-medium truncate">{child.name}</span>
+                </div>
+                <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

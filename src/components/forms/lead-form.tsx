@@ -52,6 +52,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
         showSuccess(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.refresh()
       } catch (error) {
+        if (error && typeof error === "object" && "digest" in error && String((error as { digest: unknown }).digest).startsWith("NEXT_REDIRECT")) throw error
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
       }
     })

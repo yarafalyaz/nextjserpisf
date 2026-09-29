@@ -14,7 +14,7 @@ import {
   createApprovalWorkflow,
   updateApprovalWorkflow,
 } from "@/actions/approval.actions"
-import { APPROVAL_MODEL_TYPES } from "@/lib/constants/approval"
+import { APPROVAL_MODEL_TYPES, APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
 
 export interface WorkflowFormStep {
   name?: string | null
@@ -47,7 +47,7 @@ let stepCounter = 0
 function newStep(partial?: Partial<StepState>): StepState {
   stepCounter += 1
   return {
-    key: `step-${Date.now()}-${stepCounter}`,
+    key: `step-${stepCounter}`,
     name: partial?.name ?? "",
     roleId: partial?.roleId ?? "",
     approverType: partial?.approverType ?? "",
@@ -81,7 +81,7 @@ export function WorkflowForm({
   )
 
   const roleOptions = roles.map((r) => ({ value: String(r.id), label: r.name }))
-  const modelTypeOptions = APPROVAL_MODEL_TYPES.map((t) => ({ value: t, label: t }))
+  const modelTypeOptions = APPROVAL_MODEL_TYPES.map((t) => ({ value: t, label: APPROVAL_MODEL_LABELS[t] || t }))
 
   function updateStep(key: string, patch: Partial<StepState>) {
     setSteps((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)))

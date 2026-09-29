@@ -34,6 +34,7 @@ export default async function ItemCategoryDetailPage({
       parent: true,
       children: true,
       items: { take: 10, orderBy: { name: "asc" } },
+      brands: { orderBy: { name: "asc" }, select: { id: true, name: true, _count: { select: { items: true } } } },
     },
   })
 
@@ -106,6 +107,31 @@ export default async function ItemCategoryDetailPage({
                   <DetailTableTd className="font-mono"><Link href={`/master/barang/${item.id}`}>{item.sku}</Link></DetailTableTd>
                   <DetailTableTd>{item.name}</DetailTableTd>
                   <DetailTableTd>{item.unitOfMeasure}</DetailTableTd>
+                </DetailTableRow>
+              ))}
+            </DetailTableBody>
+          </DetailTable>
+        )}
+      </DetailSection>
+      {/* Brands */}
+      <DetailSection title={`Merek (${category.brands.length})`}>
+        {category.brands.length === 0 ? (
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada merek untuk kategori ini</p>
+        ) : (
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Nama Merek</DetailTableTh>
+              <DetailTableTh>Jumlah Item</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {category.brands.map((brand) => (
+                <DetailTableRow key={brand.id}>
+                  <DetailTableTd>
+                    <Link href={`/master/merek/${brand.id}`} className="text-primary hover:underline font-medium">
+                      {brand.name}
+                    </Link>
+                  </DetailTableTd>
+                  <DetailTableTd>{brand._count.items}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>

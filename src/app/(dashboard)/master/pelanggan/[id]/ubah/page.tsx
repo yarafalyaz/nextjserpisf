@@ -21,9 +21,16 @@ export default async function EditCustomerPage({
 
   if (!Number.isInteger(customerId) || customerId <= 0) notFound()
 
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId, deletedAt: null },
-  })
+  const [customer, categories] = await Promise.all([
+    prisma.customer.findUnique({
+      where: { id: customerId, deletedAt: null },
+    }),
+    prisma.customerCategory.findMany({
+      where: { deletedAt: null, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ])
 
   if (!customer) notFound()
 
@@ -38,7 +45,13 @@ export default async function EditCustomerPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah Pelanggan: {customer.name}</h1>
       </div>
-      <CustomerForm customer={{ ...customer, creditLimit: customer.creditLimit != null ? Number(customer.creditLimit) : 0 }} />
+      <CustomerForm
+        customer={{
+          ...customer,
+          customerCategoryId: customer.customerCategoryId,
+        }}
+        categories={categories}
+      />
     </div>
   )
 }

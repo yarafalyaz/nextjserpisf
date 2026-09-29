@@ -55,4 +55,5 @@ export const workflowStepSchema = z.object({
 
 export const workflowStepsSchema = z
   .array(workflowStepSchema)
+  .min(1, "Minimal harus ada satu langkah persetujuan")
   .max(50, "Maksimal 50 langkah persetujuan")

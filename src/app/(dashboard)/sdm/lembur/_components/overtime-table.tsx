@@ -1,6 +1,7 @@
 "use client"
 
 import { createColumnHelper } from "@tanstack/react-table"
+import { useMemo } from "react"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
@@ -73,13 +74,22 @@ interface OvertimeTableProps {
   data: OvertimeRequest[]
   toolbar?: React.ReactNode
   filters?: React.ReactNode
+  showActions?: boolean
+  showEmployeeColumn?: boolean
 }
 
-export function OvertimeTable({ data, toolbar, filters }: OvertimeTableProps) {
+export function OvertimeTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: OvertimeTableProps) {
+  const visibleColumns = useMemo(() => {
+    let cols = columns
+    if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
+    if (!showEmployeeColumn) cols = cols.filter((c: any) => c.id !== "employeeName")
+    return cols
+  }, [showActions, showEmployeeColumn])
+
   return (
     <DataTable
       data={data}
-      columns={columns}
+      columns={visibleColumns}
       ariaLabel="Daftar lembur"
       pageSize={20}
       selectable={true}

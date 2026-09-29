@@ -71,21 +71,19 @@ describe("POST /api/upload", () => {
     expect(mocks.requirePermission).not.toHaveBeenCalled()
   })
 
-  it("allows attachments without permission check", async () => {
+  it("rejects public attachment uploads through the generic endpoint", async () => {
     const file = new File(["test"], "test.png", { type: "image/png" })
     const res = await POST(makeReq({ file, category: "attachments" }))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(400)
     expect(mocks.requirePermission).not.toHaveBeenCalled()
+    expect(mocks.uploadToStorage).not.toHaveBeenCalled()
   })
 
-  it("defaults to attachments category if missing", async () => {
+  it("requires category instead of defaulting to public attachments", async () => {
     const file = new File(["test"], "test.png", { type: "image/png" })
     const res = await POST(makeReq({ file }))
-    expect(res.status).toBe(200)
-    expect(mocks.uploadToStorage).toHaveBeenCalledWith(file, expect.objectContaining({
-      category: "attachments",
-      prefix: "attachments-u1",
-    }))
+    expect(res.status).toBe(400)
+    expect(mocks.uploadToStorage).not.toHaveBeenCalled()
   })
 
   it("uploads successfully and returns url", async () => {

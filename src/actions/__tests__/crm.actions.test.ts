@@ -37,6 +37,13 @@ vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => moc
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("DOC-001") }))
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((path) => {
+    const err = new Error("NEXT_REDIRECT")
+    ;(err as any).digest = `NEXT_REDIRECT;replace;${path};307`
+    throw err
+  }),
+}))
 
 import * as actions from "../crm.actions"
 
@@ -99,8 +106,7 @@ describe("CRM Ticket Actions", () => {
 
 describe("CRM Lead Actions", () => {
   it("deleteLead succeeds", async () => {
-    const res = await actions.deleteLead(1)
-    expect(res?.success).toBe(true)
+    await expect(actions.deleteLead(1)).rejects.toThrow("NEXT_REDIRECT")
   })
   it("deleteLead handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})

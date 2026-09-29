@@ -28,6 +28,7 @@ export default async function BrandDetailPage({
     where: { id: numId },
     include: {
       items: { take: 20, orderBy: { createdAt: "desc" }, select: { id: true, sku: true, name: true } },
+      categories: { select: { id: true, name: true }, orderBy: { name: "asc" } },
     },
   })
 
@@ -64,6 +65,21 @@ export default async function BrandDetailPage({
             <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(brand.createdAt)}</span>
           </div>
         </div>
+        {brand.categories.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-default flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Kategori Barang</span>
+            <div className="flex flex-wrap gap-1.5">
+              {brand.categories.map((cat) => (
+                <span
+                  key={cat.id}
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                >
+                  {cat.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {brand.items.length > 0 && (

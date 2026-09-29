@@ -12,7 +12,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Production Orders" }
+export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrdersPage({
   searchParams,

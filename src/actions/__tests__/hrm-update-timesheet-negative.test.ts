@@ -58,6 +58,8 @@ describe("updateTimesheet validation asymmetry", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: [] })
+    mocks.prismaMock.employee.findFirst.mockResolvedValue({ id: 1, departmentId: 1 })
+    mocks.prismaMock.timesheet.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1 })
   })
 
   it("rejects negative hours (parity with createTimesheet)", async () => {

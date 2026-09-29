@@ -8,12 +8,16 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/shadcn/sidebar"
 import type { Metadata } from "next"
 import { getSystemSettings } from "@/lib/utils/settings"
 
-export const metadata: Metadata = {
-  title: {
-    template: "%s — Silengkap",
-    default: "Silengkap ERP",
-  },
-  description: "Sistem ERP bengkel otomotif",
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSystemSettings()
+  const brand = settings.companyName || "YaraERP"
+  return {
+    title: {
+      template: `%s | ${brand}`,
+      default: brand,
+    },
+    description: "Sistem ERP bengkel otomotif",
+  }
 }
 
 export default async function DashboardLayout({
@@ -44,9 +48,15 @@ export default async function DashboardLayout({
           } as React.CSSProperties
         }
       >
-        <AppSidebar companyName={settings.companyName ?? undefined} companyLogo={settings.companyLogo ?? undefined} />
+        <AppSidebar
+          companyName={settings.companyName ?? undefined}
+          companyLogo={settings.companyLogo ?? undefined}
+          companyLogoDark={settings.companyLogoDark ?? undefined}
+          permissions={(session.user as { permissions?: string[] }).permissions ?? []}
+          roles={(session.user as { roles?: string[] }).roles ?? []}
+        />
         <SidebarInset>
-          <Header companyLogo={settings.companyLogo ?? undefined} />
+          <Header companyLogo={settings.companyLogo ?? undefined} companyLogoDark={settings.companyLogoDark ?? undefined} />
           <main className="app-content">{children}</main>
         </SidebarInset>
       </SidebarProvider>

@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => {
     lead: buildModelMock(),
     bank: buildModelMock(),
     tax: buildModelMock(),
-    currency: buildModelMock(),
     barcode: buildModelMock(),
     taxGroup: buildModelMock(),
     taxGroupTax: buildModelMock(),
@@ -296,20 +295,7 @@ describe("Tax Actions", () => {
   })
 })
 
-describe("Currency Actions", () => {
-  it("createCurrency succeeds", async () => {
-    const res = await actions.createCurrency(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
-    expect(res?.success).toBe(true)
-  })
-  it("updateCurrency succeeds", async () => {
-    const res = await actions.updateCurrency(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
-    expect(res?.success).toBe(true)
-  })
-  it("deleteCurrency succeeds", async () => {
-    const res = await actions.deleteCurrency(1)
-    expect(res?.success).toBe(true)
-  })
-})
+
 
 describe("ItemByScan Actions", () => {
   it("lookupItemByScan succeeds", async () => {
@@ -593,22 +579,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg2 = new FormData();
     try { await (actions as any).updateTax(arg1, arg2); } catch {}
   })
-  it("createCurrency handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).createCurrency(arg1, arg2); } catch {}
-  })
-  it("updateCurrency handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).updateCurrency(arg1, arg2); } catch {}
-  })
+
   it("lookupItemByScan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
@@ -760,14 +731,6 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteTaxGroup(arg1, arg2); } catch {}
-  })
-  it("deleteCurrency handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).deleteCurrency(arg1, arg2); } catch {}
   })
   it("deleteBarcode handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1010,18 +973,6 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(res?.error).toContain("Anda tidak memiliki izin untuk mengubah penugasan")
   })
 
-  it('createCurrency - with isBase=true', async () => {
-    const res = await actions.createCurrency(fdMap({ name: "A", code: "A", isBase: "on" }))
-    expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.currency.updateMany).toHaveBeenCalled()
-  })
-
-  it('updateCurrency - with isBase=true', async () => {
-    const res = await actions.updateCurrency(1, fdMap({ name: "A", code: "A", isBase: "on" }))
-    expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.currency.updateMany).toHaveBeenCalled()
-  })
-
   it('lookupItemByScan - by sku', async () => {
     mocks.prismaMock.barcode.findUnique.mockResolvedValueOnce(null)
     mocks.prismaMock.item.findFirst.mockResolvedValueOnce({ id: 1 })
@@ -1139,14 +1090,6 @@ describe("Coverage completion tests for validation errors", () => {
     const res = await actions.updatePosition(1, new FormData())
     expect(res?.success).toBe(false)
   })
-  it("createCurrency validation error", async () => {
-    const res = await actions.createCurrency(new FormData())
-    expect(res?.success).toBe(false)
-  })
-  it("updateCurrency validation error", async () => {
-    const res = await actions.updateCurrency(1, new FormData())
-    expect(res?.success).toBe(false)
-  })
   it("createBarcode validation error", async () => {
     const res = await actions.createBarcode(new FormData())
     expect(res?.success).toBe(false)
@@ -1195,7 +1138,6 @@ describe('Next Redirect Error Handling', () => {
     actions.createLead, actions.updateLead,
     actions.createBank, actions.updateBank,
     actions.createTax, actions.updateTax,
-    actions.createCurrency, actions.updateCurrency,
     actions.lookupItemByScan, actions.createBarcode, actions.updateBarcode,
     actions.createTaxGroup, actions.updateTaxGroup,
     actions.createStatisticalKeyFigure, actions.updateStatisticalKeyFigure,

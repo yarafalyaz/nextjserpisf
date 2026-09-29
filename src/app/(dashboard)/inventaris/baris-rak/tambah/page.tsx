@@ -1,5 +1,4 @@
-export const dynamic = "force-dynamic"
-
+import { Suspense } from "react"
 import { prisma } from "@/lib/db/prisma"
 import { RackRowForm } from "@/components/forms/rack-row-form"
 import { getSystemSettings } from "@/lib/utils/settings"
@@ -25,9 +24,11 @@ export default async function CreateRackRowPage() {
   const enableAutoCode = settings.enableAutoRowCode !== false
 
   return (
-    <RackRowForm
-      warehouses={warehouses}
-      enableAutoCode={enableAutoCode}
-    />
+    <Suspense fallback={<div className="h-48 animate-pulse bg-muted/30 rounded-xl" />}>
+      <RackRowForm
+        warehouses={warehouses}
+        enableAutoCode={enableAutoCode}
+      />
+    </Suspense>
   )
 }

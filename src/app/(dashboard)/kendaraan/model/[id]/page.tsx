@@ -13,7 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Model Kendaraan" }
 
 export default async function VehicleModelDetailPage({
@@ -37,6 +37,9 @@ export default async function VehicleModelDetailPage({
 
   if (!model) notFound()
 
+  const canEdit = await hasPermission("edit_vehicle_models")
+  const canDelete = await hasPermission("delete_vehicle_models")
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -49,8 +52,12 @@ export default async function VehicleModelDetailPage({
         ]}
         actions={
           <>
-            <Button href={`/kendaraan/model/${model.id}/ubah`} variant="primary">Ubah</Button>
-            <DeleteButton id={model.id} action={deleteVehicleModel} />
+            {canEdit && (
+              <Button href={`/kendaraan/model/${model.id}/ubah`} variant="primary">Ubah</Button>
+            )}
+            {canDelete && (
+              <DeleteButton id={model.id} action={deleteVehicleModel} />
+            )}
             <BackButton href="/kendaraan/model" />
           </>
         }

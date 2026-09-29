@@ -7,60 +7,42 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
+import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
+import { ReportNarration } from "@/components/reports/report-narration"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Hutang Jatuh Tempo" }
 
-function getAgeGroup(days: number): string {
-  if (days <= 30) return '0-30 hari'
-  if (days <= 60) return '31-60 hari'
-  if (days <= 90) return '61-90 hari'
-  return '90+ hari'
-}
-
 export default async function AgingPayablesPage() {
   await requirePermission('view_reports')
 
   const bills = await prisma.vendorBill.findMany({
-    where: {
-      status: { notIn: ['paid', 'cancelled', 'draft'] },
-      dueDate: { not: null },
-    },
-    include: { vendor: true },
+    where: { status: { notIn: ['draft', 'cancelled'] }, deletedAt: null },
+    include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: 'asc' },
   })
 
-  const today = new Date()
-  const data = bills.map((bill) => {
-    const dueDate = bill.dueDate!
-    const diffTime = today.getTime() - dueDate.getTime()
-    const ageDays = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)))
-    return {
-      id: bill.id,
-      vendorName: bill.vendor.name,
-      documentNo: bill.documentNo,
-      dueDate: bill.dueDate!,
-      amount: Number(bill.grandTotal) - Number(bill.paidAmount),
-      ageDays,
-      ageGroup: getAgeGroup(ageDays),
-    }
-  })
+  const now = new Date()
+  const rows = bills
+    .map(bill => {
+      if (!bill.dueDate) return null
+      const outstanding = Number(bill.grandTotal) - Number(bill.paidAmount)
+      if (outstanding <= 0) return null
+      const dueDate = new Date(bill.dueDate)
+      const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      return {
+        vendor: bill.vendor.name,
+        billNo: bill.documentNo,
+        dueDate,
+        daysOverdue: diffDays,
+        outstanding,
+      }
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null)
 
-  // Summary by age group
-  const summary = {
-    '0-30 hari': 0,
-    '31-60 hari': 0,
-    '61-90 hari': 0,
-    '90+ hari': 0,
-  }
-  data.forEach((d) => {
-    summary[d.ageGroup as keyof typeof summary] += d.amount
-  })
-
-  const totalOutstanding = data.reduce((sum, d) => sum + d.amount, 0)
-
-  const period = `Per ${today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0)
+  const period = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -68,66 +50,50 @@ export default async function AgingPayablesPage() {
         <AppBreadcrumbs items={[
           { label: "Dasbor", href: "/" },
           { label: "Laporan", href: "/laporan" },
-          { label: "Umur Hutang" },
+          { label: "Hutang Jatuh Tempo" },
         ]} />
       </div>
 
       <div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="Aging_Payables" />
+        <ExportButtons title="Hutang_Jatuh_Tempo" />
       </div>
 
-      {/* Professional letterhead (screen + print) */}
-      <ReportLetterhead title="Umur Hutang" subtitle="Aging Payables" periodLabel={period} />
+      <ReportLetterhead title="Hutang Jatuh Tempo" subtitle="Aging Payables" periodLabel={period} />
+      <ReportNarration text="Laporan Utang Jatuh Tempo mengelompokkan utang usaha berdasarkan umur jatuh temponya. Informasi ini penting untuk mengelola jadwal pembayaran, menjaga hubungan baik dengan pemasok, dan mengoptimalkan arus kas perusahaan." />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-5 mb-6 print:hidden">
-        <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className="flex flex-col">
-            <span className="text-[0.8125rem] text-muted-foreground font-medium">Total Belum Lunas</span>
-            <span className="text-xl font-bold text-foreground">{formatCurrency(totalOutstanding)}</span>
-          </div>
-        </div>
-        {Object.entries(summary).map(([group, amount]) => (
-          <div className="bg-surface rounded-xl p-5 px-6 flex items-center gap-4 shadow-sm border border-default transition-all hover:-translate-y-0.5 hover:shadow-md" key={group}>
-            <div className="flex flex-col">
-              <span className="text-[0.8125rem] text-muted-foreground font-medium">{group}</span>
-              <span className="text-xl font-bold text-foreground">{formatCurrency(amount)}</span>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
+        <ReportKpiCard label="Total Hutang" value={formatCurrency(totalOutstanding)} />
       </div>
 
-      {/* Table */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden no-break">
-        <div className="overflow-x-auto">
-          <DetailTable data-report-table="Aging Payables">
-            <DetailTableHead>
-              <DetailTableTh>Pemasok</DetailTableTh>
-              <DetailTableTh>No. Tagihan</DetailTableTh>
-              <DetailTableTh>Jatuh Tempo</DetailTableTh>
-              <DetailTableTh align="right">Sisa Tagihan</DetailTableTh>
-              <DetailTableTh align="right">Umur (Hari)</DetailTableTh>
-              <DetailTableTh>Kelompok Umur</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {data.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={6} className="text-center py-10 text-muted-foreground">Tidak ada hutang jatuh tempo</DetailTableTd></DetailTableRow>
-              ) : (
-                data.map((row) => (
-                  <DetailTableRow key={row.id}>
-                    <DetailTableTd className="font-medium">{row.vendorName}</DetailTableTd>
-                    <DetailTableTd className="font-mono">{row.documentNo}</DetailTableTd>
-                    <DetailTableTd>{formatDate(row.dueDate, { format: 'short' })}</DetailTableTd>
-                    <DetailTableTd align="right">{formatAccounting(row.amount)}</DetailTableTd>
-                    <DetailTableTd align="right">{row.ageDays}</DetailTableTd>
-                    <DetailTableTd><span className={`status-badge status-${row.ageDays > 90 ? 'danger' : row.ageDays > 60 ? 'warning' : 'default'}`}>{row.ageGroup}</span></DetailTableTd>
-                  </DetailTableRow>
-                ))
-              )}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
-      </div>
+      <ReportSection title="Detail Hutang">
+        <DetailTable data-report-table="Detail Hutang">
+          <DetailTableHead>
+            <DetailTableTh>Pemasok</DetailTableTh>
+            <DetailTableTh>No. Tagihan</DetailTableTh>
+            <DetailTableTh>Jatuh Tempo</DetailTableTh>
+            <DetailTableTh align="right">Sisa (Rp)</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {rows.map((r, i) => (
+              <DetailTableRow key={i}>
+                <DetailTableTd className="font-medium">{r.vendor}</DetailTableTd>
+                <DetailTableTd className="font-mono text-sm">{r.billNo}</DetailTableTd>
+                <DetailTableTd>{formatDate(r.dueDate)}</DetailTableTd>
+                <DetailTableTd align="right" className="font-semibold text-danger">{formatAccounting(r.outstanding)}</DetailTableTd>
+              </DetailTableRow>
+            ))}
+            {rows.length === 0 && (
+              <DetailTableRow><DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6">Tidak ada hutang jatuh tempo</DetailTableTd></DetailTableRow>
+            )}
+            {rows.length > 0 && (
+              <DetailTableRow className="font-bold border-t-2 border-default">
+                <DetailTableTd colSpan={3}>TOTAL</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
+              </DetailTableRow>
+            )}
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
     </div>
   )
 }

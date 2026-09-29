@@ -59,6 +59,7 @@ export const materialIssueSchema = z.object({
   warehouseId: z.coerce.number().min(1, "Gudang wajib dipilih"),
   projectId: optionalNumber(),
   workOrderId: optionalNumber(),
+  costCenterId: optionalNumber(),
   date: dateString,
   notes: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately

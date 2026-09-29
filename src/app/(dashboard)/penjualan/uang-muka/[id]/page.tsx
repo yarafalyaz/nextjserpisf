@@ -12,6 +12,7 @@ import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import { ConfirmDownPaymentButton } from "../_components/confirm-dp-button";
 import {
   getPaymentMethodMap,
   resolvePaymentMethodName,
@@ -58,12 +59,17 @@ export default async function DownPaymentDetailPage({
         badge={<StatusChip status={dp.status} />}
         actions={
           <>
-            <Button
-              href={`/penjualan/uang-muka/${dp.id}/ubah`}
-              variant="primary"
-            >
-              Ubah
-            </Button>
+            {dp.status === "draft" && (
+              <>
+                <ConfirmDownPaymentButton dpId={dp.id} />
+                <Button
+                  href={`/penjualan/uang-muka/${dp.id}/ubah`}
+                  variant="primary"
+                >
+                  Ubah
+                </Button>
+              </>
+            )}
             {dp.status === "confirmed" && (
               <Button
                 href={`/produksi/perintah-kerja/tambah?quotationId=${dp.quotationId}`}
@@ -73,7 +79,9 @@ export default async function DownPaymentDetailPage({
               </Button>
             )}
             <PrintButton />
-            <DeleteButton id={dp.id} action={deleteDownPayment} />
+            {dp.status === "draft" && (
+              <DeleteButton id={dp.id} action={deleteDownPayment} />
+            )}
             <BackButton href="/penjualan/uang-muka" />
           </>
         }

@@ -1,18 +1,21 @@
+import { redirect } from "next/navigation";
 import { auth } from "./auth";
 
 /**
- * Require authenticated session. Throws if no session exists.
+ * Require authenticated session. Redirects to /login if not signed in.
  */
 export async function requireAuth() {
   const session = await auth();
   if (!session?.user || session.user.isActive === false) {
-    throw new Error("Unauthorized: Silakan login terlebih dahulu.");
+    redirect("/login");
   }
   return session.user;
 }
 
 /**
  * Require specific permission. Super admin bypasses all permission checks.
+ * On miss, redirects to dashboard (/) instead of throwing — halaman forbidden
+ * langsung dialihkan, tidak muncul "Terjadi Kesalahan".
  */
 export async function requirePermission(permission: string) {
   const user = await requireAuth();
@@ -21,9 +24,7 @@ export async function requirePermission(permission: string) {
   if (user.roles.includes("super_admin")) return user;
 
   if (!user.permissions.includes(permission)) {
-    throw new Error(
-      `Forbidden: Anda tidak memiliki izin '${permission}'.`
-    );
+    redirect("/");
   }
 
   return user;
@@ -36,9 +37,7 @@ export async function requireRole(role: string) {
   const user = await requireAuth();
 
   if (!user.roles.includes(role) && !user.roles.includes("super_admin")) {
-    throw new Error(
-      `Forbidden: Anda tidak memiliki role '${role}'.`
-    );
+    redirect("/");
   }
 
   return user;

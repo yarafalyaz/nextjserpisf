@@ -1,5 +1,6 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { auth } from "@/lib/auth/auth"
+import { assertCSRF } from "@/lib/security/csrf"
 
 /**
  * Wrapper for server actions: auto try-catch + auth check
@@ -21,6 +22,9 @@ export function action<T extends (...args: unknown[]) => Promise<unknown>>(fn: T
   wrapped.protect = (permission?: string) => {
     const protectedFn = (async (...args: unknown[]) => {
       try {
+        // CSRF check
+        await assertCSRF()
+
         // Auth check
         const session = await auth()
         if (!session?.user?.id) {

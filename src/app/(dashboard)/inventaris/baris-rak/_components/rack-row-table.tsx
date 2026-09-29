@@ -24,14 +24,6 @@ interface RackRowData {
 const columnHelper = createColumnHelper<RackRowData>()
 
 const columns = [
-  columnHelper.accessor("rack.warehouse.name", {
-    header: "Gudang",
-    cell: (info) => info.getValue(),
-  }),
-  columnHelper.accessor("rack.name", {
-    header: "Rak",
-    cell: (info) => info.getValue(),
-  }),
   columnHelper.accessor("code", {
     header: "Kode",
     cell: (info) => (
@@ -46,7 +38,16 @@ const columns = [
       </Link>
     ),
   }),
+  columnHelper.accessor("rack.name", {
+    header: "Rak",
+    cell: (info) => info.getValue(),
+  }),
+  columnHelper.accessor("rack.warehouse.name", {
+    header: "Gudang",
+    cell: (info) => info.getValue(),
+  }),
   columnHelper.accessor("createdAt", {
+    id: "createdAt",
     header: "Dibuat",
     cell: (info) => formatDate(info.getValue()),
   }),
@@ -80,6 +81,7 @@ export function RackRowTable({ data }: RackRowTableProps) {
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode baris rak..."
       onBulkDelete={(ids) => bulkDelete("rackRow", ids)}
+      initialColumnVisibility={{ createdAt: false }}
     />
   )
 }

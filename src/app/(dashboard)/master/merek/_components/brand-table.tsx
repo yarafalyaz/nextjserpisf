@@ -11,6 +11,7 @@ interface Brand {
   id: number
   name: string
   _count: { items: number }
+  categories: { id: number; name: string }[]
 }
 
 const columnHelper = createColumnHelper<Brand>()
@@ -23,6 +24,28 @@ const columns = [
         {info.getValue()}
       </Link>
     ),
+  }),
+  columnHelper.accessor("categories", {
+    header: "Kategori",
+    enableSorting: false,
+    cell: (info) => {
+      const cats = info.getValue()
+      if (!cats || cats.length === 0) {
+        return <span className="text-muted-foreground text-xs">—</span>
+      }
+      return (
+        <div className="flex flex-wrap gap-1">
+          {cats.map((cat) => (
+            <span
+              key={cat.id}
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+            >
+              {cat.name}
+            </span>
+          ))}
+        </div>
+      )
+    },
   }),
   columnHelper.accessor("_count.items", {
     header: "Jumlah Item",

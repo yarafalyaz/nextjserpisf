@@ -37,18 +37,75 @@ export default async function EditPage({
     notes: data.notes,
   };
 
-  const [customers, quotations] = await Promise.all([
+  const [customersList, quotationsList] = await Promise.all([
     prisma.customer.findMany({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        customerCategory: {
+          select: {
+            downPaymentPercent: true,
+          },
+        },
+      },
     }),
     prisma.quotation.findMany({
-      where: { status: "accepted" },
+      where: { status: { in: ["accepted", "approved"] } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, documentNo: true, customerId: true },
+      select: {
+        id: true,
+        documentNo: true,
+        customerId: true,
+        grandTotal: true,
+        sections: {
+          select: {
+            id: true,
+            name: true,
+            items: {
+              select: {
+                id: true,
+                description: true,
+                qty: true,
+                uom: true,
+                unitPrice: true,
+                total: true,
+              },
+            },
+          },
+        },
+      },
     }),
   ]);
+
+  const customers = customersList.map((c) => ({
+    id: c.id,
+    name: c.name,
+    customerCategory: c.customerCategory
+      ? { downPaymentPercent: Number(c.customerCategory.downPaymentPercent) }
+      : null,
+  }));
+  
+  const quotations = quotationsList.map((q) => ({
+    id: q.id,
+    documentNo: q.documentNo,
+    customerId: q.customerId,
+    grandTotal: Number(q.grandTotal),
+    sections: q.sections.map((s) => ({
+      id: s.id,
+      name: s.name,
+      items: s.items.map((i) => ({
+        id: i.id,
+        description: i.description,
+        qty: Number(i.qty),
+        uom: i.uom,
+        unitPrice: Number(i.unitPrice),
+        total: Number(i.total),
+      })),
+    })),
+  }));
+
   const paymentMethods = await getActivePaymentMethods();
 
   return (

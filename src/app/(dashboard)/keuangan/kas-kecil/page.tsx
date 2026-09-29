@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import Link from "next/link";
 import { AppSearchField } from "@/components/ui/search-field";
 import { PettyCashTable } from "./_components/petty-cash-table";
+import { formatCurrency } from "@/lib/utils/format";
 
 import type { Metadata } from "next";
 
@@ -22,7 +23,8 @@ export default async function PettyCashPage({
   const perPage = 100;
 
   const where = {
-    ...(params.tipe && { type: params.tipe }),
+    ...(params.tipe === "masuk" ? { type: "IN" } : {}),
+    ...(params.tipe === "keluar" ? { type: "OUT" } : {}),
     ...(params.cari && {
       OR: [
         { documentNo: { contains: params.cari } },
@@ -30,6 +32,30 @@ export default async function PettyCashPage({
       ],
     }),
   };
+
+  // Current balance
+  const lastRecord = await prisma.pettyCash.findFirst({
+    orderBy: { createdAt: "desc" },
+    select: { balanceAfter: true },
+  });
+  const currentBalance = lastRecord ? Number(lastRecord.balanceAfter) : 0;
+
+  // Monthly summary
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthRecords = await prisma.pettyCash.findMany({
+    where: {
+      date: { gte: monthStart, lt: monthEnd },
+    },
+    select: { type: true, amount: true },
+  });
+  const monthIn = monthRecords
+    .filter((r) => r.type === "IN")
+    .reduce((s, r) => s + Number(r.amount), 0);
+  const monthOut = monthRecords
+    .filter((r) => r.type === "OUT")
+    .reduce((s, r) => s + Number(r.amount), 0);
 
   const [records, total] = await Promise.all([
     prisma.pettyCash.findMany({
@@ -53,6 +79,13 @@ export default async function PettyCashPage({
     balanceAfter: Number(r.balanceAfter),
   }));
 
+  const balanceColor =
+    currentBalance > 0
+      ? "text-green-600"
+      : currentBalance < 0
+        ? "text-red-600"
+        : "text-muted-foreground";
+
   const statusChips = (
     <>
       <Link
@@ -62,14 +95,14 @@ export default async function PettyCashPage({
         Semua
       </Link>
       <Link
-        href="/keuangan/kas-kecil?tipe=IN"
-        className={`filter-chip ${params.tipe === "IN" ? "active" : ""}`}
+        href="/keuangan/kas-kecil?tipe=masuk"
+        className={`filter-chip ${params.tipe === "masuk" ? "active" : ""}`}
       >
         Masuk
       </Link>
       <Link
-        href="/keuangan/kas-kecil?tipe=OUT"
-        className={`filter-chip ${params.tipe === "OUT" ? "active" : ""}`}
+        href="/keuangan/kas-kecil?tipe=keluar"
+        className={`filter-chip ${params.tipe === "keluar" ? "active" : ""}`}
       >
         Keluar
       </Link>
@@ -78,8 +111,38 @@ export default async function PettyCashPage({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Balance + stats cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            Saldo Kas Kecil
+          </p>
+          <p className={`text-2xl font-bold ${balanceColor}`}>
+            {formatCurrency(currentBalance)}
+          </p>
+        </div>
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            Pemasukan Bulan Ini
+          </p>
+          <p className="text-2xl font-bold text-green-600">
+            {formatCurrency(monthIn)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">{monthRecords.filter(r => r.type === "IN").length} transaksi</p>
+        </div>
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+            Pengeluaran Bulan Ini
+          </p>
+          <p className="text-2xl font-bold text-red-600">
+            {formatCurrency(monthOut)}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">{monthRecords.filter(r => r.type === "OUT").length} transaksi</p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Kas Kecil</h1>
+        <h1 className="text-2xl font-bold text-foreground">Transaksi Kas Kecil</h1>
         <Link
           href="/keuangan/kas-kecil/tambah"
           className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"

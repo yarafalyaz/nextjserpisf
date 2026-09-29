@@ -23,9 +23,14 @@ export const customerSchema = z.object({
   postalCode: optionalString(200),
   contactPerson: optionalString(100),
   gender: z.enum(["male", "female"]).optional(),
-  creditLimit: optionalNumber(0),
   code: optionalString(50),
   taxId: optionalString(50),
+  customerCategoryId: optionalNumber(),
+})
+
+export const customerCategorySchema = z.object({
+  name: z.string().min(1, "Nama kategori wajib diisi").max(200),
+  downPaymentPercent: z.coerce.number().min(0, "Persentase minimal 0").max(100, "Persentase maksimal 100").default(0),
 })
 
 export const vendorSchema = z.object({

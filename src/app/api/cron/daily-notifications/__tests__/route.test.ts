@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   holidayFindFirst: vi.fn(),
   employeeFindMany: vi.fn(),
   leaveRequestFindMany: vi.fn(),
+  workScheduleFindMany: vi.fn(),
+  holidayFindMany: vi.fn(),
+  departmentHolidayFindMany: vi.fn(),
   notifyUsers: vi.fn(),
 }))
 
@@ -31,8 +34,13 @@ vi.mock("@/lib/db/prisma", () => ({
     salesInvoice: { findMany: (...a: unknown[]) => mocks.salesInvoiceFindMany(...a) },
     purchaseOrder: { findMany: (...a: unknown[]) => mocks.purchaseOrderFindMany(...a) },
     attendance: { findMany: (...a: unknown[]) => mocks.attendanceFindMany(...a) },
-    holiday: { findFirst: (...a: unknown[]) => mocks.holidayFindFirst(...a) },
     employee: { findMany: (...a: unknown[]) => mocks.employeeFindMany(...a) },
+    workSchedule: { findMany: (...a: unknown[]) => mocks.workScheduleFindMany(...a) },
+    departmentHoliday: { findMany: (...a: unknown[]) => mocks.departmentHolidayFindMany(...a) },
+    holiday: {
+      findFirst: (...a: unknown[]) => mocks.holidayFindFirst(...a),
+      findMany: (...a: unknown[]) => mocks.holidayFindMany(...a),
+    },
     leaveRequest: { findMany: (...a: unknown[]) => mocks.leaveRequestFindMany(...a) },
   },
 }))
@@ -55,6 +63,9 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.holidayFindFirst.mockResolvedValue(null)
     mocks.employeeFindMany.mockResolvedValue([])
     mocks.leaveRequestFindMany.mockResolvedValue([])
+    mocks.workScheduleFindMany.mockResolvedValue([])
+    mocks.holidayFindMany.mockResolvedValue([])
+    mocks.departmentHolidayFindMany.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -122,7 +133,7 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T08:00:00"))
     mocks.attendanceFindMany.mockResolvedValue(
-      Array.from({ length: 6 }, (_, i) => ({ employee: i === 0 ? null : { name: `Emp${i}` } }))
+      Array.from({ length: 6 }, (_, i) => ({ employeeId: i + 1, status: "late", lateMinutes: 1, employee: i === 0 ? null : { name: `Emp${i}` } }))
     )
     const res = await GET(makeReq())
     const json = await res.json()
@@ -133,11 +144,11 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T12:00:00"))
     mocks.employeeFindMany.mockResolvedValue([
-      { id: 1, name: "A", department: { name: "IT" } },
-      { id: 2, name: "B", department: null },
-      { id: 3, name: "C", department: { name: "HR" } },
+      { id: 1, name: "A", departmentId: 1, workSchedules: [], department: { id: 1, name: "IT", workSchedules: [] } },
+      { id: 2, name: "B", departmentId: null, workSchedules: [], department: null },
+      { id: 3, name: "C", departmentId: 2, workSchedules: [], department: { id: 2, name: "HR", workSchedules: [] } },
     ])
-    mocks.attendanceFindMany.mockResolvedValue([{ employeeId: 1 }]) // emp 1 present
+    mocks.attendanceFindMany.mockResolvedValue([{ employeeId: 1, status: "present", lateMinutes: 0 }]) // emp 1 present
     mocks.leaveRequestFindMany.mockResolvedValue([{ employeeId: 2 }]) // emp 2 on leave
     // emp 3 absent
     const res = await GET(makeReq())
@@ -148,8 +159,8 @@ describe("GET /api/cron/daily-notifications", () => {
   it("skips absent check on holiday", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T12:00:00"))
-    mocks.holidayFindFirst.mockResolvedValue({ id: 1 })
-    mocks.employeeFindMany.mockResolvedValue([{ id: 1, name: "A", department: null }])
+    mocks.holidayFindMany.mockResolvedValue([{ date: new Date("2026-06-12T00:00:00") }])
+    mocks.employeeFindMany.mockResolvedValue([{ id: 1, name: "A", departmentId: null, workSchedules: [], department: null }])
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.absentEmployees).toBeUndefined()
@@ -169,7 +180,7 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T12:00:00"))
     mocks.employeeFindMany.mockResolvedValue(
-      Array.from({ length: 7 }, (_, i) => ({ id: i, name: `E${i}`, department: null }))
+      Array.from({ length: 7 }, (_, i) => ({ id: i, name: `E${i}`, departmentId: null, workSchedules: [], department: null }))
     )
     const res = await GET(makeReq())
     const json = await res.json()
@@ -195,9 +206,9 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.queryRaw.mockResolvedValue([{ id: 1, name: "Item1", qty_on_hand: 1, min_stock: 10 }]) // low stock
     mocks.salesInvoiceFindMany.mockResolvedValue([{ grandTotal: 100, paidAmount: 0 }]) // overdue
     mocks.purchaseOrderFindMany.mockResolvedValue([{ id: 1 }]) // stale PO
-    mocks.attendanceFindMany.mockResolvedValue([{ employee: { name: "Late" } }]) // late
+    mocks.attendanceFindMany.mockResolvedValue([{ employeeId: 1, status: "late", lateMinutes: 1, employee: { name: "Late" } }]) // late
     mocks.holidayFindFirst.mockResolvedValue(null)
-    mocks.employeeFindMany.mockResolvedValue([{ id: 99, name: "Absent", department: null }])
+    mocks.employeeFindMany.mockResolvedValue([{ id: 99, name: "Absent", departmentId: null, workSchedules: [], department: null }])
 
     const res = await GET(makeReq())
     const json = await res.json()

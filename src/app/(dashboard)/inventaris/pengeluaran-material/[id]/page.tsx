@@ -6,7 +6,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteMaterialIssue } from "@/actions/inventory.actions"
+import { ProcessButton } from "@/components/ui/process-button"
+import { deleteMaterialIssue, completeMaterialIssue } from "@/actions/inventory.actions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
@@ -36,6 +37,14 @@ export default async function MaterialIssueDetailPage({
 
   if (!issue) notFound()
 
+  // Fetch item names dynamically
+  const itemIds = issue.items.map((i) => i.itemId)
+  const items = await prisma.item.findMany({
+    where: { id: { in: itemIds } },
+    select: { id: true, name: true },
+  })
+  const itemNameMap = new Map(items.map((i) => [i.id, i.name]))
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Inventaris",href:"/inventaris"},{label:"Pengeluaran Material",href:"/inventaris/pengeluaran-material"},{label:"Detail"}]} />
@@ -43,11 +52,21 @@ export default async function MaterialIssueDetailPage({
         <h1 className="text-2xl font-bold text-foreground">Pengeluaran Material {issue.documentNo}</h1>
         <div className="flex gap-2 items-center">
           <StatusChip status={issue.status} />
-  <div className="flex gap-2">
-          <Link href={`/inventaris/pengeluaran-material/${issue.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
-          <DeleteButton id={issue.id} action={deleteMaterialIssue} />
-                  <Link href="/inventaris/pengeluaran-material" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
-        </div>
+          <div className="flex gap-2 items-center">
+            {issue.status === "draft" && (
+              <>
+                <ProcessButton
+                  id={issue.id}
+                  action={completeMaterialIssue}
+                  successMessage="Pengeluaran material berhasil diposting"
+                  label="Posting"
+                />
+                <Link href={`/inventaris/pengeluaran-material/${issue.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default text-foreground hover:bg-surface-secondary hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+                <DeleteButton id={issue.id} action={deleteMaterialIssue} />
+              </>
+            )}
+            <Link href="/inventaris/pengeluaran-material" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
+          </div>
         </div>
       </div>
 
@@ -101,14 +120,14 @@ export default async function MaterialIssueDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Nama Barang</DetailTableTh>
                 <DetailTableTh align="right">Jml</DetailTableTh>
                 <DetailTableTh align="right">Biaya</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {issue.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>Item #{item.itemId}</DetailTableTd>
+                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
                   </DetailTableRow>

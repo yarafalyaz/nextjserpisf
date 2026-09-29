@@ -15,7 +15,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Products" }
+export const metadata: Metadata = { title: "Detail Produk (BOM)" }
 
 export default async function ProductDetailPage({
   params,
@@ -35,6 +35,7 @@ export default async function ProductDetailPage({
       productionOrders: { take: 5, orderBy: { createdAt: "desc" } },
       vehicleBrand: true,
       vehicleModel: true,
+      inventoryItem: { select: { id: true, sku: true, name: true } },
     },
   })
 
@@ -70,14 +71,18 @@ export default async function ProductDetailPage({
         <DetailField label="Nama" value={product.name} />
         <DetailField label="Merek Kendaraan" value={product.vehicleBrand?.name || "-"} />
         <DetailField label="Model Kendaraan" value={product.vehicleModel?.name || "-"} />
+        <DetailField
+          label="Item Persediaan Hasil Produksi"
+          value={product.inventoryItem ? `${product.inventoryItem.sku} — ${product.inventoryItem.name}` : "Belum dihubungkan"}
+        />
         <DetailField label="Dibuat" value={formatDate(product.createdAt)} />
         {product.description && (
           <DetailField label="Deskripsi" value={product.description} colSpan="full" />
         )}
       </DetailCard>
 
-      {/* Bill of Materials */}
-      <DetailSection title="Bill of Materials">
+      {/* Rincian Bahan Baku (BOM) */}
+      <DetailSection title="Rincian Bahan Baku (BOM)">
         {product.materials.length === 0 ? (
           <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada material</p>
         ) : (

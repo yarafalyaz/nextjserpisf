@@ -16,7 +16,6 @@ async function main() {
     // HRM
     if (prisma.payroll) await prisma.payroll.deleteMany({});
     if (prisma.timesheet) await prisma.timesheet.deleteMany({});
-    if (prisma.attendance) await prisma.attendance.deleteMany({});
     if (prisma.leaveRequest) await prisma.leaveRequest.deleteMany({});
     if (prisma.overtimeRequest) await prisma.overtimeRequest.deleteMany({});
     if (prisma.employeeLoan) await prisma.employeeLoan.deleteMany({});

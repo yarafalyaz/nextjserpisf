@@ -8,7 +8,7 @@ import { prisma } from "@/lib/db/prisma"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Products" }
+export const metadata: Metadata = { title: "Tambah Produk (BOM)" }
 
 export default async function CreateProductPage() {
   await requirePermission("create_products")
@@ -16,7 +16,7 @@ export default async function CreateProductPage() {
   const generatedCode = await peekNextDocumentNumber("PRD", "simple")
   const items = await prisma.item.findMany({
     where: { isActive: true, deletedAt: null },
-    select: { id: true, sku: true, name: true, unitOfMeasure: true },
+    select: { id: true, sku: true, name: true, unitOfMeasure: true, isProduct: true },
     orderBy: { name: "asc" },
   })
 

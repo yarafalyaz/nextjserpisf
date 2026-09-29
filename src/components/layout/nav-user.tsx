@@ -25,7 +25,7 @@ export function NavUser() {
   const { data: session } = useSession()
   const { isMobile } = useSidebar()
 
-  const name = session?.user?.name || "User"
+  const name = session?.user?.name || "Pengguna"
   const email = session?.user?.email || ""
   const image = session?.user?.image || ""
 

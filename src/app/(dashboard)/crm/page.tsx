@@ -7,8 +7,8 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "CRM" }
 
 const crmModules: ModuleItem[] = [
-  { label: "Leads", href: "/crm/leads", icon: Target, desc: "Prospek pelanggan" },
-  { label: "Tiket", href: "/crm/tickets", icon: Ticket, desc: "Tiket support" },
+  { label: "Prospek (Leads)", href: "/crm/leads", icon: Target, desc: "Kelola prospek pelanggan" },
+  { label: "Tiket", href: "/crm/tickets", icon: Ticket, desc: "Tiket bantuan pelanggan" },
 ]
 
 export default function CrmPage() {

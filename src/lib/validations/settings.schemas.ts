@@ -58,6 +58,7 @@ export const updateSystemSettingsSchema = z.object({
   periodLockDate: optionalNullString(),
   showIsActiveField: optionalBool(),
   showTaxId: optionalBool(),
+  defaultProjectStages: optionalString(1000),
 
   // Auto-Code Prefixes
   itemCodePrefix: optionalNullString(50),

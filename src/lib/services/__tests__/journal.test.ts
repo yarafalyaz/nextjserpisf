@@ -26,7 +26,7 @@ function buildService(txOverrides: Record<string, unknown> = {}) {
     $transaction: (fn: (t: unknown) => Promise<unknown>) => fn(tx),
   } as never;
 
-  return { service: new JournalService(prismaLike), spies };
+  return { service: new JournalService(prismaLike), spies, tx };
 }
 
 describe("JournalService", () => {
@@ -155,6 +155,27 @@ describe("JournalService", () => {
           expect.objectContaining({ journalId: 99, accountId: 2, debit: 0, credit: 100 }),
         ],
       });
+    });
+
+    it("writes through an existing transaction without opening a nested transaction", async () => {
+      const { spies, tx } = buildService();
+      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      spies.journalCreate.mockResolvedValue({ id: 33, journalNumber: "JRN-TX" });
+      spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
+      const service = new JournalService(tx as never);
+
+      await expect(service.createJournal({
+        journalNumber: "JRN-TX",
+        transactionDate: new Date("2026-06-09"),
+        type: "stock",
+        entries: [
+          { accountId: 1, debit: 50, credit: 0 },
+          { accountId: 2, debit: 0, credit: 50 },
+        ],
+      })).resolves.toEqual({ id: 33, journalNumber: "JRN-TX" });
+
+      expect(spies.accountFindMany).toHaveBeenCalledOnce();
+      expect(spies.journalCreate).toHaveBeenCalledOnce();
     });
 
     it("accepts tiny floating-point imbalance within epsilon", async () => {

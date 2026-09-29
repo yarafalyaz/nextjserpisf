@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
 
-export function KeyFigureEditForm({ id, name, unit, value }: { id: number; name: string; unit: string; value: number }) {
+export function KeyFigureEditForm({ id, name, unit, value, code, type, isActive }: { id: number; name: string; unit: string; value: number; code?: string | null; type?: string | null; isActive?: boolean }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -28,6 +28,10 @@ export function KeyFigureEditForm({ id, name, unit, value }: { id: number; name:
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="code">Kode</Label>
+          <Input id="code" name="code" defaultValue={code ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nama *</Label>
           <Input id="name" name="name" required defaultValue={name} />
         </div>
@@ -36,8 +40,18 @@ export function KeyFigureEditForm({ id, name, unit, value }: { id: number; name:
           <Input id="unit" name="unit" required defaultValue={unit} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="value">Nilai</Label>
+          <Label htmlFor="type">Tipe</Label>
+          <Input id="type" name="type" defaultValue={type ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="value">Nilai Default</Label>
           <Input id="value" name="value" type="number" step="0.01" defaultValue={value} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="isActive" className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="isActive" name="isActive" defaultChecked={isActive ?? true} className="size-4" />
+            Aktif
+          </Label>
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

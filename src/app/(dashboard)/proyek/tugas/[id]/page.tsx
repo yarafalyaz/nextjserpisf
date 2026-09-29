@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -49,7 +50,9 @@ export default async function TaskDetailPage({
         badge={<StatusChip status={task.status} />}
         actions={
           <>
-            <Button href={`/proyek/tugas/${task.id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            <CanCreate permission="edit_projects">
+              <Button href={`/proyek/tugas/${task.id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            </CanCreate>
             <BackButton href="/proyek/tugas" />
           </>
         }

@@ -30,7 +30,7 @@ const settingsNav = [
     heading: "Umum",
     items: [
       { href: "/pengaturan/perusahaan", label: "Perusahaan", desc: "Identitas, alamat, logo perusahaan", icon: Building2 },
-      { href: "/pengaturan/preferensi", label: "Preferensi", desc: "Mata uang, fiskal, costing method", icon: SlidersHorizontal },
+      { href: "/pengaturan/preferensi", label: "Preferensi", desc: "Mata uang, periode fiskal, metode HPP", icon: SlidersHorizontal },
       { href: "/pengaturan/penomoran", label: "Penomoran Dokumen", desc: "Prefix & format nomor otomatis", icon: Hash },
       { href: "/pengaturan/penawaran", label: "Penawaran", desc: "Tanda tangan & catatan kaki", icon: FileText },
     ],
@@ -51,22 +51,22 @@ const settingsNav = [
     heading: "Akses & Keamanan",
     items: [
       { href: "/pengaturan/pengguna", label: "Pengguna", desc: "Kelola akun pengguna sistem", icon: Users },
-      { href: "/pengaturan/peran", label: "Peran & Hak Akses", desc: "Role-based access control", icon: Shield },
+      { href: "/pengaturan/peran", label: "Peran & Hak Akses", desc: "Kontrol hak akses berbasis peran", icon: Shield },
       { href: "/pengaturan/log-aktivitas", label: "Log Aktivitas", desc: "Audit trail perubahan data", icon: Activity },
     ],
   },
   {
     heading: "Otomasi",
     items: [
-      { href: "/pengaturan/workflow", label: "Alur Persetujuan", desc: "Workflow approval dokumen", icon: Workflow },
+      { href: "/pengaturan/workflow", label: "Alur Persetujuan", desc: "Alur persetujuan dokumen", icon: Workflow },
       { href: "/pengaturan/cron", label: "Jadwal Tugas", desc: "Cron job otomatisasi sistem", icon: Timer },
     ],
   },
   {
     heading: "Sistem",
     items: [
-      { href: "/pengaturan/penyimpanan", label: "Penyimpanan & CDN", desc: "Storage lokal / Cloudflare R2", icon: Cloud },
-      { href: "/pengaturan/database", label: "Backup & Restore", desc: "Cadangkan & pulihkan database", icon: DatabaseBackup },
+      { href: "/pengaturan/penyimpanan", label: "Penyimpanan & CDN", desc: "Penyimpanan lokal / Cloudflare R2", icon: Cloud },
+      { href: "/pengaturan/database", label: "Cadangan & Pemulihan", desc: "Cadangkan & pulihkan database", icon: DatabaseBackup },
     ],
   },
 ]

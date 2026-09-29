@@ -48,6 +48,19 @@ export default async function SalesOrderDetailPage({
 
   if (!order) notFound();
 
+  const itemIds = order.items
+    .map((item) => item.itemId)
+    .filter((id): id is number => id !== null);
+
+  const dbItems = itemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, name: true, sku: true },
+      })
+    : [];
+
+  const itemMap = new Map(dbItems.map((i) => [i.id, i]));
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -130,6 +143,7 @@ export default async function SalesOrderDetailPage({
         <div className="p-4 px-5">
           <DetailTable>
             <DetailTableHead>
+              <DetailTableTh>Produk</DetailTableTh>
               <DetailTableTh>Deskripsi</DetailTableTh>
               <DetailTableTh align="right">Jml</DetailTableTh>
               <DetailTableTh align="right">Harga</DetailTableTh>
@@ -137,23 +151,36 @@ export default async function SalesOrderDetailPage({
               <DetailTableTh align="right">Total</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
-              {order.items.map((item) => (
-                <DetailTableRow key={item.id}>
-                  <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                  <DetailTableTd align="right">
-                    {Number(item.qty)}
-                  </DetailTableTd>
-                  <DetailTableTd align="right">
-                    {formatCurrency(Number(item.unitPrice))}
-                  </DetailTableTd>
-                  <DetailTableTd align="right">
-                    {formatCurrency(Number(item.discount))}
-                  </DetailTableTd>
-                  <DetailTableTd align="right">
-                    {formatCurrency(Number(item.total))}
-                  </DetailTableTd>
-                </DetailTableRow>
-              ))}
+              {order.items.map((item) => {
+                const matchedItem = item.itemId ? itemMap.get(item.itemId) : null;
+                return (
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd>
+                      {matchedItem ? (
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{matchedItem.name}</span>
+                          <span className="text-xs text-muted-foreground">{matchedItem.sku}</span>
+                        </div>
+                      ) : (
+                        `Item #${item.itemId}`
+                      )}
+                    </DetailTableTd>
+                    <DetailTableTd>{item.description || "-"}</DetailTableTd>
+                    <DetailTableTd align="right">
+                      {Number(item.qty)}
+                    </DetailTableTd>
+                    <DetailTableTd align="right">
+                      {formatCurrency(Number(item.unitPrice))}
+                    </DetailTableTd>
+                    <DetailTableTd align="right">
+                      {formatCurrency(Number(item.discount))}
+                    </DetailTableTd>
+                    <DetailTableTd align="right">
+                      {formatCurrency(Number(item.total))}
+                    </DetailTableTd>
+                  </DetailTableRow>
+                );
+              })}
             </DetailTableBody>
           </DetailTable>
         </div>

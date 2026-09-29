@@ -9,6 +9,7 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { Banknote } from "lucide-react"
 import { AppSearchField } from "@/components/ui/search-field"
 import { LoanTable } from "./_components/loan-table"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -52,6 +53,14 @@ export default async function EmployeeLoansPage({
     status: l.status,
   }))
 
+  const userRoles: string[] = user.roles ?? [];
+  const userPerms: string[] = (user as any).permissions ?? [];
+  const showActions =
+    userRoles.includes("super_admin") ||
+    userPerms.includes("create_loans") ||
+    userPerms.includes("delete_loans");
+  const showEmployeeColumn = scope.kind !== "self";
+
   const statusChips = ["", "active", "paid"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
     return (
@@ -69,13 +78,17 @@ export default async function EmployeeLoansPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pinjaman Karyawan</h1>
-        <Link href="/sdm/pinjaman/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-loan-btn">
-          <Banknote size={16} /> Tambah Pinjaman
-        </Link>
+        <CanCreate permission="create_loans">
+          <Link href="/sdm/pinjaman/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-loan-btn">
+            <Banknote size={16} /> Tambah Pinjaman
+          </Link>
+        </CanCreate>
       </div>
 
       <LoanTable
         data={data}
+        showActions={showActions}
+        showEmployeeColumn={showEmployeeColumn}
         toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/pinjaman" />}
         filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
       />

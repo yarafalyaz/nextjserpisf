@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { hasPermission, requireAuth } from "@/lib/auth/permissions";
 import { apiError } from "@/lib/api-response";
+import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service";
 
 export async function GET() {
   try {
@@ -16,16 +17,20 @@ export async function GET() {
           user.roles.includes("super_admin") || user.roles.includes("admin"),
         ),
       ]);
+    // Approval totals span all modules. Don't reveal the global queue count to
+    // users who can only see their own module data.
+    const canViewApprovalQueue =
+      user.roles.includes("super_admin") ||
+      user.permissions.includes("approve_workflows") ||
+      user.permissions.includes("manage_settings");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today.getTime() + 86400000);
 
     const [
       lowStockCount,
       overdueInvoiceCount,
       pendingApprovalCount,
-      lateAttendanceCount,
-      absentEmployeeCount,
+      attendanceMetrics,
       recentActivities,
       latestNotifications,
     ] = await Promise.all([
@@ -39,77 +44,19 @@ export async function GET() {
       canViewInvoices
         ? prisma.salesInvoice.count({
             where: {
-              // An invoice is only overdue once its full due date has elapsed —
-              // using `new Date()` (the current instant) would flag invoices due
-              // earlier today (dueDate = local midnight today) as overdue while
-              // they are still in their due day, and would also disagree with
-              // the daily-notifications cron at src/app/api/cron/daily-notifications/route.ts
-              // which uses dayStart (local midnight today) as the cutoff. Use the
-              // same boundary so both views report the same overdue count.
               dueDate: { lt: today },
               paymentStatus: { not: "paid" },
-              // Cancelled invoices are void; even if they retain a past due date
-              // and unpaid paymentStatus (cancelled status short-circuits the
-              // payment-state recalc), they must never inflate the overdue count.
-              // Mirrors the daily-notifications cron filter to keep both views
-              // consistent — previously a cancelled invoice would surface here
-              // and overstate overdue accounts receivable to admins.
               status: { not: "cancelled" },
               deletedAt: null,
             },
           })
         : Promise.resolve(0),
-      Promise.resolve(0),
-      canViewAttendance
-        ? prisma.attendance.count({
-            where: {
-              // Use the same JS local-midnight [today, tomorrow) window the rest
-              // of this route (and the daily-notifications cron) uses. The previous
-              // raw SQL `WHERE date >= CURDATE() AND date < CURDATE() + INTERVAL 1
-              // DAY` used MySQL's CURDATE(), which evaluates in the MySQL server's
-              // timezone — when the MySQL TZ differs from the Node TZ (e.g. Node
-              // in Asia/Jakarta, MySQL in UTC), the dashboard's late-attendance
-              // count silently disagreed with the cron's own count by ±1 day at
-              // the rollover. Mirrors the overdue-invoice -> today fix in this
-              // same file (and the cron's lateAttendances `dayStart/dayEnd`).
-              date: { gte: today, lt: tomorrow },
-              OR: [{ status: "late" }, { lateMinutes: { gt: 0 } }],
-            },
-          })
+      canViewApprovalQueue
+        ? prisma.approval.count({ where: { status: "pending" } })
         : Promise.resolve(0),
       canViewAttendance
-        ? (async () => {
-            if (new Date().getHours() < 10) return 0;
-            // Skip on weekends (no work schedule applied yet → use calendar
-            // weekend as the safe default). Mirrors the daily-notifications cron
-            // holiday-skip so both views stay consistent. WorkSchedule-aware
-            // filtering can be added later; for now, count absent only on
-            // Mon-Fri non-holiday weekdays.
-            const day = new Date().getDay();
-            if (day === 0 || day === 6) return 0;
-            const [active, present, onLeave, holiday] = await Promise.all([
-              prisma.employee.count({
-                where: { isActive: true, deletedAt: null },
-              }),
-              prisma.attendance.count({
-                where: { date: { gte: today, lt: tomorrow } },
-              }),
-              prisma.leaveRequest.count({
-                where: {
-                  status: "approved",
-                  startDate: { lte: today },
-                  endDate: { gte: today },
-                },
-              }),
-              prisma.holiday.findFirst({
-                where: { date: today },
-                select: { id: true },
-              }),
-            ]);
-            if (holiday) return 0;
-            return Math.max(0, active - present - onLeave);
-          })()
-        : Promise.resolve(0),
+        ? getDailyAttendanceMetrics(today)
+        : Promise.resolve({ lateAttendanceCount: 0, absentEmployees: [] }),
       canViewActivity
         ? prisma.activityLog.findMany({
             orderBy: { createdAt: "desc" },
@@ -142,8 +89,11 @@ export async function GET() {
       lowStockCount: Number(lowStockCount[0]?.count ?? 0),
       overdueInvoiceCount,
       pendingApprovalCount,
-      lateAttendanceCount: lateAttendanceCount as number,
-      absentEmployeeCount,
+      lateAttendanceCount: attendanceMetrics.lateAttendanceCount,
+      absentEmployeeCount:
+        canViewAttendance && new Date().getHours() >= 10
+          ? attendanceMetrics.absentEmployees.length
+          : 0,
       recentActivities: recentActivities.map((a) => ({
         ...a,
         createdAt: a.createdAt.toISOString(),
@@ -155,8 +105,6 @@ export async function GET() {
       })),
     });
   } catch (e: unknown) {
-    // Distinguish auth failures from internal errors — previously all errors
-    // (including DB failures) were masked as 401, hiding outages from operators.
     const msg = e instanceof Error ? e.message : "";
     if (
       msg.includes("Unauthorized") ||

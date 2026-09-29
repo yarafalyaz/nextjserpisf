@@ -27,17 +27,23 @@ export default async function EditPage({
 
   if (!data) notFound();
 
-  const accounts = await prisma.account.findMany({
-    where: { isActive: true },
-    orderBy: { code: "asc" },
-    select: { id: true, code: true, name: true, type: true },
-  });
-
-  const projects = await prisma.project.findMany({
-    where: { status: "active" },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, documentNo: true },
-  });
+  const [accounts, projects, categories] = await Promise.all([
+    prisma.account.findMany({
+      where: { isActive: true },
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, name: true, type: true },
+    }),
+    prisma.project.findMany({
+      where: { status: "active" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, documentNo: true },
+    }),
+    prisma.expenseCategory.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, name: true, label: true },
+    }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,13 +66,14 @@ export default async function EditPage({
           amount: Number(data.amount),
           accountId: data.accountId,
           paidFromAccountId: data.paidFromAccountId,
-          category: data.category,
+          categoryId: data.categoryId,
           costCenterId: data.costCenterId,
           projectId: data.projectId,
           referenceNo: data.referenceNo,
           receiptImage: data.receiptImage,
         }}
         accounts={accounts}
+        categories={categories}
         projects={projects}
       />
     </div>

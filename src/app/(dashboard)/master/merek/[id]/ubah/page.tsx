@@ -8,7 +8,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Ubah Merek Kendaraan" }
+export const metadata: Metadata = { title: "Ubah Merek" }
 
 export default async function EditBrandPage({
   params,
@@ -21,11 +21,22 @@ export default async function EditBrandPage({
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()
 
-  const brand = await prisma.brand.findUnique({
-    where: { id: numId },
-  })
+  const [brand, allCategories] = await Promise.all([
+    prisma.brand.findUnique({
+      where: { id: numId },
+      include: {
+        categories: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+      },
+    }),
+    prisma.itemCategory.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ])
 
   if (!brand) notFound()
+
+  const { categories: initialCategories, ...brandData } = brand
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,7 +49,11 @@ export default async function EditBrandPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah Merek</h1>
       </div>
-      <BrandEditForm brand={JSON.parse(JSON.stringify(brand))} />
+      <BrandEditForm
+        brand={JSON.parse(JSON.stringify(brandData))}
+        allCategories={allCategories}
+        initialCategories={initialCategories}
+      />
     </div>
   )
 }

@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   findFirstWorkflow: vi.fn(),
   findFirstApproval: vi.fn(),
   createApproval: vi.fn(),
+  queryRaw: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -15,6 +16,15 @@ vi.mock("@/lib/db/prisma", () => ({
       findFirst: mocks.findFirstApproval,
       create: mocks.createApproval,
     },
+    $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
+    $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+      approvalWorkflow: { findFirst: (...args: unknown[]) => mocks.findFirstWorkflow(...args) },
+      approval: {
+        findFirst: (...args: unknown[]) => mocks.findFirstApproval(...args),
+        create: (...args: unknown[]) => mocks.createApproval(...args),
+      },
+      $queryRaw: (...args: unknown[]) => mocks.queryRaw(...args),
+    })),
   },
 }));
 
@@ -26,11 +36,12 @@ import {
 describe("approval-workflow.service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.queryRaw.mockResolvedValue([{ id: 10 }]);
   });
 
   describe("requestApprovalIfConfigured", () => {
     it("returns false when no active workflow exists", async () => {
-      mocks.findFirstWorkflow.mockResolvedValue(null);
+      mocks.queryRaw.mockResolvedValue([]);
 
       const result = await requestApprovalIfConfigured("Quotation", 1);
 

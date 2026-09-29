@@ -84,6 +84,25 @@ export default async function WarehouseDetailPage({
 
                 {/* Racks */}
                 <DetailSection title="Rak">
+                  <div className="flex items-center justify-between mb-4">
+                    <div />
+                    <div className="flex gap-2">
+                      <Link
+                        href={`/inventaris/rak/tambah?warehouseId=${warehouse.id}`}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+                        id="create-rack-btn"
+                      >
+                        + Rak
+                      </Link>
+                      <Link
+                        href={`/inventaris/baris-rak/tambah?warehouseId=${warehouse.id}`}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+                        id="create-rack-row-btn"
+                      >
+                        + Baris Rak
+                      </Link>
+                    </div>
+                  </div>
                   {warehouse.racks.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada rak</p>
                   ) : (
@@ -110,7 +129,7 @@ export default async function WarehouseDetailPage({
           },
           {
             id: "items",
-            label: `Stock Moves (${stockMoves.length})`,
+            label: `Mutasi Stok (${stockMoves.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -125,7 +144,7 @@ export default async function WarehouseDetailPage({
                       <DetailTableHead>
                         <DetailTableTh>No. Dokumen</DetailTableTh>
                         <DetailTableTh>Item</DetailTableTh>
-                        <DetailTableTh>Impact</DetailTableTh>
+                        <DetailTableTh>Dampak</DetailTableTh>
                         <DetailTableTh align="right">Jml</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>
                       </DetailTableHead>

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 "use client"
 
 import { useRouter } from "next/navigation"
@@ -15,11 +15,12 @@ import { CheckCircle, Loader2 } from "lucide-react"
 
 interface PayrollFormProps {
   employees: { id: number; name: string }[]
+  costCenters?: { id: number; code: string; name: string }[]
   initialData?: any
 }
 
 import { updatePayroll } from "@/actions/hrm.actions"
-export function PayrollForm({ employees, initialData }: PayrollFormProps) {
+export function PayrollForm({ employees, costCenters = [], initialData }: PayrollFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isEstimating, setIsEstimating] = useState(false)
@@ -167,6 +168,17 @@ export function PayrollForm({ employees, initialData }: PayrollFormProps) {
 
         <div className="flex flex-col gap-1.5 md:col-span-2">
           <AppDatePicker label="Tanggal Rencana Pembayaran" name="paymentDate" defaultValue={initialData?.paymentDate ? new Date(initialData.paymentDate).toISOString().substring(0, 10) : undefined} onChange={() => {}} />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="costCenterId">Pusat Biaya</Label>
+          <Combobox
+            id="costCenterId"
+            name="costCenterId"
+            options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            value={initialData?.costCenterId ? String(initialData.costCenterId) : null}
+            placeholder="— Pilih pusat biaya —"
+          />
         </div>
       </div>
 

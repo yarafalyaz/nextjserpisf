@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   workOrderFindUnique: vi.fn(),
   paymentMethodFindUnique: vi.fn(),
   shippingMethodFindUnique: vi.fn(),
+  itemFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/auth", () => ({
@@ -38,6 +39,7 @@ vi.mock("@/lib/db/prisma", () => ({
     workOrder: { findUnique: (...a: unknown[]) => mocks.workOrderFindUnique(...a) },
     paymentMethod: { findUnique: (...a: unknown[]) => mocks.paymentMethodFindUnique(...a) },
     shippingMethod: { findUnique: (...a: unknown[]) => mocks.shippingMethodFindUnique(...a) },
+    item: { findMany: (...a: unknown[]) => mocks.itemFindMany(...a) },
   },
 }))
 
@@ -89,6 +91,14 @@ describe("GET /api/print", () => {
   it("returns 400 when id is NaN", async () => {
     const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=abc"))
     expect(res.status).toBe(400)
+  })
+
+  it("rejects fractional and unsafe ids before querying", async () => {
+    for (const id of ["1.5", "9007199254740992"]) {
+      const res = await GET(makeReq(`http://localhost/api/print?tipe=invoice&id=${id}`))
+      expect(res.status).toBe(400)
+    }
+    expect(mocks.salesInvoiceFindUnique).not.toHaveBeenCalled()
   })
 
   describe("invoice", () => {
@@ -147,7 +157,7 @@ describe("GET /api/print", () => {
         tax: 50,
         grandTotal: 550,
         notes: "n",
-        customer: { name: "Cust", address: null, street: "St", phone: "08" },
+        customer: { name: "Cust", address: null, street: "St", phone: "08", email: "cust@gmail.com" },
         customerVehicle: {
           licensePlate: "B 123",
           vehicle: {
@@ -155,7 +165,7 @@ describe("GET /api/print", () => {
             variant: { model: { name: "Avanza", brand: { name: "Toyota" } } },
           },
         },
-        sections: [{ items: [{ description: "Servis", qty: 1, unitPrice: 500, discount: 0, total: 500, uom: "Pcs" }] }],
+        sections: [{ name: "Front Section", items: [{ description: "Servis", qty: 1, unitPrice: 500, discount: 0, total: 500, uom: "Pcs" }] }],
       })
       mocks.paymentMethodFindUnique.mockResolvedValue({ name: "Transfer Bank" })
       mocks.shippingMethodFindUnique.mockResolvedValue({ name: "JNE" })
@@ -165,6 +175,10 @@ describe("GET /api/print", () => {
       expect(json.docInfo.vehicleName).toBe("Toyota Avanza")
       expect(json.docInfo.paymentMethod).toBe("Transfer Bank")
       expect(json.docInfo.shippingMethod).toBe("JNE")
+      expect(json.docInfo.customerEmail).toBe("cust@gmail.com")
+      expect(json.sections).toBeDefined()
+      expect(json.sections.length).toBe(1)
+      expect(json.sections[0].name).toBe("Front Section")
     })
 
     it("falls back to static label when payment method row missing", async () => {
@@ -210,16 +224,21 @@ describe("GET /api/print", () => {
   })
 
   describe("work-order", () => {
-    it("returns work order print data with computed cost", async () => {
+    it("returns work order print data with items and status", async () => {
       mocks.workOrderFindUnique.mockResolvedValue({
-        documentNo: "WO-1", date: new Date(), endDate: null,
+        documentNo: "WO-1",
+        date: new Date(),
+        startDate: null,
+        endDate: null,
+        status: "pending",
         customer: { name: "A", address: "B", street: null, phone: "" },
-        items: [{ itemId: 99, qty: 2, cost: 50, description: "Material" }],
+        items: [{ itemId: 99, qty: 2, status: "pending", description: "Material" }],
       })
+      mocks.itemFindMany.mockResolvedValue([{ id: 99, name: "Material", sku: "M-1" }])
       const res = await GET(makeReq("http://localhost/api/print?tipe=work-order&id=1"))
       const json = await res.json()
-      expect(json.items[0].total).toBe(100)
-      expect(json.summary.total).toBe(100)
+      expect(json.items[0].qty).toBe(2)
+      expect(json.items[0].status).toBe("pending")
     })
 
     it("returns 404 when work order not found", async () => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
-import { canAccessAttachment } from "@/lib/auth/attachment-permissions"
+import { canAccessAttachment, canModifyAttachment } from "@/lib/auth/attachment-permissions"
+import { prisma } from "@/lib/db/prisma"
 import { readFile, stat } from "fs/promises"
 import path from "path"
 import { apiError } from "@/lib/api-response"
@@ -40,14 +41,21 @@ export async function GET(
     }
   }
 
-  // Resource-level authz: the first segment is the referenceType. Being logged
-  // in is not enough — the caller must be allowed to view that document type
-  // (closes IDOR — reading any attachment file by guessing its path).
-  if (!(await canAccessAttachment(segments[0]))) {
+  const relativePath = segments.join("/")
+  const fileUrl = `/api/attachments/${relativePath}`
+  const attachment = await prisma.transactionAttachment.findFirst({
+    where: { fileUrl, referenceType: segments[0] },
+    select: { referenceId: true, uploadedBy: true },
+  })
+  if (!attachment) return apiError("NOT_FOUND", "File tidak ditemukan")
+  const isTemporary = attachment.referenceId === 0
+  const allowed = isTemporary
+    ? attachment.uploadedBy === Number(session.user.id) && await canModifyAttachment(segments[0], 0)
+    : await canAccessAttachment(segments[0], attachment.referenceId)
+  if (!allowed) {
     return apiError("FORBIDDEN", "Akses ditolak")
   }
 
-  const relativePath = segments.join("/")
   const absolutePath = path.join(process.cwd(), "private", "uploads", "attachments", relativePath)
 
   // Ensure the resolved path is still within the private directory

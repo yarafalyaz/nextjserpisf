@@ -34,6 +34,7 @@ export const purchaseOrderSchema = z.object({
   expectedDate: optionalDateString,
   paymentTerm: optionalString(200),
   shippingCost: optionalNumber(0),
+  serviceFee: optionalNumber(0),
   notes: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
 })

@@ -113,7 +113,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     // 3. Wait for confirm dialog
     await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
     // 4. Click confirm button in dialog (scope ke dialog, hindari salah klik item menu)
-    const confirmDialog = page.getByRole("alertdialog", { name: "Hapus data ini?" })
+    const confirmDialog = page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: "Hapus data ini?" }).first()
     await expect(confirmDialog).toBeVisible({ timeout: 5000 })
     await confirmDialog.getByRole("button", { name: /^hapus$/i }).click()
     // 5. Wait for row/search state to settle; refetch via fresh query page after redirect/action completes

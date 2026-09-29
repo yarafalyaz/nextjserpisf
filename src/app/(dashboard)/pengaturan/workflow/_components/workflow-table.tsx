@@ -7,6 +7,7 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { cn } from "@/lib/utils"
 import { deleteApprovalWorkflow } from "@/actions/approval.actions"
+import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
 
 interface WorkflowRow {
   id: number
@@ -32,7 +33,7 @@ const columns = [
   }),
   columnHelper.accessor("modelType", {
     header: "Tipe Dokumen",
-    cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
+    cell: (info) => <span>{APPROVAL_MODEL_LABELS[info.getValue()] || info.getValue()}</span>,
   }),
   columnHelper.accessor("stepCount", {
     header: "Jumlah Langkah",

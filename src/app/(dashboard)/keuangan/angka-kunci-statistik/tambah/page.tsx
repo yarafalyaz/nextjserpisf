@@ -30,15 +30,23 @@ export default function CreateStatisticalKeyFigurePage() {
       <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="code">Kode</Label>
+            <Input id="code" name="code" placeholder="Contoh: SKF-001" />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Nama *</Label>
             <Input id="name" name="name" required />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="unit">Satuan *</Label>
-            <Input id="unit" name="unit" required />
+            <Input id="unit" name="unit" placeholder="Orang, m², kWh, dll" required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="value">Nilai</Label>
+            <Label htmlFor="type">Tipe</Label>
+            <Input id="type" name="type" placeholder="Keuangan / Operasional" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="value">Nilai Default</Label>
             <Input id="value" name="value" type="number" step="0.01" defaultValue="0" />
           </div>
         </div>

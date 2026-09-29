@@ -57,7 +57,7 @@ export default async function EditPage({
   };
 
   const [vendors, items] = await Promise.all([
-    prisma.vendor.findMany({ orderBy: { name: "asc" } }),
+    prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
     prisma.item
       .findMany({
         where: { isActive: true, deletedAt: null },

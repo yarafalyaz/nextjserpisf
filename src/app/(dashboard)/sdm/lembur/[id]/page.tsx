@@ -14,6 +14,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 export const metadata: Metadata = { title: "Lembur" }
 
 export default async function OvertimeRequestDetailPage({
@@ -21,14 +22,15 @@ export default async function OvertimeRequestDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_employees")
+  const user = await requirePermission("view_overtime")
+  const scope = await getHrScope(user)
 
   const { id } = await params
   const numId = Number(id)
-  if (Number.isNaN(numId)) notFound()
+  if (!Number.isSafeInteger(numId) || numId <= 0) notFound()
 
   const overtime = await prisma.overtimeRequest.findUnique({
-    where: { id: numId },
+    where: { id: numId, ...hrScopeWhere(scope) },
     include: {
       employee: true,
     },

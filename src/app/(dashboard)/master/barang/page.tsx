@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ItemTable } from "./_components/item-table"
@@ -18,11 +18,10 @@ export const metadata: Metadata = { title: "Barang" }
 export default async function ItemsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; category?: string 
-  halaman?: string
-  pageSize?: string}>
+  searchParams: Promise<{ cari?: string; category?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_items")
+  const canCreate = await hasPermission("create_items")
 
   const params = await searchParams
 
@@ -69,9 +68,11 @@ export default async function ItemsPage({
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Item" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Barang</h1>
-<Link href="/master/barang/tambah" id="create-item-btn" className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-          + Tambah Barang
-        </Link>
+        {canCreate && (
+          <Link href="/master/barang/tambah" id="create-item-btn" className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+            + Tambah Barang
+          </Link>
+        )}
       </div>
 
       <ItemTable
