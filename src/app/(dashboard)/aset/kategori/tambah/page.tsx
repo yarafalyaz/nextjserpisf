@@ -9,7 +9,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Kategori" }
 
 export default async function CreateAssetCategoryPage() {
-  await requirePermission("create_assets")
+  await requirePermission("create_asset_categories")
 
   return (
     <div className="flex flex-col gap-6">

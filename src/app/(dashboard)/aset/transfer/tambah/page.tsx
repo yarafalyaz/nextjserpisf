@@ -10,7 +10,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Transfer Stok" }
 
 export default async function CreateAssetTransferPage() {
-  await requirePermission("create_assets")
+  await requirePermission("create_asset_transfers")
 
   const assets = await prisma.asset.findMany({
     where: { status: "active" },

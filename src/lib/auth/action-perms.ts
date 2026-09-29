@@ -58,8 +58,10 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/pembelian/retur", edit: "edit_purchase_returns", delete: "delete_purchase_returns" },
 
   // Inventaris
-  { prefix: "/inventaris/scan", edit: "edit_inventory", delete: "delete_inventory" },
-  { prefix: "/inventaris/mutasi-stok", edit: "edit_stock_moves", delete: "delete_stock_moves" },
+  // /inventaris/scan dan /inventaris/mutasi-stok hanya menyediakan aksi lihat
+  // (tidak ada edit/delete), jadi tidak didaftarkan di sini. Sebelumnya keduanya
+  // memakai edit_inventory/edit_stock_moves/delete_* yang tidak ada di seed,
+  // sehingga bila kelak diberi aksi baris tombolnya tak akan pernah muncul.
   { prefix: "/inventaris/penyesuaian", edit: "edit_stock_adjustments", delete: "delete_stock_adjustments" },
   { prefix: "/inventaris/transfer", edit: "edit_inventory_transfers", delete: "delete_inventory_transfers" },
   { prefix: "/inventaris/pengeluaran-material", edit: "edit_material_issues", delete: "delete_material_issues" },
@@ -78,7 +80,8 @@ export const ROUTE_PERMS: ReadonlyArray<{
   // SDM
   { prefix: "/sdm/cuti", edit: "edit_leave_requests", delete: "delete_leave_requests" },
   { prefix: "/sdm/lembur", edit: "edit_overtime_requests", delete: "delete_overtime_requests" },
-  { prefix: "/sdm/penggajian", edit: "edit_payroll", delete: "delete_payroll" },
+  // Payroll hanya punya aksi ubah (tidak ada deletePayroll), jadi tanpa delete.
+  { prefix: "/sdm/penggajian", edit: "edit_payroll" },
 
   // Timesheet/appreciation edits are enforced server-side by
   // updateTimesheet/updateAppreciation with create_timesheets /
@@ -99,8 +102,10 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/master/kategori-pengeluaran", edit: "manage_expense_categories", delete: "manage_expense_categories" },
   { prefix: "/anggaran/alokasi-skf", edit: "edit_accounts", delete: "delete_accounts" },
   { prefix: "/pengaturan/workflow", edit: "manage_settings", delete: "manage_settings" },
-  { prefix: "/keuangan/laporan-bank", edit: "edit_bank_statements", delete: "delete_bank_statements" },
-  { prefix: "/keuangan/rekonsiliasi-bank", edit: "edit_bank_reconciliation", delete: "delete_bank_reconciliation" },
+  // Rekening koran (laporan-bank) hanya lihat + tambah (createBankStatement
+  // memakai create_journals) sehingga tak punya aksi baris. Rekonsiliasi bank
+  // ditulis memakai manage_bank_reconciliation, sama dengan halaman "tambah"-nya.
+  { prefix: "/keuangan/rekonsiliasi-bank", edit: "manage_bank_reconciliation" },
   // SKF master (angka kunci statistik) is gated by the account permissions the
   // edit page + updateStatisticalKeyFigure action enforce (create_accounts /
   // edit_accounts); only its Delete uses delete_statistical_key_figures. The

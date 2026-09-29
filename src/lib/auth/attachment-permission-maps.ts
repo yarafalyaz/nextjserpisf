@@ -52,7 +52,10 @@ export const ATTACHMENT_WRITE_PERMISSION: Record<string, string> = {
   goods_receipt: "edit_goods_receipts",
   purchase_return: "edit_purchase_returns",
   sales_return: "edit_sales_returns",
-  bank_statement: "edit_bank_statements",
+  // Rekening koran tak punya halaman ubah; satu-satunya penulisnya adalah
+  // createBankStatement yang memakai create_journals. "edit_bank_statements"
+  // tidak pernah di-seed sehingga unggah/hapus lampiran tak muncul untuk siapa pun.
+  bank_statement: "create_journals",
   delivery_order: "edit_delivery_orders",
   inventory_transfer: "edit_inventory_transfers",
   stock_adjustment: "edit_stock_adjustments",

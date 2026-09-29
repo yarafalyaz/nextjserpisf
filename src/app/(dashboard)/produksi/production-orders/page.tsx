@@ -21,7 +21,7 @@ export default async function ProductionOrdersPage({
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_work_orders")
+  await requirePermission("view_production")
 
   const params = await searchParams
 

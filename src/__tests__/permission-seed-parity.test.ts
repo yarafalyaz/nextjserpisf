@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { ROUTE_PERMS } from "@/lib/auth/action-perms"
+import {
+  ATTACHMENT_PERMISSION,
+  ATTACHMENT_WRITE_PERMISSION,
+} from "@/lib/auth/attachment-permission-maps"
 
 /**
  * Guard for the bug class behind the "Key Figure Statistik is dead for every
@@ -97,5 +102,38 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
 
     expect(duplicates(permissions)).toEqual([])
     expect(duplicates(roles)).toEqual([])
+  })
+
+  it("every permission referenced by ROUTE_PERMS/attachment maps exists as a seeded permission", () => {
+    // ROUTE_PERMS and ATTACHMENT_WRITE_PERMISSION decide whether a row action /
+    // upload affordance is rendered (ActionDropdown hides it unless the session
+    // holds the permission). A value no seed row creates can never be held by a
+    // role, so the button is hidden for every non-super-admin - the same
+    // fail-closed class as an unseeded requirePermission(). This pins both
+    // registries to the seeded catalogue.
+    const referenced = new Map<string, string[]>()
+    const add = (permission: string | undefined, source: string) => {
+      if (!permission) return
+      referenced.set(permission, [...(referenced.get(permission) ?? []), source])
+    }
+
+    for (const entry of ROUTE_PERMS) {
+      add(entry.edit, `ROUTE_PERMS edit ${entry.prefix}`)
+      add(entry.delete, `ROUTE_PERMS delete ${entry.prefix}`)
+    }
+    for (const [key, permission] of Object.entries(ATTACHMENT_PERMISSION)) {
+      add(permission, `ATTACHMENT_PERMISSION ${key}`)
+    }
+    for (const [key, permission] of Object.entries(ATTACHMENT_WRITE_PERMISSION)) {
+      add(permission, `ATTACHMENT_WRITE_PERMISSION ${key}`)
+    }
+
+    expect(referenced.size).toBeGreaterThan(50)
+
+    const missing = [...referenced.entries()]
+      .filter(([permission]) => !seededPermissions.has(permission))
+      .map(([permission, sources]) => `${permission} (${sources.join(", ")})`)
+
+    expect(missing, `Permission registry tapi tidak di-seed:\n${missing.join("\n")}`).toEqual([])
   })
 })

@@ -100,8 +100,7 @@ export default async function PayrollPage({
   const userPerms: string[] = (user as any).permissions ?? [];
   const showActions =
     userRoles.includes("super_admin") ||
-    userPerms.includes("edit_payroll") ||
-    userPerms.includes("delete_payroll");
+    userPerms.includes("edit_payroll");
   const showEmployeeColumn = scope.kind !== "self";
 
   const settings = await prisma.systemSetting.findFirst();

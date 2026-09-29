@@ -21,7 +21,7 @@ export default async function VehicleBrandsPage({
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_vehicles")
+  await requirePermission("view_vehicle_brands")
 
   const params = await searchParams
 

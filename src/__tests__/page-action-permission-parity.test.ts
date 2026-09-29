@@ -55,7 +55,23 @@ function routeFromDir(dir: string): string {
 
 const PAGES = walk(DASHBOARD)
 /** Detail pages whose permission must mirror their list page. */
-const MIRRORED_MODULES = ["/penjualan", "/pembelian", "/inventaris"]
+const MIRRORED_MODULES = ["/penjualan", "/pembelian", "/inventaris", "/produksi", "/aset", "/kendaraan"]
+
+/**
+ * Create pages are server components, so their guard is the permission the
+ * create action enforces. Kept explicit (the registry only maps edit/delete).
+ */
+const CREATE_PAGE_CASES: Array<[string, string]> = [
+  ["aset/kategori/tambah/page.tsx", "create_asset_categories"],
+  ["aset/merek/tambah/page.tsx", "create_asset_brands"],
+  ["aset/transfer/tambah/page.tsx", "create_asset_transfers"],
+  ["kendaraan/merek/tambah/page.tsx", "create_vehicle_brands"],
+]
+
+/** Client pages whose permission check lives in a parent layout. */
+const LAYOUT_GUARD_CASES: Array<[string, string]> = [
+  ["app/(dashboard)/inventaris/scan/layout.tsx", "view_inventory"],
+]
 
 describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
   it("menemukan cukup banyak halaman untuk tidak vakum", () => {
@@ -105,5 +121,21 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
 
     expect(checked).toBeGreaterThan(20)
     expect(offenders, `Halaman edit dengan izin berbeda dari server action:\n${offenders.join("\n")}`).toEqual([])
+  })
+
+  it("setiap halaman tambah memakai izin create yang sama dengan action-nya", () => {
+    const offenders = CREATE_PAGE_CASES
+      .filter(([rel, expected]) => permissionOf(join(DASHBOARD, rel)) !== expected)
+      .map(([rel, expected]) => `${rel}: expected ${expected}`)
+
+    expect(offenders, `Halaman tambah dengan izin berbeda dari action:\n${offenders.join("\n")}`).toEqual([])
+  })
+
+  it("layout halaman client memakai izin view modulnya", () => {
+    const offenders = LAYOUT_GUARD_CASES
+      .filter(([rel, expected]) => permissionOf(join(ROOT, "src", rel)) !== expected)
+      .map(([rel, expected]) => `${rel}: expected ${expected}`)
+
+    expect(offenders, `Layout tanpa guard izin yang benar:\n${offenders.join("\n")}`).toEqual([])
   })
 })

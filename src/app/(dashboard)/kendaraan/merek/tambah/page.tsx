@@ -9,7 +9,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Merek Kendaraan" }
 
 export default async function CreateVehicleBrandPage() {
-  await requirePermission("view_vehicles")
+  await requirePermission("create_vehicle_brands")
 
   return (
     <div className="flex flex-col gap-6">

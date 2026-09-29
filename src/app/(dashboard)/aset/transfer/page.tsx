@@ -19,7 +19,7 @@ export default async function AssetTransfersPage({
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_assets")
+  await requirePermission("view_asset_transfers")
 
   const params = await searchParams
 
