@@ -15,7 +15,7 @@ export default async function EditRackRowPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("edit_inventory")
+  await requirePermission("manage_inventory")
 
   const { id } = await params
   const numId = Number(id)

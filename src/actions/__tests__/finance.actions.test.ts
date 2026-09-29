@@ -155,6 +155,19 @@ describe("Journal Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("updateJournal menuntut izin edit_journals, bukan create_journals", async () => {
+    // Regresi: gate halaman + ROUTE_PERMS menuntut edit_journals, tetapi action
+    // memakai create_journals. Akibatnya pemegang create_journals (tanpa
+    // edit_journals) bisa menyunting jurnal langsung lewat action (escalation),
+    // sementara pemegang edit_journals gagal saat menyimpan.
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01"), type: "GENERAL" })
+    await (actions as any).updateJournal(1, fdMap({
+      transactionDate: "2024-01-01",
+      entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 100 }]),
+    }))
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_journals")
+    expect(mocks.requirePermissionMock).not.toHaveBeenCalledWith("create_journals")
+  })
   it("postJournal succeeds", async () => {
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
     const res = await (actions as any).postJournal(1)

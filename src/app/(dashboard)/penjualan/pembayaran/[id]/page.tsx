@@ -26,7 +26,7 @@ export default async function SalesPaymentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_sales_orders");
+  await requirePermission("view_sales_payments");
 
   const { id } = await params;
   const numId = Number(id);

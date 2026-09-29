@@ -20,7 +20,7 @@ export default async function MaterialIssueDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_inventory")
+  await requirePermission("view_material_issues")
 
   const { id } = await params
   const numId = Number(id)

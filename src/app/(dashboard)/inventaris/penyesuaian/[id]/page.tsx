@@ -21,7 +21,7 @@ export default async function StockAdjustmentDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_inventory")
+  await requirePermission("view_stock_adjustments")
 
   const { id } = await params
   const numId = Number(id)

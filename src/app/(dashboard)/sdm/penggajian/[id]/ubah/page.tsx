@@ -15,7 +15,7 @@ export default async function EditPayrollPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("update_payroll");
+  await requirePermission("edit_payroll");
 
   const { id } = await params;
   const numId = Number(id);

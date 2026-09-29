@@ -22,7 +22,7 @@ export default async function SalesReturnDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_sales_orders")
+  await requirePermission("view_sales_returns")
 
   const { id } = await params
   const numId = Number(id)

@@ -21,7 +21,7 @@ export default async function InventoryTransferDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_inventory")
+  await requirePermission("view_inventory_transfers")
 
   const { id } = await params
   const numId = Number(id)

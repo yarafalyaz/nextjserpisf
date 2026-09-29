@@ -15,7 +15,7 @@ export default async function EditPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("edit_production");
+  await requirePermission("edit_work_orders");
 
   const { id } = await params;
   const numId = Number(id);

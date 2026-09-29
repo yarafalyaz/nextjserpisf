@@ -28,7 +28,7 @@ export default async function GoodsReceiptDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_purchase_orders");
+  await requirePermission("view_goods_receipts");
 
   const { id } = await params;
   const numId = Number(id);

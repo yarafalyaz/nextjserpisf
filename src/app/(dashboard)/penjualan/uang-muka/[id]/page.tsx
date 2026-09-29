@@ -27,7 +27,7 @@ export default async function DownPaymentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("view_sales_orders");
+  await requirePermission("view_down_payments");
 
   const { id } = await params;
   const numId = Number(id)

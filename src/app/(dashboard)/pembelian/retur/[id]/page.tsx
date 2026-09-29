@@ -23,7 +23,7 @@ export default async function PurchaseReturnDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_purchase_orders")
+  await requirePermission("view_purchase_returns")
 
   const { id } = await params
   const numId = Number(id)

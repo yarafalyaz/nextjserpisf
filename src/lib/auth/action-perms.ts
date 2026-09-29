@@ -101,7 +101,12 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/pengaturan/workflow", edit: "manage_settings", delete: "manage_settings" },
   { prefix: "/keuangan/laporan-bank", edit: "edit_bank_statements", delete: "delete_bank_statements" },
   { prefix: "/keuangan/rekonsiliasi-bank", edit: "edit_bank_reconciliation", delete: "delete_bank_reconciliation" },
-  { prefix: "/keuangan/angka-kunci-statistik", edit: "edit_statistical_key_figures", delete: "delete_statistical_key_figures" },
+  // SKF master (angka kunci statistik) is gated by the account permissions the
+  // edit page + updateStatisticalKeyFigure action enforce (create_accounts /
+  // edit_accounts); only its Delete uses delete_statistical_key_figures. The
+  // registry previously pointed edit at edit_statistical_key_figures, so the row
+  // Edit button was hidden from every accountant who could actually open the page.
+  { prefix: "/keuangan/angka-kunci-statistik", edit: "edit_accounts", delete: "delete_statistical_key_figures" },
 
   // CRM
   { prefix: "/crm/leads", edit: "edit_leads", delete: "delete_leads" },

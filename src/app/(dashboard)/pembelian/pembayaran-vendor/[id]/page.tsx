@@ -24,7 +24,7 @@ export default async function VendorPaymentDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_purchase_orders")
+  await requirePermission("view_vendor_payments")
 
   const { id } = await params
   const numId = Number(id)

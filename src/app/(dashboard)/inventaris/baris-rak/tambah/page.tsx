@@ -10,7 +10,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Tambah Baris Rak" }
 
 export default async function CreateRackRowPage() {
-  await requirePermission("edit_inventory")
+  await requirePermission("manage_inventory")
 
   const warehouses = await prisma.warehouse.findMany({
     where: {
