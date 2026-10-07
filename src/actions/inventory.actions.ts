@@ -60,6 +60,18 @@ async function assertWarehouseIdInScope(user: WarehouseActionUser, warehouseId: 
   assertWarehouseAccess(await warehouseScopeFor(user), warehouseId);
 }
 
+function assertUniqueAdjustmentItems(items: { itemId: number }[]) {
+  const seen = new Set<number>();
+  for (const item of items) {
+    const itemId = Number(item.itemId);
+    if (seen.has(itemId)) {
+      throw new Error(`Item #${itemId} hanya boleh dicantumkan satu kali dalam penyesuaian.`);
+    }
+    seen.add(itemId);
+  }
+}
+
+
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
 
 export async function createStockAdjustment(formData: FormData) {
@@ -83,9 +95,12 @@ export async function createStockAdjustment(formData: FormData) {
           newQty: number;
           unitCost: number;
           reason?: string;
+          serialNumbers?: string[];
         }[]
       >(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0);
+    assertUniqueAdjustmentItems(adjItems);
+
 
     // Fetch latest system quantity for each item in the warehouse to prevent
     // client-side tampering of 'currentQty'.
@@ -129,6 +144,7 @@ export async function createStockAdjustment(formData: FormData) {
             const difference = safeSubtract(actualQty, systemQty, 0);
             return {
               itemId: Number(it.itemId),
+              serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
               systemQty,
               actualQty,
               difference,
@@ -1041,9 +1057,11 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
           newQty: number;
           unitCost: number;
           reason?: string;
+          serialNumbers?: string[];
         }[]
       >(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0);
+    assertUniqueAdjustmentItems(adjItems);
 
     const warehouseId = v.warehouseId;
     const itemIds = adjItems.map((it) => Number(it.itemId));
@@ -1097,6 +1115,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
                 actualQty,
                 difference,
                 unitCost: Number(it.unitCost || 0),
+                serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
                 totalCost: safeMultiply(
                   difference,
                   Number(it.unitCost || 0),
@@ -1185,7 +1204,6 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
         },
       });
     });
-
     await logActivity(
       "update",
       "MaterialIssue",

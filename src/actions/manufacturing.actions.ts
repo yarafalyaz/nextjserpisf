@@ -3,7 +3,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeMultiply, safeAdd, safeSubtract } from "@/lib/utils/math";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -678,7 +678,7 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
 
       const claim = await tx.productionOrder.updateMany({
         where: { id, status: "in_progress" },
-        data: { status: "completed" },
+        data: { status: "completed", endDate: new Date() },
       });
       if (claim.count === 0) throw new Error("Perintah produksi sudah diproses oleh pengguna lain.");
       const variance = safeSubtract(
@@ -735,14 +735,23 @@ export async function startWorkOrder(workOrderId: number) {
     // that the UI then refuses to re-start (status guard). Operators would
     // have to flip items by hand. Wrapping both in one tx guarantees the
     // header and its items are always in sync.
+    //
+    // The header flip is a conditional claim (updateMany WHERE status IN
+    // (pending,draft)); only the request that wins it proceeds to flip items.
+    // Two concurrent "mulai" clicks therefore cannot both start the WO.
     await prisma.$transaction(async (tx) => {
-      await tx.workOrder.update({
-        where: { id: workOrderId },
+      const claim = await tx.workOrder.updateMany({
+        where: { id: workOrderId, status: { in: ["pending", "draft"] } },
         data: {
           status: "in_progress",
           startDate: wo.startDate || new Date(),
         },
       });
+      if (claim.count === 0) {
+        throw new Error(
+          "Work Order sudah dimulai atau sedang diproses oleh pengguna lain.",
+        );
+      }
 
       // Update all WO items to in_progress
       await tx.workOrderItem.updateMany({
@@ -846,16 +855,14 @@ export async function completeWorkOrder(workOrderId: number) {
 
       // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
       // the atomic claim above so only the winning request reaches here).
-      // NOTE: autoCreateDeliveryOrder does not accept a txClient; it uses the
-      // global prisma client. Its writes are therefore not part of this
-      // transaction — a failure here would still leave a "completed" WO row.
-      // Documented as a known limitation; refactoring that helper to accept
-      // a txClient is the next step if this proves brittle.
-      await autoCreateDeliveryOrder(workOrderId, Number(user.id));
+      // Accepts txClient so the DO header + items commit in the SAME
+      // transaction as the WO completion: a failure mid-way rolls the WO claim
+      // back instead of leaving a "completed" WO with no Delivery Order.
+      await autoCreateDeliveryOrder(workOrderId, Number(user.id), tx);
 
-      // Sync linked Project status (same caveat: helper uses global prisma).
+      // Sync linked Project status (same tx so status never diverges).
       if (wo.projectId) {
-        await syncProjectStatus(wo.projectId);
+        await syncProjectStatus(wo.projectId, tx);
       }
     });
 
@@ -879,9 +886,12 @@ export async function completeWorkOrder(workOrderId: number) {
 /**
  * Auto-create DeliveryOrder from completed WorkOrder.
  * Only creates DO if WO has items with quantity > 0.
+ * Accepts an optional txClient so the caller can include the DO creation in
+ * its own transaction (WO completion); falls back to the global client.
  */
-async function autoCreateDeliveryOrder(workOrderId: number, userId: number) {
-  const wo = await prisma.workOrder.findUniqueOrThrow({
+async function autoCreateDeliveryOrder(workOrderId: number, userId: number, txClient?: TxClient) {
+  const db = txClient ?? prisma;
+  const wo = await db.workOrder.findUniqueOrThrow({
     where: { id: workOrderId },
     include: { items: true, customer: true },
   });
@@ -898,14 +908,14 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number) {
   if (!wo.quotationId) return;
 
   // Find linked SalesOrder to attach DO to
-  const salesOrder = await prisma.salesOrder.findFirst({
+  const salesOrder = await db.salesOrder.findFirst({
     where: { quotationId: wo.quotationId },
   });
   if (!salesOrder) return;
 
   const doDocNo = await generateDocumentNumber("DO");
 
-  const deliveryOrder = await prisma.deliveryOrder.create({
+  const deliveryOrder = await db.deliveryOrder.create({
     data: {
       documentNo: doDocNo,
       doNumber: doDocNo,
@@ -920,7 +930,7 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number) {
   });
 
   // Create DO items from WO items
-  await prisma.deliveryOrderItem.createMany({
+  await db.deliveryOrderItem.createMany({
     data: deliverableItems.map((item) => ({
       deliveryOrderId: deliveryOrder.id,
       itemId: item.itemId,
@@ -941,12 +951,13 @@ async function autoCreateDeliveryOrder(workOrderId: number, userId: number) {
  * completion-date drift bug that fired every time a new WO completed for
  * the same project, e.g. warranty follow-up work).
  */
-async function syncProjectStatus(projectId: number) {
-  const project = await prisma.project.findUniqueOrThrow({
+async function syncProjectStatus(projectId: number, txClient?: TxClient) {
+  const db = txClient ?? prisma;
+  const project = await db.project.findUniqueOrThrow({
     where: { id: projectId },
     select: { status: true, endDate: true },
   });
-  const stages = await prisma.projectStage.findMany({
+  const stages = await db.projectStage.findMany({
     where: { projectId },
     orderBy: { sortOrder: "asc" },
     select: { status: true },
@@ -961,7 +972,7 @@ async function syncProjectStatus(projectId: number) {
   );
   if (!result.changed) return;
 
-  await prisma.project.update({
+  await db.project.update({
     where: { id: projectId },
     data: { status: result.status, endDate: result.endDate },
   });

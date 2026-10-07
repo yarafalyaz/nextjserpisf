@@ -2,6 +2,8 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { toBaseFactor } from "@/lib/services/uom.service";
 
 /**
  * Purchase Return Hook - Observer pattern replacement.
@@ -37,19 +39,25 @@ export async function onPurchaseReturnProcessed(
     });
     if (existingMoves) return;
 
+    // Enforce period lock — return date must fall in an open period.
+    await assertPeriodOpen(purchaseReturn.date, tx);
+
     // Guard: already returned
     if (purchaseReturn.status === "returned") return;
 
-    // Warehouse resolution fallback:
-    // 1) latest Goods Receipt warehouse for same PO
-    // 2) returned item's default warehouse
-    // 3) first active warehouse
-    // 4) first warehouse
-    const goodsReceipt = await tx.goodsReceipt.findFirst({
-      where: { purchaseOrderId: purchaseReturn.purchaseOrderId },
-      select: { warehouseId: true },
-      orderBy: { createdAt: "desc" },
+    // Use each item's receipt line: one PO can receive different items into different warehouses.
+    const receiptLines = await tx.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: {
+          purchaseOrderId: purchaseReturn.purchaseOrderId,
+          status: { in: ["verified", "completed"] },
+        },
+      },
+      select: { itemId: true, uom: true, warehouseId: true, goodsReceipt: { select: { warehouseId: true } } },
+      orderBy: { goodsReceipt: { createdAt: "desc" } },
     });
+    const receiptByItem = new Map<number, (typeof receiptLines)[number]>();
+    for (const line of receiptLines) if (!receiptByItem.has(line.itemId)) receiptByItem.set(line.itemId, line);
 
     const activeWarehouse = await tx.warehouse.findFirst({
       where: { isActive: true, deletedAt: null },
@@ -86,7 +94,10 @@ export async function onPurchaseReturnProcessed(
 
       let docIdx = 0;
       for (const item of activeItems) {
-        const warehouseId = goodsReceipt?.warehouseId
+        const receipt = receiptByItem.get(item.itemId);
+        const factor = await toBaseFactor(tx, item.itemId, receipt?.uom);
+        const baseQty = Number(item.qty) * factor;
+        const warehouseId = receipt?.warehouseId ?? receipt?.goodsReceipt.warehouseId
           ?? defaultWarehouseByItem.get(item.itemId)
           ?? activeWarehouse?.id
           ?? anyWarehouse?.id;
@@ -100,16 +111,25 @@ export async function onPurchaseReturnProcessed(
         // relief use this real FIFO cost — not the agreed return price (item.cost),
         // which the AP side keeps. Any difference is a purchase-return price
         // variance booked by accounting.hook.onPurchaseReturnProcessed.
-        const { consumedCost } = await consumeFifoLayers(tx, {
+        const { consumedCost, consumedSerials } = await consumeFifoLayers(tx, {
           itemId: item.itemId,
           warehouseId,
-          qty: Number(item.qty),
+          qty: baseQty,
           allowShortfall: false,
           label: `retur pembelian ${purchaseReturn.documentNo}`,
         });
-        const carryingUnitCost = Number(item.qty) > 0
-          ? consumedCost / Number(item.qty)
-          : Number(item.cost ?? 0);
+        const carryingUnitCost = baseQty > 0
+          ? consumedCost / baseQty
+          : Number(item.cost ?? 0) / (factor || 1);
+
+        // Persist the serial attribution so the return document records which
+        // serialized units left stock (auto-FIFO picks them for trackSerial items).
+        if (consumedSerials && consumedSerials.length > 0) {
+          await tx.purchaseReturnItem.update({
+            where: { id: item.id },
+            data: { serialNumbers: consumedSerials },
+          });
+        }
 
         const smDocNo = smDocNos[docIdx++];
 
@@ -118,7 +138,7 @@ export async function onPurchaseReturnProcessed(
             documentNo: smDocNo,
             itemId: item.itemId,
             warehouseId,
-            qty: item.qty,
+            qty: baseQty,
             cost: carryingUnitCost,
             impact: "OUT",
             status: "posted",
@@ -130,9 +150,9 @@ export async function onPurchaseReturnProcessed(
         });
 
         // Update item qtyOnHand — guard against negative stock
-        const updated = await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${Number(item.qty)} WHERE id = ${item.itemId} AND qty_on_hand >= ${Number(item.qty)}`;
+        const updated = await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${baseQty} WHERE id = ${item.itemId} AND qty_on_hand >= ${baseQty}`;
         if (updated === 0) {
-          throw new Error(`Stok tidak cukup untuk retur item ID ${item.itemId} (qty: ${item.qty})`);
+          throw new Error(`Stok tidak cukup untuk retur item ID ${item.itemId} (qty dasar: ${baseQty})`);
         }
       }
     }

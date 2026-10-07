@@ -71,16 +71,36 @@ export async function onMaterialIssueCompleted(
       for (const item of activeItems) {
         const qty = Number(item.qty);
 
+        // Optional manual serial selection for serial-tracked materials. When
+        // the caller picked serials we pass them through so consumeFifoLayers
+        // marks exactly those (and validates count/uniqueness/availability);
+        // when absent it falls back to auto-FIFO. Stored as Json on the row.
+        const pickedSerials = Array.isArray(item.serialNumbers)
+          ? (item.serialNumbers as unknown[])
+              .map((s) => String(s).trim())
+              .filter((s) => s.length > 0)
+          : null;
+
         // Consume FIFO from the issue's warehouse (guards per-warehouse stock)
         // and capture the ACTUAL consumed cost first, so both the StockMove and
         // the GL journal record the real FIFO cost — not the item.cost master
         // snapshot. Falls back to master cost for any shortfall portion.
-        const { consumedCost, shortfall } = await consumeFifoLayers(tx, {
+        const { consumedCost, shortfall, consumedSerials } = await consumeFifoLayers(tx, {
           itemId: item.itemId,
           warehouseId: issue.warehouseId,
           qty,
           label: `pengeluaran material ${issue.documentNo}`,
+          serialNumbers: pickedSerials && pickedSerials.length > 0 ? pickedSerials : null,
         });
+
+        // Persist the serial attribution on the issue line so the document
+        // records which units were actually consumed (auto-FIFO or manual).
+        if (consumedSerials && consumedSerials.length > 0) {
+          await tx.materialIssueItem.update({
+            where: { id: item.id },
+            data: { serialNumbers: consumedSerials },
+          });
+        }
         const fallback = Number(item.cost ?? 0);
         const totalCost = consumedCost + shortfall * fallback;
         const unitCost = qty > 0 ? totalCost / qty : fallback;
@@ -117,7 +137,8 @@ export async function onMaterialIssueCompleted(
       issue.documentNo ?? `MI-${issueId}`,
       issueId,
       userId,
-      issue.costCenterId
+      issue.costCenterId,
+      issue.date
     );
 
     // Update Material Issue status

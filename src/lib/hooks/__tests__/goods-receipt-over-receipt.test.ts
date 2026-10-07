@@ -260,6 +260,37 @@ describe("onGoodsReceiptVerified stock tracking modules", () => {
     })
     await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/tidak sama dengan qty diterima/)
   })
+
+  // Regression: a trackSerial item whose serial field is null/undefined/empty
+  // used to skip the guard entirely (the block was gated behind
+  // Array.isArray(item.serialNumbers)), letting it verify stock-in with zero
+  // ItemSerial rows. It must now be rejected.
+  it("throws when trackSerial item arrives with no serial field", async () => {
+    wireTx({
+      poId: 50, poItems: [{ itemId: 7, qty: 2 }], priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 2 }], // serialNumbers omitted
+      itemMeta: { trackSerial: true },
+    })
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/melacak nomor seri/)
+  })
+
+  it("throws when trackSerial item arrives with an empty serial array", async () => {
+    wireTx({
+      poId: 50, poItems: [{ itemId: 7, qty: 2 }], priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 2, serialNumbers: [] }],
+      itemMeta: { trackSerial: true },
+    })
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/melacak nomor seri/)
+  })
+
+  it("throws when trackSerial item arrives with duplicate serials", async () => {
+    wireTx({
+      poId: 50, poItems: [{ itemId: 7, qty: 2 }], priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 2, serialNumbers: ["S1", "S1"] }],
+      itemMeta: { trackSerial: true },
+    })
+    await expect(onGoodsReceiptVerified(100, 1)).rejects.toThrow(/duplikasi nomor seri/)
+  })
 })
 
 // Regression test: the goods-receipt GL journal flows through stockJournalService

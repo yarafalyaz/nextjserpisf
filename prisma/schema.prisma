@@ -1071,6 +1071,11 @@ model GoodsReceipt {
   date            DateTime
   referenceNumber String?            @map("reference_number")
   notes           String?            @db.Text
+  // Actual landed costs for THIS receipt. When > 0 they override the PO's
+  // shippingCost/serviceFee estimate for the allocation; when 0 the hook
+  // derives this receipt's proportional share of the PO estimate instead.
+  shippingCost    Decimal            @default(0.00) @map("shipping_cost") @db.Decimal(15, 2)
+  otherCost       Decimal            @default(0.00) @map("other_cost") @db.Decimal(15, 2)
   status          String             @default("draft")
   createdBy       Int?               @map("created_by")
   createdAt       DateTime           @default(now()) @map("created_at")
@@ -1135,6 +1140,7 @@ model PurchaseReturnItem {
   itemId           Int            @map("item_id")
   qty              Decimal        @db.Decimal(15, 2)
   cost             Decimal        @default(0.00) @db.Decimal(15, 2)
+  serialNumbers    Json?          @map("serial_numbers")
   purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
 
   @@index([purchaseReturnId], map: "purchase_return_items_purchase_return_id_fkey")
@@ -1392,7 +1398,7 @@ model StockAdjustmentItem {
   batchId           Int?            @map("batch_id")
   unit              String?
   unitCost          Decimal         @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
-  totalCost         Decimal         @default(0.00) @map("total_cost") @db.Decimal(15, 2)
+  serialNumbers     Json?           @map("serial_numbers")
   notes             String?
   stockAdjustment   StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
 
@@ -1430,6 +1436,13 @@ model InventoryTransferItem {
   inventoryTransferId Int               @map("inventory_transfer_id")
   itemId              Int               @map("item_id")
   qty                 Decimal           @db.Decimal(15, 2)
+  // FIFO lot/serial attribution captured at process time. A transfer is a MOVE,
+  // not a sale: the batch lots and serials consumed from the source warehouse must
+  // be re-created/revived in the destination warehouse on receive. Without these
+  // the origin lots are decremented and the serials stay "used" forever (unsellable)
+  // while the destination shows qty on hand with no lot/serial behind it.
+  serialNumbers       Json?             @map("serial_numbers")
+  batchAllocations    Json?             @map("batch_allocations")
   inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
 
   @@index([inventoryTransferId], map: "inventory_transfer_items_inventory_transfer_id_fkey")
@@ -1470,6 +1483,7 @@ model MaterialIssueItem {
   itemId          Int           @map("item_id")
   qty             Decimal       @db.Decimal(15, 2)
   cost            Decimal       @default(0.00) @db.Decimal(15, 2)
+  serialNumbers   Json?         @map("serial_numbers")
   materialIssue   MaterialIssue @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
 
   @@index([materialIssueId], map: "material_issue_items_material_issue_id_fkey")

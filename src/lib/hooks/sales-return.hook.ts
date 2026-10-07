@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { Status } from "@/lib/constants";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { toBaseFactor } from "@/lib/services/uom.service";
 
 /**
  * Sales Return Hook - Observer pattern replacement.
@@ -38,6 +40,9 @@ export async function onSalesReturnCompleted(
     });
     if (existingMoves) return; // Idempotent: silently no-op
 
+    // Enforce period lock — return date must fall in an open period.
+    await assertPeriodOpen(salesReturn.date, tx);
+
     // Guard: must be in a completable state
     if (salesReturn.status === Status.COMPLETED || salesReturn.status === Status.CANCELLED) {
       return; // already completed/cancelled; idempotent no-op
@@ -57,10 +62,22 @@ export async function onSalesReturnCompleted(
     const itemDefaults = returnItemIds.length
       ? await tx.item.findMany({
           where: { id: { in: returnItemIds } },
-          select: { id: true, defaultWarehouseId: true },
+          select: { id: true, defaultWarehouseId: true, trackSerial: true },
         })
       : [];
     const warehouseByItem = new Map(itemDefaults.map((it) => [it.id, it.defaultWarehouseId]));
+    const trackSerialByItem = new Map(itemDefaults.map((it) => [it.id, it.trackSerial]));
+
+    const invoiceUnits = salesReturn.salesInvoiceId
+      ? await tx.salesInvoiceItem.findMany({
+          where: { salesInvoiceId: salesReturn.salesInvoiceId, itemId: { in: returnItemIds } },
+          select: { itemId: true, uom: true },
+        })
+      : [];
+    const uomByItem = new Map<number, string | null>();
+    for (const line of invoiceUnits) {
+      if (line.itemId != null && !uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
+    }
 
     // Create Stock Move IN per item (goods returned to warehouse)
     const activeItems = salesReturn.items.filter((it) => Number(it.qty) > 0);
@@ -73,6 +90,9 @@ export async function onSalesReturnCompleted(
 
       let docIdx = 0;
       for (const item of activeItems) {
+        const factor = await toBaseFactor(tx, item.itemId, uomByItem.get(item.itemId));
+        const baseQty = Number(item.qty) * factor;
+        const baseCost = factor > 0 ? Number(item.cost ?? 0) / factor : Number(item.cost ?? 0);
         const smDocNo = smDocNos[docIdx++];
 
         // Resolve warehouse per item (chain: item default → fallback)
@@ -83,8 +103,8 @@ export async function onSalesReturnCompleted(
             documentNo: smDocNo,
             itemId: item.itemId,
             warehouseId: resolvedWarehouseId,
-            qty: item.qty,
-            cost: item.cost,
+            qty: baseQty,
+            cost: baseCost,
             impact: "IN",
             status: "posted",
             referenceType: "SalesReturn",
@@ -95,16 +115,41 @@ export async function onSalesReturnCompleted(
         });
 
         // Update item qtyOnHand (global total)
-        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${Number(item.qty)} WHERE id = ${item.itemId}`;
+        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${baseQty} WHERE id = ${item.itemId}`;
 
         // Create FIFO inventory layer (returned stock) in the resolved warehouse
         await createInLayer(tx, {
           itemId: item.itemId,
           warehouseId: resolvedWarehouseId,
           stockMoveId: sm.id,
-          qty: Number(item.qty),
-          unitCost: Number(item.cost ?? 0),
+          qty: baseQty,
+          unitCost: baseCost,
         });
+
+        // Serial-tracked items: a return puts the physical units back in stock,
+        // so their ItemSerial rows must be revived to "available". Without this
+        // they stay "used" forever after the original sale (consumeFifoLayers
+        // marks them used), the returned units cannot be sold/issued again, and
+        // the serial subledger drifts from the FIFO layer this line just created.
+        // We revive the most-recently-used serials for the item up to the
+        // returned qty (mirrors the auto-FIFO reviving in inventory-transfer).
+        if (trackSerialByItem.get(item.itemId)) {
+          const need = Math.round(baseQty);
+          if (need > 0) {
+            const revivable = await tx.itemSerial.findMany({
+              where: { itemId: item.itemId, status: "used" },
+              orderBy: { id: "desc" },
+              take: need,
+              select: { id: true },
+            });
+            if (revivable.length > 0) {
+              await tx.itemSerial.updateMany({
+                where: { id: { in: revivable.map((s) => s.id) } },
+                data: { status: "available", warehouseId: resolvedWarehouseId },
+              });
+            }
+          }
+        }
       }
     }
 

@@ -75,10 +75,49 @@ export async function deleteJournalByReferenceTx(
         ? { in: referenceId }
         : referenceId,
     },
-    select: { id: true },
+    select: { id: true, status: true, transactionDate: true },
   });
   if (journals.length === 0) return;
-  const journalIds = journals.map((j) => j.id);
+
+  // Deleting a POSTED journal mutates the GL exactly like reverseJournal(), so
+  // the same period lock must gate it. Without this, a user blocked from
+  // reversing a closed-period journal could still erase it (and its reversal)
+  // by deleting the source document — a silent, unaudited GL rewrite of a
+  // closed period. Draft journals never hit the GL and are skipped.
+  for (const j of journals) {
+    if (j.status === "POSTED") {
+      await assertPeriodOpen(j.transactionDate);
+    }
+  }
+
+  let journalIds = journals.map((j) => j.id);
+
+  // Cascade to reversal journals (transitively). reverseJournal() creates a
+  // companion journal with referenceType "Journal" + referenceId = the original
+  // journal id and flips the original to REVERSED. Deleting the original without
+  // its reversal would strand a POSTED reversal in the GL (a one-sided balance
+  // that can never be cleared). A reversal is itself POSTED and can be reversed
+  // again, so follow the chain to a fixed point: J1 <- J2 <- J3 must delete all
+  // three, not just J2. One level would strand J3.
+  const seen = new Set(journalIds);
+  let frontier = journalIds;
+  while (frontier.length > 0) {
+    const reversals = await tx.journal.findMany({
+      where: { referenceType: "Journal", referenceId: { in: frontier } },
+      select: { id: true },
+    });
+    const next: number[] = [];
+    for (const r of reversals) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        next.push(r.id);
+      }
+    }
+    if (next.length === 0) break;
+    journalIds = [...journalIds, ...next];
+    frontier = next;
+  }
+
   await tx.journalEntry.deleteMany({
     where: { journalId: { in: journalIds } },
   });
@@ -237,6 +276,70 @@ export async function onSalesInvoicePosted(
       await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(itemIds)}) FOR UPDATE`;
     }
 
+    // Stock guard: a product sale must not drive warehouse stock negative.
+    // Previously the hook used allowShortfall:true unconditionally, so
+    // overselling silently pushed qtyOnHand/layers negative and valued the
+    // shortfall portion at the master cost snapshot — corrupting both the
+    // stock subledger and HPP. We now pre-check per-warehouse availability and
+    // abort the whole posting (making the invoice unpostable) when any line
+    // exceeds the stock actually present in the item's default warehouse.
+    // Services / non-product items are exempt (they never carry stock).
+    if (productItems.length > 0) {
+      const productItemIds = productItems
+        .map((it) => itemInfo.get(it.itemId))
+        .filter((info): info is NonNullable<typeof info> => !!info?.isProduct)
+        .map((info) => info.id);
+      const warehouseIds = [
+        ...new Set(
+          productItems
+            .map((it) => itemInfo.get(it.itemId))
+            .filter((info): info is NonNullable<typeof info> => !!info?.isProduct)
+            .map((info) => info.defaultWarehouseId)
+            .filter((id): id is number => id != null),
+        ),
+      ];
+      if (productItemIds.length > 0) {
+        const layerSums = await tx.inventoryLayer.groupBy({
+          by: ["itemId", "warehouseId"],
+          where: {
+            itemId: { in: productItemIds },
+            warehouseId: { in: warehouseIds },
+            remaining: { gt: 0 },
+          },
+          _sum: { remaining: true },
+        });
+        const availableMap = new Map<string, number>();
+        for (const row of layerSums) {
+          availableMap.set(
+            `${row.itemId}:${row.warehouseId}`,
+            Number(row._sum.remaining ?? 0),
+          );
+        }
+        // Aggregate needed per item+warehouse (converted to base UoM).
+        const neededMap = new Map<string, number>();
+        for (const line of productItems) {
+          const info = itemInfo.get(line.itemId);
+          if (!info?.isProduct) continue;
+          const uom = (line as { uom?: string | null }).uom;
+          const isBaseUom = !uom || uom === info.unitOfMeasure;
+          const rawFactor = isBaseUom ? 1 : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
+          const factor = rawFactor > 0 ? rawFactor : 1;
+          const key = `${line.itemId}:${info.defaultWarehouseId}`;
+          neededMap.set(key, (neededMap.get(key) ?? 0) + Number(line.qty) * factor);
+        }
+        for (const [key, needed] of neededMap) {
+          const available = availableMap.get(key) ?? 0;
+          if (needed > available + 1e-9) {
+            const [itemId, warehouseId] = key.split(":");
+            const row = itemInfo.get(Number(itemId));
+            throw new Error(
+              `Stok tidak mencukupi untuk ${row?.id ?? itemId} di gudang ${warehouseId}: butuh ${needed}, tersedia ${available}. Selesaikan penerimaan/produksi terlebih dahulu.`,
+            );
+          }
+        }
+      }
+    }
+
     // Batch SM generation
     const smProductIdx: number[] = [];
     for (let i = 0; i < productItems.length; i++) {
@@ -265,9 +368,10 @@ export async function onSalesInvoicePosted(
       const fallbackUnitCost =
         factor > 0 ? Number(info.cost ?? 0) / factor : Number(info.cost ?? 0);
 
-      // Decrement on-hand (reflects the sale even if overselling) and consume
-      // FIFO layers from the item's default warehouse up to what is available
-      // (allowShortfall — a sale is never blocked by stock).
+      // Decrement on-hand and consume FIFO layers from the item's default
+      // warehouse. The guard above already proved per-warehouse availability,
+      // so a shortfall here would be a bug — refuse rather than silently value
+      // missing units at the master cost.
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${line.itemId}`;
       const lineSerials = Array.isArray(
         (line as { serialNumbers?: unknown }).serialNumbers,
@@ -280,13 +384,12 @@ export async function onSalesInvoicePosted(
         itemId: line.itemId,
         warehouseId: info.defaultWarehouseId,
         qty,
-        allowShortfall: true,
+        allowShortfall: false,
         serialNumbers: lineSerials,
       });
       const lineCogs = consumedCost + shortfall * fallbackUnitCost;
       cogsAmount += lineCogs;
       const moveUnitCost = qty > 0 ? lineCogs / qty : fallbackUnitCost;
-
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
@@ -457,7 +560,7 @@ export async function onPurchaseOrderReceived(
   });
   if (existing) return;
 
-  await assertPeriodOpen(new Date(), txClient);
+  await assertPeriodOpen(order.date, txClient);
 
   await executeInTx(txClient, async (tx) => {
     // double-check inside tx: two concurrent calls both pass the early
@@ -483,7 +586,7 @@ export async function onPurchaseOrderReceived(
     const journal = await tx.journal.create({
       data: {
         journalNumber,
-        transactionDate: new Date(),
+        transactionDate: order.date,
         referenceType: "PurchaseOrder",
         referenceId: order.id,
         description: `Penerimaan PO ${order.documentNo}`,
@@ -560,7 +663,7 @@ export async function onExpenseApproved(
   });
   if (existing) return;
 
-  await assertPeriodOpen(expense.date ?? new Date());
+  await assertPeriodOpen(expense.date ?? new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
     // double-check inside tx: two concurrent calls both pass the early
@@ -646,7 +749,7 @@ export async function onPettyCashCreated(
   // for back-dated petty-cash entries and posted the journal dated today while
   // the subledger record sat on a closed-period date — corrupting the GL.
   const postingDate = pettyCash.transactionDate ?? pettyCash.date;
-  await assertPeriodOpen(postingDate);
+  await assertPeriodOpen(postingDate, txClient);
 
   await executeInTx(txClient, async (tx) => {
     // double-check inside tx: two concurrent calls both pass the early
@@ -785,7 +888,7 @@ export async function onSalesReturnCompleted(
   );
   if (priceTotal <= 0 && costTotal <= 0) return;
 
-  await assertPeriodOpen(new Date(), txClient);
+  await assertPeriodOpen(salesReturn.date, txClient);
 
   await executeInTx(txClient, async (tx) => {
     // double-check inside tx
@@ -799,7 +902,7 @@ export async function onSalesReturnCompleted(
     const journal = await tx.journal.create({
       data: {
         journalNumber,
-        transactionDate: new Date(),
+        transactionDate: salesReturn.date,
         referenceType: "SalesReturn",
         referenceId: salesReturn.id,
         description: `Retur Penjualan ${salesReturn.documentNo}`,
@@ -900,7 +1003,7 @@ export async function onPurchaseReturnProcessed(
     0,
   );
 
-  await assertPeriodOpen(new Date(), txClient);
+  await assertPeriodOpen(purchaseReturn.date, txClient);
 
   await executeInTx(txClient, async (tx) => {
     // double check
@@ -983,7 +1086,7 @@ export async function onPurchaseReturnProcessed(
     const journal = await tx.journal.create({
       data: {
         journalNumber,
-        transactionDate: new Date(),
+        transactionDate: purchaseReturn.date,
         referenceType: "PurchaseReturn",
         referenceId: purchaseReturn.id,
         description: `Retur Pembelian ${purchaseReturn.documentNo}`,

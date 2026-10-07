@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { createInLayer } from "@/lib/services/inventory-fifo";
+import { allocateLandedCost } from "@/lib/services/landed-cost.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { PurchaseStatus, Status } from "@/lib/constants";
 
@@ -222,13 +223,50 @@ export async function onGoodsReceiptVerified(
     const smDocNos = await generateDocumentNumberBatch("SM", goodsReceipt.items.length);
     await tx.$queryRaw`SELECT id FROM items WHERE id IN (${Prisma.join(grItemIds)}) FOR UPDATE`;
 
-    // Per-line base-converted qty + unitCost, captured during the stock-move
-    // loop so the GL journal below posts the SAME value as the subledger. When
-    // a line is received in a non-base UoM, stock moves use baseQty/baseUnitCost
-    // (qty scaled UP by the conversion factor, unit cost scaled DOWN by the
-    // same factor so qty*cost is invariant) — re-deriving those values here
-    // from raw i.qty / i.unitCost would drift the GL inventory valuation from
-    // the stock subledger for every multi-UoM GR.
+    // ─── 3a. Landed cost allocation (computed ONCE for the whole receipt) ──
+    // The PO's shippingCost/serviceFee is a whole-order estimate; a GR must
+    // absorb only the share that matches the goods value it receives, so the
+    // shares across every receipt of the PO sum back to the estimate (see
+    // landed-cost.service). The PO discount is a separate pool that is
+    // SUBTRACTED from each line (the GR unit cost is entered gross — the PO
+    // unit price — so the line discount must be applied once here). GR-level
+    // actual freight, when entered, overrides the estimate for this receipt.
+    //
+    // Weight basis is the PO's NET unit price (poItem.total / poItem.qty),
+    // which keeps the same allocation across receipts regardless of whether
+    // this GR happened to enter a different unitCost than the PO.
+    const landedPo = goodsReceipt.purchaseOrder;
+    const poItemsById = new Map((landedPo?.items ?? []).map((pi) => [pi.itemId, pi]));
+    const poNetUnitPriceOf = (itemId: number): number => {
+      const pi = poItemsById.get(itemId);
+      if (!pi) return 0;
+      const qty = Number(pi.qty);
+      return qty > 0 ? Number(pi.total) / qty : 0;
+    };
+
+    // Per-line base qty + allocation weight, in the same order as
+    // goodsReceipt.items so the result maps back by index.
+    const landedLines = goodsReceipt.items.map((item) => {
+      const meta = metaByItem.get(item.itemId);
+      const isBase = !meta || !item.uom || item.uom === meta.unitOfMeasure;
+      const raw = isBase ? 1 : (factorMap.get(`${item.itemId}:${item.uom}`) ?? 1);
+      const f = raw > 0 ? raw : 1;
+      return { baseQty: Number(item.qty) * f, poNetUnitPrice: poNetUnitPriceOf(item.itemId) };
+    });
+
+    const poNetValue = (landedPo?.items ?? []).reduce((s, pi) => s + Number(pi.total), 0);
+    const poCostPool =
+      Number(landedPo?.shippingCost ?? 0) + Number(landedPo?.serviceFee ?? 0);
+
+    const landed = allocateLandedCost({
+      lines: landedLines,
+      poCostPool,
+      poNetValue,
+      poDiscount: Number(landedPo?.discount ?? 0),
+      shippingCost: Number(goodsReceipt.shippingCost ?? 0),
+      otherCost: Number(goodsReceipt.otherCost ?? 0),
+    });
+
     const journalLines: { qty: number; cost: number }[] = [];
 
     // Initialize running map of item quantities and costs to handle duplicate item IDs in the GR
@@ -241,8 +279,10 @@ export async function onGoodsReceiptVerified(
     }
 
     let docIdx = 0;
+    let lineIdx = 0;
     for (const item of goodsReceipt.items) {
       const smDocNo = smDocNos[docIdx++];
+      const landedPerUnit = landed.perUnitAdditions[lineIdx++] ?? 0;
 
       // Per-line destination warehouse (the GR form lets each line target a
       // different warehouse). Fall back to the header warehouse when a line
@@ -263,28 +303,7 @@ export async function onGoodsReceiptVerified(
       const baseUnitCost = factor > 0 ? enteredUnitCost / factor : enteredUnitCost;
       const batchNumber = itemMeta?.trackBatch ? (item.batchNumber ?? null) : null;
 
-      // Landed Cost allocation: shippingCost & serviceFee from PO
-      const po = goodsReceipt.purchaseOrder;
-      const totalLandedCost = Number(po?.shippingCost ?? 0) + Number(po?.serviceFee ?? 0);
-      let landedCostPerUnit = 0;
-
-      if (po && totalLandedCost > 0 && po.items.length > 0) {
-        const poTotalValue = po.items.reduce((s, it) => s + Number(it.total), 0);
-        const poItem = po.items.find((pi) => pi.itemId === item.itemId);
-        if (poItem) {
-          let itemLandedCostShare = 0;
-          if (poTotalValue > 0) {
-            itemLandedCostShare = (Number(poItem.total) / poTotalValue) * totalLandedCost;
-          } else {
-            itemLandedCostShare = totalLandedCost / po.items.length;
-          }
-          if (Number(poItem.qty) > 0) {
-            landedCostPerUnit = itemLandedCostShare / Number(poItem.qty);
-          }
-        }
-      }
-
-      const baseUnitCostWithLanded = baseUnitCost + landedCostPerUnit;
+      const baseUnitCostWithLanded = baseUnitCost + landedPerUnit;
 
       const sm = await tx.stockMove.create({
         data: {
@@ -373,26 +392,42 @@ export async function onGoodsReceiptVerified(
         }
       }
 
-      // Serial tracking: register each received unit's serial number
-      if (itemMeta?.trackSerial && Array.isArray(item.serialNumbers)) {
-        const serials = (item.serialNumbers as unknown[])
+      // Serial tracking: register each received unit's serial number.
+      // An item flagged trackSerial MUST arrive with one serial per received
+      // unit. Previously the whole guard was gated behind
+      // `Array.isArray(item.serialNumbers)`, so a line whose serial field was
+      // null/undefined/absent skipped validation AND registration entirely —
+      // a serial-tracked item could be verified stock-in with zero ItemSerial
+      // rows and no quantity check. Keep this strict and aligned with
+      // completeProductionOrder / consumeFifoLayers, which both refuse a
+      // serial-count mismatch.
+      if (itemMeta?.trackSerial) {
+        const rawSerials = Array.isArray(item.serialNumbers)
+          ? (item.serialNumbers as unknown[])
+          : [];
+        const serials = rawSerials
           .map((s) => String(s).trim())
           .filter((s) => s.length > 0);
-        if (serials.length > 0 && serials.length !== Math.round(baseQty)) {
+        const expected = Math.round(baseQty);
+        if (serials.length !== expected) {
           throw new Error(
-            `Jumlah nomor seri (${serials.length}) tidak sama dengan qty diterima (${Math.round(baseQty)}) untuk item #${item.itemId}.`
+            `Item #${item.itemId} melacak nomor seri: jumlah nomor seri (${serials.length}) tidak sama dengan qty diterima (${expected}).`,
           );
         }
-        if (serials.length > 0) {
-          await tx.itemSerial.createMany({
-            data: serials.map((serialNumber) => ({
-              itemId: item.itemId,
-              serialNumber,
-              warehouseId: lineWarehouseId,
-              status: "available",
-            })),
-          });
+        const uniqueSerials = new Set(serials);
+        if (uniqueSerials.size !== serials.length) {
+          throw new Error(
+            `Item #${item.itemId}: terdapat duplikasi nomor seri pada penerimaan.`,
+          );
         }
+        await tx.itemSerial.createMany({
+          data: serials.map((serialNumber) => ({
+            itemId: item.itemId,
+            serialNumber,
+            warehouseId: lineWarehouseId,
+            status: "available",
+          })),
+        });
       }
     }
 
@@ -407,7 +442,9 @@ export async function onGoodsReceiptVerified(
       journalLines,
       goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`,
       goodsReceiptId,
-      userId
+      userId,
+      null,
+      goodsReceipt.date
     );
 
     // ─── 5. Update GR status ─────────────────────────────────────────────

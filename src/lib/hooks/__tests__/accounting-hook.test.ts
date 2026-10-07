@@ -171,11 +171,13 @@ describe("deleteJournalByReference", () => {
   });
 
   it("deletes entries and journals when found", async () => {
-    mocks.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+    mocks.findMany
+      .mockResolvedValueOnce([{ id: 1 }, { id: 2 }])
+      .mockResolvedValueOnce([]); // no reversal journals reference these
     await deleteJournalByReference("VendorBill", 100);
     expect(mocks.findMany).toHaveBeenCalledWith({
       where: { referenceType: "VendorBill", referenceId: 100 },
-      select: { id: true },
+      select: { id: true, status: true, transactionDate: true },
     });
     expect(mocks.deleteManyEntries).toHaveBeenCalledWith({
       where: { journalId: { in: [1, 2] } },
@@ -185,11 +187,64 @@ describe("deleteJournalByReference", () => {
     });
   });
 
+  it("cascades to reversal journals that reference the deleted journal", async () => {
+    mocks.findMany
+      .mockResolvedValueOnce([
+        { id: 1, status: "POSTED", transactionDate: new Date("2026-06-09") },
+      ]) // original journal
+      .mockResolvedValueOnce([{ id: 9 }]) // reversal referencing journal 1
+      .mockResolvedValueOnce([]); // no reversal of the reversal — chain ends
+    await deleteJournalByReference("VendorBill", 100);
+    expect(mocks.findMany).toHaveBeenNthCalledWith(2, {
+      where: { referenceType: "Journal", referenceId: { in: [1] } },
+      select: { id: true },
+    });
+    // Both the original and its reversal are removed together; leaving the
+    // reversal behind would strand a POSTED, one-sided GL entry.
+    expect(mocks.deleteManyEntries).toHaveBeenCalledWith({
+      where: { journalId: { in: [1, 9] } },
+    });
+    expect(mocks.deleteManyJournals).toHaveBeenCalledWith({
+      where: { id: { in: [1, 9] } },
+    });
+  });
+
   it("returns early if no journals found", async () => {
     mocks.findMany.mockResolvedValue([]);
     await deleteJournalByReference("VendorBill", 999);
     expect(mocks.deleteManyEntries).not.toHaveBeenCalled();
     expect(mocks.deleteManyJournals).not.toHaveBeenCalled();
+  });
+
+  it("blocks deleting a POSTED journal whose period is closed", async () => {
+    const closed = new Date("2026-05-20");
+    mocks.findMany.mockResolvedValueOnce([
+      { id: 1, status: "POSTED", transactionDate: closed },
+    ]);
+    mocks.assertPeriodOpen.mockRejectedValueOnce(
+      new Error("Periode akuntansi sudah ditutup"),
+    );
+
+    await expect(deleteJournalByReference("VendorBill", 100)).rejects.toThrow(
+      "Periode akuntansi sudah ditutup",
+    );
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(closed);
+    // The GL must be untouched when the lock holds.
+    expect(mocks.deleteManyEntries).not.toHaveBeenCalled();
+    expect(mocks.deleteManyJournals).not.toHaveBeenCalled();
+  });
+
+  it("does not period-lock DRAFT journals (never hit the GL)", async () => {
+    mocks.findMany
+      .mockResolvedValueOnce([
+        { id: 1, status: "draft", transactionDate: new Date("2026-05-20") },
+      ])
+      .mockResolvedValueOnce([]);
+    await deleteJournalByReference("VendorBill", 100);
+    expect(mocks.assertPeriodOpen).not.toHaveBeenCalled();
+    expect(mocks.deleteManyJournals).toHaveBeenCalledWith({
+      where: { id: { in: [1] } },
+    });
   });
 
   it("uses provided txClient if passed", async () => {
@@ -206,7 +261,10 @@ describe("deleteJournalByReference", () => {
   it("handles array referenceType and referenceId natively in deleteJournalByReferenceTx", async () => {
     const tx = {
       journal: {
-        findMany: vi.fn().mockResolvedValue([{ id: 7 }]),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([{ id: 7, status: "POSTED", transactionDate: new Date("2026-06-09") }])
+          .mockResolvedValueOnce([]),
         deleteMany: vi.fn(),
       },
       journalEntry: { deleteMany: vi.fn() },
@@ -221,10 +279,42 @@ describe("deleteJournalByReference", () => {
         referenceType: { in: ["SalesInvoice", "COGS"] },
         referenceId: { in: [10, 11] },
       },
-      select: { id: true },
+      select: { id: true, status: true, transactionDate: true },
     });
     expect(tx.journalEntry.deleteMany).toHaveBeenCalledWith({
       where: { journalId: { in: [7] } },
+    });
+  });
+
+  it("deletes the whole reversal chain, not just one level", async () => {
+    // Chain: J1 (original) <- J2 (reversal of J1) <- J3 (reversal of J2). All
+    // three are POSTED; deleting J1 must remove J2 and J3 too, otherwise J3 is
+    // stranded as a one-sided POSTED entry.
+    const tx = {
+      journal: {
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([
+            { id: 1, status: "POSTED", transactionDate: new Date("2026-06-09") },
+          ]) // originals
+          .mockResolvedValueOnce([{ id: 2 }]) // reversals of J1
+          .mockResolvedValueOnce([{ id: 3 }]) // reversals of J2
+          .mockResolvedValueOnce([]), // end of chain
+        deleteMany: vi.fn(),
+      },
+      journalEntry: { deleteMany: vi.fn() },
+    };
+    await deleteJournalByReferenceTx(tx as any, "VendorBill", 100);
+
+    expect(tx.journal.findMany).toHaveBeenNthCalledWith(3, {
+      where: { referenceType: "Journal", referenceId: { in: [2] } },
+      select: { id: true },
+    });
+    expect(tx.journalEntry.deleteMany).toHaveBeenCalledWith({
+      where: { journalId: { in: [1, 2, 3] } },
+    });
+    expect(tx.journal.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [1, 2, 3] } },
     });
   });
 });
@@ -266,6 +356,12 @@ describe("onSalesInvoicePosted", () => {
         },
         uomConversion: { findMany: mocks.uomConversionFindMany },
         stockMove: { create: mocks.stockMoveCreate },
+        inventoryLayer: {
+          groupBy: vi.fn().mockResolvedValue([
+            // Ample availability for the fixture items used in these tests.
+            { itemId: 50, warehouseId: 7, _sum: { remaining: 1_000_000 } },
+          ]),
+        },
         $queryRaw: mocks.queryRaw,
         $executeRaw: mocks.executeRaw,
       }),
@@ -455,6 +551,56 @@ describe("onSalesInvoicePosted", () => {
 
     // Only 1 journal (AR/Revenue), no COGS
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects posting when product stock is insufficient in the default warehouse", async () => {
+    const inner = {
+      id: 1,
+      totalAmount: 1000,
+      taxAmount: 0,
+      date: new Date(),
+      documentNo: "INV-1",
+    };
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
+      ...inner,
+      items: [{ itemId: 50, qty: 2, cost: 100 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 },
+    ]);
+    // Only 1 unit available, 2 requested → must refuse.
+    mocks.transaction.mockImplementationOnce((fn: any) =>
+      fn({
+        systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+        salesInvoice: {
+          findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
+          findUnique: mocks.invoiceFindUnique,
+        },
+        journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+        journalEntry: {
+          create: mocks.journalEntryCreate,
+          createMany: vi.fn(async (args) => {
+            args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d }));
+            return { count: args.data.length };
+          }),
+        },
+        item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
+        uomConversion: { findMany: mocks.uomConversionFindMany },
+        stockMove: { create: mocks.stockMoveCreate },
+        inventoryLayer: {
+          groupBy: vi.fn().mockResolvedValue([
+            { itemId: 50, warehouseId: 7, _sum: { remaining: 1 } },
+          ]),
+        },
+        $queryRaw: mocks.queryRaw,
+        $executeRaw: mocks.executeRaw,
+      }),
+    );
+
+    await expect(onSalesInvoicePosted(1, 999)).rejects.toThrow(/Stok tidak mencukupi/)
+    expect(mocks.stockMoveCreate).not.toHaveBeenCalled()
   });
 });
 
@@ -777,7 +923,7 @@ describe("onPettyCashCreated", () => {
     await onPettyCashCreated(1);
 
     // It should check the period using the actual date, not today's date!
-    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(closedDate);
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledWith(closedDate, undefined);
     // And the journal should be posted using the actual date
     expect(mocks.journalCreate).toHaveBeenCalledWith(
       expect.objectContaining({
