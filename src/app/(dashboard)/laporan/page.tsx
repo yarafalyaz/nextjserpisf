@@ -10,23 +10,28 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Laporan" }
 
 const reportsModules: ModuleItem[] = [
+  // Keuangan
   { label: "Laba Rugi", href: "/laporan/laba-rugi", icon: TrendingUp, desc: "Laba rugi multi-step" },
   { label: "Laba Rugi per Proyek", href: "/laporan/laba-rugi-proyek", icon: FolderKanban, desc: "Laba rugi per proyek/WO" },
-  { label: "Keuangan", href: "/laporan/keuangan", icon: FileSpreadsheet, desc: "Laporan keuangan" },
+  { label: "Laba Rugi per Pusat Biaya", href: "/laporan/laba-rugi-per-pusat-biaya", icon: TrendingUp, desc: "Laba rugi per pusat biaya" },
+  { label: "Keuangan", href: "/laporan/keuangan", icon: FileSpreadsheet, desc: "Neraca saldo & laba rugi" },
   { label: "Neraca Saldo", href: "/laporan/neraca-saldo", icon: Scale, desc: "Neraca saldo" },
   { label: "Neraca", href: "/laporan/neraca", icon: BookOpen, desc: "Neraca" },
   { label: "Arus Kas", href: "/laporan/arus-kas", icon: Coins, desc: "Arus kas" },
   { label: "Buku Besar", href: "/laporan/buku-besar", icon: BookOpen, desc: "Buku besar per akun" },
   { label: "Buku Bank", href: "/laporan/buku-bank", icon: Landmark, desc: "Mutasi bank/kas" },
-  { label: "Anggaran vs Aktual", href: "/laporan/anggaran-vs-aktual", icon: Target, desc: "Realisasi anggaran" },
+  { label: "Anggaran vs Realisasi", href: "/laporan/anggaran-vs-realisasi", icon: Target, desc: "Realisasi anggaran per pusat biaya" },
   { label: "Ringkasan AR/AP", href: "/laporan/ringkasan-ar-ap", icon: Users, desc: "Piutang & hutang" },
   { label: "Laporan Pajak", href: "/laporan/pajak", icon: Receipt, desc: "Rekap PPN" },
+  // Persediaan
   { label: "Valuasi Stok", href: "/laporan/valuasi-stok", icon: Package, desc: "Nilai persediaan per gudang" },
   { label: "Mutasi Stok", href: "/laporan/mutasi-stok", icon: ArrowLeftRight, desc: "Mutasi stok masuk/keluar" },
   { label: "Ringkasan Persediaan", href: "/laporan/ringkasan-stok", icon: BarChart3, desc: "Ringkasan & item kritis" },
+  { label: "Umur Persediaan", href: "/laporan/umur-stok", icon: Package, desc: "Umur persediaan" },
+  // Piutang & hutang
   { label: "Umur Piutang", href: "/laporan/piutang-jatuh-tempo", icon: Clock, desc: "Umur piutang" },
   { label: "Umur Hutang", href: "/laporan/hutang-jatuh-tempo", icon: Clock, desc: "Umur hutang" },
-  { label: "Umur Persediaan", href: "/laporan/umur-stok", icon: Package, desc: "Umur persediaan" },
+  // Analisis
   { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, desc: "Laba per pusat" },
   { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, desc: "Perbandingan biaya perolehan antar vendor" },
   { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, desc: "Applied vs aktual, selisih under/over-absorption" },

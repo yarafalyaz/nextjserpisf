@@ -49,6 +49,15 @@ const nextConfig: NextConfig = {
         destination: "/master/vendor/:path*",
         permanent: true,
       },
+      // Anggaran laporan pernah punya dua halaman nyaris identik
+      // (anggaran-vs-aktual & anggaran-vs-realisasi). Yang resmi adalah
+      // anggaran-vs-realisasi (punya filter Pusat Biaya); URL lama diarahkan
+      // ke sana agar bookmark lama tetap berfungsi.
+      {
+        source: "/laporan/anggaran-vs-aktual",
+        destination: "/laporan/anggaran-vs-realisasi",
+        permanent: true,
+      },
     ];
   },
 

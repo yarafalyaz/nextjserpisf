@@ -36,6 +36,29 @@ describe("navigation single source of truth", () => {
     }
   })
 
+  it("links every report page on disk (no orphan /laporan/* page)", async () => {
+    const fs = await import("node:fs")
+    const path = await import("node:path")
+    const dir = path.resolve(__dirname, "../../../app/(dashboard)/laporan")
+    const routes: string[] = []
+    const walk = (current: string, rel = "") => {
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          if (entry.name.startsWith("_")) continue
+          walk(path.join(current, entry.name), rel ? `${rel}/${entry.name}` : entry.name)
+        } else if (entry.name === "page.tsx" && rel) {
+          routes.push(`/laporan/${rel}`)
+        }
+      }
+    }
+    walk(dir)
+
+    const navHrefs = flattenNavigation().map((e) => e.href)
+    for (const route of routes) {
+      expect(navHrefs, `laporan "${route}" harus ada di navigasi (sidebar/cmdK)`).toContain(route)
+    }
+  })
+
   it("flattens only leaf pages (no parent group duplicated as a page)", () => {
     const flat = flattenNavigation()
     const hrefs = flat.map((e) => e.href)
