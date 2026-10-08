@@ -19,6 +19,10 @@ export interface GenealogyMaterialLine {
   qty: number
   unitCost: number
   totalCost: number
+  /** Serial numbers of the material actually consumed (serial-tracked items). */
+  serialNumbers?: string[]
+  /** Batch/lot numbers of the material actually consumed (batch-tracked items). */
+  batchNumbers?: string[]
 }
 
 export async function recordProductionGenealogy(
@@ -54,6 +58,8 @@ export async function recordProductionGenealogy(
           qty: m.qty,
           unitCost: m.unitCost,
           totalCost: m.totalCost,
+          serialNumbers: m.serialNumbers?.length ? m.serialNumbers : undefined,
+          batchNumber: m.batchNumbers?.length ? m.batchNumbers.join(", ") : undefined,
         })),
       },
     },

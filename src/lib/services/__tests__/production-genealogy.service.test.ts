@@ -71,4 +71,58 @@ describe("recordProductionGenealogy", () => {
     expect(arg.data.materials.create).toEqual([])
     expect(arg.data.completedBy).toBeNull()
   })
+
+  it("persists per-material source serials and batch numbers (PRD line 369 / REP-13)", async () => {
+    await recordProductionGenealogy(tx as never, {
+      productionOrderId: 3,
+      documentNo: "PO-003",
+      outputItemId: 10,
+      outputQty: 1,
+      outputSerials: ["OUT-1"],
+      outputBatch: null,
+      unitCost: 1000,
+      totalCost: 1000,
+      completedBy: 5,
+      materials: [
+        {
+          itemId: 20,
+          qty: 2,
+          unitCost: 100,
+          totalCost: 200,
+          serialNumbers: ["RAW-A", "RAW-B"],
+          batchNumbers: ["LOT-1"],
+        },
+        { itemId: 21, qty: 1, unitCost: 50, totalCost: 50 },
+      ],
+    })
+
+    const materials = createMock.mock.calls[0][0].data.materials.create
+    // Material with tracked lots/serials carries them through.
+    expect(materials[0].serialNumbers).toEqual(["RAW-A", "RAW-B"])
+    expect(materials[0].batchNumber).toBe("LOT-1")
+    // Material with no attribution leaves both columns undefined (null).
+    expect(materials[1].serialNumbers).toBeUndefined()
+    expect(materials[1].batchNumber).toBeUndefined()
+  })
+
+  it("joins multiple batch numbers on a material line", async () => {
+    await recordProductionGenealogy(tx as never, {
+      productionOrderId: 4,
+      documentNo: "PO-004",
+      outputItemId: 10,
+      outputQty: 1,
+      outputSerials: [],
+      outputBatch: null,
+      unitCost: 1,
+      totalCost: 1,
+      completedBy: null,
+      materials: [
+        { itemId: 20, qty: 3, unitCost: 10, totalCost: 30, batchNumbers: ["LOT-1", "LOT-2"] },
+      ],
+    })
+
+    const materials = createMock.mock.calls[0][0].data.materials.create
+    expect(materials[0].batchNumber).toBe("LOT-1, LOT-2")
+    expect(materials[0].serialNumbers).toBeUndefined()
+  })
 })

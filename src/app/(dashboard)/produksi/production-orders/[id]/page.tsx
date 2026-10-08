@@ -256,22 +256,34 @@ export default async function ProductionOrderDetailPage({
                     <DetailTableHead>
                       <DetailTableTh>Barang</DetailTableTh>
                       <DetailTableTh align="right">Qty</DetailTableTh>
+                      <DetailTableTh>Lot/Serial</DetailTableTh>
                       <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
                       <DetailTableTh align="right">Total</DetailTableTh>
                     </DetailTableHead>
                     <DetailTableBody>
-                      {order.genealogy.materials.map((m) => (
-                        <DetailTableRow key={m.id}>
-                          <DetailTableTd>
-                            {geneItemMap.get(m.itemId)
-                              ? `${geneItemMap.get(m.itemId)!.sku} — ${geneItemMap.get(m.itemId)!.name}`
-                              : `Item #${m.itemId}`}
-                          </DetailTableTd>
-                          <DetailTableTd align="right">{Number(m.qty)}</DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrency(Number(m.unitCost))}</DetailTableTd>
-                          <DetailTableTd align="right">{formatCurrency(Number(m.totalCost))}</DetailTableTd>
-                        </DetailTableRow>
-                      ))}
+                      {order.genealogy.materials.map((m) => {
+                        const serials = (m.serialNumbers as string[] | null) ?? []
+                        const lotText = [m.batchNumber, ...serials].filter(Boolean).join(", ")
+                        return (
+                          <DetailTableRow key={m.id}>
+                            <DetailTableTd>
+                              {geneItemMap.get(m.itemId)
+                                ? `${geneItemMap.get(m.itemId)!.sku} — ${geneItemMap.get(m.itemId)!.name}`
+                                : `Item #${m.itemId}`}
+                            </DetailTableTd>
+                            <DetailTableTd align="right">{Number(m.qty)}</DetailTableTd>
+                            <DetailTableTd>
+                              {lotText ? (
+                                <span className="font-mono text-xs">{lotText}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(m.unitCost))}</DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(m.totalCost))}</DetailTableTd>
+                          </DetailTableRow>
+                        )
+                      })}
                     </DetailTableBody>
                   </DetailTable>
                 )}

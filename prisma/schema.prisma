@@ -1618,6 +1618,11 @@ model ProductionOrderMaterial {
   actualQty         Decimal?        @map("actual_qty") @db.Decimal(15, 2)
   standardCost      Decimal         @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
   actualCost        Decimal         @default(0.00) @map("actual_cost") @db.Decimal(15, 2)
+  // Lot/serial attribution of the material actually issued (PRD line 369 / REP-13).
+  // Captured at issue time from the FIFO consumption so the production genealogy
+  // can answer "which source serials/lots went into this finished unit".
+  serialNumbers     Json?           @map("serial_numbers")
+  batchNumbers      Json?           @map("batch_numbers")
   productionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
 
   @@index([productionOrderId], map: "production_order_materials_production_order_id_fkey")

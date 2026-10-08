@@ -30,6 +30,17 @@ import { Prisma } from "@prisma/client";
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
 
+/** Normalise a Json column that holds an array of strings into `string[]`. */
+function toStringArray(value: Prisma.JsonValue | null | undefined): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v)).filter((v) => v.trim().length > 0);
+}
+
+/** Concatenate two lists, dropping duplicates while preserving order. */
+function mergeUnique(a: string[], b: string[]): string[] {
+  return Array.from(new Set([...a, ...b].map((v) => v.trim()).filter((v) => v.length > 0)));
+}
+
 export async function createProduct(formData: FormData) {
   try {
     await requirePermission("create_products");
@@ -640,7 +651,7 @@ export async function issueMaterial(
         if (itm.defaultWarehouseId && !validWarehouseIds.has(itm.defaultWarehouseId)) {
           throw new Error(`Gudang default item #${itemId} tidak aktif.`);
         }
-        const { consumedCost } = await consumeFifoLayers(tx, {
+        const { consumedCost, consumedSerials, consumedBatches } = await consumeFifoLayers(tx, {
           itemId,
           warehouseId,
           qty,
@@ -652,16 +663,28 @@ export async function issueMaterial(
 
         await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${itemId}`;
 
+        // Lot/serial attribution of what this issue actually consumed, merged into
+        // the material line so the production genealogy can trace source lots
+        // (PRD line 369 / REP-13).
+        const newSerials = (consumedSerials ?? []).filter((s) => String(s).trim().length > 0);
+        const newBatchNumbers = Array.from(
+          new Set((consumedBatches ?? []).map((b) => b.batchNumber).filter((b) => String(b).trim().length > 0)),
+        );
+
         const existing = await tx.productionOrderMaterial.findFirst({
           where: { productionOrderId, itemId },
-          select: { id: true, actualQty: true, actualCost: true },
+          select: { id: true, actualQty: true, actualCost: true, serialNumbers: true, batchNumbers: true },
         });
         if (existing) {
+          const prevSerials = toStringArray(existing.serialNumbers);
+          const prevBatches = toStringArray(existing.batchNumbers);
           await tx.productionOrderMaterial.update({
             where: { id: existing.id },
             data: {
               actualQty: safeAdd(Number(existing.actualQty ?? 0), qty, 2),
               actualCost: safeAdd(Number(existing.actualCost), lineCost, 2),
+              serialNumbers: mergeUnique(prevSerials, newSerials),
+              batchNumbers: mergeUnique(prevBatches, newBatchNumbers),
             },
           });
         } else {
@@ -674,6 +697,8 @@ export async function issueMaterial(
               standardCost: resolveItemCost(itm),
               actualQty: qty,
               actualCost: lineCost,
+              serialNumbers: newSerials.length ? newSerials : undefined,
+              batchNumbers: newBatchNumbers.length ? newBatchNumbers : undefined,
             },
           });
         }
@@ -909,7 +934,13 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
       // and the materials consumed, in the same transaction as completion.
       const materialRows = await tx.productionOrderMaterial.findMany({
         where: { productionOrderId: id },
-        select: { itemId: true, actualQty: true, actualCost: true },
+        select: {
+          itemId: true,
+          actualQty: true,
+          actualCost: true,
+          serialNumbers: true,
+          batchNumbers: true,
+        },
       });
       await recordProductionGenealogy(tx, {
         productionOrderId: id,
@@ -929,6 +960,9 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
             qty: mq,
             unitCost: mq > 0 ? Math.round((mc / mq) * 100) / 100 : 0,
             totalCost: mc,
+            // Source lot/serial attribution captured at issue time.
+            serialNumbers: toStringArray(m.serialNumbers),
+            batchNumbers: toStringArray(m.batchNumbers),
           };
         }),
       });

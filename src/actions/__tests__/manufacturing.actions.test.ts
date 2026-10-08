@@ -308,6 +308,80 @@ describe("Production Order Actions", () => {
     expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
+  it("persists the consumed serials and lots on the material line (PRD line 369 / REP-13)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0,
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    // FIFO consumption reports what it actually took, including the lots/serials.
+    mocks.consumeFifoLayersMock.mockResolvedValue({
+      consumedCost: 42,
+      shortfall: 0,
+      consumedSerials: ["RAW-A", "RAW-B"],
+      consumedBatches: [
+        { batchNumber: "LOT-1", warehouseId: 5, qty: 2 },
+        { batchNumber: "LOT-1", warehouseId: 5, qty: 1 },
+      ],
+    })
+    // No prior line → create path.
+    mocks.prismaMock.productionOrderMaterial.findFirst.mockResolvedValue(null)
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.productionOrderMaterial.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          productionOrderId: 8,
+          itemId: 4,
+          actualQty: 3,
+          serialNumbers: ["RAW-A", "RAW-B"],
+          // Duplicate LOT-1 from two decrements collapses to a single entry.
+          batchNumbers: ["LOT-1"],
+        }),
+      }),
+    )
+  })
+
+  it("merges serials/lots into an existing material line on a later issue", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 42,
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    mocks.consumeFifoLayersMock.mockResolvedValue({
+      consumedCost: 30,
+      shortfall: 0,
+      consumedSerials: ["RAW-C"],
+      consumedBatches: [{ batchNumber: "LOT-2", warehouseId: 5, qty: 2 }],
+    })
+    mocks.prismaMock.productionOrderMaterial.findFirst.mockResolvedValue({
+      id: 77, actualQty: 3, actualCost: 42, serialNumbers: ["RAW-A"], batchNumbers: ["LOT-1"],
+    })
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 2 }])
+
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.productionOrderMaterial.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 77 },
+        data: expect.objectContaining({
+          serialNumbers: ["RAW-A", "RAW-C"],
+          batchNumbers: ["LOT-1", "LOT-2"],
+        }),
+      }),
+    )
+  })
+
   it("receives finished output, updates inventory layers, and transfers WIP on completion", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8,
@@ -368,6 +442,37 @@ describe("Production Order Actions", () => {
     const res = await actions.completeProductionOrder(8)
     expect(res.success).toBe(false)
     expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
+  })
+
+  it("carries the issued material lots/serials into the production genealogy (REP-13)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 1,
+      totalActualCost: 100, totalStandardCost: 90,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+    // The material line remembered which source lots/serials it consumed.
+    mocks.prismaMock.productionOrderMaterial.findMany.mockResolvedValue([
+      { itemId: 20, actualQty: 2, actualCost: 200, serialNumbers: ["RAW-A", "RAW-B"], batchNumbers: ["LOT-1"] },
+      { itemId: 21, actualQty: 1, actualCost: 50, serialNumbers: null, batchNumbers: null },
+    ])
+
+    const res = await actions.completeProductionOrder(8)
+
+    expect(res).toMatchObject({ success: true })
+    const materials = mocks.prismaMock.productionGenealogy.create.mock.calls[0][0].data.materials.create
+    expect(materials[0]).toMatchObject({
+      itemId: 20,
+      serialNumbers: ["RAW-A", "RAW-B"],
+      batchNumber: "LOT-1",
+    })
+    expect(materials[1].itemId).toBe(21)
+    expect(materials[1].serialNumbers).toBeUndefined()
+    expect(materials[1].batchNumber).toBeUndefined()
   })
 
   it("createProductionOrder succeeds", async () => {
