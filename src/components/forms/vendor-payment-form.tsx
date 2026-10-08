@@ -25,7 +25,7 @@ interface UploadedFile {
 
 interface VendorPaymentFormProps {
   vendors: { id: number; name: string }[]
-  payment?: { id: number; vendorId: number; amount: number; date: string; accountId?: number | null; notes?: string | null; referenceNumber?: string | null; bankAccount?: string | null }
+  payment?: { id: number; vendorId: number; amount: number; date: string; accountId?: number | null; notes?: string | null; referenceNumber?: string | null; bankAccount?: string | null; adminFee?: number | null }
   bills: { id: number; documentNo: string; vendorId: number; grandTotal: number }[]
   paymentMethods?: { code: string; name: string }[]
 }
@@ -163,6 +163,14 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bankAccount">No. Rekening</Label>
             <Input id="bankAccount" name="bankAccount" placeholder="No. rekening tujuan" defaultValue={payment?.bankAccount ?? ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="adminFee">Biaya Admin Bank (Rp)</Label>
+            <CurrencyInput id="adminFee" name="adminFee" placeholder="0" defaultValue={payment?.adminFee} prefix="Rp" />
+            <p className="text-xs text-muted-foreground">
+              Biaya admin/transfer saat bayar. Dibukukan sebagai Beban Admin Bank,
+              di luar jumlah pelunasan tagihan.
+            </p>
           </div>
           <input type="hidden" name="status" value="draft" />
         </FormSection>

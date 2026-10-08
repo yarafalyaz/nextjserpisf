@@ -1382,6 +1382,16 @@ export async function onVendorPaymentCreated(
     where: { id: paymentId },
   });
 
+  // Bank/transfer admin fee is a real cost on top of the bill amount. It is NOT
+  // allocated to any bill (the payment settles bills with `amount` only); it is
+  // expensed to the purchase admin-fee account. When the account is not
+  // configured, the fee is dropped from the journal (a fee must never unbalance
+  // it) — the bank still pays amount + fee only when we can book the debit.
+  const fee = Number(payment.adminFee ?? 0);
+  const feeAccount = settings.purchaseAdminFeeAccountId;
+  const bookableFee = fee > 0 && !!feeAccount ? fee : 0;
+  const bankOut = Number(payment.amount) + bookableFee;
+
   const existing = await db.journal.findFirst({
     where: { referenceType: "VendorPayment", referenceId: paymentId },
   });
@@ -1398,6 +1408,37 @@ export async function onVendorPaymentCreated(
 
     const journalNumber = await generateJournalNumber(tx, "VP", paymentId);
 
+    const entries: {
+      accountId: number;
+      debit: number;
+      credit: number;
+      memo: string;
+    }[] = [
+      // Dr. Hutang Usaha
+      {
+        accountId: settings.purchasePayableAccountId!,
+        debit: Number(payment.amount),
+        credit: 0,
+        memo: "Accounts Payable",
+      },
+    ];
+    if (bookableFee > 0) {
+      // Dr. Beban Admin Bank (fee of paying)
+      entries.push({
+        accountId: feeAccount!,
+        debit: bookableFee,
+        credit: 0,
+        memo: "Beban Admin Bank",
+      });
+    }
+    // Fix #28: Cr. Bank/Cash (bukan salesReceivableAccountId!)
+    entries.push({
+      accountId: payment.accountId ?? settings.cashBankAccountId!,
+      debit: 0,
+      credit: bankOut,
+      memo: "Bank/Cash paid",
+    });
+
     await tx.journal.create({
       data: {
         journalNumber,
@@ -1407,27 +1448,10 @@ export async function onVendorPaymentCreated(
         description: `Vendor Payment ${payment.documentNo || paymentId}`,
         type: "AUTO",
         status: "POSTED",
-        totalDebit: payment.amount,
-        totalCredit: payment.amount,
+        totalDebit: bankOut,
+        totalCredit: bankOut,
         createdBy: userId,
-        entries: {
-          create: [
-            // Dr. Hutang Usaha
-            {
-              accountId: settings.purchasePayableAccountId!,
-              debit: payment.amount,
-              credit: 0,
-              memo: "Accounts Payable",
-            },
-            // Fix #28: Cr. Bank/Cash (bukan salesReceivableAccountId!)
-            {
-              accountId: payment.accountId ?? settings.cashBankAccountId!,
-              debit: 0,
-              credit: payment.amount,
-              memo: "Bank/Cash paid",
-            },
-          ],
-        },
+        entries: { create: entries },
       },
     });
   });

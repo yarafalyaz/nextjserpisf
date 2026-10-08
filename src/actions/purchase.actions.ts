@@ -936,6 +936,7 @@ export async function createVendorPayment(formData: FormData) {
           paymentDate: new Date(v.paymentDate),
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
+          adminFee: v.adminFee ?? 0,
           notes: v.notes ?? null,
           createdBy: Number(user.id),
         },
@@ -2262,6 +2263,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
           paymentDate: new Date(v.paymentDate),
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
+          adminFee: v.adminFee ?? 0,
           notes: v.notes ?? null,
         },
       });

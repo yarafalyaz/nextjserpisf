@@ -69,6 +69,8 @@ export default async function VendorPaymentDetailPage({
           value={<Link href={`/master/pemasok/${payment.vendor.id}`}>{payment.vendor.name}</Link>}
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />
+        <DetailField label="Biaya Admin Bank" value={formatCurrency(Number(payment.adminFee))} />
+        <DetailField label="Total Keluar dari Bank" value={formatCurrency(Number(payment.amount) + Number(payment.adminFee))} />
         <DetailField label="Tanggal Bayar" value={formatDate(payment.paymentDate)} />
         <DetailField label="Metode Pembayaran" value={resolvePaymentMethodName(payment.paymentMethod, pmMap)} />
         <DetailField label="Dibuat" value={formatDate(payment.createdAt)} />

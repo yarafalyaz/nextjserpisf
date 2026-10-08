@@ -89,6 +89,9 @@ export type VendorBillInput = z.infer<typeof vendorBillSchema>
 export const vendorPaymentSchema = z.object({
   vendorId: z.coerce.number().min(1, "Vendor wajib dipilih"),
   amount: z.coerce.number().min(1, "Jumlah pembayaran wajib diisi"),
+  // Bank/transfer admin fee (a real cost of paying, expensed separately — never
+  // allocated to a bill).
+  adminFee: optionalNumber(0),
   paymentDate: dateString,
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(50),
   accountId: optionalNumber(),

@@ -1252,6 +1252,10 @@ model VendorPayment {
   paymentDate     DateTime                  @map("payment_date")
   paymentMethod   String                    @map("payment_method")
   accountId       Int?                      @map("account_id")
+  // Bank / transfer admin fee paid to move the money (e.g. "Admin BCA 1.000").
+  // A real cost of paying, NOT part of the bill settlement — it is expensed to
+  // the purchase admin-fee account and never allocated to a bill.
+  adminFee        Decimal                   @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
   notes           String?                   @db.Text
   createdBy       Int?                      @map("created_by")
   createdAt       DateTime                  @default(now()) @map("created_at")

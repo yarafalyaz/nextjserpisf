@@ -1728,6 +1728,68 @@ describe("onVendorPaymentCreated", () => {
       }),
     );
   });
+
+  it("books a bank admin fee as a separate Dr with the bank paying amount+fee", async () => {
+    (mocks.systemSettings as any).purchaseAdminFeeAccountId = 640;
+    mocks.vendorPaymentFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      amount: 150000,
+      adminFee: 1000,
+      paymentDate: new Date(),
+      documentNo: "VP-1",
+      accountId: 100,
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onVendorPaymentCreated(1);
+
+    const call = mocks.journalCreate.mock.calls[0][0];
+    expect(call.data.totalDebit).toBe(151000);
+    expect(call.data.totalCredit).toBe(151000);
+    expect(call.data.entries.create).toEqual([
+      expect.objectContaining({ accountId: 210, debit: 150000, credit: 0 }), // Dr AP (bill only)
+      expect.objectContaining({ accountId: 640, debit: 1000, credit: 0 }), // Dr Beban Admin Bank
+      expect.objectContaining({ accountId: 100, debit: 0, credit: 151000 }), // Cr Bank (amount+fee)
+    ]);
+  });
+
+  it("drops the fee from the journal when no admin-fee account is configured (stays balanced)", async () => {
+    (mocks.systemSettings as any).purchaseAdminFeeAccountId = null;
+    mocks.vendorPaymentFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      amount: 150000,
+      adminFee: 1000,
+      paymentDate: new Date(),
+      documentNo: "VP-1",
+      accountId: 100,
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onVendorPaymentCreated(1);
+
+    const call = mocks.journalCreate.mock.calls[0][0];
+    // No fee debit; bank pays only the bill amount → still balanced.
+    expect(call.data.totalDebit).toBe(150000);
+    expect(call.data.entries.create).toEqual([
+      expect.objectContaining({ accountId: 210, debit: 150000, credit: 0 }),
+      expect.objectContaining({ accountId: 100, debit: 0, credit: 150000 }),
+    ]);
+  });
+
+  it("is unchanged (2 entries) when adminFee is zero", async () => {
+    mocks.vendorPaymentFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      amount: 200,
+      adminFee: 0,
+      paymentDate: new Date(),
+      documentNo: "VP-1",
+      accountId: 100,
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onVendorPaymentCreated(1);
+
+    const call = mocks.journalCreate.mock.calls[0][0];
+    expect(call.data.entries.create).toHaveLength(2);
+    expect(call.data.totalDebit).toBe(200);
+  });
 });
 
 describe("onPayrollPaid", () => {

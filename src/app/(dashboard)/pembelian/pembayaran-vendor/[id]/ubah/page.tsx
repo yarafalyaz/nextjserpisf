@@ -37,6 +37,7 @@ export default async function EditPage({
     notes: data.notes,
     referenceNumber: data.referenceNumber,
     bankAccount: data.bankAccount,
+    adminFee: Number(data.adminFee),
   }
 
   const [vendors, bills] = await Promise.all([prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.vendorBill.findMany({ where: { status: { not: "paid" } }, orderBy: { createdAt: "desc" } })])
