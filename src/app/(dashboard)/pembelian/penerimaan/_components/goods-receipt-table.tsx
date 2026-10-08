@@ -1,11 +1,11 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { deleteGoodsReceipt } from "@/actions/purchase.actions"
+import { deleteGoodsReceipt, verifyGoodsReceipt } from "@/actions/purchase.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 
@@ -79,6 +79,14 @@ const columns = [
         deleteId={info.row.original.id}
         editPermission="edit_goods_receipts"
         deletePermission="delete_goods_receipts"
+        processAction={
+          info.row.original.status === "draft" ? verifyGoodsReceipt : undefined
+        }
+        processLabel="Verifikasi"
+        processPermission="verify_goods_receipts"
+        processConfirmTitle="Verifikasi penerimaan barang ini?"
+        processConfirmBody="Verifikasi akan menambah stok ke gudang, membuat mutasi stok, dan mencatat nilai HPP. Pastikan jumlah, lokasi rak/baris, dan harga sudah benar."
+        processSuccessMessage="Penerimaan barang berhasil diverifikasi"
       />
     ),
   }),

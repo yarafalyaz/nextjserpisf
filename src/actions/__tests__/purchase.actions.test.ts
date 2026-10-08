@@ -1492,6 +1492,7 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
   it("updateGoodsReceipt succeeds when status is draft inside transaction", async () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
     mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValueOnce({ status: "draft" })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, items: [] })
     mocks.prismaMock.goodsReceipt.update.mockResolvedValueOnce({ id: 1 })
     const res = await actions.updateGoodsReceipt(1, fdMap({ date: "2026-06-12", purchaseOrderId: "1", warehouseId: "1" }))
     expect(res?.success).toBe(true)

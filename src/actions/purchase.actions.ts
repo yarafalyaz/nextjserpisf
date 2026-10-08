@@ -656,6 +656,13 @@ export async function createGoodsReceipt(formData: FormData) {
         where: { id: v.purchaseOrderId },
         include: { items: { select: { itemId: true, qty: true } } },
       });
+      // Snapshot the ordered qty per item onto each GR line. Without this the
+      // detail page's "Qty Dipesan" reads the (always 0) column and the receipt
+      // looks like it was ordered for nothing. `poQtyMap` is reused below for
+      // the over-receive guard.
+      const orderedQtyByItem = new Map(
+        po.items.map((i) => [i.itemId, Number(i.qty)]),
+      );
       if (
         po.status !== "approved" &&
         po.status !== "ordered" &&
@@ -685,7 +692,7 @@ export async function createGoodsReceipt(formData: FormData) {
           (alreadyReceived.get(r.itemId) ?? 0) + Number(r.qty),
         );
       }
-      const poQtyMap = new Map(po.items.map((i) => [i.itemId, Number(i.qty)]));
+      const poQtyMap = orderedQtyByItem;
 
       // Pre-aggregate this submission's qty per itemId so duplicate lines in the
       // same payload (e.g. two rows for the same item) can't each pass the
@@ -735,6 +742,7 @@ export async function createGoodsReceipt(formData: FormData) {
               .map((i) => ({
                 itemId: i.itemId,
                 qty: i.qty,
+                qtyOrdered: orderedQtyByItem.get(i.itemId) ?? 0,
                 unitCost: i.unitCost || 0,
                 warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
                 rackId: i.rackId ? Number(i.rackId) : null,
@@ -2072,6 +2080,15 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
       });
       if (latestStatus && latestStatus.status !== "draft")
         throw new Error("Hanya GR draft yang dapat diedit");
+      // Snapshot ordered qty per item so "Qty Dipesan" survives an edit — the
+      // GR line carries its own copy of the PO quantity.
+      const poForItems = await tx.purchaseOrder.findUniqueOrThrow({
+        where: { id: v.purchaseOrderId },
+        select: { items: { select: { itemId: true, qty: true } } },
+      });
+      const orderedQtyByItem = new Map(
+        poForItems.items.map((i) => [i.itemId, Number(i.qty)]),
+      );
       const updated = await tx.goodsReceipt.update({
         where: { id },
         data: {
@@ -2096,6 +2113,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
               goodsReceiptId: id,
               itemId: i.itemId,
               qty: i.qty,
+              qtyOrdered: orderedQtyByItem.get(i.itemId) ?? 0,
               unitCost: i.unitCost || 0,
               warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
               rackId: i.rackId ? Number(i.rackId) : null,

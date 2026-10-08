@@ -6,9 +6,11 @@ import { formatCurrency, formatDate } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/ui/delete-button";
-import { deleteGoodsReceipt } from "@/actions/purchase.actions";
+import { deleteGoodsReceipt, verifyGoodsReceipt } from "@/actions/purchase.actions";
 import { PrintButton } from "@/components/ui/print-button";
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { ProcessButton } from "@/components/ui/process-button";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { StatusChip } from "@/components/ui/status-chip";
 import {
   DetailTable,
   DetailTableHead,
@@ -46,53 +48,59 @@ export default async function GoodsReceiptDetailPage({
   if (!receipt) notFound();
 
   // Load warehouses for per-item display
-  const [warehouses, racks, rackRows] = await Promise.all([
+  const [warehouses, racks, rackRows, receiptItems] = await Promise.all([
     prisma.warehouse.findMany({
       select: { id: true, name: true },
     }),
     prisma.rack.findMany({ select: { id: true, name: true, code: true } }),
     prisma.rackRow.findMany({ select: { id: true, name: true, code: true } }),
+    prisma.item.findMany({
+      where: { id: { in: receipt.items.map((i) => i.itemId) } },
+      select: { id: true, name: true, sku: true, unitOfMeasure: true },
+    }),
   ]);
   const warehouseMap = new Map(warehouses.map((w) => [w.id, w.name]));
   const rackMap = new Map(racks.map((r) => [r.id, r]));
   const rackRowMap = new Map(rackRows.map((rr) => [rr.id, rr]));
+  const itemMap = new Map(receiptItems.map((i) => [i.id, i]));
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs
-        items={[
+      <PageHeader
+        title={`Penerimaan Barang ${receipt.documentNo}`}
+        breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Pembelian", href: "/pembelian" },
           { label: "Penerimaan Barang", href: "/pembelian/penerimaan" },
           { label: "Detail" },
         ]}
-      />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">
-          Penerimaan Barang {receipt.documentNo}
-        </h1>
-        <div className="flex gap-2 items-center">
-          <span className={`status-badge status-${receipt.status}`}>
-            {receipt.status}
-          </span>
-          <div className="flex gap-2">
-            <Link
-              href={`/pembelian/penerimaan/${receipt.id}/ubah`}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-            >
-              Ubah
-            </Link>
+        badge={<StatusChip status={receipt.status} />}
+        actions={
+          <>
+            {receipt.status === "draft" && (
+              <>
+                <ProcessButton
+                  id={receipt.id}
+                  action={verifyGoodsReceipt}
+                  confirmTitle="Verifikasi penerimaan barang ini?"
+                  confirmBody="Verifikasi akan menambah stok ke gudang, membuat mutasi stok, dan mencatat nilai HPP. Pastikan jumlah, lokasi rak/baris, dan harga sudah benar."
+                  successMessage="Penerimaan barang berhasil diverifikasi"
+                  label="Verifikasi"
+                />
+                <Link
+                  href={`/pembelian/penerimaan/${receipt.id}/ubah`}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+                >
+                  Ubah
+                </Link>
+                <DeleteButton id={receipt.id} action={deleteGoodsReceipt} />
+              </>
+            )}
             <PrintButton />
-            <DeleteButton id={receipt.id} action={deleteGoodsReceipt} />
-            <Link
-              href="/pembelian/penerimaan"
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all"
-            >
-              ← Kembali
-            </Link>
-          </div>
-        </div>
-      </div>
+            <BackButton href="/pembelian/penerimaan" />
+          </>
+        }
+      />
 
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
@@ -246,7 +254,7 @@ export default async function GoodsReceiptDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Barang</DetailTableTh>
                 <DetailTableTh align="right">Qty Dipesan</DetailTableTh>
                 <DetailTableTh align="right">Qty Diterima</DetailTableTh>
                 <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
@@ -259,11 +267,23 @@ export default async function GoodsReceiptDetailPage({
                   const poItem = receipt.purchaseOrder.items?.find(
                     (pi: any) => pi.itemId === item.itemId,
                   );
+                  const master = itemMap.get(item.itemId);
                   return (
                     <DetailTableRow key={item.id}>
-                      <DetailTableTd>{item.itemId}</DetailTableTd>
+                      <DetailTableTd>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium text-foreground">
+                            {master?.name ?? `Barang #${item.itemId}`}
+                          </span>
+                          {master?.sku && (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {master.sku}
+                            </span>
+                          )}
+                        </div>
+                      </DetailTableTd>
                       <DetailTableTd align="right">
-                        {item.qtyOrdered != null
+                        {Number(item.qtyOrdered) > 0
                           ? Number(item.qtyOrdered)
                           : poItem
                             ? Number(poItem.qty)
@@ -271,6 +291,11 @@ export default async function GoodsReceiptDetailPage({
                       </DetailTableTd>
                       <DetailTableTd align="right">
                         {Number(item.qty)}
+                        {item.uom ? (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            {item.uom}
+                          </span>
+                        ) : null}
                       </DetailTableTd>
                       <DetailTableTd align="right">
                         {formatCurrency(Number(item.unitCost))}
@@ -297,6 +322,10 @@ export default async function GoodsReceiptDetailPage({
                           >
                             SM-{item.stockMoveId}
                           </Link>
+                        ) : receipt.status === "draft" ? (
+                          <span className="text-xs text-muted-foreground">
+                            Menunggu verifikasi
+                          </span>
                         ) : (
                           "-"
                         )}
