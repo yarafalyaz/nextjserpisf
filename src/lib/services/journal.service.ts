@@ -1,6 +1,5 @@
 
 import { PrismaClient, Prisma } from '@prisma/client'
-import { prisma } from '@/lib/db/prisma'
 
 interface JournalEntryInput {
   accountId: number
@@ -190,5 +189,3 @@ export class JournalService {
   }
 }
 
-// Singleton instance
-export const journalService = new JournalService(prisma)

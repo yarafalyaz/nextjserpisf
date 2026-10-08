@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
+import { DeleteButton } from "@/components/ui/delete-button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { deleteUom } from "@/actions/master.actions"
 
 import type { Metadata } from "next"
 
@@ -41,6 +43,7 @@ export default async function UomDetailPage({
         actions={
           <>
             <Button href={`/master/satuan/${id}/ubah`} variant="primary">Ubah</Button>
+            <DeleteButton id={numId} action={deleteUom} />
             <BackButton href="/master/satuan" />
           </>
         }

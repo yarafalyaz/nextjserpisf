@@ -11,18 +11,6 @@ import { safeAdd, safeMultiply } from "@/lib/utils/math"
  * never recomputed here, only the non-material delta is applied.
  */
 
-/** Sum of all non-material cost lines for a production order. */
-export async function sumProductionCosts(
-  productionOrderId: number,
-  client: TxClient | typeof prisma = prisma,
-): Promise<number> {
-  const agg = await client.productionCost.aggregate({
-    where: { productionOrderId },
-    _sum: { amount: true },
-  })
-  return Number(agg._sum.amount ?? 0)
-}
-
 /**
  * Apply a non-material cost delta to a production order's actual cost. Positive
  * delta on add, negative on delete/update-reduction. Never lets the running

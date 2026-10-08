@@ -8,7 +8,20 @@ const eslintConfig = defineConfig([
   {
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "off",
+      // Catch dead code (unused imports / variables). Warning-level so it
+      // surfaces in review without failing CI, but eslint-config-next enables
+      // this by default anyway — this makes the intent explicit and covers the
+      // `^_` escape hatch used for intentionally-unused bindings.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+          args: "after-used",
+        },
+      ],
     },
   },
   // Override for test files — relax strict type checks

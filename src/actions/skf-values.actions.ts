@@ -126,20 +126,3 @@ export async function deleteSkfValue(id: number) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Get distinct periods from existing SKF values
-// ─────────────────────────────────────────────────────────────────────────────
-export async function getSkfPeriods() {
-  try {
-    await requirePermission("view_statistical_key_figures")
-    const periods = await prisma.skfValue.findMany({
-      select: { period: true },
-      distinct: ["period"],
-      orderBy: { period: "desc" },
-    })
-    return { success: true, data: periods.map((p) => p.period) }
-  } catch (e: unknown) {
-    console.error("[getSkfPeriods]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan"), data: [] }
-  }
-}

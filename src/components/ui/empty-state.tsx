@@ -1,31 +1,6 @@
 import { ReactNode } from "react"
 import { Card, CardContent } from "@/components/ui/shadcn/card"
 
-interface EmptyStateProps {
-  icon?: ReactNode
-  title: string
-  description?: string
-  action?: ReactNode
-}
-
-/**
- * Empty state placeholder for lists/tables with no data.
- */
-export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
-  // Visual only — non-clickable container with semantic grouping for AT.
-  return (
-    <div
-      className="flex flex-col items-center justify-center py-16 px-6 text-center"
-      role="status"
-    >
-      {icon && <div className="text-muted-foreground/40 mb-4" aria-hidden="true">{icon}</div>}
-      <h3 className="text-base font-semibold text-foreground mb-1">{title}</h3>
-      {description && <p className="text-sm text-muted-foreground max-w-sm mb-4">{description}</p>}
-      {action}
-    </div>
-  )
-}
-
 interface StatCardProps {
   label: string
   value: string | number

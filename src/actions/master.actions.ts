@@ -2169,6 +2169,32 @@ export async function updateUom(id: number, formData: FormData) {
 export async function deleteUom(id: number) {
   try {
     await requirePermission("edit_units");
+
+    const uom = await prisma.unitOfMeasure.findUnique({ where: { id } });
+    if (!uom) return { success: false, error: "Satuan tidak ditemukan" };
+
+    // Referential safety: items store the unit as a free string (matched by
+    // symbol/name) and other units may derive from this one via baseUnitId.
+    // There is no FK, so a blind delete would orphan those references.
+    const [usedByItems, derivedUnits] = await Promise.all([
+      prisma.item.count({
+        where: { OR: [{ unitOfMeasure: uom.symbol }, { unitOfMeasure: uom.name }] },
+      }),
+      prisma.unitOfMeasure.count({ where: { baseUnitId: id } }),
+    ]);
+    if (usedByItems > 0) {
+      return {
+        success: false,
+        error: `Satuan dipakai oleh ${usedByItems} barang — tidak dapat dihapus`,
+      };
+    }
+    if (derivedUnits > 0) {
+      return {
+        success: false,
+        error: `Satuan menjadi basis ${derivedUnits} satuan lain — tidak dapat dihapus`,
+      };
+    }
+
     await prisma.unitOfMeasure.delete({ where: { id } });
     await logActivity("delete", "UnitOfMeasure", id, "Menghapus satuan");
     revalidatePath("/master/satuan");

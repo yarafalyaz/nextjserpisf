@@ -10,7 +10,7 @@ export const metadata = { title: "Input Nilai Key Figure" }
 export default async function InputSkfValuesPage() {
   await requirePermission("view_statistical_key_figures")
 
-  const [skfs, costCenters] = await Promise.all([
+  const [skfs, costCenters, existingPeriodRows] = await Promise.all([
     prisma.statisticalKeyFigure.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -21,14 +21,24 @@ export default async function InputSkfValuesPage() {
       orderBy: { code: "asc" },
       select: { id: true, code: true, name: true },
     }),
+    // Distinct periods that already have values, so an existing period stays
+    // selectable even after it ages out of the rolling 6-month window.
+    prisma.skfValue.findMany({
+      select: { period: true },
+      distinct: ["period"],
+      orderBy: { period: "desc" },
+    }),
   ])
 
-  const periods: string[] = []
+  // Rolling 6 months (current + 5 prior) PLUS any older period already in use.
+  const periodSet = new Set<string>()
   const now = new Date()
   for (let i = 0; i < 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    periods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+    periodSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
   }
+  for (const row of existingPeriodRows) periodSet.add(row.period)
+  const periods = [...periodSet].sort().reverse()
 
   return (
     <div className="flex flex-col gap-6">
