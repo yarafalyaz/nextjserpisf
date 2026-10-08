@@ -21,18 +21,39 @@ import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
 
 // ==================== ASSET GL HELPERS ====================
-// Asset GL accounts are configured via environment variables, mirroring the
-// depreciation cron (DEPRECIATION_EXPENSE_ACCOUNT_ID /
-// ACCUMULATED_DEPRECIATION_ACCOUNT_ID). When an account is unset the matching
-// journal is skipped silently, the same convention stock journaling uses.
-function getAssetGlAccounts() {
+// Asset GL accounts resolve with the SAME precedence as depreciation:
+//   per-category mapping -> global SystemSetting mapping (UI: Mapping Akun)
+//   -> legacy environment variables (last resort).
+// A category account, when set, overrides the global one for that asset class
+// (e.g. vehicles vs machinery may post to different fixed-asset accounts).
+// When a slot is unset everywhere the matching journal is skipped silently, the
+// same convention stock journaling uses.
+type AssetGlCategory = {
+  assetAccountId?: number | null
+  accumulatedDepreciationAccountId?: number | null
+  gainLossAccountId?: number | null
+} | null
+
+async function getAssetGlAccounts(category?: AssetGlCategory) {
+  const settings = await prisma.systemSetting.findFirst({
+    select: {
+      cashBankAccountId: true,
+      accumulatedDepreciationAccountId: true,
+    },
+  })
+  const env = (key: string) => parseInt(process.env[key] || "0") || 0
+  const first = (...candidates: (number | null | undefined)[]) =>
+    candidates.find((c) => typeof c === "number" && c > 0) ?? 0
+
   return {
-    fixedAsset: parseInt(process.env.FIXED_ASSET_ACCOUNT_ID || "0") || 0,
-    cashBank: parseInt(process.env.ASSET_CASH_ACCOUNT_ID || "0") || 0,
-    accumDep:
-      parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0") || 0,
-    gainLoss:
-      parseInt(process.env.ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID || "0") || 0,
+    fixedAsset: first(category?.assetAccountId, null, env("FIXED_ASSET_ACCOUNT_ID")),
+    cashBank: first(settings?.cashBankAccountId, env("ASSET_CASH_ACCOUNT_ID")),
+    accumDep: first(
+      category?.accumulatedDepreciationAccountId,
+      settings?.accumulatedDepreciationAccountId,
+      env("ACCUMULATED_DEPRECIATION_ACCOUNT_ID"),
+    ),
+    gainLoss: first(category?.gainLossAccountId, null, env("ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID")),
   };
 }
 
@@ -485,7 +506,15 @@ export async function createAsset(formData: FormData) {
     const acquisitionDate = data.purchaseDate
       ? new Date(data.purchaseDate)
       : new Date();
-    const gl = getAssetGlAccounts();
+    // Resolve GL accounts from the asset's category mapping (falls back to the
+    // global Mapping Akun, then env vars).
+    const category = data.categoryId
+      ? await prisma.assetCategory.findUnique({
+          where: { id: data.categoryId },
+          select: { assetAccountId: true, accumulatedDepreciationAccountId: true, gainLossAccountId: true },
+        })
+      : null;
+    const gl = await getAssetGlAccounts(category);
 
     const asset = await prisma.$transaction(async (tx) => {
       const created = await tx.asset.create({
@@ -660,7 +689,15 @@ export async function disposeAsset(formData: FormData) {
     const grossCost = Number(asset.purchaseCost);
     const bookValue = Number(asset.currentValue);
     const gainLoss = safeSubtract(proceeds, bookValue, 0); // positive = gain, negative = loss
-    const gl = getAssetGlAccounts();
+    // Resolve GL accounts from the asset's category mapping (falls back to the
+    // global Mapping Akun, then env vars).
+    const category = asset.categoryId
+      ? await prisma.assetCategory.findUnique({
+          where: { id: asset.categoryId },
+          select: { assetAccountId: true, accumulatedDepreciationAccountId: true, gainLossAccountId: true },
+        })
+      : null;
+    const gl = await getAssetGlAccounts(category);
 
     await prisma.$transaction(async (tx) => {
       // Atomically claim the disposal: only the request that flips status away

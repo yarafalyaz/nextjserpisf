@@ -26,6 +26,8 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     asset: { findUniqueOrThrow: (...a: unknown[]) => assetFindUniqueOrThrowMock(...a) },
+    assetCategory: { findUnique: vi.fn().mockResolvedValue(null) },
+    systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))

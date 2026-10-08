@@ -12,6 +12,10 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(),
       delete: vi.fn(),
       update: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    systemSetting: {
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     assetBrand: {
       create: vi.fn(),
@@ -600,6 +604,18 @@ describe("createAsset / updateAsset", () => {
     }))
     expect(res.success).toBe(true)
     expect(prismaMock.journal.create).toHaveBeenCalled()
+  })
+
+  it("posts acquisition to the CATEGORY fixed-asset account over env", async () => {
+    // Regression: the category mapping used to be ignored entirely (env only).
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ASSET_CASH_ACCOUNT_ID = "201"
+    prismaMock.assetCategory.findUnique.mockResolvedValue({ assetAccountId: 900, accumulatedDepreciationAccountId: 901, gainLossAccountId: null })
+    await createAsset(fd({ name: "Truk", categoryId: "5", purchasePrice: "1000" }))
+    const call = prismaMock.journal.create.mock.calls.at(-1)?.[0]
+    const accounts = call.data.entries.create.map((e: any) => e.accountId)
+    expect(accounts).toContain(900) // category fixed-asset account
+    expect(accounts).not.toContain(200) // env account must lose
   })
 
   it("returns error when asset create throws (caught error path)", async () => {
