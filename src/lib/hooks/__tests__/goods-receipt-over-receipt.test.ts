@@ -37,6 +37,8 @@ interface GrItem {
   batchNumber?: string | null
   expiryDate?: Date | null
   serialNumbers?: unknown
+  rackId?: number | null
+  rackRowId?: number | null
 }
 
 function wireTx(opts: {
@@ -142,6 +144,40 @@ describe("onGoodsReceiptVerified over-receipt guard", () => {
     expect(spies.moveCreate).toHaveBeenCalledTimes(1) // reached stock-in
     expect(spies.grUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "verified" }) }),
+    )
+  })
+
+  it("stores the destination rack and rack row on the stock move", async () => {
+    const { spies } = wireTx({
+      poId: 50,
+      poItems: [{ itemId: 7, qty: 10 }],
+      priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 5, rackId: 3, rackRowId: 9 }],
+    })
+
+    await onGoodsReceiptVerified(100, 1)
+
+    expect(spies.moveCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ rackId: 3, rackRowId: 9 }),
+      }),
+    )
+  })
+
+  it("leaves the rack/row null when the receipt line did not pick one", async () => {
+    const { spies } = wireTx({
+      poId: 50,
+      poItems: [{ itemId: 7, qty: 10 }],
+      priorGrItems: [],
+      grItems: [{ itemId: 7, qty: 5 }],
+    })
+
+    await onGoodsReceiptVerified(100, 1)
+
+    expect(spies.moveCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ rackId: null, rackRowId: null }),
+      }),
     )
   })
 

@@ -17,13 +17,21 @@ export default async function CreateGoodsReceiptPage({
   await requirePermission("create_goods_receipts")
   const params = await searchParams
 
-  const [purchaseOrders, warehouses, itemRecords] = await Promise.all([
+  const [purchaseOrders, warehouses, racks, rackRows, itemRecords] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where: { status: { in: ["ordered", "approved"] } },
       include: { vendor: true, items: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.warehouse.findMany({ where: { isActive: true , deletedAt: null }, orderBy: { name: "asc" } }),
+    prisma.rack.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, warehouseId: true, name: true, code: true },
+    }),
+    prisma.rackRow.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, rackId: true, name: true, code: true },
+    }),
     prisma.item.findMany({ where: { deletedAt: null },
       select: {
         id: true,
@@ -32,6 +40,9 @@ export default async function CreateGoodsReceiptPage({
         trackBatch: true,
         trackSerial: true,
         unitOfMeasure: true,
+        defaultWarehouseId: true,
+        defaultRackId: true,
+        defaultRackRowId: true,
         uomConversions: { select: { code: true, factorToBase: true } },
       },
     }),
@@ -46,6 +57,9 @@ export default async function CreateGoodsReceiptPage({
         trackBatch: i.trackBatch,
         trackSerial: i.trackSerial,
         unitOfMeasure: i.unitOfMeasure,
+        defaultWarehouseId: i.defaultWarehouseId,
+        defaultRackId: i.defaultRackId,
+        defaultRackRowId: i.defaultRackRowId,
         uomConversions: i.uomConversions.map((u) => ({ code: u.code, factorToBase: Number(u.factorToBase) })),
       },
     ])
@@ -55,11 +69,17 @@ export default async function CreateGoodsReceiptPage({
     id: po.id,
     documentNo: po.documentNo,
     vendor: po.vendor ? { name: po.vendor.name } : undefined,
+    // Landed-cost preview inputs: the PO's order-time freight estimate and the
+    // header discount rollup, plus each line's net value (allocation weight).
+    shippingCost: Number(po.shippingCost),
+    serviceFee: Number(po.serviceFee),
+    discount: Number(po.discount),
     items: po.items.map((item) => ({
       id: item.id,
       itemId: item.itemId,
       qty: Number(item.qty),
       unitPrice: Number(item.unitPrice),
+      total: Number(item.total),
       receivedQty: Number(item.receivedQty),
       item: itemMap.get(item.itemId) ?? {
         name: "",
@@ -81,6 +101,8 @@ export default async function CreateGoodsReceiptPage({
       <GoodsReceiptForm
         purchaseOrders={JSON.parse(JSON.stringify(purchaseOrderOptions))}
         warehouses={warehouses}
+        racks={racks}
+        rackRows={rackRows}
         defaultPoId={params.poId ? Number(params.poId) : undefined}
       />
     </div>

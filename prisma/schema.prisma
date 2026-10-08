@@ -1121,6 +1121,8 @@ model GoodsReceiptItem {
   goodsReceiptId Int          @map("goods_receipt_id")
   itemId         Int          @map("item_id")
   warehouseId    Int?         @map("warehouse_id")
+  rackId         Int?         @map("rack_id")
+  rackRowId      Int?         @map("rack_row_id")
   qtyOrdered     Decimal      @default(0.00) @map("qty_ordered") @db.Decimal(15, 2)
   qty            Decimal      @db.Decimal(15, 2)
   uom            String?
@@ -1134,6 +1136,8 @@ model GoodsReceiptItem {
   @@index([goodsReceiptId], map: "goods_receipt_items_goods_receipt_id_fkey")
   @@index([itemId])
   @@index([warehouseId])
+  @@index([rackId])
+  @@index([rackRowId])
   @@index([stockMoveId])
   @@map("goods_receipt_items")
 }

@@ -346,6 +346,11 @@ export async function onGoodsReceiptVerified(
           documentNo: smDocNo,
           itemId: item.itemId,
           warehouseId: lineWarehouseId,
+          // Destination rack/row picked on the receipt line (nullable — an
+          // operator may not track bin locations). Stored so downstream stock
+          // reports and put-away can locate the bin.
+          rackId: item.rackId ?? null,
+          rackRowId: item.rackRowId ?? null,
           qty: baseQty,
           cost: baseUnitCostWithLanded,
           impact: "IN",

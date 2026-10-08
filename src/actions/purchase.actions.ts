@@ -634,6 +634,8 @@ export async function createGoodsReceipt(formData: FormData) {
           qty: number;
           unitCost: number;
           warehouseId?: number | null;
+          rackId?: number | null;
+          rackRowId?: number | null;
           uom?: string | null;
           batchNumber?: string | null;
           expiryDate?: string | null;
@@ -735,6 +737,8 @@ export async function createGoodsReceipt(formData: FormData) {
                 qty: i.qty,
                 unitCost: i.unitCost || 0,
                 warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
+                rackId: i.rackId ? Number(i.rackId) : null,
+                rackRowId: i.rackRowId ? Number(i.rackRowId) : null,
                 uom: i.uom || null,
                 batchNumber: i.batchNumber || null,
                 expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
@@ -2052,6 +2056,8 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           qty: number;
           unitCost: number;
           warehouseId?: number | null;
+          rackId?: number | null;
+          rackRowId?: number | null;
           uom?: string | null;
           batchNumber?: string | null;
           expiryDate?: string | null;
@@ -2092,6 +2098,8 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
               qty: i.qty,
               unitCost: i.unitCost || 0,
               warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
+              rackId: i.rackId ? Number(i.rackId) : null,
+              rackRowId: i.rackRowId ? Number(i.rackRowId) : null,
               uom: i.uom || null,
               batchNumber: i.batchNumber || null,
               expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,

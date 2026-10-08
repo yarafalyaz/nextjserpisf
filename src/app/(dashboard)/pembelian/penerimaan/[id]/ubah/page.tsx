@@ -36,7 +36,10 @@ export default async function EditPage({
     purchaseOrderId: data.purchaseOrderId,
     warehouseId: data.warehouseId,
     date: data.date.toISOString().split("T")[0],
+    referenceNumber: data.referenceNumber,
     notes: data.notes,
+    shippingCost: Number(data.shippingCost),
+    otherCost: Number(data.otherCost),
     items: data.items.map((it) => ({
       itemId: it.itemId,
       qty: Number(it.qty),
@@ -47,10 +50,12 @@ export default async function EditPage({
         ? it.serialNumbers.join("\n")
         : "",
       warehouseId: it.warehouseId,
+      rackId: it.rackId,
+      rackRowId: it.rackRowId,
     })),
   };
 
-  const [purchaseOrders, warehouses, itemRecords] = await Promise.all([
+  const [purchaseOrders, warehouses, racks, rackRows, itemRecords] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where: {
         status: { in: ["approved", "ordered", "partial_received", "received"] },
@@ -62,6 +67,14 @@ export default async function EditPage({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
     }),
+    prisma.rack.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, warehouseId: true, name: true, code: true },
+    }),
+    prisma.rackRow.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, rackId: true, name: true, code: true },
+    }),
     prisma.item.findMany({
       where: { deletedAt: null },
       select: {
@@ -71,6 +84,9 @@ export default async function EditPage({
         trackBatch: true,
         trackSerial: true,
         unitOfMeasure: true,
+        defaultWarehouseId: true,
+        defaultRackId: true,
+        defaultRackRowId: true,
         uomConversions: { select: { code: true, factorToBase: true } },
       },
     }),
@@ -85,6 +101,9 @@ export default async function EditPage({
         trackBatch: i.trackBatch,
         trackSerial: i.trackSerial,
         unitOfMeasure: i.unitOfMeasure,
+        defaultWarehouseId: i.defaultWarehouseId,
+        defaultRackId: i.defaultRackId,
+        defaultRackRowId: i.defaultRackRowId,
         uomConversions: i.uomConversions.map((u) => ({
           code: u.code,
           factorToBase: Number(u.factorToBase),
@@ -97,11 +116,15 @@ export default async function EditPage({
     id: po.id,
     documentNo: po.documentNo,
     vendor: po.vendor ? { name: po.vendor.name } : undefined,
+    shippingCost: Number(po.shippingCost),
+    serviceFee: Number(po.serviceFee),
+    discount: Number(po.discount),
     items: po.items.map((item) => ({
       id: item.id,
       itemId: item.itemId,
       qty: Number(item.qty),
       unitPrice: Number(item.unitPrice),
+      total: Number(item.total),
       receivedQty: Number(item.receivedQty),
       item: itemMap.get(item.itemId) ?? {
         name: "",
@@ -131,6 +154,8 @@ export default async function EditPage({
         receipt={receipt}
         purchaseOrders={purchaseOrderOptions}
         warehouses={warehouses}
+        racks={racks}
+        rackRows={rackRows}
       />
     </div>
   );

@@ -46,10 +46,16 @@ export default async function GoodsReceiptDetailPage({
   if (!receipt) notFound();
 
   // Load warehouses for per-item display
-  const warehouses = await prisma.warehouse.findMany({
-    select: { id: true, name: true },
-  });
+  const [warehouses, racks, rackRows] = await Promise.all([
+    prisma.warehouse.findMany({
+      select: { id: true, name: true },
+    }),
+    prisma.rack.findMany({ select: { id: true, name: true, code: true } }),
+    prisma.rackRow.findMany({ select: { id: true, name: true, code: true } }),
+  ]);
   const warehouseMap = new Map(warehouses.map((w) => [w.id, w.name]));
+  const rackMap = new Map(racks.map((r) => [r.id, r]));
+  const rackRowMap = new Map(rackRows.map((rr) => [rr.id, rr]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -245,6 +251,7 @@ export default async function GoodsReceiptDetailPage({
                 <DetailTableTh align="right">Qty Diterima</DetailTableTh>
                 <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
                 <DetailTableTh>Gudang</DetailTableTh>
+                <DetailTableTh>Rak / Baris</DetailTableTh>
                 <DetailTableTh>Mutasi Stok</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
@@ -271,6 +278,16 @@ export default async function GoodsReceiptDetailPage({
                       <DetailTableTd>
                         {warehouseMap.get(item.warehouseId) ||
                           receipt.warehouse.name}
+                      </DetailTableTd>
+                      <DetailTableTd>
+                        {(() => {
+                          const rack = item.rackId ? rackMap.get(item.rackId) : null;
+                          const row = item.rackRowId ? rackRowMap.get(item.rackRowId) : null;
+                          const rackLabel = rack ? (rack.code ? `${rack.code} — ${rack.name}` : rack.name) : null;
+                          const rowLabel = row ? (row.code ? `${row.code} — ${row.name}` : row.name) : null;
+                          if (!rackLabel && !rowLabel) return "-";
+                          return [rackLabel, rowLabel].filter(Boolean).join(" / ");
+                        })()}
                       </DetailTableTd>
                       <DetailTableTd>
                         {item.stockMoveId ? (

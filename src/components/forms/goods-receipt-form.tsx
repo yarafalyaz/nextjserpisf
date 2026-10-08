@@ -28,6 +28,9 @@ interface ItemMeta {
   trackSerial: boolean;
   unitOfMeasure: string;
   uomConversions: Array<{ code: string; factorToBase: number }>;
+  defaultWarehouseId?: number | null;
+  defaultRackId?: number | null;
+  defaultRackRowId?: number | null;
 }
 
 interface GRFormProps {
@@ -52,6 +55,8 @@ interface GRFormProps {
     }>;
   }>;
   warehouses: { id: number; name: string }[];
+  racks: Array<{ id: number; warehouseId: number; name: string; code: string }>;
+  rackRows: Array<{ id: number; rackId: number; name: string; code: string | null }>;
   receipt?: {
     id: number;
     purchaseOrderId: number;
@@ -75,6 +80,8 @@ interface GRFormProps {
       expiryDate: string;
       serialNumbers: string;
       warehouseId: number | null;
+      rackId?: number | null;
+      rackRowId?: number | null;
     }>;
   };
   defaultPoId?: number;
@@ -89,6 +96,8 @@ interface GRItemRow {
   // mirroring landed-cost.service so the preview matches the posted value.
   poNetUnitPrice: number;
   warehouseId: string;
+  rackId: string;
+  rackRowId: string;
   uom: string;
   batchNumber: string;
   expiryDate: string;
@@ -116,7 +125,13 @@ function mapPoToRows(
       unitCost: Number(item.unitPrice),
       qtyOrdered: Number(item.qty),
       poNetUnitPrice: Number(item.qty) > 0 ? netTotal / Number(item.qty) : 0,
-      warehouseId: "",
+      warehouseId: item.item?.defaultWarehouseId
+        ? String(item.item.defaultWarehouseId)
+        : "",
+      rackId: item.item?.defaultRackId ? String(item.item.defaultRackId) : "",
+      rackRowId: item.item?.defaultRackRowId
+        ? String(item.item.defaultRackRowId)
+        : "",
       uom: item.item?.unitOfMeasure ?? "PCS",
       batchNumber: "",
       expiryDate: "",
@@ -156,6 +171,8 @@ function mapReceiptToRows(
       poNetUnitPrice:
         poItem && Number(poItem.qty) > 0 ? netTotal / Number(poItem.qty) : 0,
       warehouseId: ri.warehouseId ? String(ri.warehouseId) : "",
+      rackId: ri.rackId ? String(ri.rackId) : "",
+      rackRowId: ri.rackRowId ? String(ri.rackRowId) : "",
       uom: poItem?.item?.unitOfMeasure ?? "PCS",
       batchNumber: ri.batchNumber,
       expiryDate: ri.expiryDate,
@@ -172,6 +189,8 @@ function mapReceiptToRows(
 export function GoodsReceiptForm({
   purchaseOrders,
   warehouses,
+  racks,
+  rackRows,
   defaultPoId,
   receipt,
 }: GRFormProps) {
@@ -292,6 +311,8 @@ export function GoodsReceiptForm({
             qty: item.qty,
             unitCost: item.unitCost,
             warehouseId: item.warehouseId ? Number(item.warehouseId) : null,
+            rackId: item.rackId ? Number(item.rackId) : null,
+            rackRowId: item.rackRowId ? Number(item.rackRowId) : null,
             uom: item.uom || item.unitOfMeasure,
             batchNumber:
               item.trackBatch && item.batchNumber.trim()
@@ -429,7 +450,7 @@ export function GoodsReceiptForm({
           >
             <div className="overflow-x-auto">
               <table
-                className="w-full border-collapse min-w-[1000px]"
+                className="w-full border-collapse min-w-[1200px]"
                 style={{ fontSize: "0.8125rem" }}
               >
                 <thead>
@@ -443,6 +464,8 @@ export function GoodsReceiptForm({
                     <th className="text-right">Bagian Diskon</th>
                     <th className="text-right">HPP/Unit</th>
                     <th>Gudang (per item)</th>
+                    <th>Rak</th>
+                    <th>Baris</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -512,7 +535,14 @@ export function GoodsReceiptForm({
                             <Combobox
                               value={row.warehouseId || null}
                               onChange={(key) =>
-                                updateItem(index, { warehouseId: key ?? "" })
+                                updateItem(index, {
+                                  warehouseId: key ?? "",
+                                  // Warehouse changed → the previously chosen
+                                  // rack/row belong to another warehouse. Clear
+                                  // them so we never store a mismatched bin.
+                                  rackId: "",
+                                  rackRowId: "",
+                                })
                               }
                               options={warehouses.map((w) => ({
                                 value: String(w.id),
@@ -522,10 +552,53 @@ export function GoodsReceiptForm({
                               className="w-full"
                             />
                           </td>
+                          <td>
+                            <Combobox
+                              value={row.rackId || null}
+                              onChange={(key) =>
+                                updateItem(index, {
+                                  rackId: key ?? "",
+                                  // Rack changed → drop the row chosen under the
+                                  // previous rack.
+                                  rackRowId: "",
+                                })
+                              }
+                              options={racks
+                                .filter(
+                                  (r) =>
+                                    String(r.warehouseId) ===
+                                    (row.warehouseId || warehouseId),
+                                )
+                                .map((r) => ({
+                                  value: String(r.id),
+                                  label: r.code ? `${r.code} — ${r.name}` : r.name,
+                                }))}
+                              placeholder="— Rak —"
+                              className="w-full"
+                              disabled={!(row.warehouseId || warehouseId)}
+                            />
+                          </td>
+                          <td>
+                            <Combobox
+                              value={row.rackRowId || null}
+                              onChange={(key) =>
+                                updateItem(index, { rackRowId: key ?? "" })
+                              }
+                              options={rackRows
+                                .filter((rr) => String(rr.rackId) === row.rackId)
+                                .map((rr) => ({
+                                  value: String(rr.id),
+                                  label: rr.code ? `${rr.code} — ${rr.name}` : rr.name,
+                                }))}
+                              placeholder="— Baris —"
+                              className="w-full"
+                              disabled={!row.rackId}
+                            />
+                          </td>
                         </tr>
                         {(row.trackBatch || row.trackSerial) && (
                           <tr>
-                            <td colSpan={9} style={{ paddingBottom: "12px" }}>
+                            <td colSpan={11} style={{ paddingBottom: "12px" }}>
                               <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/30 p-3">
                                 {row.trackBatch && (
                                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
