@@ -1,7 +1,7 @@
 
 import { prisma } from '@/lib/db/prisma'
 
-interface LowStockItem {
+export interface LowStockItem {
   id: number
   name: string
   qtyOnHand: number
@@ -94,7 +94,9 @@ export const notificationService = {
 
   /**
    * Check if an item's stock is below minimum threshold and notify admins.
-   * Idempotent — safe to call multiple times for the same item.
+   * NOTE: not idempotent — each call creates fresh notifications. Callers that
+   * may run repeatedly for the same item/period must dedupe themselves (see the
+   * low-stock cron, which de-dupes per period).
    */
   async checkAndNotifyLowStock(item: LowStockItem): Promise<void> {
     if (item.minStock > 0 && item.qtyOnHand <= item.minStock) {

@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
-import { assertApproved } from "@/lib/services/approval-workflow.service";
+import { assertApproved, requestApprovalIfConfigured } from "@/lib/services/approval-workflow.service";
 import {
   assetCategorySchema,
   assetBrandSchema,
@@ -500,12 +500,11 @@ export async function createAsset(formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("create_assets");
+    const user = await requirePermission("create_assets");
 
     const parsed = parseFormData(assetSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
-
     let code = data.code || "";
     if (!code) {
       code = await generateDocumentNumber("AST", "simple");
@@ -587,6 +586,13 @@ export async function createAsset(formData: FormData) {
     });
 
     await logActivity("create", "Asset", asset.id, "Membuat aset");
+
+    // Route the asset through the approval workflow if one is configured. This
+    // is what makes disposeAsset's `assertApproved("Asset", id)` gate actually
+    // able to block: without a requested Approval row, assertApproved treats the
+    // asset as "no workflow → allowed" and the disposal control silently passes.
+    await requestApprovalIfConfigured("Asset", asset.id, Number(user.id));
+
     revalidatePath("/aset");
     return { success: true, id: asset.id };
   } catch (e: unknown) {

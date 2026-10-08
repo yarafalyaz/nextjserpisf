@@ -1354,6 +1354,12 @@ export async function updateBank(id: number, formData: FormData) {
 
 // ==================== TAX ACTIONS ====================
 
+/** Tax rate is a percentage: clamp to a sane 0..100 range (Decimal(5,2)). */
+function clampTaxRate(rate: number): number {
+  if (!Number.isFinite(rate)) return 0;
+  return Math.min(100, Math.max(0, rate));
+}
+
 export async function createTax(formData: FormData) {
   try {
     const user = await requirePermission("create_taxes");
@@ -1361,7 +1367,7 @@ export async function createTax(formData: FormData) {
     const tax = await prisma.tax.create({
       data: {
         name: requireString(formData.get("name"), "name"),
-        rate: safeNumber(formData.get("rate")) ?? 0,
+        rate: clampTaxRate(safeNumber(formData.get("rate")) ?? 0),
         code: (formData.get("code") as string) || undefined,
         description: (formData.get("description") as string) || undefined,
         type: (formData.get("type") as string) || undefined,
@@ -1393,24 +1399,36 @@ export async function updateTax(id: number, formData: FormData) {
   try {
     await requirePermission("edit_taxes");
 
+    // The edit form renders only `name` and `rate`. Writing `isInclusive`/
+    // `isCompound` unconditionally would force them to false on every save
+    // (formData.get returns null for an unchecked/absent box), silently
+    // downgrading an inclusive or compound tax. Preserve when the form does not
+    // submit the field — same class as the account.normalBalance / itemCategory
+    // parentId preservation fixes.
+    const data: Prisma.TaxUpdateInput = {
+      name: requireString(formData.get("name"), "name"),
+      rate: clampTaxRate(safeNumber(formData.get("rate")) ?? 0),
+      code: (formData.get("code") as string) || undefined,
+      description: (formData.get("description") as string) || undefined,
+      type: (formData.get("type") as string) || undefined,
+      scope: (formData.get("scope") as string) || undefined,
+      effectiveFrom: formData.get("effectiveFrom")
+        ? new Date(formData.get("effectiveFrom") as string)
+        : undefined,
+      effectiveTo: formData.get("effectiveTo")
+        ? new Date(formData.get("effectiveTo") as string)
+        : undefined,
+    };
+    if (formData.has("isInclusive")) {
+      data.isInclusive = formData.get("isInclusive") === "on";
+    }
+    if (formData.has("isCompound")) {
+      data.isCompound = formData.get("isCompound") === "on";
+    }
+
     await prisma.tax.update({
       where: { id },
-      data: {
-        name: requireString(formData.get("name"), "name"),
-        rate: safeNumber(formData.get("rate")) ?? 0,
-        code: (formData.get("code") as string) || undefined,
-        description: (formData.get("description") as string) || undefined,
-        type: (formData.get("type") as string) || undefined,
-        scope: (formData.get("scope") as string) || undefined,
-        isInclusive: formData.get("isInclusive") === "on",
-        isCompound: formData.get("isCompound") === "on",
-        effectiveFrom: formData.get("effectiveFrom")
-          ? new Date(formData.get("effectiveFrom") as string)
-          : undefined,
-        effectiveTo: formData.get("effectiveTo")
-          ? new Date(formData.get("effectiveTo") as string)
-          : undefined,
-      },
+      data,
     });
 
     revalidatePath("/master/pajak");
@@ -1857,6 +1875,17 @@ export async function deleteDepartment(id: number) {
       throw new Error(`Departemen masih memiliki ${empCount} karyawan aktif`);
     }
 
+    // Guard: `positions.department_id` is ON DELETE SET NULL, so a raw delete
+    // silently detaches every position in the department. Refuse instead.
+    const positionCount = await prisma.position.count({
+      where: { departmentId: id },
+    });
+    if (positionCount > 0) {
+      throw new Error(
+        `Departemen masih memiliki ${positionCount} jabatan. Hapus atau pindahkan jabatan terlebih dahulu.`,
+      );
+    }
+
     await prisma.department.delete({ where: { id } });
 
     revalidatePath("/master/karyawan");
@@ -1993,6 +2022,26 @@ export async function deleteBarcode(id: number) {
 export async function deleteItemCategory(id: number) {
   try {
     await requirePermission("delete_item_categories");
+
+    // Guard: `items.category_id` and `item_categories.parent_id` are both
+    // ON DELETE SET NULL, so a raw delete silently detaches every item in the
+    // category AND promotes all sub-categories to roots — no FK error, just
+    // quiet data loss. Refuse while either still references this category
+    // (mirrors deleteCustomerCategory / deleteTax).
+    const [childCount, itemCount] = await Promise.all([
+      prisma.itemCategory.count({ where: { parentId: id } }),
+      prisma.item.count({ where: { categoryId: id } }),
+    ]);
+    if (childCount > 0) {
+      throw new Error(
+        `Kategori masih memiliki ${childCount} sub-kategori. Hapus atau pindahkan sub-kategori terlebih dahulu.`,
+      );
+    }
+    if (itemCount > 0) {
+      throw new Error(
+        `Kategori masih dipakai oleh ${itemCount} barang. Pindahkan barang ke kategori lain terlebih dahulu.`,
+      );
+    }
 
     await prisma.itemCategory.delete({ where: { id } });
 

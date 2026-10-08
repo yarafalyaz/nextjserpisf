@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
   const redirectMock = vi.fn()
   const logActivityMock = vi.fn()
   const assertApprovedMock = vi.fn()
+  const requestApprovalMock = vi.fn().mockResolvedValue(false)
   const generateDocNumMock = vi.fn()
   const prismaMock = {
     assetCategory: {
@@ -61,6 +62,7 @@ const mocks = vi.hoisted(() => {
     redirectMock,
     logActivityMock,
     assertApprovedMock,
+    requestApprovalMock,
     generateDocNumMock,
     prismaMock,
   }
@@ -72,6 +74,7 @@ const {
   redirectMock,
   logActivityMock,
   assertApprovedMock,
+  requestApprovalMock,
   generateDocNumMock,
   prismaMock,
 } = mocks
@@ -103,6 +106,7 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 
 vi.mock("@/lib/services/approval-workflow.service", () => ({
   assertApproved: (...a: unknown[]) => mocks.assertApprovedMock(...a),
+  requestApprovalIfConfigured: (...a: unknown[]) => mocks.requestApprovalMock(...a),
 }))
 
 vi.mock("@/lib/utils/document-number", () => ({
@@ -598,6 +602,18 @@ describe("createAsset / updateAsset", () => {
     expect(res.success).toBe(true)
     expect(prismaMock.asset.create).toHaveBeenCalled()
     expect(prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
+  it("routes the new asset through the approval workflow if configured", async () => {
+    // Without this request, disposeAsset's assertApproved("Asset", id) can never
+    // block (no Approval row exists), so a configured disposal gate silently passes.
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-01",
+      purchasePrice: "1000",
+    }))
+    expect(res.success).toBe(true)
+    expect(requestApprovalMock).toHaveBeenCalledWith("Asset", expect.any(Number), expect.any(Number))
   })
 
   it("skips GL posting when purchaseCost is 0", async () => {

@@ -183,6 +183,20 @@ export async function convertLead(leadId: number) {
 
     const lead = await prisma.lead.findUniqueOrThrow({ where: { id: leadId } })
 
+    // Ownership guard (mirrors updateLead): a sales rep may only convert a lead
+    // assigned to them, unless they hold manage_leads / super_admin. Without
+    // this, any edit_leads holder could mark another rep's lead "won" and create
+    // a customer from it — a cross-owner mutation the update path forbids.
+    const isAdmin =
+      user.permissions.includes("manage_leads") ||
+      user.roles.includes("super_admin")
+    if (!isAdmin && lead.assignedTo !== Number(user.id)) {
+      return {
+        success: false,
+        error: "Anda hanya dapat mengonversi lead yang ditugaskan kepada Anda.",
+      }
+    }
+
     if (!(CONVERTIBLE_STATUSES as readonly string[]).includes(lead.status)) {
       return {
         success: false,

@@ -10,6 +10,7 @@ const ALLOWED_CRON_TASKS = [
   "low-stock",
   "overdue-invoice",
   "late-checkin",
+  "recover-stuck-reversals",
   "cleanup",
 ] as const
 

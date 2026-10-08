@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => {
   const prismaMock: any = {
     crmTicket: buildModelMock(),
     lead: buildModelMock(),
+    leadActivity: buildModelMock(),
+    customer: buildModelMock(),
+    $queryRaw: vi.fn().mockResolvedValue([]),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -150,5 +153,30 @@ describe("CRM Actions - Next redirect errors are re-thrown", () => {
     await expect(actions.deleteLead(1)).rejects.toMatchObject({
       digest: expect.stringContaining("NEXT_REDIRECT"),
     })
+  })
+
+  it("convertLead refuses to convert a lead assigned to another rep (non-admin)", async () => {
+    // edit_leads only (not manage_leads) → not admin; lead belongs to rep #7.
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads"], roles: ["sales"] })
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "qualified", assignedTo: 7, customerId: null,
+    })
+
+    const res = await actions.convertLead(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/ditugaskan kepada Anda/i)
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+
+  it("convertLead allows an admin to convert another rep's lead", async () => {
+    mocks.requirePermissionMock.mockResolvedValueOnce({ id: 3, permissions: ["edit_leads", "manage_leads"], roles: ["admin"] })
+    mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "qualified", assignedTo: 7, customerId: null,
+    })
+
+    const res = await actions.convertLead(1)
+
+    expect(res.success).toBe(true)
   })
 })

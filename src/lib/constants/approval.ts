@@ -1,5 +1,5 @@
 /** Document types that can be routed through an approval workflow. */
-export const APPROVAL_MODEL_TYPES = ["PurchaseOrder", "Expense", "LeaveRequest", "OvertimeRequest", "EmployeeLoan", "PurchaseRequest", "SalesInvoice", "Payroll", "Project"] as const
+export const APPROVAL_MODEL_TYPES = ["PurchaseOrder", "Expense", "LeaveRequest", "OvertimeRequest", "EmployeeLoan", "PurchaseRequest", "SalesInvoice", "Payroll", "Project", "Asset"] as const
 
 export type ApprovalModelType = (typeof APPROVAL_MODEL_TYPES)[number]
 
@@ -14,4 +14,5 @@ export const APPROVAL_MODEL_LABELS: Record<string, string> = {
   SalesInvoice: "Faktur Penjualan",
   Payroll: "Penggajian",
   Project: "Proyek",
+  Asset: "Aset Tetap",
 }

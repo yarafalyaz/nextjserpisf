@@ -1,7 +1,7 @@
  
 
 import { PrismaClient, Prisma, StockMove } from '@prisma/client'
-import { notificationService } from './notification.service'
+import { notificationService, LowStockItem } from './notification.service'
 import { safeDivide } from '@/lib/utils/math'
 import { consumeFifoLayers } from './inventory-fifo'
 import { resolveCostingMethodForItem } from './costing-method.service'
@@ -24,6 +24,10 @@ export class InventoryService {
    * to the inner transaction opened on a different connection).
    */
   async postMove(moveId: number, tx?: TxClient): Promise<void> {
+    // Low-stock candidates found inside the tx; dispatched only AFTER commit so a
+    // rollback cannot fire a notification for stock that was never decremented
+    // (the old setTimeout ran outside the tx and ignored commit/rollback).
+    const lowStockCandidates: LowStockItem[] = []
     const run = async (t: TxClient): Promise<void> => {
       const move = await t.stockMove.findUniqueOrThrow({
         where: { id: moveId },
@@ -36,7 +40,7 @@ export class InventoryService {
       if (move.impact === 'IN') {
         await this.handleIn(t, move)
       } else if (move.impact === 'OUT') {
-        await this.handleOut(t, move)
+        await this.handleOut(t, move, lowStockCandidates)
       } else {
         throw new Error(`Unknown impact type: ${move.impact}`)
       }
@@ -47,8 +51,19 @@ export class InventoryService {
       })
     }
 
+    const dispatchLowStock = async () => {
+      if (lowStockCandidates.length === 0) return
+      // Never let a notification failure fail the (already committed) post.
+      try {
+        await notificationService.checkAndNotifyLowStockBatch(lowStockCandidates)
+      } catch (e) {
+        console.error('[postMove] low-stock notification failed', e)
+      }
+    }
+
     if (tx) {
       await run(tx)
+      await dispatchLowStock()
     } else {
       await this.prisma.$transaction(
         async (t) => {
@@ -58,6 +73,7 @@ export class InventoryService {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         }
       )
+      await dispatchLowStock()
     }
   }
 
@@ -125,7 +141,7 @@ export class InventoryService {
    * Handle outgoing stock — FIFO consumption with row-level locking.
    * Validates sufficient stock before consuming layers oldest-first.
    */
-  private async handleOut(tx: TxClient, move: StockMove): Promise<void> {
+  private async handleOut(tx: TxClient, move: StockMove, lowStockCandidates: LowStockItem[]): Promise<void> {
     // Lock item row to prevent concurrent modifications
     const [item] = await tx.$queryRaw<any[]>`
       SELECT * FROM items WHERE id = ${move.itemId} FOR UPDATE
@@ -170,14 +186,22 @@ export class InventoryService {
       throw new Error('Concurrent stock modification detected. Please retry.')
     }
 
-    // Check low stock threshold and notify asynchronously
+    // Evaluate low-stock threshold; record the candidate for post-commit
+    // dispatch (a notification must never fire inside the tx — a rollback would
+    // leave admins alerted about stock that was never actually decremented).
     const updatedItem = await tx.item.findUnique({ where: { id: move.itemId } })
     if (
       updatedItem &&
       Number(updatedItem.minStock) > 0 &&
       Number(updatedItem.qtyOnHand) <= Number(updatedItem.minStock)
     ) {
-      setTimeout(() => notificationService.checkAndNotifyLowStock(updatedItem as any), 0)
+      const shape = updatedItem as any
+      lowStockCandidates.push({
+        id: shape.id,
+        name: shape.name,
+        qtyOnHand: Number(updatedItem.qtyOnHand),
+        minStock: Number(updatedItem.minStock),
+      })
     }
   }
 

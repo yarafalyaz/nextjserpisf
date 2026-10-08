@@ -16,6 +16,7 @@ import type { Metadata } from "next"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { FitmentChecker } from "./_components/fitment-checker"
+import { RecalculateStandardCostButton } from "./_components/recalculate-standard-cost-button"
 
 export const metadata: Metadata = { title: "Detail Produk (BOM)" }
 
@@ -75,6 +76,7 @@ export default async function ProductDetailPage({
         ]}
         actions={
           <>
+            <RecalculateStandardCostButton productId={product.id} />
             <Button href={`/produksi/products/${product.id}/ubah`} variant="primary">Ubah</Button>
             <DeleteButton id={product.id} action={deleteProduct} />
             <BackButton href="/produksi/products" />

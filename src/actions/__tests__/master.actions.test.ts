@@ -199,6 +199,26 @@ describe("ItemCategory Actions", () => {
     const res = await actions.deleteItemCategory(1)
     expect(res?.success).toBe(true)
   })
+
+  it("deleteItemCategory refuses when the category still has children or items", async () => {
+    // items.category_id and item_categories.parent_id are ON DELETE SET NULL —
+    // a raw delete silently detaches items and flattens the tree.
+    // Children present (both counts share one resolved value here).
+    mocks.prismaMock.itemCategory.count.mockResolvedValue(2)
+    mocks.prismaMock.item.count.mockResolvedValue(0)
+    const childRes = await actions.deleteItemCategory(1)
+    expect(childRes?.success).toBe(false)
+    expect(childRes?.error).toMatch(/sub-kategori/i)
+    expect(mocks.prismaMock.itemCategory.delete).not.toHaveBeenCalled()
+
+    // No children, but items still reference the category.
+    mocks.prismaMock.itemCategory.count.mockResolvedValue(0)
+    mocks.prismaMock.item.count.mockResolvedValue(3)
+    const itemRes = await actions.deleteItemCategory(1)
+    expect(itemRes?.success).toBe(false)
+    expect(itemRes?.error).toMatch(/barang/i)
+    expect(mocks.prismaMock.itemCategory.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Department Actions", () => {
@@ -213,6 +233,16 @@ describe("Department Actions", () => {
   it("deleteDepartment succeeds", async () => {
     const res = await actions.deleteDepartment(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("deleteDepartment refuses when the department still has positions", async () => {
+    // positions.department_id is ON DELETE SET NULL — a raw delete silently
+    // detaches every position.
+    mocks.prismaMock.position.count.mockResolvedValueOnce(4)
+    const res = await actions.deleteDepartment(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/jabatan/i)
+    expect(mocks.prismaMock.department.delete).not.toHaveBeenCalled()
   })
 })
 
@@ -286,6 +316,35 @@ describe("Tax Actions", () => {
       await actions.updateTax(1, fdMap({ name: "Tax Test", rate: "10" }))
     } catch (e) { /* redirect throws */ }
     expect(mocks.prismaMock.tax.update).toHaveBeenCalled()
+  })
+
+  it("updateTax preserves isInclusive/isCompound when the edit form omits them", async () => {
+    // The edit form only renders name + rate; writing the checkboxes
+    // unconditionally would force them false, silently downgrading the tax.
+    try {
+      await actions.updateTax(1, fdMap({ name: "PPN", rate: "11" }))
+    } catch (e) { /* redirect throws */ }
+    const arg = mocks.prismaMock.tax.update.mock.calls.at(-1)?.[0]
+    expect(arg.data).not.toHaveProperty("isInclusive")
+    expect(arg.data).not.toHaveProperty("isCompound")
+  })
+
+  it("updateTax writes isInclusive/isCompound when the form submits them", async () => {
+    try {
+      await actions.updateTax(1, fdMap({ name: "PPN", rate: "11", isInclusive: "on" }))
+    } catch (e) { /* redirect throws */ }
+    const arg = mocks.prismaMock.tax.update.mock.calls.at(-1)?.[0]
+    expect(arg.data.isInclusive).toBe(true)
+    // isCompound was not submitted → preserved (not forced false).
+    expect(arg.data).not.toHaveProperty("isCompound")
+  })
+
+  it("createTax clamps an out-of-range rate into 0..100", async () => {
+    try {
+      await actions.createTax(fdMap({ name: "Neg", rate: "-5" }))
+    } catch (e) { /* redirect throws */ }
+    const arg = mocks.prismaMock.tax.create.mock.calls.at(-1)?.[0]
+    expect(arg.data.rate).toBe(0)
   })
   it("deleteTax succeeds", async () => {
     mocks.prismaMock.tax.findUniqueOrThrow.mockResolvedValue({ id: 1, usages: 0 })

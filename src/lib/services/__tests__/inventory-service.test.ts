@@ -3,12 +3,16 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
+  notifyBatch: vi.fn(),
   generateDocumentNumber: vi.fn(),
   generateDocumentNumberBatch: vi.fn(),
 }));
 
 vi.mock("@/lib/services/notification.service", () => ({
-  notificationService: { checkAndNotifyLowStock: mocks.notify },
+  notificationService: {
+    checkAndNotifyLowStock: mocks.notify,
+    checkAndNotifyLowStockBatch: mocks.notifyBatch,
+  },
 }));
 
 vi.mock("@/lib/utils/document-number", () => ({
@@ -158,7 +162,7 @@ describe("InventoryService", () => {
       await expect(service.postMove(1)).rejects.toThrow("Stok tidak mencukupi untuk item ITM-5. Kurang 20.");
     });
 
-    it("notifies asynchronously if item qtyOnHand falls to or below minStock", async () => {
+    it("notifies after the transaction commits if item qtyOnHand falls to or below minStock", async () => {
       const { service, spies } = buildService();
       spies.moveFindUniqueOrThrow.mockResolvedValue({
         id: 1, documentNo: "SM-3", status: "draft", impact: "OUT",
@@ -175,12 +179,10 @@ describe("InventoryService", () => {
 
       await service.postMove(1);
 
-      // We must wait for the setTimeout(..., 0) inside postMove to execute
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(mocks.notify).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 5, qtyOnHand: 4, minStock: 5 })
-      );
+      // The notification is dispatched (awaited) AFTER the tx commits — no timer.
+      expect(mocks.notifyBatch).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 5, qtyOnHand: 4, minStock: 5 }),
+      ]);
     });
 
     it("throws on any impact type", async () => {
