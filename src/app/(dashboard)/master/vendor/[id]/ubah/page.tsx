@@ -8,7 +8,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Ubah Pemasok" }
+export const metadata: Metadata = { title: "Ubah Vendor" }
 
 export default async function EditVendorPage({
   params,
@@ -37,11 +37,11 @@ export default async function EditVendorPage({
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Pemasok", href: "/master/pemasok" },
+  { label: "Vendor", href: "/master/vendor" },
   { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah Pemasok: {vendor.name}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Vendor: {vendor.name}</h1>
       </div>
       <VendorForm vendor={vendor} paymentTerms={paymentTerms} />
     </div>

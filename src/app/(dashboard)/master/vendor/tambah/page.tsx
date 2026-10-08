@@ -9,7 +9,7 @@ import { prisma } from "@/lib/db/prisma"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Pemasok" }
+export const metadata: Metadata = { title: "Tambah Vendor" }
 
 export default async function CreateVendorPage() {
   await requirePermission("create_vendors")
@@ -28,11 +28,11 @@ export default async function CreateVendorPage() {
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "Master Data", href: "/master" },
-  { label: "Pemasok", href: "/master/pemasok" },
+  { label: "Vendor", href: "/master/vendor" },
   { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Pemasok</h1>
+        <h1 className="text-2xl font-bold text-foreground">Tambah Vendor</h1>
       </div>
       <VendorForm generatedCode={generatedCode} enableAutoCode={enableAutoCode} paymentTerms={paymentTerms} />
     </div>

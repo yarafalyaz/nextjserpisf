@@ -15,7 +15,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Pemasok" }
+export const metadata: Metadata = { title: "Vendor" }
 
 export default async function VendorDetailPage({
   params,
@@ -61,13 +61,13 @@ export default async function VendorDetailPage({
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Master Data", href: "/master" },
-          { label: "Pemasok", href: "/master/pemasok" },
+          { label: "Vendor", href: "/master/vendor" },
           { label: "Detail" },
         ]}
         actions={
           <>
-            <Button href={`/master/pemasok/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
-            <BackButton href="/master/pemasok" />
+            <Button href={`/master/vendor/${id}/ubah`} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            <BackButton href="/master/vendor" />
           </>
         }
       />
@@ -248,7 +248,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.items.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada barang dari pemasok ini</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada barang dari vendor ini</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
