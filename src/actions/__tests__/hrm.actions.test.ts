@@ -639,6 +639,26 @@ describe("Payroll Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("processPayroll caps a client-sent loan deduction to the real outstanding", async () => {
+    // Employee's active loan only owes 100k (installment 500k). A client that
+    // submits loanDeduction=500k must be capped to 100k, else onPayrollPaid would
+    // credit Piutang Karyawan 500k while relieving only 100k (receivable goes negative).
+    prismaMock.employeeLoan.findMany.mockResolvedValueOnce([
+      { monthlyInstallment: 500000, remainingAmount: 100000 },
+    ])
+    const res = await actions.processPayroll(fd({
+      employeeId: "1",
+      period: "2026-06",
+      startDate: "2026-06-01",
+      endDate: "2026-06-30",
+      baseSalary: "5000000",
+      loanDeduction: "500000",
+    }))
+    expect(res?.success).toBe(true)
+    const createArg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(createArg.data.loanDeduction).toBe(100000)
+  })
+
   it("updatePayroll succeeds", async () => {
     const res = await actions.updatePayroll(1, fd({
       period: "2026-05",

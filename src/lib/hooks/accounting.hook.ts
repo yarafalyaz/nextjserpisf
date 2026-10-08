@@ -1558,7 +1558,11 @@ export async function onPayrollPaid(
     where: { id: payrollId },
   });
 
-  const netSalary = Number(payroll.netSalary) || 0;
+  // Defensive floor: legacy rows may carry a negative net_salary (before the
+  // write-path clamp). A negative value would credit the bank account a negative
+  // amount (the company "receiving" cash from the employee) and corrupt the
+  // ledger. Clamp at 0 for posting.
+  const netSalary = Math.max(0, Number(payroll.netSalary) || 0);
   const grossSalary = Number(payroll.grossSalary) || 0;
   const loanDeduction = Number(payroll.loanDeduction) || 0;
   const lateDeduction = Number(payroll.lateDeduction) || 0;

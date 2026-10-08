@@ -441,6 +441,36 @@ function assertPayrollDateRange(startDateStr: string, endDateStr: string): void 
   }
 }
 
+/**
+ * Cap a client-supplied loan instalment to the employee's real outstanding
+ * loan balance. Mirrors computePayrollEstimation's cap (Σ min(installment,
+ * remaining)) so the deduction written to payroll can never exceed what
+ * onPayrollPaid can actually relieve — otherwise the full amount is credited to
+ * Piutang Karyawan while the loans are only reduced by their remaining balance,
+ * driving the receivable negative.
+ */
+async function capLoanDeduction(
+  db: typeof prisma,
+  employeeId: number | null,
+  requested: number,
+): Promise<number> {
+  if (!employeeId || requested <= 0) return Math.max(0, requested || 0);
+  const loans = await db.employeeLoan.findMany({
+    where: { employeeId, status: "active" },
+    select: { monthlyInstallment: true, remainingAmount: true },
+  });
+  const cap = loans.reduce(
+    (sum, loan) =>
+      safeAdd(
+        sum,
+        Math.min(Number(loan.monthlyInstallment) || 0, Number(loan.remainingAmount) || 0),
+        0,
+      ),
+    0,
+  );
+  return Math.min(requested, cap);
+}
+
 async function computePayrollEstimation(
   employeeId: number,
   startDateStr: string,
@@ -1022,7 +1052,12 @@ export async function generateBulkPayroll(
         ],
         0,
       );
-      const netSalary = safeSubtract(gross, deds, 0);
+      // Net pay is never negative: deductions (notably a full-period absence
+      // deduction ≈ base salary, plus statutory) can exceed gross. A negative
+      // net_salary would let onPayrollPaid credit the bank account a negative
+      // amount (the company "receiving" cash from the employee) and corrupt the
+      // ledger. Floor at 0.
+      const netSalary = Math.max(0, safeSubtract(gross, deds, 0));
 
       rows.push({
         documentNo,
@@ -1154,7 +1189,12 @@ export async function processPayroll(formData: FormData) {
     const deductions = v.deductions ?? 0;
     const overtimeTotal = v.overtimeTotal ?? 0;
     const appreciationTotal = v.appreciationTotal ?? 0;
-    const loanDeduction = v.loanDeduction ?? 0;
+    // Cap the loan instalment server-side: the value is user-editable, but
+    // onPayrollPaid credits the FULL loanDeduction to Piutang Karyawan while only
+    // relieving each loan by min(installment, remaining). A client-sent value
+    // larger than the real outstanding would over-credit the receivable (driving
+    // it negative) and over-withhold pay. Mirror the estimator's cap.
+    const loanDeduction = await capLoanDeduction(prisma, employeeId, v.loanDeduction ?? 0);
 
     // Statutory: BPJS (employee) + PPh21, computed server-side from base salary.
     const empForTax = employeeId
@@ -1179,7 +1219,10 @@ export async function processPayroll(formData: FormData) {
       [deductions, loanDeduction, lateDeduction, absentDeduction, statutory],
       0,
     );
-    const netSalary = safeSubtract(grossSalary, deductionsSum, 0);
+    // Floor net pay at 0 (see generateBulkPayroll): deductions can exceed gross
+    // (full-period absence + statutory + manual), and a negative net_salary would
+    // post a negative bank credit in onPayrollPaid, corrupting the ledger.
+    const netSalary = Math.max(0, safeSubtract(grossSalary, deductionsSum, 0));
     // totalAmount must mirror the server-computed netSalary — never trust a
     // client-supplied total. Accepting formData "totalAmount" let the stored
     // figure (shown on payslips/reports/list-totals) diverge from the actual net
@@ -1319,7 +1362,8 @@ export async function updatePayroll(id: number, formData: FormData) {
     const deductions = v.deductions ?? 0;
     const overtimeTotal = v.overtimeTotal ?? 0;
     const appreciationTotal = v.appreciationTotal ?? 0;
-    const loanDeduction = v.loanDeduction ?? 0;
+    // Cap server-side (see processPayroll): over-crediting Piutang Karyawan.
+    const loanDeduction = await capLoanDeduction(prisma, employeeId, v.loanDeduction ?? 0);
 
     // Statutory: BPJS (employee) + PPh21, computed server-side.
     const empForTaxUpd = employeeId
@@ -1345,7 +1389,10 @@ export async function updatePayroll(id: number, formData: FormData) {
       [deductions, loanDeduction, lateDeduction, absentDeduction, statutory],
       0,
     );
-    const netSalary = safeSubtract(grossSalary, deductionsSum, 0);
+    // Floor net pay at 0 (see generateBulkPayroll): deductions can exceed gross
+    // (full-period absence + statutory + manual), and a negative net_salary would
+    // post a negative bank credit in onPayrollPaid, corrupting the ledger.
+    const netSalary = Math.max(0, safeSubtract(grossSalary, deductionsSum, 0));
     // totalAmount must mirror the server-computed netSalary — never trust a
     // client-supplied total. Accepting formData "totalAmount" let the stored
     // figure (shown on payslips/reports/list-totals) diverge from the actual net
