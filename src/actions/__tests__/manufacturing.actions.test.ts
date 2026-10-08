@@ -497,8 +497,41 @@ describe("Production Order Actions", () => {
     expect(mocks.prismaMock.productionGenealogy.create).toHaveBeenCalled()
   })
 
-  it("rejects completing more than the remaining quantity", async () => {
-    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+  it("accumulates production variance across partial releases (not the remaining-slice vs full-standard)", async () => {
+    // Order of 10, standard 90000 (9000/unit), actual WIP 100000 (10000/unit).
+    // Release 4 first → variance 40000 - 4×9000 = +4000, order stays in_progress.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 0,
+      totalActualCost: 100000, totalStandardCost: 90000, variance: 0,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+
+    const first = await actions.completeProductionOrder(8, [], 4)
+    expect(first).toMatchObject({ success: true, isFinal: false, variance: 4000 })
+
+    // Final release of the remaining 6 → 60000 released vs 6×9000 = 54000 std,
+    // so +6000 this round; accumulated 4000 + 6000 = 10000 over the whole order.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 4,
+      totalActualCost: 60000, totalStandardCost: 90000, variance: 4000,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    const second = await actions.completeProductionOrder(8)
+    expect(second).toMatchObject({ success: true, isFinal: true, variance: 10000 })
+    const update = mocks.prismaMock.productionOrder.update.mock.calls[1][0]
+    expect(update.data.variance).toBe(10000)
+    expect(update.data.status).toBe("completed")
+  })
+
+  it("rejects completing more than the remaining quantity", async () => {    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 8,
       totalActualCost: 20000, totalStandardCost: 90000,
       product: { inventoryItem: {

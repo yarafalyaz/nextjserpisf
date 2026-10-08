@@ -793,6 +793,7 @@ export async function completeProductionOrder(
           completedQty: true,
           totalActualCost: true,
           totalStandardCost: true,
+          variance: true,
           product: {
             select: {
               inventoryItem: {
@@ -863,11 +864,20 @@ export async function completeProductionOrder(
       // for continuity with existing single-pass orders.
       const releaseBatch = isFinal && alreadyCompleted === 0 ? order.documentNo : `${order.documentNo}-R${alreadyCompleted + qty}`;
 
-      // Equivalent unit cost: the whole order's cost spread over its full planned
-      // qty. A partial release takes only its share, leaving the rest as WIP
+      // Equivalent unit cost: the remaining WIP cost spread over the REMAINING
+      // planned qty (not the whole order qty). `actualCost` is the WIP cost still
+      // held for the order — it is trimmed on each partial release (see the
+      // order.update below) — so dividing it by the ORIGINAL order qty would
+      // understate the unit cost from the second release onward and let the
+      // released cost never sum back to the full actual WIP. Using the remaining
+      // quantity keeps `releaseCost` a clean proportional share, so a full
+      // sequence of partial releases releases exactly `actualCost` in total
       // (FAB-09: "Produksi parsial membagi biaya berdasarkan hasil/ekuivalen").
-      const unitCost = Math.round((actualCost / orderQty) * 100) / 100;
-      const releaseCost = safeMultiply(qty, unitCost, 2);
+      const remainingBefore = orderQty - alreadyCompleted;
+      const share =
+        remainingBefore > 0 ? Math.min(1, Math.round((qty / remainingBefore) * 1e6) / 1e6) : 1;
+      const releaseCost = safeMultiply(actualCost, share, 2);
+      const unitCost = qty > 0 ? Math.round((releaseCost / qty) * 100) / 100 : 0;
       const serials = serialNumbers.map((serial) => String(serial).trim()).filter(Boolean);
       if (outputItem.trackSerial) {
         if (!Number.isInteger(qty) || serials.length !== qty) {
@@ -960,11 +970,24 @@ export async function completeProductionOrder(
       // remaining cost still held as WIP (PRD FAB-09).
       const newCompleted = Math.round((alreadyCompleted + qty) * 100) / 100;
       const remainingCost = Math.max(0, safeSubtract(actualCost, releaseCost, 2));
-      const variance = safeSubtract(
-        Number(order.totalActualCost),
+      // Production variance = cost actually carried into finished goods minus
+      // the STANDARD cost of the same produced quantity. Compute it for THIS
+      // release and ACCUMULATE into the order's running variance.
+      //
+      // Computing it as `order.totalActualCost - order.totalStandardCost` was
+      // wrong under partial completion: `totalActualCost` is reduced as WIP is
+      // released, so the final step compared the *remaining* cost slice against
+      // the *whole* order's standard cost (e.g. 40 000 - 90 000 = -50 000 for a
+      // fully-completed 10-unit order), and the per-step figures never summed to
+      // the true whole-order variance.
+      const orderQtyForStd = orderQty > 0 ? orderQty : 1;
+      const releasedStandardCost = safeMultiply(
         Number(order.totalStandardCost),
+        Math.round((qty / orderQtyForStd) * 1e6) / 1e6,
         2,
       );
+      const varianceThisRound = safeSubtract(releaseCost, releasedStandardCost, 2);
+      const variance = safeAdd(Number(order.variance ?? 0), varianceThisRound, 2);
       await tx.productionOrder.update({
         where: { id },
         data: {
