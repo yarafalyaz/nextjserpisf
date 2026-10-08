@@ -444,48 +444,6 @@ export const stockJournalService = {
    *   Dr WIP Account
    *   Cr Inventory Account
    */
-  async onWorkOrderCompleted(
-    tx: Prisma.TransactionClient,
-    items: JournalItemInput[],
-    woDocumentNo: string,
-    woId: number,
-    userId?: number,
-    costCenterId?: number | null,
-    transactionDate?: Date
-  ) {
-    const accounts = await getAccountIds()
-    if (!accounts.inventory || !accounts.wip) return null
-
-    const totalValue = sumValue(items)
-    if (totalValue <= 0) return null
-
-    const journalNumber = await generateDocumentNumber('JRN')
-    const journalSvc = new JournalService(tx)
-    return journalSvc.createJournal({
-      journalNumber,
-      transactionDate: transactionDate ?? new Date(),
-      referenceType: 'WorkOrder',
-      referenceId: woId,
-      type: 'WO',
-      description: `Produksi WO ${woDocumentNo}`,
-      createdBy: userId,
-      entries: [
-        {
-          accountId: accounts.wip!,
-          debit: totalValue,
-          credit: 0,
-          memo: `Debit WIP - WO ${woDocumentNo}`,
-        },
-        {
-          accountId: accounts.inventory,
-          debit: 0,
-          credit: totalValue,
-          memo: `Kredit Persediaan (material) - WO ${woDocumentNo}`,
-        },
-      ],
-    })
-  },
-
   /** Production-order material issue — transfer material value from inventory to WIP. */
   async onProductionOrderMaterialIssue(
     tx: Prisma.TransactionClient,

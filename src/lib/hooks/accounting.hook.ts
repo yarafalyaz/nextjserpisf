@@ -665,11 +665,12 @@ export async function onPurchaseOrderReceived(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTE: GL for Stock Adjustment, Work Order completion, and Material Issue is
-// posted by `stockJournalService` (src/lib/services/stock-journal.service.ts),
-// invoked from the stock hooks (stock-adjustment.hook / work-order.hook /
-// material-issue.hook) at the exact point FIFO layers are consumed — so the
-// journal uses the REAL consumed cost, not a stored master-cost snapshot.
+// NOTE: GL for Stock Adjustment, Production-Order material issue/completion,
+// and Material Issue is posted by `stockJournalService`
+// (src/lib/services/stock-journal.service.ts), invoked from the stock hooks
+// (stock-adjustment.hook / material-issue.hook) and the production-order
+// actions at the exact point FIFO layers are consumed — so the journal uses the
+// REAL consumed cost, not a stored master-cost snapshot.
 // Duplicate accounting-hook implementations of those three events were removed
 // here: keeping them risked double-posting the same journals. Do NOT re-add
 // stock-movement GL in this file; extend stockJournalService instead.

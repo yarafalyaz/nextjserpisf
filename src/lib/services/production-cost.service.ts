@@ -56,17 +56,6 @@ export async function applyProductionCostDelta(
   }
 }
 
-/** Categories that are genuinely non-material (i.e. belong in ProductionCost). */
-export const NON_MATERIAL_CATEGORIES = [
-  "labor",
-  "machine",
-  "overhead",
-  "subcontract",
-  "service",
-  "rework",
-  "other",
-] as const
-
 /**
  * Mirror a service/subcontract PurchaseOrder's value onto a single `subcontract`
  * ProductionCost line for the production order(s) its work order fulfils

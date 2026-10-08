@@ -602,32 +602,4 @@ describe("stockJournalService", () => {
       expect(mocks.createJournal).not.toHaveBeenCalled();
     });
   });
-
-  describe("onWorkOrderCompleted", () => {
-    it("posts Dr WIP / Cr Inventory", async () => {
-      await stockJournalService.onWorkOrderCompleted(tx, [{ qty: 4, cost: 25 }], "WO-1", 1);
-
-      expect(mocks.createJournal).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "WO",
-          entries: [
-            expect.objectContaining({ accountId: 400, debit: 100, credit: 0 }),
-            expect.objectContaining({ accountId: 100, debit: 0, credit: 100 }),
-          ],
-        })
-      );
-    });
-
-    it("returns null when WIP account not configured", async () => {
-      mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, wipAccountId: null });
-      const result = await stockJournalService.onWorkOrderCompleted(tx, [{ qty: 4, cost: 25 }], "WO-1", 1);
-      expect(result).toBeNull();
-    });
-
-    it("returns null when total value is zero", async () => {
-      const result = await stockJournalService.onWorkOrderCompleted(tx, [{ qty: 0, cost: 25 }], "WO-1", 1);
-      expect(result).toBeNull();
-      expect(mocks.createJournal).not.toHaveBeenCalled();
-    });
-  });
 });

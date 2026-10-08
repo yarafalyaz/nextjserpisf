@@ -28,7 +28,6 @@ const HOOKS = [
   'purchase-return.hook.ts',
   'sales-return.hook.ts',
   'stock-adjustment.hook.ts',
-  'work-order.hook.ts',
   'inventory-transfer.hook.ts',
   'down-payment.hook.ts',
   'expense.hook.ts',

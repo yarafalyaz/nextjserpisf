@@ -15,29 +15,6 @@ export type NonconformanceStatus = (typeof NONCONFORMANCE_STATUSES)[number]
 const OPEN_NCR_STATUSES = ["open", "rework", "rejected"]
 
 /**
- * Resolve the active released checklist for a product + type. Falls back to a
- * product-agnostic (productId = null) checklist of the same type when the
- * product has no dedicated released checklist. Returns null when none exist.
- */
-export async function resolveActiveChecklist(
-  checklistType: QcInspectionType,
-  productId: number | null,
-  client: TxClient | typeof prisma = prisma,
-) {
-  const released = await client.qcChecklist.findFirst({
-    where: {
-      checklistType,
-      isActive: true,
-      status: "released",
-      ...(productId ? { OR: [{ productId }, { productId: null }] } : {}),
-    },
-    orderBy: [{ productId: "desc" }, { version: "desc" }],
-    include: { items: { orderBy: { sortOrder: "asc" } } },
-  })
-  return released
-}
-
-/**
  * Assert a work order is cleared for handover per FAB-11/FAB-13: it must have a
  * completed `final` inspection that PASSED, and must have no open
  * nonconformance. Throws a descriptive error otherwise.

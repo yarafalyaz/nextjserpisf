@@ -14,7 +14,6 @@ describe('Stock Move Hooks: posted status parity', () => {
     'purchase-return.hook.ts',
     'sales-return.hook.ts',
     'stock-adjustment.hook.ts',
-    'work-order.hook.ts',
     'inventory-transfer.hook.ts',
   ]
 
@@ -37,7 +36,6 @@ describe('FIFO layer handling parity', () => {
     'material-issue.hook.ts',
     'purchase-return.hook.ts',
     'stock-adjustment.hook.ts',
-    'work-order.hook.ts',
     'inventory-transfer.hook.ts',
   ]
 
@@ -76,7 +74,6 @@ describe('Qty on hand updates', () => {
     'purchase-return.hook.ts',
     'sales-return.hook.ts',
     'stock-adjustment.hook.ts',
-    'work-order.hook.ts',
     'inventory-transfer.hook.ts',
   ]
 

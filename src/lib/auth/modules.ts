@@ -251,11 +251,3 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   Globe, ListOrdered, Layers, BadgeDollarSign,
 }
-
-export const ACTION_LABELS: Record<ActionKey, string> = {
-  view: "Lihat",
-  create: "Buat",
-  update: "Ubah",
-  delete: "Hapus",
-  approve: "Setujui",
-}
