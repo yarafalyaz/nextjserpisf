@@ -20,7 +20,7 @@ export default async function EditItemPage({
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()
 
-  const [item, categories, brands, vendors, warehouses, racks, rackRows] = await Promise.all([
+  const [item, categories, brands, vendors, warehouses, racks, rackRows, unitOptions] = await Promise.all([
     prisma.item.findUnique({ where: { id: numId }, include: { uomConversions: true } }),
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
@@ -28,6 +28,8 @@ export default async function EditItemPage({
     prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.rack.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, warehouseId: true } }),
     prisma.rackRow.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, rackId: true } }),
+    // Master satuan → the "Satuan" dropdown (previously a hard-coded list).
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
   ])
 
   if (!item) notFound()
@@ -66,6 +68,7 @@ export default async function EditItemPage({
           costingMethod: item.costingMethod,
           purchasePrice: item.purchasePrice ? Number(item.purchasePrice) : null,
           isProduct: item.isProduct,
+          isService: item.isService,
           trackBatch: item.trackBatch,
           trackSerial: item.trackSerial,
           uomConversions: item.uomConversions.map((u) => ({ code: u.code, factorToBase: Number(u.factorToBase) })),
@@ -76,6 +79,7 @@ export default async function EditItemPage({
         warehouses={warehouses}
         racks={racks}
         rackRows={rackRows}
+        unitOptions={unitOptions}
         baseUrl={baseUrl}
       />
     </div>

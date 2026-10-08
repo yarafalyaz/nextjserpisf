@@ -71,6 +71,7 @@ export const itemSchema = z.object({
   purchasePrice: optionalNumber(0),
   costingMethod: z.string().optional(),
   isProduct: optionalBoolean,
+  isService: optionalBoolean,
   trackBatch: optionalBoolean,
   trackSerial: optionalBoolean,
   image: z.string().optional(),

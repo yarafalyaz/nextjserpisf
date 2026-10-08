@@ -150,6 +150,18 @@ describe("stockJournalService", () => {
       );
     });
 
+    it("uses passed transactionDate when provided", async () => {
+      const customDate = new Date("2026-05-15T00:00:00Z");
+      await stockJournalService.onGoodsReceipt(tx, [{ qty: 10, cost: 5 }], "GR-1", 1, 42, null, customDate);
+
+      expect(mocks.createJournal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          referenceType: "GoodsReceipt",
+          transactionDate: customDate,
+        })
+      );
+    });
+
     it("returns null when inventory account not configured", async () => {
       mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, inventoryAccountId: null });
 
@@ -162,6 +174,49 @@ describe("stockJournalService", () => {
     it("returns null when total value is zero", async () => {
       const result = await stockJournalService.onGoodsReceipt(tx, [{ qty: 0, cost: 0 }], "GR-1", 1);
       expect(result).toBeNull();
+    });
+  });
+
+  describe("onServiceGoodsReceipt (PRD FAB-08)", () => {
+    it("posts Dr Material/Service Expense / Cr PurchaseInventory (no inventory debit)", async () => {
+      await stockJournalService.onServiceGoodsReceipt(tx, [{ qty: 1, cost: 500000 }], "GR-9", 9, 42);
+
+      const arg = mocks.createJournal.mock.calls[0][0];
+      expect(arg.referenceType).toBe("GoodsReceipt");
+      expect(arg.referenceId).toBe(9);
+      expect(arg.type).toBe("GR");
+      // Debits the expense account (500), NOT inventory (100); credits clearing (600).
+      expect(arg.entries).toEqual([
+        expect.objectContaining({ accountId: 500, debit: 500000, credit: 0 }),
+        expect.objectContaining({ accountId: 600, debit: 0, credit: 500000 }),
+      ]);
+      expect(arg.entries.some((e: { accountId: number }) => e.accountId === 100)).toBe(false);
+    });
+
+    it("falls back to materialIssueExpense then cogs when materialExpense is unset", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        materialExpenseAccountId: null,
+        materialIssueExpenseAccountId: 510,
+      });
+
+      await stockJournalService.onServiceGoodsReceipt(tx, [{ qty: 2, cost: 100 }], "GR-9", 9);
+
+      const arg = mocks.createJournal.mock.calls[0][0];
+      expect(arg.entries[0]).toEqual(expect.objectContaining({ accountId: 510, debit: 200 }));
+    });
+
+    it("returns null when no expense account is configured", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        materialExpenseAccountId: null,
+        materialIssueExpenseAccountId: null,
+        cogsAccountId: null,
+      });
+
+      const result = await stockJournalService.onServiceGoodsReceipt(tx, [{ qty: 1, cost: 5 }], "GR-9", 9);
+      expect(result).toBeNull();
+      expect(mocks.createJournal).not.toHaveBeenCalled();
     });
   });
 

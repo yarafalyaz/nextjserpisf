@@ -11,7 +11,7 @@ const optionalPositiveId = () =>
 
 // ==================== QC CHECKLIST ====================
 
-export const QC_CHECKLIST_TYPES = ["incoming", "in_process", "final"] as const
+export const QC_CHECKLIST_TYPES = ["incoming", "in_process", "final", "safety"] as const
 export const QC_ITEM_METHODS = ["visual", "measure", "torque", "test", "functional"] as const
 
 export const createQcChecklistSchema = z.object({

@@ -109,6 +109,7 @@ export async function onGoodsReceiptVerified(
             unitOfMeasure: true,
             trackBatch: true,
             trackSerial: true,
+            isService: true,
             cost: true,
             qtyOnHand: true,
             categoryId: true,
@@ -268,6 +269,9 @@ export async function onGoodsReceiptVerified(
     });
 
     const journalLines: { qty: number; cost: number }[] = [];
+    // Service lines (vendor labour/subcontract) do NOT move stock; their cost is
+    // expensed instead (PRD FAB-08). Collected separately for the service journal.
+    const serviceJournalLines: { qty: number; cost: number }[] = [];
 
     // Initialize running map of item quantities and costs to handle duplicate item IDs in the GR
     const itemRunningData = new Map<number, { qtyOnHand: number; cost: number }>();
@@ -304,6 +308,13 @@ export async function onGoodsReceiptVerified(
       const batchNumber = itemMeta?.trackBatch ? (item.batchNumber ?? null) : null;
 
       const baseUnitCostWithLanded = baseUnitCost + landedPerUnit;
+
+      // A service item is not stock: expense it, don't move inventory. No stock
+      // move, no FIFO layer, no batch/serial, no qtyOnHand/average-cost change.
+      if (itemMeta?.isService) {
+        serviceJournalLines.push({ qty: Number(item.qty), cost: enteredUnitCost });
+        continue;
+      }
 
       const sm = await tx.stockMove.create({
         data: {
@@ -437,15 +448,32 @@ export async function onGoodsReceiptVerified(
     // UoM). Without this, multi-UoM GRs would post a GL inventory value
     // that doesn't match the stock-move + FIFO layer amounts, drifting the
     // general ledger from the stock subledger.
-    await stockJournalService.onGoodsReceipt(
-      tx,
-      journalLines,
-      goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`,
-      goodsReceiptId,
-      userId,
-      null,
-      goodsReceipt.date
-    );
+    // Only post an inventory journal when stock actually moved; an all-service
+    // GR has no inventory debit (PRD FAB-08).
+    if (journalLines.length > 0) {
+      await stockJournalService.onGoodsReceipt(
+        tx,
+        journalLines,
+        goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`,
+        goodsReceiptId,
+        userId,
+        null,
+        goodsReceipt.date
+      );
+    }
+
+    // Service lines: expensed directly, no inventory debit (PRD FAB-08).
+    if (serviceJournalLines.length > 0) {
+      await stockJournalService.onServiceGoodsReceipt(
+        tx,
+        serviceJournalLines,
+        goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`,
+        goodsReceiptId,
+        userId,
+        null,
+        goodsReceipt.date
+      );
+    }
 
     // ─── 5. Update GR status ─────────────────────────────────────────────
     await tx.goodsReceipt.update({

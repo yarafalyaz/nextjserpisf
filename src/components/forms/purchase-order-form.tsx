@@ -66,6 +66,7 @@ export function PurchaseOrderForm({
 }: PurchaseOrderFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isService, setIsService] = useState<boolean>((order as any)?.isService ?? false);
   const [poItems, setPoItems] = useState<POItem[]>(
     order?.items && order.items.length > 0
       ? order.items.map((it) => ({
@@ -132,6 +133,7 @@ export function PurchaseOrderForm({
             formData.append(key, String(value));
         });
         formData.append("items", JSON.stringify(poItems));
+        formData.append("isService", isService ? "true" : "false");
         const result = order?.id
           ? await updatePurchaseOrder(order.id, formData)
           : await createPurchaseOrder(formData);
@@ -259,6 +261,22 @@ export function PurchaseOrderForm({
               rows={2}
               placeholder="Catatan PO..."
             />
+          </div>
+          <div className="flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              id="isService"
+              checked={isService}
+              onChange={(e) => setIsService(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-default"
+            />
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="isService">PO Jasa / Subkontrak</Label>
+              <p className="text-xs text-muted-foreground">
+                Barang pada PO ini adalah jasa/subkontrak (mis. coating, bubut, laser cutting).
+                Penerimaan tidak menggerakkan stok — biayanya langsung dibebankan (PRD FAB-08).
+              </p>
+            </div>
           </div>
         </FormSection>
 

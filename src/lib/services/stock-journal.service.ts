@@ -68,7 +68,8 @@ export const stockJournalService = {
     grDocumentNo: string,
     grId: number,
     userId?: number,
-    costCenterId?: number | null
+    costCenterId?: number | null,
+    transactionDate?: Date
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.purchaseInventory) return null
@@ -80,7 +81,7 @@ export const stockJournalService = {
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: transactionDate ?? new Date(),
       referenceType: 'GoodsReceipt',
       referenceId: grId,
       type: 'GR',
@@ -92,6 +93,61 @@ export const stockJournalService = {
           debit: totalValue,
           credit: 0,
           memo: `Debit Persediaan - GR ${grDocumentNo}`,
+        },
+        {
+          accountId: accounts.purchaseInventory!,
+          debit: 0,
+          credit: totalValue,
+          memo: `Kredit Hutang Pembelian (clearing) - GR ${grDocumentNo}`,
+        },
+      ],
+    })
+  },
+
+  /**
+   * Service Goods Receipt (verified) — a vendor performs labour/subcontract
+   * (coating, machining, laser cutting). There is NO stock movement; the cost is
+   * expensed directly.
+   *
+   *   Dr Material/Service Expense   (materialExpense → materialIssueExpense → cogs)
+   *   Cr Purchase Inventory Account  (clearing)
+   *
+   * The credit side mirrors onGoodsReceipt so the vendor bill reverses the same
+   * clearing account, keeping inventory purchases and service purchases on one
+   * suspense account (PRD FAB-08 / PUR-17).
+   */
+  async onServiceGoodsReceipt(
+    tx: Prisma.TransactionClient,
+    items: JournalItemInput[],
+    grDocumentNo: string,
+    grId: number,
+    userId?: number,
+    costCenterId?: number | null,
+    transactionDate?: Date
+  ) {
+    const accounts = await getAccountIds()
+    const expenseAcct = accounts.materialExpense ?? accounts.materialIssueExpense ?? accounts.cogs
+    if (!expenseAcct || !accounts.purchaseInventory) return null
+
+    const totalValue = sumValue(items)
+    if (totalValue <= 0) return null
+
+    const journalNumber = await generateDocumentNumber('JRN')
+    const journalSvc = new JournalService(tx)
+    return journalSvc.createJournal({
+      journalNumber,
+      transactionDate: transactionDate ?? new Date(),
+      referenceType: 'GoodsReceipt',
+      referenceId: grId,
+      type: 'GR',
+      description: `Penerimaan Jasa ${grDocumentNo}`,
+      createdBy: userId,
+      entries: [
+        {
+          accountId: expenseAcct,
+          debit: totalValue,
+          credit: 0,
+          memo: `Debit Biaya Jasa/Subkontrak - GR ${grDocumentNo}`,
         },
         {
           accountId: accounts.purchaseInventory!,
@@ -120,7 +176,8 @@ export const stockJournalService = {
     adjDocumentNo: string,
     adjId: number,
     userId?: number,
-    costCenterId?: number | null
+    costCenterId?: number | null,
+    transactionDate?: Date
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.stockAdj) return null
@@ -140,7 +197,7 @@ export const stockJournalService = {
 
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: transactionDate ?? new Date(),
       referenceType: 'StockAdjustment',
       referenceId: adjId,
       type: 'ADJ',
@@ -175,7 +232,8 @@ export const stockJournalService = {
     miDocumentNo: string,
     miId: number,
     userId?: number,
-    costCenterId?: number | null
+    costCenterId?: number | null,
+    transactionDate?: Date
   ) {
     const accounts = await getAccountIds()
     const expenseAcct = accounts.materialIssueExpense ?? accounts.materialExpense ?? accounts.cogs
@@ -188,7 +246,7 @@ export const stockJournalService = {
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: transactionDate ?? new Date(),
       referenceType: 'MaterialIssue',
       referenceId: miId,
       type: 'MI',
@@ -318,7 +376,8 @@ export const stockJournalService = {
     woDocumentNo: string,
     woId: number,
     userId?: number,
-    costCenterId?: number | null
+    costCenterId?: number | null,
+    transactionDate?: Date
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.wip) return null
@@ -330,7 +389,7 @@ export const stockJournalService = {
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: transactionDate ?? new Date(),
       referenceType: 'WorkOrder',
       referenceId: woId,
       type: 'WO',
@@ -360,6 +419,7 @@ export const stockJournalService = {
     productionOrderNo: string,
     referenceStockMoveId: number,
     userId?: number,
+    transactionDate?: Date,
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.wip) {
@@ -373,7 +433,7 @@ export const stockJournalService = {
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: transactionDate ?? new Date(),
       referenceType: 'ProductionOrderMaterialIssue',
       // A stock move ID is unique per issue transaction and provides a stable
       // journal reference even when one order is issued in several batches.
@@ -405,6 +465,7 @@ export const stockJournalService = {
     productionOrderNo: string,
     productionOrderId: number,
     userId?: number,
+    transactionDate?: Date,
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.wip) {
@@ -417,7 +478,7 @@ export const stockJournalService = {
     const journalSvc = new JournalService(tx)
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: transactionDate ?? new Date(),
       referenceType: 'ProductionOrder',
       referenceId: productionOrderId,
       type: 'PROD',
@@ -447,6 +508,7 @@ export const stockJournalService = {
     productionOrderNo: string,
     productionOrderId: number,
     userId?: number,
+    transactionDate?: Date,
   ) {
     if (Math.abs(variance) < 0.005) return null
     const accounts = await getAccountIds()
@@ -460,7 +522,7 @@ export const stockJournalService = {
     const actualCostExceedsInventoryValue = variance > 0
     return journalSvc.createJournal({
       journalNumber,
-      transactionDate: new Date(),
+      transactionDate: transactionDate ?? new Date(),
       referenceType: 'ProductionOrderCostVariance',
       referenceId: productionOrderId,
       type: 'PROD',

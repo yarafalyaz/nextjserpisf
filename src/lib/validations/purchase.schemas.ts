@@ -30,6 +30,11 @@ export type PurchaseRequestInput = z.infer<typeof purchaseRequestSchema>
 export const purchaseOrderSchema = z.object({
   vendorId: z.coerce.number().min(1, "Vendor wajib dipilih"),
   purchaseRequestId: optionalNumber(),
+  workOrderId: optionalNumber(),
+  isService: z
+    .union([z.boolean(), z.literal("true"), z.literal("false"), z.literal("on")])
+    .optional()
+    .transform((v) => v === true || v === "true" || v === "on"),
   date: dateString,
   expectedDate: optionalDateString,
   paymentTerm: optionalString(200),
@@ -49,6 +54,10 @@ export const goodsReceiptSchema = z.object({
   date: dateString,
   referenceNumber: optionalString(100),
   notes: optionalString(1000),
+  // Actual landed costs for this receipt. Optional: when omitted/0 the hook
+  // falls back to this receipt's proportional share of the PO estimate.
+  shippingCost: optionalNumber(0),
+  otherCost: optionalNumber(0),
   items: optionalString(50000), // JSON string, parsed separately
 })
 

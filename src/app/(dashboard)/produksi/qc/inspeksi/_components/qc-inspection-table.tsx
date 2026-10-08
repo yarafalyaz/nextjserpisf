@@ -24,6 +24,7 @@ const TYPE_LABELS: Record<string, string> = {
   incoming: "Penerimaan",
   in_process: "Proses",
   final: "Akhir",
+  safety: "Keselamatan",
 }
 
 const columns = [

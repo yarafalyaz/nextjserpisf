@@ -420,6 +420,7 @@ model Item {
   costingMethod      String              @default("average") @map("costing_method")
   purchasePrice      Decimal             @default(0.00) @map("purchase_price") @db.Decimal(15, 2)
   isProduct          Boolean             @default(false) @map("is_product")
+  isService          Boolean             @default(false) @map("is_service")
   trackBatch         Boolean             @default(false) @map("track_batch")
   trackSerial        Boolean             @default(false) @map("track_serial")
   isActive           Boolean             @default(true) @map("is_active")
@@ -1017,6 +1018,8 @@ model PurchaseOrder {
   documentNo        String              @unique @map("document_no")
   vendorId          Int                 @map("vendor_id")
   purchaseRequestId Int?                @map("purchase_request_id")
+  workOrderId       Int?                @map("work_order_id")
+  isService         Boolean             @default(false) @map("is_service")
   date              DateTime
   expectedDate      DateTime?           @map("expected_date")
   subtotal          Decimal             @default(0.00) @db.Decimal(15, 2)
@@ -1034,11 +1037,14 @@ model PurchaseOrder {
   goodsReceipts     GoodsReceipt[]
   items             PurchaseOrderItem[]
   purchaseRequest   PurchaseRequest?    @relation(fields: [purchaseRequestId], references: [id])
+  workOrder         WorkOrder?          @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   vendor            Vendor              @relation(fields: [vendorId], references: [id])
   purchaseReturns   PurchaseReturn[]
   vendorBills       VendorBill[]
+  productionCosts   ProductionCost[]
 
   @@index([purchaseRequestId], map: "purchase_orders_purchase_request_id_fkey")
+  @@index([workOrderId], map: "purchase_orders_work_order_id_fkey")
   @@index([vendorId], map: "purchase_orders_vendor_id_fkey")
   @@index([status], map: "idx_purchase_orders_status")
   @@index([approvedBy])
@@ -1810,6 +1816,7 @@ model ProductionCost {
   amount            Decimal          @default(0.00) @db.Decimal(15, 2)
   sourceTimesheetId Int?             @map("source_timesheet_id")
   nonconformanceId  Int?             @map("nonconformance_id")
+  purchaseOrderId   Int?             @map("purchase_order_id")
   vendorId          Int?             @map("vendor_id")
   referenceNo       String?          @map("reference_no")
   postedAt          DateTime?        @map("posted_at")
@@ -1819,11 +1826,13 @@ model ProductionCost {
   productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
   workOrder         WorkOrder?       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   nonconformance    Nonconformance?  @relation(fields: [nonconformanceId], references: [id], onDelete: SetNull)
+  purchaseOrder     PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
   vendor            Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   @@unique([nonconformanceId], map: "production_costs_nonconformance_id_unique")
   @@index([productionOrderId], map: "production_costs_production_order_id_fkey")
   @@index([workOrderId], map: "production_costs_work_order_id_fkey")
+  @@index([purchaseOrderId], map: "production_costs_purchase_order_id_fkey")
   @@index([category])
   @@index([vendorId])
   @@index([createdAt])
@@ -1848,6 +1857,7 @@ model WorkOrder {
   updatedAt         DateTime         @updatedAt @map("updated_at")
   items             WorkOrderItem[]
   costs             ProductionCost[]
+  purchaseOrders    PurchaseOrder[]
   customer          Customer         @relation(fields: [customerId], references: [id])
   customerVehicle   CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
   quotation         Quotation?       @relation(fields: [quotationId], references: [id])

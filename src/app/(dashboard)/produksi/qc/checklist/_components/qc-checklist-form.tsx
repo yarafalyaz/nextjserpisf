@@ -43,6 +43,7 @@ const TYPE_OPTIONS = [
   { value: "incoming", label: "Penerimaan (incoming)" },
   { value: "in_process", label: "Proses (in-process)" },
   { value: "final", label: "Akhir (final)" },
+  { value: "safety", label: "Keselamatan (safety/K3)" },
 ]
 
 const METHOD_OPTIONS = [

@@ -10,6 +10,7 @@ import {
   safeRound,
 } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
+import { toBaseFactor } from "@/lib/services/uom.service";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import { Prisma } from "@prisma/client";
 import {
@@ -256,6 +257,8 @@ export async function createPurchaseOrder(formData: FormData) {
           documentNo,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
+          workOrderId: v.workOrderId ?? null,
+          isService: v.isService,
           date: new Date(v.date),
           expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
@@ -535,6 +538,8 @@ export async function createGoodsReceipt(formData: FormData) {
           date: new Date(v.date),
           referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
+          shippingCost: v.shippingCost ?? 0,
+          otherCost: v.otherCost ?? 0,
           status: "draft",
           createdBy: Number(user.id),
           items: {
@@ -633,12 +638,18 @@ export async function createVendorBill(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("BILL");
 
-    // Lock the PO row, run the 3-way match, and create the bill atomically so two
-    // concurrent createVendorBill calls on the same PO cannot both pass the match
-    // and over-bill. With the draft bill now counted by assertThreeWayMatch, the
-    // serialized second call sees the first bill and is rejected. Mirrors the
-    // confirmVendorPayment lock pattern. GL posting runs AFTER commit because
-    // onVendorBillPosted opens its own transaction (no nesting) and is idempotent.
+    // Lock the PO row, run the 3-way match, create the bill, and post its AP
+    // journal atomically so two concurrent createVendorBill calls on the same PO
+    // cannot both pass the match and over-bill. With the draft bill now counted
+    // by assertThreeWayMatch, the serialized second call sees the first bill and
+    // is rejected. Mirrors the confirmVendorPayment lock pattern.
+    //
+    // The journal MUST be posted inside this transaction (passing `tx`):
+    // onVendorBillPosted is idempotent and its own executeInTx would otherwise
+    // open a SECOND transaction that commits after this one. A failure after
+    // commit (closed period, missing account) would then leave the bill without
+    // an AP journal — an unposted liability. Posting inside rolls the whole
+    // thing back so the user retries cleanly.
     const bill = await prisma.$transaction(async (tx) => {
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
@@ -672,10 +683,13 @@ export async function createVendorBill(formData: FormData) {
         });
       }
 
+      // Post the AP journal in the same transaction (idempotent; no-op if a
+      // journal for this bill already exists).
+      await onVendorBillPosted(created.id, Number(user.id), tx);
+
       return created;
     });
 
-    await onVendorBillPosted(bill.id, Number(user.id));
     await logActivity(
       "create",
       "VendorBill",
@@ -989,6 +1003,7 @@ export async function createPurchaseReturn(formData: FormData) {
     const prCostMap = new Map(
       prCostRows.map((r) => [r.id, Number(r.cost ?? 0)]),
     );
+    let prDocumentCostMap = prCostMap;
 
     // Over-return guard + return create MUST be in a single transaction with
     // a row lock on the purchase_order, otherwise two concurrent createPurchaseReturn
@@ -1009,8 +1024,15 @@ export async function createPurchaseReturn(formData: FormData) {
             },
             itemId: { in: prItemIds },
           },
-          select: { itemId: true, qty: true },
+          select: { itemId: true, qty: true, uom: true },
         });
+        const uomByItem = new Map<number, string | null>();
+        for (const line of grItems) {
+          if (!uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
+        }
+        const prFactorRows = await Promise.all(prItemIds.map(async (itemId) => [itemId, await toBaseFactor(tx, itemId, uomByItem.get(itemId))] as const));
+        const prFactorByItem = new Map(prFactorRows);
+        prDocumentCostMap = new Map([...prCostMap].map(([itemId, cost]) => [itemId, cost * (prFactorByItem.get(itemId) ?? 1)]));
         const receivedQtyByItem = new Map<number, number>();
         for (const it of grItems) {
           receivedQtyByItem.set(
@@ -1074,7 +1096,7 @@ export async function createPurchaseReturn(formData: FormData) {
               // pattern) so a tampered 0/undefined qty is treated as essentially zero
               // rather than crashing the Prisma insert with a string-to-Int error.
               qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: prCostMap.get(Number(item.itemId)) ?? 0,
+              cost: prDocumentCostMap.get(Number(item.itemId)) ?? 0,
             })),
           },
         },
@@ -1800,6 +1822,8 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           date: new Date(v.date),
           referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
+          shippingCost: v.shippingCost ?? 0,
+          otherCost: v.otherCost ?? 0,
         },
       });
 

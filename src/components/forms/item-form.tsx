@@ -22,6 +22,7 @@ import { formatCurrency } from "@/lib/utils/format"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { Button } from "@/components/ui/button"
+import { buildUomOptions, type UomMasterEntry } from "@/lib/utils/uom-options"
 
 interface ItemFormProps {
   item?: {
@@ -44,6 +45,7 @@ interface ItemFormProps {
     costingMethod: string | null
     purchasePrice: number | null
     isProduct: boolean
+    isService?: boolean
     trackBatch?: boolean
     trackSerial?: boolean
     uomConversions?: { code: string; factorToBase: number | string }[]
@@ -54,17 +56,20 @@ interface ItemFormProps {
   warehouses: { id: number; name: string }[]
   racks: { id: number; name: string; warehouseId: number }[]
   rackRows: { id: number; name: string; rackId: number }[]
+  /** Active rows from the UoM master (`/master/satuan`). */
+  unitOptions?: UomMasterEntry[]
   generatedCode?: string
   enableAutoCode?: boolean
   baseUrl?: string
 }
 
-export function ItemForm({ item, categories, brands, vendors, warehouses, racks, rackRows, generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
+export function ItemForm({ item, categories, brands, vendors, warehouses, racks, rackRows, unitOptions = [], generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(item?.image || null)
   const [isProduct, setIsProduct] = useState(item?.isProduct ?? false)
+  const [isService, setIsService] = useState(item?.isService ?? false)
   const [trackBatch, setTrackBatch] = useState(item?.trackBatch ?? false)
   const [trackSerial, setTrackSerial] = useState(item?.trackSerial ?? false)
   const [uomConversions, setUomConversions] = useState<{ code: string; factorToBase: string }[]>(
@@ -131,6 +136,16 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
     return rackRows.filter((r) => r.rackId === selectedRackId)
   }, [rackRows, selectedRackId])
 
+  // "Satuan" options come from the UoM master (`/master/satuan`) instead of the
+  // old hard-coded list, so a unit added there shows up here. Keeping the
+  // watched value in the list preserves an item's saved unit even after its
+  // master row is renamed/removed (otherwise the edit form would show blank).
+  const watchedUnit = watch("unitOfMeasure")
+  const uomOptions = useMemo(
+    () => buildUomOptions(unitOptions, watchedUnit),
+    [unitOptions, watchedUnit],
+  )
+
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -180,6 +195,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
           if (value !== undefined && value !== null) formData.append(key, String(value))
         })
         formData.set("isProduct", String(isProduct))
+        formData.set("isService", String(isService))
         formData.set("trackBatch", String(trackBatch))
         formData.set("trackSerial", String(trackSerial))
         const cleanedUom = uomConversions
@@ -329,14 +345,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                     id="unitOfMeasure"
                     value={field.value || "PCS"}
                     onValueChange={field.onChange}
-                    options={[
-                      { value: "PCS", label: "PCS" },
-                      { value: "SET", label: "SET" },
-                      { value: "KG", label: "KG" },
-                      { value: "LTR", label: "LTR" },
-                      { value: "MTR", label: "MTR" },
-                      { value: "BOX", label: "BOX" },
-                    ]}
+                    options={uomOptions}
                   />
                 </>
               )}
@@ -481,6 +490,17 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               <Label htmlFor="isProduct">Tandai sebagai Produk</Label>
             </div>
             <span className="text-xs text-muted-foreground">Aktifkan jika item ini merupakan produk jadi</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={isService}
+                onCheckedChange={setIsService}
+                id="isService"
+              />
+              <Label htmlFor="isService">Tandai sebagai Jasa</Label>
+            </div>
+            <span className="text-xs text-muted-foreground">Aktifkan untuk item jasa/subkontrak (tidak menggerakkan stok; biaya dibebankan saat penerimaan)</span>
           </div>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-3">

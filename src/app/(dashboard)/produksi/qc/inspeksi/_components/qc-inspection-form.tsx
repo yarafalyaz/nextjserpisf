@@ -39,6 +39,7 @@ const TYPE_OPTIONS = [
   { value: "incoming", label: "Penerimaan" },
   { value: "in_process", label: "Proses" },
   { value: "final", label: "Akhir" },
+  { value: "safety", label: "Keselamatan" },
 ]
 
 const REFERENCE_OPTIONS = [

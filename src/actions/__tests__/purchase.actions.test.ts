@@ -174,6 +174,19 @@ describe("Purchase Order Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createPurchaseOrder persists the service flag and work order link", async () => {
+    await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      isService: "true",
+      workOrderId: "9",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 500000, discount: 0 }])
+    }))
+    const arg = mocks.prismaMock.purchaseOrder.create.mock.calls[0][0]
+    expect(arg.data.isService).toBe(true)
+    expect(arg.data.workOrderId).toBe(9)
+  })
+
   it("updatePurchaseOrder succeeds", async () => {
     const res = await actions.updatePurchaseOrder(1, fdMap({
       vendorId: "1",
