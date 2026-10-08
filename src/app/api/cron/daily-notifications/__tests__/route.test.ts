@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   userFindMany: vi.fn(),
   queryRaw: vi.fn(),
   salesInvoiceFindMany: vi.fn(),
+  salesInvoiceCount: vi.fn(),
   purchaseOrderFindMany: vi.fn(),
   attendanceFindMany: vi.fn(),
   holidayFindFirst: vi.fn(),
@@ -31,7 +32,10 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: { findMany: (...a: unknown[]) => mocks.userFindMany(...a) },
     $queryRaw: (...a: unknown[]) => mocks.queryRaw(...a),
-    salesInvoice: { findMany: (...a: unknown[]) => mocks.salesInvoiceFindMany(...a) },
+    salesInvoice: {
+      findMany: (...a: unknown[]) => mocks.salesInvoiceFindMany(...a),
+      count: (...a: unknown[]) => mocks.salesInvoiceCount(...a),
+    },
     purchaseOrder: { findMany: (...a: unknown[]) => mocks.purchaseOrderFindMany(...a) },
     attendance: { findMany: (...a: unknown[]) => mocks.attendanceFindMany(...a) },
     employee: { findMany: (...a: unknown[]) => mocks.employeeFindMany(...a) },
@@ -56,8 +60,15 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.clearAllMocks()
     mocks.isValidCron.mockReturnValue(true)
     mocks.userFindMany.mockResolvedValue([{ id: 1 }])
-    mocks.queryRaw.mockResolvedValue([])
+    mocks.queryRaw.mockImplementation((strings: TemplateStringsArray) => {
+      // The route issues two raw queries: the low-stock sample (SELECT ... items)
+      // and its COUNT. Return the sample list for the former, a count row for the
+      // latter, based on the SQL text.
+      const sql = Array.isArray(strings) ? strings.join("?") : String(strings)
+      return Promise.resolve(sql.includes("COUNT(") ? [{ count: BigInt(1) }] : [])
+    })
     mocks.salesInvoiceFindMany.mockResolvedValue([])
+    mocks.salesInvoiceCount.mockResolvedValue(0)
     mocks.purchaseOrderFindMany.mockResolvedValue([])
     mocks.attendanceFindMany.mockResolvedValue([])
     mocks.holidayFindFirst.mockResolvedValue(null)
@@ -94,9 +105,11 @@ describe("GET /api/cron/daily-notifications", () => {
   it("notifies low stock items (with >5 truncation)", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T08:00:00")) // before 10am, skip absent
-    mocks.queryRaw.mockResolvedValue(
-      Array.from({ length: 7 }, (_, i) => ({ id: i, name: `Item${i}`, qty_on_hand: 1, min_stock: 10 }))
-    )
+    mocks.queryRaw.mockImplementation((strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join("?") : String(strings)
+      const sample = Array.from({ length: 7 }, (_, i) => ({ id: i, name: `Item${i}`, qty_on_hand: 1, min_stock: 10 }))
+      return Promise.resolve(sql.includes("COUNT(") ? [{ count: BigInt(7) }] : sample)
+    })
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.lowStock).toBe(7)
@@ -115,6 +128,7 @@ describe("GET /api/cron/daily-notifications", () => {
       { grandTotal: 1000, paidAmount: 200 },
       { grandTotal: 500, paidAmount: 0 },
     ])
+    mocks.salesInvoiceCount.mockResolvedValue(2)
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.overdueInvoices).toBe(2)
@@ -203,7 +217,15 @@ describe("GET /api/cron/daily-notifications", () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T12:00:00")) // post-10am so ALL branches fire
     mocks.userFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
-    mocks.queryRaw.mockResolvedValue([{ id: 1, name: "Item1", qty_on_hand: 1, min_stock: 10 }]) // low stock
+    mocks.queryRaw.mockImplementation((strings: TemplateStringsArray) => {
+      const sql = Array.isArray(strings) ? strings.join("?") : String(strings)
+      return Promise.resolve(
+        sql.includes("COUNT(")
+          ? [{ count: BigInt(1) }]
+          : [{ id: 1, name: "Item1", qty_on_hand: 1, min_stock: 10 }],
+      )
+    }) // low stock (sample + count)
+    mocks.salesInvoiceCount.mockResolvedValue(1)
     mocks.salesInvoiceFindMany.mockResolvedValue([{ grandTotal: 100, paidAmount: 0 }]) // overdue
     mocks.purchaseOrderFindMany.mockResolvedValue([{ id: 1 }]) // stale PO
     mocks.attendanceFindMany.mockResolvedValue([{ employeeId: 1, status: "late", lateMinutes: 1, employee: { name: "Late" } }]) // late
