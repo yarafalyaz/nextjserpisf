@@ -102,6 +102,11 @@ export function PurchaseOrderForm({
         }
       : null,
   );
+  // Termin terkunci saat diisi dari termin pemasok; tombol "Ubah" membukanya.
+  const initialVendorId = order?.vendorId ?? preselectedPR?.vendorId ?? undefined;
+  const [termLocked, setTermLocked] = useState<boolean>(
+    Boolean(vendors.find((v) => v.id === initialVendorId)?.paymentTerm),
+  );
   const [poItems, setPoItems] = useState<POItem[]>(
     order?.items && order.items.length > 0
       ? order.items.map((it) => ({
@@ -152,7 +157,13 @@ export function PurchaseOrderForm({
   function applyVendorTerm(vendorId: number | undefined) {
     const vendor = vendors.find((v) => v.id === vendorId);
     const term = vendor?.paymentTerm;
-    if (term) setValue("paymentTerm", term.name || term.code);
+    if (term) {
+      setValue("paymentTerm", term.name || term.code);
+      // Lock the field again while it is driven by the vendor's term.
+      setTermLocked(true);
+    } else {
+      setTermLocked(false);
+    }
   }
 
   function handlePRChange(prId: string) {
@@ -215,6 +226,9 @@ export function PurchaseOrderForm({
   const shippingCost = Number(watch("shippingCost")) || 0;
   const serviceFee = Number(watch("serviceFee")) || 0;
   const grandTotal = itemsTotal + shippingCost + serviceFee;
+
+  const watchedVendorId = watch("vendorId");
+  const vendorTerm = vendors.find((v) => v.id === watchedVendorId)?.paymentTerm ?? null;
 
   function onSubmit(data: PurchaseOrderInput) {
     startTransition(async () => {
@@ -351,13 +365,44 @@ export function PurchaseOrderForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="paymentTerm">Termin Pembayaran</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="paymentTerm">Termin Pembayaran</Label>
+              {vendorTerm && termLocked && (
+                <button
+                  type="button"
+                  onClick={() => setTermLocked(false)}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Ubah
+                </button>
+              )}
+              {vendorTerm && !termLocked && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValue("paymentTerm", vendorTerm.name || vendorTerm.code);
+                    setTermLocked(true);
+                  }}
+                  className="text-xs font-medium text-muted-foreground hover:underline"
+                >
+                  Pakai termin pemasok
+                </button>
+              )}
+            </div>
             <input
               id="paymentTerm"
               {...register("paymentTerm")}
-              className="form-input"
+              className="form-input disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted-foreground"
               placeholder="Mis. Net 30, COD..."
+              readOnly={Boolean(vendorTerm) && termLocked}
+              disabled={Boolean(vendorTerm) && termLocked}
             />
+            {vendorTerm && termLocked && (
+              <p className="text-xs text-muted-foreground">
+                Otomatis dari pemasok: <span className="font-medium">{vendorTerm.name || vendorTerm.code}</span>
+                {vendorTerm.days ? ` (${vendorTerm.days} hari)` : ""}. Klik &quot;Ubah&quot; bila perlu termin khusus.
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="shippingCost">Biaya Pengiriman</Label>

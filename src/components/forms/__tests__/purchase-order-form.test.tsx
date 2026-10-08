@@ -111,9 +111,53 @@ describe("PurchaseOrderForm — Permintaan Pembelian linkage", () => {
 
     // The vendor combobox for vendor id 1 must display "Vendor A" (not the placeholder).
     expect(container.textContent).toContain("Vendor A")
-    // ...and the vendor's payment term must be prefilled into the term field.
+    // ...and the vendor's payment term must be prefilled into the term field,
+    // locked (read-only) because it comes from the vendor.
     const termInput = container.querySelector<HTMLInputElement>("#paymentTerm")
     expect(termInput?.value).toBe("NET30")
+    expect(termInput?.readOnly).toBe(true)
+    expect(termInput?.disabled).toBe(true)
+    expect(container.textContent).toContain("Otomatis dari pemasok")
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("unlocks the payment term when the operator clicks Ubah", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <PurchaseOrderForm
+          vendors={mockVendors}
+          items={mockItems}
+          defaultPrId={5}
+          purchaseRequests={[{ id: 5, documentNo: "PR-005", title: "Bahan Las", vendorId: 1 }]}
+          preselectedPR={{
+            id: 5,
+            documentNo: "PR-005",
+            title: "Bahan Las",
+            vendorId: 1,
+            items: [{ itemId: 100, qty: 3 }],
+          }}
+        />,
+      )
+    })
+
+    const termInput = container.querySelector<HTMLInputElement>("#paymentTerm")
+    expect(termInput?.readOnly).toBe(true)
+
+    const unlock = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === "Ubah",
+    )
+    expect(unlock).toBeTruthy()
+    act(() => {
+      unlock!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+
+    expect(container.querySelector<HTMLInputElement>("#paymentTerm")?.readOnly).toBe(false)
 
     unmount(root)
     container.remove()
