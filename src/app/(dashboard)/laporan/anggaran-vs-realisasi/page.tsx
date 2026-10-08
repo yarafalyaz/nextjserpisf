@@ -11,6 +11,7 @@ import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
 import { BudgetFilterBar } from "./budget-filter-bar"
+import { computeBudgetRow } from "@/lib/finance/budget-actual"
 
 import type { Metadata } from "next"
 
@@ -42,7 +43,7 @@ export default async function BudgetVsRealisasiPage({
   const costCenterIds = [...new Set(budgets.filter((b) => b.costCenterId).map((b) => b.costCenterId!))]
 
   const [accounts, costCenters, actualMap] = await Promise.all([
-    prisma.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, code: true, name: true } }),
+    prisma.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, code: true, name: true, type: true } }),
     costCenterIds.length > 0
       ? prisma.costCenter.findMany({ where: { id: { in: costCenterIds } }, select: { id: true, code: true, name: true } })
       : Promise.resolve([]),
@@ -54,17 +55,25 @@ export default async function BudgetVsRealisasiPage({
   const accountMap = new Map(accounts.map((a) => [a.id, a]))
   const costCenterMap = new Map(costCenters.map((c) => [c.id, c]))
 
+  // Budget "realisasi" must be a POSITIVE magnitude for both expense and revenue
+  // accounts. `sumNetByAccountAndCostCenter` returns signed (debit - credit),
+  // which is only correct for debit-normal accounts (ASSET, EXPENSE). For
+  // credit-normal accounts (LIABILITY, EQUITY, REVENUE) revenue budget lines
+  // must read as credit - debit, otherwise a fully-realised revenue budget shows
+  // a NEGATIVE realisasi and the % Terpakai / Selisih go haywire. The
+  // normal-balance conversion lives in computeBudgetRow (see budget-actual.ts).
   const rows = budgets.map((budget) => {
     const account = accountMap.get(budget.accountId)
     const costCenter = budget.costCenterId ? costCenterMap.get(budget.costCenterId) : null
     const key = `${budget.accountId}-${budget.costCenterId || 0}`
-    const actual = actualMap.get(key) || 0
-    const budgetAmount = Number(budget.amount)
-    const variance = budgetAmount - actual
-    const percentage = budgetAmount > 0 ? (actual / budgetAmount) * 100 : 0
+    const { actual, variance, percentage } = computeBudgetRow({
+      accountType: account?.type,
+      netSigned: actualMap.get(key) || 0,
+      budgetAmount: Number(budget.amount),
+    })
     return { id: budget.id, name: budget.name, accountName: account ? `${account.code} - ${account.name}` : '-',
       costCenterName: costCenter ? `${costCenter.code} - ${costCenter.name}` : '-',
-      budget: budgetAmount, actual, variance, percentage }
+      budget: Number(budget.amount), actual, variance, percentage }
   })
 
   const totalBudget = rows.reduce((sum, r) => sum + r.budget, 0)
