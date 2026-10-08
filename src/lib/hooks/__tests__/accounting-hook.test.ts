@@ -643,10 +643,15 @@ describe("onSalesInvoicePosted", () => {
         uomConversion: { findMany: mocks.uomConversionFindMany },
         stockMove: { create: mocks.stockMoveCreate },
         inventoryLayer: {
-          // Stock lives in warehouse 9 only; the null-default item must still see it.
-          groupBy: vi.fn().mockResolvedValue([
-            { itemId: 50, warehouseId: 9, _sum: { remaining: 5 } },
-          ]),
+          // Stock lives in warehouse 9 only, and warehouse 9 is NOT the default
+          // warehouse of any sold item. The per-(item,warehouse) query (restricted
+          // to default warehouses) therefore returns nothing, while the
+          // any-warehouse query must still see the 5 units — otherwise a valid
+          // multi-warehouse sale of a null-default item is wrongly rejected.
+          groupBy: vi.fn().mockImplementation(async (args: any) => {
+            if (args?.by?.includes("warehouseId")) return [];
+            return [{ itemId: 50, _sum: { remaining: 5 } }];
+          }),
         },
         $queryRaw: mocks.queryRaw,
         $executeRaw: mocks.executeRaw,

@@ -309,6 +309,20 @@ export async function onSalesInvoicePosted(
           },
           _sum: { remaining: true },
         });
+        // Availability per item across ALL warehouses, for items with no default
+        // warehouse. This must NOT be restricted to `warehouseIds` — a null-default
+        // item consumes across every warehouse (consumeFifoLayers treats a null
+        // warehouseId as "any warehouse"), so its stock may live in a warehouse
+        // that no sold item lists as its default. Reusing the filtered `layerSums`
+        // would under-count and wrongly reject a valid sale.
+        const anyWarehouseSums = await tx.inventoryLayer.groupBy({
+          by: ["itemId"],
+          where: {
+            itemId: { in: productItemIds },
+            remaining: { gt: 0 },
+          },
+          _sum: { remaining: true },
+        });
         // Available per (item, warehouse) AND per item across ALL warehouses. The
         // latter is what an item with a null defaultWarehouseId consumes against
         // (consumeFifoLayers treats null warehouseId as "any warehouse"), so the
@@ -316,9 +330,10 @@ export async function onSalesInvoicePosted(
         const availableMap = new Map<string, number>();
         const availableAnyWarehouse = new Map<number, number>();
         for (const row of layerSums) {
-          const remaining = Number(row._sum.remaining ?? 0);
-          availableMap.set(`${row.itemId}:${row.warehouseId}`, remaining);
-          availableAnyWarehouse.set(row.itemId, (availableAnyWarehouse.get(row.itemId) ?? 0) + remaining);
+          availableMap.set(`${row.itemId}:${row.warehouseId}`, Number(row._sum.remaining ?? 0));
+        }
+        for (const row of anyWarehouseSums) {
+          availableAnyWarehouse.set(row.itemId, Number(row._sum.remaining ?? 0));
         }
         // Aggregate needed per item+warehouse (converted to base UoM). Items with
         // no default warehouse are aggregated per item (consumed across warehouses).
