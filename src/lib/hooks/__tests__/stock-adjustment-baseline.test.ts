@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // client-supplied currentQty at create time. The process hook used to apply
 // that stored `difference` as a blind delta to qtyOnHand. A stale or forged
 // baseline therefore made the final qtyOnHand diverge from actualQty.
-// The hook now reads the LIVE qtyOnHand under the item row lock and computes
-// delta = actualQty - liveQty, so the result converges to actualQty regardless.
+// The hook now reads the LIVE per-warehouse stock (sum of remaining FIFO layers
+// for the adjustment's warehouse) under the item row lock and computes
+// delta = actualQty - liveWarehouseQty, so the result converges to actualQty
+// regardless of client input and never uses the global cross-warehouse total.
 
 const mocks = vi.hoisted(() => ({
   generateDocumentNumber: vi.fn(),
@@ -35,8 +37,9 @@ vi.mock("@/lib/db/prisma", () => ({
 import { onStockAdjustmentProcessed } from "@/lib/hooks/stock-adjustment.hook"
 
 function wireTx(opts: {
-  items: Array<{ itemId: number; systemQty: number; actualQty: number; difference: number; unitCost: number }>
+  items: Array<{ itemId: number; systemQty: number; actualQty: number; difference: number; unitCost: number; serialNumbers?: string[] }>
   liveQty: Record<number, number>
+  trackSerialItemIds?: number[]
 }) {
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
@@ -46,33 +49,39 @@ function wireTx(opts: {
       warehouseId: 1,
       status: "draft",
       date: new Date("2024-06-15"),
-      items: opts.items,
+      items: opts.items.map((it, idx) => ({ id: idx + 1, ...it })),
     }),
     moveFindFirst: vi.fn().mockResolvedValue(null),
     itemFindUnique: vi.fn().mockImplementation(({ where }: { where: { id: number } }) =>
       Promise.resolve({ qtyOnHand: opts.liveQty[where.id] ?? 0 }),
     ),
+    itemFindMany: vi.fn().mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
+      where.id.in.filter((id) => opts.trackSerialItemIds?.includes(id)).map((id) => ({ id, trackSerial: true })),
+    ),
+    serialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
     executeRaw: vi.fn().mockResolvedValue(1),
     adjUpdate: vi.fn().mockResolvedValue({ id: 50 }),
+    adjItemUpdate: vi.fn().mockResolvedValue({ id: 1 }),
     systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
   }
   const tx = {
     $queryRaw: spies.queryRaw,
     $executeRaw: spies.executeRaw,
     stockAdjustment: { findUniqueOrThrow: spies.adjFindUniqueOrThrow, update: spies.adjUpdate },
+    stockAdjustmentItem: { update: spies.adjItemUpdate },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
-    item: { findUnique: spies.itemFindUnique, findMany: vi.fn().mockImplementation(async ({ where }) => {
-      const ids: number[] = where?.id?.in ?? []
-      const results = []
-      for (const id of ids) {
-        const res = await spies.itemFindUnique({ where: { id } })
-        if (res) {
-          results.push({ ...res, id })
-        }
-      }
-      return results
-    }) },
+    item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany },
+    itemSerial: { createMany: spies.serialCreateMany },
+    inventoryLayer: {
+      groupBy: vi.fn().mockImplementation(async ({ where }: { where?: { itemId?: { in?: number[] } } }) => {
+        const ids: number[] = where?.itemId?.in ?? []
+        return ids.map((itemId) => ({
+          itemId,
+          _sum: { remaining: opts.liveQty[itemId] ?? 0 },
+        }))
+      }),
+    },
     systemSetting: { findFirst: spies.systemSettingFindFirst },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
@@ -90,6 +99,22 @@ beforeEach(() => {
 })
 
 describe("onStockAdjustmentProcessed live-qty baseline", () => {
+  it("creates available serial records for positive adjustments of serialized items", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 7, systemQty: 0, actualQty: 2, difference: 2, unitCost: 100, serialNumbers: ["S-1", "S-2"] }],
+      liveQty: { 7: 0 },
+      trackSerialItemIds: [7],
+    });
+
+    await onStockAdjustmentProcessed(50, 1);
+
+    expect(spies.serialCreateMany).toHaveBeenCalledWith({
+      data: [
+        { itemId: 7, serialNumber: "S-1", warehouseId: 1, status: "available" },
+        { itemId: 7, serialNumber: "S-2", warehouseId: 1, status: "available" },
+      ],
+    });
+  });
   it("applies delta against LIVE qtyOnHand, not the stored client baseline", async () => {
     // Client claimed systemQty=0 and difference=10 (actualQty=10). But the LIVE
     // on-hand is 8 (stock moved since the form was loaded). The real delta is
@@ -164,8 +189,24 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
     expect(outMove.data.qty).toBe(10)
   })
 
-  it("posts journal entry and updates adjustment status on success", async () => {
+  it("writes the ACTUAL effective cost back onto the adjustment line after posting", async () => {
+    // OUT line: entered cost 100, but FIFO consumed 5 @ real 150 → the stored
+    // line must reflect the real 150 so it matches the stock subledger/GL.
+    mocks.consumeFifoLayers.mockResolvedValueOnce({ consumedCost: 5 * 150, shortfall: 0 })
     const spies = wireTx({
+      items: [{ itemId: 11, systemQty: 8, actualQty: 3, difference: -5, unitCost: 100 }],
+      liveQty: { 11: 8 },
+    })
+
+    await onStockAdjustmentProcessed(50, 1)
+
+    expect(spies.adjItemUpdate).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { unitCost: 150, totalCost: -750 },
+    })
+  })
+
+  it("posts journal entry and updates adjustment status on success", async () => {    const spies = wireTx({
       items: [{ itemId: 15, systemQty: 5, actualQty: 8, difference: 3, unitCost: 100 }],
       liveQty: { 15: 5 },
     })
@@ -182,6 +223,23 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
         data: expect.objectContaining({ status: "processed", approvedBy: 7 }),
       })
     )
+  })
+
+  it("uses per-warehouse layer stock, not the global qtyOnHand (multi-warehouse item)", async () => {
+    // Item 21 has 100 units globally but only 60 in the adjustment's warehouse
+    // (WH-1). A physical count of 60 in WH-1 is a correct, zero-variance count:
+    // the hook must see baseline 60 (layers) and no-op — NOT compare against the
+    // global 100 and wrongly remove 40 units.
+    const spies = wireTx({
+      items: [{ itemId: 21, systemQty: 60, actualQty: 60, difference: 0, unitCost: 100 }],
+      liveQty: { 21: 60 },
+    })
+
+    await onStockAdjustmentProcessed(50, 1)
+
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(spies.executeRaw).not.toHaveBeenCalled()
+    expect(mocks.consumeFifoLayers).not.toHaveBeenCalled()
   })
 })
 
