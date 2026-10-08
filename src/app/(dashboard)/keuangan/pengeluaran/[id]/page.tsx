@@ -12,6 +12,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
+import { ExpenseApprovalActions } from "../_components/expense-approval-actions";
 import { Pencil } from "lucide-react";
 
 import type { Metadata } from "next";
@@ -94,6 +95,8 @@ export default async function ExpenseDetailPage({
           </>
         }
       />
+
+      <ExpenseApprovalActions status={expense.status} id={expense.id} />
 
       <DetailCard>
         <DetailField label="No. Dokumen" value={expense.documentNo} mono />

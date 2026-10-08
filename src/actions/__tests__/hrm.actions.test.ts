@@ -274,6 +274,19 @@ describe("Leave Request Actions", () => {
     )
   })
 
+  it("approveLeave is an idempotent success for a workflow-approved request", async () => {
+    // The approval engine flips status to "approved" before this action runs.
+    // LeaveRequest has no post-approval side-effect, so that is already the
+    // desired end state; throwing "not pending" here only confused the final
+    // approver. It must succeed without a second status write.
+    prismaMock.leaveRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, employeeId: 1, status: "approved",
+    })
+    const res = await actions.approveLeave(1)
+    expect(res?.success).toBe(true)
+    expect(prismaMock.leaveRequest.updateMany).not.toHaveBeenCalled()
+  })
+
   it("rejectLeave updates status with reason", async () => {
     const res = await actions.rejectLeave(1, "Tidak cukup karyawan")
     expect(res?.success).toBe(true)
@@ -281,6 +294,7 @@ describe("Leave Request Actions", () => {
     expect(prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 1, status: "pending" } }),
     )
+    expect(requirePermissionMock).toHaveBeenCalledWith("approve_leave_requests")
   })
 
   it("updateLeaveRequest updates record", async () => {
@@ -321,7 +335,7 @@ describe("Overtime Request Actions", () => {
     vi.clearAllMocks()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.overtimeRequest.create.mockResolvedValue({ id: 1 })
-    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending" })
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, calculatedValue: null, employee: { baseSalary: 5_000_000 } })
     prismaMock.overtimeRequest.update.mockResolvedValue({})
     prismaMock.overtimeRequest.delete.mockResolvedValue({})
   })
@@ -345,8 +359,48 @@ describe("Overtime Request Actions", () => {
     expect(res?.success).toBe(true)
     expect(assertApprovedMock).toHaveBeenCalledWith("OvertimeRequest", 1)
     expect(prismaMock.overtimeRequest.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 1, status: "pending" } }),
+      expect.objectContaining({
+        where: { id: 1, status: { in: ["pending", "approved"] } },
+      }),
     )
+    // The manual approval must still compute the pay value.
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.calculatedValue).toBeGreaterThan(0)
+    expect(arg.data.status).toBe("approved")
+  })
+
+  it("computes calculatedValue for a workflow-approved overtime (status already 'approved')", async () => {
+    // The approval engine flips status to "approved" but never runs domain
+    // side-effects; approveOvertime is what must compute the value. Previously
+    // it rejected anything not "pending", leaving workflow-approved overtime at
+    // calculatedValue = 0 and dropping the pay from payroll.
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "approved",
+      hours: 2,
+      calculatedValue: null,
+      employee: { baseSalary: 5_000_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
+    expect(arg.data.calculatedValue).toBeGreaterThan(0)
+  })
+
+  it("approveOvertime is idempotent when the value is already computed", async () => {
+    prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      employeeId: 1,
+      status: "approved",
+      hours: 2,
+      calculatedValue: 150000,
+      employee: { baseSalary: 5_000_000 },
+    })
+    const res = await actions.approveOvertime(1)
+    expect(res?.success).toBe(true)
+    // No recompute / no overwrite of the existing value or approver.
+    expect(prismaMock.overtimeRequest.updateMany).not.toHaveBeenCalled()
   })
 
   it("updateOvertimeRequest updates record", async () => {

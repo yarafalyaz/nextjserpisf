@@ -306,27 +306,37 @@ export async function approveExpense(expenseId: number) {
       where: { id: expenseId },
     });
 
-    if (expense.status !== "draft") {
+    // An expense reachable here is either "draft" (no multi-level workflow —
+    // this is the only gate) OR "approved" when a configured ApprovalWorkflow
+    // already completed and approveStep flipped the status (approval.actions.ts).
+    // In the latter case this call must STILL run the petty-cash sync, which the
+    // workflow engine never does. Rejecting anything but "draft" (the previous
+    // behaviour) left every workflow-approved expense un-synced — the petty cash
+    // record was never created, understating petty cash — with no retry path
+    // because approveExpense refused the non-draft status.
+    if (expense.status !== "draft" && expense.status !== "approved") {
       throw new Error("Expense hanya bisa di-approve dari status draft");
     }
 
     // Workflow approval must be complete (no-op if no workflow configured).
     await assertApproved("Expense", expenseId);
 
-    // Sync to PettyCash FIRST (idempotent on documentNo), THEN flip to approved.
-    // Ordering matters: if the petty-cash sync fails, the expense stays in
-    // "draft" and the whole approveExpense is retryable. The previous order
-    // (approve → sync) committed the approved status first, so a sync failure
-    // left the expense permanently approved-but-unsynced (petty cash
-    // under-recorded with no retry path, since approveExpense rejects non-draft).
-    // The hook re-checks documentNo inside its own transaction, so a retry after
-    // a partial failure will not double-create the petty cash record.
+    // Sync to PettyCash (idempotent on documentNo), THEN flip to approved.
+    // Ordering matters: if the petty-cash sync fails, the expense keeps its
+    // pre-approval status and the whole approveExpense is retryable. The sync is
+    // idempotent on documentNo, so a retry after a partial failure will not
+    // double-create the petty cash record.
     await onExpenseApprovedSyncPettyCash(expenseId, Number(user.id));
 
-    await prisma.expense.update({
-      where: { id: expenseId },
+    // Guarded write: only flip when the row is still in a pre-approval state,
+    // so a concurrent approver cannot double-apply the status change.
+    const claim = await prisma.expense.updateMany({
+      where: { id: expenseId, status: { in: ["draft", "approved"] } },
       data: { status: "approved", approvedBy: Number(user.id) },
     });
+    if (claim.count === 0) {
+      throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+    }
 
     await logActivity(
       "approve",
@@ -340,6 +350,43 @@ export async function approveExpense(expenseId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[approveExpense]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function rejectExpense(expenseId: number) {
+  try {
+    const user = await requirePermission("approve_expenses");
+
+    const expense = await prisma.expense.findUniqueOrThrow({
+      where: { id: expenseId },
+    });
+
+    // Mirror of approveExpense: reject is the no-workflow gate. When a workflow
+    // IS configured, the approval engine already sets status="rejected", so we
+    // treat an already-rejected expense as an idempotent success rather than a
+    // confusing error. Only pre-approval states may be rejected.
+    if (expense.status === "rejected") {
+      return { success: true };
+    }
+    if (expense.status !== "draft" && expense.status !== "pending") {
+      throw new Error("Pengeluaran hanya bisa ditolak dari status draft");
+    }
+
+    const claim = await prisma.expense.updateMany({
+      where: { id: expenseId, status: { in: ["draft", "pending"] } },
+      data: { status: "rejected" },
+    });
+    if (claim.count === 0) {
+      throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+    }
+
+    await logActivity("reject", "Expense", expenseId, "Menolak pengeluaran");
+    revalidatePath("/keuangan/pengeluaran");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[rejectExpense]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
-import { deleteExpense } from "@/actions/finance.actions"
+import { deleteExpense, approveExpense } from "@/actions/finance.actions"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 
@@ -62,15 +62,32 @@ const columns = [
     id: "actions",
     header: "Aksi",
     enableSorting: false,
-    cell: (info) => (
-      <ActionDropdown
-        viewHref={`/keuangan/pengeluaran/${info.row.original.id}`}
-        deleteAction={deleteExpense}
-        deleteId={info.row.original.id}
-        editPermission="edit_expenses"
-        deletePermission="delete_expenses"
-      />
-    ),
+    cell: (info) => {
+      const row = info.row.original
+      // Only pre-approval rows can be approved. The action calls approveExpense
+      // (not the generic workflow route) so the petty-cash sync runs.
+      const canApprove = row.status === "draft" || row.status === "pending"
+      return (
+        <ActionDropdown
+          viewHref={`/keuangan/pengeluaran/${row.id}`}
+          deleteAction={deleteExpense}
+          deleteId={row.id}
+          editPermission="edit_expenses"
+          deletePermission="delete_expenses"
+          {...(canApprove
+            ? {
+                processAction: approveExpense,
+                processLabel: "Setujui",
+                processPermission: "approve_expenses",
+                processSuccessMessage: "Pengeluaran disetujui",
+                processConfirmTitle: "Setujui pengeluaran ini?",
+                processConfirmBody:
+                  "Pengeluaran akan disetujui dan, bila dibayar dari kas kecil, kas kecil akan disinkronkan.",
+              }
+            : {})}
+        />
+      )
+    },
   }),
 ]
 

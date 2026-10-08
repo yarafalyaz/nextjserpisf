@@ -972,12 +972,49 @@ describe("Next.js redirect error handling", () => {
 })
 
 describe("Status guard branches", () => {
-  it("approveExpense rejects non-draft status", async () => {
+  it("approveExpense rejects a terminal (non-draft, non-approved) status", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "rejected" })
     const res = await actions.approveExpense(1)
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Expense hanya bisa di-approve dari status draft/i)
+  })
+
+  it("approveExpense accepts an already-approved expense so petty cash still syncs", async () => {
+    // A configured approval workflow flips status to "approved" but never runs
+    // domain side effects; approveExpense must still sync petty cash.
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.approveExpense(1)
+    expect(res.success).toBe(true)
+  })
+
+  it("rejectExpense flips a draft expense to rejected", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    const res = await actions.rejectExpense(1)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.expense.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1, status: { in: ["draft", "pending"] } },
+        data: { status: "rejected" },
+      }),
+    )
+  })
+
+  it("rejectExpense is idempotent for an already-rejected expense", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "rejected" })
+    const res = await actions.rejectExpense(1)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.expense.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("rejectExpense refuses to reject an approved expense", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    const res = await actions.rejectExpense(1)
+    expect(res.success).toBe(false)
   })
 
   it("markExpensePaid rejects non-approved status", async () => {

@@ -220,6 +220,19 @@ export async function approveLeave(leaveId: number) {
       where: { id: leaveId },
     });
 
+    // A leave request reachable here is either:
+    //   • "pending"  — no multi-level workflow; this manual approval is the only
+    //     gate, or
+    //   • "approved" — a configured ApprovalWorkflow completed and approveStep
+    //     already flipped the status (LeaveRequest is in APPROVED_BY_MODELS, so
+    //     approvedBy is stamped too). LeaveRequest has no post-approval domain
+    //     side-effect (unlike overtime value / petty-cash sync), so this is
+    //     already the desired end state — treat it as an idempotent success
+    //     instead of throwing a confusing "not pending" error on the final
+    //     approver's click.
+    if (leave.status === "approved") {
+      return { success: true };
+    }
     if (leave.status !== "pending") {
       throw new Error(
         "Leave request hanya bisa di-approve dari status pending",
@@ -351,10 +364,28 @@ export async function approveOvertime(overtimeId: number) {
       where: { id: overtimeId },
       include: { employee: { select: { baseSalary: true } } },
     });
-    if (ot.status !== "pending") {
+    // A document reachable here is either:
+    //   • "pending"  — no multi-level workflow configured; this manual approval
+    //     is the only gate, so it must compute the value AND flip the status, or
+    //   • "approved" — the configured ApprovalWorkflow completed and approveStep
+    //     already set status="approved" (see approval.actions.ts). In that case
+    //     this call is the ONE that must still compute calculatedValue — the
+    //     workflow engine only flips status, it never runs domain side effects.
+    // Rejecting anything but "pending" (the previous behaviour) left every
+    // workflow-approved overtime with calculatedValue = 0, silently dropping the
+    // overtime pay from payroll.
+    if (ot.status !== "pending" && ot.status !== "approved") {
       throw new Error(
-        "Hanya pengajuan lembur berstatus menunggu yang dapat disetujui",
+        "Hanya pengajuan lembur berstatus menunggu (atau sudah lolos persetujuan) yang dapat disetujui",
       );
+    }
+
+    // Idempotency: if the value was already computed, do not recompute or
+    // overwrite approvedBy (which may have been stamped by the final approver).
+    // This makes a double-click / re-entry a harmless no-op instead of a
+    // re-rounded value or a clobbered approver.
+    if (ot.calculatedValue != null && Number(ot.calculatedValue) > 0) {
+      return { success: true };
     }
 
     // Compute overtime value: hours * baseSalary * multiplier * coefficient.
@@ -371,7 +402,7 @@ export async function approveOvertime(overtimeId: number) {
     );
 
     const claim = await prisma.overtimeRequest.updateMany({
-      where: { id: overtimeId, status: "pending" },
+      where: { id: overtimeId, status: { in: ["pending", "approved"] } },
       data: {
         status: "approved",
         approvedBy: Number(user.id),

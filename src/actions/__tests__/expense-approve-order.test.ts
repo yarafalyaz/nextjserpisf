@@ -14,7 +14,7 @@ const assertApprovedMock = vi.fn()
 const syncPettyCashMock = vi.fn()
 
 const expenseFindUniqueOrThrowMock = vi.fn()
-const expenseUpdateMock = vi.fn()
+const expenseUpdateManyMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -23,7 +23,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     expense: {
       findUniqueOrThrow: (...a: unknown[]) => expenseFindUniqueOrThrowMock(...a),
-      update: (...a: unknown[]) => expenseUpdateMock(...a),
+      updateMany: (...a: unknown[]) => expenseUpdateManyMock(...a),
     },
   },
 }))
@@ -60,20 +60,20 @@ import { approveExpense } from "../finance.actions"
 beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, assertApprovedMock,
-    syncPettyCashMock, expenseFindUniqueOrThrowMock, expenseUpdateMock,
+    syncPettyCashMock, expenseFindUniqueOrThrowMock, expenseUpdateManyMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 7 })
   expenseFindUniqueOrThrowMock.mockResolvedValue({ id: 42, status: "draft", documentNo: "EXP-0001" })
   assertApprovedMock.mockResolvedValue(undefined)
   syncPettyCashMock.mockResolvedValue(undefined)
-  expenseUpdateMock.mockResolvedValue({})
+  expenseUpdateManyMock.mockResolvedValue({ count: 1 })
 })
 
 describe("approveExpense ordering guard", () => {
   it("syncs petty cash BEFORE flipping the expense to approved", async () => {
     const order: string[] = []
     syncPettyCashMock.mockImplementation(() => { order.push("sync"); return Promise.resolve() })
-    expenseUpdateMock.mockImplementation(() => { order.push("approve"); return Promise.resolve({}) })
+    expenseUpdateManyMock.mockImplementation(() => { order.push("approve"); return Promise.resolve({ count: 1 }) })
 
     const result = await approveExpense(42)
 
@@ -88,16 +88,29 @@ describe("approveExpense ordering guard", () => {
     const result = await approveExpense(42)
 
     expect(result.success).toBe(false)
-    expect(expenseUpdateMock).not.toHaveBeenCalled() // expense remains in draft
+    expect(expenseUpdateManyMock).not.toHaveBeenCalled() // expense remains retryable
   })
 
-  it("rejects approving an expense that is not in draft", async () => {
+  it("still syncs petty cash for a workflow-approved expense (status already 'approved')", async () => {
+    // The approval engine flips status to "approved" but never runs domain
+    // side effects; approveExpense is what creates the petty-cash record.
+    // Rejecting non-draft status here left workflow-approved expenses un-synced.
     expenseFindUniqueOrThrowMock.mockResolvedValue({ id: 42, status: "approved", documentNo: "EXP-0001" })
+
+    const result = await approveExpense(42)
+
+    expect(result.success).toBe(true)
+    expect(syncPettyCashMock).toHaveBeenCalledWith(42, 7)
+    expect(expenseUpdateManyMock).toHaveBeenCalled()
+  })
+
+  it("rejects approving an expense that is in a terminal state", async () => {
+    expenseFindUniqueOrThrowMock.mockResolvedValue({ id: 42, status: "rejected", documentNo: "EXP-0001" })
 
     const result = await approveExpense(42)
 
     expect(result.success).toBe(false)
     expect(syncPettyCashMock).not.toHaveBeenCalled()
-    expect(expenseUpdateMock).not.toHaveBeenCalled()
+    expect(expenseUpdateManyMock).not.toHaveBeenCalled()
   })
 })
