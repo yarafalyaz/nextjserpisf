@@ -28,7 +28,6 @@ const clientSchema = z.object({
 })
 
 export type ServerEnv = z.infer<typeof serverSchema>
-export type ClientEnv = z.infer<typeof clientSchema>
 
 function validateEnv() {
   // Skip validation during build or test/CI (env vars not fully available)
@@ -62,4 +61,8 @@ function validateClientEnv() {
 }
 
 export const env = validateEnv()
-export const clientEnv = validateClientEnv()
+
+// Validate public env on module load (throws when NEXT_PUBLIC_ASSET_BASE_URL is
+// malformed). The return value is intentionally not exported — the module
+// side-effect is the contract, and no consumer reads the parsed object.
+void validateClientEnv()
