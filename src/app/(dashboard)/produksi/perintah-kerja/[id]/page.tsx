@@ -9,6 +9,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
+import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
@@ -53,9 +54,30 @@ export default async function WorkOrderDetailPage({
   const itemIds = wo.items.map((i) => i.itemId);
   const items = await prisma.item.findMany({
     where: { id: { in: itemIds } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, isService: true, vendorId: true },
   });
   const itemNameMap = new Map(items.map((i) => [i.id, i.name]));
+
+  // Service items eligible for a service PO (PRD FAB-08 / PUR-17).
+  const serviceItems = wo.items
+    .map((line) => {
+      const meta = items.find((i) => i.id === line.itemId);
+      if (!meta?.isService || Number(line.qty) <= 0) return null;
+      return {
+        itemId: line.itemId,
+        name: meta.name,
+        qty: Number(line.qty),
+        cost: Number(line.cost),
+        vendorId: meta.vendorId ?? null,
+      };
+    })
+    .filter((x): x is { itemId: number; name: string; qty: number; cost: number; vendorId: number | null } => x !== null);
+
+  const serviceVendors = await prisma.vendor.findMany({
+    where: { isActive: true, deletedAt: null },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 
   const [completedMi, defaultWarehouse] = await Promise.all([
     prisma.materialIssue.findFirst({
@@ -98,6 +120,11 @@ export default async function WorkOrderDetailPage({
               status={wo.status}
               hasCompletedMaterialIssue={!!completedMi}
               defaultWarehouseId={defaultWarehouse?.id ?? null}
+            />
+            <CreateServicePoButton
+              workOrderId={wo.id}
+              serviceItems={serviceItems}
+              vendors={serviceVendors}
             />
             {wo.status === "completed" && wo.quotationId && (
               <Button

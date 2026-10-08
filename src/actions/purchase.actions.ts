@@ -323,8 +323,154 @@ export async function createPurchaseOrder(formData: FormData) {
   }
 }
 
-export async function approvePurchaseOrder(poId: number) {
+/**
+ * Create a SERVICE purchase order from a Work Order's service items (PRD FAB-08 /
+ * PUR-17). A work order may include service lines (coating, machining, laser
+ * cutting) — items flagged `isService`. This bundles every service line into one
+ * draft PO linked to the work order (`workOrderId`, `isService: true`), so the
+ * workshop can sub-contract them and receive the cost via a service GRN (which
+ * expenses rather than moves stock).
+ *
+ * One active service PO per work order: a second attempt is rejected unless
+ * `force` is set, preventing accidental duplicate subcontracting.
+ */
+export async function createServicePurchaseOrderFromWorkOrder(
+  workOrderId: number,
+  vendorId: number,
+  options?: { force?: boolean },
+) {
   try {
+    const user = await requirePermission("create_purchase_orders");
+    if (!Number.isInteger(workOrderId) || workOrderId <= 0) {
+      throw new Error("Perintah kerja tidak valid");
+    }
+    if (!Number.isInteger(vendorId) || vendorId <= 0) {
+      throw new Error("Pemasok jasa wajib dipilih");
+    }
+
+    const vendor = await prisma.vendor.findFirst({
+      where: { id: vendorId, isActive: true, deletedAt: null },
+      select: { id: true },
+    });
+    if (!vendor) throw new Error("Pemasok tidak ditemukan atau tidak aktif");
+
+    const wo = await prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: {
+        id: true,
+        documentNo: true,
+        status: true,
+        items: {
+          select: { itemId: true, qty: true, cost: true },
+        },
+      },
+    });
+    if (!wo) throw new Error("Perintah kerja tidak ditemukan");
+    if (wo.status === "cancelled" || wo.status === "completed") {
+      throw new Error(`Tidak bisa membuat PO jasa untuk perintah kerja berstatus '${wo.status}'`);
+    }
+
+    // WorkOrderItem has no item relation — resolve the service flags in one query.
+    const woItemIds = [...new Set(wo.items.map((i) => i.itemId))];
+    const itemRows = woItemIds.length
+      ? await prisma.item.findMany({
+          where: { id: { in: woItemIds }, isService: true, isActive: true, deletedAt: null },
+          select: { id: true },
+        })
+      : [];
+    const serviceItemIds = new Set(itemRows.map((i) => i.id));
+
+    const serviceLines = wo.items
+      .filter((i) => serviceItemIds.has(i.itemId) && Number(i.qty) > 0)
+      .map((i) => ({
+        itemId: i.itemId,
+        qty: Number(i.qty),
+        unitPrice: Number(i.cost ?? 0),
+      }));
+    if (serviceLines.length === 0) {
+      throw new Error("Perintah kerja ini tidak memiliki item jasa (isService) untuk dipesan");
+    }
+
+    // Guard against accidental duplicate subcontracting.
+    const existing = options?.force
+      ? null
+      : await prisma.purchaseOrder.findFirst({
+          where: {
+            workOrderId,
+            isService: true,
+            status: { notIn: ["cancelled", "rejected"] },
+          },
+          select: { id: true, documentNo: true },
+        });
+    if (existing) {
+      throw new Error(
+        `PO jasa untuk perintah kerja ini sudah ada (${existing.documentNo}). ` +
+          `Batalkan PO tersebut dulu, atau buat ulang dengan paksa.`,
+      );
+    }
+
+    const subtotal = serviceLines.reduce(
+      (s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0),
+      0,
+    );
+    const documentNo = await generateDocumentNumber("PO");
+
+    const po = await prisma.$transaction(async (tx) => {
+      const created = await tx.purchaseOrder.create({
+        data: {
+          documentNo,
+          vendorId,
+          workOrderId,
+          isService: true,
+          date: new Date(),
+          notes: `PO jasa/subkontrak untuk perintah kerja ${wo.documentNo}`,
+          subtotal,
+          discount: 0,
+          tax: 0,
+          grandTotal: subtotal,
+          status: "draft",
+          createdBy: Number(user.id),
+          items: {
+            create: serviceLines.map((it) => ({
+              itemId: it.itemId,
+              qty: it.qty,
+              unitPrice: it.unitPrice,
+              discount: 0,
+              total: safeMultiply(it.qty, it.unitPrice, 0),
+            })),
+          },
+        },
+      });
+      await requestApprovalIfConfigured("PurchaseOrder", created.id, Number(user.id), tx);
+      return created;
+    });
+
+    try {
+      await notificationService.notifyAdmins(
+        "PO jasa dari perintah kerja dibuat",
+        `/pembelian/pesanan/${po.id}`,
+      );
+    } catch (err) {
+      console.error("Gagal mengirim notifikasi admin:", err);
+    }
+
+    await logActivity(
+      "create",
+      "PurchaseOrder",
+      po.id,
+      `Membuat PO jasa #${po.id} dari perintah kerja ${wo.documentNo}`,
+    );
+    revalidatePath("/pembelian/pesanan");
+    revalidatePath(`/produksi/perintah-kerja/${workOrderId}`);
+    return { success: true, id: po.id, documentNo: po.documentNo };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createServicePurchaseOrderFromWorkOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function approvePurchaseOrder(poId: number) {  try {
     const user = await requirePermission("approve_purchase_orders");
 
     const po = await prisma.purchaseOrder.findUniqueOrThrow({

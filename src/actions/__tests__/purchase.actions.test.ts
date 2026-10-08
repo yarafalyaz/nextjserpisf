@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     purchaseReturn: buildModelMock(),
     purchaseReturnItem: buildModelMock(),
     purchaseHistory: buildModelMock(),
+    workOrder: buildModelMock(),
     journal: buildModelMock(),
     inventory: buildModelMock(),
     inventoryMovement: buildModelMock(),
@@ -185,6 +186,87 @@ describe("Purchase Order Actions", () => {
     const arg = mocks.prismaMock.purchaseOrder.create.mock.calls[0][0]
     expect(arg.data.isService).toBe(true)
     expect(arg.data.workOrderId).toBe(9)
+  })
+
+  describe("createServicePurchaseOrderFromWorkOrder (PRD FAB-08 / PUR-17)", () => {
+    function wireServiceWo() {
+      mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 3 })
+      mocks.prismaMock.workOrder.findUnique.mockResolvedValue({
+        id: 9,
+        documentNo: "WO-009",
+        status: "in_progress",
+        items: [
+          { itemId: 100, qty: 2, cost: 150000 }, // service
+          { itemId: 200, qty: 5, cost: 10000 }, // stock (excluded)
+        ],
+      })
+      // Only item 100 is a service.
+      mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 100 }])
+      mocks.prismaMock.purchaseOrder.findFirst.mockResolvedValue(null)
+      mocks.prismaMock.purchaseOrder.create.mockResolvedValue({ id: 55, documentNo: "PO-055" })
+    }
+
+    it("bundles only the service items into a draft service PO linked to the WO", async () => {
+      wireServiceWo()
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res).toMatchObject({ success: true, id: 55 })
+
+      const arg = mocks.prismaMock.purchaseOrder.create.mock.calls[0][0]
+      expect(arg.data.isService).toBe(true)
+      expect(arg.data.workOrderId).toBe(9)
+      expect(arg.data.vendorId).toBe(3)
+      expect(arg.data.status).toBe("draft")
+      expect(arg.data.subtotal).toBe(300000) // 2 × 150000, stock line excluded
+      expect(arg.data.items.create).toEqual([
+        expect.objectContaining({ itemId: 100, qty: 2, unitPrice: 150000, total: 300000 }),
+      ])
+      expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_purchase_orders")
+    })
+
+    it("rejects when the work order has no service items", async () => {
+      mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 3 })
+      mocks.prismaMock.workOrder.findUnique.mockResolvedValue({
+        id: 9, documentNo: "WO-009", status: "in_progress",
+        items: [{ itemId: 200, qty: 5, cost: 10000 }],
+      })
+      mocks.prismaMock.item.findMany.mockResolvedValue([]) // no service items
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res.success).toBe(false)
+      expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+    })
+
+    it("refuses a duplicate service PO unless forced", async () => {
+      wireServiceWo()
+      mocks.prismaMock.purchaseOrder.findFirst.mockResolvedValue({ id: 40, documentNo: "PO-040" })
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res.success).toBe(false)
+      expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+    })
+
+    it("allows a re-create when forced", async () => {
+      wireServiceWo()
+      mocks.prismaMock.purchaseOrder.findFirst.mockResolvedValue({ id: 40, documentNo: "PO-040" })
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3, { force: true })
+      expect(res.success).toBe(true)
+      expect(mocks.prismaMock.purchaseOrder.create).toHaveBeenCalled()
+    })
+
+    it("rejects a completed or cancelled work order", async () => {
+      mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 3 })
+      mocks.prismaMock.workOrder.findUnique.mockResolvedValue({
+        id: 9, documentNo: "WO-009", status: "completed", items: [],
+      })
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res.success).toBe(false)
+      expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+    })
+
+    it("rejects an inactive or missing vendor", async () => {
+      mocks.prismaMock.vendor.findFirst.mockResolvedValue(null)
+      const res = await actions.createServicePurchaseOrderFromWorkOrder(9, 3)
+      expect(res.success).toBe(false)
+      expect(mocks.prismaMock.workOrder.findUnique).not.toHaveBeenCalled()
+    })
   })
 
   it("updatePurchaseOrder succeeds", async () => {
