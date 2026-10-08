@@ -17,6 +17,7 @@ import {
   resolveNonconformanceSchema,
 } from "@/lib/validations/qc.schemas"
 import { raiseNonconformanceFromInspection } from "@/lib/services/qc.service"
+import { syncReworkCostToOrder } from "@/lib/services/production-cost.service"
 
 // ==================== QC CHECKLIST ACTIONS ====================
 
@@ -366,27 +367,53 @@ export async function resolveNonconformance(id: number, formData: FormData) {
 
     const existing = await prisma.nonconformance.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        documentNo: true,
+        referenceType: true,
+        referenceId: true,
+      },
     })
     if (!existing) return { success: false, error: "NCR tidak ditemukan" }
     if (existing.status === "closed") {
       return { success: false, error: "NCR sudah ditutup." }
     }
 
-    await prisma.nonconformance.update({
-      where: { id },
-      data: {
-        status: v.status,
-        resolution: v.resolution ?? null,
-        reworkCost: v.reworkCost,
-        reworkHours: v.reworkHours,
-        ...(v.status === "closed" ? { closedBy: Number(user.id), closedAt: new Date() } : {}),
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.nonconformance.update({
+        where: { id },
+        data: {
+          status: v.status,
+          resolution: v.resolution ?? null,
+          reworkCost: v.reworkCost,
+          reworkHours: v.reworkHours,
+          ...(v.status === "closed" ? { closedBy: Number(user.id), closedAt: new Date() } : {}),
+        },
+      })
+
+      // Mirror the NCR rework cost into the referenced production order's HPP
+      // (FAB-11 → FAB-09). Non-production references are ignored by the service.
+      await syncReworkCostToOrder(
+        {
+          nonconformance: {
+            id: existing.id,
+            referenceType: existing.referenceType,
+            referenceId: existing.referenceId,
+          },
+          reworkCost: v.reworkCost,
+          reworkHours: v.reworkHours,
+          documentNo: existing.documentNo,
+          createdBy: Number(user.id),
+        },
+        tx,
+      )
     })
 
     await logActivity("update", "Nonconformance", id, `NCR #${id} → ${v.status}`)
     revalidatePath("/produksi/qc/ncr")
     revalidatePath("/produksi/qc")
+    revalidatePath("/produksi/production-orders")
     return { success: true }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e

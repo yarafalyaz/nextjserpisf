@@ -1780,6 +1780,7 @@ model Nonconformance {
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
   inspection        QcInspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  productionCosts   ProductionCost[]
 
   @@index([inspectionId], map: "nonconformances_inspection_id_fkey")
   @@index([referenceType, referenceId], map: "nonconformances_reference_idx")
@@ -1793,9 +1794,11 @@ model Nonconformance {
 /// finished-goods HPP is material + labor + overhead + subcontract, not material
 /// alone. A line is attached to a production order (and/or work order) and its
 /// amount rolls into `ProductionOrder.totalActualCost`. `category`:
-/// labor | machine | overhead | subcontract | service | other.
+/// labor | machine | overhead | subcontract | service | rework | other.
 /// A labor line may cite a `sourceTimesheetId` when it was pulled from an
 /// existing timesheet, but the amount is always stored explicitly (snapshot).
+/// A `rework` line is auto-posted from a nonconformance (`nonconformanceId`) and
+/// mirrors that NCR's `reworkCost` (one line per NCR).
 model ProductionCost {
   id                Int              @id @default(autoincrement())
   productionOrderId Int?             @map("production_order_id")
@@ -1806,6 +1809,7 @@ model ProductionCost {
   rate              Decimal?         @db.Decimal(15, 2)
   amount            Decimal          @default(0.00) @db.Decimal(15, 2)
   sourceTimesheetId Int?             @map("source_timesheet_id")
+  nonconformanceId  Int?             @map("nonconformance_id")
   vendorId          Int?             @map("vendor_id")
   referenceNo       String?          @map("reference_no")
   postedAt          DateTime?        @map("posted_at")
@@ -1814,8 +1818,10 @@ model ProductionCost {
   updatedAt         DateTime         @updatedAt @map("updated_at")
   productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
   workOrder         WorkOrder?       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  nonconformance    Nonconformance?  @relation(fields: [nonconformanceId], references: [id], onDelete: SetNull)
   vendor            Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
+  @@unique([nonconformanceId], map: "production_costs_nonconformance_id_unique")
   @@index([productionOrderId], map: "production_costs_production_order_id_fkey")
   @@index([workOrderId], map: "production_costs_work_order_id_fkey")
   @@index([category])

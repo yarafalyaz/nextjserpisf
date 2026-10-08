@@ -58,5 +58,76 @@ export const NON_MATERIAL_CATEGORIES = [
   "overhead",
   "subcontract",
   "service",
+  "rework",
   "other",
 ] as const
+
+/**
+ * Mirror an NCR's `reworkCost` onto a single `rework` ProductionCost line for the
+ * production order the NCR references (PRD FAB-11 → FAB-09: rework is a real cost
+ * of the job and must show up in HPP). The line is unique per NCR; a change to
+ * the NCR's rework cost applies only the delta so the order's running total stays
+ * exact.
+ *
+ * Only `referenceType === "ProductionOrder"` participates — rework captured
+ * against a work order or goods receipt has no production HPP to roll into.
+ * Passing a non-positive amount removes the line (and subtracts it from HPP).
+ */
+export async function syncReworkCostToOrder(
+  input: {
+    nonconformance: { id: number; referenceType: string; referenceId: number }
+    reworkCost: number
+    reworkHours: number
+    documentNo: string
+    createdBy: number | null
+  },
+  client: TxClient | typeof prisma = prisma,
+): Promise<{ posted: number; productionOrderId: number | null }> {
+  const { nonconformance } = input
+  if (nonconformance.referenceType !== "ProductionOrder") {
+    return { posted: 0, productionOrderId: null }
+  }
+  const productionOrderId = nonconformance.referenceId
+  const desired = Math.max(0, Number(input.reworkCost) || 0)
+
+  const existing = await client.productionCost.findUnique({
+    where: { nonconformanceId: nonconformance.id },
+    select: { id: true, amount: true },
+  })
+  const currentAmount = existing ? Number(existing.amount) : 0
+
+  // Remove the line when the rework cost is cleared.
+  if (desired === 0) {
+    if (existing) {
+      await client.productionCost.delete({ where: { id: existing.id } })
+      await applyProductionCostDelta(productionOrderId, -currentAmount, client)
+    }
+    return { posted: 0, productionOrderId }
+  }
+
+  if (existing) {
+    await client.productionCost.update({
+      where: { id: existing.id },
+      data: {
+        amount: desired,
+        hours: input.reworkHours,
+        description: `Biaya rework NCR ${input.documentNo}`,
+      },
+    })
+  } else {
+    await client.productionCost.create({
+      data: {
+        productionOrderId,
+        category: "rework",
+        description: `Biaya rework NCR ${input.documentNo}`,
+        hours: input.reworkHours,
+        amount: desired,
+        nonconformanceId: nonconformance.id,
+        postedAt: new Date(),
+        createdBy: input.createdBy,
+      },
+    })
+  }
+  await applyProductionCostDelta(productionOrderId, desired - currentAmount, client)
+  return { posted: desired, productionOrderId }
+}

@@ -14,6 +14,7 @@ const logActivityMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
 const assertWorkOrderQcClearedMock = vi.fn()
 const raiseNcrFromInspectionMock = vi.fn()
+const syncReworkCostMock = vi.fn()
 
 const qcChecklistFindUniqueMock = vi.fn()
 const qcChecklistCreateMock = vi.fn()
@@ -38,6 +39,9 @@ vi.mock("@/lib/utils/document-number", () => ({
 vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: (...a: unknown[]) => assertWorkOrderQcClearedMock(...a),
   raiseNonconformanceFromInspection: (...a: unknown[]) => raiseNcrFromInspectionMock(...a),
+}))
+vi.mock("@/lib/services/production-cost.service", () => ({
+  syncReworkCostToOrder: (...a: unknown[]) => syncReworkCostMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => {
@@ -107,13 +111,14 @@ beforeEach(() => {
     assertWorkOrderQcClearedMock, qcChecklistFindUniqueMock, qcChecklistCreateMock,
     qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcInspectionCreateMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
-    raiseNcrFromInspectionMock,
+    raiseNcrFromInspectionMock, syncReworkCostMock,
   ]) m.mockReset()
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   generateDocumentNumberMock.mockResolvedValue("QCI-0001")
   assertWorkOrderQcClearedMock.mockResolvedValue(undefined)
   raiseNcrFromInspectionMock.mockResolvedValue([])
+  syncReworkCostMock.mockResolvedValue({ posted: 0, productionOrderId: null })
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -307,6 +312,31 @@ describe("resolveNonconformance", () => {
     expect(arg.data.status).toBe("closed")
     expect(arg.data.closedAt).toBeInstanceOf(Date)
     expect(arg.data.closedBy).toBe(5)
+  })
+
+  it("mirrors the NCR rework cost into the referenced production order", async () => {
+    nonconformanceFindUniqueMock.mockResolvedValue({
+      id: 1,
+      status: "rework",
+      documentNo: "NCR-0007",
+      referenceType: "ProductionOrder",
+      referenceId: 55,
+    })
+    nonconformanceUpdateMock.mockResolvedValue({})
+    syncReworkCostMock.mockResolvedValue({ posted: 150000, productionOrderId: 55 })
+
+    const res = await resolveNonconformance(1, fd({ status: "rework_done", reworkCost: 150000, reworkHours: 3 }))
+
+    expect(res.success).toBe(true)
+    expect(syncReworkCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nonconformance: { id: 1, referenceType: "ProductionOrder", referenceId: 55 },
+        reworkCost: 150000,
+        reworkHours: 3,
+        documentNo: "NCR-0007",
+      }),
+      expect.anything(),
+    )
   })
 })
 

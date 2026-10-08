@@ -29,6 +29,7 @@ const CATEGORY_OPTIONS = [
   { value: "overhead", label: "Overhead" },
   { value: "subcontract", label: "Subkontrak" },
   { value: "service", label: "Jasa" },
+  { value: "rework", label: "Rework" },
   { value: "other", label: "Lain-lain" },
 ]
 

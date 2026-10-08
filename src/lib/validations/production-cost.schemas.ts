@@ -19,6 +19,7 @@ export const PRODUCTION_COST_CATEGORIES = [
   "overhead",
   "subcontract",
   "service",
+  "rework",
   "other",
 ] as const
 
