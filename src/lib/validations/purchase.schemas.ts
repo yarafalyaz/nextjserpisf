@@ -16,6 +16,7 @@ const optionalDateString = optionalString(30)
 export const purchaseRequestSchema = z.object({
   title: optionalString(200),
   requestedBy: optionalNumber(),
+  vendorId: optionalNumber(),
   date: dateString,
   requestDate: optionalDateString,
   description: optionalString(1000),

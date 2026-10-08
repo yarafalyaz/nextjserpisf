@@ -24,12 +24,14 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 interface PRFormProps {
   items: { id: number; sku: string; name: string; unitOfMeasure: string }[];
   employees: { id: number; name: string }[];
+  vendors?: { id: number; name: string }[];
   request?: {
     id: number;
     title?: string | null;
     date: string;
     departmentId?: number | null;
     requestedBy?: string | null;
+    vendorId?: number | null;
     notes?: string | null;
     requestDate?: string | null;
     description?: string | null;
@@ -46,6 +48,7 @@ interface PRItem {
 export function PurchaseRequestForm({
   items,
   employees,
+  vendors,
   request,
 }: PRFormProps) {
   const router = useRouter();
@@ -53,6 +56,9 @@ export function PurchaseRequestForm({
   const [title, setTitle] = useState(request?.title || "");
   const [requestedBy, setRequestedBy] = useState<string>(
     request?.requestedBy ? String(request.requestedBy) : "",
+  );
+  const [vendorId, setVendorId] = useState<string>(
+    request?.vendorId ? String(request.vendorId) : "",
   );
   const [date, setDate] = useState(
     request?.date
@@ -99,6 +105,7 @@ export function PurchaseRequestForm({
         const formData = new FormData();
         formData.append("title", title);
         formData.append("requestedBy", requestedBy);
+        if (vendorId) formData.append("vendorId", vendorId);
         formData.append("date", date);
         formData.append("notes", notes);
         formData.append("requestDate", requestDate);
@@ -152,6 +159,23 @@ export function PurchaseRequestForm({
                 label: emp.name,
               }))}
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="vendorId">Pemasok yang Disarankan</Label>
+            <Combobox
+              id="vendorId"
+              name="vendorId"
+              value={vendorId || null}
+              onChange={(key) => setVendorId(key ?? "")}
+              placeholder="Cari pemasok (opsional)..."
+              options={(vendors ?? []).map((v) => ({
+                value: String(v.id),
+                label: v.name,
+              }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Opsional. Dipakai untuk mengisi pemasok saat permintaan ini dibuatkan pesanan pembelian.
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker

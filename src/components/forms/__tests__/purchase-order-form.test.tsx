@@ -84,6 +84,36 @@ describe("PurchaseOrderForm — Permintaan Pembelian linkage", () => {
     container.remove()
   })
 
+  it("prefills the vendor from the preselected PR", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <PurchaseOrderForm
+          vendors={mockVendors}
+          items={mockItems}
+          defaultPrId={5}
+          purchaseRequests={[{ id: 5, documentNo: "PR-005", title: "Bahan Las", vendorId: 1 }]}
+          preselectedPR={{
+            id: 5,
+            documentNo: "PR-005",
+            title: "Bahan Las",
+            vendorId: 1,
+            items: [{ itemId: 100, qty: 3 }],
+          }}
+        />,
+      )
+    })
+
+    // The vendor combobox for vendor id 1 must display "Vendor A" (not the placeholder).
+    expect(container.textContent).toContain("Vendor A")
+
+    unmount(root)
+    container.remove()
+  })
+
   it("does not render the PR section when there are no requests and no link", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)

@@ -184,6 +184,7 @@ export async function createPurchaseRequest(formData: FormData) {
         documentNo,
         title: v.title ?? null,
         requestedBy,
+        vendorId: v.vendorId ?? null,
         date: new Date(v.date),
         requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
         description,
@@ -1775,6 +1776,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
         data: {
           title: v.title ?? null,
           requestedBy,
+          vendorId: v.vendorId ?? null,
           date: new Date(v.date),
           requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
           description,

@@ -33,7 +33,7 @@ export default async function CreatePurchaseOrderPage({
     prisma.purchaseRequest.findMany({
       where: { status: { in: ["approved", "partial_ordered"] } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, documentNo: true, title: true },
+      select: { id: true, documentNo: true, title: true, vendorId: true },
     }),
     prId
       ? prisma.purchaseRequest.findUnique({
@@ -61,6 +61,7 @@ export default async function CreatePurchaseOrderPage({
                   id: preselectedPR.id,
                   documentNo: preselectedPR.documentNo,
                   title: preselectedPR.title,
+                  vendorId: preselectedPR.vendorId,
                   items: preselectedPR.items.map((it) => ({
                     itemId: it.itemId,
                     qty: Number(it.qty),

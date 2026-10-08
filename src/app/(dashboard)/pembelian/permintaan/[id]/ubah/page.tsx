@@ -21,7 +21,7 @@ export default async function EditPage({
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()
 
-  const [data, items, employees] = await Promise.all([
+  const [data, items, employees, vendors] = await Promise.all([
     prisma.purchaseRequest.findUnique({
       where: { id: numId },
       include: { items: true },
@@ -33,6 +33,11 @@ export default async function EditPage({
     }),
     prisma.employee.findMany({
       where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.vendor.findMany({
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
@@ -57,11 +62,12 @@ export default async function EditPage({
         title: data.title,
         date: data.date.toISOString().split("T")[0],
         requestedBy: data.requestedBy != null ? String(data.requestedBy) : null,
+        vendorId: data.vendorId,
         notes: data.notes,
         requestDate: data.requestDate?.toISOString().split("T")[0] ?? null,
         description: data.description,
         items: data.items.map((item) => ({ itemId: item.itemId, qty: Number(item.qty), notes: item.notes ?? "" })),
-      }} items={items} employees={employees} />
+      }} items={items} employees={employees} vendors={vendors} />
     </div>
   )
 }

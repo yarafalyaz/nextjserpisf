@@ -50,11 +50,17 @@ interface PurchaseOrderFormProps {
     unitOfMeasure: string;
   }[];
   defaultPrId?: number;
-  purchaseRequests?: { id: number; documentNo: string; title?: string | null }[];
+  purchaseRequests?: {
+    id: number;
+    documentNo: string;
+    title?: string | null;
+    vendorId?: number | null;
+  }[];
   preselectedPR?: {
     id: number;
     documentNo: string;
     title?: string | null;
+    vendorId?: number | null;
     items: { itemId: number; qty: number; notes?: string | null }[];
   } | null;
 }
@@ -81,9 +87,15 @@ export function PurchaseOrderForm({
     id: number;
     documentNo: string;
     title?: string | null;
+    vendorId?: number | null;
   } | null>(
     preselectedPR
-      ? { id: preselectedPR.id, documentNo: preselectedPR.documentNo, title: preselectedPR.title }
+      ? {
+          id: preselectedPR.id,
+          documentNo: preselectedPR.documentNo,
+          title: preselectedPR.title,
+          vendorId: preselectedPR.vendorId,
+        }
       : null,
   );
   const [poItems, setPoItems] = useState<POItem[]>(
@@ -117,7 +129,7 @@ export function PurchaseOrderForm({
   } = useForm<PurchaseOrderInput>({
     resolver: zodResolver(purchaseOrderSchema),
     defaultValues: {
-      vendorId: order?.vendorId,
+      vendorId: order?.vendorId ?? preselectedPR?.vendorId ?? undefined,
       date: order?.date ?? toLocalDateOnly(new Date()),
       notes: order?.notes ?? "",
       paymentTerm: order?.paymentTerm ?? "",
@@ -135,8 +147,14 @@ export function PurchaseOrderForm({
       return;
     }
     const pr = purchaseRequests?.find((p) => p.id === id);
-    setLinkedPR(pr ? { id: pr.id, documentNo: pr.documentNo, title: pr.title } : null);
-    // Prefill items from the selected PR (only when the grid is still empty/untouched).
+    setLinkedPR(
+      pr
+        ? { id: pr.id, documentNo: pr.documentNo, title: pr.title, vendorId: pr.vendorId }
+        : null,
+    );
+    // Suggest the PR's vendor as the PO vendor (still changeable).
+    if (pr?.vendorId) setValue("vendorId", pr.vendorId);
+    // Prefill items from the selected PR (only when we have the full PR payload).
     const full = preselectedPR && preselectedPR.id === id ? preselectedPR : null;
     if (full && full.items.length > 0) {
       setPoItems(
@@ -231,8 +249,8 @@ export function PurchaseOrderForm({
                   ) : null}
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Item di bawah terisi dari permintaan ini. Setelah PO disimpan, permintaan
-                  otomatis ditandai dipesan.
+                  Item &amp; pemasok di bawah terisi dari permintaan ini (pemasok masih bisa diganti).
+                  Setelah PO disimpan, permintaan otomatis ditandai dipesan.
                 </p>
               </div>
             ) : (

@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Tambah Permintaan Pembelian" }
 export default async function CreatePurchaseRequestPage() {
   await requirePermission("create_purchase_requests")
 
-  const [items, employees] = await Promise.all([
+  const [items, employees, vendors] = await Promise.all([
     prisma.item.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -20,6 +20,11 @@ export default async function CreatePurchaseRequestPage() {
     }),
     prisma.employee.findMany({
       where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.vendor.findMany({
+      where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
@@ -31,7 +36,7 @@ export default async function CreatePurchaseRequestPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Permintaan Pembelian</h1>
       </div>
-      <PurchaseRequestForm items={items} employees={employees} />
+      <PurchaseRequestForm items={items} employees={employees} vendors={vendors} />
     </div>
   )
 }

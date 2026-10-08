@@ -142,6 +142,27 @@ describe("Purchase Request Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createPurchaseRequest persists the suggested vendor", async () => {
+    await actions.createPurchaseRequest(fdMap({
+      date: "2026-06-12",
+      title: "PR Test",
+      vendorId: "7",
+      items: JSON.stringify([{ itemId: 1, qty: 10, notes: "" }])
+    }))
+    const arg = mocks.prismaMock.purchaseRequest.create.mock.calls.at(-1)![0]
+    expect(arg.data.vendorId).toBe(7)
+  })
+
+  it("createPurchaseRequest without a vendor leaves it null", async () => {
+    await actions.createPurchaseRequest(fdMap({
+      date: "2026-06-12",
+      title: "PR Test",
+      items: JSON.stringify([{ itemId: 1, qty: 10, notes: "" }])
+    }))
+    const arg = mocks.prismaMock.purchaseRequest.create.mock.calls.at(-1)![0]
+    expect(arg.data.vendorId).toBeNull()
+  })
+
   it("updatePurchaseRequest succeeds", async () => {
     const res = await actions.updatePurchaseRequest(1, fdMap({
       date: "2026-06-12",
@@ -150,6 +171,17 @@ describe("Purchase Request Actions", () => {
     }))
     expect(res?.success).toBe(true)
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_requests")
+  })
+
+  it("updatePurchaseRequest persists the suggested vendor", async () => {
+    await actions.updatePurchaseRequest(1, fdMap({
+      date: "2026-06-12",
+      title: "PR Test Updated",
+      vendorId: "9",
+      items: JSON.stringify([{ itemId: 1, qty: 12, notes: "" }])
+    }))
+    const arg = mocks.prismaMock.purchaseRequest.update.mock.calls.at(-1)![0]
+    expect(arg.data.vendorId).toBe(9)
   })
 
   it("approvePurchaseRequest succeeds", async () => {
