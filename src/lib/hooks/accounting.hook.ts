@@ -3,6 +3,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
+import { safeAdd } from "@/lib/utils/math";
 
 /**
  * Accounting Hook - Observer pattern replacement for all accounting journal entries.
@@ -1459,9 +1460,11 @@ export async function onVendorPaymentCreated(
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. onPayrollPaid
-//    Dr. Salary Expense (netSalary + statutory)
+//    Dr. Salary Expense (grossSalary)
 //    Cr. Bank/Cash (netSalary)
 //    Cr. Tax/BPJS Payable (statutory)
+//    Cr. Piutang Karyawan (loanDeduction)
+//    Cr. Salaries Payable (late + absent + manual deductions)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function onPayrollPaid(
@@ -1485,13 +1488,32 @@ export async function onPayrollPaid(
   });
 
   const netSalary = Number(payroll.netSalary) || 0;
+  const grossSalary = Number(payroll.grossSalary) || 0;
+  const loanDeduction = Number(payroll.loanDeduction) || 0;
+  const lateDeduction = Number(payroll.lateDeduction) || 0;
+  const absentDeduction = Number(payroll.absentDeduction) || 0;
+  const otherDeductions = Number(payroll.deductions) || 0;
   const statutory =
     Number(payroll.bpjsHealthEmployee ?? 0) +
     Number(payroll.bpjsEmploymentEmployee ?? 0) +
     Number(payroll.pph21 ?? 0);
-  const totalExpense = netSalary + statutory;
+  // Everything withheld from gross that is NOT the cash paid to the employee.
+  // gross = net + statutory + loanDeduction + lateDeduction + absentDeduction + deductions
+  const withholdings = safeAdd(
+    safeAdd(statutory, loanDeduction, 2),
+    safeAdd(lateDeduction, safeAdd(absentDeduction, otherDeductions, 2), 2),
+    2,
+  );
+  // Debit the FULL gross salary cost, not (net + statutory): otherwise the
+  // loan repayment, late/absent and manual deductions are never booked, the
+  // salary expense is understated, and the employee receivable (Piutang
+  // Karyawan) is never relieved as the loan is repaid through payroll.
+  const totalExpense = safeAdd(netSalary, withholdings, 2);
+  // Prefer the stored gross; fall back to the reconstructed total when gross is
+  // 0 (legacy rows) so the journal still balances.
+  const debitTotal = grossSalary > 0 ? grossSalary : totalExpense;
 
-  if (totalExpense <= 0) return;
+  if (debitTotal <= 0) return;
 
   await assertPeriodOpen(payroll.paymentDate ?? new Date(), txClient);
 
@@ -1516,10 +1538,10 @@ export async function onPayrollPaid(
       memo: string;
       costCenterId?: number | null;
     }> = [
-      // Dr. Salary Expense
+      // Dr. Salary Expense (full gross cost)
       {
         accountId: settings.salaryExpenseAccountId!,
-        debit: totalExpense,
+        debit: debitTotal,
         credit: 0,
         memo: "Beban Gaji",
         costCenterId: payroll.costCenterId ?? null,
@@ -1546,6 +1568,51 @@ export async function onPayrollPaid(
       entries[1].credit += statutory;
     }
 
+    // Cr. Piutang Karyawan for the loan instalment withheld from pay — this is
+    // the repayment side of onEmployeeLoanDisbursed (Dr Piutang / Cr Bank).
+    // Without it the receivable grows forever and is never collected.
+    if (loanDeduction > 0 && settings.employeeReceivableAccountId) {
+      entries.push({
+        accountId: settings.employeeReceivableAccountId,
+        debit: 0,
+        credit: loanDeduction,
+        memo: "Angsuran Pinjaman Karyawan",
+      });
+    } else if (loanDeduction > 0) {
+      // No receivable account configured — park it on payable so the entry
+      // still balances instead of silently dropping the leg.
+      if (settings.salariesPayableAccountId) {
+        entries.push({
+          accountId: settings.salariesPayableAccountId,
+          debit: 0,
+          credit: loanDeduction,
+          memo: "Angsuran Pinjaman Karyawan (tanpa akun piutang)",
+        });
+      } else {
+        entries[1].credit += loanDeduction;
+      }
+    }
+
+    // Cr. Potongan (late / absent / manual deductions) — withheld, not paid as
+    // cash, so they reduce the salary expense via a payable leg.
+    const otherWithheld = safeAdd(
+      safeAdd(lateDeduction, absentDeduction, 2),
+      otherDeductions,
+      2,
+    );
+    if (otherWithheld > 0) {
+      if (settings.salariesPayableAccountId) {
+        entries.push({
+          accountId: settings.salariesPayableAccountId,
+          debit: 0,
+          credit: otherWithheld,
+          memo: "Potongan (terlambat/absen/lainnya)",
+        });
+      } else {
+        entries[1].credit += otherWithheld;
+      }
+    }
+
     await tx.journal.create({
       data: {
         journalNumber,
@@ -1555,8 +1622,8 @@ export async function onPayrollPaid(
         description: `Penggajian ${payroll.documentNo}`,
         type: "AUTO",
         status: "POSTED",
-        totalDebit: totalExpense,
-        totalCredit: totalExpense,
+        totalDebit: debitTotal,
+        totalCredit: debitTotal,
         createdBy: userId ?? null,
         entries: {
           create: entries,

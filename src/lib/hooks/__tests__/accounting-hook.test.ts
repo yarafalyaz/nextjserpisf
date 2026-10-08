@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => ({
     salaryExpenseAccountId: 630 as number | null,
     payrollBankAccountId: 105 as number | null,
     salariesPayableAccountId: 230 as number | null,
+    employeeReceivableAccountId: 140 as number | null,
   },
   assertPeriodOpen: vi.fn(),
   fifoConsume: vi.fn(),
@@ -1798,6 +1799,7 @@ describe("onPayrollPaid", () => {
     mocks.systemSettings.salaryExpenseAccountId = 630;
     mocks.systemSettings.payrollBankAccountId = 105;
     mocks.systemSettings.salariesPayableAccountId = 230;
+    mocks.systemSettings.employeeReceivableAccountId = 140;
     mocks.transaction.mockImplementation((fn: any) =>
       fn({
         systemSetting: {
@@ -1915,5 +1917,59 @@ describe("onPayrollPaid", () => {
         }),
       }),
     );
+  });
+
+  it("debits FULL gross salary and relieves withholding legs (loan / late / absent)", async () => {
+    // gross 2000 = net 1500 + statutory 150 + loan 250 + late 50 + absent 50
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      grossSalary: 2000,
+      netSalary: 1500,
+      bpjsHealthEmployee: 100,
+      bpjsEmploymentEmployee: 30,
+      pph21: 20,
+      loanDeduction: 250,
+      lateDeduction: 50,
+      absentDeduction: 50,
+      deductions: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-2",
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(1);
+
+    const call = mocks.journalCreate.mock.calls[0][0];
+    // Journal balances to the FULL gross, not (net + statutory).
+    expect(call.data.totalDebit).toBe(2000);
+    expect(call.data.totalCredit).toBe(2000);
+
+    const entries = call.data.entries.create as Array<{
+      accountId: number;
+      debit: number;
+      credit: number;
+    }>;
+    // Dr. Salary Expense = gross
+    expect(entries[0]).toEqual(
+      expect.objectContaining({ accountId: 630, debit: 2000, credit: 0 }),
+    );
+    // Cr. Bank = net cash paid
+    expect(entries).toContainEqual(
+      expect.objectContaining({ accountId: 105, debit: 0, credit: 1500 }),
+    );
+    // Cr. Salaries Payable = statutory
+    expect(entries).toContainEqual(
+      expect.objectContaining({ accountId: 230, debit: 0, credit: 150 }),
+    );
+    // Cr. Piutang Karyawan = loan instalment withheld (relieves the receivable)
+    expect(entries).toContainEqual(
+      expect.objectContaining({ accountId: 140, debit: 0, credit: 250 }),
+    );
+    // Cr. Salaries Payable = late + absent deductions (100)
+    expect(entries).toContainEqual(
+      expect.objectContaining({ accountId: 230, debit: 0, credit: 100 }),
+    );
+    // Credits must sum exactly to the debit total (double-entry balances).
+    const creditSum = entries.reduce((s, e) => s + e.credit, 0);
+    expect(creditSum).toBe(2000);
   });
 });

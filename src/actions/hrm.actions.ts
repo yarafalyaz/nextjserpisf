@@ -251,7 +251,7 @@ export async function approveLeave(leaveId: number) {
 
 export async function rejectLeave(leaveId: number, reason?: string) {
   try {
-    const user = await requirePermission("edit_leave_requests");
+    const user = await requirePermission("approve_leave_requests");
     await assertApproved("LeaveRequest", leaveId);
 
     const leave = await prisma.leaveRequest.findUniqueOrThrow({
@@ -1183,8 +1183,9 @@ export async function processPayroll(formData: FormData) {
     // totalAmount must mirror the server-computed netSalary — never trust a
     // client-supplied total. Accepting formData "totalAmount" let the stored
     // figure (shown on payslips/reports/list-totals) diverge from the actual net
-    // pay and from the GL posting, which posts netSalary + statutory (see
-    // postPayrollJournal in accounting.hook.ts).
+    // pay and from the GL posting, which debits the full grossSalary and
+    // credits the withholdings (statutory, loan instalment, late/absent/manual
+    // deductions) plus the net cash paid (see onPayrollPaid in accounting.hook.ts).
     const totalAmount = netSalary;
     const paymentDateRaw = v.paymentDate ?? null;
 
@@ -1348,8 +1349,9 @@ export async function updatePayroll(id: number, formData: FormData) {
     // totalAmount must mirror the server-computed netSalary — never trust a
     // client-supplied total. Accepting formData "totalAmount" let the stored
     // figure (shown on payslips/reports/list-totals) diverge from the actual net
-    // pay and from the GL posting, which posts netSalary + statutory (see
-    // postPayrollJournal in accounting.hook.ts).
+    // pay and from the GL posting, which debits the full grossSalary and
+    // credits the withholdings (statutory, loan instalment, late/absent/manual
+    // deductions) plus the net cash paid (see onPayrollPaid in accounting.hook.ts).
     const totalAmount = netSalary;
     const paymentDateRaw = v.paymentDate ?? null;
 

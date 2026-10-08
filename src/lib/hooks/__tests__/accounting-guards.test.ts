@@ -79,23 +79,33 @@ describe("Accounting hook guards (regression)", () => {
   })
 
   describe("Payroll journal on paid", () => {
-    it("calculates totalExpense = netSalary + statutory", () => {
-      const netSalary = 5_000_000
+    it("debits the FULL gross salary; credits net + statutory + loan + other deductions", () => {
+      const baseSalary = 5_000_000
       const bpjsHealth = 50_000
       const bpjsEmployment = 100_000
       const pph21 = 150_000
       const statutory = bpjsHealth + bpjsEmployment + pph21
-      const totalExpense = netSalary + statutory
+      const loanDeduction = 200_000
+      const lateDeduction = 25_000
+      const absentDeduction = 75_000
+      const grossSalary = baseSalary
+      const netSalary =
+        grossSalary - statutory - loanDeduction - lateDeduction - absentDeduction
 
-      expect(totalExpense).toBe(5_300_000)
+      // Journal must balance to the FULL gross, not (net + statutory): the
+      // loan instalment and late/absent deductions are withheld from pay and
+      // need their own credit legs or the employee receivable never clears.
+      expect(netSalary).toBe(4_400_000)
       expect(statutory).toBe(300_000)
+      expect(loanDeduction + lateDeduction + absentDeduction).toBe(300_000)
+      expect(netSalary + statutory + loanDeduction + lateDeduction + absentDeduction).toBe(
+        grossSalary,
+      )
     })
 
-    it("skips when totalExpense <= 0", () => {
-      const netSalary = 0
-      const statutory = 0
-      const totalExpense = netSalary + statutory
-      expect(totalExpense).toBeLessThanOrEqual(0)
+    it("skips when gross salary <= 0", () => {
+      const grossSalary = 0
+      expect(grossSalary).toBeLessThanOrEqual(0)
     })
 
     it("skips when salaryExpenseAccountId not configured", () => {
