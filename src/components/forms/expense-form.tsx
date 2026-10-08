@@ -23,10 +23,11 @@ interface ExpenseFormProps {
   categories?: { id: number; name: string; label: string }[]
   costCenters?: { id: number; code: string; name: string }[]
   projects?: { id: number; name: string; documentNo: string | null }[]
-  expense?: { id: number; date: string; description?: string | null; amount: number; accountId: number; paidFromAccountId?: number | null; categoryId?: number | null; costCenterId?: number | null; projectId?: number | null; referenceNo?: string | null; receiptImage?: string | null; notes?: string | null; status?: string }
+  vendors?: { id: number; name: string }[]
+  expense?: { id: number; date: string; description?: string | null; amount: number; accountId: number; paidFromAccountId?: number | null; categoryId?: number | null; costCenterId?: number | null; projectId?: number | null; vendorId?: number | null; referenceNo?: string | null; receiptImage?: string | null; notes?: string | null; status?: string }
 }
 
-export function ExpenseForm({ accounts, categories = [], costCenters = [], projects = [], expense }: ExpenseFormProps) {
+export function ExpenseForm({ accounts, categories = [], costCenters = [], projects = [], vendors = [], expense }: ExpenseFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -46,6 +47,7 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
       accountId: expense.accountId,
       paidFromAccountId: expense.paidFromAccountId ?? undefined,
       projectId: expense.projectId ?? undefined,
+      vendorId: expense.vendorId ?? undefined,
     } : {
       date: toLocalDateOnly(new Date()),
       amount: 0,
@@ -177,13 +179,32 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
             control={control}
             render={({ field }) => (
               <>
-                <Label htmlFor="projectId">Proyek</Label>
+                <Label htmlFor="projectId">Nama Project</Label>
                 <Combobox
                   id="projectId"
                   options={projects.map((p) => ({ value: String(p.id), label: `${p.documentNo ? `${p.documentNo} - ` : ""}${p.name}` }))}
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  placeholder="Cari proyek..."
+                  placeholder="Cari project..."
+                />
+              </>
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Controller
+            name="vendorId"
+            control={control}
+            render={({ field }) => (
+              <>
+                <Label htmlFor="vendorId">Vendor</Label>
+                <Combobox
+                  id="vendorId"
+                  options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+                  value={field.value ? String(field.value) : null}
+                  onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                  placeholder="Cari vendor/toko..."
                 />
               </>
             )}

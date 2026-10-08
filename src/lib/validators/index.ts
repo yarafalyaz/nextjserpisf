@@ -270,6 +270,7 @@ export const expenseSchema = z.object({
   referenceNo: z.string().optional(),
   description: z.string().optional(),
   categoryId: z.number().optional(),
+  vendorId: z.number().optional(),
   receiptImage: z.string().optional(),
 })
 
@@ -279,6 +280,9 @@ export const pettyCashSchema = z.object({
   date: z.string().min(1, "Tanggal wajib diisi"),
   accountId: z.number().optional(),
   description: z.string().optional(),
+  projectId: z.number().optional(),
+  vendorId: z.number().optional(),
+  categoryId: z.number().optional(),
 })
 
 // ==================== HRM VALIDATORS ====================

@@ -224,14 +224,17 @@ export async function postJournal(journalId: number) {
       );
     }
 
-    await prisma.journal.update({
-      where: { id: journalId },
+    const claim = await prisma.journal.updateMany({
+      where: { id: journalId, status: "DRAFT" },
       data: {
         status: "POSTED",
         totalDebit,
         totalCredit,
       },
     });
+    if (claim.count === 0) {
+      throw new Error("Jurnal sudah diposting atau sedang diproses");
+    }
 
     await logActivity("post", "Journal", journalId, "Posting jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -268,6 +271,7 @@ export async function createExpense(formData: FormData) {
         referenceNo: v.referenceNo ?? null,
         description: v.description ?? null,
         categoryId: v.categoryId ?? null,
+        vendorId: v.vendorId ?? null,
         receiptImage: v.receiptImage ?? null,
         status: "draft",
         createdBy: Number(user.id),
@@ -548,6 +552,9 @@ export async function createPettyCash(formData: FormData) {
           accountId: v.accountId ?? null,
           referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
+          projectId: v.projectId ?? null,
+          vendorId: v.vendorId ?? null,
+          categoryId: v.categoryId ?? null,
           createdBy: Number(user.id),
         },
       });
@@ -1290,6 +1297,7 @@ export async function updateExpense(id: number, formData: FormData) {
         referenceNo: v.referenceNo ?? null,
         description: v.description ?? null,
         categoryId: v.categoryId ?? null,
+        vendorId: v.vendorId ?? null,
         receiptImage: v.receiptImage ?? null,
         status: "draft",
       },
@@ -1350,6 +1358,9 @@ export async function updatePettyCash(id: number, formData: FormData) {
           accountId: v.accountId ?? null,
           referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
+          projectId: v.projectId ?? null,
+          vendorId: v.vendorId ?? null,
+          categoryId: v.categoryId ?? null,
         },
       });
 

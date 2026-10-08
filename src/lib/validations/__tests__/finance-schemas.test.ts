@@ -51,6 +51,30 @@ describe("validations/finance.schemas", () => {
     it("rejects non-positive accountId", () => {
       expect(expenseSchema.safeParse({ accountId: 0, amount: 100, date: "2026-06-09" }).success).toBe(false);
     });
+    it("accepts Nama Project + Vendor (pola jurnal operasional)", () => {
+      const r = expenseSchema.safeParse({
+        accountId: 1, amount: 50000, date: "2026-06-09",
+        projectId: 7, categoryId: 3, vendorId: 12,
+      });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.projectId).toBe(7);
+        expect(r.data.categoryId).toBe(3);
+        expect(r.data.vendorId).toBe(12);
+      }
+    });
+    it("coerces string project/vendor ids (FormData)", () => {
+      const r = expenseSchema.safeParse({
+        accountId: "1", amount: "50000", date: "2026-06-09",
+        projectId: "7", vendorId: "12", categoryId: "3",
+      });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.projectId).toBe(7);
+        expect(r.data.vendorId).toBe(12);
+        expect(r.data.categoryId).toBe(3);
+      }
+    });
   });
 
   describe("pettyCashSchema", () => {
@@ -65,6 +89,30 @@ describe("validations/finance.schemas", () => {
     });
     it("rejects zero amount", () => {
       expect(pettyCashSchema.safeParse({ type: "IN", amount: 0, date: "2026-06-09" }).success).toBe(false);
+    });
+    it("accepts Nama Project + Vendor + Kategori (pola jurnal operasional)", () => {
+      const r = pettyCashSchema.safeParse({
+        type: "OUT", amount: 20000, date: "2026-06-09",
+        projectId: 5, vendorId: 9, categoryId: 2,
+      });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.projectId).toBe(5);
+        expect(r.data.vendorId).toBe(9);
+        expect(r.data.categoryId).toBe(2);
+      }
+    });
+    it("coerces string project/vendor/category ids (FormData)", () => {
+      const r = pettyCashSchema.safeParse({
+        type: "OUT", amount: "20000", date: "2026-06-09",
+        projectId: "5", vendorId: "9", categoryId: "2",
+      });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.projectId).toBe(5);
+        expect(r.data.vendorId).toBe(9);
+        expect(r.data.categoryId).toBe(2);
+      }
     });
   });
 

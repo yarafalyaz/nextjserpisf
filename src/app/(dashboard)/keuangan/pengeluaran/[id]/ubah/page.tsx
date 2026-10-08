@@ -27,7 +27,7 @@ export default async function EditPage({
 
   if (!data) notFound();
 
-  const [accounts, projects, categories] = await Promise.all([
+  const [accounts, projects, categories, vendors] = await Promise.all([
     prisma.account.findMany({
       where: { isActive: true },
       orderBy: { code: "asc" },
@@ -42,6 +42,11 @@ export default async function EditPage({
       where: { isActive: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true, label: true },
+    }),
+    prisma.vendor.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
     }),
   ])
 
@@ -69,12 +74,14 @@ export default async function EditPage({
           categoryId: data.categoryId,
           costCenterId: data.costCenterId,
           projectId: data.projectId,
+          vendorId: data.vendorId,
           referenceNo: data.referenceNo,
           receiptImage: data.receiptImage,
         }}
         accounts={accounts}
         categories={categories}
         projects={projects}
+        vendors={vendors}
       />
     </div>
   );

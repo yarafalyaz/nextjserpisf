@@ -15,12 +15,15 @@ import { FormCard, FormSection, FormActions } from "@/components/ui/form-section
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
-export function PettyCashForm({ accounts, pettyCash, currentBalance }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; referenceNo?: string | null; balanceBefore?: number; balanceAfter?: number }; currentBalance?: number }) {
+export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = [], vendors = [], categories = [] }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; referenceNo?: string | null; balanceBefore?: number; balanceAfter?: number; projectId?: number | null; vendorId?: number | null; categoryId?: number | null }; currentBalance?: number; projects?: { id: number; name: string; documentNo: string | null }[]; vendors?: { id: number; name: string }[]; categories?: { id: number; name: string; label: string }[] }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(pettyCash?.date ?? toLocalDateOnly(new Date()))
   const [type, setType] = useState(pettyCash?.type ?? "IN")
   const [accountId, setAccountId] = useState<string | null>(pettyCash?.accountId ? String(pettyCash.accountId) : null)
+  const [projectId, setProjectId] = useState<string | null>(pettyCash?.projectId ? String(pettyCash.projectId) : null)
+  const [vendorId, setVendorId] = useState<string | null>(pettyCash?.vendorId ? String(pettyCash.vendorId) : null)
+  const [categoryId, setCategoryId] = useState<string | null>(pettyCash?.categoryId ? String(pettyCash.categoryId) : null)
   const assetAccounts = accounts.filter((a) => a.type === "ASSET")
   const expenseAccounts = accounts.filter((a) => a.type === "EXPENSE")
   const filteredOptions = useMemo(() => {
@@ -94,6 +97,41 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance }: { account
           </div>
         </FormSection>
         <FormSection title="Detail" columns={1}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="projectId">Nama Project</Label>
+              <Combobox
+                id="projectId"
+                name="projectId"
+                options={projects.map((p) => ({ value: String(p.id), label: `${p.documentNo ? `${p.documentNo} - ` : ""}${p.name}` }))}
+                value={projectId}
+                onChange={setProjectId}
+                placeholder="Cari project..."
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="vendorId">Vendor</Label>
+              <Combobox
+                id="vendorId"
+                name="vendorId"
+                options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+                value={vendorId}
+                onChange={setVendorId}
+                placeholder="Cari vendor/toko..."
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="categoryId">Kategori</Label>
+              <Combobox
+                id="categoryId"
+                name="categoryId"
+                options={categories.map((c) => ({ value: String(c.id), label: c.label }))}
+                value={categoryId}
+                onChange={setCategoryId}
+                placeholder="Cari kategori..."
+              />
+            </div>
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="referenceNo">No. Referensi</Label>
             <Input id="referenceNo" name="referenceNo" placeholder="No. referensi transaksi..." defaultValue={pettyCash?.referenceNo ?? ""} />

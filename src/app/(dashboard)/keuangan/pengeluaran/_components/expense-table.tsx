@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
@@ -15,6 +15,7 @@ interface ExpenseData {
   date: string
   description: string | null
   categoryName: string | null
+  vendorName: string | null
   amount: number
   status: string
 }
@@ -40,6 +41,10 @@ const columns = [
   }),
   columnHelper.accessor("categoryName", {
     header: "Kategori",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor("vendorName", {
+    header: "Vendor",
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("amount", {

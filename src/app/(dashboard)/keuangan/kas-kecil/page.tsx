@@ -63,6 +63,11 @@ export default async function PettyCashPage({
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * perPage,
       take: perPage,
+      include: {
+        project: { select: { name: true, documentNo: true } },
+        vendor: { select: { name: true } },
+        category: { select: { label: true } },
+      },
     }),
     prisma.pettyCash.count({ where }),
   ]);
@@ -77,6 +82,11 @@ export default async function PettyCashPage({
     description: r.description,
     amount: Number(r.amount),
     balanceAfter: Number(r.balanceAfter),
+    projectName: r.project
+      ? `${r.project.documentNo ? `${r.project.documentNo} - ` : ""}${r.project.name}`
+      : null,
+    vendorName: r.vendor?.name ?? null,
+    categoryName: r.category?.label ?? null,
   }));
 
   const balanceColor =

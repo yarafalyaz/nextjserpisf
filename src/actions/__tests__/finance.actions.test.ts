@@ -204,6 +204,35 @@ describe("Expense Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  it("createExpense persists Nama Project + Vendor", async () => {
+    const res = await (actions as any).createExpense(fdMap({
+      accountId: 1,
+      amount: 1000,
+      date: "2026-06-13",
+      projectId: 7,
+      categoryId: 3,
+      vendorId: 12,
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.expense.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ projectId: 7, categoryId: 3, vendorId: 12 }),
+      }),
+    )
+  })
+  it("createExpense defaults vendor/project to null when omitted", async () => {
+    const res = await (actions as any).createExpense(fdMap({
+      accountId: 1,
+      amount: 1000,
+      date: "2026-06-13",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.expense.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ projectId: null, categoryId: null, vendorId: null }),
+      }),
+    )
+  })
   it("updateExpense succeeds", async () => {
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await (actions as any).updateExpense(1, fdMap({
@@ -276,6 +305,23 @@ describe("Petty Cash Actions", () => {
       date: "2026-06-13"
     }))
     expect(res?.success).toBe(true)
+  })
+  it("createPettyCash persists Nama Project + Vendor + Kategori", async () => {
+    // The create runs inside a tx; the model mock's create is the same fn.
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "IN",
+      amount: 20000,
+      date: "2026-06-13",
+      projectId: 5,
+      vendorId: 9,
+      categoryId: 2,
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.pettyCash.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ projectId: 5, vendorId: 9, categoryId: 2 }),
+      }),
+    )
   })
   it("updatePettyCash succeeds with unchanged balance (line 378)", async () => {
     // 1) Find existing record to pass schema check

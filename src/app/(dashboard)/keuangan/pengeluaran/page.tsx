@@ -34,7 +34,7 @@ export default async function ExpensesPage({
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * perPage,
       take: perPage,
-      include: { category: { select: { label: true } } },
+      include: { category: { select: { label: true } }, vendor: { select: { name: true } } },
     }),
     prisma.expense.count({ where }),
   ])
@@ -44,6 +44,9 @@ export default async function ExpensesPage({
     ...e,
     categoryName: (e as Record<string, unknown>).category
       ? ((e as Record<string, unknown>).category as { label: string }).label
+      : null,
+    vendorName: (e as Record<string, unknown>).vendor
+      ? ((e as Record<string, unknown>).vendor as { name: string }).name
       : null,
   }))
 

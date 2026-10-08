@@ -29,6 +29,11 @@ export default async function PettyCashDetailPage({
 
   const pettyCash = await prisma.pettyCash.findUnique({
     where: { id: numId },
+    include: {
+      project: { select: { id: true, name: true, documentNo: true } },
+      vendor: { select: { name: true } },
+      category: { select: { label: true } },
+    },
   });
 
   if (!pettyCash) notFound();
@@ -96,6 +101,18 @@ export default async function PettyCashDetailPage({
             value={pettyCash.description}
             colSpan="full"
           />
+        )}
+        {pettyCash.project && (
+          <DetailField
+            label="Nama Project"
+            value={`${pettyCash.project.documentNo ? `${pettyCash.project.documentNo} - ` : ""}${pettyCash.project.name}`}
+          />
+        )}
+        {pettyCash.vendor && (
+          <DetailField label="Vendor" value={pettyCash.vendor.name} />
+        )}
+        {pettyCash.category && (
+          <DetailField label="Kategori" value={pettyCash.category.label} />
         )}
         <DetailField label="Dibuat" value={formatDate(pettyCash.createdAt)} />
       </DetailCard>

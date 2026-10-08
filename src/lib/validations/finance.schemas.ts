@@ -67,6 +67,7 @@ export const expenseSchema = z.object({
   referenceNo: optionalString(100),
   description: optionalString(1000),
   categoryId: optionalNumber(),
+  vendorId: optionalNumber(),
   receiptImage: optionalString(500),
   attachmentIds: optionalString(5000),
 });
@@ -82,6 +83,9 @@ export const pettyCashSchema = z.object({
   accountId: optionalNumber(),
   referenceNo: optionalString(100),
   description: optionalString(1000),
+  projectId: optionalNumber(),
+  vendorId: optionalNumber(),
+  categoryId: optionalNumber(),
   attachmentIds: optionalString(5000),
 });
 

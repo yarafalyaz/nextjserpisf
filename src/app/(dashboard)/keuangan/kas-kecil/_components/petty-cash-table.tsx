@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
@@ -16,6 +16,9 @@ interface PettyCashData {
   description: string | null
   amount: number
   balanceAfter: number
+  projectName: string | null
+  vendorName: string | null
+  categoryName: string | null
 }
 
 const columnHelper = createColumnHelper<PettyCashData>()
@@ -39,6 +42,18 @@ const columns = [
   }),
   columnHelper.accessor("description", {
     header: "Deskripsi",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor("projectName", {
+    header: "Nama Project",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor("vendorName", {
+    header: "Vendor",
+    cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor("categoryName", {
+    header: "Kategori",
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("amount", {

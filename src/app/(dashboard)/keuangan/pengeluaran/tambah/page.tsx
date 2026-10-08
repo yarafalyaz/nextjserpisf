@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Tambah Pengeluaran" }
 export default async function CreateExpensePage() {
   await requirePermission("create_expenses")
 
-  const [accounts, projects, categories] = await Promise.all([
+  const [accounts, projects, categories, vendors] = await Promise.all([
     prisma.account.findMany({
       where: { isActive: true },
       orderBy: { code: "asc" },
@@ -27,6 +27,11 @@ export default async function CreateExpensePage() {
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true, label: true },
     }),
+    prisma.vendor.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ])
 
   return (
@@ -34,7 +39,7 @@ export default async function CreateExpensePage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Pengeluaran</h1>
       </div>
-      <ExpenseForm accounts={accounts} categories={categories} projects={projects} />
+      <ExpenseForm accounts={accounts} categories={categories} projects={projects} vendors={vendors} />
     </div>
   )
 }

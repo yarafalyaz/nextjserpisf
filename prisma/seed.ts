@@ -1164,6 +1164,8 @@ async function main() {
     console.log(`✅ ${unitsOfMeasure.length} units of measure seeded/checked`);
 
     // === EXPENSE CATEGORIES ===
+    // Kategori umum + kategori granular yang benar-benar dipakai tim keuangan
+    // (diambil dari JURNAL OPERASIONAL — "Analisis Dokumen Sample Operasional").
     const expenseCategories = [
       { name: "operasional", label: "Operasional", sort: 10 },
       { name: "transportasi", label: "Transportasi", sort: 20 },
@@ -1180,6 +1182,38 @@ async function main() {
       { name: "sewa", label: "Sewa", sort: 130 },
       { name: "asuransi", label: "Asuransi", sort: 140 },
       { name: "konsumsi", label: "Konsumsi", sort: 150 },
+      // --- Granular (pola jurnal operasional) ---
+      { name: "belanja_dapur", label: "Belanja Dapur", sort: 200 },
+      { name: "atk_kantor", label: "ATK Kantor", sort: 210 },
+      { name: "equipment_kantor", label: "Equipment Kantor", sort: 220 },
+      { name: "equipment_produksi", label: "Equipment Produksi", sort: 230 },
+      { name: "tools_produksi", label: "Tools Produksi", sort: 240 },
+      { name: "perawatan_equipment_kantor", label: "Maintenance Equipment Kantor", sort: 250 },
+      { name: "perawatan_equipment_produksi", label: "Maintenance Equipment Produksi", sort: 260 },
+      { name: "biaya_listrik", label: "Biaya Listrik", sort: 270 },
+      { name: "biaya_internet", label: "Biaya Internet & Hosting", sort: 280 },
+      { name: "biaya_telepon", label: "Biaya Telepon", sort: 290 },
+      { name: "biaya_transport_bensin", label: "Biaya Transport, Bensin & Parkir", sort: 300 },
+      { name: "biaya_pengiriman", label: "Biaya Pengiriman / Ongkir", sort: 310 },
+      { name: "biaya_perjalanan_dinas", label: "Biaya Perjalanan Dinas / Representasi", sort: 320 },
+      { name: "biaya_lebur", label: "Belanja Lembur", sort: 330 },
+      { name: "biaya_csr", label: "Biaya CSR", sort: 340 },
+      { name: "biaya_design", label: "Biaya Design", sort: 350 },
+      { name: "fee_marketing", label: "Fee Marketing", sort: 360 },
+      { name: "p3k", label: "P3K / Kesehatan", sort: 370 },
+      { name: "gaji_karyawan", label: "Gaji Karyawan", sort: 380 },
+      { name: "gaji_phl", label: "Gaji PHL", sort: 390 },
+      { name: "fee_phl", label: "Fee PHL", sort: 400 },
+      { name: "jasa_coating", label: "Jasa Coating", sort: 410 },
+      { name: "jasa_bending", label: "Jasa Bending", sort: 420 },
+      { name: "jasa_laser_cutting", label: "Jasa Laser Cutting", sort: 430 },
+      { name: "jasa_service", label: "Jasa Service", sort: 440 },
+      { name: "jasa_potong_kaca", label: "Jasa Potong Kaca", sort: 450 },
+      { name: "jasa_tempered_glass", label: "Jasa Tempered Glass", sort: 460 },
+      { name: "row_material", label: "Row Material", sort: 470 },
+      { name: "supporting_part", label: "Supporting Part", sort: 480 },
+      { name: "merchandise", label: "Merchandise", sort: 490 },
+      { name: "biaya_admin_bank", label: "Biaya Admin Bank", sort: 500 },
       { name: "lainnya", label: "Lainnya", sort: 999 },
     ];
     for (const cat of expenseCategories) {

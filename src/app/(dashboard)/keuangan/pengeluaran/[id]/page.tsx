@@ -32,7 +32,10 @@ export default async function ExpenseDetailPage({
 
   const expense = await prisma.expense.findUnique({
     where: { id: numId },
-    include: { category: { select: { label: true } } },
+    include: {
+      category: { select: { label: true } },
+      vendor: { select: { name: true } },
+    },
   });
 
   if (!expense) notFound();
@@ -100,6 +103,7 @@ export default async function ExpenseDetailPage({
           value={formatCurrency(Number(expense.amount))}
         />
         <DetailField label="Kategori" value={expense.category?.label || "-"} />
+        <DetailField label="Vendor" value={expense.vendor?.name || "-"} />
         <DetailField
           label="Status"
           value={<StatusChip status={expense.status} />}
