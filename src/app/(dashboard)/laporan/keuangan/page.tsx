@@ -1,6 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
+import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service";
+import { computeIncomeStatement } from "@/lib/finance/income-statement";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatCurrency } from "@/lib/utils/format";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
@@ -34,24 +36,24 @@ async function getTrialBalanceData(tanggalMulai?: string, tanggalSelesai?: strin
   const end = Number.isNaN(_e.getTime()) ? new Date() : _e;
   end.setHours(23, 59, 59, 999);
 
-  const entries = await prisma.journalEntry.findMany({
-    where: {
-      journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { gte: start, lte: end } },
-    },
-    include: { account: true },
-  });
+  // Totalled in SQL (groupBy) rather than pulling every journal line of the
+  // period into Node just to add up two columns.
+  const periodSums = await sumEntriesByAccount({ date: { gte: start, lte: end } });
 
-  const accountBalances = new Map<number, { code: string; name: string; type: string; totalDebit: number; totalCredit: number }>();
-  for (const entry of entries) {
-    const existing = accountBalances.get(entry.accountId) || { code: entry.account.code, name: entry.account.name, type: entry.account.type, totalDebit: 0, totalCredit: 0 };
-    existing.totalDebit += Number(entry.debit);
-    existing.totalCredit += Number(entry.credit);
-    accountBalances.set(entry.accountId, existing);
-  }
-  const accounts = Array.from(accountBalances.values()).sort((a, b) => a.code.localeCompare(b.code));
-  const grandTotalDebit = accounts.reduce((sum, a) => sum + a.totalDebit, 0);
-  const grandTotalCredit = accounts.reduce((sum, a) => sum + a.totalCredit, 0);
-  return { accounts, grandTotalDebit, grandTotalCredit };
+  const accounts = await prisma.account.findMany({
+    where: { id: { in: [...periodSums.keys()] } },
+    select: { id: true, code: true, name: true, type: true },
+  });
+  const rows = accounts
+    .map((acc) => {
+      const sums = periodSums.get(acc.id) ?? { debit: 0, credit: 0 };
+      return { code: acc.code, name: acc.name, type: acc.type, totalDebit: sums.debit, totalCredit: sums.credit };
+    })
+    .sort((a, b) => a.code.localeCompare(b.code));
+
+  const grandTotalDebit = rows.reduce((sum, a) => sum + a.totalDebit, 0);
+  const grandTotalCredit = rows.reduce((sum, a) => sum + a.totalCredit, 0);
+  return { accounts: rows, grandTotalDebit, grandTotalCredit };
 }
 
 async function getIncomeStatementData(tanggalMulai?: string, tanggalSelesai?: string) {
@@ -61,33 +63,30 @@ async function getIncomeStatementData(tanggalMulai?: string, tanggalSelesai?: st
   const end = Number.isNaN(_e.getTime()) ? new Date() : _e;
   end.setHours(23, 59, 59, 999);
 
-  const entries = await prisma.journalEntry.findMany({
-    where: {
-      journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { gte: start, lte: end } },
-      account: { type: { in: ["REVENUE", "EXPENSE"] } },
-    },
-    include: { account: true },
-  });
+  const [accounts, periodSums] = await Promise.all([
+    prisma.account.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true, type: true },
+      orderBy: { code: "asc" },
+    }),
+    sumEntriesByAccount({ date: { gte: start, lte: end } }),
+  ]);
 
-  const accountMap = new Map<number, { code: string; name: string; type: string; amount: number }>();
-  for (const entry of entries) {
-    const existing = accountMap.get(entry.accountId) || { code: entry.account.code, name: entry.account.name, type: entry.account.type, amount: 0 };
-    if (entry.account.type === "REVENUE") existing.amount += Number(entry.credit) - Number(entry.debit);
-    else existing.amount += Number(entry.debit) - Number(entry.credit);
-    accountMap.set(entry.accountId, existing);
-  }
-  const revenues: { code: string; name: string; amount: number }[] = [];
-  const expenses: { code: string; name: string; amount: number }[] = [];
-  for (const [, acc] of accountMap) {
-    if (acc.type === "REVENUE") revenues.push(acc);
-    else expenses.push(acc);
-  }
-  revenues.sort((a, b) => a.code.localeCompare(b.code));
-  expenses.sort((a, b) => a.code.localeCompare(b.code));
-  const totalRevenue = revenues.reduce((sum, r) => sum + r.amount, 0);
-  const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const netIncome = totalRevenue - totalExpense;
-  return { revenues, expenses, totalRevenue, totalExpense, netIncome };
+  // Delegate to the SAME multi-step engine the dedicated Laba Rugi report uses.
+  // The old inline sum lumped every EXPENSE account (including 5-1 HPP) into one
+  // "Beban" bucket and never carved out 8- (other income) / 9- (other expense),
+  // so this legacy page reported a different net profit than /laporan/laba-rugi
+  // for the same period whenever those accounts existed.
+  return computeIncomeStatement(
+    accounts.map((acc) => ({
+      id: acc.id,
+      code: acc.code,
+      name: acc.name,
+      type: acc.type,
+      debit: periodSums.get(acc.id)?.debit ?? 0,
+      credit: periodSums.get(acc.id)?.credit ?? 0,
+    })),
+  );
 }
 
 export default async function FinancialReportsPage({
@@ -167,47 +166,121 @@ export default async function FinancialReportsPage({
 
       {reportType === "income-statement" && incomeStatement && (
         <>
-          <ReportSection title="Pendapatan">
+          <ReportSection title="Pendapatan Usaha">
             <DetailTable data-report-table="Pendapatan">
               <DetailTableHead><DetailTableTh>Kode</DetailTableTh><DetailTableTh>Nama Akun</DetailTableTh><DetailTableTh align="right">Jumlah</DetailTableTh></DetailTableHead>
               <DetailTableBody>
-                {incomeStatement.revenues.map((r) => (
+                {incomeStatement.revenueData.map((r) => (
                   <DetailTableRow key={r.code}>
                     <DetailTableTd className="font-mono">{r.code}</DetailTableTd>
                     <DetailTableTd>{r.name}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(r.amount)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(r.balance)}</DetailTableTd>
                   </DetailTableRow>
                 ))}
-                {incomeStatement.revenues.length === 0 && (
+                {incomeStatement.revenueData.length === 0 && (
                   <DetailTableRow><DetailTableTd colSpan={3} className="text-muted-foreground text-center">Belum ada data</DetailTableTd></DetailTableRow>
                 )}
               </DetailTableBody>
+              <DetailTableFoot>
+                <DetailTableFootRow className="font-semibold">
+                  <DetailTableTd colSpan={2}>Total Pendapatan Usaha</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(incomeStatement.totalRevenue)}</DetailTableTd>
+                </DetailTableFootRow>
+              </DetailTableFoot>
             </DetailTable>
           </ReportSection>
 
-          <ReportSection title="Beban">
-            <DetailTable data-report-table="Beban">
+          {incomeStatement.cogsData.length > 0 && (
+            <ReportSection title="Harga Pokok Penjualan (HPP)">
+              <DetailTable data-report-table="HPP">
+                <DetailTableHead><DetailTableTh>Kode</DetailTableTh><DetailTableTh>Nama Akun</DetailTableTh><DetailTableTh align="right">Jumlah</DetailTableTh></DetailTableHead>
+                <DetailTableBody>
+                  {incomeStatement.cogsData.map((c) => (
+                    <DetailTableRow key={c.code}>
+                      <DetailTableTd className="font-mono">{c.code}</DetailTableTd>
+                      <DetailTableTd>{c.name}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(c.balance)}</DetailTableTd>
+                    </DetailTableRow>
+                  ))}
+                </DetailTableBody>
+                <DetailTableFoot>
+                  <DetailTableFootRow className="font-semibold">
+                    <DetailTableTd colSpan={2}>Total HPP</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(incomeStatement.totalCogs)}</DetailTableTd>
+                  </DetailTableFootRow>
+                </DetailTableFoot>
+              </DetailTable>
+            </ReportSection>
+          )}
+
+          <div className={`report-section ${incomeStatement.grossProfit >= 0 ? 'border-success' : 'border-danger'}`} style={{ borderLeft: '4px solid', paddingLeft: 16 }}>
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-bold">LABA KOTOR</span>
+              <span className={`text-base font-bold ${incomeStatement.grossProfit >= 0 ? 'text-success' : 'text-danger'}`}>
+                {formatCurrency(incomeStatement.grossProfit)}
+              </span>
+            </div>
+          </div>
+
+          <ReportSection title="Beban Operasional">
+            <DetailTable data-report-table="Beban Operasional">
               <DetailTableHead><DetailTableTh>Kode</DetailTableTh><DetailTableTh>Nama Akun</DetailTableTh><DetailTableTh align="right">Jumlah</DetailTableTh></DetailTableHead>
               <DetailTableBody>
-                {incomeStatement.expenses.map((e) => (
+                {incomeStatement.expenseData.map((e) => (
                   <DetailTableRow key={e.code}>
                     <DetailTableTd className="font-mono">{e.code}</DetailTableTd>
                     <DetailTableTd>{e.name}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(e.amount)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(e.balance)}</DetailTableTd>
                   </DetailTableRow>
                 ))}
-                {incomeStatement.expenses.length === 0 && (
+                {incomeStatement.expenseData.length === 0 && (
                   <DetailTableRow><DetailTableTd colSpan={3} className="text-muted-foreground text-center">Belum ada data</DetailTableTd></DetailTableRow>
                 )}
               </DetailTableBody>
+              <DetailTableFoot>
+                <DetailTableFootRow className="font-semibold">
+                  <DetailTableTd colSpan={2}>Total Beban Operasional</DetailTableTd>
+                  <DetailTableTd align="right">{formatCurrency(incomeStatement.totalExpense)}</DetailTableTd>
+                </DetailTableFootRow>
+              </DetailTableFoot>
             </DetailTable>
           </ReportSection>
 
-          <div className={`report-section ${incomeStatement.netIncome >= 0 ? 'border-success' : 'border-danger'}`} style={{ borderLeft: '4px solid', paddingLeft: 16 }}>
+          {(incomeStatement.otherIncomeData.length > 0 || incomeStatement.otherExpenseData.length > 0) && (
+            <ReportSection title="Pendapatan / Beban Lain-lain">
+              <DetailTable data-report-table="Lain-lain">
+                <DetailTableHead><DetailTableTh>Kode</DetailTableTh><DetailTableTh>Nama Akun</DetailTableTh><DetailTableTh align="right">Jumlah</DetailTableTh></DetailTableHead>
+                <DetailTableBody>
+                  {incomeStatement.otherIncomeData.map((o) => (
+                    <DetailTableRow key={o.code}>
+                      <DetailTableTd className="font-mono">{o.code}</DetailTableTd>
+                      <DetailTableTd>{o.name}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(o.balance)}</DetailTableTd>
+                    </DetailTableRow>
+                  ))}
+                  {incomeStatement.otherExpenseData.map((o) => (
+                    <DetailTableRow key={o.code}>
+                      <DetailTableTd className="font-mono">{o.code}</DetailTableTd>
+                      <DetailTableTd>{o.name}</DetailTableTd>
+                      <DetailTableTd align="right">{formatCurrency(-o.balance)}</DetailTableTd>
+                    </DetailTableRow>
+                  ))}
+                </DetailTableBody>
+                <DetailTableFoot>
+                  <DetailTableFootRow className="font-semibold">
+                    <DetailTableTd colSpan={2}>Total Lain-lain</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(incomeStatement.totalOther)}</DetailTableTd>
+                  </DetailTableFootRow>
+                </DetailTableFoot>
+              </DetailTable>
+            </ReportSection>
+          )}
+
+          <div className={`report-section ${incomeStatement.netProfit >= 0 ? 'border-success' : 'border-danger'}`} style={{ borderLeft: '4px solid', paddingLeft: 16 }}>
             <div className="flex items-center gap-4">
               <span className="text-sm font-bold">LABA / RUGI BERSIH</span>
-              <span className={`text-base font-bold ${incomeStatement.netIncome >= 0 ? 'text-success' : 'text-danger'}`}>
-                {formatCurrency(incomeStatement.netIncome)}
+              <span className={`text-base font-bold ${incomeStatement.netProfit >= 0 ? 'text-success' : 'text-danger'}`}>
+                {formatCurrency(incomeStatement.netProfit)}
               </span>
             </div>
           </div>

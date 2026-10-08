@@ -29,13 +29,6 @@ function collectReportRoutes(): string[] {
 
 const REPORT_ROUTES = collectReportRoutes()
 
-test.describe("Laporan — legacy redirects", () => {
-  test("anggaran-vs-aktual redirects to anggaran-vs-realisasi", async ({ page }) => {
-    await page.goto("/laporan/anggaran-vs-aktual", { waitUntil: "domcontentloaded" })
-    await expect(page).toHaveURL(/\/laporan\/anggaran-vs-realisasi$/)
-  })
-})
-
 // A failed report render surfaces one of these markers in the error boundary
 // (`laporan/error.tsx`) or Next's dev overlay.
 const ERROR_MARKERS = [
@@ -45,6 +38,40 @@ const ERROR_MARKERS = [
   "Internal Server Error",
   "Unhandled Runtime Error",
 ]
+
+test.describe("Laporan — legacy redirects", () => {
+  test("anggaran-vs-aktual redirects to anggaran-vs-realisasi", async ({ page }) => {
+    await page.goto("/laporan/anggaran-vs-aktual", { waitUntil: "domcontentloaded" })
+    await expect(page).toHaveURL(/\/laporan\/anggaran-vs-realisasi$/)
+  })
+})
+
+// The legacy combined /laporan/keuangan page switches mode via ?report=. The
+// route walker only hits the default, so exercise BOTH modes here: the income
+// statement branch must render the multi-step shell (HPP / LABA KOTOR) that the
+// old naive sum omitted.
+test.describe("Laporan — keuangan combined modes", () => {
+  for (const mode of ["trial-balance", "income-statement"]) {
+    test(`renders /laporan/keuangan?report=${mode}`, async ({ page }) => {
+      test.setTimeout(60_000)
+      const response = await page.goto(`/laporan/keuangan?report=${mode}`, { waitUntil: "domcontentloaded" })
+      await expect(page).not.toHaveURL(/\/login/)
+      expect(response?.status() ?? 200).toBeLessThan(400)
+
+      const body = (await page.locator("body").innerText()).toLowerCase()
+      for (const marker of ERROR_MARKERS) {
+        expect(body, `must not show "${marker}"`).not.toContain(marker.toLowerCase())
+      }
+      if (mode === "income-statement") {
+        // The carve-out must be present: gross profit line proves HPP was split
+        // out of operating expense rather than lumped together.
+        expect(body).toContain("laba kotor")
+      } else {
+        expect(body).toContain("neraca saldo")
+      }
+    })
+  }
+})
 
 test.describe("Laporan — every report page renders", () => {
   test("there is at least one report route to check", () => {
