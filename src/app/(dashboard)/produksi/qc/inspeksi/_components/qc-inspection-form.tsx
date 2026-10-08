@@ -109,7 +109,16 @@ export function QcInspectionForm({ checklists }: { checklists: ChecklistOption[]
         showError(result.error || "Gagal menyimpan inspeksi")
         return
       }
-      showSuccess(result?.status === "failed" ? "Inspeksi dicatat: GAGAL" : "Inspeksi dicatat: LULUS")
+      const ncrCount = result?.raisedNcrIds?.length ?? 0
+      if (result?.status === "failed") {
+        showSuccess(
+          ncrCount > 0
+            ? `Inspeksi dicatat: GAGAL — ${ncrCount} NCR dibuat otomatis`
+            : "Inspeksi dicatat: GAGAL",
+        )
+      } else {
+        showSuccess("Inspeksi dicatat: LULUS")
+      }
       router.push("/produksi/qc/inspeksi")
       router.refresh()
     })

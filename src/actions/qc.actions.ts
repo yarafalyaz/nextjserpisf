@@ -16,6 +16,7 @@ import {
   createNonconformanceSchema,
   resolveNonconformanceSchema,
 } from "@/lib/validations/qc.schemas"
+import { raiseNonconformanceFromInspection } from "@/lib/services/qc.service"
 
 // ==================== QC CHECKLIST ACTIONS ====================
 
@@ -247,38 +248,52 @@ export async function createQcInspection(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("QCI", "simple")
 
-    const inspection = await prisma.qcInspection.create({
-      data: {
-        documentNo,
-        checklistId: v.checklistId,
-        inspectionType: v.inspectionType,
-        referenceType: v.referenceType,
-        referenceId: v.referenceId,
-        status,
-        inspectorId: Number(user.id),
-        inspectedAt: new Date(),
-        notes: v.notes ?? null,
-        createdBy: Number(user.id),
-        results: {
-          create: submitted.map((r) => ({
-            checklistItemId: r.checklistItemId,
-            result: r.result,
-            measuredValue: r.measuredValue ?? null,
-            notes: r.notes ?? null,
-          })),
+    const { inspection, raisedNcrIds } = await prisma.$transaction(async (tx) => {
+      const inspection = await tx.qcInspection.create({
+        data: {
+          documentNo,
+          checklistId: v.checklistId,
+          inspectionType: v.inspectionType,
+          referenceType: v.referenceType,
+          referenceId: v.referenceId,
+          status,
+          inspectorId: Number(user.id),
+          inspectedAt: new Date(),
+          notes: v.notes ?? null,
+          createdBy: Number(user.id),
+          results: {
+            create: submitted.map((r) => ({
+              checklistItemId: r.checklistItemId,
+              result: r.result,
+              measuredValue: r.measuredValue ?? null,
+              notes: r.notes ?? null,
+            })),
+          },
         },
-      },
+      })
+
+      // A failed inspection auto-raises one NCR per failed item (FAB-11) so a
+      // defect cannot be silently dropped. Same transaction: a failure to record
+      // the NCR rolls back the inspection too, keeping QC and NCR consistent.
+      const raisedNcrIds =
+        status === "failed"
+          ? await raiseNonconformanceFromInspection(inspection.id, tx, Number(user.id))
+          : []
+
+      return { inspection, raisedNcrIds }
     })
 
     await logActivity(
       "create",
       "QcInspection",
       inspection.id,
-      `Inspeksi QC ${documentNo} (${status}) untuk ${v.referenceType} #${v.referenceId}`,
+      `Inspeksi QC ${documentNo} (${status}) untuk ${v.referenceType} #${v.referenceId}` +
+        (raisedNcrIds.length > 0 ? ` — ${raisedNcrIds.length} NCR otomatis` : ""),
     )
     revalidatePath("/produksi/qc/inspeksi")
+    revalidatePath("/produksi/qc/ncr")
     revalidatePath("/produksi/qc")
-    return { success: true, id: inspection.id, status }
+    return { success: true, id: inspection.id, status, raisedNcrIds }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createQcInspection]", getErrorMessage(e) || e)

@@ -13,6 +13,7 @@ const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
 const assertWorkOrderQcClearedMock = vi.fn()
+const raiseNcrFromInspectionMock = vi.fn()
 
 const qcChecklistFindUniqueMock = vi.fn()
 const qcChecklistCreateMock = vi.fn()
@@ -36,6 +37,7 @@ vi.mock("@/lib/utils/document-number", () => ({
 }))
 vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: (...a: unknown[]) => assertWorkOrderQcClearedMock(...a),
+  raiseNonconformanceFromInspection: (...a: unknown[]) => raiseNcrFromInspectionMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => {
@@ -105,11 +107,13 @@ beforeEach(() => {
     assertWorkOrderQcClearedMock, qcChecklistFindUniqueMock, qcChecklistCreateMock,
     qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcInspectionCreateMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
+    raiseNcrFromInspectionMock,
   ]) m.mockReset()
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   generateDocumentNumberMock.mockResolvedValue("QCI-0001")
   assertWorkOrderQcClearedMock.mockResolvedValue(undefined)
+  raiseNcrFromInspectionMock.mockResolvedValue([])
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -141,6 +145,38 @@ describe("createQcInspection", () => {
 
     expect(res.success).toBe(true)
     expect(res.status).toBe("failed")
+  })
+
+  it("auto-raises NCRs from a failed inspection", async () => {
+    qcChecklistFindUniqueMock.mockResolvedValue({
+      id: 5, status: "released",
+      items: [{ id: 1, isRequired: true }, { id: 2, isRequired: true }],
+    })
+    qcInspectionCreateMock.mockResolvedValue({ id: 21 })
+    raiseNcrFromInspectionMock.mockResolvedValue([101, 102])
+
+    const res = await createQcInspection(inspectionForm({ rows: [{ id: 1, result: "fail" }, { id: 2, result: "fail" }] }))
+
+    expect(res.success).toBe(true)
+    expect(res.status).toBe("failed")
+    // Auto-raise must run in the same transaction that created the inspection.
+    expect(raiseNcrFromInspectionMock).toHaveBeenCalledWith(21, expect.anything(), 5)
+    expect(res.raisedNcrIds).toEqual([101, 102])
+  })
+
+  it("does NOT auto-raise NCRs when the inspection passes", async () => {
+    qcChecklistFindUniqueMock.mockResolvedValue({
+      id: 5, status: "released",
+      items: [{ id: 1, isRequired: true }],
+    })
+    qcInspectionCreateMock.mockResolvedValue({ id: 22 })
+
+    const res = await createQcInspection(inspectionForm({ rows: [{ id: 1, result: "pass" }] }))
+
+    expect(res.success).toBe(true)
+    expect(res.status).toBe("passed")
+    expect(raiseNcrFromInspectionMock).not.toHaveBeenCalled()
+    expect(res.raisedNcrIds).toEqual([])
   })
 
   it("refuses a non-released checklist", async () => {

@@ -1,4 +1,5 @@
 import { prisma, TxClient } from "@/lib/db/prisma"
+import { generateDocumentNumber } from "@/lib/utils/document-number"
 
 /**
  * Quality-control domain service (PRD FAB-10, FAB-11, FAB-13).
@@ -73,4 +74,78 @@ export async function assertWorkOrderQcCleared(
       `Tidak dapat menyelesaikan WO: inspeksi akhir berstatus '${inspections[0].status}', harus 'passed' sebelum serah terima.`,
     )
   }
+}
+
+/**
+ * Auto-raise a nonconformance (NCR) for every failed result on an inspection
+ * (PRD FAB-10/FAB-11: a failed check must be recorded as a defect so it is not
+ * lost). One NCR is created per failed checklist item, linked back to the
+ * inspection, with the item name/spec captured in the defect description.
+ *
+ * Idempotent per inspection+item: if an NCR already exists for the same
+ * inspection and defect description, it is not duplicated. Returns the created
+ * NCR ids (empty when the inspection passed or all NCRs already exist).
+ *
+ * Severity is `major` by default — an explicit manual NCR can later be raised for
+ * a critical defect, and `resolveNonconformance` handles the lifecycle.
+ */
+export async function raiseNonconformanceFromInspection(
+  inspectionId: number,
+  client: TxClient | typeof prisma = prisma,
+  createdBy: number | null = null,
+): Promise<number[]> {
+  const inspection = await client.qcInspection.findUnique({
+    where: { id: inspectionId },
+    select: {
+      id: true,
+      documentNo: true,
+      referenceType: true,
+      referenceId: true,
+      status: true,
+      results: {
+        where: { result: "fail" },
+        select: {
+          checklistItem: { select: { itemName: true, spec: true } },
+        },
+      },
+    },
+  })
+  if (!inspection || inspection.status !== "failed") return []
+
+  const failed = inspection.results
+  if (failed.length === 0) return []
+
+  // Skip items that already have an NCR from this inspection (idempotent).
+  const existing = await client.nonconformance.findMany({
+    where: { inspectionId },
+    select: { defectDescription: true },
+  })
+  const existingDescriptions = new Set(existing.map((n) => n.defectDescription))
+
+  const createdIds: number[] = []
+  for (const r of failed) {
+    const itemName = r.checklistItem?.itemName ?? "Item inspeksi"
+    const spec = r.checklistItem?.spec ? ` (spesifikasi: ${r.checklistItem.spec})` : ""
+    const defectDescription = `${itemName}${spec} gagal inspeksi ${inspection.documentNo}`
+    if (existingDescriptions.has(defectDescription)) continue
+
+    const documentNo = await generateDocumentNumber("NCR", "simple")
+    const ncr = await client.nonconformance.create({
+      data: {
+        documentNo,
+        inspectionId,
+        referenceType: inspection.referenceType,
+        referenceId: inspection.referenceId,
+        defectDescription,
+        responsibility: "internal",
+        severity: "major",
+        status: "open",
+        createdBy,
+      },
+      select: { id: true },
+    })
+    createdIds.push(ncr.id)
+  }
+
+  return createdIds
 }

@@ -7,17 +7,41 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const nonconformanceCountMock = vi.fn()
 const qcInspectionFindManyMock = vi.fn()
+const qcInspectionFindUniqueMock = vi.fn()
+const nonconformanceFindManyMock = vi.fn()
+const nonconformanceCreateMock = vi.fn()
+const generateDocumentNumberMock = vi.fn()
+
+vi.mock("@/lib/utils/document-number", () => ({
+  generateDocumentNumber: (...a: unknown[]) => generateDocumentNumberMock(...a),
+}))
 
 const client = {
-  nonconformance: { count: (...a: unknown[]) => nonconformanceCountMock(...a) },
-  qcInspection: { findMany: (...a: unknown[]) => qcInspectionFindManyMock(...a) },
+  nonconformance: {
+    count: (...a: unknown[]) => nonconformanceCountMock(...a),
+    findMany: (...a: unknown[]) => nonconformanceFindManyMock(...a),
+    create: (...a: unknown[]) => nonconformanceCreateMock(...a),
+  },
+  qcInspection: {
+    findMany: (...a: unknown[]) => qcInspectionFindManyMock(...a),
+    findUnique: (...a: unknown[]) => qcInspectionFindUniqueMock(...a),
+  },
 }
 
-import { assertWorkOrderQcCleared } from "@/lib/services/qc.service"
+import {
+  assertWorkOrderQcCleared,
+  raiseNonconformanceFromInspection,
+} from "@/lib/services/qc.service"
 
 beforeEach(() => {
   nonconformanceCountMock.mockReset()
   qcInspectionFindManyMock.mockReset()
+  qcInspectionFindUniqueMock.mockReset()
+  nonconformanceFindManyMock.mockReset()
+  nonconformanceCreateMock.mockReset()
+  generateDocumentNumberMock.mockReset()
+  nonconformanceFindManyMock.mockResolvedValue([])
+  generateDocumentNumberMock.mockResolvedValue("NCR-0001")
 })
 
 describe("assertWorkOrderQcCleared", () => {
@@ -75,5 +99,76 @@ describe("assertWorkOrderQcCleared", () => {
     expect(arg.where.inspectionType).toBe("final")
     expect(arg.where.referenceType).toBe("WorkOrder")
     expect(arg.where.referenceId).toBe(7)
+  })
+})
+
+describe("raiseNonconformanceFromInspection", () => {
+  it("creates one NCR per failed item on a failed inspection", async () => {
+    qcInspectionFindUniqueMock.mockResolvedValue({
+      id: 21,
+      documentNo: "QCI-0001",
+      referenceType: "WorkOrder",
+      referenceId: 9,
+      status: "failed",
+      results: [
+        { checklistItem: { itemName: "Tebal cat", spec: "min 80µm" } },
+        { checklistItem: { itemName: "Torsi baut", spec: null } },
+      ],
+    })
+    nonconformanceFindManyMock.mockResolvedValue([])
+    nonconformanceCreateMock
+      .mockResolvedValueOnce({ id: 101 })
+      .mockResolvedValueOnce({ id: 102 })
+
+    const ids = await raiseNonconformanceFromInspection(21, client as never, 5)
+
+    expect(ids).toEqual([101, 102])
+    expect(nonconformanceCreateMock).toHaveBeenCalledTimes(2)
+    const first = nonconformanceCreateMock.mock.calls[0][0]
+    expect(first.data.inspectionId).toBe(21)
+    expect(first.data.referenceType).toBe("WorkOrder")
+    expect(first.data.referenceId).toBe(9)
+    expect(first.data.status).toBe("open")
+    expect(first.data.severity).toBe("major")
+    expect(first.data.createdBy).toBe(5)
+    expect(first.data.defectDescription).toContain("Tebal cat")
+    expect(first.data.defectDescription).toContain("min 80µm")
+  })
+
+  it("is a no-op for a passed inspection", async () => {
+    qcInspectionFindUniqueMock.mockResolvedValue({
+      id: 21, documentNo: "QCI-0001", referenceType: "WorkOrder", referenceId: 9,
+      status: "passed", results: [{ checklistItem: { itemName: "x", spec: null } }],
+    })
+
+    const ids = await raiseNonconformanceFromInspection(21, client as never, 5)
+
+    expect(ids).toEqual([])
+    expect(nonconformanceCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("does not duplicate an NCR that already exists for the same defect", async () => {
+    qcInspectionFindUniqueMock.mockResolvedValue({
+      id: 21, documentNo: "QCI-0001", referenceType: "WorkOrder", referenceId: 9,
+      status: "failed",
+      results: [{ checklistItem: { itemName: "Tebal cat", spec: null } }],
+    })
+    nonconformanceFindManyMock.mockResolvedValue([
+      { defectDescription: "Tebal cat gagal inspeksi QCI-0001" },
+    ])
+
+    const ids = await raiseNonconformanceFromInspection(21, client as never, 5)
+
+    expect(ids).toEqual([])
+    expect(nonconformanceCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("is a no-op when the inspection does not exist", async () => {
+    qcInspectionFindUniqueMock.mockResolvedValue(null)
+
+    const ids = await raiseNonconformanceFromInspection(999, client as never, 5)
+
+    expect(ids).toEqual([])
+    expect(nonconformanceCreateMock).not.toHaveBeenCalled()
   })
 })
