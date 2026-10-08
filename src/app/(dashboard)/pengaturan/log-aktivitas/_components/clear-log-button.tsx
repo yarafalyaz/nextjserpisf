@@ -11,7 +11,11 @@ export function ClearLogButton() {
   const [isPending, startTransition] = useTransition()
 
   function handleConfirm() {
-    startTransition(() => clearActivityLog())
+    // The action returns the deleted count, but `startTransition` requires a
+    // void callback — discard it explicitly.
+    startTransition(async () => {
+      await clearActivityLog()
+    })
     setOpen(false)
   }
 
@@ -31,7 +35,7 @@ export function ClearLogButton() {
         isOpen={open}
         onOpenChange={setOpen}
         title="Kosongkan Log Aktivitas"
-        body="Yakin ingin menghapus semua log aktivitas? Tindakan ini tidak bisa dibatalkan."
+        body="Yakin ingin menghapus riwayat log aktivitas? Catatan siapa yang mengosongkan log (dan kapan) akan tetap tersimpan permanen dan tidak bisa dihapus."
         confirmLabel="Ya, Kosongkan"
         cancelLabel="Batal"
         variant="danger"

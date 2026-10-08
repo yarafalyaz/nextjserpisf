@@ -296,11 +296,17 @@ describe("GET /api/cron", () => {
   })
 
   describe("cleanup task", () => {
-    it("deletes logs older than 90 days", async () => {
+    it("prunes old activity logs within the retention window, sparing purge records", async () => {
       mocks.activityLogDeleteMany.mockResolvedValue({ count: 5 })
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=cleanup"))
       const json = await res.json()
       expect(json.results["cleanup"].message).toContain("5 log activity")
+      // Retention is well beyond the old 90 days, and the append-only "purge"
+      // meta-audit rows must never be pruned.
+      expect(json.results["cleanup"].message).toContain("730")
+      const where = mocks.activityLogDeleteMany.mock.calls[0][0].where
+      expect(where.action).toEqual({ not: "purge" })
+      expect(where.createdAt.lt).toBeInstanceOf(Date)
     })
   })
 

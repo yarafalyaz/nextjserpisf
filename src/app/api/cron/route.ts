@@ -111,6 +111,17 @@ async function taskLockPeriod(): Promise<string> {
     throw new Error("SystemSetting tidak ditemukan")
   }
 
+  // Monotonic guard: the auto-lock may only ADVANCE the lock date, never rewind
+  // it. A manual edit can set periodLockDate to a future date (e.g. locking
+  // through year-end, or closing a period early); the previous unconditional
+  // update would then pull the lock back to "end of last month" on the next
+  // cron run, silently REOPENING every period between the two dates and letting
+  // back-dated entries into a period that had already been closed.
+  const current = setting.periodLockDate
+  if (current && new Date(current).getTime() >= periodEnd.getTime()) {
+    return `Periode tetap dikunci hingga ${current.toLocaleDateString("id-ID")} (auto-lock tidak memundurkan kunci)`
+  }
+
   await prisma.systemSetting.update({
     where: { id: setting.id },
     data: { periodLockDate: periodEnd },
@@ -277,12 +288,20 @@ async function taskRecoverStuckReversals(): Promise<string> {
 
 // 6. Cleanup Old Sessions + expired idempotency keys
 async function taskCleanup(): Promise<string> {
-  const ninetyDaysAgo = new Date()
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+  // Activity-log retention. 90 days was far too short for an audit trail: the
+  // GL needs many years of history for tax/external audit, and an automatically
+  // vanishing trail is worse than none (it looks complete but isn't). Keep 2
+  // years by default; adjust ACTIVITY_LOG_RETENTION_DAYS in the environment for
+  // a longer/shorter window. "purge" records (who cleared the log) are NEVER
+  // pruned — their meta-audit history is append-only.
+  const retentionDays = Number(process.env.ACTIVITY_LOG_RETENTION_DAYS ?? 730)
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - (Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : 730))
 
   const result = await prisma.activityLog.deleteMany({
     where: {
-      createdAt: { lt: ninetyDaysAgo },
+      createdAt: { lt: cutoff },
+      action: { not: "purge" },
     },
   })
 
@@ -290,5 +309,5 @@ async function taskCleanup(): Promise<string> {
   // removed, so the table grew without bound.
   const prunedKeys = await pruneIdempotencyKeys()
 
-  return `${result.count} log activity (>90 hari) dihapus, ${prunedKeys} kunci idempotency kedaluwarsa dihapus`
+  return `${result.count} log activity (>${retentionDays} hari) dihapus, ${prunedKeys} kunci idempotency kedaluwarsa dihapus`
 }
