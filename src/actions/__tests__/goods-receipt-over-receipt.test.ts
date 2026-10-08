@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { createGoodsReceipt } from "../purchase.actions"
-import { parseFormData } from "@/lib/validations/parse-form"
 
 // Use same mocks as the main test suite
 const mocks = vi.hoisted(() => {
@@ -33,18 +32,20 @@ vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("GR-123") }))
 
 describe("GoodsReceipt Over-receipt Guard", () => {
-  it("rejects over-receipt when duplicate item IDs exist in the same payload", async () => {
-    // Mock PO: 1 item, ordered qty 10
+  it("accepts the draft for duplicate item IDs (over-receipt is capped at verification)", async () => {
+    // The over-receive cap is enforced at VERIFICATION in the goods-receipt hook,
+    // which converts every row to the item's BASE unit before comparing against
+    // the PO qty. GoodsReceiptItem.qty is stored in the ENTERED UoM, so a
+    // create-time comparison against the base-unit PO qty is apples-to-oranges
+    // and would wrongly reject valid receipts. The draft must therefore be created.
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
       id: 1,
       status: "approved",
       items: [{ itemId: 101, qty: 10 }],
     })
-    
-    // Prior receipts: none
-    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([])
+    mocks.prismaMock.goodsReceipt.create.mockResolvedValue({ id: 99, purchaseOrderId: 1 })
 
-    // Payload: submit two lines for item 101, qty 6 and qty 5 (total 11 > 10)
+    // Payload: two lines for item 101, qty 6 and qty 5 (total 11 > 10)
     const items = JSON.stringify([
       { itemId: 101, qty: 6, unitCost: 100 },
       { itemId: 101, qty: 5, unitCost: 100 },
@@ -57,9 +58,28 @@ describe("GoodsReceipt Over-receipt Guard", () => {
     f.append("items", items)
 
     const res = await createGoodsReceipt(f)
-    
-    // We expect it to fail with an error about exceeding the ordered amount
+
+    expect(res.success).toBe(true)
+  })
+
+  it("still rejects an item that is not part of the purchase order", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "approved",
+      items: [{ itemId: 101, qty: 10 }],
+    })
+    mocks.prismaMock.goodsReceipt.create.mockResolvedValue({ id: 99, purchaseOrderId: 1 })
+
+    const items = JSON.stringify([{ itemId: 999, qty: 1, unitCost: 100 }])
+    const f = new FormData()
+    f.append("purchaseOrderId", "1")
+    f.append("date", "2024-01-01")
+    f.append("warehouseId", "1")
+    f.append("items", items)
+
+    const res = await createGoodsReceipt(f)
+
     expect(res.success).toBe(false)
-    expect(res.error).toMatch(/melebihi pesanan/i)
+    expect(res.error).toMatch(/tidak ada dalam pesanan/i)
   })
 })

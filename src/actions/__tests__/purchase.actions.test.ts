@@ -1080,15 +1080,18 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.error).toContain("tidak ada dalam pesanan pembelian")
   })
 
-  it("createGoodsReceipt fails if item qty exceeds PO qty", async () => {
+  it("createGoodsReceipt allows drafting qty above the PO (over-receipt is capped at verification)", async () => {
+    // The over-receipt cap is enforced in the verification hook in BASE units
+    // (GR rows are stored in the ENTERED UoM, so a create-time comparison against
+    // the base-unit PO qty would be wrong). Creating the draft must therefore
+    // succeed; the hook rejects the over-receipt on verify.
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved", items: [{ itemId: 1, qty: 10 }] })
-    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([{ itemId: 1, qty: 8 }])
+    mocks.prismaMock.goodsReceipt.create.mockResolvedValueOnce({ id: 99 })
     const res = await actions.createGoodsReceipt(fdMap({
       purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
       items: JSON.stringify([{ itemId: 1, qty: 3 }])
     }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("melebihi pesanan")
+    expect(res?.success).toBe(true)
   })
 
   it("verifyGoodsReceipt fails if status not draft", async () => {

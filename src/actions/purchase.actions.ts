@@ -672,25 +672,8 @@ export async function createGoodsReceipt(formData: FormData) {
         );
       }
 
-      // Guard: Prevent over-receiving.
-      // Fetch all prior completed/draft receipts for this PO to calculate remaining balance.
-      const priorReceipts = await tx.goodsReceiptItem.findMany({
-        where: {
-          goodsReceipt: {
-            purchaseOrderId: v.purchaseOrderId,
-            status: { not: "cancelled" },
-          },
-          itemId: { in: items.map((i) => Number(i.itemId)) },
-        },
-        select: { itemId: true, qty: true },
-      });
-      const alreadyReceived = new Map<number, number>();
-      for (const r of priorReceipts) {
-        alreadyReceived.set(
-          r.itemId,
-          (alreadyReceived.get(r.itemId) ?? 0) + Number(r.qty),
-        );
-      }
+      // The cumulative over-receive guard runs at verification (goods-receipt
+      // hook) in BASE units; no prior-receipt aggregation is needed here.
       const poQtyMap = orderedQtyByItem;
 
       // Pre-aggregate this submission's qty per itemId so duplicate lines in the
@@ -705,19 +688,18 @@ export async function createGoodsReceipt(formData: FormData) {
         );
       }
 
+      // NOTE: the cumulative over-receive guard lives in the verification hook
+      // (goods-receipt.hook.ts), which converts every GR row to the item's BASE
+      // unit before comparing against the PO qty. GoodsReceiptItem.qty is stored
+      // in the ENTERED unit, so a comparison here would be apples-to-oranges
+      // (base PO qty vs entered GR qty) and wrongly reject valid receipts entered
+      // in a smaller-than-base UoM. Only assert membership here.
       for (const [itemId, submittedQty] of submittedQtyByItem) {
-        const ordered = poQtyMap.get(itemId) ?? 0;
-        const totalAfterThis =
-          (alreadyReceived.get(itemId) ?? 0) + submittedQty;
-
+        if (submittedQty <= 0) continue
+        const ordered = poQtyMap.get(itemId) ?? 0
         if (ordered === 0) {
           throw new Error(
             `Item #${itemId} tidak ada dalam pesanan pembelian (PO).`,
-          );
-        }
-        if (totalAfterThis > ordered) {
-          throw new Error(
-            `Kuantitas item #${itemId} melebihi pesanan. Sisa yang bisa diterima: ${ordered - (alreadyReceived.get(itemId) ?? 0)}.`,
           );
         }
       }
