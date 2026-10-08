@@ -25,9 +25,11 @@ interface UploadedFile {
 
 interface VendorPaymentFormProps {
   vendors: { id: number; name: string }[]
-  payment?: { id: number; vendorId: number; amount: number; date: string; accountId?: number | null; notes?: string | null; referenceNumber?: string | null; bankAccount?: string | null; adminFee?: number | null }
-  bills: { id: number; documentNo: string; vendorId: number; grandTotal: number }[]
+  payment?: { id: number; vendorId: number; amount: number; date: string; accountId?: number | null; notes?: string | null; referenceNumber?: string | null; bankAccount?: string | null; adminFee?: number | null; vendorBillId?: number | null }
+  bills: { id: number; documentNo: string; vendorId: number; grandTotal: number; balanceDue?: number }[]
   paymentMethods?: { code: string; name: string }[]
+  /** Tagihan yang ditargetkan (dari tombol "Bayar" di halaman tagihan). */
+  preselectedBillId?: number | null
 }
 
 function formatFileSize(bytes: number): string {
@@ -36,11 +38,21 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = [] }: VendorPaymentFormProps) {
+export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = [], preselectedBillId = null }: VendorPaymentFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Tagihan yang sedang ditargetkan: dari tombol "Bayar" (preselected) atau dari
+  // pembayaran yang sedang diubah. Dipakai untuk menampilkan kartu ringkasan &
+  // mengisi otomatis jumlah = sisa tagihan.
+  const [targetBillId, setTargetBillId] = useState<string | null>(
+    (payment?.vendorBillId ?? preselectedBillId) ? String(payment?.vendorBillId ?? preselectedBillId) : null,
+  )
   const [paymentDate, setPaymentDate] = useState(payment?.date || toLocalDateOnly(new Date()))
-  const [vendorId, setVendorId] = useState(payment?.vendorId ? String(payment.vendorId) : "")
+  const [vendorId, setVendorId] = useState(
+    payment?.vendorId
+      ? String(payment.vendorId)
+      : (preselectedBillId ? String(bills.find((b) => b.id === preselectedBillId)?.vendorId ?? "") : ""),
+  )
   const [paymentMethod, setPaymentMethod] = useState("")
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
@@ -49,6 +61,8 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
   const fileInputId = `${labelId}-file`
 
   const vendorBills = bills.filter((b) => b.vendorId === Number(vendorId))
+  const targetBill = targetBillId ? bills.find((b) => b.id === Number(targetBillId)) : null
+  const targetDue = targetBill ? Number(targetBill.balanceDue ?? targetBill.grandTotal) : 0
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -102,6 +116,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        if (targetBillId) formData.set("vendorBillId", targetBillId)
         if (uploadedFiles.length > 0) {
           formData.set("attachmentIds", JSON.stringify(uploadedFiles.map((f) => f.id)))
         }
@@ -158,7 +173,12 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="amount">Jumlah (Rp) *</Label>
-            <CurrencyInput id="amount" name="amount" placeholder="0" required defaultValue={payment?.amount} prefix="Rp" />
+            <CurrencyInput id="amount" name="amount" placeholder="0" required defaultValue={payment?.amount ?? (targetBill ? targetDue : undefined)} prefix="Rp" />
+            {targetBill && !payment?.id && (
+              <p className="text-xs text-muted-foreground">
+                Otomatis diisi sisa tagihan. Ubah bila bayar sebagian.
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="bankAccount">No. Rekening</Label>
@@ -244,18 +264,48 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
         </FormSection>
 
         {vendorId && vendorBills.length > 0 && (
-          <FormSection title="Tagihan Belum Lunas" columns={1}>
-            <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-              <thead><tr><th>No. Dokumen</th><th>Total Keseluruhan</th></tr></thead>
-              <tbody>
-                {vendorBills.map((b) => (
-                  <tr key={b.id}>
-                    <td className="font-mono">{b.documentNo}</td>
-                    <td className="text-right">{Number(b.grandTotal).toLocaleString("id-ID")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <FormSection title="Tagihan yang Dibayar" columns={1}>
+            {targetBill ? (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-muted-foreground">Tagihan</span>
+                    <span className="font-mono text-sm font-medium text-foreground">{targetBill.documentNo}</span>
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-xs text-muted-foreground">Sisa Tagihan</span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                      {targetDue.toLocaleString("id-ID")}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Pembayaran akan dialokasikan ke tagihan ini. Boleh dibayar sebagian —
+                  sisanya tetap tercatat sebagai utang.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Belum dipilih tagihan. Pembayaran akan otomatis dialokasikan ke tagihan
+                tertua pemasok ini saat dikonfirmasi.
+              </p>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="targetBill">Pilih Tagihan (opsional)</Label>
+              <Combobox
+                id="targetBill"
+                options={vendorBills.map((b) => ({
+                  value: String(b.id),
+                  label: `${b.documentNo} — sisa ${Number(b.balanceDue ?? b.grandTotal).toLocaleString("id-ID")}`,
+                }))}
+                value={targetBillId}
+                onChange={setTargetBillId}
+                placeholder="Auto (tertua dulu)..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Kosongkan untuk alokasi otomatis (tagihan tertua dulu).
+              </p>
+            </div>
           </FormSection>
         )}
 

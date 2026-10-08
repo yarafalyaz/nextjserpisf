@@ -38,9 +38,10 @@ export default async function EditPage({
     referenceNumber: data.referenceNumber,
     bankAccount: data.bankAccount,
     adminFee: Number(data.adminFee),
+    vendorBillId: data.vendorBillId,
   }
 
-  const [vendors, bills] = await Promise.all([prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.vendorBill.findMany({ where: { status: { not: "paid" } }, orderBy: { createdAt: "desc" } })])
+  const [vendors, bills] = await Promise.all([prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }), prisma.vendorBill.findMany({ where: { status: { notIn: ["paid", "cancelled"] }, deletedAt: null }, orderBy: { createdAt: "desc" } })])
   const paymentMethods = await getActivePaymentMethods()
 
   const billOptions = bills.map((b) => ({
@@ -48,6 +49,7 @@ export default async function EditPage({
     documentNo: b.documentNo,
     vendorId: b.vendorId,
     grandTotal: Number(b.grandTotal),
+    balanceDue: Number(b.balanceDue),
   }))
 
   return (

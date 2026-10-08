@@ -515,6 +515,61 @@ describe("Vendor Payment Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createVendorPayment persists the targeted bill", async () => {
+    mocks.prismaMock.vendorBill.findFirst.mockResolvedValueOnce({ id: 7, status: "posted" })
+    const res = await actions.createVendorPayment(fdMap({
+      vendorId: "1",
+      amount: "1000",
+      paymentDate: "2026-06-12",
+      paymentMethod: "cash",
+      vendorBillId: "7",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ vendorBillId: 7 }) }),
+    )
+  })
+
+  it("createVendorPayment rejects a bill that belongs to another vendor", async () => {
+    mocks.prismaMock.vendorBill.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.createVendorPayment(fdMap({
+      vendorId: "1",
+      amount: "1000",
+      paymentDate: "2026-06-12",
+      paymentMethod: "cash",
+      vendorBillId: "7",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Tagihan tidak ditemukan")
+    expect(mocks.prismaMock.vendorPayment.create).not.toHaveBeenCalled()
+  })
+
+  it("createVendorPayment rejects an already-paid target bill", async () => {
+    mocks.prismaMock.vendorBill.findFirst.mockResolvedValueOnce({ id: 7, status: "paid" })
+    const res = await actions.createVendorPayment(fdMap({
+      vendorId: "1",
+      amount: "1000",
+      paymentDate: "2026-06-12",
+      paymentMethod: "cash",
+      vendorBillId: "7",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah lunas")
+  })
+
+  it("createVendorPayment without a targeted bill leaves vendorBillId null", async () => {
+    const res = await actions.createVendorPayment(fdMap({
+      vendorId: "1",
+      amount: "1000",
+      paymentDate: "2026-06-12",
+      paymentMethod: "cash",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ vendorBillId: null }) }),
+    )
+  })
+
   it("updateVendorPayment succeeds", async () => {
     const res = await actions.updateVendorPayment(1, fdMap({
       vendorId: "1",
@@ -1062,6 +1117,42 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     const res = await actions.confirmVendorPayment(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak ditemukan dalam tagihan terkunci")
+  })
+
+  it("confirmVendorPayment allocates to the targeted bill first", async () => {
+    // Target = bill 30 (3rd by age). It must be handed to the allocator FIRST.
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 1, amount: 1000, vendorBillId: 30,
+    })
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([
+      { id: 10, balanceDue: 500, paidAmount: 0, grandTotal: 500 },
+      { id: 20, balanceDue: 500, paidAmount: 0, grandTotal: 500 },
+      { id: 30, balanceDue: 500, paidAmount: 0, grandTotal: 500 },
+    ])
+    const { allocatePaymentToBills } = await import("@/lib/finance/payment-allocation")
+    // Deterministic return (targeted bill 30 first, then 10): both fully paid.
+    vi.mocked(allocatePaymentToBills).mockReset()
+    vi.mocked(allocatePaymentToBills).mockReturnValueOnce([
+      { vendorBillId: 30, amount: 500 },
+      { vendorBillId: 10, amount: 500 },
+    ])
+    const res = await actions.confirmVendorPayment(1)
+    expect(res?.success).toBe(true)
+    // The allocator must receive the targeted bill 30 BEFORE the age-older bills.
+    const [, billsArg] = vi.mocked(allocatePaymentToBills).mock.calls[0]
+    expect((billsArg as { id: number }[]).map((b) => b.id)).toEqual([30, 10, 20])
+  })
+
+  it("confirmVendorPayment fails when the targeted bill is no longer open", async () => {
+    mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", vendorId: 1, amount: 1000, vendorBillId: 99,
+    })
+    mocks.prismaMock.vendorBill.findMany.mockResolvedValueOnce([
+      { id: 10, balanceDue: 500, paidAmount: 0, grandTotal: 500 },
+    ])
+    const res = await actions.confirmVendorPayment(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak lagi terbuka")
   })
 
   it("createPurchaseReturn fails if item not on invoice", async () => {

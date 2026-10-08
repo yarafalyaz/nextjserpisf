@@ -921,6 +921,24 @@ export async function createVendorPayment(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("VPAY");
 
+    // A payment may target a specific bill (chosen via the "Bayar" button on a
+    // bill). Validate it belongs to the vendor and is still open, so a stale
+    // link can't be saved.
+    let targetBillId: number | null = null;
+    if (v.vendorBillId != null) {
+      const target = await prisma.vendorBill.findFirst({
+        where: { id: v.vendorBillId, vendorId: v.vendorId, deletedAt: null },
+        select: { id: true, status: true },
+      });
+      if (!target) {
+        return { success: false, error: "Tagihan tidak ditemukan untuk pemasok ini" };
+      }
+      if (target.status === "paid" || target.status === "cancelled") {
+        return { success: false, error: "Tagihan sudah lunas atau dibatalkan" };
+      }
+      targetBillId = target.id;
+    }
+
     // ATOMICITY: the payment row + the attachment pointer update must commit
     // together. If the attachment updateMany fails after the payment is
     // created, the user sees a payment without its supporting documents linked
@@ -937,6 +955,7 @@ export async function createVendorPayment(formData: FormData) {
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,
+          vendorBillId: targetBillId,
           notes: v.notes ?? null,
           createdBy: Number(user.id),
         },
@@ -1088,9 +1107,25 @@ export async function confirmVendorPayment(paymentId: number) {
         orderBy: [{ date: "asc" }, { id: "asc" }],
       });
 
+      // If the payment targets a specific bill, allocate to THAT bill first
+      // (partial allowed), then the rest oldest-first. Otherwise pure oldest-first.
+      const targetBillId = freshPayment.vendorBillId ?? null;
+      const orderedBills = targetBillId
+        ? [
+            ...openBills.filter((b) => b.id === targetBillId),
+            ...openBills.filter((b) => b.id !== targetBillId),
+          ]
+        : openBills;
+
+      if (targetBillId && !openBills.some((b) => b.id === targetBillId)) {
+        throw new Error(
+          "Tagihan tujuan sudah lunas atau tidak lagi terbuka. Perbarui pembayaran.",
+        );
+      }
+
       const allocations = allocatePaymentToBills(
         Number(freshPayment.amount),
-        openBills.map((b) => ({ id: b.id, balanceDue: Number(b.balanceDue) })),
+        orderedBills.map((b) => ({ id: b.id, balanceDue: Number(b.balanceDue) })),
       );
 
       // Guard against GL/subledger drift: the GL hook (onVendorPaymentCreated)
@@ -2264,6 +2299,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,
+          vendorBillId: v.vendorBillId ?? null,
           notes: v.notes ?? null,
         },
       });

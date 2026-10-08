@@ -92,6 +92,9 @@ export const vendorPaymentSchema = z.object({
   // Bank/transfer admin fee (a real cost of paying, expensed separately — never
   // allocated to a bill).
   adminFee: optionalNumber(0),
+  // Tagihan spesifik yang dibayar (dipilih lewat tombol "Bayar" di tagihan).
+  // Opsional: bila kosong, alokasi konfirmasi murni oldest-first seperti semula.
+  vendorBillId: optionalNumber(),
   paymentDate: dateString,
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(50),
   accountId: optionalNumber(),

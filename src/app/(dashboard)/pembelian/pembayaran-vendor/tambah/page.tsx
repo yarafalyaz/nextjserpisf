@@ -10,8 +10,15 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Tambah Pembayaran Vendor" }
 
-export default async function CreateVendorPaymentPage() {
+export default async function CreateVendorPaymentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ billId?: string }>
+}) {
   await requirePermission("create_vendor_payments")
+
+  const { billId } = await searchParams
+  const preselectedBillId = billId ? Number(billId) : null
 
   const [vendors, bills, paymentMethods] = await Promise.all([
     prisma.vendor.findMany({
@@ -20,9 +27,9 @@ export default async function CreateVendorPaymentPage() {
       select: { id: true, name: true },
     }),
     prisma.vendorBill.findMany({
-      where: { status: { not: "paid" } },
+      where: { status: { notIn: ["paid", "cancelled"] }, deletedAt: null },
       orderBy: { createdAt: "desc" },
-      select: { id: true, documentNo: true, vendorId: true, grandTotal: true },
+      select: { id: true, documentNo: true, vendorId: true, grandTotal: true, balanceDue: true },
     }),
     getActivePaymentMethods(),
   ])
@@ -42,6 +49,7 @@ export default async function CreateVendorPaymentPage() {
         vendors={vendors}
         bills={JSON.parse(JSON.stringify(bills))}
         paymentMethods={paymentMethods}
+        preselectedBillId={preselectedBillId}
       />
     </div>
   )

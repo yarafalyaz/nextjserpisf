@@ -1198,6 +1198,7 @@ model VendorBill {
   goodsReceipt        GoodsReceipt?    @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
   vendor              Vendor           @relation(fields: [vendorId], references: [id])
   allocations         VendorPaymentAllocation[]
+  vendorPayments      VendorPayment[]
 
   @@index([purchaseOrderId], map: "vendor_bills_purchase_order_id_fkey")
   @@index([vendorId], map: "vendor_bills_vendor_id_fkey")
@@ -1258,12 +1259,18 @@ model VendorPayment {
   // A real cost of paying, NOT part of the bill settlement — it is expensed to
   // the purchase admin-fee account and never allocated to a bill.
   adminFee        Decimal                   @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
+  // Tagihan yang ditargetkan pembayaran ini (dipilih lewat tombol "Bayar" di
+  // tagihan). Saat konfirmasi, alokasi diutamakan ke tagihan ini (boleh sebagian),
+  // lalu sisanya oldest-first ke tagihan terbuka lain. Null = perilaku lama
+  // (murni oldest-first).
+  vendorBillId    Int?                      @map("vendor_bill_id")
   notes           String?                   @db.Text
   createdBy       Int?                      @map("created_by")
   createdAt       DateTime                  @default(now()) @map("created_at")
   updatedAt       DateTime                  @updatedAt @map("updated_at")
   allocations     VendorPaymentAllocation[]
   vendor          Vendor                    @relation(fields: [vendorId], references: [id])
+  vendorBill      VendorBill?               @relation(fields: [vendorBillId], references: [id])
 
   @@index([vendorId], map: "vendor_payments_vendor_id_fkey")
   @@index([status])
@@ -1273,6 +1280,7 @@ model VendorPayment {
   @@index([createdBy])
   @@index([paymentDate])
   @@index([deletedAt])
+  @@index([vendorBillId])
   @@map("vendor_payments")
 }
 

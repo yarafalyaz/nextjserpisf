@@ -69,6 +69,24 @@ const columns = [
     },
   }),
   columnHelper.display({
+    id: "bayar",
+    header: "Bayar",
+    enableSorting: false,
+    cell: (info) => {
+      const b = info.row.original
+      const payable = b.status !== "draft" && b.status !== "cancelled" && b.status !== "paid"
+      if (!payable) return <span className="text-muted-foreground">-</span>
+      return (
+        <Link
+          href={`/pembelian/pembayaran-vendor/tambah?billId=${b.id}`}
+          className="text-primary hover:underline font-medium"
+        >
+          Bayar
+        </Link>
+      )
+    },
+  }),
+  columnHelper.display({
     id: "actions",
     header: "Aksi",
     enableSorting: false,
