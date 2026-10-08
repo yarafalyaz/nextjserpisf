@@ -18,7 +18,6 @@ import {
 } from "recharts"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -60,6 +59,15 @@ function formatDayLabel(date: string) {
   return new Date(date).toLocaleDateString("id-ID", {
     day: "numeric",
     month: "short",
+  })
+}
+function formatChartDateLabel(value: React.ReactNode) {
+  if (typeof value !== "string" && typeof value !== "number") return value
+  return new Date(value).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
   })
 }
 
@@ -161,14 +169,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             cursor={{ stroke: "var(--border)", strokeDasharray: "4 4" }}
             content={
               <ChartTooltipContent
-                labelFormatter={(value) =>
-                  new Date(value).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                    timeZone: "Asia/Jakarta",
-                  })
-                }
+                labelFormatter={formatChartDateLabel}
                 formatter={(value, name) => (
                   <>
                     <div
@@ -233,14 +234,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             cursor={{ fill: "var(--muted)", opacity: 0.15 }}
             content={
               <ChartTooltipContent
-                labelFormatter={(value) =>
-                  new Date(value).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                    timeZone: "Asia/Jakarta",
-                  })
-                }
+                labelFormatter={formatChartDateLabel}
                 formatter={(value, name) => (
                   <>
                     <div
@@ -308,14 +302,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
           cursor={{ stroke: "var(--border)", strokeDasharray: "4 4" }}
           content={
             <ChartTooltipContent
-              labelFormatter={(value) =>
-                new Date(value).toLocaleDateString("id-ID", {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                  timeZone: "Asia/Jakarta",
-                })
-              }
+              labelFormatter={formatChartDateLabel}
               formatter={(value, name) => (
                 <>
                   <div
@@ -357,78 +344,77 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
   return (
     <Card className="h-full @container/chart">
       <CardHeader>
-        <div className="flex flex-col gap-2 @[540px]/chart:flex-row @[540px]/chart:items-center @[540px]/chart:justify-between">
-          <div>
-            <CardTitle id="revenue-chart-title">Tren Pendapatan</CardTitle>
-            <CardDescription className="mt-1">
-              <span className="hidden @[540px]/chart:block">
-                Tagihan diterbitkan vs pembayaran lunas
-              </span>
-              <span className="@[540px]/chart:hidden">Tagihan vs lunas</span>
-            </CardDescription>
-          </div>
-          <CardAction className="flex items-center gap-2 flex-wrap">
-            {/* Chart type selector */}
-            <ToggleGroup
-              type="single"
-              value={chartType}
-              onValueChange={(v) => v && setChartType(v as "area" | "line" | "bar")}
-              variant="outline"
-              size="sm"
-              aria-label="Tipe Grafik"
-              className="*:data-[slot=toggle-group-item]:!px-2"
-            >
-              <ToggleGroupItem value="area" aria-label="Grafik Area">
-                Area
-              </ToggleGroupItem>
-              <ToggleGroupItem value="line" aria-label="Grafik Garis">
-                Garis
-              </ToggleGroupItem>
-              <ToggleGroupItem value="bar" aria-label="Grafik Batang">
-                Batang
-              </ToggleGroupItem>
-            </ToggleGroup>
+        <div className="min-w-0">
+          <CardTitle id="revenue-chart-title">Tren Pendapatan</CardTitle>
+          <CardDescription className="mt-1">
+            <span className="hidden @[540px]/chart:block">
+              Tagihan diterbitkan vs pembayaran lunas
+            </span>
+            <span className="@[540px]/chart:hidden">Tagihan vs lunas</span>
+          </CardDescription>
+        </div>
 
-            {/* Time range selector */}
-            <ToggleGroup
-              type="single"
-              value={timeRange}
-              onValueChange={(v) => v && setTimeRange(v)}
-              variant="outline"
+        <div className="flex w-full flex-wrap items-center justify-start gap-2">
+          {/* Chart type selector */}
+          <ToggleGroup
+            type="single"
+            value={chartType}
+            onValueChange={(v) => v && setChartType(v as "area" | "line" | "bar")}
+            variant="outline"
+            size="sm"
+            aria-label="Tipe Grafik"
+            className="*:data-[slot=toggle-group-item]:!px-2"
+          >
+            <ToggleGroupItem value="area" aria-label="Grafik Area">
+              Area
+            </ToggleGroupItem>
+            <ToggleGroupItem value="line" aria-label="Grafik Garis">
+              Garis
+            </ToggleGroupItem>
+            <ToggleGroupItem value="bar" aria-label="Grafik Batang">
+              Batang
+            </ToggleGroupItem>
+          </ToggleGroup>
+
+          {/* Time range selector */}
+          <ToggleGroup
+            type="single"
+            value={timeRange}
+            onValueChange={(v) => v && setTimeRange(v)}
+            variant="outline"
+            size="sm"
+            aria-label="Pilih rentang waktu"
+            className="hidden *:data-[slot=toggle-group-item]:!px-3 @[767px]/chart:flex"
+          >
+            <ToggleGroupItem value="90d">3 bulan</ToggleGroupItem>
+            <ToggleGroupItem value="30d">30 hari</ToggleGroupItem>
+            <ToggleGroupItem value="7d">7 hari</ToggleGroupItem>
+          </ToggleGroup>
+          <Select value={timeRange} onValueChange={setTimeRange}>
+            <SelectTrigger
+              className="flex w-32 @[767px]/chart:hidden"
               size="sm"
               aria-label="Pilih rentang waktu"
-              className="hidden *:data-[slot=toggle-group-item]:!px-3 @[767px]/chart:flex"
             >
-              <ToggleGroupItem value="90d">3 bulan</ToggleGroupItem>
-              <ToggleGroupItem value="30d">30 hari</ToggleGroupItem>
-              <ToggleGroupItem value="7d">7 hari</ToggleGroupItem>
-            </ToggleGroup>
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger
-                className="flex w-32 @[767px]/chart:hidden"
-                size="sm"
-                aria-label="Pilih rentang waktu"
-              >
-                <SelectValue placeholder="3 bulan" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl">
-                <SelectItem value="90d" className="rounded-lg">
-                  3 bulan terakhir
-                </SelectItem>
-                <SelectItem value="30d" className="rounded-lg">
-                  30 hari terakhir
-                </SelectItem>
-                <SelectItem value="7d" className="rounded-lg">
-                  7 hari terakhir
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </CardAction>
+              <SelectValue placeholder="3 bulan" />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="90d" className="rounded-lg">
+                3 bulan terakhir
+              </SelectItem>
+              <SelectItem value="30d" className="rounded-lg">
+                30 hari terakhir
+              </SelectItem>
+              <SelectItem value="7d" className="rounded-lg">
+                7 hari terakhir
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Interactive Filter Pills / Cards */}
         {filteredData.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t text-xs">
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-xs">
             <button
               type="button"
               onClick={() => setActiveSeries("all")}
