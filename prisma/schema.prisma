@@ -3281,6 +3281,41 @@ model ProductVehicleModel {
   @@map("product_vehicle_models")
 }
 
+/// VEH-07 — Kompatibilitas part/BOM ke konfigurasi kendaraan.
+/// A fitment rule scopes an Item (SKU) — and optionally a specific BOM revision
+/// — to a vehicle configuration (brand/model/variant + year range + drivetrain +
+/// transmission) and declares the outcome: `compatible`, `incompatible`, or
+/// `unknown` (needs verification). Evaluation picks the MOST SPECIFIC matching
+/// rule; when none matches, the result is `unknown` so downstream flows can
+/// require technical verification before releasing work/components.
+model VehicleFitmentRule {
+  id               Int             @id @default(autoincrement())
+  itemId           Int             @map("item_id")
+  bomRevisionId    Int?            @map("bom_revision_id")
+  // Scope (all optional; null = wildcard). More specific rules win at evaluation.
+  vehicleBrandId   Int?            @map("vehicle_brand_id")
+  vehicleModelId   Int?            @map("vehicle_model_id")
+  vehicleVariantId Int?            @map("vehicle_variant_id")
+  yearFrom         Int?            @map("year_from")
+  yearTo           Int?            @map("year_to")
+  drivetrain       String?         @map("drivetrain")
+  transmission     String?         @map("transmission")
+  result           String          @default("unknown")
+  source           String?         @db.Text
+  notes            String?         @db.Text
+  isActive         Boolean         @default(true) @map("is_active")
+  createdBy        Int?            @map("created_by")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@index([itemId])
+  @@index([bomRevisionId])
+  @@index([vehicleBrandId])
+  @@index([vehicleModelId])
+  @@index([vehicleVariantId])
+  @@map("vehicle_fitment_rules")
+}
+
 enum SalesInvoiceStatus {
   draft
   sent

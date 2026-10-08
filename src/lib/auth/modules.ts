@@ -194,6 +194,10 @@ export const MODULES: ModuleDef[] = [
     actions: [
       { key: "view", permissionKey: "view_vehicles", label: "Kendaraan / Model" },
       { key: "view", permissionKey: "view_vehicle_brands", label: "Merek" },
+      { key: "view", permissionKey: "view_vehicle_fitments", label: "Fitment" },
+      { key: "create", permissionKey: "create_vehicle_fitments", label: "Tambah Fitment" },
+      { key: "update", permissionKey: "edit_vehicle_fitments", label: "Ubah Fitment" },
+      { key: "delete", permissionKey: "delete_vehicle_fitments", label: "Hapus Fitment" },
     ],
   },
   {

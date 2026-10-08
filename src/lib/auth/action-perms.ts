@@ -126,6 +126,7 @@ export const ROUTE_PERMS: ReadonlyArray<{
   // Kendaraan
   { prefix: "/kendaraan/merek", edit: "edit_vehicle_brands", delete: "delete_vehicle_brands" },
   { prefix: "/kendaraan/model", edit: "edit_vehicle_models", delete: "delete_vehicle_models" },
+  { prefix: "/kendaraan/fitment", edit: "edit_vehicle_fitments", delete: "delete_vehicle_fitments" },
   { prefix: "/kendaraan", edit: "edit_vehicles", delete: "delete_vehicles" },
 
   // Aset

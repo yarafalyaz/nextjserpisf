@@ -61,6 +61,7 @@ type ModelName =
   | "assetTransfer"
   | "vehicleBrand"
   | "vehicleModel"
+  | "vehicleFitmentRule"
   | "vehicle"
   | "appreciation"
   | "departmentHoliday"
@@ -124,6 +125,7 @@ const modelPermissionMap: Record<ModelName, string> = {
   assetTransfer: "delete_asset_transfers",
   vehicleBrand: "delete_vehicle_brands",
   vehicleModel: "delete_vehicle_models",
+  vehicleFitmentRule: "delete_vehicle_fitments",
   vehicle: "delete_vehicles",
   appreciation: "delete_appreciations",
   departmentHoliday: "delete_holidays",
@@ -188,6 +190,7 @@ const modelRevalidateMap: Record<ModelName, string | null> = {
   assetTransfer: "/aset/transfer",
   vehicleBrand: "/kendaraan/merek",
   vehicleModel: "/kendaraan/model",
+  vehicleFitmentRule: "/kendaraan/fitment",
   vehicle: "/kendaraan",
   appreciation: "/sdm/apresiasi",
   paymentMethod: "/master/metode-pembayaran",

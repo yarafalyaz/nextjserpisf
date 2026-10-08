@@ -14,7 +14,9 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
+import { FitmentChecker } from "./_components/fitment-checker"
+
 export const metadata: Metadata = { title: "Detail Produk (BOM)" }
 
 export default async function ProductDetailPage({
@@ -47,6 +49,19 @@ export default async function ProductDetailPage({
     select: { id: true, sku: true, name: true, unitOfMeasure: true },
   })
   const itemMap = new Map(materialItems.map((it) => [it.id, it]))
+
+  // VEH-07 fitment checker (only when the user may view fitment rules).
+  const canViewFitment = await hasPermission("view_vehicle_fitments")
+  const [fitmentBrands, fitmentModels, fitmentVariants] = canViewFitment
+    ? await Promise.all([
+        prisma.vehicleBrand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+        prisma.vehicleModel.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, vehicleBrandId: true } }),
+        prisma.vehicleVariant.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, vehicleModelId: true } }),
+      ])
+    : [[], [], []]
+
+  const itemNameMap: Record<number, string> = {}
+  for (const [id, it] of itemMap) itemNameMap[id] = `${it.sku} — ${it.name}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -114,6 +129,17 @@ export default async function ProductDetailPage({
           </DetailTable>
         )}
       </DetailSection>
+
+      {/* VEH-07 fitment check */}
+      {canViewFitment && (
+        <FitmentChecker
+          productId={product.id}
+          itemNameMap={itemNameMap}
+          brands={fitmentBrands}
+          models={fitmentModels}
+          variants={fitmentVariants}
+        />
+      )}
 
       {/* BOM Revisions */}
       <DetailSection title="Revisi BOM">
