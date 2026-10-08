@@ -195,3 +195,15 @@ Aturan baru (commit `85e42fa7`):
 - **UI**: `InvoiceItemsEditor` mendapat `variant="order"`; halaman detail pesanan memakai editor yang sama. Halaman faktur: tombol "Ubah Item" mengikuti aturan pelunasan (`status !== cancelled && tidak ada pembayaran non-DP`) — kini konsisten dengan server (sebelumnya tombol tampil untuk `posted`/`partial` tapi server menolak).
 
 Tes: aturan pelunasan (boleh ubah saat belum lunas; blokir saat sudah ada pembayaran nyata) untuk ketiga dokumen, reverse+repost faktur `posted`, dan suite `sales-invoice-posting.service`.
+
+## 9. Konsistensi Metode Costing / HPP (8 Okt 2026) — commit `30a09751`
+
+**Konteks bisnis:** harga pokok (HPP) barang berubah tiap kali restock karena harga beli + ongkir + biaya admin − diskon pembelian berbeda tiap pembelian. Rantai: **PO → terima (GR) → landed cost → lapisan FIFO → HPP saat jual**. Harga pokok per unit = harga beli bruto + (bagian ongkir & biaya lain) − (bagian diskon beli), dibagi proporsional menurut nilai. HPP saat jual diambil dari lapisan FIFO (harga pokok nyata saat dibeli), bukan dari harga master.
+
+**Temuan:** resolusi metode costing tidak konsisten:
+- `inventory-fifo.ts` (jual/konsumsi) default `"fifo"`, sedangkan `goods-receipt.hook.ts` & `inventory.service.ts` (terima) default `"average"` → barang tanpa metode eksplisit dinilai beda saat terima vs jual.
+- `SystemSetting.costingMethod` **mati** (tak pernah dibaca logika biaya); dropdown menawarkan "LIFO" yang juga tidak didukung.
+
+**Perbaikan:** service baru `costing-method.service.ts` sebagai satu-satunya resolver — presedensi **kategori → barang → default perusahaan → `"fifo"`**. Dipakai di ketiga jalur. Setting global kini benar-benar berlaku sebagai default (bisa ditimpa per kategori/barang). Dropdown pengaturan dibersihkan (FIFO/Average saja). Ditambah tes resolver + branch `average` di `consumeFifoLayers` (sebelumnya tidak teruji).
+
+**Perilaku HPP yang dihasilkan** (contoh: A dibeli 161.500 lalu 141.500): **FIFO** → jual pertama HPP 161.500, jual kedua 141.500; **Average** → HPP rata-rata 151.500 tiap penjualan.
