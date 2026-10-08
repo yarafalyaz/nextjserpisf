@@ -55,7 +55,7 @@ export default async function PurchaseRequestDetailPage({
         actions={
           <>
             {(request.status === "approved" || request.status === "partial_ordered") && (
-              <Button href={`/pembelian/pesanan/tambah?prId=${request.id}`} variant="primary">
+              <Button href={`/pembelian/pesanan/tambah/${request.id}`} variant="primary">
                 Buat Pesanan
               </Button>
             )}

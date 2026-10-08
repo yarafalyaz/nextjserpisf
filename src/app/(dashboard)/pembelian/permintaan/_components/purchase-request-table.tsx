@@ -67,7 +67,7 @@ const columns = [
       }
       return (
         <Link
-          href={`/pembelian/pesanan/tambah?prId=${pr.id}`}
+          href={`/pembelian/pesanan/tambah/${pr.id}`}
           className="text-primary hover:underline font-medium"
         >
           Buat PO
