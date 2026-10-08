@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency } from '@/lib/utils/format'
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -71,8 +72,8 @@ export default async function PurchasePriceAnalysisPage({
           <FormSelect id="itemId" name="itemId" defaultValue={params.itemId || undefined}
             placeholder="Semua Barang" options={items.map(i => ({ value: String(i.id), label: `${i.sku} — ${i.name}` }))} />
         </div>
-        <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || startDate.toISOString().split('T')[0]} className="w-[180px]" />
-        <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || endDate.toISOString().split('T')[0]} className="w-[180px]" />
+        <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || toLocalDateOnly(startDate)} className="w-[180px]" />
+        <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || toLocalDateOnly(endDate)} className="w-[180px]" />
         <Button type="submit" variant="primary" size="sm">Filter</Button>
       </form>
       <ReportLetterhead title="Analisis Harga Beli Multi-Sumber" subtitle="Multi-Source Purchase Price Analysis" periodLabel={periodLabel} />

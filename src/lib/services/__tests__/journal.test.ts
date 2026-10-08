@@ -157,6 +157,34 @@ describe("JournalService", () => {
       });
     });
 
+    it("persists costCenterId on entries (dimension must survive the tx path)", async () => {
+      // Regression: the transactional createMany dropped entry.costCenterId, so the
+      // Material-Issue / stock journals landed with cost_center_id = NULL and every
+      // cost-center report (pusat-laba, anggaran-vs-realisasi) silently lost the
+      // realisasi into the "no cost center" bucket.
+      const { service, spies } = buildService();
+      spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      spies.journalCreate.mockResolvedValue({ id: 7, journalNumber: "JRN-CC" });
+      spies.journalEntryCreateMany.mockResolvedValue({ count: 2 });
+
+      await service.createJournal({
+        journalNumber: "JRN-CC",
+        transactionDate: new Date("2026-06-09"),
+        type: "MI",
+        entries: [
+          { accountId: 1, debit: 100, credit: 0, costCenterId: 42 },
+          { accountId: 2, debit: 0, credit: 100 },
+        ],
+      });
+
+      expect(spies.journalEntryCreateMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ accountId: 1, costCenterId: 42 }),
+          expect.objectContaining({ accountId: 2, costCenterId: null }),
+        ],
+      });
+    });
+
     it("writes through an existing transaction without opening a nested transaction", async () => {
       const { spies, tx } = buildService();
       spies.accountFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }]);

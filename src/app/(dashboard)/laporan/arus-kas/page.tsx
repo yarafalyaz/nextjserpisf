@@ -7,6 +7,7 @@ import {
   formatAccounting,
   formatPeriod,
 } from "@/lib/utils/format";
+import { toLocalDateOnly } from "@/lib/utils/date-only";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -169,8 +170,8 @@ export default async function CashFlowPage({
 
       <div className="print:hidden">
         <ReportDateFilter
-          defaultStartDate={startDate.toISOString().split("T")[0]}
-          defaultEndDate={endDate.toISOString().split("T")[0]}
+          defaultStartDate={toLocalDateOnly(startDate)}
+          defaultEndDate={toLocalDateOnly(endDate)}
         />
       </div>
 

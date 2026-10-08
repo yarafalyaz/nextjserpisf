@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { BookOpen } from 'lucide-react'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -127,8 +128,8 @@ export default async function GeneralLedgerPage({
             options={allAccounts.map((acc) => ({ value: String(acc.id), label: `${acc.code} - ${acc.name}` }))}
           />
         </div>
-        <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || startDate.toISOString().split('T')[0]} className="w-[180px]" />
-        <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || endDate.toISOString().split('T')[0]} className="w-[180px]" />
+        <AppDatePicker label="Dari" name="tanggalMulai" defaultValue={params.tanggalMulai || toLocalDateOnly(startDate)} className="w-[180px]" />
+        <AppDatePicker label="Sampai" name="tanggalSelesai" defaultValue={params.tanggalSelesai || toLocalDateOnly(endDate)} className="w-[180px]" />
         <Button type="submit" variant="primary" size="sm">Tampilkan</Button>
       </form>
 

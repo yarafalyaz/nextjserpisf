@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatCurrency, formatAccounting } from "@/lib/utils/format";
+import { toLocalDateOnly } from "@/lib/utils/date-only";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -146,7 +147,7 @@ export default async function ProfitCenterIncomePage({
       </div>
       <div className="flex items-center justify-end print:hidden"><ExportButtons title="Pusat_Laba" /></div>
       <div className="print:hidden">
-        <ReportDateFilter defaultStartDate={startDate.toISOString().split("T")[0]} defaultEndDate={endDate.toISOString().split("T")[0]} />
+        <ReportDateFilter defaultStartDate={toLocalDateOnly(startDate)} defaultEndDate={toLocalDateOnly(endDate)} />
       </div>
       <ReportLetterhead title="Laporan Laba Rugi per Pusat Laba" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Pusat Laba mengukur kontribusi laba dari setiap divisi, departemen, atau unit bisnis dalam perusahaan. Analisis ini membantu dalam evaluasi kinerja, alokasi sumber daya, dan pengambilan keputusan strategis di tingkat unit." />

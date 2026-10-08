@@ -98,6 +98,7 @@ export class JournalService {
             debit: entry.debit,
             credit: entry.credit,
             memo: entry.memo ?? null,
+            costCenterId: entry.costCenterId ?? null,
           })),
         })
 
@@ -171,6 +172,7 @@ export class JournalService {
             debit: entry.debit,
             credit: entry.credit,
             memo: entry.memo ?? null,
+            costCenterId: entry.costCenterId ?? null,
           })),
         })
 

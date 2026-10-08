@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatAccounting } from "@/lib/utils/format";
+import { toLocalDateOnly } from "@/lib/utils/date-only";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -87,7 +88,7 @@ export default async function BalanceSheetPage({
 
       <div className="print:hidden">
         <ReportSingleDateFilter
-          defaultDate={params.date || asOfDate.toISOString().split("T")[0]}
+          defaultDate={params.date || toLocalDateOnly(asOfDate)}
         />
       </div>
 

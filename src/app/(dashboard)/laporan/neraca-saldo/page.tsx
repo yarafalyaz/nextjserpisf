@@ -5,6 +5,7 @@ import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service";
 import { requirePermission } from "@/lib/auth/permissions";
 import { computeTrialBalance } from "@/lib/finance/trial-balance";
 import { formatAccounting } from "@/lib/utils/format";
+import { toLocalDateOnly } from "@/lib/utils/date-only";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { ExportButtons } from "@/components/reports/export-buttons";
@@ -113,7 +114,7 @@ export default async function TrialBalancePage({
 
       <div className="print:hidden">
         <ReportSingleDateFilter
-          defaultDate={params.date || asOfDate.toISOString().split("T")[0]}
+          defaultDate={params.date || toLocalDateOnly(asOfDate)}
         />
       </div>
 
@@ -180,7 +181,7 @@ export default async function TrialBalancePage({
 
       <ReportSection title="Perbandingan Periode">
         <form className="flex items-end gap-4 flex-wrap print:hidden" action="/laporan/neraca-saldo">
-          <input type="hidden" name="date" value={params.date || asOfDate.toISOString().split("T")[0]} />
+          <input type="hidden" name="date" value={params.date || toLocalDateOnly(asOfDate)} />
           <AppDatePicker
             label="Bandingkan dengan tanggal"
             name="pembanding"

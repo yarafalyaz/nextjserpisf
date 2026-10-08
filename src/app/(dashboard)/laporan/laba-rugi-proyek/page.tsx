@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -100,7 +101,7 @@ export default async function ProjectPnLPage({
       </div>
       <div className="flex items-center justify-end print:hidden"><ExportButtons title="Laba_Rugi_per_Proyek" /></div>
       <div className="print:hidden">
-        <ReportDateFilter defaultStartDate={startDate.toISOString().split('T')[0]} defaultEndDate={endDate.toISOString().split('T')[0]} />
+        <ReportDateFilter defaultStartDate={toLocalDateOnly(startDate)} defaultEndDate={toLocalDateOnly(endDate)} />
       </div>
       <ReportLetterhead title="Laba Rugi per Proyek / Perintah Kerja" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Laba Rugi Proyek menyajikan kinerja keuangan setiap proyek yang sedang berjalan. Laporan ini menampilkan pendapatan, biaya langsung, dan laba bersih per proyek, sehingga manajemen dapat mengevaluasi profitabilitas dan efisiensi masing-masing proyek." />
