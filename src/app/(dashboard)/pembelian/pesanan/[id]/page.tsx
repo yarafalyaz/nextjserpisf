@@ -38,7 +38,8 @@ export default async function PurchaseOrderDetailPage({
       items: true,
       goodsReceipts: { include: { items: true } },
       purchaseReturns: true,
-      vendorBills: { where: { status: { notIn: ["cancelled"] } }, select: { id: true } },
+      workOrder: { select: { id: true, documentNo: true } },
+      vendorBills: { where: { status: { notIn: ["cancelled"] } }, select: { id: true, documentNo: true, grandTotal: true } },
     },
   })
 
@@ -96,6 +97,16 @@ export default async function PurchaseOrderDetailPage({
                   <DetailField label="Tanggal" value={formatDate(po.date)} />
                   <DetailField label="Tanggal Diharapkan" value={formatDate(po.expectedDate)} />
                   <DetailField label="Ref. PR" value={po.purchaseRequest?.documentNo || "-"} mono />
+                  <DetailField
+                    label={po.isService ? "Perintah Kerja (Jasa)" : "Perintah Kerja"}
+                    value={
+                      po.workOrder ? (
+                        <Link href={`/produksi/perintah-kerja/${po.workOrder.id}`} className="hover:underline">
+                          {po.workOrder.documentNo ?? `WO #${po.workOrder.id}`}
+                        </Link>
+                      ) : "-"
+                    }
+                  />
                   <DetailField label="Total Keseluruhan" value={formatCurrency(Number(po.grandTotal))} />
                 </DetailCard>
 
@@ -176,6 +187,37 @@ export default async function PurchaseOrderDetailPage({
                             <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
                             <DetailTableTd>{gr.items.length} item</DetailTableTd>
                             <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "bills",
+            label: "Tagihan",
+            content: (
+              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan Vendor</h2>
+                </div>
+                <div className="p-4 px-5">
+                  {po.vendorBills.length === 0 ? (
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada tagihan</p>
+                  ) : (
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh align="right">Total</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {po.vendorBills.map((b) => (
+                          <DetailTableRow key={b.id}>
+                            <DetailTableTd className="font-mono"><Link href={`/pembelian/tagihan/${b.id}`}>{b.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd align="right">{formatCurrency(Number(b.grandTotal))}</DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

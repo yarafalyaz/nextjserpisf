@@ -12,6 +12,7 @@ import {
   getInitials,
 getStatusColor,
   formatPeriod,
+  referenceHref,
 } from "../format"
 
 describe("formatCurrency", () => {
@@ -312,5 +313,21 @@ describe("formatDate edge cases", () => {
 
   it("returns - for invalid Date object", () => {
     expect(formatDate(new Date("invalid"))).toBe("-")
+  })
+})
+
+describe("referenceHref", () => {
+  it("maps known reference types to their detail route", () => {
+    expect(referenceHref("GoodsReceipt", 12)).toBe("/pembelian/penerimaan/12")
+    expect(referenceHref("ProductionOrder", 7)).toBe("/produksi/production-orders/7")
+    expect(referenceHref("SalesInvoice", 3)).toBe("/penjualan/faktur/3")
+    expect(referenceHref("GR", 5)).toBe("/pembelian/penerimaan/5")
+  })
+
+  it("returns null for unknown types or missing id", () => {
+    expect(referenceHref("UnknownType", 1)).toBeNull()
+    expect(referenceHref("GoodsReceipt", null)).toBeNull()
+    expect(referenceHref(null, 1)).toBeNull()
+    expect(referenceHref(undefined, undefined)).toBeNull()
   })
 })

@@ -84,16 +84,22 @@ export default async function VehicleFitmentDetailPage({
           label="Item / SKU"
           value={
             item ? (
-              <span>
+              <Link href={`/master/barang/${item.id}`} className="hover:underline">
                 <span className="font-mono text-xs text-muted-foreground mr-1.5">{item.sku}</span>
                 {item.name}
-              </span>
+              </Link>
             ) : `Item #${rule.itemId}`
           }
         />
         <DetailField
           label="Revisi BOM"
-          value={bomRevision ? `Rev. ${bomRevision.revisionNo}` : "Semua revisi"}
+          value={
+            bomRevision ? (
+              <Link href={`/produksi/bom-revisi/${bomRevision.id}`} className="hover:underline">
+                Rev. {bomRevision.revisionNo}
+              </Link>
+            ) : "Semua revisi"
+          }
         />
         <DetailField label="Merek" value={brand?.name ?? "Semua merek"} />
         <DetailField label="Model" value={model?.name ?? "Semua model"} />

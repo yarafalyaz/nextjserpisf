@@ -34,6 +34,7 @@ export default async function VendorBillDetailPage({
     include: {
       vendor: true,
       purchaseOrder: true,
+      goodsReceipt: { select: { id: true, documentNo: true } },
       items: true,
     },
   })
@@ -88,6 +89,14 @@ export default async function VendorBillDetailPage({
                     </span>
                   )}
                 </span>
+              ) : "-"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Penerimaan Barang</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">
+              {bill.goodsReceipt ? (
+                <Link href={`/pembelian/penerimaan/${bill.goodsReceipt.id}`}>{bill.goodsReceipt.documentNo}</Link>
               ) : "-"}
             </span>
           </div>

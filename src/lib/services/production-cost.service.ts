@@ -1,5 +1,5 @@
 import { prisma, TxClient } from "@/lib/db/prisma"
-import { safeAdd } from "@/lib/utils/math"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 
 /**
  * Non-material production cost rollup (PRD FAB-06/07/08/09).
@@ -61,6 +61,118 @@ export const NON_MATERIAL_CATEGORIES = [
   "rework",
   "other",
 ] as const
+
+/**
+ * Mirror a service/subcontract PurchaseOrder's value onto a single `subcontract`
+ * ProductionCost line for the production order(s) its work order fulfils
+ * (VEH/G4 → FAB-08: subcontract is a real cost of the job and must show up in
+ * HPP). The line is unique per `purchaseOrderId`; a change to the PO's value
+ * applies only the delta so the order's running total stays exact.
+ *
+ * Only service POs linked to a work order participate, and only when that work
+ * order has at least one production order. Passing a non-positive amount removes
+ * the line (and subtracts it from HPP). Non-service POs are ignored (their value
+ * is capitalised into inventory at goods receipt).
+ */
+export async function syncServicePurchaseOrderCost(
+  input: {
+    purchaseOrderId: number
+    amount: number
+    documentNo: string
+    createdBy: number | null
+  },
+  client: TxClient | typeof prisma = prisma,
+): Promise<{ posted: number; productionOrderIds: number[] }> {
+  const po = await client.purchaseOrder.findUnique({
+    where: { id: input.purchaseOrderId },
+    select: { isService: true, workOrderId: true, vendorId: true },
+  })
+  if (!po || !po.isService || po.workOrderId == null) {
+    return { posted: 0, productionOrderIds: [] }
+  }
+
+  const productionOrders = await client.productionOrder.findMany({
+    where: { workOrderId: po.workOrderId },
+    select: { id: true },
+  })
+  if (productionOrders.length === 0) {
+    return { posted: 0, productionOrderIds: [] }
+  }
+
+  const desiredTotal = Math.max(0, Number(input.amount) || 0)
+  const existingLines = await client.productionCost.findMany({
+    where: { purchaseOrderId: input.purchaseOrderId, category: "subcontract" },
+    select: { id: true, amount: true, productionOrderId: true },
+  })
+
+  const existingTotal = existingLines.reduce((s, l) => safeAdd(s, Number(l.amount), 2), 0)
+
+  if (desiredTotal === 0) {
+    if (existingLines.length) {
+      for (const line of existingLines) {
+        await client.productionCost.delete({ where: { id: line.id } })
+        if (line.productionOrderId != null) {
+          await applyProductionCostDelta(line.productionOrderId, -Number(line.amount), client)
+        }
+      }
+    }
+    return { posted: 0, productionOrderIds: productionOrders.map((o) => o.id) }
+  }
+
+  // Spread the PO value across the work order's production orders equally per
+  // order (the job's output is what the subcontract supports). One line per
+  // production order keeps HPP attribution precise.
+  const perOrder = Math.round((desiredTotal / productionOrders.length) * 100) / 100
+  const remainder = safeAdd(desiredTotal, -safeMultiply(perOrder, productionOrders.length, 2), 2)
+
+  const byOrder = new Map(existingLines.filter((l) => l.productionOrderId != null).map((l) => [l.productionOrderId!, l]))
+
+  for (let i = 0; i < productionOrders.length; i++) {
+    const orderId = productionOrders[i].id
+    // Put any rounding remainder on the first order so the sum is exact.
+    const target = i === 0 ? safeAdd(perOrder, remainder, 2) : perOrder
+    const existing = byOrder.get(orderId)
+    const currentAmount = existing ? Number(existing.amount) : 0
+
+    if (existing) {
+      await client.productionCost.update({
+        where: { id: existing.id },
+        data: {
+          amount: target,
+          description: `Subkontrak PO ${input.documentNo}`,
+        },
+      })
+    } else {
+      await client.productionCost.create({
+        data: {
+          productionOrderId: orderId,
+          workOrderId: po.workOrderId,
+          purchaseOrderId: input.purchaseOrderId,
+          vendorId: po.vendorId,
+          category: "subcontract",
+          description: `Subkontrak PO ${input.documentNo}`,
+          amount: target,
+          postedAt: new Date(),
+          createdBy: input.createdBy,
+        },
+      })
+    }
+    await applyProductionCostDelta(orderId, target - currentAmount, client)
+  }
+
+  // Clean up any orphaned lines for production orders that no longer exist.
+  for (const line of existingLines) {
+    if (line.productionOrderId == null || !productionOrders.some((o) => o.id === line.productionOrderId)) {
+      await client.productionCost.delete({ where: { id: line.id } })
+      if (line.productionOrderId != null) {
+        await applyProductionCostDelta(line.productionOrderId, -Number(line.amount), client)
+      }
+    }
+  }
+
+  // `existingTotal` is the prior total; return the newly posted amount.
+  return { posted: desiredTotal, productionOrderIds: productionOrders.map((o) => o.id) }
+}
 
 /**
  * Mirror an NCR's `reworkCost` onto a single `rework` ProductionCost line for the

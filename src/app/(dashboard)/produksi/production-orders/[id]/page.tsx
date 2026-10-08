@@ -34,10 +34,16 @@ export default async function ProductionOrderDetailPage({
     where: { id: numId },
     include: {
       product: { include: { inventoryItem: { select: { trackSerial: true } } } },
+      bomRevision: { select: { id: true, revisionNo: true } },
+      workOrder: { select: { id: true, documentNo: true, projectId: true } },
       materials: true,
       costs: {
         orderBy: { createdAt: "asc" },
-        include: { vendor: { select: { name: true } } },
+        include: {
+          vendor: { select: { name: true } },
+          purchaseOrder: { select: { id: true, documentNo: true } },
+          nonconformance: { select: { id: true, documentNo: true } },
+        },
       },
       genealogy: {
         include: { materials: true },
@@ -57,16 +63,17 @@ export default async function ProductionOrderDetailPage({
     : []
   const geneItemMap = new Map(geneItemRows.map((i) => [i.id, i]))
 
-  // Link to a work order (if any) so labor cost can be pulled from its project's
-  // timesheets. A production order is not directly tied to a project or WO, so
-  // this is a best-effort link via the product's inventory item on WO items.
-  const linkedWorkOrder = order.product.inventoryItemId
-    ? await prisma.workOrder.findFirst({
-        where: { items: { some: { itemId: order.product.inventoryItemId } } },
-        select: { id: true, projectId: true },
-        orderBy: { createdAt: "desc" },
-      })
-    : null
+  // The production order now carries a real workOrderId FK (see migration
+  // 20261008130000_integration_relations); fall back to the legacy best-effort
+  // item match only for older orders created before the link existed.
+  const linkedWorkOrder = order.workOrder
+    ?? (order.product.inventoryItemId
+      ? await prisma.workOrder.findFirst({
+          where: { items: { some: { itemId: order.product.inventoryItemId } } },
+          select: { id: true, documentNo: true, projectId: true },
+          orderBy: { createdAt: "desc" },
+        })
+      : null)
 
   const costRows = order.costs.map((c) => ({
     id: c.id,
@@ -78,6 +85,10 @@ export default async function ProductionOrderDetailPage({
     referenceNo: c.referenceNo,
     sourceTimesheetId: c.sourceTimesheetId,
     vendorName: c.vendor?.name ?? null,
+    purchaseOrderId: c.purchaseOrderId,
+    purchaseOrderNo: c.purchaseOrder?.documentNo ?? null,
+    nonconformanceId: c.nonconformanceId,
+    nonconformanceNo: c.nonconformance?.documentNo ?? null,
   }))
 
   // Resolve material item names (ProductionOrderMaterial holds itemId only).
@@ -132,6 +143,26 @@ export default async function ProductionOrderDetailPage({
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Produk</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{order.product.name}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Revisi BOM</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">
+              {order.bomRevision ? (
+                <Link href={`/produksi/bom-revisi/${order.bomRevision.id}`} className="hover:underline">
+                  Rev. {order.bomRevision.revisionNo}
+                </Link>
+              ) : "-"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Perintah Kerja</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">
+              {linkedWorkOrder ? (
+                <Link href={`/produksi/perintah-kerja/${linkedWorkOrder.id}`} className="hover:underline">
+                  {linkedWorkOrder.documentNo ?? `WO #${linkedWorkOrder.id}`}
+                </Link>
+              ) : "-"}
+            </span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Jml</span>

@@ -299,6 +299,7 @@ model Customer {
   projects         Project[]
   quotations       Quotation[]
   salesInvoices    SalesInvoice[]
+  salesReturns     SalesReturn[]
   salesOrders      SalesOrder[]
   workOrders       WorkOrder[]
   customerCategoryId Int?              @map("customer_category_id")
@@ -441,6 +442,7 @@ model Item {
   stockMoves         StockMove[]
   manufacturedProducts Product[]          @relation("ProductInventoryItem")
   uomConversions     UomConversion[]
+  fitmentRules       VehicleFitmentRule[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -872,6 +874,7 @@ model SalesInvoice {
   customer          Customer           @relation(fields: [customerId], references: [id])
   quotation         Quotation?         @relation(fields: [quotationId], references: [id])
   salesOrder        SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  salesReturns      SalesReturn[]
   payments          SalesPayment[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
@@ -943,6 +946,8 @@ model SalesReturn {
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
   items          SalesReturnItem[]
+  salesInvoice   SalesInvoice?     @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+  customer       Customer          @relation(fields: [customerId], references: [id])
 
   @@index([status])
   @@index([salesInvoiceId])
@@ -1090,6 +1095,7 @@ model GoodsReceipt {
   items           GoodsReceiptItem[]
   purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
   warehouse       Warehouse          @relation(fields: [warehouseId], references: [id])
+  vendorBills     VendorBill[]
 
   @@index([purchaseOrderId], map: "goods_receipts_purchase_order_id_fkey")
   @@index([warehouseId], map: "goods_receipts_warehouse_id_fkey")
@@ -1182,7 +1188,9 @@ model VendorBill {
   updatedAt           DateTime         @updatedAt @map("updated_at")
   items               VendorBillItem[]
   purchaseOrder       PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  goodsReceipt        GoodsReceipt?    @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
   vendor              Vendor           @relation(fields: [vendorId], references: [id])
+  allocations         VendorPaymentAllocation[]
 
   @@index([purchaseOrderId], map: "vendor_bills_purchase_order_id_fkey")
   @@index([vendorId], map: "vendor_bills_vendor_id_fkey")
@@ -1263,6 +1271,7 @@ model VendorPaymentAllocation {
   vendorBillId    Int           @map("vendor_bill_id")
   amount          Decimal       @db.Decimal(15, 2)
   vendorPayment   VendorPayment @relation(fields: [vendorPaymentId], references: [id], onDelete: Cascade)
+  vendorBill      VendorBill    @relation(fields: [vendorBillId], references: [id], onDelete: Cascade)
 
   @@index([vendorPaymentId], map: "vendor_payment_allocations_vendor_payment_id_fkey")
   @@index([vendorBillId])
@@ -1559,6 +1568,7 @@ model BomRevision {
   materials     BomRevisionMaterial[]
   productionOrders ProductionOrder[]
   workOrders    WorkOrder[]
+  fitmentRules  VehicleFitmentRule[]
 
   @@unique([productId, revisionNo], map: "bom_revisions_product_revision_unique")
   @@index([productId], map: "bom_revisions_product_id_fkey")
@@ -1585,6 +1595,7 @@ model ProductionOrder {
   documentNo        String                    @unique @map("document_no")
   productId         Int                       @map("product_id")
   bomRevisionId     Int?                      @map("bom_revision_id")
+  workOrderId       Int?                      @map("work_order_id")
   qty               Decimal                   @db.Decimal(15, 2)
   status            String                    @default("draft")
   startDate         DateTime?                 @map("start_date")
@@ -1605,9 +1616,11 @@ model ProductionOrder {
   genealogy         ProductionGenealogy?
   product           Product                   @relation(fields: [productId], references: [id])
   bomRevision       BomRevision?              @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
+  workOrder         WorkOrder?                @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
 
   @@index([productId], map: "production_orders_product_id_fkey")
   @@index([bomRevisionId])
+  @@index([workOrderId])
   @@index([status])
   @@index([createdBy])
   @@index([createdAt])
@@ -1873,6 +1886,7 @@ model WorkOrder {
   items             WorkOrderItem[]
   costs             ProductionCost[]
   purchaseOrders    PurchaseOrder[]
+  productionOrders  ProductionOrder[]
   customer          Customer         @relation(fields: [customerId], references: [id])
   customerVehicle   CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
   quotation         Quotation?       @relation(fields: [quotationId], references: [id])
@@ -3307,6 +3321,8 @@ model VehicleFitmentRule {
   createdBy        Int?            @map("created_by")
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
+  item             Item            @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  bomRevision      BomRevision?    @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
 
   @@index([itemId])
   @@index([bomRevisionId])

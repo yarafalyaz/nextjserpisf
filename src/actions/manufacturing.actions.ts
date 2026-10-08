@@ -495,6 +495,7 @@ export async function createProductionOrder(formData: FormData) {
         documentNo,
         productId: v.productId,
         bomRevisionId: effectiveBom.revisionId,
+        workOrderId: v.workOrderId ? Number(v.workOrderId) : null,
         qty: v.qty,
         startDate: v.startDate ? new Date(v.startDate) : null,
         endDate: v.endDate ? new Date(v.endDate) : null,
@@ -1605,6 +1606,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
         data: {
           productId: v.productId,
           qty: v.qty,
+          workOrderId: v.workOrderId ? Number(v.workOrderId) : null,
           startDate: v.startDate ? new Date(v.startDate) : null,
           endDate: v.endDate ? new Date(v.endDate) : null,
           notes: v.notes ?? null,

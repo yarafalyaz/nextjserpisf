@@ -312,3 +312,38 @@ export function formatReferenceType(refType: string | null | undefined): string 
   
   return refTypeMap[refType] || refType;
 }
+
+/**
+ * Map a stock-move / journal `referenceType` + `referenceId` to the detail page
+ * of the source document, so inventory mutations can link back to the document
+ * that caused them (GoodsReceipt, ProductionOrder, SalesInvoice, …). Returns
+ * null when the type has no known detail route, so callers can fall back to a
+ * plain label.
+ */
+export function referenceHref(
+  refType: string | null | undefined,
+  refId: number | null | undefined,
+): string | null {
+  if (!refType || refId == null || Number.isNaN(Number(refId))) return null;
+  const id = Number(refId);
+  const routes: Record<string, string> = {
+    SalesInvoice: "/penjualan/faktur",
+    SalesOrder: "/penjualan/pesanan",
+    SalesReturn: "/penjualan/retur",
+    SalesPayment: "/penjualan/pembayaran",
+    Quotation: "/penjualan/penawaran",
+    PurchaseOrder: "/pembelian/pesanan",
+    PurchaseRequest: "/pembelian/permintaan",
+    PurchaseReturn: "/pembelian/retur",
+    GoodsReceipt: "/pembelian/penerimaan",
+    GR: "/pembelian/penerimaan",
+    ProductionOrder: "/produksi/production-orders",
+    ManufacturingOrder: "/produksi/production-orders",
+    MaterialIssue: "/inventaris/pengeluaran-material",
+    ProductionOrderMaterialIssue: "/produksi/production-orders",
+    StockAdjustment: "/inventaris/penyesuaian",
+    InventoryTransfer: "/inventaris/transfer",
+  };
+  const base = routes[refType];
+  return base ? `${base}/${id}` : null;
+}

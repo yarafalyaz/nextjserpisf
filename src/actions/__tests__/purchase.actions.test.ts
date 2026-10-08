@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
     purchaseReturnItem: buildModelMock(),
     purchaseHistory: buildModelMock(),
     workOrder: buildModelMock(),
+    productionOrder: buildModelMock(),
+    productionCost: buildModelMock(),
     journal: buildModelMock(),
     inventory: buildModelMock(),
     inventoryMovement: buildModelMock(),
@@ -425,6 +427,65 @@ describe("Vendor Bill Actions", () => {
     mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
     const res = await actions.confirmVendorBill(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("confirmVendorBill rolls a service PO's value into the work order's production HPP", async () => {
+    // 3-way match
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    // Bill is a service PO linked to a work order.
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+    })
+    mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+    })
+    // First aggregate call = 3-way match (0 already billed); second = service PO billed total.
+    mocks.prismaMock.vendorBill.aggregate
+      .mockResolvedValueOnce({ _sum: { grandTotal: 0 } })
+      .mockResolvedValue({ _sum: { grandTotal: 500000 } })
+
+    // Service PO → work order 9.
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      isService: true, workOrderId: 9, vendorId: 3, documentNo: "PO-0042",
+    })
+    // Work order 9 has a production order.
+    mocks.prismaMock.productionOrder.findMany.mockResolvedValue([{ id: 55 }])
+    mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
+    mocks.prismaMock.productionCost.create.mockResolvedValue({ id: 77 })
+    mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ totalActualCost: 1000 })
+
+    const res = await actions.confirmVendorBill(1)
+
+    expect(res?.success).toBe(true)
+    const created = mocks.prismaMock.productionCost.create.mock.calls.at(-1)![0]
+    expect(created.data.category).toBe("subcontract")
+    expect(created.data.purchaseOrderId).toBe(42)
+    expect(created.data.productionOrderId).toBe(55)
+    expect(Number(created.data.amount)).toBe(500000)
+    expect(mocks.prismaMock.productionOrder.update).toHaveBeenCalledWith({
+      where: { id: 55 },
+      data: { totalActualCost: 501000 },
+    })
+  })
+
+  it("confirmVendorBill does not touch HPP for a non-service PO", async () => {
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+    })
+    mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+    })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      isService: false, workOrderId: null, vendorId: 3, documentNo: "PO-0042",
+    })
+
+    const res = await actions.confirmVendorBill(1)
+
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.productionCost.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.productionOrder.update).not.toHaveBeenCalled()
   })
 
   it("voidVendorBill succeeds", async () => {

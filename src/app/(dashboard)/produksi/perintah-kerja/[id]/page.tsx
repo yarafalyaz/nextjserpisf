@@ -44,7 +44,17 @@ export default async function WorkOrderDetailPage({
     include: {
       customer: true,
       quotation: true,
+      customerVehicle: { select: { id: true, licensePlate: true, vehicle: { select: { plateNumber: true, variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+      project: { select: { id: true, name: true } },
+      bomRevision: { select: { id: true, revisionNo: true } },
       items: true,
+      purchaseOrders: {
+        where: { status: { notIn: ["cancelled"] } },
+        select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true },
+      },
+      productionOrders: {
+        select: { id: true, documentNo: true, status: true, qty: true },
+      },
     },
   });
 
@@ -168,7 +178,88 @@ export default async function WorkOrderDetailPage({
           label="Total Biaya Material"
           value={formatCurrency(totalCost)}
         />
+        {wo.customerVehicle && (
+          <DetailField
+            label="Kendaraan"
+            value={
+              <Link href={`/master/pelanggan/${wo.customerId}/kendaraan/${wo.customerVehicle.id}`} className="hover:underline">
+                {[
+                  wo.customerVehicle.vehicle?.variant?.model?.brand?.name,
+                  wo.customerVehicle.vehicle?.variant?.model?.name,
+                  wo.customerVehicle.vehicle?.variant?.name,
+                  wo.customerVehicle.licensePlate ?? wo.customerVehicle.vehicle?.plateNumber,
+                ].filter(Boolean).join(" · ") || `Kendaraan #${wo.customerVehicle.id}`}
+              </Link>
+            }
+          />
+        )}
+        {wo.project && (
+          <DetailField
+            label="Proyek"
+            value={<Link href={`/proyek/${wo.project.id}`} className="hover:underline">{wo.project.name}</Link>}
+          />
+        )}
+        {wo.bomRevision && (
+          <DetailField
+            label="Revisi BOM"
+            value={<Link href={`/produksi/bom-revisi/${wo.bomRevision.id}`} className="hover:underline">Rev. {wo.bomRevision.revisionNo}</Link>}
+          />
+        )}
       </DetailCard>
+
+      {(wo.purchaseOrders.length > 0 || wo.productionOrders.length > 0) && (
+        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+          <div className="p-4 px-5 border-b border-default">
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">Dokumen Terkait</h2>
+          </div>
+          <div className="p-4 px-5 flex flex-col gap-5">
+            {wo.purchaseOrders.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Pesanan Pembelian</p>
+                <DetailTable>
+                  <DetailTableHead>
+                    <DetailTableTh>No. Dokumen</DetailTableTh>
+                    <DetailTableTh>Jenis</DetailTableTh>
+                    <DetailTableTh align="right">Total</DetailTableTh>
+                    <DetailTableTh>Status</DetailTableTh>
+                  </DetailTableHead>
+                  <DetailTableBody>
+                    {wo.purchaseOrders.map((p) => (
+                      <DetailTableRow key={p.id}>
+                        <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${p.id}`}>{p.documentNo}</Link></DetailTableTd>
+                        <DetailTableTd>{p.isService ? "Jasa" : "Barang"}</DetailTableTd>
+                        <DetailTableTd align="right">{formatCurrency(Number(p.grandTotal))}</DetailTableTd>
+                        <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
+                      </DetailTableRow>
+                    ))}
+                  </DetailTableBody>
+                </DetailTable>
+              </div>
+            )}
+            {wo.productionOrders.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Perintah Produksi</p>
+                <DetailTable>
+                  <DetailTableHead>
+                    <DetailTableTh>No. Dokumen</DetailTableTh>
+                    <DetailTableTh align="right">Qty</DetailTableTh>
+                    <DetailTableTh>Status</DetailTableTh>
+                  </DetailTableHead>
+                  <DetailTableBody>
+                    {wo.productionOrders.map((p) => (
+                      <DetailTableRow key={p.id}>
+                        <DetailTableTd className="font-mono"><Link href={`/produksi/production-orders/${p.id}`}>{p.documentNo}</Link></DetailTableTd>
+                        <DetailTableTd align="right">{Number(p.qty)}</DetailTableTd>
+                        <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
+                      </DetailTableRow>
+                    ))}
+                  </DetailTableBody>
+                </DetailTable>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Items / Materials */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

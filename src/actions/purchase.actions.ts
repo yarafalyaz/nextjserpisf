@@ -29,6 +29,7 @@ import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
+import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
   requestApprovalIfConfigured,
   assertApproved,
@@ -118,6 +119,42 @@ async function assertThreeWayMatch(
         `melebihi nilai barang diterima (${receivedValue.toLocaleString("id-ID")}).`,
     );
   }
+}
+
+/**
+ * Keep a service PO's subcontract cost on the work order's production orders in
+ * sync with what has actually been billed. Recomputes the PO's booked value as
+ * the sum of its non-cancelled vendor bills' grandTotal and mirrors it onto
+ * `ProductionCost` (`subcontract`) so subcontract work reaches HPP. No-op for
+ * non-service POs or service POs whose work order has no production order.
+ */
+async function syncServicePoCostFromBills(
+  tx: Prisma.TransactionClient,
+  purchaseOrderId: number | null | undefined,
+  userId: number | null,
+): Promise<void> {
+  if (!purchaseOrderId) return;
+  const po = await tx.purchaseOrder.findUnique({
+    where: { id: purchaseOrderId },
+    select: { isService: true, workOrderId: true, documentNo: true },
+  });
+  if (!po || !po.isService || po.workOrderId == null) return;
+
+  const agg = await tx.vendorBill.aggregate({
+    where: { purchaseOrderId, status: { notIn: ["cancelled"] } },
+    _sum: { grandTotal: true },
+  });
+  const billedTotal = Number(agg._sum.grandTotal ?? 0);
+
+  await syncServicePurchaseOrderCost(
+    {
+      purchaseOrderId,
+      amount: billedTotal,
+      documentNo: po.documentNo,
+      createdBy: userId,
+    },
+    tx,
+  );
 }
 
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -849,6 +886,10 @@ export async function createVendorBill(formData: FormData) {
       // journal for this bill already exists).
       await onVendorBillPosted(created.id, Number(user.id), tx);
 
+      // Roll the newly-billed service PO value into the work order's production
+      // HPP (subcontract cost).
+      await syncServicePoCostFromBills(tx, created.purchaseOrderId, Number(user.id));
+
       return created;
     });
 
@@ -977,6 +1018,9 @@ export async function confirmVendorBill(billId: number) {
 
       // Trigger GL hook inside transaction
       await onVendorBillPosted(billId, Number(user.id), tx);
+
+      // Reflect the posted (now recognised) value in the work order's HPP.
+      await syncServicePoCostFromBills(tx, fresh.purchaseOrderId, Number(user.id));
     });
 
     await logActivity(
@@ -1599,6 +1643,8 @@ export async function deleteVendorBill(id: number) {
       // Reverse any journal posted at draft creation before removing the record.
       await deleteJournalByReferenceTx(tx, "VendorBill", id);
       await tx.vendorBill.delete({ where: { id } });
+      // Recompute the service PO's subcontract HPP after removing the bill.
+      await syncServicePoCostFromBills(tx, bill.purchaseOrderId, null);
     });
 
     await logActivity(
@@ -1919,6 +1965,11 @@ export async function updateVendorBill(id: number, formData: FormData) {
       // first so onVendorBillPosted's idempotency guard doesn't skip the repost.
       await deleteJournalByReferenceTx(tx, "VendorBill", id);
       await onVendorBillPosted(updated.id, Number(user.id), tx);
+
+      // The bill's PO link or amount may have changed — resync the old and new
+      // service PO subcontract costs so HPP stays exact.
+      await syncServicePoCostFromBills(tx, existingBill.purchaseOrderId, Number(user.id));
+      await syncServicePoCostFromBills(tx, updated.purchaseOrderId, Number(user.id));
 
       return updated;
     });
@@ -2279,6 +2330,9 @@ export async function voidVendorBill(id: number) {
         where: { id },
         data: { status: "cancelled" },
       });
+      // The bill no longer counts toward the service PO's billed value — resync
+      // the subcontract HPP.
+      await syncServicePoCostFromBills(tx, bill.purchaseOrderId, null);
     });
 
     await logActivity(

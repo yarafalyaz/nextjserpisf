@@ -23,6 +23,7 @@ import {
   pullLaborCostFromTimesheets,
   applyOverheadToProductionOrder,
 } from "@/actions/production-cost.actions"
+import Link from "next/link"
 import { OVERHEAD_DRIVER_LABELS } from "@/lib/validations/production-cost.schemas"
 
 const CATEGORY_OPTIONS = [
@@ -51,6 +52,10 @@ export interface ProductionCostRow {
   referenceNo: string | null
   sourceTimesheetId: number | null
   vendorName: string | null
+  purchaseOrderId?: number | null
+  purchaseOrderNo?: string | null
+  nonconformanceId?: number | null
+  nonconformanceNo?: string | null
 }
 
 export function ProductionCostSection({
@@ -323,7 +328,24 @@ export function ProductionCostSection({
                   <DetailTableTd align="right">{c.rate != null ? formatCurrency(c.rate) : "-"}</DetailTableTd>
                   <DetailTableTd align="right">{formatCurrency(c.amount)}</DetailTableTd>
                   <DetailTableTd>
-                    {c.sourceTimesheetId ? "Timesheet" : c.vendorName ? c.vendorName : "-"}
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {c.sourceTimesheetId ? (
+                        <span>Timesheet</span>
+                      ) : c.vendorName ? (
+                        <span>{c.vendorName}</span>
+                      ) : null}
+                      {c.purchaseOrderId != null && (
+                        <Link href={`/pembelian/pesanan/${c.purchaseOrderId}`} className="text-primary hover:underline">
+                          PO {c.purchaseOrderNo ?? `#${c.purchaseOrderId}`}
+                        </Link>
+                      )}
+                      {c.nonconformanceId != null && (
+                        <Link href={`/produksi/qc/ncr/${c.nonconformanceId}`} className="text-primary hover:underline">
+                          NCR {c.nonconformanceNo ?? `#${c.nonconformanceId}`}
+                        </Link>
+                      )}
+                      {!c.sourceTimesheetId && !c.vendorName && c.purchaseOrderId == null && c.nonconformanceId == null && "-"}
+                    </span>
                   </DetailTableTd>
                   {canManage && (
                     <DetailTableTd>

@@ -57,6 +57,21 @@ export default async function CustomerVehicleDetailPage({
 
   if (!cv || cv.customerId !== customerId) notFound()
 
+  const [workOrders, quotations] = await Promise.all([
+    prisma.workOrder.findMany({
+      where: { customerVehicleId: customerVehicleId },
+      select: { id: true, documentNo: true, date: true, status: true },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.quotation.findMany({
+      where: { customerVehicleId: customerVehicleId },
+      select: { id: true, documentNo: true, date: true, status: true },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+  ])
+
   const brandName = cv.vehicle?.variant?.model?.brand?.name || "-"
   const modelName = cv.vehicle?.variant?.model?.name || "-"
   const variantName = cv.vehicle?.variant?.name || "-"
@@ -136,6 +151,54 @@ export default async function CustomerVehicleDetailPage({
             <div className="flex flex-col gap-1 col-span-full">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Catatan</span>
               <span className="text-[0.9375rem] text-foreground font-medium">{cv.notes}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Work Orders */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Perintah Kerja</h2>
+        </div>
+        <div className="p-4 px-5">
+          {workOrders.length === 0 ? (
+            <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">Belum ada perintah kerja</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-default">
+              {workOrders.map((wo) => (
+                <div key={wo.id} className="flex items-center justify-between gap-4 py-3">
+                  <Link href={`/produksi/perintah-kerja/${wo.id}`} className="font-mono text-sm text-primary hover:underline">
+                    {wo.documentNo}
+                  </Link>
+                  <span className="text-sm text-muted-foreground">{formatDate(wo.date)}</span>
+                  <StatusChip status={wo.status} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Quotations */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Penawaran</h2>
+        </div>
+        <div className="p-4 px-5">
+          {quotations.length === 0 ? (
+            <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">Belum ada penawaran</p>
+          ) : (
+            <div className="flex flex-col divide-y divide-default">
+              {quotations.map((q) => (
+                <div key={q.id} className="flex items-center justify-between gap-4 py-3">
+                  <Link href={`/penjualan/penawaran/${q.id}`} className="font-mono text-sm text-primary hover:underline">
+                    {q.documentNo}
+                  </Link>
+                  <span className="text-sm text-muted-foreground">{formatDate(q.date)}</span>
+                  <StatusChip status={q.status} />
+                </div>
+              ))}
             </div>
           )}
         </div>

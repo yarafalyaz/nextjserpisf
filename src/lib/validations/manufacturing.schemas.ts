@@ -38,6 +38,7 @@ export type UpdateProductInput = z.infer<typeof updateProductSchema>
 export const createProductionOrderSchema = z.object({
   productId: z.coerce.number().int().min(1, "Produk wajib dipilih"),
   qty: z.coerce.number().min(1, "Qty minimal 1"),
+  workOrderId: optionalString(30),
   startDate: optionalString(30),
   endDate: optionalString(30),
   notes: optionalString(1000),
@@ -48,6 +49,7 @@ export type CreateProductionOrderInput = z.infer<typeof createProductionOrderSch
 export const updateProductionOrderSchema = z.object({
   productId: z.coerce.number().int().min(1, "Produk wajib dipilih"),
   qty: z.coerce.number().min(1, "Qty minimal 1"),
+  workOrderId: optionalString(30),
   startDate: optionalString(30),
   endDate: optionalString(30),
   notes: optionalString(1000),
