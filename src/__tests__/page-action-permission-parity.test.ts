@@ -138,4 +138,34 @@ describe("paritas izin halaman detail/edit vs list/action (#53)", () => {
 
     expect(offenders, `Layout tanpa guard izin yang benar:\n${offenders.join("\n")}`).toEqual([])
   })
+
+  it("setiap halaman hub modul memiliki guard izin (requirePermission atau requireAnyPermission)", () => {
+    const hubModules = [
+      "master",
+      "penjualan",
+      "pembelian",
+      "inventaris",
+      "produksi",
+      "sdm",
+      "keuangan",
+      "crm",
+      "laporan",
+      "aset",
+      "kendaraan",
+      "proyek",
+      "pengaturan",
+    ]
+
+    const unguarded: string[] = []
+    for (const mod of hubModules) {
+      const pageFile = join(DASHBOARD, mod, "page.tsx")
+      const src = readFileSync(pageFile, "utf8")
+      const hasGuard =
+        /requirePermission\(\s*['"][^'"]+['"]\s*\)/.test(src) ||
+        /requireAnyPermission\(/.test(src)
+      if (!hasGuard) unguarded.push(mod)
+    }
+
+    expect(unguarded, `Halaman hub modul tanpa guard izin:\n${unguarded.join("\n")}`).toEqual([])
+  })
 })

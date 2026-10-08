@@ -18,6 +18,7 @@ import {
   workflowStepsSchema,
 } from "@/lib/validations/approval.schemas";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
+import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions";
 
 type WorkflowStepInput = {
   name?: string;
@@ -39,19 +40,6 @@ const REJECTION_REASON_MODELS = new Set([
   "LeaveRequest",
   "OvertimeRequest",
 ]);
-
-const APPROVAL_REFERENCE_PERMISSIONS: Record<string, string> = {
-  Quotation: "approve_quotations",
-  SalesOrder: "approve_sales_orders",
-  SalesInvoice: "approve_sales_invoices",
-  PurchaseRequest: "approve_purchase_requests",
-  PurchaseOrder: "approve_purchase_orders",
-  VendorBill: "approve_vendor_bills",
-  LeaveRequest: "approve_leave_requests",
-  OvertimeRequest: "approve_overtime_requests",
-  EmployeeLoan: "create_loans",
-  Expense: "approve_expenses",
-};
 
 function assertApprovalPermission(
   user: { roles?: string[]; permissions?: string[]; isActive?: boolean },

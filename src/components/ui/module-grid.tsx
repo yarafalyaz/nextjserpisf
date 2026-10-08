@@ -9,6 +9,8 @@ export interface ModuleItem {
   href: string
   icon: LucideIcon
   desc: string
+  /** Permission required to view this module card. Omit to always show. */
+  permission?: string
 }
 
 export interface ModuleGridProps {
@@ -25,6 +27,10 @@ export interface ModuleGridProps {
   className?: string
   /** Optional content rendered above the grid (e.g. a heading). */
   header?: ReactNode
+  /** Permissions held by current session user. If provided, filters cards by item.permission. */
+  userPermissions?: string[]
+  /** True for super_admin to bypass permission filtering on cards. */
+  isSuperAdmin?: boolean
 }
 
 const cardClassName =
@@ -49,7 +55,15 @@ export function ModuleGrid({
   headingId,
   className,
   header,
+  userPermissions,
+  isSuperAdmin,
 }: ModuleGridProps) {
+  const visibleItems = isSuperAdmin
+    ? items
+    : userPermissions
+      ? items.filter((item) => !item.permission || userPermissions.includes(item.permission))
+      : items
+
   return (
     <nav aria-label={ariaLabel} className="flex flex-col gap-4">
       {header}
@@ -60,7 +74,7 @@ export function ModuleGrid({
         )}
         {...(headingId ? { "aria-labelledby": headingId } : {})}
       >
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <li key={item.href}>
             <ModuleCard {...item} />
           </li>

@@ -31,6 +31,28 @@ export async function requirePermission(permission: string) {
 }
 
 /**
+ * Require at least one of the specified permissions. Super admin bypasses all checks.
+ * On miss, redirects to dashboard (/) instead of throwing.
+ */
+export async function requireAnyPermission(permissions: string[]) {
+  const user = await requireAuth();
+
+  // Super admin bypass
+  if (user.roles.includes("super_admin")) return user;
+
+  const userPerms = user.permissions ?? [];
+  const hasAny = permissions.some((permission) =>
+    userPerms.includes(permission)
+  );
+
+  if (!hasAny) {
+    redirect("/");
+  }
+
+  return user;
+}
+
+/**
  * Require specific role. Super admin bypasses all role checks.
  */
 export async function requireRole(role: string) {
@@ -54,3 +76,16 @@ export async function hasPermission(permission: string): Promise<boolean> {
   if (user.roles?.includes("super_admin")) return true;
   return user.permissions?.includes(permission) ?? false;
 }
+
+/**
+ * Non-throwing check if user holds at least one of the specified permissions.
+ */
+export async function hasAnyPermission(permissions: string[]): Promise<boolean> {
+  const session = await auth();
+  const user = session?.user;
+  if (!user || user.isActive === false) return false;
+  if (user.roles?.includes("super_admin")) return true;
+  const userPerms = user.permissions ?? [];
+  return permissions.some((permission) => userPerms.includes(permission));
+}
+

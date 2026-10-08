@@ -10,31 +10,39 @@ import { requestApprovalIfConfigured } from "@/lib/services/approval-workflow.se
 import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook"
 import { approveOvertime } from "@/actions/hrm.actions"
 import { assertCSRF } from "@/lib/security/csrf"
+import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 
 
-const MODULE_MAP: Record<string, { model: string; revalidate: string; permission: string }> = {
-  "penjualan/penawaran": { model: "quotation", revalidate: "/penjualan/penawaran", permission: "approve_quotations" },
-  "penjualan/pesanan": { model: "salesOrder", revalidate: "/penjualan/pesanan", permission: "approve_sales_orders" },
-  "penjualan/faktur": { model: "salesInvoice", revalidate: "/penjualan/faktur", permission: "approve_sales_invoices" },
-  "pembelian/permintaan": { model: "purchaseRequest", revalidate: "/pembelian/permintaan", permission: "approve_purchase_requests" },
-  "pembelian/pesanan": { model: "purchaseOrder", revalidate: "/pembelian/pesanan", permission: "approve_purchase_orders" },
-  "pembelian/tagihan": { model: "vendorBill", revalidate: "/pembelian/tagihan", permission: "approve_vendor_bills" },
-  "sdm/cuti": { model: "leaveRequest", revalidate: "/sdm/cuti", permission: "approve_leave_requests" },
-  "sdm/lembur": { model: "overtimeRequest", revalidate: "/sdm/lembur", permission: "approve_overtime_requests" },
-  "sdm/pinjaman": { model: "employeeLoan", revalidate: "/sdm/pinjaman", permission: "create_loans" },
+/**
+ * Module slug -> Prisma delegate + revalidate path + approval reference type.
+ * The permission is NOT stored here: it is derived from
+ * APPROVAL_REFERENCE_PERMISSIONS[modelType] so the status-button route and
+ * approveStep/rejectStep (the detail-page flow) can never drift apart.
+ */
+const MODULE_MAP: Record<string, { model: string; modelType: string; revalidate: string }> = {
+  "penjualan/penawaran": { model: "quotation", modelType: "Quotation", revalidate: "/penjualan/penawaran" },
+  "penjualan/pesanan": { model: "salesOrder", modelType: "SalesOrder", revalidate: "/penjualan/pesanan" },
+  "penjualan/faktur": { model: "salesInvoice", modelType: "SalesInvoice", revalidate: "/penjualan/faktur" },
+  "pembelian/permintaan": { model: "purchaseRequest", modelType: "PurchaseRequest", revalidate: "/pembelian/permintaan" },
+  "pembelian/pesanan": { model: "purchaseOrder", modelType: "PurchaseOrder", revalidate: "/pembelian/pesanan" },
+  "pembelian/tagihan": { model: "vendorBill", modelType: "VendorBill", revalidate: "/pembelian/tagihan" },
+  "sdm/cuti": { model: "leaveRequest", modelType: "LeaveRequest", revalidate: "/sdm/cuti" },
+  "sdm/lembur": { model: "overtimeRequest", modelType: "OvertimeRequest", revalidate: "/sdm/lembur" },
+  // EmployeeLoan approval/disbursement used to be gated by "create_loans",
+  // which let whoever raised a loan also approve + disburse it. The dedicated
+  // "approve_loans" permission (see approval-permissions.ts) separates them.
+  "sdm/pinjaman": { model: "employeeLoan", modelType: "EmployeeLoan", revalidate: "/sdm/pinjaman" },
 }
 
-const MODEL_TYPE_MAP: Record<string, string> = {
-  quotation: "Quotation",
-  salesOrder: "SalesOrder",
-  salesInvoice: "SalesInvoice",
-  purchaseRequest: "PurchaseRequest",
-  purchaseOrder: "PurchaseOrder",
-  vendorBill: "VendorBill",
-  leaveRequest: "LeaveRequest",
-  overtimeRequest: "OvertimeRequest",
-  employeeLoan: "EmployeeLoan",
-}
+/**
+ * Baseline status guard when no active approval workflow is configured.
+ * Extracted as a named constant so the manual approve/reject path and its
+ * parity test share one definition. "approved" is deliberately NOT in the
+ * list: once a document is approved the manual button no longer offers the
+ * action (see StatusActions), and re-running approve would re-fire side
+ * effects such as employee-loan disbursement.
+ */
+const STATUS_ALLOWED_FROM = ["pending", "draft", "sent"]
 
 export async function POST(
   _request: NextRequest,
@@ -65,10 +73,16 @@ export async function POST(
     return apiError("NOT_FOUND", "Modul tidak ditemukan")
   }
 
-  // Permission check — super_admin bypasses
+  // Permission check — super_admin bypasses. The permission is derived from
+  // the shared reference map so this route and approveStep/rejectStep cannot
+  // disagree about who may approve a given document type.
   const userRoles = session.user.roles as string[] | undefined
   const userPermissions = session.user.permissions as string[] | undefined
-  if (!userRoles?.includes("super_admin") && !userPermissions?.includes(config.permission)) {
+  const requiredPermission = APPROVAL_REFERENCE_PERMISSIONS[config.modelType]
+  if (!requiredPermission) {
+    return apiError("INTERNAL_ERROR", "Izin approval untuk modul ini belum dipetakan")
+  }
+  if (!userRoles?.includes("super_admin") && !userPermissions?.includes(requiredPermission)) {
     return apiError("FORBIDDEN", "Anda tidak memiliki izin untuk aksi ini")
   }
 
@@ -76,7 +90,7 @@ export async function POST(
     return apiError("BAD_REQUEST", "Aksi tidak valid")
   }
 
-  const modelType = MODEL_TYPE_MAP[config.model]
+  const modelType = config.modelType
 
   try {
     await assertCSRF()
@@ -162,7 +176,7 @@ export async function POST(
     if (config.model === "employeeLoan" && newStatus === Status.APPROVED) {
       newStatus = "active"
     }
-    const allowedFrom = ["pending", "draft", "sent"]
+    const allowedFrom = STATUS_ALLOWED_FROM
     const delegate = prisma[config.model as keyof typeof prisma] as any
 
     let result

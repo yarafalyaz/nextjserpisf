@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { ROUTE_PERMS } from "@/lib/auth/action-perms"
+import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
 import {
   ATTACHMENT_PERMISSION,
   ATTACHMENT_WRITE_PERMISSION,
@@ -74,7 +75,7 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
   })
 
   it("every requirePermission()/hasPermission() string exists as a seeded permission", () => {
-    const enforced = collect(/(?:requirePermission|hasPermission)\(\s*"([^"]+)"/g)
+    const enforced = collect(/(?:requirePermission|hasPermission)\(\s*["']([^"']+)["']/g)
     expect(enforced.size).toBeGreaterThan(100)
 
     const missing = [...enforced.entries()]
@@ -82,6 +83,34 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
       .map(([permission, files]) => `${permission} (${files.join(", ")})`)
 
     expect(missing, `Permission dipakai kode tapi tidak di-seed:\n${missing.join("\n")}`).toEqual([])
+  })
+
+  it("every permission passed to requireAnyPermission exists as a seeded permission", () => {
+    const found = new Map<string, string[]>()
+    for (const file of walk(join(ROOT, "src"))) {
+      const source = readFileSync(file, "utf8")
+      for (const callMatch of source.matchAll(/requireAnyPermission\(\s*\[([\s\S]*?)\]\s*\)/g)) {
+        for (const m of callMatch[1].matchAll(/["']([^"']+)["']/g)) {
+          const value = m[1]
+          const relative = file.slice(ROOT.length + 1)
+          found.set(value, [...(found.get(value) ?? []), relative])
+        }
+      }
+      for (const declMatch of source.matchAll(/(?:const|let)\s+([A-Za-z0-9_]+PERMISSIONS?)\s*(?::\s*string\[\])?\s*=\s*\[([\s\S]*?)\]/g)) {
+        for (const m of declMatch[2].matchAll(/["']([^"']+)["']/g)) {
+          const value = m[1]
+          const relative = file.slice(ROOT.length + 1)
+          found.set(value, [...(found.get(value) ?? []), relative])
+        }
+      }
+    }
+    expect(found.size).toBeGreaterThan(10)
+
+    const missing = [...found.entries()]
+      .filter(([permission]) => !seededPermissions.has(permission))
+      .map(([permission, files]) => `${permission} (${files.join(", ")})`)
+
+    expect(missing, `Permission requireAnyPermission tapi tidak di-seed:\n${missing.join("\n")}`).toEqual([])
   })
 
   it("every requireRole()/hasRole() string exists as a seeded role", () => {
@@ -135,5 +164,25 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
       .map(([permission, sources]) => `${permission} (${sources.join(", ")})`)
 
     expect(missing, `Permission registry tapi tidak di-seed:\n${missing.join("\n")}`).toEqual([])
+  })
+
+  it("every permission in APPROVAL_REFERENCE_PERMISSIONS exists as a seeded permission", () => {
+    // Approve/reject for a document type is gated by
+    // APPROVAL_REFERENCE_PERMISSIONS[modelType] in BOTH approval.actions.ts and
+    // the status-button route. An unseeded value there means no non-super-admin
+    // can ever approve that document type (fail-closed) - exactly the bug class
+    // this file guards.
+    const missing = Object.entries(APPROVAL_REFERENCE_PERMISSIONS)
+      .filter(([, permission]) => !seededPermissions.has(permission))
+      .map(([modelType, permission]) => `${permission} (${modelType})`)
+
+    expect(missing, `Permission approval tapi tidak di-seed:\n${missing.join("\n")}`).toEqual([])
+  })
+
+  it("employee loans are approved under a permission separate from create_loans", () => {
+    // Separation of duties: raising a loan must not imply approving/disbursing
+    // it. Pin the split so it cannot silently regress to create_loans.
+    expect(APPROVAL_REFERENCE_PERMISSIONS.EmployeeLoan).toBe("approve_loans")
+    expect(APPROVAL_REFERENCE_PERMISSIONS.EmployeeLoan).not.toBe("create_loans")
   })
 })

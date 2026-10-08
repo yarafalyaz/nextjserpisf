@@ -16,8 +16,10 @@ vi.mock("next/navigation", () => ({
 import {
   requireAuth,
   requirePermission,
+  requireAnyPermission,
   requireRole,
   hasPermission,
+  hasAnyPermission,
 } from "@/lib/auth/permissions";
 
 describe("auth/permissions", () => {
@@ -150,4 +152,76 @@ describe("auth/permissions", () => {
       expect(await hasPermission("edit_items")).toBe(false);
     });
   });
+
+  describe("requireAnyPermission", () => {
+    it("returns user when they hold at least one of the permissions", async () => {
+      const user = { id: "1", roles: ["staff"], permissions: ["view_items"], isActive: true };
+      mocks.auth.mockResolvedValue({ user });
+
+      expect(await requireAnyPermission(["view_customers", "view_items"])).toBe(user);
+    });
+
+    it("bypasses check for super_admin", async () => {
+      const user = { id: "1", roles: ["super_admin"], permissions: [], isActive: true };
+      mocks.auth.mockResolvedValue({ user });
+
+      expect(await requireAnyPermission(["anything", "else"])).toBe(user);
+    });
+
+    it("throws (redirects to /) when user lacks all required permissions", async () => {
+      const user = { id: "1", roles: ["staff"], permissions: ["view_warehouses"], isActive: true };
+      mocks.auth.mockResolvedValue({ user });
+
+      await expect(
+        requireAnyPermission(["view_customers", "view_items"])
+      ).rejects.toThrow("Redirected to /");
+    });
+
+    it("throws when unauthenticated", async () => {
+      mocks.auth.mockResolvedValue(null);
+      await expect(
+        requireAnyPermission(["view_customers"])
+      ).rejects.toThrow("Redirected to /login");
+    });
+  });
+
+  describe("hasAnyPermission", () => {
+    it("returns true when user has at least one permission", async () => {
+      mocks.auth.mockResolvedValue({
+        user: { id: "1", roles: ["staff"], permissions: ["view_items"], isActive: true },
+      });
+
+      expect(await hasAnyPermission(["view_customers", "view_items"])).toBe(true);
+    });
+
+    it("returns true for super_admin regardless of permissions", async () => {
+      mocks.auth.mockResolvedValue({
+        user: { id: "1", roles: ["super_admin"], permissions: [], isActive: true },
+      });
+
+      expect(await hasAnyPermission(["anything", "else"])).toBe(true);
+    });
+
+    it("returns false when user lacks all permissions", async () => {
+      mocks.auth.mockResolvedValue({
+        user: { id: "1", roles: ["staff"], permissions: ["view_warehouses"], isActive: true },
+      });
+
+      expect(await hasAnyPermission(["view_customers", "view_items"])).toBe(false);
+    });
+
+    it("returns false when unauthenticated", async () => {
+      mocks.auth.mockResolvedValue(null);
+      expect(await hasAnyPermission(["view_items"])).toBe(false);
+    });
+
+    it("returns false when user is inactive", async () => {
+      mocks.auth.mockResolvedValue({
+        user: { id: "1", roles: ["super_admin"], permissions: [], isActive: false },
+      });
+
+      expect(await hasAnyPermission(["view_items"])).toBe(false);
+    });
+  });
 });
+
