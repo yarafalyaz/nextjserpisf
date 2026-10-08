@@ -177,25 +177,31 @@ export async function getLeaveQuota(
   const db = opts.db ?? prisma
   const now = opts.now ?? new Date()
   const year = opts.year ?? now.getFullYear()
+  // Tenure is judged as of the END of the reported year (or `now` when the year
+  // being reported IS the current year), so a historical/other-year quota is
+  // evaluated with the tenure the employee actually had then — not today's.
+  // Using `now` made `?tahun=2024` grant 12 days to employees not yet 1-year
+  // eligible in 2024, and deny it to those who were.
+  const asOf = year < now.getFullYear() ? new Date(year, 11, 31) : now
 
   const employee = await db.employee.findUnique({
     where: { id: employeeId },
     select: { joinDate: true },
   })
 
-  // Tenure: eligible iff joined on or before one year ago.
+  // Tenure: eligible iff joined on or before one year before `asOf`.
   let eligible = false
   let tenureMonths = 0
   if (employee?.joinDate) {
     const join = new Date(employee.joinDate)
-    const oneYearAgo = new Date(now)
-    oneYearAgo.setFullYear(now.getFullYear() - 1)
+    const oneYearAgo = new Date(asOf)
+    oneYearAgo.setFullYear(asOf.getFullYear() - 1)
     eligible = join.getTime() <= oneYearAgo.getTime()
     tenureMonths = Math.max(
       0,
-      (now.getFullYear() - join.getFullYear()) * 12 +
-        (now.getMonth() - join.getMonth()) -
-        (now.getDate() < join.getDate() ? 1 : 0),
+      (asOf.getFullYear() - join.getFullYear()) * 12 +
+        (asOf.getMonth() - join.getMonth()) -
+        (asOf.getDate() < join.getDate() ? 1 : 0),
     )
   }
 

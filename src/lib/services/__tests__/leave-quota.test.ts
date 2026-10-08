@@ -119,6 +119,20 @@ describe("getLeaveQuota — tenure eligibility", () => {
     const q = await getLeaveQuota(1)
     expect(q.eligible).toBe(true)
   })
+
+  it("judges tenure as of the reported YEAR, not today", async () => {
+    // now = 2026-06-16. Re-reporting a PAST year must use that year's tenure,
+    // not today's — the bug built every year's `eligible` from `now`.
+    vi.mocked(prisma.employee.findUnique).mockResolvedValue({
+      joinDate: new Date("2026-01-01"),
+    } as any)
+    // Reported year 2024: employee had not even joined => NOT eligible.
+    const pastQuota = await getLeaveQuota(1, { year: 2024 })
+    expect(pastQuota.eligible).toBe(false)
+    // Current year (2026) judged at today (2026-06-16, ~5.5 months) => not eligible.
+    const nowQuota = await getLeaveQuota(1)
+    expect(nowQuota.eligible).toBe(false)
+  })
 })
 
 describe("getLeaveQuota — usage accounting", () => {

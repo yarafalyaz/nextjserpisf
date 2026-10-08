@@ -35,6 +35,7 @@ import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accountin
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
+import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 
 
 // ==================== LEAVE REQUEST ACTIONS ====================
@@ -120,10 +121,18 @@ export async function createLeaveRequest(formData: FormData) {
             "Cuti tahunan hanya untuk karyawan dengan masa kerja minimal 1 tahun.",
           );
         }
+        // Clip the request to the quota year before counting so a leave that
+        // straddles Dec→Jan is charged to the start year only for its days IN
+        // that year — exactly how getLeaveQuota accounts for `used`. Without the
+        // clip the gate charged the WHOLE straddling leave to the start year
+        // while the balance dashboard charged only the start-year portion, so a
+        // valid year-end request was rejected as over-quota.
+        const quotaYearStart = new Date(quotaYear, 0, 1);
+        const quotaYearEnd = new Date(quotaYear, 11, 31);
         const requestedDays = await countLeaveWorkingDays(
           employeeId,
-          startDate,
-          endDate,
+          startDate > quotaYearStart ? startDate : quotaYearStart,
+          endDate < quotaYearEnd ? endDate : quotaYearEnd,
           tx,
         );
         if (requestedDays === 0) {
@@ -463,14 +472,14 @@ async function computePayrollEstimation(
         where: {
           employeeId,
           status: "approved",
-          date: { gte: startDate, lte: endDate },
+          date: { gte: startDate, lt: endOfUtcDayExclusive(endDate) },
         },
       }),
       // 3. Appreciation
       prisma.appreciation.findMany({
         where: {
           employeeId,
-          date: { gte: startDate, lte: endDate },
+          date: { gte: startDate, lt: endOfUtcDayExclusive(endDate) },
         },
       }),
       // 4. Late Deduction
@@ -671,13 +680,13 @@ async function computeBulkPayrollEstimations(
       where: {
         employeeId: { in: employeeIds },
         status: "approved",
-        date: { gte: startDate, lte: endDate },
+        date: { gte: startDate, lt: endOfUtcDayExclusive(endDate) },
       },
     }),
     prisma.appreciation.findMany({
       where: {
         employeeId: { in: employeeIds },
-        date: { gte: startDate, lte: endDate },
+        date: { gte: startDate, lt: endOfUtcDayExclusive(endDate) },
       },
     }),
     prisma.attendance.findMany({
@@ -1989,10 +1998,14 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
             "Cuti tahunan hanya untuk karyawan dengan masa kerja minimal 1 tahun.",
           );
         }
+        // Clip to the quota year (same reasoning as createLeaveRequest): the gate
+        // must charge only the days within the start year, matching `used`.
+        const quotaYearStart = new Date(quotaYear, 0, 1);
+        const quotaYearEnd = new Date(quotaYear, 11, 31);
         const requestedDays = await countLeaveWorkingDays(
           employeeId,
-          startDate,
-          endDate,
+          startDate > quotaYearStart ? startDate : quotaYearStart,
+          endDate < quotaYearEnd ? endDate : quotaYearEnd,
           tx,
         );
         if (requestedDays === 0) {
