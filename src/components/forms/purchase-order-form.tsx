@@ -392,7 +392,7 @@ export function PurchaseOrderForm({
             <input
               id="paymentTerm"
               {...register("paymentTerm")}
-              className="form-input disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted-foreground"
+              className="form-input disabled:cursor-not-allowed disabled:bg-surface-secondary disabled:text-muted-foreground"
               placeholder="Mis. Net 30, COD..."
               readOnly={Boolean(vendorTerm) && termLocked}
               disabled={Boolean(vendorTerm) && termLocked}

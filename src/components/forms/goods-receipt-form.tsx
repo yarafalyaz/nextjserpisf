@@ -92,6 +92,9 @@ interface GRItemRow {
   qty: number;
   unitCost: number;
   qtyOrdered: number;
+  // Qty already received on prior verified/draft receipts — used to show the
+  // remaining-to-receive so the operator doesn't have to do the math.
+  qtyReceivedBefore: number;
   // PO net unit price (line total / ordered qty) — the landed-cost weight basis,
   // mirroring landed-cost.service so the preview matches the posted value.
   poNetUnitPrice: number;
@@ -104,6 +107,7 @@ interface GRItemRow {
   serialNumbers: string;
   // metadata
   name: string;
+  sku: string;
   trackBatch: boolean;
   trackSerial: boolean;
   unitOfMeasure: string;
@@ -124,6 +128,7 @@ function mapPoToRows(
       qty: Number(item.qty) - Number(item.receivedQty || 0),
       unitCost: Number(item.unitPrice),
       qtyOrdered: Number(item.qty),
+      qtyReceivedBefore: Number(item.receivedQty || 0),
       poNetUnitPrice: Number(item.qty) > 0 ? netTotal / Number(item.qty) : 0,
       warehouseId: item.item?.defaultWarehouseId
         ? String(item.item.defaultWarehouseId)
@@ -137,6 +142,7 @@ function mapPoToRows(
       expiryDate: "",
       serialNumbers: "",
       name: item.item?.name ?? `Item #${item.itemId}`,
+      sku: item.item?.sku ?? "",
       trackBatch: item.item?.trackBatch ?? false,
       trackSerial: item.item?.trackSerial ?? false,
       unitOfMeasure: item.item?.unitOfMeasure ?? "PCS",
@@ -168,6 +174,7 @@ function mapReceiptToRows(
       qty: ri.qty,
       unitCost: ri.unitCost,
       qtyOrdered: poItem ? Number(poItem.qty) : ri.qty,
+      qtyReceivedBefore: Number(poItem?.receivedQty || 0),
       poNetUnitPrice:
         poItem && Number(poItem.qty) > 0 ? netTotal / Number(poItem.qty) : 0,
       warehouseId: ri.warehouseId ? String(ri.warehouseId) : "",
@@ -178,6 +185,7 @@ function mapReceiptToRows(
       expiryDate: ri.expiryDate,
       serialNumbers: ri.serialNumbers,
       name: poItem?.item?.name ?? `Item #${ri.itemId}`,
+      sku: poItem?.item?.sku ?? "",
       trackBatch: poItem?.item?.trackBatch ?? false,
       trackSerial: poItem?.item?.trackSerial ?? false,
       unitOfMeasure: poItem?.item?.unitOfMeasure ?? "PCS",
@@ -448,24 +456,29 @@ export function GoodsReceiptForm({
             columns={1}
             description="HPP per unit dihitung dari harga beli + bagian ongkir − bagian diskon. Angka ini yang akan masuk ke layer FIFO saat penerimaan diverifikasi."
           >
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-default">
               <table
-                className="w-full border-collapse min-w-[1200px]"
+                className="w-full border-collapse min-w-[1180px]"
                 style={{ fontSize: "0.8125rem" }}
               >
                 <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th className="text-right">Qty Dipesan</th>
-                    <th className="text-right">Sisa</th>
-                    <th>Satuan</th>
-                    <th className="text-right">Harga Beli</th>
-                    <th className="text-right">Bagian Ongkir</th>
-                    <th className="text-right">Bagian Diskon</th>
-                    <th className="text-right">HPP/Unit</th>
-                    <th>Gudang (per item)</th>
-                    <th>Rak</th>
-                    <th>Baris</th>
+                  <tr className="bg-surface-secondary align-bottom">
+                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "220px" }}>Item</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>Dipesan</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>Sisa</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>Qty Terima</th>
+                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ width: "110px" }}>Satuan</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>Harga Beli</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "110px" }}>
+                      Ongkir<span className="block text-[0.625rem] font-normal text-muted-foreground">+ per unit</span>
+                    </th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "110px" }}>
+                      Diskon<span className="block text-[0.625rem] font-normal text-muted-foreground">− per unit</span>
+                    </th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>HPP/Unit</th>
+                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "150px" }}>Gudang</th>
+                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "140px" }}>Rak</th>
+                    <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "140px" }}>Baris</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -489,13 +502,48 @@ export function GoodsReceiptForm({
                       Number(row.unitCost || 0) + chargePerUnit - discountPerUnit;
                     return (
                       <React.Fragment key={row.itemId}>
-                        <tr>
-                          <td>{row.name}</td>
-                          <td className="text-right">{row.qtyOrdered}</td>
-                          <td className="text-right font-medium">
-                            {row.qty} {row.uom || row.unitOfMeasure}
+                        <tr className="border-t border-default align-middle">
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-medium text-foreground">
+                                {row.name}
+                              </span>
+                              {row.sku && (
+                                <span className="font-mono text-xs text-muted-foreground">
+                                  {row.sku}
+                                </span>
+                              )}
+                            </div>
                           </td>
-                          <td>
+                          <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
+                            {row.qtyOrdered}
+                          </td>
+                          <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
+                            {Math.max(row.qtyOrdered - row.qtyReceivedBefore, 0)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <input
+                              type="number"
+                              min={0}
+                              max={Math.max(
+                                row.qtyOrdered - row.qtyReceivedBefore,
+                                0,
+                              )}
+                              step="any"
+                              value={row.qty}
+                              onChange={(e) =>
+                                updateItem(index, {
+                                  qty: Number(e.target.value),
+                                })
+                              }
+                              className="form-input w-full text-right tabular-nums"
+                              style={{
+                                fontSize: "0.8125rem",
+                                padding: "6px 8px",
+                              }}
+                            />
+                          </td>
+                          <td className="py-2.5 px-3">
                             {hasConversions ? (
                               <Combobox
                                 value={row.uom || null}
@@ -515,23 +563,23 @@ export function GoodsReceiptForm({
                               </span>
                             )}
                           </td>
-                          <td className="text-right tabular-nums">
+                          <td className="py-2.5 px-3 text-right tabular-nums">
                             {formatCurrency(Number(row.unitCost || 0))}
                           </td>
-                          <td className="text-right tabular-nums text-muted-foreground">
+                          <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                             {chargePerUnit > 0
                               ? `+ ${formatCurrency(chargePerUnit)}`
                               : "—"}
                           </td>
-                          <td className="text-right tabular-nums text-muted-foreground">
+                          <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                             {discountPerUnit > 0
                               ? `− ${formatCurrency(discountPerUnit)}`
                               : "—"}
                           </td>
-                          <td className="text-right tabular-nums font-medium">
+                          <td className="py-2.5 px-3 text-right tabular-nums font-semibold text-foreground">
                             {formatCurrency(hppPerUnit)}
                           </td>
-                          <td>
+                          <td className="py-2.5 px-3">
                             <Combobox
                               value={row.warehouseId || null}
                               onChange={(key) =>
@@ -552,7 +600,7 @@ export function GoodsReceiptForm({
                               className="w-full"
                             />
                           </td>
-                          <td>
+                          <td className="py-2.5 px-3">
                             <Combobox
                               value={row.rackId || null}
                               onChange={(key) =>
@@ -578,7 +626,7 @@ export function GoodsReceiptForm({
                               disabled={!(row.warehouseId || warehouseId)}
                             />
                           </td>
-                          <td>
+                          <td className="py-2.5 px-3">
                             <Combobox
                               value={row.rackRowId || null}
                               onChange={(key) =>
@@ -597,9 +645,9 @@ export function GoodsReceiptForm({
                           </td>
                         </tr>
                         {(row.trackBatch || row.trackSerial) && (
-                          <tr>
-                            <td colSpan={11} style={{ paddingBottom: "12px" }}>
-                              <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/30 p-3">
+                          <tr className="border-t border-default bg-surface-secondary/50">
+                            <td colSpan={12} className="px-3 pb-3 pt-1">
+                              <div className="flex flex-col gap-3 rounded-md border border-default bg-surface p-3">
                                 {row.trackBatch && (
                                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="flex flex-col gap-1.5">
@@ -673,35 +721,35 @@ export function GoodsReceiptForm({
               </table>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <div className="rounded-md border border-border bg-muted/30 p-3">
+              <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Ongkir Terserap</p>
-                <p className="text-sm font-medium tabular-nums text-foreground">
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
                   {formatCurrency(landedPreview.shippingCost)}
                 </p>
               </div>
-              <div className="rounded-md border border-border bg-muted/30 p-3">
+              <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Biaya Lain</p>
-                <p className="text-sm font-medium tabular-nums text-foreground">
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
                   {formatCurrency(landedPreview.otherCost)}
                 </p>
               </div>
-              <div className="rounded-md border border-border bg-muted/30 p-3">
+              <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Admin Bank</p>
-                <p className="text-sm font-medium tabular-nums text-foreground">
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
                   {formatCurrency(landedPreview.adminFee)}
                 </p>
               </div>
-              <div className="rounded-md border border-border bg-muted/30 p-3">
+              <div className="rounded-lg border border-default bg-surface-secondary p-3">
                 <p className="text-xs text-muted-foreground">Diskon Terserap</p>
-                <p className="text-sm font-medium tabular-nums text-foreground">
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-foreground">
                   {formatCurrency(landedPreview.discount)}
                 </p>
               </div>
-              <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
                 <p className="text-xs text-muted-foreground">
                   Total Masuk HPP
                 </p>
-                <p className="text-sm font-semibold tabular-nums text-foreground">
+                <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
                   {formatCurrency(landedPreview.absorbed)}
                 </p>
               </div>
