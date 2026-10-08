@@ -180,6 +180,7 @@ describe("Account Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("updateAccount succeeds", async () => {
+    mocks.prismaMock.account.findUnique.mockResolvedValueOnce({ code: "TEST", normalBalance: "DEBIT" })
     const res = await actions.updateAccount(1, fdMap({ name: "test", code: "test", type: "ASSET", rate: "10" }))
     expect(res?.success).toBe(true)
   })
@@ -1056,6 +1057,39 @@ describe('Coverage Hardening Edge Cases', () => {
     mocks.prismaMock.account.findUnique.mockResolvedValueOnce(null)
     const res = await actions.updateAccount(1, fdMap({ name: "A", type: "ASSET" }))
     expect(res?.success).toBe(false)
+  })
+
+  it('updateAccount - preserves normalBalance when the form omits it', async () => {
+    // The AccountForm previously didn't render the normal-balance select, so an
+    // edit submitted without it. The action must carry the stored value forward
+    // instead of nulling it (which misclassifies the account in every report).
+    mocks.prismaMock.account.findUnique.mockResolvedValueOnce({ code: "1000", normalBalance: "DEBIT" })
+    const res = await actions.updateAccount(1, fdMap({ name: "Kas", code: "1000", type: "ASSET" }))
+    expect(res?.success).toBe(true)
+    const updateArg = mocks.prismaMock.account.update.mock.calls.at(-1)?.[0]
+    expect(updateArg.data.normalBalance).toBe("DEBIT")
+  })
+
+  it('updateItemCategory - preserves parentId and costingMethod when the form omits them', async () => {
+    // The edit form renders only name/description. Blindly writing parentId=null
+    // / costingMethod="average" would flatten the hierarchy and flip a FIFO
+    // category to average on every save.
+    const res = await actions.updateItemCategory(1, fdMap({ name: "Kategori" }))
+    expect(res?.success).toBe(true)
+    const updateArg = mocks.prismaMock.itemCategory.update.mock.calls.at(-1)?.[0]
+    expect(updateArg.data).not.toHaveProperty("parentId")
+    expect(updateArg.data).not.toHaveProperty("costingMethod")
+    expect(updateArg.data.name).toBe("Kategori")
+  })
+
+  it('deleteTax - refuses when the tax is still a member of a tax group', async () => {
+    // tax_group_taxes.tax_id has no FK, so a hard delete would silently orphan
+    // the group row. The action must guard on membership explicitly.
+    mocks.prismaMock.taxGroupTax.count.mockResolvedValueOnce(2)
+    const res = await actions.deleteTax(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/kelompok pajak/i)
+    expect(mocks.prismaMock.tax.delete).not.toHaveBeenCalled()
   })
 
 })

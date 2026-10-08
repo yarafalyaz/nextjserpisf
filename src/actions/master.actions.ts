@@ -1007,14 +1007,25 @@ export async function updateItemCategory(id: number, formData: FormData) {
   try {
     await requirePermission("edit_item_categories");
 
+    // Only write the hierarchy/valuation fields when the form actually submits
+    // them. The edit form renders only name + description, so blindly writing
+    // `parentId: safeNumber(null)` / `costingMethod: "" || "average"` would wipe
+    // the category's parent (flattening the tree) and flip a FIFO category to
+    // "average" on every save — silently changing HPP valuation for its items.
+    const data: Record<string, unknown> = {
+      name: requireString(formData.get("name"), "name"),
+      description: formData.get("description") as string | null,
+    };
+    if (formData.has("parentId")) {
+      data.parentId = safeNumber(formData.get("parentId"));
+    }
+    if (formData.has("costingMethod")) {
+      data.costingMethod = (formData.get("costingMethod") as string) || "average";
+    }
+
     await prisma.itemCategory.update({
       where: { id },
-      data: {
-        name: requireString(formData.get("name"), "name"),
-        description: formData.get("description") as string | null,
-        parentId: safeNumber(formData.get("parentId")),
-        costingMethod: (formData.get("costingMethod") as string) || "average",
-      },
+      data,
     });
 
     revalidatePath("/master/kategori-barang");
@@ -1907,6 +1918,18 @@ export async function deleteTax(id: number) {
   try {
     await requirePermission("delete_taxes");
 
+    // tax_group_taxes.tax_id has NO foreign key (only tax_group_id does), so a
+    // hard delete would NOT raise P2003 and would leave the group row pointing at
+    // a non-existent tax — the group then renders a blank/broken line. Guard on
+    // memberships explicitly before attempting the delete.
+    const usedInGroups = await prisma.taxGroupTax.count({ where: { taxId: id } });
+    if (usedInGroups > 0) {
+      return {
+        success: false,
+        error: `Pajak masih dipakai di ${usedInGroups} kelompok pajak. Hapus dari kelompok terlebih dahulu.`,
+      };
+    }
+
     // Tax has a deletedAt column; fall back to soft-delete on FK conflict
     // (e.g. when referenced by a TaxGroup line) to mirror the convention
     // used by deleteCustomer / deleteVendor / deleteItem.
@@ -2002,28 +2025,36 @@ export async function updateAccount(id: number, formData: FormData) {
     // user clears the field would corrupt the audit trail and break references
     // to this account in historical journal entries. Read the current code from
     // the DB and preserve it if the form sent nothing usable.
+    //
+    // normalBalance (report classification) is preserved the same way when the
+    // submitted form omits it — nulling it silently misclassifies the account in
+    // the trial balance / P&L / balance sheet. Both fallbacks share one lookup.
     const submittedCode = v.code?.trim() || null;
-    let code: string;
-    if (!submittedCode) {
+    let code = submittedCode;
+    let normalBalance: "DEBIT" | "CREDIT" | null = v.normalBalance ?? null;
+    if (!submittedCode || normalBalance == null) {
       const current = await prisma.account.findUnique({
         where: { id },
-        select: { code: true },
+        select: { code: true, normalBalance: true },
       });
       if (!current) throw new Error("Akun tidak ditemukan");
-      code = current.code;
-    } else {
-      code = submittedCode;
+      if (!submittedCode) code = current.code;
+      if (normalBalance == null) {
+        normalBalance = (current.normalBalance as "DEBIT" | "CREDIT" | null) ?? null;
+      }
     }
+    // `code` is always set by this point (submitted, or read from the record).
+    const finalCode = code as string;
 
     const account = await prisma.account.update({
       where: { id },
       data: {
-        code,
+        code: finalCode,
         name: v.name,
         type: v.type,
         parentId: v.parentId ?? null,
         description: v.description ?? null,
-        normalBalance: v.normalBalance ?? null,
+        normalBalance,
       },
     });
 

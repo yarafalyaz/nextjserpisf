@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 interface AccountFormProps {
   accounts: { id: number; code: string; name: string
 }[]
-  account?: { id: number; code: string; name: string; type: string; parentId?: number | null; description?: string | null }
+  account?: { id: number; code: string; name: string; type: string; parentId?: number | null; description?: string | null; normalBalance?: string | null }
   generatedCode?: string
 }
 
@@ -86,6 +86,7 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
             id="normalBalance"
             name="normalBalance"
             placeholder="Pilih Saldo Normal"
+            defaultValue={account?.normalBalance ?? null}
             options={[
               { value: "DEBIT", label: "Debit" },
               { value: "CREDIT", label: "Kredit" },
