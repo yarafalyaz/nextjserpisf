@@ -202,6 +202,7 @@ export const navigation: NavItem[] = [
       { label: "Valuasi Stok", href: "/laporan/valuasi-stok", icon: Package, permission: "view_reports" },
       { label: "Mutasi Stok", href: "/laporan/mutasi-stok", icon: ArrowLeftRight, permission: "view_reports" },
       { label: "Ringkasan Persediaan", href: "/laporan/ringkasan-stok", icon: BarChart3, permission: "view_reports" },
+      { label: "Rekonsiliasi Stok", href: "/laporan/rekonsiliasi-stok", icon: Scale, permission: "view_reports" },
       { label: "Piutang Aging", href: "/laporan/piutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
       { label: "Hutang Aging", href: "/laporan/hutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
       { label: "Aging Inventaris", href: "/laporan/umur-stok", icon: Package, permission: "view_reports" },

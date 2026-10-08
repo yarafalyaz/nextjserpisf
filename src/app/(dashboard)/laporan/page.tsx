@@ -28,6 +28,7 @@ const reportsModules: ModuleItem[] = [
   { label: "Mutasi Stok", href: "/laporan/mutasi-stok", icon: ArrowLeftRight, desc: "Mutasi stok masuk/keluar" },
   { label: "Ringkasan Persediaan", href: "/laporan/ringkasan-stok", icon: BarChart3, desc: "Ringkasan & item kritis" },
   { label: "Umur Persediaan", href: "/laporan/umur-stok", icon: Package, desc: "Umur persediaan" },
+  { label: "Rekonsiliasi Stok", href: "/laporan/rekonsiliasi-stok", icon: Scale, desc: "Qty induk vs lapisan FIFO" },
   // Piutang & hutang
   { label: "Umur Piutang", href: "/laporan/piutang-jatuh-tempo", icon: Clock, desc: "Umur piutang" },
   { label: "Umur Hutang", href: "/laporan/hutang-jatuh-tempo", icon: Clock, desc: "Umur hutang" },
