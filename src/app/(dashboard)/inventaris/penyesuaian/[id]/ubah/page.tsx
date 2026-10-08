@@ -32,6 +32,7 @@ export default async function EditPage({
           actualQty: true,
           unitCost: true,
           notes: true,
+          serialNumbers: true,
         },
       },
     },
@@ -47,6 +48,7 @@ export default async function EditPage({
       newQty: Number(it.actualQty),
       unitCost: Number(it.unitCost),
       reason: it.notes ?? "",
+      serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers.map(String) : [],
     })),
   };
 
@@ -62,6 +64,7 @@ export default async function EditPage({
           name: true,
           qtyOnHand: true,
           cost: true,
+          trackSerial: true,
         },
       })
       .then((items) =>

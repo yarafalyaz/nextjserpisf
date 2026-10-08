@@ -14,7 +14,7 @@ export default async function CreateAdjustmentPage() {
 
   const [warehouses, items] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, qtyOnHand: true, cost: true } }),
+    prisma.item.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, sku: true, name: true, qtyOnHand: true, cost: true, trackSerial: true } }),
   ])
 
   return (

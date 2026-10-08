@@ -21,13 +21,17 @@ vi.mock("@/lib/services/inventory-fifo", () => ({
   consumeFifoLayers: mocks.consumeFifoLayers,
   createInLayer: mocks.createInLayer,
 }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: { $transaction: (fn: (t: unknown) => Promise<unknown>) => mocks.transaction(fn) },
 }))
 
 import { onTransferProcessed, onTransferReceived } from "@/lib/hooks/inventory-transfer.hook"
 
-function wireTx(transferItems: Array<{ itemId: number; qty: number }>, status = "draft") {
+function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number; serialNumbers?: unknown; batchAllocations?: unknown }>, status = "draft") {
+  const normalizedItems = transferItems.map((item, index) => ({ id: item.id ?? index + 1, ...item }))
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
     transferFindUniqueOrThrow: vi.fn().mockResolvedValue({
@@ -35,18 +39,32 @@ function wireTx(transferItems: Array<{ itemId: number; qty: number }>, status = 
       documentNo: "TRF-001",
       sourceWarehouseId: 1,
       destinationWarehouseId: 2,
-      status: status,
-      items: transferItems,
+      status,
+      items: normalizedItems,
     }),
-    moveFindFirst: vi.fn().mockResolvedValue(null), // no existing moves
+    moveFindFirst: vi.fn().mockResolvedValue(null),
     moveFindMany: vi.fn().mockResolvedValue([]),
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
+    transferItemUpdate: vi.fn().mockResolvedValue({}),
+    serialUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    batchFindMany: vi.fn().mockResolvedValue([]),
+    batchFindFirst: vi.fn().mockResolvedValue(null),
+    batchUpdate: vi.fn().mockResolvedValue({}),
+    batchCreate: vi.fn().mockResolvedValue({}),
     executeRaw: vi.fn().mockResolvedValue(1),
   }
   const tx = {
     $queryRaw: spies.queryRaw,
     $executeRaw: spies.executeRaw,
     inventoryTransfer: { findUniqueOrThrow: spies.transferFindUniqueOrThrow },
+    inventoryTransferItem: { update: spies.transferItemUpdate },
+    itemSerial: { updateMany: spies.serialUpdateMany },
+    itemBatch: {
+      findMany: spies.batchFindMany,
+      findFirst: spies.batchFindFirst,
+      update: spies.batchUpdate,
+      create: spies.batchCreate,
+    },
     stockMove: { findFirst: spies.moveFindFirst, findMany: spies.moveFindMany, create: spies.moveCreate },
   }
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
@@ -60,13 +78,13 @@ beforeEach(() => {
     Array.from({ length: count }, () => `SM-${++n}`),
   )
   // Cost differs per FIFO consume call to make drift detectable if dedup regressed.
-  mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 500, shortfall: 0 })
+  mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 500, shortfall: 0, consumedSerials: [], consumedBatches: [] })
 })
 
 describe("onTransferProcessed item aggregation", () => {
   it("creates exactly one OUT move per item when an item is listed on duplicate rows", async () => {
     // Item 7 appears twice (qty 3 + qty 2 = 5); item 8 once (qty 4).
-    const { spies, tx } = wireTx([
+    const { spies } = wireTx([
       { itemId: 7, qty: 3 },
       { itemId: 7, qty: 2 },
       { itemId: 8, qty: 4 },
@@ -92,6 +110,30 @@ describe("onTransferProcessed item aggregation", () => {
     )
     expect((out7![0] as { data: { qty: number; impact: string } }).data.qty).toBe(5)
     expect((out7![0] as { data: { impact: string } }).data.impact).toBe("OUT")
+  })
+
+  it("stores consumed batch and serial allocation once on the first duplicate item row", async () => {
+    const { spies } = wireTx([
+      { id: 41, itemId: 7, qty: 3 },
+      { id: 42, itemId: 7, qty: 2 },
+    ])
+    mocks.consumeFifoLayers.mockResolvedValueOnce({
+      consumedCost: 500,
+      shortfall: 0,
+      consumedSerials: ["SER-1"],
+      consumedBatches: [{ batchNumber: "LOT-A", warehouseId: 1, qty: 2 }],
+    })
+
+    await onTransferProcessed(100, 1)
+
+    expect(spies.transferItemUpdate).toHaveBeenCalledTimes(1)
+    expect(spies.transferItemUpdate).toHaveBeenCalledWith({
+      where: { id: 41 },
+      data: {
+        serialNumbers: ["SER-1"],
+        batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 1, qty: 2 }],
+      },
+    })
   })
 
   it("aggregates fractional duplicate rows without float drift (exact qty to FIFO)", async () => {
@@ -203,5 +245,62 @@ describe("onTransferReceived", () => {
     expect((layer7![1] as { unitCost: number }).unitCost).toBe(15)
     expect((layer7![1] as { stockMoveId: number }).stockMoveId).toBe(900)
     expect((layer7![1] as { warehouseId: number }).warehouseId).toBe(2) // destination
+  })
+  it("restores allocated serials and batches, splitting destination FIFO layers by lot", async () => {
+    const { spies } = wireTx([
+      {
+        id: 51,
+        itemId: 7,
+        qty: 3,
+        serialNumbers: ["SER-1"],
+        batchAllocations: [{ batchNumber: "LOT-A", warehouseId: 1, qty: 2 }],
+      },
+      { id: 52, itemId: 7, qty: 0 },
+    ], "processed")
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 900 })
+    spies.serialUpdateMany.mockResolvedValueOnce({ count: 1 })
+    spies.batchFindMany.mockResolvedValueOnce([
+      {
+        batchNumber: "LOT-A",
+        manufacturingDate: new Date("2025-01-01T00:00:00.000Z"),
+        expiryDate: new Date("2027-01-01T00:00:00.000Z"),
+        notes: "source lot",
+      },
+    ])
+
+    await onTransferReceived(100, 1)
+
+    expect(spies.serialUpdateMany).toHaveBeenCalledWith({
+      where: { itemId: 7, serialNumber: { in: ["SER-1"] }, status: "used" },
+      data: { status: "available", warehouseId: 2 },
+    })
+    expect(spies.batchCreate).toHaveBeenCalledWith({
+      data: {
+        itemId: 7,
+        warehouseId: 2,
+        batchNumber: "LOT-A",
+        qty: 2,
+        manufacturingDate: new Date("2025-01-01T00:00:00.000Z"),
+        expiryDate: new Date("2027-01-01T00:00:00.000Z"),
+        notes: "source lot",
+      },
+    })
+    expect(mocks.createInLayer).toHaveBeenCalledTimes(2)
+    expect(mocks.createInLayer).toHaveBeenCalledWith(expect.anything(), {
+      itemId: 7,
+      warehouseId: 2,
+      batchNumber: "LOT-A",
+      stockMoveId: 900,
+      qty: 2,
+      unitCost: 15,
+    })
+    expect(mocks.createInLayer).toHaveBeenCalledWith(expect.anything(), {
+      itemId: 7,
+      warehouseId: 2,
+      stockMoveId: 900,
+      qty: 1,
+      unitCost: 15,
+    })
   })
 })

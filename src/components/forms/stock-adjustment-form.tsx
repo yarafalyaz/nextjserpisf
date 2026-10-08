@@ -33,6 +33,7 @@ interface AdjustmentFormProps {
       newQty: number;
       unitCost: number;
       reason: string;
+      serialNumbers?: string[] | null;
     }>;
   };
   items: {
@@ -41,6 +42,7 @@ interface AdjustmentFormProps {
     name: string;
     qtyOnHand: string;
     cost: string;
+    trackSerial: boolean;
   }[];
 }
 
@@ -50,6 +52,7 @@ interface AdjItem {
   newQty: number;
   unitCost: number;
   reason: string;
+  serialNumbers: string;
 }
 
 export function StockAdjustmentForm({
@@ -71,14 +74,15 @@ export function StockAdjustmentForm({
           newQty: it.newQty,
           unitCost: it.unitCost,
           reason: it.reason ?? "",
+          serialNumbers: (it.serialNumbers ?? []).join("\n"),
         }))
-      : [{ itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "" }],
+      : [{ itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "", serialNumbers: "" }],
   );
 
   function addItem() {
     setAdjItems([
       ...adjItems,
-      { itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "" },
+      { itemId: 0, currentQty: 0, newQty: 0, unitCost: 0, reason: "", serialNumbers: "" },
     ]);
   }
 
@@ -110,7 +114,10 @@ export function StockAdjustmentForm({
         const formData = new FormData();
         formData.append("warehouseId", warehouseId);
         formData.append("date", toLocalDateOnly(new Date()));
-        formData.append("items", JSON.stringify(adjItems));
+        formData.append("items", JSON.stringify(adjItems.map((item) => ({
+          ...item,
+          serialNumbers: item.serialNumbers.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
+        }))));
         formData.append("type", type);
         const notesValue =
           (
@@ -233,6 +240,7 @@ export function StockAdjustmentForm({
                     <th className="text-left py-2 px-2 font-medium text-secondary">
                       Alasan
                     </th>
+                    <th className="text-left py-2 px-2 font-medium text-secondary">Nomor Seri</th>
                     <th style={{ width: "40px" }}></th>
                   </tr>
                 </thead>
@@ -279,13 +287,21 @@ export function StockAdjustmentForm({
                         <input
                           type="text"
                           value={item.reason}
-                          onChange={(e) =>
-                            updateItem(i, "reason", e.target.value)
-                          }
+                          onChange={(e) => updateItem(i, "reason", e.target.value)}
                           className="form-input"
                           style={{ fontSize: "0.8125rem", padding: "6px" }}
                           placeholder="Alasan"
                         />
+                      </td>
+                      <td className="py-2 px-2">
+                        {items.find((it) => it.id === item.itemId)?.trackSerial ? (
+                          <Textarea
+                            value={item.serialNumbers}
+                            onChange={(e) => updateItem(i, "serialNumbers", e.target.value)}
+                            placeholder="Satu nomor seri per baris"
+                            rows={2}
+                          />
+                        ) : null}
                       </td>
                       <td className="py-2 px-2 text-center">
                         {adjItems.length > 1 && (
