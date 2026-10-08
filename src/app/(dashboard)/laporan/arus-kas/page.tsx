@@ -84,6 +84,7 @@ export default async function CashFlowPage({
       accountId: { in: cashAccountIds },
       journal: {
         status: { in: ["POSTED", "REVERSED"] },
+        deletedAt: null,
         transactionDate: { gte: startDate, lte: endDate },
       },
     },

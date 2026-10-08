@@ -62,6 +62,7 @@ export default async function GeneralLedgerPage({
         accountId,
         journal: {
           status: { in: ['POSTED', 'REVERSED'] },
+          deletedAt: null,
           transactionDate: { gte: startDate, lte: endDate },
         },
       },

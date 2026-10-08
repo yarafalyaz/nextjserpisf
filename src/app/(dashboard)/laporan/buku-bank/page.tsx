@@ -55,7 +55,7 @@ export default async function BankBookPage({
     const openingEntries = await prisma.journalEntry.findMany({
       where: {
         accountId,
-        journal: { status: { in: ['POSTED', 'REVERSED'] }, transactionDate: { lt: startDate } },
+        journal: { status: { in: ['POSTED', 'REVERSED'] }, deletedAt: null, transactionDate: { lt: startDate } },
       },
     })
     openingBalance = openingEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0)
@@ -63,7 +63,7 @@ export default async function BankBookPage({
     const periodEntries = await prisma.journalEntry.findMany({
       where: {
         accountId,
-        journal: { status: { in: ['POSTED', 'REVERSED'] }, transactionDate: { gte: startDate, lte: endDate } },
+        journal: { status: { in: ['POSTED', 'REVERSED'] }, deletedAt: null, transactionDate: { gte: startDate, lte: endDate } },
       },
       include: {
         journal: { select: { journalNumber: true, transactionDate: true, description: true } },

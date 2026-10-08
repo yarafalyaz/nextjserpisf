@@ -39,6 +39,7 @@ export default async function BalanceSheetPage({
     where: {
       journal: {
         status: { in: ["POSTED", "REVERSED"] },
+        deletedAt: null,
         transactionDate: { lte: asOfDate },
       },
     },
