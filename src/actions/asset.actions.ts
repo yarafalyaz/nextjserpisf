@@ -169,10 +169,19 @@ export async function createAssetTransfer(formData: FormData) {
           },
         });
 
-        // Update asset location inside the same tx.
+        // Only drive the asset's current location from THIS transfer when it is
+        // the most recent transfer for the asset. A back-dated transfer inserted
+        // after a later move must not reset the asset's location to the OLDER
+        // destination — recompute from the latest transfer by (date, id). Mirrors
+        // updateAssetTransfer / deleteAssetTransfer.
+        const latestForAsset = await tx.assetTransfer.findFirst({
+          where: { assetId: data.assetId },
+          orderBy: [{ transferDate: "desc" }, { id: "desc" }],
+          select: { id: true, toLocation: true },
+        });
         await tx.asset.update({
           where: { id: data.assetId },
-          data: { location: data.toLocation },
+          data: { location: latestForAsset?.toLocation ?? data.toLocation },
         });
 
         return created;
@@ -608,7 +617,7 @@ export async function updateAsset(id: number, formData: FormData) {
     // freely. Mirrors the fail-closed GL guards on deleteAsset/disposeAsset.
     const existing = await prisma.asset.findUniqueOrThrow({
       where: { id },
-      select: { purchaseCost: true },
+      select: { purchaseCost: true, status: true },
     });
     if (Number(existing.purchaseCost) !== purchaseCost) {
       const acquisitionJournal = await prisma.journal.findFirst({
@@ -624,6 +633,20 @@ export async function updateAsset(id: number, formData: FormData) {
       }
     }
 
+    // Disposal MUST go through disposeAsset: it reverses the acquisition in the
+    // GL (Dr Akum. Penyusutan + Dr Kas + Cr Aset Tetap) and zeroes the book value.
+    // Setting status="disposed" here would flip the subledger without any of that — the
+    // asset keeps its book value forever, the GL stays on the books, and the
+    // depreciation cron (status:"active" only) silently stops. Refuse the transition.
+    const nextStatus = data.status || "active";
+    if (nextStatus === "disposed" && existing.status !== "disposed") {
+      return {
+        success: false,
+        error:
+          "Status 'Dilepas' hanya dapat diatur melalui aksi Pelepasan Aset agar jurnal GL ikut tercatat.",
+      };
+    }
+
     await prisma.asset.update({
       where: { id },
       data: {
@@ -634,7 +657,7 @@ export async function updateAsset(id: number, formData: FormData) {
         residualValue: data.residualValue ?? 0,
         depreciationMethod: data.depreciationMethod || "straight_line",
         location: data.location || null,
-        status: data.status || "active",
+        status: nextStatus,
         notes: data.description || null,
       },
     });
@@ -737,13 +760,24 @@ export async function disposeAsset(formData: FormData) {
         select: { id: true },
       });
 
-      if (
-        acquisitionJournal &&
-        gl.fixedAsset &&
-        gl.accumDep &&
-        gl.gainLoss &&
-        (proceeds === 0 || gl.cashBank)
-      ) {
+      // GL-integrated asset (acquisition posted): the disposal MUST post a
+      // balanced reversal. Previously an incomplete account mapping silently
+      // skipped the journal while the asset was already zeroed below → the GL
+      // kept the asset on the books forever with no reversing entry. Fail closed
+      // and roll back instead of half-disposing.
+      if (acquisitionJournal) {
+        const missing: string[] = [];
+        if (!gl.fixedAsset) missing.push("akun Aset Tetap");
+        if (!gl.accumDep) missing.push("akun Akumulasi Penyusutan");
+        if (!gl.gainLoss) missing.push("akun Laba/Rugi Pelepasan");
+        if (proceeds > 0 && !gl.cashBank) missing.push("akun Kas/Bank");
+        if (missing.length > 0) {
+          throw new Error(
+            `Akun pelepasan aset belum dipetakan: ${missing.join(", ")}. ` +
+              `Lengkapi pemetaan pada kategori aset / Pengaturan Akun sebelum melepas aset ini.`,
+          );
+        }
+
         // Pure helper builds the balanced double-entry set (unit-tested across
         // gain/loss/break-even/write-off branches) and asserts balance itself.
         const built = buildAssetDisposalEntries({

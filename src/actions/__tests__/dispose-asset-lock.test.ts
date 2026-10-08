@@ -107,4 +107,18 @@ describe("disposeAsset concurrency guard", () => {
     expect(result.success).toBe(false)
     expect(transactionMock).not.toHaveBeenCalled() // never enters the tx
   })
+
+  it("fails closed (rolls back) when a GL-integrated asset's disposal accounts are incomplete", async () => {
+    // Asset HAS an acquisition journal (GL-integrated) but no disposal accounts
+    // are mapped. Previously the journal was silently skipped while the asset was
+    // already zeroed — GL kept the asset forever. Must now throw and roll back.
+    journalFindFirstMock.mockResolvedValue({ id: 1 }) // acquisition journal exists
+    // assetCategory/systemSetting mocks resolve null → all GL accounts unmapped.
+
+    const result = await disposeAsset(new FormData())
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/belum dipetakan/i)
+    expect(journalCreateMock).not.toHaveBeenCalled()
+  })
 })

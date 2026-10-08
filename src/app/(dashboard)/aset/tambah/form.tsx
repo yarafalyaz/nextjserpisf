@@ -122,7 +122,6 @@ export function AssetForm({ categories, brands, asset, generatedCode }: AssetFor
             options={[
               { value: "active", label: "Aktif" },
               { value: "maintenance", label: "Pemeliharaan" },
-              { value: "disposed", label: "Dilepas" },
             ]}
           />
         </div>

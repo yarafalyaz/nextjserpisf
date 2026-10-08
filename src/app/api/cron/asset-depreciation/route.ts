@@ -36,6 +36,13 @@ export async function GET(request: Request) {
     const periodEnd = new Date(year, month - 1 + 1, 0) // Last day of current month
 
     // Find all active assets with depreciation info via category
+    //
+    // Period convention (explicit): an asset purchased at ANY point in a month
+    // starts depreciating in that SAME month, charged a full month (first
+    // depreciation dated the 1st). `purchaseDate: { lte: periodEnd }` therefore
+    // includes assets bought mid-month. This is a deliberate policy choice (common
+    // and simplest to reconcile); switch to a pro-rata or "month-after" policy by
+    // changing this bound AND the posting date below together.
     const assets = await prisma.asset.findMany({
       where: {
         status: "active",

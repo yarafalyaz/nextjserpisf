@@ -315,6 +315,23 @@ describe("Asset Transfer Actions", () => {
     })
   })
 
+  it("does not reset the asset location when a back-dated transfer is inserted after a later move", async () => {
+    // A newer transfer already moved the asset to "Site-B". Inserting an OLDER
+    // (back-dated) transfer to "HQ" must not reset the asset's current location
+    // back to the older destination — the latest transfer by (date,id) wins.
+    prismaMock.assetTransfer.findFirst.mockResolvedValue({ id: 99, toLocation: "Site-B" })
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-06-12",
+    }))
+    expect(res.success).toBe(true)
+    expect(prismaMock.asset.update).toHaveBeenCalledWith({
+      where: { id: 5 },
+      data: { location: "Site-B" },
+    })
+  })
+
   it("wraps transfer create + asset location update in $transaction for atomicity", async () => {
     await createAssetTransfer(fd({
       assetId: "5",
