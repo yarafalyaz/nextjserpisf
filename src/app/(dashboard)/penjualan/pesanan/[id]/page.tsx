@@ -10,6 +10,7 @@ import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor";
 import {
   DetailTable,
   DetailTableHead,
@@ -60,6 +61,35 @@ export default async function SalesOrderDetailPage({
     : [];
 
   const itemMap = new Map(dbItems.map((i) => [i.id, i]));
+
+  // Custom fabrication: the order's items stay editable until the customer
+  // actually pays. A down payment on a linked invoice is only an advance and
+  // does NOT lock the list — only a real (non-DP) payment does.
+  const realPaymentCount = await prisma.salesPayment.count({
+    where: {
+      NOT: { paymentMethod: "down_payment" },
+      salesInvoice: { salesOrderId: numId },
+    },
+  });
+  const orderItemsEditable =
+    order.status !== "cancelled" && order.status !== "completed" && realPaymentCount === 0;
+
+  // Items selectable in the editor (active catalogue).
+  const availableItems = orderItemsEditable
+    ? await prisma.item.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          price: true,
+          unitOfMeasure: true,
+          trackSerial: true,
+          uomConversions: { select: { code: true, factorToBase: true } },
+        },
+        orderBy: { name: "asc" },
+      })
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -134,57 +164,42 @@ export default async function SalesOrderDetailPage({
       </DetailCard>
 
       {/* Items */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            Item
-          </h2>
-        </div>
-        <div className="p-4 px-5">
-          <DetailTable>
-            <DetailTableHead>
-              <DetailTableTh>Produk</DetailTableTh>
-              <DetailTableTh>Deskripsi</DetailTableTh>
-              <DetailTableTh align="right">Jml</DetailTableTh>
-              <DetailTableTh align="right">Harga</DetailTableTh>
-              <DetailTableTh align="right">Diskon</DetailTableTh>
-              <DetailTableTh align="right">Total</DetailTableTh>
-            </DetailTableHead>
-            <DetailTableBody>
-              {order.items.map((item) => {
-                const matchedItem = item.itemId ? itemMap.get(item.itemId) : null;
-                return (
-                  <DetailTableRow key={item.id}>
-                    <DetailTableTd>
-                      {matchedItem ? (
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{matchedItem.name}</span>
-                          <span className="text-xs text-muted-foreground">{matchedItem.sku}</span>
-                        </div>
-                      ) : (
-                        `Item #${item.itemId}`
-                      )}
-                    </DetailTableTd>
-                    <DetailTableTd>{item.description || "-"}</DetailTableTd>
-                    <DetailTableTd align="right">
-                      {Number(item.qty)}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatCurrency(Number(item.unitPrice))}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatCurrency(Number(item.discount))}
-                    </DetailTableTd>
-                    <DetailTableTd align="right">
-                      {formatCurrency(Number(item.total))}
-                    </DetailTableTd>
-                  </DetailTableRow>
-                );
-              })}
-            </DetailTableBody>
-          </DetailTable>
-        </div>
-      </div>
+      <InvoiceItemsEditor
+        variant="order"
+        invoiceId={order.id}
+        customerId={order.customerId}
+        salesOrderId={order.id}
+        quotationId={order.quotationId ?? null}
+        date={order.date.toISOString().split("T")[0]}
+        taxRate={
+          Number(order.subtotal) - Number(order.discount) > 0
+            ? Math.round((Number(order.tax) / (Number(order.subtotal) - Number(order.discount))) * 100 * 100) / 100
+            : 0
+        }
+        discountTotal={Number(order.discount ?? 0)}
+        items={order.items.map((item) => ({
+          id: item.id,
+          itemId: item.itemId,
+          description: item.description || (item.itemId ? `Item #${item.itemId}` : null),
+          qty: Number(item.qty),
+          unitPrice: Number(item.unitPrice),
+          discount: Number(item.discount ?? 0),
+          total: Number(item.total),
+          uom: null,
+          serialNumbers: [],
+        }))}
+        availableItems={availableItems.map((i) => ({
+          id: i.id,
+          name: i.name,
+          sku: i.sku,
+          price: Number(i.price ?? 0),
+          unitOfMeasure: i.unitOfMeasure,
+          trackSerial: i.trackSerial,
+          uomConversions: i.uomConversions.map((c) => ({ code: c.code, factorToBase: Number(c.factorToBase) })),
+        }))}
+        paidAmount={0}
+        editable={orderItemsEditable}
+      />
 
       {/* Summary */}
       <DetailCard columns={4}>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 import { useState, useTransition, Fragment } from "react";
 import { useRouter } from "next/navigation";
-import { updateSalesInvoice } from "@/actions/sales.actions";
+import { updateSalesInvoice, updateSalesOrder } from "@/actions/sales.actions";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Combobox } from "@/components/ui/combobox";
 import { showSuccess, showError } from "@/lib/utils/toast";
@@ -45,6 +45,13 @@ interface InvoiceItemsEditorProps {
   availableItems: AvailableItem[];
   paidAmount: number;
   editable: boolean;
+  /**
+   * Which document this editor drives. "invoice" (default) saves via
+   * updateSalesInvoice and shows the paid/remaining summary; "order" saves via
+   * updateSalesOrder — a sales order has no payments, so the summary is
+   * suppressed and serial/UoM fields are still supported the same way.
+   */
+  variant?: "invoice" | "order";
 }
 
 export function InvoiceItemsEditor({
@@ -60,6 +67,7 @@ export function InvoiceItemsEditor({
   availableItems,
   paidAmount,
   editable,
+  variant = "invoice",
 }: InvoiceItemsEditorProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -154,7 +162,7 @@ export function InvoiceItemsEditor({
         if (salesOrderId) formData.append("salesOrderId", String(salesOrderId));
         if (quotationId) formData.append("quotationId", String(quotationId));
         formData.append("date", date);
-        if (dueDate) formData.append("dueDate", dueDate);
+        if (variant === "invoice" && dueDate) formData.append("dueDate", dueDate);
         formData.append("taxRate", String(tax));
         formData.append("discount", String(discount));
         formData.append(
@@ -182,7 +190,10 @@ export function InvoiceItemsEditor({
           ),
         );
 
-        const result = await updateSalesInvoice(invoiceId, formData);
+        const result =
+          variant === "order"
+            ? await updateSalesOrder(invoiceId, formData)
+            : await updateSalesInvoice(invoiceId, formData);
         if (result.success) {
           showSuccess("Item berhasil diperbarui");
           setEditing(false);
@@ -308,25 +319,29 @@ export function InvoiceItemsEditor({
                   {formatCurrency(grandTotal)}
                 </td>
               </tr>
-              <tr>
-                <td colSpan={4} className="text-right py-1 px-2 text-success">
-                  Terbayar
-                </td>
-                <td className="text-right py-1 px-2 text-success">
-                  {formatCurrency(paidAmount)}
-                </td>
-              </tr>
-              <tr>
-                <td
-                  colSpan={4}
-                  className="text-right py-1 px-2 text-danger font-bold"
-                >
-                  Sisa
-                </td>
-                <td className="text-right py-1 px-2 text-danger font-bold">
-                  {formatCurrency(sisa)}
-                </td>
-              </tr>
+              {variant === "invoice" && (
+                <>
+                  <tr>
+                    <td colSpan={4} className="text-right py-1 px-2 text-success">
+                      Terbayar
+                    </td>
+                    <td className="text-right py-1 px-2 text-success">
+                      {formatCurrency(paidAmount)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      colSpan={4}
+                      className="text-right py-1 px-2 text-danger font-bold"
+                    >
+                      Sisa
+                    </td>
+                    <td className="text-right py-1 px-2 text-danger font-bold">
+                      {formatCurrency(sisa)}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tfoot>
           </table>
         </div>
@@ -573,14 +588,18 @@ export function InvoiceItemsEditor({
             <span>Total Keseluruhan:</span>
             <span>{formatCurrency(grandTotal)}</span>
           </div>
-          <div className="flex items-center gap-3 text-sm text-success">
-            <span>Terbayar:</span>
-            <span>{formatCurrency(paidAmount)}</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-danger font-bold">
-            <span>Sisa:</span>
-            <span>{formatCurrency(sisa)}</span>
-          </div>
+          {variant === "invoice" && (
+            <>
+              <div className="flex items-center gap-3 text-sm text-success">
+                <span>Terbayar:</span>
+                <span>{formatCurrency(paidAmount)}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-danger font-bold">
+                <span>Sisa:</span>
+                <span>{formatCurrency(sisa)}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

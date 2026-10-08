@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => {
     salesOrderItem: { deleteMany: vi.fn(), createMany: vi.fn() },
     salesInvoice: { findMany: vi.fn(), update: vi.fn(), findUniqueOrThrow: vi.fn() },
     salesInvoiceItem: { deleteMany: vi.fn(), createMany: vi.fn() },
-    salesPayment: { findMany: vi.fn() },
+    salesPayment: { findMany: vi.fn(), count: vi.fn() },
     $transaction: vi.fn(async (fn: any) => fn(prismaMock)),
   }
   // Re-derive payment status using the same logic as recalcCore. This is what
@@ -46,12 +46,22 @@ vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/hooks/sales-payment.hook", () => ({
   onSalesPaymentUpdated: mocks.onSalesPaymentUpdatedMock,
 }))
+// Real settlement checks run against the same prisma mock (salesPayment.count).
+// Default count 0 → no real (non-DP) payment, so editing/resync is allowed.
+vi.mock("@/lib/services/sales-invoice-posting.service", () => ({
+  reverseSalesInvoicePostingTx: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock("@/lib/hooks/accounting.hook", () => ({
+  onSalesInvoicePosted: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { resyncOnEdit } from "../quotation-sync.service"
 
 describe("quotation-sync.service / resyncOnEdit", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // No real (non-DP) settlement by default → documents remain editable.
+    mocks.prismaMock.salesPayment.count.mockResolvedValue(0)
   })
 
   it("recomputes payment status of a partially-paid invoice when the edited quotation lowers grandTotal below paidAmount", async () => {

@@ -57,6 +57,12 @@ export const updateSalesOrderSchema = z.object({
   date: z.string().min(1, "Tanggal wajib diisi").max(50),
   deliveryDate: optionalString(50),
   notes: optionalString(500),
+  // Line items may be edited until a real settlement exists (custom
+  // fabrication). Sent as a JSON string like the invoice editor. Per-line values
+  // are clamped in the action, so no bounds here (mirrors updateSalesInvoice).
+  items: optionalString(50000),
+  taxRate: z.coerce.number().optional(),
+  discount: z.coerce.number().optional(),
 });
 
 // ==================== SALES INVOICE ====================

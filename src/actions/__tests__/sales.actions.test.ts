@@ -194,6 +194,19 @@ vi.mock("@/lib/services/quotation-sync.service", () => ({
   resyncOnEdit: (...a: unknown[]) => mocks.resyncOnEditMock(...a),
 }))
 
+// Settlement rules: by default no real (non-DP) payment → items editable.
+// Individual tests can override the mocks to simulate a locked document.
+vi.mock("@/lib/services/sales-settlement.service", () => ({
+  DOWN_PAYMENT_METHOD: "down_payment",
+  hasRealSettlement: vi.fn().mockResolvedValue(false),
+  salesOrderHasRealSettlement: vi.fn().mockResolvedValue(false),
+  quotationHasRealSettlement: vi.fn().mockResolvedValue(false),
+}))
+
+vi.mock("@/lib/services/sales-invoice-posting.service", () => ({
+  reverseSalesInvoicePostingTx: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock("@/lib/sales/return-validation", () => ({
   findOverReturn: (...a: unknown[]) => mocks.findOverReturnMock(...a),
 }))
@@ -361,8 +374,9 @@ describe("Quotation Actions", () => {
     // Old sections wiped and recreated via nested write on the quotation update.
     expect(mocks.prismaMock.quotationSection.deleteMany).toHaveBeenCalled()
     expect(mocks.prismaMock.quotation.update).toHaveBeenCalled()
-    // Linked SO/Invoice re-sync runs after the section rewrite.
-    expect(mocks.resyncOnEditMock).toHaveBeenCalledWith(1)
+    // Linked SO/Invoice re-sync runs after the section rewrite, carrying the
+    // acting user id so a posted invoice can be reversed + re-posted.
+    expect(mocks.resyncOnEditMock).toHaveBeenCalledWith(1, expect.any(Number))
   })
   it("updateQuotation fails on invalid json", async () => {
     const res = await actions.updateQuotation(1, fdMap({ data: "invalid json" }))
@@ -491,8 +505,21 @@ describe("Sales Order Actions", () => {
     const res = await actions.completeSalesOrder(1)
     expect(res?.success).toBe(false)
   })
-  it("updateSalesOrder fails if not draft", async () => {
+  it("updateSalesOrder allows editing a confirmed order when unpaid (custom fabrication)", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+    expect(res?.success).toBe(true)
+  })
+  it("updateSalesOrder blocks editing once a real (non-DP) payment exists", async () => {
+    const settlement = await import("@/lib/services/sales-settlement.service")
+    vi.mocked(settlement.salesOrderHasRealSettlement).mockResolvedValueOnce(true)
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
+    const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pelunasan")
+  })
+  it("updateSalesOrder blocks a cancelled order", async () => {
+    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
     const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
     expect(res?.success).toBe(false)
   })
@@ -540,8 +567,42 @@ describe("Sales Invoice Actions", () => {
   })
 
   // === updateSalesInvoice ===
-  it("updateSalesInvoice fails if not draft", async () => {
+  it("updateSalesInvoice allows editing a posted-but-unpaid invoice (custom fabrication)", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
+    const payload = {
+      customerId: 1, date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2, unitPrice: 100, discount: 0 }]),
+      taxRate: 0,
+      discount: 0,
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+  })
+  it("updateSalesInvoice reverse+reposts a posted invoice on edit", async () => {
+    const posting = await import("@/lib/services/sales-invoice-posting.service")
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
+    const payload = {
+      customerId: 1, date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
+      taxRate: 0,
+      discount: 0,
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+    // A posted invoice's old stock/GL must be reversed then re-posted.
+    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
+    expect(mocks.onSalesInvoicePostedMock).toHaveBeenCalled()
+  })
+  it("updateSalesInvoice blocks editing once a real (non-DP) payment exists", async () => {
+    const settlement = await import("@/lib/services/sales-settlement.service")
+    vi.mocked(settlement.hasRealSettlement).mockResolvedValueOnce(true)
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "partial" })
+    const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("pelunasan")
+  })
+  it("updateSalesInvoice blocks a cancelled invoice", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
     const res = await actions.updateSalesInvoice(1, fdMap({ customerId: 1, date: "2026-06-12" }))
     expect(res?.success).toBe(false)
   })
@@ -594,16 +655,15 @@ describe("Sales Invoice Actions", () => {
     expect(res?.success).toBe(false)
   })
 
-  // === reverseSalesInvoicePostingTx stock reversal branches ===
-  it("deleteSalesInvoice reverse stock OUT logic", async () => {
-    // Delete triggers reverseSalesInvoicePostingTx
+  // === reverseSalesInvoicePostingTx delegation ===
+  it("deleteSalesInvoice delegates stock/GL reversal to the posting service", async () => {
+    const posting = await import("@/lib/services/sales-invoice-posting.service")
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
-    mocks.prismaMock.stockMove.findMany.mockResolvedValue([{ id: 1, itemId: 1, warehouseId: 1, qty: 10, cost: 100 }]) // stock out
     const res = await actions.deleteSalesInvoice(1)
     expect(res?.success).toBe(true)
-    // Verify inventoryLayer creation
-    expect(mocks.prismaMock.inventoryLayer.createMany).toHaveBeenCalled()
-    expect(mocks.prismaMock.stockMove.deleteMany).toHaveBeenCalled()
+    // The reversal (stock restore + journal delete) now lives in the shared
+    // service so the invoice-edit flow can reuse it; assert the delegation.
+    expect(vi.mocked(posting.reverseSalesInvoicePostingTx)).toHaveBeenCalled()
   })
 })
 
@@ -883,7 +943,7 @@ describe("Sales Payment Actions (legacy happy paths)", () => {
   })
   it("updateSalesPayment succeeds", async () => {
     mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", salesInvoiceId: 1 })
-    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, grandTotal: 1000 })
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, grandTotal: 1000, status: "posted" })
     mocks.prismaMock.salesPayment.aggregate.mockResolvedValue({ _sum: { amount: 0 } })
     const res = await actions.updateSalesPayment(1, fdMap({ salesInvoiceId: "1", paymentDate: "2026-06-12", paymentMethod: "cash", amount: "100" }))
     expect(res?.success).toBe(true)

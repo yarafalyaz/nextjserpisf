@@ -2,6 +2,9 @@
 import { SalesInvoiceStatus } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { onSalesPaymentUpdated } from '@/lib/hooks/sales-payment.hook'
+import { onSalesInvoicePosted } from '@/lib/hooks/accounting.hook'
+import { reverseSalesInvoicePostingTx } from '@/lib/services/sales-invoice-posting.service'
+import { quotationHasRealSettlement, hasRealSettlement } from '@/lib/services/sales-settlement.service'
 
 interface QuotationItem {
   itemId: number | null
@@ -26,21 +29,33 @@ function flattenQuotationItems(sections: { items: any[] }[]): QuotationItem[] {
 }
 
 /**
- * Re-sync linked SO/Invoice items when a draft revision is edited.
- * Only updates unfinished SO (draft/confirmed/processing) and unpaid Invoice (draft/sent/partial).
+ * Re-sync linked SO/Invoice items when a quotation is edited.
+ *
+ * Custom fabrication rule: a quotation's items may change until the customer
+ * actually pays, so this now runs whenever the quotation has no real (non-DP)
+ * settlement — regardless of its `draft`/`converted` status. A down payment
+ * alone does not stop the sync. Downstream SO (draft/confirmed/processing) and
+ * invoices (draft/sent/partial) are rewritten in place. A posted-but-unpaid
+ * invoice is additionally reversed + re-posted so its stock-out and AR/revenue
+ * + COGS journals match the new lines.
  */
-export async function resyncOnEdit(quotationId: number): Promise<void> {
-  const quotation = await prisma.quotation.findUnique({
+export async function resyncOnEdit(quotationId: number, userId: number | null = null): Promise<void> {  const quotation = await prisma.quotation.findUnique({
     where: { id: quotationId },
     include: { sections: { include: { items: true } } },
   })
-  if (!quotation || quotation.status !== 'draft') return
+  if (!quotation) return
+  if (quotation.status === 'cancelled') return
+  // Never propagate changes once the customer has really paid.
+  if (await quotationHasRealSettlement(quotationId)) return
 
   const items = flattenQuotationItems(quotation.sections)
 
   await prisma.$transaction(async (tx) => {
     const salesOrders = await tx.salesOrder.findMany({
-      where: { quotationId, status: { in: ['draft', 'confirmed', 'processing'] } },
+      where: {
+        quotationId,
+        status: { in: ['draft', 'confirmed', 'processing'] },
+      },
     })
 
     // Hoist the invoice lookup OUTSIDE the SO loop. Previously each SO triggered
@@ -56,7 +71,16 @@ export async function resyncOnEdit(quotationId: number): Promise<void> {
         : await tx.salesInvoice.findMany({
             where: {
               salesOrderId: { in: salesOrderIds },
-              status: { in: [SalesInvoiceStatus.draft, SalesInvoiceStatus.sent, SalesInvoiceStatus.partial] },
+              // Include `posted`: a posted-but-unpaid invoice must still follow
+              // the quotation's item edits (it is reversed + re-posted below).
+              status: {
+                in: [
+                  SalesInvoiceStatus.draft,
+                  SalesInvoiceStatus.sent,
+                  SalesInvoiceStatus.partial,
+                  SalesInvoiceStatus.posted,
+                ],
+              },
             },
           })
     const invoicesBySO = new Map<number, typeof allInvoices>()
@@ -103,6 +127,11 @@ export async function resyncOnEdit(quotationId: number): Promise<void> {
       const invoices = invoicesBySO.get(so.id) ?? []
 
       for (const inv of invoices) {
+        // Never rewrite the lines of an invoice the customer has really paid.
+        if (await hasRealSettlement(inv.id, tx)) continue
+        const invWasPosted =
+          inv.status !== SalesInvoiceStatus.draft && inv.status !== SalesInvoiceStatus.approved
+
         await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: inv.id } })
         if (items.length > 0) {
           await tx.salesInvoiceItem.createMany({
@@ -135,6 +164,14 @@ export async function resyncOnEdit(quotationId: number): Promise<void> {
         // re-derived. Without this, a partially-paid invoice whose grandTotal
         // is edited down below paidAmount stays stuck at "partial" forever.
         await onSalesPaymentUpdated(inv.id, tx)
+
+        // A posted invoice already moved stock and booked AR/revenue + COGS;
+        // the new lines invalidated all of it. Reverse the old postings (keeping
+        // the DP/payment journals) and re-post from the fresh rows.
+        if (invWasPosted) {
+          await reverseSalesInvoicePostingTx(tx, inv.id, { reversePaymentJournals: false })
+          await onSalesInvoicePosted(inv.id, userId ?? undefined, tx)
+        }
       }
     }
   })

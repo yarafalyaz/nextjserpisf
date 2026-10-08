@@ -48,6 +48,14 @@ export default async function InvoiceDetailPage({
 
   if (!invoice) notFound()
 
+  // Custom fabrication: items stay editable until the customer actually pays.
+  // A down payment is only an advance (reconciled at the end) — it does NOT lock
+  // the item list. So the editor stays open while the only payments are DP rows,
+  // and locks as soon as a real (non-DP) payment exists (or the invoice is
+  // cancelled).
+  const hasRealPayment = invoice.payments.some((p) => p.paymentMethod !== "down_payment")
+  const itemsEditable = invoice.status !== "cancelled" && !hasRealPayment
+
   // Fetch available items for the editor (termasuk metadata UoM & serial)
   const availableItems = await prisma.item.findMany({
     where: { isActive: true, deletedAt: null },
@@ -174,7 +182,7 @@ export default async function InvoiceDetailPage({
                   uomConversions: i.uomConversions.map((c) => ({ code: c.code, factorToBase: Number(c.factorToBase) })),
                 }))}
                 paidAmount={Number(invoice.paidAmount ?? 0)}
-                editable={invoice.status !== "paid" && invoice.status !== "cancelled"}
+                editable={itemsEditable}
               />
             ),
           },

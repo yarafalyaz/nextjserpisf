@@ -5,6 +5,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
 import { prisma } from "@/lib/db/prisma"
+import { toBaseFactor } from "@/lib/services/uom.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import type { TxClient } from "@/lib/db/prisma"
 import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived, deleteJournalByReference, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
@@ -13,6 +14,8 @@ import { onSalesPaymentCreated as onSalesPaymentRecalculate, onSalesPaymentUpdat
 import { onSalesReturnCompleted as onSalesReturnStock } from "@/lib/hooks/sales-return.hook"
 import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
+import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlement } from "@/lib/services/sales-settlement.service"
+import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse , requireId, safeId, requireNumber} from "@/lib/utils/safe-parse"
@@ -353,7 +356,7 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
     })
   })
 
-  await resyncOnEdit(quotationId)
+  await resyncOnEdit(quotationId, Number(user.id))
 
   await logActivity("revise", "Quotation", quotationId, `Merevisi penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
@@ -450,7 +453,7 @@ export async function convertQuotationToOrder(quotationId: number) {
 
 export async function updateQuotation(quotationId: number, formData: FormData) {
   try {
-  await requirePermission("edit_quotations")
+  const user = await requirePermission("edit_quotations")
 
   const raw = formData.get("data") as string
   const data = safeJsonParse(raw) as any
@@ -460,8 +463,15 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     where: { id: quotationId },
   })
 
-  if (quotation.status === "converted") {
-    throw new Error("Quotation yang sudah converted tidak bisa diedit")
+  // Custom fabrication: the item list may change until the customer actually
+  // pays. A converted quotation (DP confirmed → SO/invoice already created) is
+  // still editable while the only money received is a down payment; it locks
+  // only once a real (non-DP) payment exists on a linked invoice.
+  if (quotation.status === "cancelled") {
+    throw new Error("Penawaran yang sudah dibatalkan tidak bisa diedit")
+  }
+  if (await quotationHasRealSettlement(quotationId)) {
+    throw new Error("Penawaran sudah ada pelunasan, item tidak bisa diubah lagi")
   }
 
   // Validate vehicle belongs to customer if both are provided
@@ -588,7 +598,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   })
 
   // Re-sync linked SO/Invoice items
-  await resyncOnEdit(quotationId)
+  await resyncOnEdit(quotationId, Number(user.id))
 
   await logActivity("update", "Quotation", quotationId, `Memperbarui penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
@@ -847,8 +857,15 @@ export async function postInvoice(invoiceId: number) {
 
   // Atomically claim the post and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
+    // Claim from EITHER "draft" or "approved". When a SalesInvoice approval
+    // workflow is configured, approval.actions sets the document status to
+    // "approved" (not "draft"), so a draft-only claim could never match and
+    // every workflow-approved invoice would fail to post with a misleading
+    // "sudah di-post" error. The status guard above already restricts us to
+    // these two states, so matching both is safe and idempotent (a second
+    // concurrent request finds neither state and gets count === 0).
     const claim = await tx.salesInvoice.updateMany({
-      where: { id: invoiceId, status: "draft" },
+      where: { id: invoiceId, status: { in: ["draft", "approved"] } },
       data: { status: "posted" },
     })
     if (claim.count === 0) {
@@ -1053,25 +1070,32 @@ export async function createSalesReturn(formData: FormData) {
   const returnCostRows = returnItemIds.length
     ? await prisma.item.findMany({ where: { id: { in: returnItemIds } }, select: { id: true, cost: true, price: true } })
     : []
-  const returnCostMap = new Map(returnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
-  const masterPriceMap = new Map(returnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
+  const baseReturnCostMap = new Map(returnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
+  const baseMasterPriceMap = new Map(returnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
 
   // Selling price for the AR reduction: prefer the original invoice line price,
   // fall back to the item master price, then cost.
   const invoiceId = v.salesInvoiceId ?? null
   const invoicePriceMap = new Map<number, number>()
   const invoicedQtyByItem = new Map<number, number>()
+  const invoiceUomByItem = new Map<number, string | null>()
   if (invoiceId) {
     const invItems = await prisma.salesInvoiceItem.findMany({
       where: { salesInvoiceId: invoiceId, itemId: { in: returnItemIds.length ? returnItemIds : [-1] } },
-      select: { itemId: true, unitPrice: true, qty: true },
+      select: { itemId: true, unitPrice: true, qty: true, uom: true },
     })
     for (const it of invItems) {
       if (it.itemId == null) continue
       invoicePriceMap.set(it.itemId, Number(it.unitPrice))
+      invoiceUomByItem.set(it.itemId, it.uom)
       invoicedQtyByItem.set(it.itemId, (invoicedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty))
     }
   }
+  const factorRows = await Promise.all(returnItemIds.map(async (itemId) => [itemId, await toBaseFactor(prisma, itemId, invoiceUomByItem.get(itemId))] as const))
+  const factorByItem = new Map(factorRows)
+  const returnCostMap = new Map([...baseReturnCostMap].map(([itemId, cost]) => [itemId, cost * (factorByItem.get(itemId) ?? 1)]))
+  const masterPriceMap = new Map([...baseMasterPriceMap].map(([itemId, price]) => [itemId, price * (factorByItem.get(itemId) ?? 1)]))
+  // Unit prices and costs are stored per invoice UoM; stock quantities/costs use base UoM.
   const resolvePrice = (itemId: number) =>
     invoicePriceMap.get(itemId) ?? (masterPriceMap.get(itemId) || returnCostMap.get(itemId) || 0)
 
@@ -1236,6 +1260,19 @@ export async function deleteQuotation(id: number) {
     if (workOrderIds.length) await tx.workOrder.deleteMany({ where: { id: { in: workOrderIds } } })
     if (projectIds.length) await tx.project.deleteMany({ where: { id: { in: projectIds } } })
 
+    // Reverse the GL journal of every Down Payment tied to this quotation
+    // BEFORE deleting the rows. Without this, the DP journal (Dr Bank / Cr
+    // Down Payment liability) stays in the GL with no document behind it, so
+    // the balance sheet and cash flow are permanently wrong after a
+    // quotation delete. Mirrors deleteDownPayment / deleteSalesPayment, which
+    // both call deleteJournalByReferenceTx for their own reference type.
+    const downPayments = await tx.downPayment.findMany({
+      where: { quotationId: id },
+      select: { id: true },
+    })
+    for (const dp of downPayments) {
+      await deleteJournalByReferenceTx(tx, "DownPayment", dp.id)
+    }
     await tx.downPayment.deleteMany({ where: { quotationId: id } })
     // Delete quotation sections + items before the quotation itself
     const sections = await tx.quotationSection.findMany({ where: { quotationId: id }, select: { id: true } })
@@ -1371,21 +1408,79 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  const existing = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
-  if (existing.status !== "draft") {
-    throw new Error("Hanya Sales Order draft yang bisa diubah")
-  }
+  const itemsJson = v.items
+  const items = itemsJson
+    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number }>>(itemsJson) ?? [])
+    : null
 
-  // Fix #1: UPDATE bukan CREATE, dan jangan generate documentNo baru
-  const salesOrder = await prisma.salesOrder.update({
-    where: { id },
-    data: {
-      customerId: v.customerId,
-      quotationId: v.quotationId ?? null,
-      date: new Date(v.date),
-      deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
-      notes: v.notes ?? null,
-    },
+  const salesOrder = await prisma.$transaction(async (tx) => {
+    const existing = await tx.salesOrder.findUniqueOrThrow({ where: { id } })
+    // Custom fabrication: the order's items may change until the customer
+    // actually pays. A confirmed/processing order is still editable while only a
+    // down payment has been received; it locks once a real (non-DP) payment
+    // exists on a linked invoice.
+    if (existing.status === "cancelled" || existing.status === "completed") {
+      throw new Error(`Sales Order berstatus '${existing.status}' tidak bisa diubah`)
+    }
+    if (await salesOrderHasRealSettlement(id, tx)) {
+      throw new Error("Sales Order sudah ada pelunasan, item tidak bisa diubah lagi")
+    }
+
+    // Fix #1: UPDATE bukan CREATE, dan jangan generate documentNo baru
+    const updated = await tx.salesOrder.update({
+      where: { id },
+      data: {
+        customerId: v.customerId,
+        quotationId: v.quotationId ?? null,
+        date: new Date(v.date),
+        deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+        notes: v.notes ?? null,
+      },
+    })
+
+    // If items provided, replace them and recompute totals. Per-line values are
+    // clamped to >= 0 so a tampered client cannot persist a negative line that
+    // would later flow into delivery/invoice.
+    if (items !== null) {
+      await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } })
+
+      if (items.length > 0) {
+        await tx.salesOrderItem.createMany({
+          data: items.map((item) => {
+            const safeQty = Math.max(0, Number(item.qty) || 0)
+            const safePrice = Math.max(0, Number(item.unitPrice) || 0)
+            const safeDiscount = Math.max(0, Number(item.discount) || 0)
+            return {
+              salesOrderId: id,
+              itemId: item.itemId,
+              description: null,
+              qty: safeQty,
+              unitPrice: safePrice,
+              discount: safeDiscount,
+              total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
+            }
+          }),
+        })
+      }
+
+      const subtotal = items.reduce((sum, item) => {
+        const safeQty = Math.max(0, Number(item.qty) || 0)
+        const safePrice = Math.max(0, Number(item.unitPrice) || 0)
+        const safeDiscount = Math.max(0, Number(item.discount) || 0)
+        return safeAdd(sum, Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)), 0)
+      }, 0)
+      const taxRate = v.taxRate !== undefined ? Math.max(0, v.taxRate) : 0
+      const discountTotal = Math.min(Math.max(0, v.discount ?? 0), subtotal)
+      const taxAmount = safeRound(safeDivide(safeMultiply(safeSubtract(subtotal, discountTotal, 0), taxRate, 4), 100, 4), 0)
+      const grandTotal = safeSubtract(safeAdd(subtotal, taxAmount, 0), discountTotal, 0)
+
+      await tx.salesOrder.update({
+        where: { id },
+        data: { subtotal, discount: discountTotal, tax: taxAmount, grandTotal, totalAmount: grandTotal },
+      })
+    }
+
+    return updated
   })
 
   await logActivity("update", "SalesOrder", salesOrder.id, `Memperbarui sales order #${salesOrder.id}`)
@@ -1404,7 +1499,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   "use server"
 
   try {
-  await requirePermission("edit_sales_invoices")
+  const user = await requirePermission("edit_sales_invoices")
 
   const parsed = parseFormData(updateSalesInvoiceSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
@@ -1418,9 +1513,20 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
       await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${id} FOR UPDATE`
     }
     const existingInvoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id } })
-    if (existingInvoice.status !== "draft") {
-      throw new Error("Hanya invoice draft yang bisa diubah")
+    // Custom fabrication: items may change until the customer actually pays. The
+    // invoice stays editable after posting (stock/GL already booked) as long as
+    // no real (non-DP) payment exists — the edit reverses and re-posts below.
+    // A down payment alone does NOT lock it; it is only reconciled at the end.
+    if (existingInvoice.status === "cancelled") {
+      throw new Error("Faktur yang sudah dibatalkan tidak bisa diubah")
     }
+    if (await hasRealSettlement(id, tx)) {
+      throw new Error("Faktur sudah ada pelunasan, item tidak bisa diubah lagi")
+    }
+    // Whether the invoice already moved stock / posted GL (needs reverse+repost
+    // when items change). draft/approved never posted; posted/partial/sent/paid
+    // have. (paid can't reach here — the settlement guard above rejects it.)
+    const wasPosted = existingInvoice.status !== "draft" && existingInvoice.status !== "approved"
     // Update header
     const invoice = await tx.salesInvoice.update({
       where: { id },
@@ -1523,6 +1629,19 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
           paymentStatus,
         },
       })
+
+      // If the invoice already posted (stock-out + AR/revenue + COGS journals),
+      // the item change invalidated every one of those entries. Reverse them and
+      // re-post from the new lines, atomically inside this tx — mirroring the
+      // vendor-bill edit pattern (delete journals by reference, then re-invoke
+      // the posting hook) plus the stock reversal a sales invoice additionally
+      // needs. `reverseSalesInvoicePostingTx` restores qtyOnHand + FIFO layers
+      // and deletes the SalesInvoice/SalesInvoiceCOGS journals; onSalesInvoicePosted
+      // (idempotent) then re-books them from the current invoice rows.
+      if (wasPosted) {
+        await reverseSalesInvoicePostingTx(tx, id, { reversePaymentJournals: false })
+        await onSalesInvoicePosted(id, Number(user.id), tx)
+      }
     }
 
     return invoice
@@ -1567,6 +1686,22 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   const payment = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${newInvoiceId} FOR UPDATE`
     const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: newInvoiceId } })
+
+    // Status guard: reject invoices that were never posted (draft/approved) or
+    // were voided (cancelled) — otherwise an edit could move a payment onto such
+    // an invoice and repost its cash-receipt journal against it, booking an
+    // AR/GL entry for an invoice that is not posted.
+    //
+    // Do NOT mirror createSalesPayment's ["posted","partial"] allowlist here:
+    // a payment that settled its invoice leaves the invoice at "paid", so that
+    // allowlist would block the normal case of correcting the amount/date/account
+    // of a payment whose invoice is already fully paid. The overpay guard below
+    // already excludes this payment from the sum, so it stays correct for "paid".
+    if (["draft", "approved", "cancelled"].includes(invoice.status)) {
+      throw new Error(
+        `Pembayaran hanya bisa diubah untuk invoice yang sudah diposting (status saat ini: ${invoice.status})`
+      )
+    }
 
     // Sum of all OTHER payments already allocated to the target invoice.
     const others = await tx.salesPayment.aggregate({
@@ -1666,18 +1801,26 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   const updReturnCostRows = updReturnIds.length
     ? await prisma.item.findMany({ where: { id: { in: updReturnIds } }, select: { id: true, cost: true, price: true } })
     : []
-  const updReturnCostMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
-  const updMasterPriceMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
-
+  const baseUpdReturnCostMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
+  const baseUpdMasterPriceMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
   const updInvoiceId = input.salesInvoiceId ?? null
   const updInvoicePriceMap = new Map<number, number>()
+  const updInvoiceUomByItem = new Map<number, string | null>()
   if (updInvoiceId) {
     const invItems = await prisma.salesInvoiceItem.findMany({
       where: { salesInvoiceId: updInvoiceId, itemId: { in: updReturnIds.length ? updReturnIds : [-1] } },
-      select: { itemId: true, unitPrice: true },
+      select: { itemId: true, unitPrice: true, uom: true },
     })
-    for (const it of invItems) if (it.itemId != null) updInvoicePriceMap.set(it.itemId, Number(it.unitPrice))
+    for (const it of invItems) {
+      if (it.itemId == null) continue
+      updInvoicePriceMap.set(it.itemId, Number(it.unitPrice))
+      updInvoiceUomByItem.set(it.itemId, it.uom)
+    }
   }
+  const updFactorRows = await Promise.all(updReturnIds.map(async (itemId) => [itemId, await toBaseFactor(prisma, itemId, updInvoiceUomByItem.get(itemId))] as const))
+  const updFactorByItem = new Map(updFactorRows)
+  const updReturnCostMap = new Map([...baseUpdReturnCostMap].map(([itemId, cost]) => [itemId, cost * (updFactorByItem.get(itemId) ?? 1)]))
+  const updMasterPriceMap = new Map([...baseUpdMasterPriceMap].map(([itemId, price]) => [itemId, price * (updFactorByItem.get(itemId) ?? 1)]))
   const resolveUpdPrice = (itemId: number) =>
     updInvoicePriceMap.get(itemId) ?? (updMasterPriceMap.get(itemId) || updReturnCostMap.get(itemId) || 0)
 
@@ -1987,83 +2130,6 @@ export async function deleteSalesInvoice(id: number) {
     if (isNextRedirectError(e)) throw e
     console.error("[deleteSalesInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
-/**
- * Reverse all GL + stock side effects of a (possibly posted) sales invoice so the
- * record can be safely removed without leaving orphaned journals or lost stock.
- *
- * Reverses, atomically within the caller's transaction:
- *  - Revenue journal (referenceType "SalesInvoice") and COGS journal ("SalesInvoiceCOGS").
- *  - Cash-receipt journals of every linked payment (referenceType "SalesPayment").
- *  - Physical stock-out: for each StockMove OUT posted by onSalesInvoicePosted, the
- *    global qtyOnHand is restored and a reversing inbound FIFO layer is created at
- *    the same cost basis so per-warehouse availability stays consistent. The OUT
- *    moves are then deleted.
- *
- * No-op for draft invoices (no journals / no stock moves exist yet).
- * Note: serial-tracked items previously marked "used" are not restored to
- * "available" here; manual correction is required for serialized stock.
- */
-async function reverseSalesInvoicePostingTx(tx: TxClient, invoiceId: number): Promise<void> {
-  // 1. Restore stock for every OUT move created at posting time.
-  const outMoves = await tx.stockMove.findMany({
-    where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT" },
-    select: { id: true, itemId: true, warehouseId: true, qty: true, cost: true },
-  })
-  const qtyUpdates: Promise<any>[] = []
-  const moveInserts: any[] = []
-  
-  for (const m of outMoves) {
-    const qty = Number(m.qty)
-    if (qty <= 0) continue
-    qtyUpdates.push(tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${m.itemId}`)
-    moveInserts.push({
-      documentNo: `SM-REV-INV-${invoiceId}-${m.id}`,
-      itemId: m.itemId,
-      warehouseId: m.warehouseId,
-      qty,
-      cost: m.cost,
-      impact: "IN",
-      status: "posted",
-      referenceType: "SalesInvoiceReversal",
-      referenceId: invoiceId,
-      notes: `Pembalikan stok penghapusan faktur #${invoiceId}`,
-    })
-  }
-
-  if (qtyUpdates.length > 0) {
-    await Promise.all(qtyUpdates)
-    const revMoves = await Promise.all(
-      moveInserts.map((m) => tx.stockMove.create({ data: m }))
-    )
-    await tx.inventoryLayer.createMany({
-      data: revMoves.map((m) => ({
-        itemId: m.itemId,
-        warehouseId: m.warehouseId!,
-        stockMoveId: m.id,
-        qtyIn: Number(m.qty),
-        qtyOut: 0,
-        remaining: Number(m.qty),
-        unitCost: m.cost,
-      }))
-    })
-  }
-  if (outMoves.length > 0) {
-    await tx.stockMove.deleteMany({ where: { id: { in: outMoves.map((m) => m.id) } } })
-  }
-
-  // 2. Reverse the revenue + COGS journals.
-  await deleteJournalByReferenceTx(tx, ["SalesInvoice", "SalesInvoiceCOGS"], invoiceId)
-
-  // 3. Reverse the cash-receipt journal of every linked payment.
-  const payments = await tx.salesPayment.findMany({
-    where: { salesInvoiceId: invoiceId },
-    select: { id: true },
-  })
-  if (payments.length > 0) {
-    await deleteJournalByReferenceTx(tx, "SalesPayment", payments.map((p) => p.id))
   }
 }
 

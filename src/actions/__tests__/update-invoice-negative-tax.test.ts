@@ -32,6 +32,8 @@ vi.mock("@/lib/db/prisma", () => {
       deleteMany: (...a: unknown[]) => invoiceItemDeleteManyMock(...a),
       createMany: (...a: unknown[]) => invoiceItemCreateManyMock(...a),
     },
+    // No real (non-DP) payment by default → invoice remains editable.
+    salesPayment: { count: vi.fn().mockResolvedValue(0) },
   }
   return { prisma: mockPrisma }
 })
@@ -50,6 +52,15 @@ vi.mock("@/lib/hooks/sales-payment.hook", () => ({
 vi.mock("@/lib/hooks/sales-return.hook", () => ({ onSalesReturnCompleted: vi.fn() }))
 vi.mock("@/lib/services/notification.service", () => ({ notificationService: {} }))
 vi.mock("@/lib/services/quotation-sync.service", () => ({ resyncOnEdit: vi.fn() }))
+vi.mock("@/lib/services/sales-settlement.service", () => ({
+  DOWN_PAYMENT_METHOD: "down_payment",
+  hasRealSettlement: vi.fn().mockResolvedValue(false),
+  salesOrderHasRealSettlement: vi.fn().mockResolvedValue(false),
+  quotationHasRealSettlement: vi.fn().mockResolvedValue(false),
+}))
+vi.mock("@/lib/services/sales-invoice-posting.service", () => ({
+  reverseSalesInvoicePostingTx: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn(async () => "INV-0001") }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
