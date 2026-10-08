@@ -21,6 +21,7 @@ import { ReportDateFilter } from "@/components/reports/report-date-filter";
 import { ReportLetterhead } from "@/components/reports/report-letterhead";
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section";
 import { ReportNarration } from "@/components/reports/report-narration";
+import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow";
 
 import type { Metadata } from "next";
 
@@ -45,12 +46,28 @@ export default async function CashFlowPage({
   const endDate = Number.isNaN(_ed.getTime()) ? new Date(now) : _ed;
   endDate.setHours(23, 59, 59, 999);
 
-  // Get all cash/bank accounts
+  // Identify cash/bank accounts.
+  //
+  // The old check OR-ed `code startsWith "1-1"` with a name match. The seeded
+  // COA uses 4-digit codes (`1000 Kas & Bank`, `5500 Kas Kecil`) — no account
+  // starts with "1-1" — so that clause matched nothing, while in a CUSTOMISED
+  // COA a `1-1xx` code could well be a current asset like piutang, silently
+  // pulling non-cash accounts into the cash-flow statement. We instead trust
+  // the configured account MAPPINGS (the same source the payment/cash hooks
+  // post against) plus a conservative type+name match, and always include the
+  // configured Kas & Bank / Kas Kecil accounts even if renamed.
+  const settings = await prisma.systemSetting.findFirst({
+    select: { cashBankAccountId: true, pettyCashAccountId: true },
+  });
+  const configuredCashIds = [settings?.cashBankAccountId, settings?.pettyCashAccountId].filter(
+    (id): id is number => typeof id === "number",
+  );
+
   const cashAccounts = await prisma.account.findMany({
     where: {
       type: "ASSET",
       OR: [
-        { code: { startsWith: "1-1" } },
+        { id: { in: configuredCashIds.length ? configuredCashIds : [-1] } },
         { name: { contains: "kas" } },
         { name: { contains: "bank" } },
         { name: { contains: "cash" } },
@@ -106,40 +123,23 @@ export default async function CashFlowPage({
       })
     : [];
 
-  function classifyCounterpart(acc: { type: string; code: string; name: string }): "operating" | "investing" | "financing" {
-    const code = acc.code || "";
-    const name = (acc.name || "").toLowerCase();
-    if (acc.type === "EQUITY") return "financing";
-    if (acc.type === "ASSET") {
-      if (code.startsWith("1-3") || code.startsWith("13") || name.includes("aset tetap") || name.includes("tetap"))
-        return "investing";
-      return "operating";
-    }
-    if (acc.type === "LIABILITY") {
-      if (name.includes("pinjaman") || name.includes("hutang bank") || name.includes("loan") || name.includes("modal"))
-        return "financing";
-      return "operating";
-    }
-    return "operating";
-  }
+  // Dominant-counterpart activity split lives in a pure helper so it is
+  // unit-tested (see lib/finance/cash-flow.ts).
+  const classified = fullJournals.map((j) =>
+    classifyJournal(
+      j.entries.map((e) => ({
+        accountId: e.accountId,
+        type: e.account?.type ?? "",
+        code: e.account?.code ?? "",
+        name: e.account?.name ?? "",
+        debit: Number(e.debit),
+        credit: Number(e.credit),
+      })),
+      (accountId) => cashIdSet.has(accountId),
+    ),
+  );
+  const activity = foldActivities(classified);
 
-  const activity = { operating: 0, investing: 0, financing: 0 };
-  for (const j of fullJournals) {
-    let cashDelta = 0;
-    const counterparts: { type: string; code: string; name: string; weight: number }[] = [];
-    for (const e of j.entries) {
-      const d = Number(e.debit);
-      const c = Number(e.credit);
-      if (cashIdSet.has(e.accountId)) {
-        cashDelta += d - c;
-      } else if (e.account) {
-        counterparts.push({ type: e.account.type, code: e.account.code, name: e.account.name, weight: Math.abs(d - c) });
-      }
-    }
-    if (cashDelta === 0 || counterparts.length === 0) continue;
-    const dominant = counterparts.reduce((a, b) => (b.weight > a.weight ? b : a));
-    activity[classifyCounterpart(dominant)] += cashDelta;
-  }
   const activityRows: { key: string; label: string; value: number }[] = [
     { key: "operating", label: "Aktivitas Operasi", value: activity.operating },
     { key: "investing", label: "Aktivitas Investasi", value: activity.investing },
