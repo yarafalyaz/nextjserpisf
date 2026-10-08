@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 const ALLOWED_CRON_TASKS = [
   "lock-period",
@@ -32,6 +33,11 @@ export async function runCronTask(task: string) {
   })
 
   const data = await res.json()
+
+  // Manual triggers bypass the scheduler, and some tasks are destructive (e.g.
+  // "cleanup" prunes the activity log itself). Record who ran which task so a
+  // manual maintenance run is attributable.
+  await logActivity("run", "Cron", 0, `Menjalankan task cron manual: ${task}`)
 
   revalidatePath("/pengaturan/cron")
 

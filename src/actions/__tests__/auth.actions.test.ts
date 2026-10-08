@@ -45,6 +45,10 @@ vi.mock("bcryptjs", () => ({
 vi.mock("next/cache", () => ({
   revalidatePath: (...a: unknown[]) => revalidateMock(...a),
 }))
+const logActivityMock = vi.fn()
+vi.mock("@/lib/services/activity-log.service", () => ({
+  logActivity: (...a: unknown[]) => logActivityMock(...a),
+}))
 
 import {
   loginAction,
@@ -175,6 +179,17 @@ describe("createUser", () => {
     expect(requirePermissionMock).toHaveBeenCalledWith("manage_users")
   })
 
+  it("records an audit-trail entry for user creation", async () => {
+    userCreateMock.mockResolvedValue({ id: 12 })
+    await createUser(fd({ name: "X", email: "x@y.z", password: "passval12", roleIds: ["1", "2"] }))
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "create",
+      "User",
+      12,
+      expect.stringContaining("x@y.z"),
+    )
+  })
+
   it("requires name, email, and password", async () => {
     const res = await createUser(fd({ name: "X" }))
     // New Zod-based validation reports the first missing field rather than the
@@ -287,6 +302,17 @@ describe("updateUserRoles", () => {
     expect(arg.data.roles.set).toEqual([{ id: 5 }, { id: 6 }])
   })
 
+  it("records an audit-trail entry with before/after roles", async () => {
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    await updateUserRoles(3, [5, 6])
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "update",
+      "User",
+      3,
+      expect.stringContaining("5, 6"),
+    )
+  })
+
   it("blocks privilege escalation when permission is denied", async () => {
     requirePermissionMock.mockImplementation(async () => {
       throw new Error("nope")
@@ -350,6 +376,19 @@ describe("toggleUserActive", () => {
     expect(res).toEqual({ success: true })
     expect(userUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ data: { isActive: false } }),
+    )
+  })
+
+  it("records an audit-trail entry for the activation toggle", async () => {
+    userFindMock.mockResolvedValue({ id: 4, isActive: true })
+    userUpdateMock.mockResolvedValue({ id: 4 })
+    userFindUniqueMock.mockResolvedValue({ id: 4, roles: [] })
+    await toggleUserActive(4)
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "update",
+      "User",
+      4,
+      expect.stringContaining("Menonaktifkan"),
     )
   })
 

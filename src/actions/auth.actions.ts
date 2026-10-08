@@ -6,6 +6,7 @@ import { requireAuth, requirePermission } from "@/lib/auth/permissions"
 import { isNextRedirectError } from "@/lib/utils/error"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
+import { logActivity } from "@/lib/services/activity-log.service"
 import {
   changePasswordSchema,
   createUserSchema,
@@ -122,6 +123,10 @@ export async function changePassword(formData: FormData) {
       data: { password: hashedPassword },
     })
 
+    // Security-relevant: record who changed their password and when. The new
+    // password is deliberately NOT logged.
+    await logActivity("update", "User", userId, "Mengubah password akun")
+
     revalidatePath("/profil")
     return { success: true }
   } catch (e) {
@@ -183,6 +188,19 @@ export async function createUser(formData: FormData) {
       },
     })
 
+    // Security-relevant: who created which user with which roles. Role names
+    // are resolved for a human-readable trail (ids alone are opaque in audit).
+    const grantedRoles = await prisma.role.findMany({
+      where: { id: { in: roleIds ?? [] } },
+      select: { name: true },
+    })
+    await logActivity(
+      "create",
+      "User",
+      user.id,
+      `Membuat pengguna ${email} (role: ${grantedRoles.map((r) => r.name).join(", ") || "tidak ada"})`,
+    )
+
     revalidatePath("/pengaturan/pengguna")
     return { success: true, id: user.id }
   } catch (e) {
@@ -234,6 +252,15 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
       },
     })
 
+    // Security-relevant: role changes are privilege grants/revocations. Log the
+    // before/after so a later privilege escalation is traceable.
+    await logActivity(
+      "update",
+      "User",
+      userId,
+      `Mengubah role pengguna #${userId} menjadi: ${cleanRoleIds.join(", ") || "tidak ada"}`,
+    )
+
     revalidatePath("/pengaturan/pengguna")
     return { success: true }
   } catch (e) {
@@ -263,6 +290,15 @@ export async function toggleUserActive(userId: number) {
       where: { id: userId },
       data: { isActive: !user.isActive },
     })
+
+    // Security-relevant: enabling/disabling an account. Log who toggled whom and
+    // to which state so a denial-of-access is auditable.
+    await logActivity(
+      "update",
+      "User",
+      userId,
+      `${user.isActive ? "Menonaktifkan" : "Mengaktifkan"} pengguna #${userId}`,
+    )
 
     revalidatePath("/pengaturan/pengguna")
     return { success: true }
@@ -296,6 +332,10 @@ export async function updateProfile(formData: FormData) {
       where: { id: userId },
       data: { name, email },
     })
+
+    // Identity change (name/email) on the user's own account — recording it
+    // makes a later email-swap (login identity) traceable.
+    await logActivity("update", "User", userId, `Memperbarui profil akun (${email})`)
 
     revalidatePath("/profil")
     revalidatePath("/")

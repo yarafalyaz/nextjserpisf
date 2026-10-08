@@ -24,6 +24,10 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
+const logActivityMock = vi.fn()
+vi.mock("@/lib/services/activity-log.service", () => ({
+  logActivity: (...a: unknown[]) => logActivityMock(...a),
+}))
 
 import { bulkDelete } from "../bulk.actions"
 
@@ -60,6 +64,15 @@ describe("Bulk Actions", () => {
     // customer doesn't have deletedAt
     const res = await bulkDelete("customer", [1, 2])
     expect(res?.success).toBe(true)
+  })
+  it("records a mass-delete audit trail entry", async () => {
+    await bulkDelete("customer", [1, 2])
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "delete",
+      "customer",
+      0,
+      expect.stringContaining("2 data"),
+    )
   })
   it("bulkDelete fails on empty/invalid ids", async () => {
     const res = await bulkDelete("customer", [0, -1, NaN])

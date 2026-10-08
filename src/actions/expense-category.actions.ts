@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 export async function createExpenseCategory(formData: FormData) {
   await requirePermission("manage_expense_categories")
@@ -14,7 +15,8 @@ export async function createExpenseCategory(formData: FormData) {
   if (!name || !label) return { success: false, error: "Nama dan label wajib diisi" }
 
   try {
-    await prisma.expenseCategory.create({ data: { name, label, sortOrder } })
+    const created = await prisma.expenseCategory.create({ data: { name, label, sortOrder } })
+    await logActivity("create", "ExpenseCategory", created.id, `Membuat kategori pengeluaran ${label}`)
     revalidatePath("/master/kategori-pengeluaran")
     return { success: true }
   } catch (e: unknown) {
@@ -39,6 +41,7 @@ export async function updateExpenseCategory(id: number, formData: FormData) {
       where: { id },
       data: { name, label, sortOrder, isActive },
     })
+    await logActivity("update", "ExpenseCategory", id, `Memperbarui kategori pengeluaran ${label}`)
     revalidatePath("/master/kategori-pengeluaran")
     return { success: true }
   } catch (e: unknown) {
@@ -59,6 +62,7 @@ export async function deleteExpenseCategory(id: number) {
 
   try {
     await prisma.expenseCategory.delete({ where: { id } })
+    await logActivity("delete", "ExpenseCategory", id, `Menghapus kategori pengeluaran #${id}`)
     revalidatePath("/master/kategori-pengeluaran")
     return { success: true }
   } catch (e: unknown) {

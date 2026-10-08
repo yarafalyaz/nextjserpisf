@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { Prisma } from "@prisma/client"
+import { logActivity } from "@/lib/services/activity-log.service"
 
 type ModelName =
   | "purchaseRequest"
@@ -346,6 +347,17 @@ export async function bulkDelete(model: ModelName, ids: number[]) {
     if (path) {
       revalidatePath(path)
     }
+
+    // Bulk deletion touches up to BULK_DELETE_MAX rows in one call and is the
+    // highest-blast-radius operation available from a list page. Without this
+    // entry a mass soft/hard delete left no audit trail at all. Record the model
+    // and the affected ids (capped) so the deletion is attributable.
+    await logActivity(
+      "delete",
+      model,
+      0,
+      `Hapus massal ${safeIds.length} data ${model} (id: ${safeIds.slice(0, 50).join(", ")}${safeIds.length > 50 ? ", …" : ""})`,
+    )
 
     return { success: true, message: `${safeIds.length} data berhasil dihapus` }
   } catch (error) {

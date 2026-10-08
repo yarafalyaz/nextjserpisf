@@ -16,6 +16,10 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+const logActivityMock = vi.fn()
+vi.mock("@/lib/services/activity-log.service", () => ({
+  logActivity: (...a: unknown[]) => logActivityMock(...a),
+}))
 
 import * as actions from "../cron.actions"
 
@@ -45,6 +49,12 @@ describe("Cron Actions", () => {
     try {
       const res = await actions.runCronTask("cleanup")
       expect(res).toEqual({ success: true, message: "OK" })
+      expect(logActivityMock).toHaveBeenCalledWith(
+        "run",
+        "Cron",
+        0,
+        expect.stringContaining("cleanup"),
+      )
     } finally {
       if (prevS === undefined) delete process.env.CRON_SECRET
       else process.env.CRON_SECRET = prevS
