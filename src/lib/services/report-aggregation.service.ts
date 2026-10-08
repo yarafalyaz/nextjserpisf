@@ -34,6 +34,9 @@ function buildWhere(filter: ReportEntryFilter): Prisma.JournalEntryWhereInput {
     ...(filter.costCenterIds?.length ? { costCenterId: { in: filter.costCenterIds } } : {}),
     journal: {
       status: { in: [...REPORT_JOURNAL_STATUSES] },
+      // Defensive: journals are hard-deleted today, but if a soft-delete path is
+      // ever added, reports must not silently count deleted GL.
+      deletedAt: null,
       ...(gte || lte || lt ? { transactionDate: { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}), ...(lt ? { lt } : {}) } } : {}),
     },
   }

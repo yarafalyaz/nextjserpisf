@@ -91,7 +91,8 @@ export default async function BankBookPage({
 
   const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
   const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
-  const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : 0
+  // No in-period movement → closing = opening balance (not 0).
+  const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : openingBalance
 
   const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 

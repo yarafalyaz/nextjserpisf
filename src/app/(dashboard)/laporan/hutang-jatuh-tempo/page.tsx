@@ -9,6 +9,8 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
+import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
+import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
 
 import type { Metadata } from "next"
 
@@ -17,8 +19,9 @@ export const metadata: Metadata = { title: "Hutang Jatuh Tempo" }
 export default async function AgingPayablesPage() {
   await requirePermission('view_reports')
 
+  // Only posted/partial/paid bills are real payables.
   const bills = await prisma.vendorBill.findMany({
-    where: { status: { notIn: ['draft', 'cancelled'] }, deletedAt: null },
+    where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
     include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: 'asc' },
   })
@@ -30,18 +33,29 @@ export default async function AgingPayablesPage() {
       const outstanding = Number(bill.grandTotal) - Number(bill.paidAmount)
       if (outstanding <= 0) return null
       const dueDate = new Date(bill.dueDate)
-      const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      const overdue = daysOverdue(dueDate, now)
       return {
         vendor: bill.vendor.name,
         billNo: bill.documentNo,
         dueDate,
-        daysOverdue: diffDays,
+        overdueDays: overdue,
+        ageGroup: agingBucket(overdue),
         outstanding,
       }
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
+    .sort((a, b) => b.overdueDays - a.overdueDays)
 
   const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0)
+
+  const agingSummary = new Map<string, { count: number; total: number }>()
+  for (const row of rows) {
+    const existing = agingSummary.get(row.ageGroup) || { count: 0, total: 0 }
+    existing.count++
+    existing.total += row.outstanding
+    agingSummary.set(row.ageGroup, existing)
+  }
+  const agingGroups = AGING_BUCKETS.map(key => ({ key, count: agingSummary.get(key)?.count || 0, total: agingSummary.get(key)?.total || 0 }))
   const period = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
@@ -65,12 +79,37 @@ export default async function AgingPayablesPage() {
         <ReportKpiCard label="Total Hutang" value={formatCurrency(totalOutstanding)} />
       </div>
 
+      <ReportSection title="Ringkasan Umur Hutang">
+        <DetailTable data-report-table="Ringkasan Umur Hutang">
+          <DetailTableHead>
+            <DetailTableTh>Kategori</DetailTableTh>
+            <DetailTableTh align="right">Jumlah</DetailTableTh>
+            <DetailTableTh align="right">Total (Rp)</DetailTableTh>
+          </DetailTableHead>
+          <DetailTableBody>
+            {agingGroups.map(g => (
+              <DetailTableRow key={g.key}>
+                <DetailTableTd>{g.key}</DetailTableTd>
+                <DetailTableTd align="right">{g.count}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(g.total)}</DetailTableTd>
+              </DetailTableRow>
+            ))}
+            <DetailTableRow className="font-bold border-t-2 border-default">
+              <DetailTableTd>TOTAL</DetailTableTd>
+              <DetailTableTd align="right">{rows.length}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
+            </DetailTableRow>
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
+
       <ReportSection title="Detail Hutang">
         <DetailTable data-report-table="Detail Hutang">
           <DetailTableHead>
             <DetailTableTh>Vendor</DetailTableTh>
             <DetailTableTh>No. Tagihan</DetailTableTh>
             <DetailTableTh>Jatuh Tempo</DetailTableTh>
+            <DetailTableTh>Umur</DetailTableTh>
             <DetailTableTh align="right">Sisa (Rp)</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
@@ -79,15 +118,16 @@ export default async function AgingPayablesPage() {
                 <DetailTableTd className="font-medium">{r.vendor}</DetailTableTd>
                 <DetailTableTd className="font-mono text-sm">{r.billNo}</DetailTableTd>
                 <DetailTableTd>{formatDate(r.dueDate)}</DetailTableTd>
+                <DetailTableTd>{r.ageGroup}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold text-danger">{formatAccounting(r.outstanding)}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={4} className="text-center text-muted-foreground py-6">Tidak ada hutang jatuh tempo</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada hutang jatuh tempo</DetailTableTd></DetailTableRow>
             )}
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
-                <DetailTableTd colSpan={3}>TOTAL</DetailTableTd>
+                <DetailTableTd colSpan={4}>TOTAL</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
               </DetailTableRow>
             )}

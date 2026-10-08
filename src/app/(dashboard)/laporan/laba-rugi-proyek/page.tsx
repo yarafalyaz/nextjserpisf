@@ -29,9 +29,12 @@ export default async function ProjectPnLPage({
   endDate.setHours(23, 59, 59, 999)
 
   const [invoices, materialIssues, expenses] = await Promise.all([
+    // Revenue recognised on the invoice = subtotal − discount (excl. tax), i.e.
+    // what the customer actually owes net of any header discount. Using bare
+    // `subtotal` overstated project revenue whenever a discount was applied.
     prisma.salesInvoice.findMany({
       where: { projectId: { not: null }, status: { in: ['posted', 'partial', 'paid'] }, date: { gte: startDate, lte: endDate } },
-      select: { projectId: true, subtotal: true },
+      select: { projectId: true, subtotal: true, discount: true },
     }),
     prisma.materialIssue.findMany({
       where: { projectId: { not: null }, status: 'completed', date: { gte: startDate, lte: endDate } },
@@ -45,7 +48,10 @@ export default async function ProjectPnLPage({
 
   const revenueByProject = new Map<number, number>()
   for (const inv of invoices) {
-    if (inv.projectId) revenueByProject.set(inv.projectId, (revenueByProject.get(inv.projectId) || 0) + Number(inv.subtotal))
+    if (inv.projectId) {
+      const netRevenue = Number(inv.subtotal) - Number(inv.discount)
+      revenueByProject.set(inv.projectId, (revenueByProject.get(inv.projectId) || 0) + netRevenue)
+    }
   }
   const cogsByProject = new Map<number, number>()
   for (const mi of materialIssues) {

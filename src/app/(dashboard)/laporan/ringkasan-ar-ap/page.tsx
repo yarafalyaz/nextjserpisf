@@ -9,6 +9,7 @@ import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
+import { RECOGNISED_AR_STATUSES, RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 
 import type { Metadata } from "next"
 
@@ -18,7 +19,7 @@ export default async function ArApSummaryPage() {
   await requirePermission('view_reports')
 
   const invoices = await prisma.salesInvoice.findMany({
-    where: { status: { notIn: ['draft', 'cancelled'] }, deletedAt: null },
+    where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
     include: { customer: { select: { name: true } } },
     orderBy: { dueDate: 'asc' },
   })
@@ -38,7 +39,7 @@ export default async function ArApSummaryPage() {
   const totalAR = arRows.reduce((s, r) => s + r.outstanding, 0)
 
   const bills = await prisma.vendorBill.findMany({
-    where: { status: { notIn: ['draft', 'cancelled'] }, deletedAt: null },
+    where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null },
     include: { vendor: { select: { name: true } } },
     orderBy: { dueDate: 'asc' },
   })

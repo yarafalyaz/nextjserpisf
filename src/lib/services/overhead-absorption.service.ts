@@ -98,14 +98,18 @@ export async function buildOverheadAbsorptionReport(
     })
   }
 
-  // ACTUAL side: net debit balance of the overhead account(s) from posted journals.
+  // ACTUAL side: net debit balance of the overhead account(s) from posted
+  // journals. Include REVERSED to match every other report: a reversal is
+  // posted as its own journal, so counting both makes a reversed overhead entry
+  // net to zero. Filtering POSTED only would leave a reversed expense counted
+  // in `actualTotal`, skewing the under/over-absorption variance.
   let actualTotal = 0
   if (accountIds.length > 0) {
     const entries = await prisma.journalEntry.findMany({
       where: {
         accountId: { in: accountIds },
         journal: {
-          status: "POSTED",
+          status: { in: ["POSTED", "REVERSED"] },
           deletedAt: null,
           transactionDate: { gte: start, lt: end },
         },

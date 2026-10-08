@@ -76,16 +76,44 @@ export default async function InventorySummaryPage() {
   })
   const criticalItems = lowStockItems.filter(i => Number(i.qtyOnHand) <= Number(i.minStock))
 
-  const byCategory = new Map<string, { count: number; qty: number; value: number }>()
+  // Category roll-up MUST use the same valuation basis as the per-warehouse
+  // table (FIFO layer cost), otherwise the two tables disagree and neither
+  // reconciles with the "Total Nilai" KPI. Previously this used master
+  // `item.cost × qtyOnHand` while the warehouse table used layer `unitCost`,
+  // so the category "Estimasi Nilai" could never tie out.
+  const itemById = new Map(items.map((i) => [i.id, i]))
+  const categoryOfItem = new Map<number, string>()
   for (const item of items) {
-    const cat = item.category?.name || 'Tanpa Kategori'
-    const existing = byCategory.get(cat) || { count: 0, qty: 0, value: 0 }
-    existing.count++
-    existing.qty += Number(item.qtyOnHand)
-    existing.value += Number(item.qtyOnHand) * Number(item.cost)
+    categoryOfItem.set(item.id, item.category?.name || 'Tanpa Kategori')
+  }
+  // Items that still have layers but were excluded from `items` (qtyOnHand <= 0
+  // drift) must still be categorised so layers are not silently dropped.
+  const missingItemIds = [...new Set(layers.map((l) => l.itemId))].filter((id) => !itemById.has(id))
+  const missingItems = missingItemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: missingItemIds } },
+        select: { id: true, category: { select: { name: true } } },
+      })
+    : []
+  for (const item of missingItems) {
+    categoryOfItem.set(item.id, item.category?.name || 'Tanpa Kategori')
+  }
+
+  const byCategory = new Map<string, { count: number; qty: number; value: number; items: Set<number> }>()
+  for (const layer of layers) {
+    const cat = categoryOfItem.get(layer.itemId) || 'Tanpa Kategori'
+    const existing = byCategory.get(cat) || { count: 0, qty: 0, value: 0, items: new Set<number>() }
+    const remaining = Number(layer.remaining)
+    existing.qty += remaining
+    existing.value += remaining * Number(layer.unitCost)
+    existing.items.add(layer.itemId)
     byCategory.set(cat, existing)
   }
-  const categoryRows = Array.from(byCategory.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.value - a.value)
+  const categoryRows = Array.from(byCategory.entries())
+    .map(([name, data]) => ({ name, count: data.items.size, qty: data.qty, value: data.value }))
+    .sort((a, b) => b.value - a.value)
+  const categoryTotalQty = categoryRows.reduce((s, r) => s + r.qty, 0)
+  const categoryTotalValue = categoryRows.reduce((s, r) => s + r.value, 0)
 
   const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
@@ -148,7 +176,7 @@ export default async function InventorySummaryPage() {
             <DetailTableTh>Kategori</DetailTableTh>
             <DetailTableTh align="right">Jenis Item</DetailTableTh>
             <DetailTableTh align="right">Total Qty</DetailTableTh>
-            <DetailTableTh align="right">Estimasi Nilai</DetailTableTh>
+            <DetailTableTh align="right">Nilai (FIFO)</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
             {categoryRows.map((row) => (
@@ -159,6 +187,13 @@ export default async function InventorySummaryPage() {
                 <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>
               </DetailTableRow>
             ))}
+            {categoryRows.length > 0 && (
+              <DetailTableRow className="font-bold border-t-2 border-default">
+                <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
+                <DetailTableTd align="right">{categoryTotalQty.toLocaleString('id-ID')}</DetailTableTd>
+                <DetailTableTd align="right" className="text-primary">{formatAccounting(categoryTotalValue)}</DetailTableTd>
+              </DetailTableRow>
+            )}
           </DetailTableBody>
         </DetailTable>
       </ReportSection>

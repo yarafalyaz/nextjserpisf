@@ -46,7 +46,7 @@ describe("sumEntriesByAccount", () => {
     expect(groupByMock).toHaveBeenCalledWith({
       by: ["accountId"],
       where: {
-        journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { lte: to } },
+        journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null, transactionDate: { lte: to } },
       },
       _sum: { debit: true, credit: true },
     })
@@ -65,7 +65,7 @@ describe("sumEntriesByAccount", () => {
         where: {
           accountId: { in: [3, 4] },
           costCenterId: { in: [7] },
-          journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { gte: from, lte: to } },
+          journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null, transactionDate: { gte: from, lte: to } },
         },
       }),
     )
@@ -108,7 +108,7 @@ describe("sumNetForAccount", () => {
     expect(aggregateMock).toHaveBeenCalledWith({
       where: {
         accountId: { in: [11] },
-        journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { lt: from } },
+        journal: { status: { in: ["POSTED", "REVERSED"] }, deletedAt: null, transactionDate: { lt: from } },
       },
       _sum: { debit: true, credit: true },
     })

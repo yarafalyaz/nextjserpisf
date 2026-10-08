@@ -37,36 +37,104 @@ export default async function ProfitCenterIncomePage({
   const endDate = Number.isNaN(_ed.getTime()) ? new Date(now) : _ed;
   endDate.setHours(23, 59, 59, 999);
 
-  const [profitCenters, revenueEntries, expenseEntries] = await Promise.all([
+  // Aggregate in SQL, grouped by profit center + account type, so we never pull
+  // the whole ledger into Node. Only POSTED/REVERSED journals count (a reversal
+  // is its own POSTED journal, so the pair nets to zero).
+  const [profitCenters, grouped] = await Promise.all([
     prisma.profitCenter.findMany({ orderBy: { code: "asc" } }),
-    prisma.journalEntry.findMany({
-      where: { account: { type: "REVENUE" }, journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { gte: startDate, lte: endDate } } },
-      include: { account: true },
-    }),
-    prisma.journalEntry.findMany({
-      where: { account: { type: "EXPENSE" }, journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { gte: startDate, lte: endDate } } },
-      include: { account: true },
+    prisma.journalEntry.groupBy({
+      by: ["profitCenterId", "accountId"],
+      where: {
+        journal: { status: { in: ["POSTED", "REVERSED"] }, transactionDate: { gte: startDate, lte: endDate } },
+        account: { type: { in: ["REVENUE", "EXPENSE"] } },
+      },
+      _sum: { debit: true, credit: true },
     }),
   ]);
 
-  const revenueByAccount = new Map<number, { code: string; name: string; amount: number }>();
-  for (const entry of revenueEntries) {
-    const existing = revenueByAccount.get(entry.accountId) || { code: entry.account.code, name: entry.account.name, amount: 0 };
-    existing.amount += Number(entry.credit) - Number(entry.debit);
-    revenueByAccount.set(entry.accountId, existing);
+  // Resolve the accounts referenced so we can classify REVENUE vs EXPENSE.
+  const accountIds = [...new Set(grouped.map((g) => g.accountId))];
+  const accounts = accountIds.length
+    ? await prisma.account.findMany({
+        where: { id: { in: accountIds } },
+        select: { id: true, code: true, name: true, type: true },
+      })
+    : [];
+  const accountMap = new Map(accounts.map((a) => [a.id, a]));
+
+  // Roll up per profit center (null profitCenterId = "Tanpa Pusat Laba").
+  type Bucket = {
+    key: number;
+    code: string;
+    name: string;
+    revenueByAccount: Map<number, { code: string; name: string; amount: number }>;
+    expenseByAccount: Map<number, { code: string; name: string; amount: number }>;
+    totalRevenue: number;
+    totalExpense: number;
+  };
+
+  const buckets = new Map<number, Bucket>();
+  const bucketKey = (pcId: number | null) => pcId ?? 0;
+
+  const getBucket = (pcId: number | null): Bucket => {
+    const key = bucketKey(pcId);
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      const pc = pcId != null ? profitCenters.find((p) => p.id === pcId) : null;
+      bucket = {
+        key,
+        code: pc?.code ?? "-",
+        name: pc?.name ?? "Tanpa Pusat Laba",
+        revenueByAccount: new Map(),
+        expenseByAccount: new Map(),
+        totalRevenue: 0,
+        totalExpense: 0,
+      };
+      buckets.set(key, bucket);
+    }
+    return bucket;
+  };
+
+  for (const row of grouped) {
+    const account = accountMap.get(row.accountId);
+    if (!account) continue;
+    const debit = Number(row._sum.debit ?? 0);
+    const credit = Number(row._sum.credit ?? 0);
+    const bucket = getBucket(row.profitCenterId);
+
+    if (account.type === "REVENUE") {
+      const amount = credit - debit;
+      if (amount === 0) continue;
+      const existing = bucket.revenueByAccount.get(account.id) ?? { code: account.code, name: account.name, amount: 0 };
+      existing.amount += amount;
+      bucket.revenueByAccount.set(account.id, existing);
+      bucket.totalRevenue += amount;
+    } else {
+      const amount = debit - credit;
+      if (amount === 0) continue;
+      const existing = bucket.expenseByAccount.get(account.id) ?? { code: account.code, name: account.name, amount: 0 };
+      existing.amount += amount;
+      bucket.expenseByAccount.set(account.id, existing);
+      bucket.totalExpense += amount;
+    }
   }
 
-  const expenseByAccount = new Map<number, { code: string; name: string; amount: number }>();
-  for (const entry of expenseEntries) {
-    const existing = expenseByAccount.get(entry.accountId) || { code: entry.account.code, name: entry.account.name, amount: 0 };
-    existing.amount += Number(entry.debit) - Number(entry.credit);
-    expenseByAccount.set(entry.accountId, existing);
-  }
+  const rows = [...buckets.values()]
+    .map((b) => ({
+      key: b.key,
+      code: b.code,
+      name: b.name,
+      totalRevenue: b.totalRevenue,
+      totalExpense: b.totalExpense,
+      netIncome: b.totalRevenue - b.totalExpense,
+      revenueItems: [...b.revenueByAccount.values()].filter((r) => r.amount !== 0).sort((a, c) => a.code.localeCompare(c.code)),
+      expenseItems: [...b.expenseByAccount.values()].filter((e) => e.amount !== 0).sort((a, c) => a.code.localeCompare(c.code)),
+    }))
+    .filter((r) => r.totalRevenue !== 0 || r.totalExpense !== 0)
+    .sort((a, b) => a.code.localeCompare(b.code));
 
-  const revenueItems = Array.from(revenueByAccount.values()).filter((r) => r.amount !== 0).sort((a, b) => a.code.localeCompare(b.code));
-  const expenseItems = Array.from(expenseByAccount.values()).filter((e) => e.amount !== 0).sort((a, b) => a.code.localeCompare(b.code));
-  const totalRevenue = revenueItems.reduce((sum, r) => sum + r.amount, 0);
-  const totalExpense = expenseItems.reduce((sum, e) => sum + e.amount, 0);
+  const totalRevenue = rows.reduce((s, r) => s + r.totalRevenue, 0);
+  const totalExpense = rows.reduce((s, r) => s + r.totalExpense, 0);
   const netIncome = totalRevenue - totalExpense;
 
   const periodLabel = `Periode ${startDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })} – ${endDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}`;
@@ -83,82 +151,78 @@ export default async function ProfitCenterIncomePage({
       <ReportLetterhead title="Laporan Laba Rugi per Pusat Laba" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Pusat Laba mengukur kontribusi laba dari setiap divisi, departemen, atau unit bisnis dalam perusahaan. Analisis ini membantu dalam evaluasi kinerja, alokasi sumber daya, dan pengambilan keputusan strategis di tingkat unit." />
 
-      <ReportSection title="Daftar Pusat Laba">
-        <DetailTable data-report-table="Daftar Pusat Laba">
-          <DetailTableHead>
-            <DetailTableTh>Kode</DetailTableTh><DetailTableTh>Nama</DetailTableTh>
-          </DetailTableHead>
-          <DetailTableBody>
-            {profitCenters.map((pc) => (
-              <DetailTableRow key={pc.id}>
-                <DetailTableTd>{pc.code}</DetailTableTd><DetailTableTd>{pc.name}</DetailTableTd>
-              </DetailTableRow>
-            ))}
-            {profitCenters.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={2} className="text-center">Belum ada pusat laba</DetailTableTd></DetailTableRow>
-            )}
-          </DetailTableBody>
-        </DetailTable>
-      </ReportSection>
-
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Pendapatan" value={formatCurrency(totalRevenue)} valueClassName="text-success" />
         <ReportKpiCard label="Total Beban" value={formatCurrency(totalExpense)} valueClassName="text-danger" />
         <ReportKpiCard label="Laba (Rugi) Bersih" value={formatCurrency(netIncome)} valueClassName={netIncome >= 0 ? 'text-success' : 'text-danger'} />
       </div>
 
-      <ReportSection title="Pendapatan">
-        <DetailTable data-report-table="Pendapatan">
+      <ReportSection title="Ringkasan per Pusat Laba">
+        <DetailTable data-report-table="Ringkasan Pusat Laba">
           <DetailTableHead>
-            <DetailTableTh>Kode</DetailTableTh><DetailTableTh>Nama Akun</DetailTableTh><DetailTableTh align="right">Jumlah</DetailTableTh>
+            <DetailTableTh>Kode</DetailTableTh>
+            <DetailTableTh>Pusat Laba</DetailTableTh>
+            <DetailTableTh align="right">Pendapatan</DetailTableTh>
+            <DetailTableTh align="right">Beban</DetailTableTh>
+            <DetailTableTh align="right">Laba (Rugi)</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
-            {revenueItems.map((r) => (
-              <DetailTableRow key={r.code}>
-                <DetailTableTd>{r.code}</DetailTableTd><DetailTableTd>{r.name}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(r.amount)}</DetailTableTd>
+            {rows.map((r) => (
+              <DetailTableRow key={r.key}>
+                <DetailTableTd className="font-mono">{r.code}</DetailTableTd>
+                <DetailTableTd>{r.name}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(r.totalRevenue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(r.totalExpense)}</DetailTableTd>
+                <DetailTableTd align="right" className={r.netIncome >= 0 ? "text-success font-medium" : "text-danger font-medium"}>{formatAccounting(r.netIncome)}</DetailTableTd>
               </DetailTableRow>
             ))}
-            {revenueItems.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={3} className="text-center">Tidak ada data pendapatan</DetailTableTd></DetailTableRow>
+            {rows.length === 0 && (
+              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada transaksi pendapatan/beban pada periode ini</DetailTableTd></DetailTableRow>
             )}
-            <DetailTableRow className="font-bold border-t-2 border-default">
-              <DetailTableTd colSpan={2}>Total Pendapatan</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(totalRevenue)}</DetailTableTd>
-            </DetailTableRow>
+            {rows.length > 0 && (
+              <DetailTableRow className="font-bold border-t-2 border-default">
+                <DetailTableTd colSpan={2}>TOTAL</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalRevenue)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalExpense)}</DetailTableTd>
+                <DetailTableTd align="right" className={netIncome >= 0 ? "text-success" : "text-danger"}>{formatAccounting(netIncome)}</DetailTableTd>
+              </DetailTableRow>
+            )}
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
 
-      <ReportSection title="Beban">
-        <DetailTable data-report-table="Beban">
-          <DetailTableHead>
-            <DetailTableTh>Kode</DetailTableTh><DetailTableTh>Nama Akun</DetailTableTh><DetailTableTh align="right">Jumlah</DetailTableTh>
-          </DetailTableHead>
-          <DetailTableBody>
-            {expenseItems.map((e) => (
-              <DetailTableRow key={e.code}>
-                <DetailTableTd>{e.code}</DetailTableTd><DetailTableTd>{e.name}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(e.amount)}</DetailTableTd>
+      {/* Per-profit-center detail (accounts behind each number). */}
+      {rows.map((r) => (
+        <ReportSection key={r.key} title={`${r.code} — ${r.name}`}>
+          <DetailTable data-report-table={`Pusat Laba ${r.code}`}>
+            <DetailTableHead>
+              <DetailTableTh>Kode Akun</DetailTableTh>
+              <DetailTableTh>Nama Akun</DetailTableTh>
+              <DetailTableTh align="right">Jumlah</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {r.revenueItems.map((item) => (
+                <DetailTableRow key={`rev-${item.code}`}>
+                  <DetailTableTd className="font-mono">{item.code}</DetailTableTd>
+                  <DetailTableTd>{item.name}</DetailTableTd>
+                  <DetailTableTd align="right" className="text-success">{formatAccounting(item.amount)}</DetailTableTd>
+                </DetailTableRow>
+              ))}
+              {r.expenseItems.map((item) => (
+                <DetailTableRow key={`exp-${item.code}`}>
+                  <DetailTableTd className="font-mono">{item.code}</DetailTableTd>
+                  <DetailTableTd>{item.name}</DetailTableTd>
+                  <DetailTableTd align="right" className="text-danger">{formatAccounting(item.amount)}</DetailTableTd>
+                </DetailTableRow>
+              ))}
+              <DetailTableRow className="font-bold border-t-2 border-default">
+                <DetailTableTd colSpan={2}>Laba (Rugi) {r.name}</DetailTableTd>
+                <DetailTableTd align="right" className={r.netIncome >= 0 ? "text-success" : "text-danger"}>{formatAccounting(r.netIncome)}</DetailTableTd>
               </DetailTableRow>
-            ))}
-            {expenseItems.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={3} className="text-center">Tidak ada data beban</DetailTableTd></DetailTableRow>
-            )}
-            <DetailTableRow className="font-bold border-t-2 border-default">
-              <DetailTableTd colSpan={2}>Total Beban</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(totalExpense)}</DetailTableTd>
-            </DetailTableRow>
-          </DetailTableBody>
-        </DetailTable>
-      </ReportSection>
-
-      <div className={`report-section ${netIncome >= 0 ? 'border-success' : 'border-danger'}`} style={{ borderLeft: '4px solid', paddingLeft: 16 }}>
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-bold">Laba (Rugi) Bersih Keseluruhan</span>
-          <span className={`text-base font-bold ${netIncome >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(netIncome)}</span>
-        </div>
-      </div>
+            </DetailTableBody>
+          </DetailTable>
+        </ReportSection>
+      ))}
     </div>
   );
 }

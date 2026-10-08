@@ -9,24 +9,20 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
+import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
+import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Piutang Jatuh Tempo" }
 
-function getAgeGroup(days: number): string {
-  if (days <= 0) return "Jatuh Tempo Hari Ini"
-  if (days <= 30) return "1–30 Hari"
-  if (days <= 60) return "31–60 Hari"
-  if (days <= 90) return "61–90 Hari"
-  return "> 90 Hari"
-}
-
 export default async function AgingReceivablesPage() {
   await requirePermission('view_reports')
 
+  // Only posted/partial/paid invoices are real receivables (drafts/sent/approved
+  // are not yet issued).
   const invoices = await prisma.salesInvoice.findMany({
-    where: { status: { notIn: ['draft', 'cancelled'] }, deletedAt: null },
+    where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null },
     include: { customer: { select: { name: true } } },
     orderBy: { dueDate: 'asc' },
   })
@@ -38,17 +34,18 @@ export default async function AgingReceivablesPage() {
       const outstanding = Number(inv.grandTotal) - Number(inv.paidAmount)
       if (outstanding <= 0) return null
       const dueDate = new Date(inv.dueDate)
-      const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      const overdue = daysOverdue(dueDate, now)
       return {
         customer: inv.customer.name,
         invoiceNo: inv.documentNo,
         dueDate,
-        daysOverdue: diffDays,
-        ageGroup: getAgeGroup(diffDays),
+        overdueDays: overdue,
+        ageGroup: agingBucket(overdue),
         outstanding,
       }
     })
     .filter((r): r is NonNullable<typeof r> => r !== null)
+    .sort((a, b) => b.overdueDays - a.overdueDays)
 
   const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0)
 
@@ -59,8 +56,7 @@ export default async function AgingReceivablesPage() {
     existing.total += row.outstanding
     agingSummary.set(row.ageGroup, existing)
   }
-  const agingGroups = ['Jatuh Tempo Hari Ini', '1–30 Hari', '31–60 Hari', '61–90 Hari', '> 90 Hari']
-    .map(key => ({ key, count: agingSummary.get(key)?.count || 0, total: agingSummary.get(key)?.total || 0 }))
+  const agingGroups = AGING_BUCKETS.map(key => ({ key, count: agingSummary.get(key)?.count || 0, total: agingSummary.get(key)?.total || 0 }))
 
   const period = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 

@@ -26,11 +26,17 @@ export default async function TaxReportPage({
   const now = new Date()
   const startDate = params.tanggalMulai ? new Date(params.tanggalMulai) : new Date(now.getFullYear(), now.getMonth(), 1)
   const endDate = params.tanggalSelesai ? new Date(params.tanggalSelesai) : now
+  // Clamp to end-of-day: without this, `date <= endDate` at midnight silently
+  // drops every invoice/bill dated ON the end date (every other report clamps).
+  endDate.setHours(23, 59, 59, 999)
 
+  // PPN is only recognised on invoices that were actually ISSUED (posted), not
+  // on draft/sent/approved ones that carry no tax liability yet. Filtering
+  // `not cancelled` previously pulled drafts into the SPT.
   const salesInvoices = await prisma.salesInvoice.findMany({
     where: {
       date: { gte: startDate, lte: endDate },
-      status: { not: 'cancelled' },
+      status: { in: ['posted', 'partial', 'paid'] },
       deletedAt: null,
       taxAmount: { gt: 0 },
     },
@@ -48,10 +54,11 @@ export default async function TaxReportPage({
   const totalOutputDPP = outputTaxRows.reduce((s, r) => s + r.dpp, 0)
   const totalOutputTax = outputTaxRows.reduce((s, r) => s + r.tax, 0)
 
+  // Input VAT is recognised on bills that were posted (received), not draft.
   const vendorBills = await prisma.vendorBill.findMany({
     where: {
       date: { gte: startDate, lte: endDate },
-      status: { not: 'cancelled' },
+      status: { in: ['posted', 'partial', 'paid'] },
       deletedAt: null,
       tax: { gt: 0 },
     },
@@ -63,7 +70,8 @@ export default async function TaxReportPage({
     date: bill.date,
     documentNo: bill.documentNo,
     party: bill.vendor.name,
-    dpp: Number(bill.subtotal),
+    // DPP = taxable base = subtotal − discount (mirror the sales side above).
+    dpp: Number(bill.subtotal) - Number(bill.discountAmount ?? 0),
     tax: Number(bill.tax),
   }))
   const totalInputDPP = inputTaxRows.reduce((s, r) => s + r.dpp, 0)

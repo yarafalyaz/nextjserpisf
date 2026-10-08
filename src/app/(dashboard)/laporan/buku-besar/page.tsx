@@ -95,7 +95,9 @@ export default async function GeneralLedgerPage({
 
   const totalDebit = entries.reduce((sum, e) => sum + e.debit, 0)
   const totalCredit = entries.reduce((sum, e) => sum + e.credit, 0)
-  const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : 0
+  // With no in-period entries the closing balance is the opening balance, NOT 0
+  // (a 0 here hid the account's carried-forward balance entirely).
+  const finalBalance = rows.length > 0 ? rows[rows.length - 1].balance : openingBalance
 
   const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
   const ledgerSubtitle = selectedAccount ? `${selectedAccount.code} – ${selectedAccount.name}` : undefined
