@@ -355,6 +355,7 @@ model Vendor {
   purchaseOrders    PurchaseOrder[]
   vendorBills       VendorBill[]
   vendorPayments    VendorPayment[]
+  productionCosts   ProductionCost[]
   paymentTerm       PaymentTerm?    @relation(fields: [paymentTermId], references: [id])
 
   @@index([paymentTermId], map: "vendors_payment_term_id_fkey")
@@ -1590,6 +1591,7 @@ model ProductionOrder {
   createdAt         DateTime                  @default(now()) @map("created_at")
   updatedAt         DateTime                  @updatedAt @map("updated_at")
   materials         ProductionOrderMaterial[]
+  costs             ProductionCost[]
   product           Product                   @relation(fields: [productId], references: [id])
   bomRevision       BomRevision?              @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
 
@@ -1737,6 +1739,42 @@ model Nonconformance {
   @@map("nonconformances")
 }
 
+/// Non-material production cost line (PRD FAB-06/07/08/09). Captures direct
+/// labor, machine usage, applied overhead, and subcontract/service cost so the
+/// finished-goods HPP is material + labor + overhead + subcontract, not material
+/// alone. A line is attached to a production order (and/or work order) and its
+/// amount rolls into `ProductionOrder.totalActualCost`. `category`:
+/// labor | machine | overhead | subcontract | service | other.
+/// A labor line may cite a `sourceTimesheetId` when it was pulled from an
+/// existing timesheet, but the amount is always stored explicitly (snapshot).
+model ProductionCost {
+  id                Int              @id @default(autoincrement())
+  productionOrderId Int?             @map("production_order_id")
+  workOrderId       Int?             @map("work_order_id")
+  category          String           @default("labor")
+  description       String?          @db.Text
+  hours             Decimal?         @db.Decimal(10, 2)
+  rate              Decimal?         @db.Decimal(15, 2)
+  amount            Decimal          @default(0.00) @db.Decimal(15, 2)
+  sourceTimesheetId Int?             @map("source_timesheet_id")
+  vendorId          Int?             @map("vendor_id")
+  referenceNo       String?          @map("reference_no")
+  postedAt          DateTime?        @map("posted_at")
+  createdBy         Int?             @map("created_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  workOrder         WorkOrder?       @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  vendor            Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  @@index([productionOrderId], map: "production_costs_production_order_id_fkey")
+  @@index([workOrderId], map: "production_costs_work_order_id_fkey")
+  @@index([category])
+  @@index([vendorId])
+  @@index([createdAt])
+  @@map("production_costs")
+}
+
 model WorkOrder {
   id                Int              @id @default(autoincrement())
   customerVehicleId Int?             @map("customer_vehicle_id")
@@ -1754,6 +1792,7 @@ model WorkOrder {
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
   items             WorkOrderItem[]
+  costs             ProductionCost[]
   customer          Customer         @relation(fields: [customerId], references: [id])
   customerVehicle   CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
   quotation         Quotation?       @relation(fields: [quotationId], references: [id])

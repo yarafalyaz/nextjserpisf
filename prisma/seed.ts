@@ -307,6 +307,8 @@ async function main() {
       "manage_qc_checklists",
       "manage_qc_inspections",
       "manage_nonconformances",
+      // Non-material production cost lines (PRD FAB-06/07/08/09).
+      "manage_production_costs",
       "view_employee_loans",
       "manage_settings",
       "manage_users",
@@ -541,6 +543,7 @@ async function main() {
       "manage_qc_checklists",
       "manage_qc_inspections",
       "manage_nonconformances",
+      "manage_production_costs",
       "view_timesheets",
       "create_timesheets",
       "view_overtime",

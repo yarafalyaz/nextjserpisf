@@ -8,6 +8,7 @@ import { StatusChip } from '@/components/ui/status-chip'
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteProductionOrder } from "@/actions/manufacturing.actions"
 import { ProductionOrderActions } from "../_components/production-order-actions"
+import { ProductionCostSection } from "../_components/production-cost-section"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
@@ -21,7 +22,9 @@ export default async function ProductionOrderDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_production")
+  const user = await requirePermission("view_production")
+  const canManageCosts =
+    user.roles.includes("super_admin") || user.permissions.includes("manage_production_costs")
 
   const { id } = await params
   const numId = Number(id)
@@ -32,10 +35,37 @@ export default async function ProductionOrderDetailPage({
     include: {
       product: { include: { inventoryItem: { select: { trackSerial: true } } } },
       materials: true,
+      costs: {
+        orderBy: { createdAt: "asc" },
+        include: { vendor: { select: { name: true } } },
+      },
     },
   })
 
   if (!order) notFound()
+
+  // Link to a work order (if any) so labor cost can be pulled from its project's
+  // timesheets. A production order is not directly tied to a project or WO, so
+  // this is a best-effort link via the product's inventory item on WO items.
+  const linkedWorkOrder = order.product.inventoryItemId
+    ? await prisma.workOrder.findFirst({
+        where: { items: { some: { itemId: order.product.inventoryItemId } } },
+        select: { id: true, projectId: true },
+        orderBy: { createdAt: "desc" },
+      })
+    : null
+
+  const costRows = order.costs.map((c) => ({
+    id: c.id,
+    category: c.category,
+    description: c.description,
+    hours: c.hours != null ? Number(c.hours) : null,
+    rate: c.rate != null ? Number(c.rate) : null,
+    amount: Number(c.amount),
+    referenceNo: c.referenceNo,
+    sourceTimesheetId: c.sourceTimesheetId,
+    vendorName: c.vendor?.name ?? null,
+  }))
 
   // Resolve material item names (ProductionOrderMaterial holds itemId only).
   const itemIds = order.materials.map((m) => m.itemId)
@@ -150,6 +180,15 @@ export default async function ProductionOrderDetailPage({
           )}
         </div>
       </div>
+
+      {/* Non-material costs (labor / overhead / subcontract / service) */}
+      <ProductionCostSection
+        productionOrderId={order.id}
+        workOrderId={linkedWorkOrder?.id ?? null}
+        costs={costRows}
+        canManage={canManageCosts}
+        hasProject={!!linkedWorkOrder?.projectId}
+      />
     </div>
   )
 }
