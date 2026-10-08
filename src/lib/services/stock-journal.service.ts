@@ -104,16 +104,26 @@ export const stockJournalService = {
 
     // Split the debit into goods / freight / admin when both the line slices and
     // the target accounts are available; otherwise post one blended Inventory
-    // debit.
-    const shippingValue = shippingLines ? sumValue(shippingLines) : 0
-    const adminValue = adminLines ? sumValue(adminLines) : 0
+    // debit. All components are rounded to 2dp and the goods leg is the exact
+    // residual of the ROUNDED total, so Σdebits === totalValue exactly (JournalService
+    // rejects any imbalance > 0.001 — sub-cent landed-cost splits used to break it).
+    const round2 = (n: number) => Math.round(n * 100) / 100
+    const totalRounded = round2(totalValue)
+    const shippingValue = round2(shippingLines ? sumValue(shippingLines) : 0)
+    const adminValue = round2(adminLines ? sumValue(adminLines) : 0)
     const canSplit =
       !!goodsOnlyLines &&
       accounts.purchaseAdminFee != null &&
       adminValue > 0
 
     if (canSplit) {
-      const residualGoods = Math.round((totalValue - shippingValue - adminValue) * 100) / 100
+      // Persediaan absorbs whatever is left after the rounded freight/admin, so
+      // the debits always sum back to totalRounded.
+      const residualGoods = round2(
+        totalRounded -
+          (shippingValue !== 0 && accounts.purchaseShipping != null ? shippingValue : 0) -
+          adminValue,
+      )
       entries.push({
         accountId: accounts.inventory,
         debit: residualGoods,
@@ -127,9 +137,6 @@ export const stockJournalService = {
           credit: 0,
           memo: `Debit Ongkir - GR ${grDocumentNo}`,
         })
-      } else if (shippingValue !== 0) {
-        // No shipping account configured → fold back into Persediaan.
-        entries[0].debit = Math.round((entries[0].debit + shippingValue) * 100) / 100
       }
       if (adminValue !== 0) {
         entries.push({
@@ -142,7 +149,7 @@ export const stockJournalService = {
     } else {
       entries.push({
         accountId: accounts.inventory,
-        debit: totalValue,
+        debit: totalRounded,
         credit: 0,
         memo: `Debit Persediaan - GR ${grDocumentNo}`,
       })
@@ -151,7 +158,7 @@ export const stockJournalService = {
     entries.push({
       accountId: accounts.purchaseInventory!,
       debit: 0,
-      credit: totalValue,
+      credit: totalRounded,
       memo: `Kredit Hutang Pembelian (clearing) - GR ${grDocumentNo}`,
     })
 

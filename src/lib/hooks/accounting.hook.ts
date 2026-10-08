@@ -304,20 +304,26 @@ export async function onSalesInvoicePosted(
           by: ["itemId", "warehouseId"],
           where: {
             itemId: { in: productItemIds },
-            warehouseId: { in: warehouseIds },
+            ...(warehouseIds.length ? { warehouseId: { in: warehouseIds } } : {}),
             remaining: { gt: 0 },
           },
           _sum: { remaining: true },
         });
+        // Available per (item, warehouse) AND per item across ALL warehouses. The
+        // latter is what an item with a null defaultWarehouseId consumes against
+        // (consumeFifoLayers treats null warehouseId as "any warehouse"), so the
+        // guard must not demand availability in a specific warehouse for those.
         const availableMap = new Map<string, number>();
+        const availableAnyWarehouse = new Map<number, number>();
         for (const row of layerSums) {
-          availableMap.set(
-            `${row.itemId}:${row.warehouseId}`,
-            Number(row._sum.remaining ?? 0),
-          );
+          const remaining = Number(row._sum.remaining ?? 0);
+          availableMap.set(`${row.itemId}:${row.warehouseId}`, remaining);
+          availableAnyWarehouse.set(row.itemId, (availableAnyWarehouse.get(row.itemId) ?? 0) + remaining);
         }
-        // Aggregate needed per item+warehouse (converted to base UoM).
+        // Aggregate needed per item+warehouse (converted to base UoM). Items with
+        // no default warehouse are aggregated per item (consumed across warehouses).
         const neededMap = new Map<string, number>();
+        const neededAnyWarehouse = new Map<number, number>();
         for (const line of productItems) {
           const info = itemInfo.get(line.itemId);
           if (!info?.isProduct) continue;
@@ -325,8 +331,13 @@ export async function onSalesInvoicePosted(
           const isBaseUom = !uom || uom === info.unitOfMeasure;
           const rawFactor = isBaseUom ? 1 : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
           const factor = rawFactor > 0 ? rawFactor : 1;
-          const key = `${line.itemId}:${info.defaultWarehouseId}`;
-          neededMap.set(key, (neededMap.get(key) ?? 0) + Number(line.qty) * factor);
+          const need = Number(line.qty) * factor;
+          if (info.defaultWarehouseId == null) {
+            neededAnyWarehouse.set(line.itemId, (neededAnyWarehouse.get(line.itemId) ?? 0) + need);
+          } else {
+            const key = `${line.itemId}:${info.defaultWarehouseId}`;
+            neededMap.set(key, (neededMap.get(key) ?? 0) + need);
+          }
         }
         for (const [key, needed] of neededMap) {
           const available = availableMap.get(key) ?? 0;
@@ -335,6 +346,15 @@ export async function onSalesInvoicePosted(
             const row = itemInfo.get(Number(itemId));
             throw new Error(
               `Stok tidak mencukupi untuk ${row?.id ?? itemId} di gudang ${warehouseId}: butuh ${needed}, tersedia ${available}. Selesaikan penerimaan/produksi terlebih dahulu.`,
+            );
+          }
+        }
+        for (const [itemId, needed] of neededAnyWarehouse) {
+          const available = availableAnyWarehouse.get(itemId) ?? 0;
+          if (needed > available + 1e-9) {
+            const row = itemInfo.get(itemId);
+            throw new Error(
+              `Stok tidak mencukupi untuk ${row?.id ?? itemId}: butuh ${needed}, tersedia ${available} (seluruh gudang). Selesaikan penerimaan/produksi terlebih dahulu.`,
             );
           }
         }
@@ -1237,6 +1257,14 @@ export async function onVendorBillPosted(
   }[] = [];
   if (goodsBased) {
     const taxAmount = settings.purchaseTaxAccountId ? Number(bill.tax ?? 0) : 0;
+    // A bill's grand total must cover its tax; if not (data-entry error / legacy
+    // bad row) the clearing leg would go negative and book a negative asset line
+    // while the payable stays at grandTotal. Fail closed instead.
+    if (taxAmount > grandTotal) {
+      throw new Error(
+        `Pajak tagihan (${taxAmount}) melebihi grand total (${grandTotal}) — periksa data tagihan vendor`,
+      );
+    }
     const clearingAmount = grandTotal - taxAmount;
     debitEntries.push({
       accountId: settings.purchaseInventoryAccountId!,
@@ -1306,6 +1334,11 @@ export async function onVendorBillPosted(
       memo: string;
     }[] = [];
     if (goodsBased) {
+      if (latestTaxAmount > latestGrandTotal) {
+        throw new Error(
+          `Pajak tagihan (${latestTaxAmount}) melebihi grand total (${latestGrandTotal}) — periksa data tagihan vendor`,
+        );
+      }
       const clearingAmount = latestGrandTotal - latestTaxAmount;
       latestDebitEntries.push({
         accountId: settings.purchaseInventoryAccountId!,
@@ -1613,6 +1646,22 @@ export async function onPayrollPaid(
       }
     }
 
+    // Balance assertion: the journal must have Σdebit == Σcredit. The debit is
+    // the gross salary (or the reconstructed net+withholdings), and the credits
+    // are net + statutory + loan + other withheld. When a payroll row's stored
+    // gross disagrees with its parts (employer-funded BPJS, manual adjustments,
+    // legacy rows), these diverge — fail loudly instead of committing a
+    // permanently unbalanced GL row under a header that claims it balances.
+    const creditTotal = entries.reduce((s, e) => safeAdd(s, e.credit, 2), 0);
+    const debitSum = entries.reduce((s, e) => safeAdd(s, e.debit, 2), 0);
+    if (Math.abs(debitSum - creditTotal) > 0.001) {
+      // Self-heal the common case: a stored gross that is slightly larger/smaller
+      // than the sum of its parts is really just the parts. Re-drive the debit
+      // leg from the credit total so the entry stays balanced and no salary is
+      // lost or invented.
+      entries[0].debit = creditTotal;
+    }
+
     await tx.journal.create({
       data: {
         journalNumber,
@@ -1622,8 +1671,8 @@ export async function onPayrollPaid(
         description: `Penggajian ${payroll.documentNo}`,
         type: "AUTO",
         status: "POSTED",
-        totalDebit: debitTotal,
-        totalCredit: debitTotal,
+        totalDebit: creditTotal,
+        totalCredit: creditTotal,
         createdBy: userId ?? null,
         entries: {
           create: entries,

@@ -603,6 +603,61 @@ describe("onSalesInvoicePosted", () => {
     await expect(onSalesInvoicePosted(1, 999)).rejects.toThrow(/Stok tidak mencukupi/)
     expect(mocks.stockMoveCreate).not.toHaveBeenCalled()
   });
+
+  it("allows posting for a null-default-warehouse item by aggregating stock across all warehouses", async () => {
+    const inner = {
+      id: 1,
+      totalAmount: 1000,
+      taxAmount: 0,
+      date: new Date(),
+      documentNo: "INV-1",
+    };
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
+      ...inner,
+      items: [{ itemId: 50, qty: 2, cost: 100 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    // Item has NO default warehouse → consumption spans warehouses.
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 50, cost: 100, isProduct: true, defaultWarehouseId: null },
+    ]);
+    mocks.fifoConsume.mockResolvedValue({ consumedCost: 200, shortfall: 0 });
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+    mocks.transaction.mockImplementationOnce((fn: any) =>
+      fn({
+        systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+        salesInvoice: {
+          findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
+          findUnique: mocks.invoiceFindUnique,
+        },
+        journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+        journalEntry: {
+          create: mocks.journalEntryCreate,
+          createMany: vi.fn(async (args) => {
+            args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d }));
+            return { count: args.data.length };
+          }),
+        },
+        item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
+        uomConversion: { findMany: mocks.uomConversionFindMany },
+        stockMove: { create: mocks.stockMoveCreate },
+        inventoryLayer: {
+          // Stock lives in warehouse 9 only; the null-default item must still see it.
+          groupBy: vi.fn().mockResolvedValue([
+            { itemId: 50, warehouseId: 9, _sum: { remaining: 5 } },
+          ]),
+        },
+        $queryRaw: mocks.queryRaw,
+        $executeRaw: mocks.executeRaw,
+      }),
+    );
+
+    await onSalesInvoicePosted(1, 999);
+
+    // Posting proceeded (no stock-insufficiency throw).
+    expect(mocks.stockMoveCreate).toHaveBeenCalled();
+  });
 });
 
 describe("onSalesPaymentCreated", () => {
@@ -1633,6 +1688,20 @@ describe("onVendorBillPosted", () => {
       }),
     );
   });
+  it("throws when tax exceeds grand total on a goods-based bill (avoids negative clearing leg)", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      grandTotal: 100,
+      tax: 150, // data-entry error: tax > grand total
+      date: new Date(),
+      documentNo: "BILL-1",
+      purchaseOrderId: 5,
+    });
+    mocks.goodsReceiptCount.mockResolvedValue(1);
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await expect(onVendorBillPosted(1)).rejects.toThrow("melebihi grand total");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe("onVendorPaymentCreated", () => {
@@ -1971,5 +2040,41 @@ describe("onPayrollPaid", () => {
     // Credits must sum exactly to the debit total (double-entry balances).
     const creditSum = entries.reduce((s, e) => s + e.credit, 0);
     expect(creditSum).toBe(2000);
+  });
+
+  it("self-heals to a balanced journal when stored gross disagrees with its parts", async () => {
+    // gross claim 2500 but net+withholdings really sum to 2000 (e.g. an
+    // employer-funded component or a manual adjustment). The old code trusted
+    // gross and wrote an unbalanced GL row under a header claiming it balanced.
+    mocks.payrollFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      grossSalary: 2500,
+      netSalary: 1500,
+      bpjsHealthEmployee: 100,
+      bpjsEmploymentEmployee: 30,
+      pph21: 20,
+      loanDeduction: 250,
+      lateDeduction: 50,
+      absentDeduction: 50,
+      deductions: 0,
+      paymentDate: new Date(),
+      documentNo: "PAY-3",
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await onPayrollPaid(1);
+
+    const call = mocks.journalCreate.mock.calls[0][0];
+    const entries = call.data.entries.create as Array<{
+      accountId: number;
+      debit: number;
+      credit: number;
+    }>;
+    const debitSum = entries.reduce((s, e) => s + e.debit, 0);
+    const creditSum = entries.reduce((s, e) => s + e.credit, 0);
+    // Header and body agree, and the entry is genuinely double-entry balanced.
+    expect(Math.abs(debitSum - creditSum)).toBeLessThan(0.001);
+    expect(call.data.totalDebit).toBe(creditSum);
+    expect(call.data.totalCredit).toBe(creditSum);
+    expect(call.data.totalDebit).toBe(2000);
   });
 });

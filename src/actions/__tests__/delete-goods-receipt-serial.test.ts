@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     },
     inventoryLayer: {
       deleteMany: vi.fn(),
+      count: vi.fn().mockResolvedValue(0),
     },
     goodsReceiptItem: {
       deleteMany: vi.fn(),
@@ -114,5 +115,23 @@ describe("deleteGoodsReceipt with Serial Numbers", () => {
     expect(mocks.txMock.itemSerial.deleteMany).toHaveBeenCalledWith({
       where: { serialNumber: { in: ["SN-1", "SN-2"] }, status: "available" },
     })
+  })
+
+  it("refuses to delete when received stock has already been consumed (avoids qty_on_hand drift)", async () => {
+    // A GR whose FIFO layer was partly consumed downstream. Deleting would
+    // subtract the FULL move.qty from Item.qtyOnHand while removing only the
+    // residual layer — permanently diverging the master counter from Σ layers.
+    mocks.txMock.stockMove.findMany.mockResolvedValueOnce([
+      { id: 77, itemId: 101, qty: 10, referenceId: 1 },
+    ])
+    mocks.txMock.inventoryLayer.count.mockResolvedValueOnce(1)
+
+    const res = await deleteGoodsReceipt(1)
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/sudah terpakai|terjual/i)
+    // The reversal must not have run.
+    expect(mocks.txMock.inventoryLayer.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.txMock.stockMove.deleteMany).not.toHaveBeenCalled()
   })
 })

@@ -244,6 +244,38 @@ describe("stockJournalService", () => {
       ]);
     });
 
+    it("keeps the split balanced to the cent when freight/admin carry sub-cent amounts", async () => {
+      // goods 100.00 + ongkir 3.333 + admin 6.667 = 110.00 exactly, but each
+      // component is 3dp so naive float maths leaves a 0.001+ imbalance that
+      // JournalService rejects. The rounded residual must absorb the difference.
+      await stockJournalService.onGoodsReceipt(
+        tx,
+        [{ qty: 1, cost: 110 }],
+        "GR-1",
+        1,
+        42,
+        null,
+        undefined,
+        [{ qty: 1, cost: 100 }],
+        [{ qty: 1, cost: 3.333 }],
+        [{ qty: 1, cost: 6.667 }],
+      );
+
+      const call = mocks.createJournal.mock.calls[0][0];
+      const debits = call.entries
+        .filter((e: { debit: number }) => e.debit > 0)
+        .reduce((s: number, e: { debit: number }) => s + e.debit, 0);
+      const credits = call.entries
+        .filter((e: { credit: number }) => e.credit > 0)
+        .reduce((s: number, e: { credit: number }) => s + e.credit, 0);
+      expect(Math.abs(debits - credits)).toBeLessThan(0.001);
+      expect(debits).toBe(110);
+      // Inventory absorbs the rounded residual.
+      expect(call.entries[0]).toEqual(
+        expect.objectContaining({ accountId: 100, debit: 100, credit: 0 }),
+      );
+    });
+
     it("falls back to a single blended Inventory debit when no split is supplied", async () => {
       await stockJournalService.onGoodsReceipt(
         tx,

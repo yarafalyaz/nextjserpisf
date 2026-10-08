@@ -157,7 +157,10 @@ export async function consumeFifoLayers(
     const consume = Math.min(Number(rem), toConsume)
     if (costingMethod === "fifo") {
       const uCost = layer.unitCost !== undefined ? layer.unitCost : (layer as any).unit_cost
-      consumedCost += consume * Number(uCost)
+      // Round each layer's contribution to 2dp before accumulating so float drift
+      // (0.1+0.2 style) never leaks into COGS / stock-move cost. The running sum
+      // stays re-rounded too, so the total is exact to the cent.
+      consumedCost = Math.round((consumedCost + Math.round(consume * Number(uCost) * 100) / 100) * 100) / 100
     }
     layerUpdates.push(
       tx.inventoryLayer.update({
@@ -175,7 +178,7 @@ export async function consumeFifoLayers(
 
   if (costingMethod === "average") {
     const consumedQty = Math.round((qty - Math.max(0, toConsume)) * 100) / 100
-    consumedCost = consumedQty * averageCost
+    consumedCost = Math.round(consumedQty * averageCost * 100) / 100
   }
 
   await Promise.all(layerUpdates)

@@ -1484,6 +1484,24 @@ export async function deletePurchaseOrder(id: number) {
         stockMovesByGrId.set(move.referenceId, arr);
       }
 
+      // Stock-integrity guard (see deleteGoodsReceipt): refuse if any received
+      // layer has already been consumed downstream — deleting would subtract the
+      // full move.qty from Item.qtyOnHand while removing only the residual layer.
+      if (allStockMoves.length > 0) {
+        const consumedLayers = await tx.inventoryLayer.count({
+          where: {
+            stockMoveId: { in: allStockMoves.map((m) => m.id) },
+            // A layer with any outflow has been (partly) consumed downstream.
+            qtyOut: { gt: 0 },
+          },
+        });
+        if (consumedLayers > 0) {
+          throw new Error(
+            "PO tidak dapat dihapus karena sebagian stok dari penerimaan barangnya sudah terpakai/terjual. Batalkan transaksi pemakaian terkait terlebih dahulu.",
+          );
+        }
+      }
+
       for (const gr of po.goodsReceipts) {
         const stockMoves = stockMovesByGrId.get(gr.id) || [];
 
@@ -1588,6 +1606,27 @@ export async function deleteGoodsReceipt(id: number) {
       });
 
       if (stockMoves.length > 0) {
+        // Stock-integrity guard: if any FIFO layer created by this GR has already
+        // been (partly) consumed by a downstream sale/issue, the received units
+        // left the warehouse at the original qty but the layer only retains its
+        // residual. Deleting the GR would subtract the FULL move.qty from the
+        // master counter while removing only the residual layer, double-reducing
+        // Item.qtyOnHand and permanently diverging it from Σ layer.remaining.
+        // Refuse the deletion in that case (the user must reverse the downstream
+        // consumption first) — mirrors the guard on the vendor-bill check above.
+        const consumedLayers = await tx.inventoryLayer.count({
+          where: {
+            stockMoveId: { in: stockMoves.map((m) => m.id) },
+            // A layer with any outflow has been (partly) consumed downstream.
+            qtyOut: { gt: 0 },
+          },
+        });
+        if (consumedLayers > 0) {
+          throw new Error(
+            "Penerimaan barang tidak dapat dihapus karena sebagian stoknya sudah terpakai/terjual. Batalkan transaksi pemakaian terkait terlebih dahulu.",
+          );
+        }
+
         const qtyUpdates: Promise<unknown>[] = [];
         for (const move of stockMoves) {
           qtyUpdates.push(

@@ -136,15 +136,35 @@ export async function onSalesReturnCompleted(
         if (trackSerialByItem.get(item.itemId)) {
           const need = Math.round(baseQty);
           if (need > 0) {
-            const revivable = await tx.itemSerial.findMany({
-              where: { itemId: item.itemId, status: "used" },
+            // Prefer serials already recorded in the destination warehouse (those
+            // are the units physically coming back), then fall back to any other
+            // used serial for the item. Keeping the destination match first avoids
+            // relocating a serial that was consumed from a different warehouse and
+            // is still represented there by a live FIFO layer.
+            const revivableInWarehouse = await tx.itemSerial.findMany({
+              where: { itemId: item.itemId, status: "used", warehouseId: resolvedWarehouseId },
               orderBy: { id: "desc" },
               take: need,
               select: { id: true },
             });
-            if (revivable.length > 0) {
+            const pickedIds = revivableInWarehouse.map((s) => s.id);
+            if (pickedIds.length < need) {
+              const remainder = need - pickedIds.length;
+              const revivableAny = await tx.itemSerial.findMany({
+                where: {
+                  itemId: item.itemId,
+                  status: "used",
+                  ...(pickedIds.length ? { id: { notIn: pickedIds } } : {}),
+                },
+                orderBy: { id: "desc" },
+                take: remainder,
+                select: { id: true },
+              });
+              pickedIds.push(...revivableAny.map((s) => s.id));
+            }
+            if (pickedIds.length > 0) {
               await tx.itemSerial.updateMany({
-                where: { id: { in: revivable.map((s) => s.id) } },
+                where: { id: { in: pickedIds } },
                 data: { status: "available", warehouseId: resolvedWarehouseId },
               });
             }
