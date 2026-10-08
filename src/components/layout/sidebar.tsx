@@ -64,7 +64,7 @@ const navigation: NavItem[] = [
     children: [
       { label: "Pelanggan", href: "/master/pelanggan", icon: Users, permission: "view_customers" },
       { label: "Kategori Pelanggan", href: "/master/kategori-pelanggan", icon: Tag, permission: "view_customers" },
-      { label: "Pemasok", href: "/master/pemasok", icon: Factory, permission: "view_vendors" },
+      { label: "Vendor", href: "/master/vendor", icon: Factory, permission: "view_vendors" },
       { label: "Barang", href: "/master/barang", icon: Package, permission: "view_items" },
       { label: "Kategori Barang", href: "/master/kategori-barang", icon: Tag, permission: "view_item_categories" },
       { label: "Merek", href: "/master/merek", icon: Layers, permission: "view_brands" },

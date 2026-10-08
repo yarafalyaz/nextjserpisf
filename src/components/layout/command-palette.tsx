@@ -24,7 +24,7 @@ const menuItems = [
   { label: "Dasbor", href: "/", icon: Home, group: "Navigasi" },
   // Master Data
   { label: "Pelanggan", href: "/master/pelanggan", icon: Users, group: "Master Data" },
-  { label: "Pemasok", href: "/master/pemasok", icon: Factory, group: "Master Data" },
+  { label: "Vendor", href: "/master/vendor", icon: Factory, group: "Master Data" },
   { label: "Barang", href: "/master/barang", icon: Package, group: "Master Data" },
   { label: "Kategori Barang", href: "/master/kategori-barang", icon: Tag, group: "Master Data" },
   { label: "Gudang", href: "/master/gudang", icon: Building2, group: "Master Data" },

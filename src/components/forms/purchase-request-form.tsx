@@ -161,20 +161,20 @@ export function PurchaseRequestForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Pemasok yang Disarankan</Label>
+            <Label htmlFor="vendorId">Vendor yang Disarankan</Label>
             <Combobox
               id="vendorId"
               name="vendorId"
               value={vendorId || null}
               onChange={(key) => setVendorId(key ?? "")}
-              placeholder="Cari pemasok (opsional)..."
+              placeholder="Cari vendor (opsional)..."
               options={(vendors ?? []).map((v) => ({
                 value: String(v.id),
                 label: v.name,
               }))}
             />
             <p className="text-xs text-muted-foreground">
-              Opsional. Dipakai untuk mengisi pemasok saat permintaan ini dibuatkan pesanan pembelian.
+              Opsional. Dipakai untuk mengisi vendor saat permintaan ini dibuatkan pesanan pembelian.
             </p>
           </div>
           <div className="flex flex-col gap-1.5">

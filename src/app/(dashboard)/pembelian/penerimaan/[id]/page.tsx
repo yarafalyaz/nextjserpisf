@@ -64,6 +64,14 @@ export default async function GoodsReceiptDetailPage({
   const rackRowMap = new Map(rackRows.map((rr) => [rr.id, rr]));
   const itemMap = new Map(receiptItems.map((i) => [i.id, i]));
 
+  // The GL journal posted when this receipt was verified (Dr Persediaan /
+  // Cr clearing). Rendered as a link so users can jump from the receipt to the
+  // books — a receipt stuck in draft has none.
+  const journal = await prisma.journal.findFirst({
+    where: { referenceType: "GoodsReceipt", referenceId: numId },
+    select: { id: true, journalNumber: true, totalDebit: true, status: true },
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -124,12 +132,12 @@ export default async function GoodsReceiptDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Pemasok
+              Vendor
             </span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               {receipt.purchaseOrder.vendor ? (
                 <Link
-                  href={`/master/pemasok/${receipt.purchaseOrder.vendor.id}`}
+                  href={`/master/vendor/${receipt.purchaseOrder.vendor.id}`}
                 >
                   {receipt.purchaseOrder.vendor.name}
                 </Link>
@@ -338,6 +346,57 @@ export default async function GoodsReceiptDetailPage({
           )}
         </div>
       </div>
+
+      {/* Jurnal — posted on verification (Dr Persediaan / Cr clearing). */}
+      {journal ? (
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+          <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">
+            Jurnal Akuntansi
+          </h2>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                No. Jurnal
+              </span>
+              <span className="text-[0.9375rem] font-medium">
+                <Link
+                  href={`/keuangan/jurnal/${journal.id}`}
+                  className="text-primary hover:underline font-mono"
+                >
+                  {journal.journalNumber}
+                </Link>
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Nilai Persediaan
+              </span>
+              <span className="text-[0.9375rem] text-foreground font-medium tabular-nums">
+                {formatCurrency(Number(journal.totalDebit))}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Status
+              </span>
+              <span className="text-[0.9375rem] text-foreground font-medium">
+                {journal.status}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : receipt.status === "draft" ? (
+        <div className="rounded-xl border border-warning/40 bg-warning/5 p-4 text-sm text-muted-foreground">
+          Jurnal belum dibuat. Jurnal akan otomatis terposting (Dr Persediaan /
+          Cr Hutang Pembelian) begitu penerimaan ini diverifikasi.
+        </div>
+      ) : (
+        <div className="rounded-xl border border-danger/40 bg-danger/5 p-4 text-sm text-foreground">
+          Penerimaan sudah diverifikasi tetapi <strong>jurnal belum terbentuk</strong>.
+          Pastikan mapping akun (Persediaan &amp; Clearing Pembelian) sudah diisi di
+          Pengaturan → Akuntansi, lalu hubungi admin untuk menjurnal ulang.
+        </div>
+      )}
 
       {/* Notes */}
       {receipt.notes && (

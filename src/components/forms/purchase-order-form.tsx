@@ -102,7 +102,7 @@ export function PurchaseOrderForm({
         }
       : null,
   );
-  // Termin terkunci saat diisi dari termin pemasok; tombol "Ubah" membukanya.
+  // Termin terkunci saat diisi dari termin vendor; tombol "Ubah" membukanya.
   const initialVendorId = order?.vendorId ?? preselectedPR?.vendorId ?? undefined;
   const [termLocked, setTermLocked] = useState<boolean>(
     Boolean(vendors.find((v) => v.id === initialVendorId)?.paymentTerm),
@@ -282,7 +282,7 @@ export function PurchaseOrderForm({
                   ) : null}
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Item &amp; pemasok di bawah terisi dari permintaan ini (pemasok masih bisa diganti).
+                  Item &amp; vendor di bawah terisi dari permintaan ini (vendor masih bisa diganti).
                   Setelah PO disimpan, permintaan otomatis ditandai dipesan.
                 </p>
               </div>
@@ -314,7 +314,7 @@ export function PurchaseOrderForm({
 
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Pemasok *</Label>
+            <Label htmlFor="vendorId">Vendor *</Label>
             <Controller
               name="vendorId"
               control={control}
@@ -328,7 +328,7 @@ export function PurchaseOrderForm({
                     field.onChange(vid);
                     applyVendorTerm(vid);
                   }}
-                  placeholder="Cari pemasok..."
+                  placeholder="Cari vendor..."
                   options={vendors.map((v) => ({
                     value: String(v.id),
                     label: v.name,
@@ -385,7 +385,7 @@ export function PurchaseOrderForm({
                   }}
                   className="text-xs font-medium text-muted-foreground hover:underline"
                 >
-                  Pakai termin pemasok
+                  Pakai termin vendor
                 </button>
               )}
             </div>
@@ -399,7 +399,7 @@ export function PurchaseOrderForm({
             />
             {vendorTerm && termLocked && (
               <p className="text-xs text-muted-foreground">
-                Otomatis dari pemasok: <span className="font-medium">{vendorTerm.name || vendorTerm.code}</span>
+                Otomatis dari vendor: <span className="font-medium">{vendorTerm.name || vendorTerm.code}</span>
                 {vendorTerm.days ? ` (${vendorTerm.days} hari)` : ""}. Klik &quot;Ubah&quot; bila perlu termin khusus.
               </p>
             )}

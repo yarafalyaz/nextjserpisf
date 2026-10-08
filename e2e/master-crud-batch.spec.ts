@@ -248,12 +248,12 @@ test.describe("Master Pelanggan CRUD", () => {
   })
 })
 
-test.describe("Master Pemasok CRUD", () => {
+test.describe("Master Vendor CRUD", () => {
   test("create → update → delete", async ({ page }, testInfo) => {
     const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     await crudMaster(page, {
-      listUrl: "/master/pemasok",
-      createUrl: "/master/pemasok/tambah",
+      listUrl: "/master/vendor",
+      createUrl: "/master/vendor/tambah",
       fields: [
         { id: "name", value: `Vendor E2E ${ts}`, updated: `Vendor E2E Updated ${ts}` },
         { id: "phone", value: `0822${String(ts).slice(-8)}`, updated: `0823${String(ts).slice(-8)}` },

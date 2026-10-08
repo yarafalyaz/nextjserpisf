@@ -186,7 +186,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Pemasok *</Label>
+            <Label htmlFor="vendorId">Vendor *</Label>
             <Combobox
               id="vendorId"
               name="vendorId"
@@ -211,7 +211,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
                   setPurchaseOrderId(null);
                 }
               }}
-              placeholder="Cari pemasok..."
+              placeholder="Cari vendor..."
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -250,11 +250,11 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorInvoiceNumber">No. Faktur Pemasok</Label>
+            <Label htmlFor="vendorInvoiceNumber">No. Faktur Vendor</Label>
             <Input
               id="vendorInvoiceNumber"
               name="vendorInvoiceNumber"
-              placeholder="No. faktur dari pemasok"
+              placeholder="No. faktur dari vendor"
               defaultValue={bill?.vendorInvoiceNumber ?? ""}
             />
           </div>

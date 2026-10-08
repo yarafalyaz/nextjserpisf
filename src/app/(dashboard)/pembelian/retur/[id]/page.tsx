@@ -67,8 +67,8 @@ export default async function PurchaseReturnDetailPage({
           value={<Link href={`/pembelian/pesanan/${purchaseReturn.purchaseOrder.id}`}>{purchaseReturn.purchaseOrder.documentNo}</Link>}
         />
         <DetailField
-          label="Pemasok"
-          value={<Link href={`/master/pemasok/${purchaseReturn.purchaseOrder.vendor.id}`}>{purchaseReturn.purchaseOrder.vendor.name}</Link>}
+          label="Vendor"
+          value={<Link href={`/master/vendor/${purchaseReturn.purchaseOrder.vendor.id}`}>{purchaseReturn.purchaseOrder.vendor.name}</Link>}
         />
         <DetailField label="Tanggal" value={formatDate(purchaseReturn.date)} />
         <DetailField label="Dibuat" value={formatDate(purchaseReturn.createdAt)} />

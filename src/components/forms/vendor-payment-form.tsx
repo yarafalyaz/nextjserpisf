@@ -137,14 +137,14 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Pemasok *</Label>
+            <Label htmlFor="vendorId">Vendor *</Label>
             <Combobox
               id="vendorId"
               name="vendorId"
               options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
               value={vendorId || null}
               onChange={(key) => setVendorId(key ?? "")}
-              placeholder="Cari pemasok..."
+              placeholder="Cari vendor..."
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -287,7 +287,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
             ) : (
               <p className="text-xs text-muted-foreground">
                 Belum dipilih tagihan. Pembayaran akan otomatis dialokasikan ke tagihan
-                tertua pemasok ini saat dikonfirmasi.
+                tertua vendor ini saat dikonfirmasi.
               </p>
             )}
             <div className="flex flex-col gap-1.5">

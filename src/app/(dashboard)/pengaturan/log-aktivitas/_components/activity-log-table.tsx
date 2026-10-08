@@ -1,6 +1,6 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table"
+import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { Badge } from "@/components/ui/shadcn/badge"
 
@@ -59,7 +59,7 @@ const modelLabel: Record<string, string> = {
   VehicleBrand: "Merek Kendaraan",
   Vehicle: "Kendaraan",
   Customer: "Pelanggan",
-  Supplier: "Pemasok",
+  Supplier: "Vendor",
   Item: "Barang",
   ItemCategory: "Kategori Barang",
   Brand: "Merek",

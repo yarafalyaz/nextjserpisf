@@ -33,6 +33,25 @@ const nextConfig: NextConfig = {
   },
 
   compress: true,
+
+  // Legacy: the vendor master lived at /master/pemasok; the app now uses the
+  // one consistent term "vendor". 301 the old URLs (list, detail, add, edit —
+  // any nested path) so bookmarks and old links keep working.
+  async redirects() {
+    return [
+      {
+        source: "/master/pemasok",
+        destination: "/master/vendor",
+        permanent: true,
+      },
+      {
+        source: "/master/pemasok/:path*",
+        destination: "/master/vendor/:path*",
+        permanent: true,
+      },
+    ];
+  },
+
   experimental: {
     optimizePackageImports: ["lucide-react", "date-fns", "@tanstack/react-query"],
   },

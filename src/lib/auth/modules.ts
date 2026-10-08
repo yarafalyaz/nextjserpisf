@@ -62,7 +62,7 @@ export const MODULES: ModuleDef[] = [
     order: 10,
     actions: [
       { key: "view", permissionKey: "view_customers", label: "Pelanggan" },
-      { key: "view", permissionKey: "view_vendors", label: "Pemasok" },
+      { key: "view", permissionKey: "view_vendors", label: "Vendor" },
       { key: "view", permissionKey: "view_items", label: "Barang" },
       { key: "view", permissionKey: "view_item_categories", label: "Kategori Barang" },
       { key: "view", permissionKey: "view_brands", label: "Merek" },

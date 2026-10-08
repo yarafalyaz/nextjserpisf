@@ -59,7 +59,7 @@ export default async function AgingPayablesPage() {
       </div>
 
       <ReportLetterhead title="Hutang Jatuh Tempo" subtitle="Aging Payables" periodLabel={period} />
-      <ReportNarration text="Laporan Utang Jatuh Tempo mengelompokkan utang usaha berdasarkan umur jatuh temponya. Informasi ini penting untuk mengelola jadwal pembayaran, menjaga hubungan baik dengan pemasok, dan mengoptimalkan arus kas perusahaan." />
+      <ReportNarration text="Laporan Utang Jatuh Tempo mengelompokkan utang usaha berdasarkan umur jatuh temponya. Informasi ini penting untuk mengelola jadwal pembayaran, menjaga hubungan baik dengan vendor, dan mengoptimalkan arus kas perusahaan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Hutang" value={formatCurrency(totalOutstanding)} />
@@ -68,7 +68,7 @@ export default async function AgingPayablesPage() {
       <ReportSection title="Detail Hutang">
         <DetailTable data-report-table="Detail Hutang">
           <DetailTableHead>
-            <DetailTableTh>Pemasok</DetailTableTh>
+            <DetailTableTh>Vendor</DetailTableTh>
             <DetailTableTh>No. Tagihan</DetailTableTh>
             <DetailTableTh>Jatuh Tempo</DetailTableTh>
             <DetailTableTh align="right">Sisa (Rp)</DetailTableTh>

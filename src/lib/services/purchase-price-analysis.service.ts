@@ -117,7 +117,7 @@ export async function buildPurchasePriceAnalysis(opts: {
         acc = {
           itemId: line.itemId,
           vendorId,
-          vendorName: vendorId ? vendorNames.get(vendorId) ?? `Vendor #${vendorId}` : "Tanpa pemasok",
+          vendorName: vendorId ? vendorNames.get(vendorId) ?? `Vendor #${vendorId}` : "Tanpa vendor",
           qty: 0,
           cost: 0,
           receipts: 0,

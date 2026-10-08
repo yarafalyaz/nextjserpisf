@@ -153,7 +153,7 @@ const modelRevalidateMap: Record<ModelName, string | null> = {
   salesReturn: "/penjualan/retur",
   downPayment: "/penjualan/uang-muka",
   customer: "/master/pelanggan",
-  vendor: "/master/pemasok",
+  vendor: "/master/vendor",
   item: "/master/barang",
   itemCategory: "/master/kategori-barang",
   brand: "/master/merek",

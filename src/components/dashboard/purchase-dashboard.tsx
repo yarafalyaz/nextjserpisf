@@ -70,8 +70,8 @@ export default async function PurchaseDashboard() {
     { label: "Permintaan", href: "/pembelian/permintaan", icon: ClipboardList, desc: "Permintaan pembelian" },
     { label: "Pesanan", href: "/pembelian/pesanan", icon: FileCheck, desc: "Pesanan pembelian" },
     { label: "Penerimaan", href: "/pembelian/penerimaan", icon: Package, desc: "Penerimaan barang" },
-    { label: "Tagihan Pemasok", href: "/pembelian/tagihan", icon: FileSpreadsheet, desc: "Tagihan dari pemasok" },
-    { label: "Pembayaran", href: "/pembelian/pembayaran-vendor", icon: Banknote, desc: "Pembayaran ke pemasok" },
+    { label: "Tagihan Vendor", href: "/pembelian/tagihan", icon: FileSpreadsheet, desc: "Tagihan dari vendor" },
+    { label: "Pembayaran", href: "/pembelian/pembayaran-vendor", icon: Banknote, desc: "Pembayaran ke vendor" },
     { label: "Retur", href: "/pembelian/retur", icon: Undo2, desc: "Retur pembelian barang" },
   ]
 
@@ -90,7 +90,7 @@ export default async function PurchaseDashboard() {
               value={formatCurrency(data.totalPendingValue)}
               icon={<ShoppingBag className="size-5" />}
             />
-            <StatCard label="Pemasok" value={data.vendorCount} icon={<Factory className="size-5" />} />
+            <StatCard label="Vendor" value={data.vendorCount} icon={<Factory className="size-5" />} />
           </div>
 
           {/* Recent POs */}
@@ -115,7 +115,7 @@ export default async function PurchaseDashboard() {
                   <DetailTable>
                     <DetailTableHead>
                       <DetailTableTh>No. Dokumen</DetailTableTh>
-                      <DetailTableTh>Pemasok</DetailTableTh>
+                      <DetailTableTh>Vendor</DetailTableTh>
                       <DetailTableTh align="right">Nilai</DetailTableTh>
                       <DetailTableTh>Status</DetailTableTh>
                       <DetailTableTh>Tgl</DetailTableTh>

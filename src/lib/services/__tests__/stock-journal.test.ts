@@ -164,12 +164,21 @@ describe("stockJournalService", () => {
       );
     });
 
-    it("returns null when inventory account not configured", async () => {
+    it("throws when inventory account not configured", async () => {
       mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, inventoryAccountId: null });
 
-      const result = await stockJournalService.onGoodsReceipt(tx, [{ qty: 10, cost: 5 }], "GR-1", 1);
+      await expect(
+        stockJournalService.onGoodsReceipt(tx, [{ qty: 10, cost: 5 }], "GR-1", 1),
+      ).rejects.toThrow("Akun Persediaan");
+      expect(mocks.createJournal).not.toHaveBeenCalled();
+    });
 
-      expect(result).toBeNull();
+    it("throws when purchase clearing account not configured", async () => {
+      mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, purchaseInventoryAccountId: null });
+
+      await expect(
+        stockJournalService.onGoodsReceipt(tx, [{ qty: 10, cost: 5 }], "GR-1", 1),
+      ).rejects.toThrow("Clearing Pembelian");
       expect(mocks.createJournal).not.toHaveBeenCalled();
     });
 
@@ -286,7 +295,7 @@ describe("stockJournalService", () => {
       expect(arg.entries[0]).toEqual(expect.objectContaining({ accountId: 510, debit: 200 }));
     });
 
-    it("returns null when no expense account is configured", async () => {
+    it("throws when no expense account is configured", async () => {
       mocks.getSystemSettings.mockResolvedValue({
         ...FULL_ACCOUNTS,
         materialExpenseAccountId: null,
@@ -294,8 +303,9 @@ describe("stockJournalService", () => {
         cogsAccountId: null,
       });
 
-      const result = await stockJournalService.onServiceGoodsReceipt(tx, [{ qty: 1, cost: 5 }], "GR-9", 9);
-      expect(result).toBeNull();
+      await expect(
+        stockJournalService.onServiceGoodsReceipt(tx, [{ qty: 1, cost: 5 }], "GR-9", 9),
+      ).rejects.toThrow("Akun beban");
       expect(mocks.createJournal).not.toHaveBeenCalled();
     });
   });

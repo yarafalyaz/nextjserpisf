@@ -442,7 +442,7 @@ describe("Vendor Bill Actions", () => {
       grandTotal: "1000",
     }))
     expect(res?.success).toBe(false)
-    expect(res?.error).toMatch(/pemasok tagihan tidak sesuai/i)
+    expect(res?.error).toMatch(/vendor tagihan tidak sesuai/i)
     // The wrong-vendor bill must never be created nor matched.
     expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
   })

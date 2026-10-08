@@ -383,14 +383,14 @@ export async function createServicePurchaseOrderFromWorkOrder(
       throw new Error("Perintah kerja tidak valid");
     }
     if (!Number.isInteger(vendorId) || vendorId <= 0) {
-      throw new Error("Pemasok jasa wajib dipilih");
+      throw new Error("Vendor jasa wajib dipilih");
     }
 
     const vendor = await prisma.vendor.findFirst({
       where: { id: vendorId, isActive: true, deletedAt: null },
       select: { id: true },
     });
-    if (!vendor) throw new Error("Pemasok tidak ditemukan atau tidak aktif");
+    if (!vendor) throw new Error("Vendor tidak ditemukan atau tidak aktif");
 
     const wo = await prisma.workOrder.findUnique({
       where: { id: workOrderId },
@@ -863,7 +863,7 @@ export async function createVendorBill(formData: FormData) {
         });
         if (po.vendorId !== v.vendorId) {
           throw new Error(
-            `Pemasok tagihan tidak sesuai dengan pemasok PO ${po.documentNo}.`,
+            `Vendor tagihan tidak sesuai dengan vendor PO ${po.documentNo}.`,
           );
         }
       }
@@ -944,7 +944,7 @@ export async function createVendorPayment(formData: FormData) {
         select: { id: true, status: true },
       });
       if (!target) {
-        return { success: false, error: "Tagihan tidak ditemukan untuk pemasok ini" };
+        return { success: false, error: "Tagihan tidak ditemukan untuk vendor ini" };
       }
       if (target.status === "paid" || target.status === "cancelled") {
         return { success: false, error: "Tagihan sudah lunas atau dibatalkan" };

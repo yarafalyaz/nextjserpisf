@@ -98,7 +98,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="reason">Alasan Retur</Label>
-          <Textarea id="reason" name="reason" rows={3} placeholder="Alasan pengembalian barang ke pemasok..." defaultValue={returnData?.reason ?? ""} />
+          <Textarea id="reason" name="reason" rows={3} placeholder="Alasan pengembalian barang ke vendor..." defaultValue={returnData?.reason ?? ""} />
         </div>
       </div>
 

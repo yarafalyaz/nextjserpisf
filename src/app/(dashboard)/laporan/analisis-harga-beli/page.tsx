@@ -76,7 +76,7 @@ export default async function PurchasePriceAnalysisPage({
         <Button type="submit" variant="primary" size="sm">Filter</Button>
       </form>
       <ReportLetterhead title="Analisis Harga Beli Multi-Sumber" subtitle="Multi-Source Purchase Price Analysis" periodLabel={periodLabel} />
-      <ReportNarration text="Analisis ini membandingkan biaya perolehan efektif (landed cost) barang yang sama antar pemasok dan antar waktu, berdasarkan penerimaan barang (GRN) yang sudah diposting. Harga listing murah belum tentu biaya perolehan termurah setelah ongkir, diskon, dan biaya lain — karena itu perbandingan didasarkan pada biaya perolehan per satuan, bukan harga listing saja (PUR-08)." />
+      <ReportNarration text="Analisis ini membandingkan biaya perolehan efektif (landed cost) barang yang sama antar vendor dan antar waktu, berdasarkan penerimaan barang (GRN) yang sudah diposting. Harga listing murah belum tentu biaya perolehan termurah setelah ongkir, diskon, dan biaya lain — karena itu perbandingan didasarkan pada biaya perolehan per satuan, bukan harga listing saja (PUR-08)." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Penerimaan" value={totalReceipts.toLocaleString('id-ID')} />
         <ReportKpiCard label="Total Qty Diterima" value={totalQty.toLocaleString('id-ID')} />
@@ -115,12 +115,12 @@ export default async function PurchasePriceAnalysisPage({
         </ReportSection>
       )}
 
-      <ReportSection title="Perbandingan Biaya Perolehan per Pemasok">
+      <ReportSection title="Perbandingan Biaya Perolehan per Vendor">
         <DetailTable data-report-table="Analisis Harga Beli Multi-Sumber">
           <DetailTableHead>
             <DetailTableTh>SKU</DetailTableTh>
             <DetailTableTh>Nama Barang</DetailTableTh>
-            <DetailTableTh>Pemasok</DetailTableTh>
+            <DetailTableTh>Vendor</DetailTableTh>
             <DetailTableTh align="right">Penerimaan</DetailTableTh>
             <DetailTableTh align="right">Total Qty</DetailTableTh>
             <DetailTableTh align="right">Landed/Unit</DetailTableTh>

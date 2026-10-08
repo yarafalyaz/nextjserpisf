@@ -86,7 +86,11 @@ export const stockJournalService = {
     adminLines?: JournalItemInput[],
   ) {
     const accounts = await getAccountIds()
-    if (!accounts.inventory || !accounts.purchaseInventory) return null
+    if (!accounts.inventory || !accounts.purchaseInventory) {
+      throw new Error(
+        "Akun Persediaan dan Akun Clearing Pembelian (purchaseInventory) harus diatur di Pengaturan → Akuntansi sebelum penerimaan barang bisa dijurnal.",
+      )
+    }
 
     const totalValue = sumValue(items)
     if (totalValue <= 0) return null
@@ -189,7 +193,11 @@ export const stockJournalService = {
   ) {
     const accounts = await getAccountIds()
     const expenseAcct = accounts.materialExpense ?? accounts.materialIssueExpense ?? accounts.cogs
-    if (!expenseAcct || !accounts.purchaseInventory) return null
+    if (!expenseAcct || !accounts.purchaseInventory) {
+      throw new Error(
+        "Akun beban (Beban Material/HPP) dan Akun Clearing Pembelian harus diatur di Pengaturan → Akuntansi sebelum penerimaan jasa bisa dijurnal.",
+      )
+    }
 
     const totalValue = sumValue(items)
     if (totalValue <= 0) return null

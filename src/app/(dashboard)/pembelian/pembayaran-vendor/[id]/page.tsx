@@ -65,8 +65,8 @@ export default async function VendorPaymentDetailPage({
       <DetailCard>
         <DetailField label="No. Dokumen" value={payment.documentNo} mono />
         <DetailField
-          label="Pemasok"
-          value={<Link href={`/master/pemasok/${payment.vendor.id}`}>{payment.vendor.name}</Link>}
+          label="Vendor"
+          value={<Link href={`/master/vendor/${payment.vendor.id}`}>{payment.vendor.name}</Link>}
         />
         <DetailField label="Jumlah" value={<span className="text-xl">{formatCurrency(Number(payment.amount))}</span>} />
         <DetailField label="Biaya Admin Bank" value={formatCurrency(Number(payment.adminFee))} />

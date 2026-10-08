@@ -321,13 +321,13 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="vendorId">Pemasok *</Label>
+                  <Label htmlFor="vendorId">Vendor *</Label>
                   <Combobox
                     id="vendorId"
                     options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                    placeholder="Cari pemasok..."
+                    placeholder="Cari vendor..."
                   />
                   {errors.vendorId && <span className="text-xs text-danger mt-1">{errors.vendorId.message}</span>}
                 </>

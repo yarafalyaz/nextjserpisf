@@ -75,9 +75,9 @@ export default async function VendorBillDetailPage({
             <span className="text-[0.9375rem] text-foreground font-medium font-mono">{bill.documentNo}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pemasok</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Vendor</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
-              <Link href={`/master/pemasok/${bill.vendor.id}`}>{bill.vendor.name}</Link>
+              <Link href={`/master/vendor/${bill.vendor.id}`}>{bill.vendor.name}</Link>
             </span>
           </div>
           <div className="flex flex-col gap-1">

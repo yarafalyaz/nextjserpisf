@@ -71,7 +71,7 @@ export const itemSchema = z.object({
   image: z.string().min(1, "Foto item wajib diunggah"),
   categoryId: z.number({ error: "Kategori wajib dipilih" }).int().positive("Kategori wajib dipilih"),
   brandId: z.number({ error: "Merek wajib dipilih" }).int().positive("Merek wajib dipilih"),
-  vendorId: z.number({ error: "Pemasok wajib dipilih" }).int().positive("Pemasok wajib dipilih"),
+  vendorId: z.number({ error: "Vendor wajib dipilih" }).int().positive("Vendor wajib dipilih"),
   defaultWarehouseId: z.number({ error: "Gudang wajib dipilih" }).int().positive("Gudang wajib dipilih"),
   defaultRackId: z.number({ error: "Rak wajib dipilih" }).int().positive("Rak wajib dipilih"),
   defaultRackRowId: z.number().int().positive().optional(),

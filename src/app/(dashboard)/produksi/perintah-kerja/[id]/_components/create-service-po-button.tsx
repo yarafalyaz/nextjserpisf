@@ -42,7 +42,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
 
   function submit() {
     if (!vendorId) {
-      showError("Pilih pemasok jasa terlebih dahulu")
+      showError("Pilih vendor jasa terlebih dahulu")
       return
     }
     startTransition(async () => {
@@ -82,13 +82,13 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
 
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-foreground" htmlFor="service-po-vendor">
-            Pemasok Jasa *
+            Vendor Jasa *
           </label>
           <Combobox
             options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
             value={vendorId || null}
             onChange={(v) => setVendorId(v ?? "")}
-            placeholder="Cari pemasok..."
+            placeholder="Cari vendor..."
           />
         </div>
 

@@ -751,9 +751,9 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <SettingSwitch name="enableAutoEmployeeCode" label="Kode Otomatis Karyawan" defaultSelected={settings.enableAutoEmployeeCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorCodePrefix">Prefix Pemasok</Label>
+                <Label htmlFor="vendorCodePrefix">Prefix Vendor</Label>
                 <Input id="vendorCodePrefix" name="vendorCodePrefix" defaultValue={settings.vendorCodePrefix || ""} className="w-full" />
-                <SettingSwitch name="enableAutoVendorCode" label="Kode Otomatis Pemasok" defaultSelected={settings.enableAutoVendorCode !== false} />
+                <SettingSwitch name="enableAutoVendorCode" label="Kode Otomatis Vendor" defaultSelected={settings.enableAutoVendorCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="paymentMethodCodePrefix">Prefix Metode Pembayaran</Label>
@@ -854,11 +854,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <Input id="goodsReceiptPrefix" name="goodsReceiptPrefix" defaultValue={settings.goodsReceiptPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorBillPrefix">Tagihan Pemasok</Label>
+                <Label htmlFor="vendorBillPrefix">Tagihan Vendor</Label>
                 <Input id="vendorBillPrefix" name="vendorBillPrefix" defaultValue={settings.vendorBillPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorPaymentPrefix">Pembayaran Pemasok</Label>
+                <Label htmlFor="vendorPaymentPrefix">Pembayaran Vendor</Label>
                 <Input id="vendorPaymentPrefix" name="vendorPaymentPrefix" defaultValue={settings.vendorPaymentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">

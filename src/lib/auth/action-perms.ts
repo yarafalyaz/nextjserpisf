@@ -26,7 +26,7 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/master/satuan", edit: "edit_units", delete: "edit_units" },
   { prefix: "/master/pelanggan", edit: "edit_customers", delete: "delete_customers" },
   { prefix: "/master/kategori-pelanggan", edit: "edit_customers", delete: "delete_customers" },
-  { prefix: "/master/pemasok", edit: "edit_vendors", delete: "delete_vendors" },
+  { prefix: "/master/vendor", edit: "edit_vendors", delete: "delete_vendors" },
   { prefix: "/master/gudang", edit: "edit_warehouses", delete: "delete_warehouses" },
   { prefix: "/master/karyawan", edit: "edit_employees", delete: "delete_employees" },
   { prefix: "/master/departemen", edit: "edit_departments", delete: "delete_departments" },

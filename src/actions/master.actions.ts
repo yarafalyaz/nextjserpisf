@@ -289,8 +289,8 @@ export async function createVendor(formData: FormData) {
       },
     });
 
-    revalidatePath("/master/pemasok");
-    await logActivity("create", "Vendor", vendor.id, "Membuat pemasok");
+    revalidatePath("/master/vendor");
+    await logActivity("create", "Vendor", vendor.id, "Membuat vendor");
     return { success: true, id: vendor.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -329,8 +329,8 @@ export async function updateVendor(vendorId: number, formData: FormData) {
       },
     });
 
-    revalidatePath("/master/pemasok");
-    await logActivity("update", "Vendor", vendorId, "Memperbarui pemasok");
+    revalidatePath("/master/vendor");
+    await logActivity("update", "Vendor", vendorId, "Memperbarui vendor");
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -1726,8 +1726,8 @@ export async function deleteVendor(id: number) {
         }),
     );
 
-    revalidatePath("/master/pemasok");
-    await logActivity("delete", "Vendor", id, "Menghapus pemasok");
+    revalidatePath("/master/vendor");
+    await logActivity("delete", "Vendor", id, "Menghapus vendor");
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

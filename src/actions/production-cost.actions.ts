@@ -60,7 +60,7 @@ export async function createProductionCost(formData: FormData) {
     }
     if (v.vendorId) {
       const vendor = await prisma.vendor.findUnique({ where: { id: v.vendorId }, select: { id: true } })
-      if (!vendor) return { success: false, error: "Pemasok tidak ditemukan" }
+      if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
     }
 
     const cost = await prisma.$transaction(async (tx) => {
@@ -122,7 +122,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
 
     if (v.vendorId) {
       const vendor = await prisma.vendor.findUnique({ where: { id: v.vendorId }, select: { id: true } })
-      if (!vendor) return { success: false, error: "Pemasok tidak ditemukan" }
+      if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
     }
 
     await prisma.$transaction(async (tx) => {

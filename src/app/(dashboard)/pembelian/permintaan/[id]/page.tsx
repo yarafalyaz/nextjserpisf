@@ -76,7 +76,7 @@ export default async function PurchaseRequestDetailPage({
       <DetailCard>
         <DetailField label="No. Dokumen" value={request.documentNo} mono />
         <DetailField label="Judul" value={request.title || "-"} />
-        <DetailField label="Pemasok Disarankan" value={request.vendor?.name || "-"} />
+        <DetailField label="Vendor Disarankan" value={request.vendor?.name || "-"} />
         <DetailField label="Tanggal" value={formatDate(request.date)} />
         {request.requestDate && (
           <DetailField label="Tanggal Permintaan" value={formatDate(request.requestDate)} />

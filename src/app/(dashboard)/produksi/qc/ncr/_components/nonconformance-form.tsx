@@ -36,7 +36,7 @@ const SEVERITY_OPTIONS = [
 
 const RESPONSIBILITY_OPTIONS = [
   { value: "internal", label: "Internal" },
-  { value: "vendor", label: "Pemasok" },
+  { value: "vendor", label: "Vendor" },
   { value: "customer", label: "Pelanggan" },
 ]
 

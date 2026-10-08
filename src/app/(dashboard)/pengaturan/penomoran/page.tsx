@@ -70,7 +70,7 @@ export default async function NumberingPage() {
             <PrefixItem label="Baris" value={settings?.rowCodePrefix} auto={settings?.enableAutoRowCode !== false} />
             <PrefixItem label="Pelanggan" value={settings?.customerCodePrefix} auto={settings?.enableAutoCustomerCode !== false} />
             <PrefixItem label="Karyawan" value={settings?.employeeCodePrefix} auto={settings?.enableAutoEmployeeCode !== false} />
-            <PrefixItem label="Pemasok" value={settings?.vendorCodePrefix} auto={settings?.enableAutoVendorCode !== false} />
+            <PrefixItem label="Vendor" value={settings?.vendorCodePrefix} auto={settings?.enableAutoVendorCode !== false} />
           </PrefixGroup>
           <Separator />
           <PrefixGroup title="Dokumen Penjualan">

@@ -93,7 +93,7 @@ export default async function PurchaseOrderDetailPage({
                   module="pembelian/pesanan"
                 />
                 <DetailCard>
-                  <DetailField label="Pemasok" value={po.vendor.name} />
+                  <DetailField label="Vendor" value={po.vendor.name} />
                   <DetailField label="Tanggal" value={formatDate(po.date)} />
                   <DetailField label="Tanggal Diharapkan" value={formatDate(po.expectedDate)} />
                   <DetailField label="Ref. PR" value={po.purchaseRequest?.documentNo || "-"} mono />
