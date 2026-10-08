@@ -27,10 +27,16 @@ export function NonconformanceResolveForm({
   ncrId,
   currentStatus,
   canManage,
+  reworkHours = 0,
+  reworkCost = 0,
+  resolution = "",
 }: {
   ncrId: number
   currentStatus: string
   canManage: boolean
+  reworkHours?: number
+  reworkCost?: number
+  resolution?: string
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -75,17 +81,17 @@ export function NonconformanceResolveForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="reworkHours">Jam Rework</Label>
-          <Input id="reworkHours" name="reworkHours" type="number" step="0.01" min="0" defaultValue="0" />
+          <Input id="reworkHours" name="reworkHours" type="number" step="0.01" min="0" defaultValue={String(reworkHours)} />
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="reworkCost">Biaya Rework</Label>
-          <Input id="reworkCost" name="reworkCost" type="number" step="0.01" min="0" defaultValue="0" />
+          <Input id="reworkCost" name="reworkCost" type="number" step="0.01" min="0" defaultValue={String(reworkCost)} />
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="resolution">Resolusi / Tindakan</Label>
-          <Textarea id="resolution" name="resolution" rows={3} placeholder="Tindakan perbaikan yang dilakukan" />
+          <Textarea id="resolution" name="resolution" rows={3} placeholder="Tindakan perbaikan yang dilakukan" defaultValue={resolution} />
         </div>
       </div>
 

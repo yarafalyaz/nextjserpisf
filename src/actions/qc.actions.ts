@@ -373,6 +373,9 @@ export async function resolveNonconformance(id: number, formData: FormData) {
         documentNo: true,
         referenceType: true,
         referenceId: true,
+        reworkCost: true,
+        reworkHours: true,
+        resolution: true,
       },
     })
     if (!existing) return { success: false, error: "NCR tidak ditemukan" }
@@ -380,14 +383,35 @@ export async function resolveNonconformance(id: number, formData: FormData) {
       return { success: false, error: "NCR sudah ditutup." }
     }
 
+    // Preserve the stored rework values when the form doesn't submit them. The
+    // schema defaults them to 0, so a form that omits the inputs (or a
+    // programmatic caller) would otherwise wipe a rework cost that was already
+    // rolled into the production order's HPP — reversing it back out
+    // (WIP credited / HPP understated) on every subsequent status change.
+    const storedCost = Number(existing.reworkCost)
+    const storedHours = Number(existing.reworkHours)
+    const reworkCost = formData.has("reworkCost")
+      ? v.reworkCost
+      : Number.isFinite(storedCost)
+        ? storedCost
+        : 0
+    const reworkHours = formData.has("reworkHours")
+      ? v.reworkHours
+      : Number.isFinite(storedHours)
+        ? storedHours
+        : 0
+    const resolution = formData.has("resolution")
+      ? (v.resolution ?? null)
+      : (existing.resolution ?? null)
+
     await prisma.$transaction(async (tx) => {
       await tx.nonconformance.update({
         where: { id },
         data: {
           status: v.status,
-          resolution: v.resolution ?? null,
-          reworkCost: v.reworkCost,
-          reworkHours: v.reworkHours,
+          resolution,
+          reworkCost,
+          reworkHours,
           ...(v.status === "closed" ? { closedBy: Number(user.id), closedAt: new Date() } : {}),
         },
       })
@@ -401,8 +425,8 @@ export async function resolveNonconformance(id: number, formData: FormData) {
             referenceType: existing.referenceType,
             referenceId: existing.referenceId,
           },
-          reworkCost: v.reworkCost,
-          reworkHours: v.reworkHours,
+          reworkCost,
+          reworkHours,
           documentNo: existing.documentNo,
           createdBy: Number(user.id),
         },

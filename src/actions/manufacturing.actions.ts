@@ -1624,6 +1624,21 @@ export async function updateProductionOrder(id: number, formData: FormData) {
     const updProductStdCost = Number(product.standardCost);
 
     const productionOrder = await prisma.$transaction(async (tx) => {
+      // Lock + re-check status INSIDE the transaction. The pre-check above is a
+      // fast path only; without this, an approve/issue that lands between the
+      // read and the update would let this call wipe the order's materials
+      // (deleteMany/createMany below) while the order is already in progress.
+      await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${id} FOR UPDATE`;
+      const current = await tx.productionOrder.findUniqueOrThrow({
+        where: { id },
+        select: { status: true },
+      });
+      if (current.status !== "draft" && current.status !== "pending") {
+        throw new Error(
+          `Tidak bisa memperbarui Production Order dengan status '${current.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
+        );
+      }
+
       const po = await tx.productionOrder.update({
         where: { id },
         data: {

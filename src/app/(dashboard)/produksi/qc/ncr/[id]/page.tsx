@@ -82,7 +82,14 @@ export default async function NonconformanceDetailPage({
       </DetailCard>
 
       <DetailSection title="Tindakan">
-        <NonconformanceResolveForm ncrId={ncr.id} currentStatus={ncr.status} canManage={canManage} />
+        <NonconformanceResolveForm
+          ncrId={ncr.id}
+          currentStatus={ncr.status}
+          canManage={canManage}
+          reworkHours={Number(ncr.reworkHours)}
+          reworkCost={Number(ncr.reworkCost)}
+          resolution={ncr.resolution ?? ""}
+        />
       </DetailSection>
     </div>
   )

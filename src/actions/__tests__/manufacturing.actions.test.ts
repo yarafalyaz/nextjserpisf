@@ -681,6 +681,23 @@ describe("Production Order Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  it("updateProductionOrder refuses when status changed to in_progress inside the tx (TOCTOU)", async () => {
+    // Pre-check sees "draft"; by the time the transaction locks and re-reads, the
+    // order has been issued (in_progress). The write must be refused so its
+    // materials are not wiped mid-production.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "draft" }) // outside the tx
+      .mockResolvedValueOnce({ status: "in_progress" }) // inside the tx
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [{ itemId: 1, qty: 2 }] })
+
+    const res = await actions.updateProductionOrder(1, fdMap({ productId: 1, qty: 10 }))
+
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/status/i)
+    expect(mocks.prismaMock.productionOrderMaterial.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.productionOrder.update).not.toHaveBeenCalled()
+  })
+
   it("updateProductionOrder fails when not draft/pending", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed" })
     mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, materials: [] })

@@ -338,6 +338,34 @@ describe("resolveNonconformance", () => {
       expect.anything(),
     )
   })
+
+  it("preserves the stored rework cost when the form omits it", async () => {
+    // A status-only change (e.g. rework_done -> closed) that doesn't resubmit the
+    // rework fields must NOT zero a cost already rolled into the order's HPP.
+    nonconformanceFindUniqueMock.mockResolvedValue({
+      id: 1,
+      status: "rework_done",
+      documentNo: "NCR-0007",
+      referenceType: "ProductionOrder",
+      referenceId: 55,
+      reworkCost: 150000,
+      reworkHours: 3,
+      resolution: "diperbaiki",
+    })
+    nonconformanceUpdateMock.mockResolvedValue({})
+    syncReworkCostMock.mockResolvedValue({ posted: 150000, productionOrderId: 55 })
+
+    const res = await resolveNonconformance(1, fd({ status: "closed" }))
+
+    expect(res.success).toBe(true)
+    const arg = nonconformanceUpdateMock.mock.calls[0][0]
+    expect(arg.data.reworkCost).toBe(150000)
+    expect(arg.data.reworkHours).toBe(3)
+    expect(syncReworkCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reworkCost: 150000, reworkHours: 3 }),
+      expect.anything(),
+    )
+  })
 })
 
 describe("completeWorkOrder — QC gate", () => {
