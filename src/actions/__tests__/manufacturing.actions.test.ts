@@ -87,6 +87,12 @@ vi.mock("@/lib/services/stock-journal.service", () => ({
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: (...args: any[]) => mocks.assertPeriodOpenMock(...args),
 }))
+// QC handover gate is a no-op by default in these tests; the QC-specific tests
+// live in qc.test.ts. Without this mock the real service would query unmocked
+// prisma models and fail every completeWorkOrder case.
+vi.mock("@/lib/services/qc.service", () => ({
+  assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: (...args: any[]) => mocks.warehouseScopeMock(...args),
   assertWarehouseAccess: vi.fn(),

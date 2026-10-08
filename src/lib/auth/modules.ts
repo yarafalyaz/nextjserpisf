@@ -136,6 +136,7 @@ export const MODULES: ModuleDef[] = [
       { key: "view", permissionKey: "view_production", label: "Produk / BOM" },
       { key: "view", permissionKey: "view_work_orders", label: "Perintah Kerja" },
       { key: "view", permissionKey: "view_bom_revisions", label: "Revisi BOM" },
+      { key: "view", permissionKey: "view_qc", label: "Quality Control" },
     ],
   },
   {

@@ -20,6 +20,7 @@ import {
 } from "@/lib/validations/manufacturing.schemas";
 import { computeProjectStatus } from "@/lib/services/project-status";
 import { resolveEffectiveBom } from "@/lib/services/bom-revision.service";
+import { assertWorkOrderQcCleared } from "@/lib/services/qc.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -1027,6 +1028,11 @@ export async function completeWorkOrder(workOrderId: number) {
         "Material Issue belum diselesaikan untuk Work Order ini. Selesaikan Material Issue terlebih dahulu.",
       );
     }
+
+    // Guard QC (PRD FAB-11/FAB-13): a final inspection that failed, or any open
+    // nonconformance, blocks handover. WO with no QC records passes (opt-in QC),
+    // so simple/legacy jobs stay completable.
+    await assertWorkOrderQcCleared(workOrderId);
 
     // NOTE: Material consumption (stock-out + Dr Material Expense / Cr Inventory) is
     // performed exclusively by the mandatory Material Issue above. The Work Order

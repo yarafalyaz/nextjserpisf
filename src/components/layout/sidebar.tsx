@@ -11,7 +11,7 @@ import {
   CircleDollarSign, Handshake, Target, Ticket, HardDrive, TrendingUp,
   Cog, ChevronRight, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
-  Globe, ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch,
+  Globe, ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import {
@@ -134,6 +134,7 @@ const navigation: NavItem[] = [
       { label: "Revisi BOM", href: "/produksi/bom-revisi", icon: GitBranch, permission: "view_bom_revisions" },
       { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, permission: "view_work_orders" },
       { label: "Perintah Produksi", href: "/produksi/production-orders", icon: Hammer, permission: "view_production" },
+      { label: "Quality Control", href: "/produksi/qc", icon: ShieldCheck, permission: "view_qc" },
     ],
   },
   {

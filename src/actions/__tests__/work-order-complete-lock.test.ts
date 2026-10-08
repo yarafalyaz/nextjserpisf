@@ -53,6 +53,11 @@ vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: (...a: unknown[]) => logActivityMock(...a),
 }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
+// QC gate is out of scope for this lock test; stub it so the real service does
+// not query unmocked prisma models.
+vi.mock("@/lib/services/qc.service", () => ({
+  assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { completeWorkOrder } from "../manufacturing.actions"
 

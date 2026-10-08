@@ -302,6 +302,11 @@ async function main() {
       // Kept as one capability so a role either governs BOM revisions or not.
       "manage_bom_revisions",
       "view_bom_revisions",
+      // Quality control (PRD FAB-10/FAB-11/FAB-13): checklists, inspections, NCR.
+      "view_qc",
+      "manage_qc_checklists",
+      "manage_qc_inspections",
+      "manage_nonconformances",
       "view_employee_loans",
       "manage_settings",
       "manage_users",
@@ -532,6 +537,10 @@ async function main() {
       "edit_products",
       "manage_bom_revisions",
       "view_bom_revisions",
+      "view_qc",
+      "manage_qc_checklists",
+      "manage_qc_inspections",
+      "manage_nonconformances",
       "view_timesheets",
       "create_timesheets",
       "view_overtime",

@@ -1507,6 +1507,7 @@ model Product {
   productVehicleModels ProductVehicleModel[]
   productionOrders     ProductionOrder[]
   bomRevisions         BomRevision[]
+  qcChecklists         QcChecklist[]
   inventoryItem        Item?                 @relation("ProductInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
   vehicleBrand         VehicleBrand?         @relation(fields: [vehicleBrandId], references: [id], onDelete: SetNull)
   vehicleModel         VehicleModel?         @relation(fields: [vehicleModelId], references: [id], onDelete: SetNull)
@@ -1613,6 +1614,127 @@ model ProductionOrderMaterial {
   @@index([productionOrderId], map: "production_order_materials_production_order_id_fkey")
   @@index([itemId])
   @@map("production_order_materials")
+}
+
+/// Master checklist for quality control (PRD FAB-10). Versioned so a released
+/// checklist is frozen; an inspection points at the exact version used. Types:
+/// `incoming` (GRN receipt QC), `in_process` (during fabrication) and `final`
+/// (pre-handover, FAB-13).
+model QcChecklist {
+  id            Int               @id @default(autoincrement())
+  code          String?           @unique
+  name          String
+  checklistType String            @map("checklist_type")
+  productId     Int?              @map("product_id")
+  version       Int               @default(1)
+  status        String            @default("draft")
+  isActive      Boolean           @default(true) @map("is_active")
+  releasedAt    DateTime?         @map("released_at")
+  releasedBy    Int?              @map("released_by")
+  createdBy     Int?              @map("created_by")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  items         QcChecklistItem[]
+  inspections   QcInspection[]
+  product       Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([productId], map: "qc_checklists_product_id_fkey")
+  @@index([checklistType])
+  @@index([status])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("qc_checklists")
+}
+
+model QcChecklistItem {
+  id           Int         @id @default(autoincrement())
+  checklistId  Int         @map("checklist_id")
+  sortOrder    Int         @default(0) @map("sort_order")
+  itemName     String      @map("item_name")
+  method       String      @default("visual")
+  spec         String?
+  isRequired   Boolean     @default(true) @map("is_required")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  checklist    QcChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  results      QcInspectionResult[]
+
+  @@index([checklistId], map: "qc_checklist_items_checklist_id_fkey")
+  @@index([createdAt])
+  @@map("qc_checklist_items")
+}
+
+/// One inspection event against a document (work order / production order /
+/// goods receipt) using a checklist version. Status: draft → passed / failed.
+model QcInspection {
+  id             Int                  @id @default(autoincrement())
+  documentNo     String               @unique @map("document_no")
+  checklistId    Int                  @map("checklist_id")
+  inspectionType String               @map("inspection_type")
+  referenceType  String               @map("reference_type")
+  referenceId    Int                  @map("reference_id")
+  status         String               @default("draft")
+  inspectorId    Int?                 @map("inspector_id")
+  inspectedAt    DateTime?            @map("inspected_at")
+  notes          String?              @db.Text
+  createdBy      Int?                 @map("created_by")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  checklist      QcChecklist          @relation(fields: [checklistId], references: [id])
+  results        QcInspectionResult[]
+  nonconformances Nonconformance[]
+
+  @@index([checklistId], map: "qc_inspections_checklist_id_fkey")
+  @@index([referenceType, referenceId], map: "qc_inspections_reference_idx")
+  @@index([status])
+  @@index([inspectionType])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("qc_inspections")
+}
+
+model QcInspectionResult {
+  id              Int           @id @default(autoincrement())
+  inspectionId    Int           @map("inspection_id")
+  checklistItemId Int           @map("checklist_item_id")
+  result          String        @default("na")
+  measuredValue   String?       @map("measured_value")
+  notes           String?       @db.Text
+  inspection      QcInspection  @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  checklistItem   QcChecklistItem @relation(fields: [checklistItemId], references: [id])
+
+  @@index([inspectionId], map: "qc_inspection_results_inspection_id_fkey")
+  @@index([checklistItemId])
+  @@map("qc_inspection_results")
+}
+
+/// Nonconformance / rework record (PRD FAB-11). A failing inspection raises one
+/// or more NCRs; an open NCR blocks handover until closed by an authorized party.
+model Nonconformance {
+  id                Int           @id @default(autoincrement())
+  documentNo        String        @unique @map("document_no")
+  inspectionId      Int?          @map("inspection_id")
+  referenceType     String        @map("reference_type")
+  referenceId       Int           @map("reference_id")
+  defectDescription String        @map("defect_description") @db.Text
+  cause             String?       @db.Text
+  responsibility    String        @default("internal")
+  severity          String        @default("minor")
+  status            String        @default("open")
+  reworkCost        Decimal       @default(0.00) @map("rework_cost") @db.Decimal(15, 2)
+  reworkHours       Decimal       @default(0.00) @map("rework_hours") @db.Decimal(10, 2)
+  resolution        String?       @db.Text
+  closedBy          Int?          @map("closed_by")
+  closedAt          DateTime?     @map("closed_at")
+  createdBy         Int?          @map("created_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  inspection        QcInspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+
+  @@index([inspectionId], map: "nonconformances_inspection_id_fkey")
+  @@index([referenceType, referenceId], map: "nonconformances_reference_idx")
+  @@index([status])
+  @@index([createdAt])
+  @@map("nonconformances")
 }
 
 model WorkOrder {

@@ -74,6 +74,10 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/produksi/products", edit: "edit_products", delete: "delete_products" },
   // BOM revisions are governed by a single capability (create/edit/release/delete).
   { prefix: "/produksi/bom-revisi", edit: "manage_bom_revisions", delete: "manage_bom_revisions" },
+  // QC checklists are managed under one capability; inspections/NCR likewise.
+  { prefix: "/produksi/qc/checklist", edit: "manage_qc_checklists", delete: "manage_qc_checklists" },
+  { prefix: "/produksi/qc/inspeksi", edit: "manage_qc_inspections", delete: "manage_qc_inspections" },
+  { prefix: "/produksi/qc/ncr", edit: "manage_nonconformances", delete: "manage_nonconformances" },
 
   // SDM — tasks reuse project edit perms
   { prefix: "/proyek/tugas", edit: "edit_projects", delete: "delete_projects" },

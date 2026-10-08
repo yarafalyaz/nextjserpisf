@@ -37,6 +37,9 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   MI: 'materialIssuePrefix',
   MO: 'manufacturingOrderPrefix',
   SM: 'stockMovementPrefix',
+  QCL: undefined as string | undefined, // QC checklist code (auto, not configurable)
+  QCI: undefined as string | undefined, // QC inspection document number
+  NCR: undefined as string | undefined, // Nonconformance report number
   // Master data codes (simple format, but still configurable)
   CUST: 'customerCodePrefix',
   VND: 'vendorCodePrefix',
