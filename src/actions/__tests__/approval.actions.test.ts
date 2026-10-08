@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     approvalStep: buildModelMock(),
     approvalHistory: buildModelMock(),
     purchaseRequest: buildModelMock(),
+    expense: buildModelMock(),
     role: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
@@ -37,6 +38,7 @@ const mocks = vi.hoisted(() => {
     revalidateMock: vi.fn(),
     logActivityMock: vi.fn(),
     authMock: vi.fn(),
+    syncPettyCashMock: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -47,6 +49,9 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/auth/auth", () => ({ auth: mocks.authMock }));
 vi.mock("@/lib/hooks/accounting.hook", () => ({
   onEmployeeLoanDisbursed: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("@/lib/hooks/expense.hook", () => ({
+  onExpenseApprovedSyncPettyCash: (...a: unknown[]) => mocks.syncPettyCashMock(...a),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }));
 vi.mock("@/lib/services/activity-log.service", () => ({
@@ -76,6 +81,42 @@ beforeEach(() => {
 });
 
 describe("Approval Progression Actions", () => {
+  it("syncs petty cash when an Expense workflow completes", async () => {
+    // Regression: the approval engine flipped Expense.status to "approved" but
+    // ran no domain side effect, so no petty-cash record was created (petty cash
+    // understated) with no retry path via approveExpense. approveStep must now
+    // trigger the sync once the workflow's final step is approved.
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      status: "pending",
+      currentStep: 1,
+      referenceType: "Expense",
+      referenceId: 55,
+      requestedBy: 2,
+      workflow: {
+        steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
+      },
+    });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.syncPettyCashMock).toHaveBeenCalledWith(55, 1);
+  });
+
+  it("does not sync petty cash for a non-Expense workflow completion", async () => {
+    mocks.prismaMock.approval.findUnique.mockResolvedValue({
+      id: 1,
+      status: "pending",
+      currentStep: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 77,
+      requestedBy: 2,
+      workflow: {
+        steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
+      },
+    });
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.syncPettyCashMock).not.toHaveBeenCalled();
+  });
+
   it("approveStep succeeds (final step)", async () => {
     mocks.prismaMock.approval.findUnique.mockResolvedValue({
       id: 1,

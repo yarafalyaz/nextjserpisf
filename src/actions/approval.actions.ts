@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { auth } from "@/lib/auth/auth";
 import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook";
+import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/services/activity-log.service"
 import { assertCSRF } from "@/lib/security/csrf";
@@ -154,6 +155,12 @@ export async function approveStep(approvalId: number, formData: FormData) {
     if (!parsed.success) throw new Error(parsed.error);
     const { notes } = parsed.data;
 
+    // Set when this approveStep completes an Expense workflow. The petty-cash
+    // sync must run AFTER the transaction commits (the hook manages its own
+    // transaction and is idempotent on documentNo), so we capture the id here
+    // and run it below rather than nesting it inside this transaction.
+    let expenseToSync: number | null = null;
+
     // Serialize concurrent approve/reject on the same approval. Without the row
     // lock, a double-clicked button or two concurrent approvers both pass the
     // "pending" check and both run currentStep + 1, silently skipping a level.
@@ -227,6 +234,10 @@ export async function approveStep(approvalId: number, formData: FormData) {
           if (approval.referenceType === "EmployeeLoan") {
             await onEmployeeLoanDisbursed(approval.referenceId, approvedBy ?? undefined, tx);
           }
+          if (approval.referenceType === "Expense") {
+            // Deferred until after commit (see expenseToSync above).
+            expenseToSync = approval.referenceId;
+          }
         }
       } else {
         // Advance to next step
@@ -238,6 +249,18 @@ export async function approveStep(approvalId: number, formData: FormData) {
         });
       }
     });
+
+    // Expense workflow just completed: sync the petty cash ledger now that the
+    // approval transaction has committed. Without this the expense is "approved"
+    // but no petty cash OUT is recorded (understating petty cash) with no retry
+    // path via approveExpense, which requires draft/approved. The hook is
+    // idempotent on documentNo, so this cannot double-post.
+    if (expenseToSync !== null) {
+      await onExpenseApprovedSyncPettyCash(
+        expenseToSync,
+        session?.user?.id ? Number(session.user.id) : undefined,
+      );
+    }
 
     await logActivity(
       "approve",
