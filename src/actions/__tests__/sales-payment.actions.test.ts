@@ -76,7 +76,7 @@ beforeEach(() => {
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   paymentFindUniqueOrThrowMock.mockResolvedValue({ salesInvoiceId: 50 })
-  invoiceFindUniqueOrThrowMock.mockResolvedValue({ id: 50, grandTotal: 1000, customerId: 3 })
+  invoiceFindUniqueOrThrowMock.mockResolvedValue({ id: 50, grandTotal: 1000, customerId: 3, status: "posted" })
   paymentAggregateMock.mockResolvedValue({ _sum: { amount: 200 } }) // 200 already paid by others
   paymentUpdateMock.mockResolvedValue({ id: 9, salesInvoiceId: 50 })
   execRawMock.mockResolvedValue(undefined)
@@ -119,5 +119,34 @@ describe("updateSalesPayment overpay guard", () => {
     expect(deleteJournalByRefTxMock).toHaveBeenCalledWith(expect.anything(), "SalesPayment", 9)
     expect(onPaymentCreatedMock).toHaveBeenCalled()
     expect(onPaymentUpdatedMock).toHaveBeenCalled()
+  })
+
+  it("allows editing a payment whose invoice is already fully paid", async () => {
+    // Once a payment settles the invoice, onSalesPaymentUpdated flips the invoice
+    // to "paid". Correcting that payment (amount/date/account) is a normal edit and
+    // must not be blocked by the status guard — only never-posted/voided invoices
+    // are off-limits.
+    invoiceFindUniqueOrThrowMock.mockResolvedValue({
+      id: 50, grandTotal: 1000, customerId: 3, status: "paid",
+    })
+    const result = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "800", paymentDate: "2026-06-09", paymentMethod: "transfer",
+    }))
+    expect(result.success).toBe(true)
+    expect(paymentUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 9 }, data: expect.objectContaining({ amount: 800 }) }),
+    )
+  })
+
+  it("still rejects an edit onto an invoice that was never posted", async () => {
+    invoiceFindUniqueOrThrowMock.mockResolvedValue({
+      id: 50, grandTotal: 1000, customerId: 3, status: "draft",
+    })
+    const result = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "100", paymentDate: "2026-06-09", paymentMethod: "cash",
+    }))
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("sudah diposting")
+    expect(paymentUpdateMock).not.toHaveBeenCalled()
   })
 })

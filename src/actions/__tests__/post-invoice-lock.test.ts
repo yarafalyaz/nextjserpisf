@@ -72,15 +72,30 @@ beforeEach(() => {
 })
 
 describe("postInvoice concurrency guard", () => {
-  it("posts via an atomic conditional claim scoped to status=draft", async () => {
+  it("posts via an atomic conditional claim scoped to status in (draft, approved)", async () => {
     const result = await postInvoice(11)
 
     expect(result.success).toBe(true)
     expect(invoiceUpdateManyMock).toHaveBeenCalledTimes(1)
     const claimArg = invoiceUpdateManyMock.mock.calls[0][0]
     expect(claimArg.where.id).toBe(11)
-    expect(claimArg.where.status).toBe("draft")
+    // A workflow-approved invoice has status "approved", so the claim must
+    // accept BOTH states or approved invoices could never be posted.
+    expect(claimArg.where.status).toEqual({ in: ["draft", "approved"] })
     expect(claimArg.data.status).toBe("posted")
+    expect(onSalesInvoicePostedMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("posts an invoice whose workflow approval set status=approved", async () => {
+    invoiceFindUniqueOrThrowMock.mockResolvedValue({
+      id: 11, status: "approved", customerId: 8, grandTotal: 1000, paidAmount: 0,
+    })
+
+    const result = await postInvoice(11)
+
+    expect(result.success).toBe(true)
+    const claimArg = invoiceUpdateManyMock.mock.calls[0][0]
+    expect(claimArg.where.status).toEqual({ in: ["draft", "approved"] })
     expect(onSalesInvoicePostedMock).toHaveBeenCalledTimes(1)
   })
 

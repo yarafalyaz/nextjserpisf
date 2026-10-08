@@ -111,6 +111,22 @@ describe("Stock Adjustment Actions", () => {
     );
     expect(res?.success).toBe(true);
   });
+
+  it("rejects duplicate item rows instead of saving conflicting physical counts", async () => {
+    const res = await actions.createStockAdjustment(
+      fdMap({
+        warehouseId: 1,
+        date: "2026-06-13",
+        items: JSON.stringify([
+          { itemId: 1, newQty: 11, unitCost: 100 },
+          { itemId: 1, newQty: 12, unitCost: 100 },
+        ]),
+      }),
+    );
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("hanya boleh dicantumkan satu kali");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
   it("createStockAdjustment computes systemQty as IN - OUT (not gross sum)", async () => {
     // Simulate historical posted moves: 15 IN + 5 OUT in this warehouse => real stock = 10.
     // The OLD bug summed IN and OUT together, so systemQty was reported as 20 instead of 10.
@@ -159,6 +175,26 @@ describe("Stock Adjustment Actions", () => {
       }),
     );
     expect(res?.success).toBe(true);
+  });
+  it("rejects duplicate item rows when updating a draft", async () => {
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "draft",
+    });
+    const res = await actions.updateStockAdjustment(
+      1,
+      fdMap({
+        warehouseId: 1,
+        date: "2026-06-13",
+        items: JSON.stringify([
+          { itemId: 1, newQty: 11, unitCost: 100 },
+          { itemId: 1, newQty: 12, unitCost: 100 },
+        ]),
+      }),
+    );
+    expect(res.success).toBe(false);
+    expect(res.error).toContain("hanya boleh dicantumkan satu kali");
+    expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
   });
   it("updateStockAdjustment succeeds", async () => {
     mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
