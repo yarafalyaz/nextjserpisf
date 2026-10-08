@@ -26,7 +26,11 @@ import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface PurchaseOrderFormProps {
-  vendors: { id: number; name: string }[];
+  vendors: {
+    id: number;
+    name: string;
+    paymentTerm?: { name: string; code: string; days: number } | null;
+  }[];
   order?: {
     id: number;
     vendorId: number;
@@ -132,12 +136,24 @@ export function PurchaseOrderForm({
       vendorId: order?.vendorId ?? preselectedPR?.vendorId ?? undefined,
       date: order?.date ?? toLocalDateOnly(new Date()),
       notes: order?.notes ?? "",
-      paymentTerm: order?.paymentTerm ?? "",
+      paymentTerm:
+        order?.paymentTerm ??
+        (() => {
+          const prVendor = vendors.find((v) => v.id === preselectedPR?.vendorId);
+          return prVendor?.paymentTerm?.name || prVendor?.paymentTerm?.code || "";
+        })(),
       shippingCost: order?.shippingCost ?? 0,
       serviceFee: (order as any)?.serviceFee ?? 0,
       purchaseRequestId: defaultPrId,
     },
   });
+
+  /** Copy the selected vendor's payment term into the (still editable) PO field. */
+  function applyVendorTerm(vendorId: number | undefined) {
+    const vendor = vendors.find((v) => v.id === vendorId);
+    const term = vendor?.paymentTerm;
+    if (term) setValue("paymentTerm", term.name || term.code);
+  }
 
   function handlePRChange(prId: string) {
     const id = prId ? Number(prId) : undefined;
@@ -153,7 +169,10 @@ export function PurchaseOrderForm({
         : null,
     );
     // Suggest the PR's vendor as the PO vendor (still changeable).
-    if (pr?.vendorId) setValue("vendorId", pr.vendorId);
+    if (pr?.vendorId) {
+      setValue("vendorId", pr.vendorId);
+      applyVendorTerm(pr.vendorId);
+    }
     // Prefill items from the selected PR (only when we have the full PR payload).
     const full = preselectedPR && preselectedPR.id === id ? preselectedPR : null;
     if (full && full.items.length > 0) {
@@ -290,9 +309,11 @@ export function PurchaseOrderForm({
                 <Combobox
                   id="vendorId"
                   value={field.value ? String(field.value) : null}
-                  onChange={(key) =>
-                    field.onChange(key ? Number(key) : undefined)
-                  }
+                  onChange={(key) => {
+                    const vid = key ? Number(key) : undefined;
+                    field.onChange(vid);
+                    applyVendorTerm(vid);
+                  }}
                   placeholder="Cari pemasok..."
                   options={vendors.map((v) => ({
                     value: String(v.id),

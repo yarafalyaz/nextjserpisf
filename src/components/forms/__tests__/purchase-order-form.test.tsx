@@ -41,7 +41,9 @@ vi.mock("@/lib/utils/toast", () => ({
   showError: vi.fn(),
 }))
 
-const mockVendors = [{ id: 1, name: "Vendor A" }]
+const mockVendors = [
+  { id: 1, name: "Vendor A", paymentTerm: { name: "NET30", code: "NET30", days: 30 } },
+]
 const mockItems = [
   { id: 100, sku: "ITEM-A", name: "Product A", cost: "1500", unitOfMeasure: "pcs" },
   { id: 200, sku: "ITEM-B", name: "Product B", cost: "2500", unitOfMeasure: "pcs" },
@@ -109,6 +111,9 @@ describe("PurchaseOrderForm — Permintaan Pembelian linkage", () => {
 
     // The vendor combobox for vendor id 1 must display "Vendor A" (not the placeholder).
     expect(container.textContent).toContain("Vendor A")
+    // ...and the vendor's payment term must be prefilled into the term field.
+    const termInput = container.querySelector<HTMLInputElement>("#paymentTerm")
+    expect(termInput?.value).toBe("NET30")
 
     unmount(root)
     container.remove()

@@ -37,6 +37,9 @@ export default async function EditPage({
     vendorId: data.vendorId,
     date: data.date.toISOString().split("T")[0],
     notes: data.notes,
+    paymentTerm: data.paymentTerm,
+    shippingCost: Number(data.shippingCost),
+    serviceFee: Number(data.serviceFee),
     items: data.items.map((it) => ({
       itemId: it.itemId,
       qty: Number(it.qty),
@@ -46,7 +49,11 @@ export default async function EditPage({
   };
 
   const [vendors, items] = await Promise.all([
-    prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
+    prisma.vendor.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, paymentTerm: { select: { name: true, code: true, days: true } } },
+    }),
     prisma.item
       .findMany({
         where: { isActive: true, deletedAt: null },

@@ -22,7 +22,7 @@ export default async function CreatePurchaseOrderPage({
     prisma.vendor.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, paymentTerm: { select: { name: true, code: true, days: true } } },
     }),
     prisma.item.findMany({
       where: { isActive: true, deletedAt: null },
