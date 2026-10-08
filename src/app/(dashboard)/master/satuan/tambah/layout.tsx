@@ -1,4 +1,3 @@
-import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 
 /**

@@ -56,10 +56,12 @@ export default async function SalesOrderDetailPage({
   const dbItems = itemIds.length
     ? await prisma.item.findMany({
         where: { id: { in: itemIds } },
-        select: { id: true, name: true, sku: true },
+        select: { id: true, name: true },
       })
     : [];
 
+  // Lookup so an order line with no free-text description still shows the
+  // catalogue item NAME instead of a bare "Item #<id>".
   const itemMap = new Map(dbItems.map((i) => [i.id, i]));
 
   // Custom fabrication: the order's items stay editable until the customer
@@ -180,7 +182,11 @@ export default async function SalesOrderDetailPage({
         items={order.items.map((item) => ({
           id: item.id,
           itemId: item.itemId,
-          description: item.description || (item.itemId ? `Item #${item.itemId}` : null),
+          // Show the catalogue item name (looked up above); fall back to a
+          // generic label only when the item was deleted / has no master row.
+          description:
+            item.description ||
+            (item.itemId ? itemMap.get(item.itemId)?.name ?? `Item #${item.itemId}` : null),
           qty: Number(item.qty),
           unitPrice: Number(item.unitPrice),
           discount: Number(item.discount ?? 0),

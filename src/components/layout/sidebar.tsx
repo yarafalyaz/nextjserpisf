@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Building2, ChevronRight, Cog,
+  Building2, ChevronRight,
 } from "lucide-react"
 import {
   Sidebar,

@@ -11,7 +11,6 @@ import {
   Undo2,
   ArrowUpRight,
   Package,
-  AlertTriangle,
 } from "lucide-react"
 import {
   Card,
@@ -22,7 +21,6 @@ import {
   CardTitle,
 } from "@/components/ui/shadcn/card"
 import { Button } from "@/components/ui/shadcn/button"
-import { Badge } from "@/components/ui/shadcn/badge"
 import { StatCard } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"

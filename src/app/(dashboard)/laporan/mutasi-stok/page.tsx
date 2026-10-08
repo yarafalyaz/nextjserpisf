@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting, formatReferenceType } from '@/lib/utils/format'
+import { formatCurrency, formatReferenceType } from '@/lib/utils/format'
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -89,6 +89,8 @@ export default async function StockMovementPage({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Masuk (Qty)" value={totalIn.toLocaleString('id-ID')} valueClassName="text-success" />
         <ReportKpiCard label="Total Keluar (Qty)" value={totalOut.toLocaleString('id-ID')} valueClassName="text-danger" />
+        <ReportKpiCard label="Nilai Masuk" value={formatCurrency(totalValueIn)} valueClassName="text-success" />
+        <ReportKpiCard label="Nilai Keluar" value={formatCurrency(totalValueOut)} valueClassName="text-danger" />
       </div>
       <ReportSection title="Mutasi Stok">
         <DetailTable data-report-table="Mutasi Stok">

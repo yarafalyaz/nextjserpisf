@@ -18,7 +18,6 @@ import {
   workflowStepsSchema,
 } from "@/lib/validations/approval.schemas";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
-import type { Prisma } from "@prisma/client";
 
 type WorkflowStepInput = {
   name?: string;

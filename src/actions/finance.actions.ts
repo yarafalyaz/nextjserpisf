@@ -12,12 +12,7 @@ import {
 import { onExpenseApprovedSyncPettyCash } from "@/lib/hooks/expense.hook";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
-import {
-  safeJsonParse,
-  requireId,
-  safeId,
-  requireNumber,
-} from "@/lib/utils/safe-parse";
+import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   bankStatementSchema,
@@ -356,7 +351,7 @@ export async function approveExpense(expenseId: number) {
 
 export async function rejectExpense(expenseId: number) {
   try {
-    const user = await requirePermission("approve_expenses");
+    await requirePermission("approve_expenses");
 
     const expense = await prisma.expense.findUniqueOrThrow({
       where: { id: expenseId },

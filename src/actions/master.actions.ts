@@ -29,7 +29,6 @@ import {
   createLeadSchema,
   updateLeadSchema,
 } from "@/lib/validations/crm.schemas";
-import { employeeSchema } from "@/lib/validators";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 

@@ -1,6 +1,5 @@
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
-import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
   Palmtree,
@@ -14,22 +13,12 @@ import {
 } from "lucide-react"
 import {
   Card,
-  CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/shadcn/card"
-import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/shadcn/button"
 import { NotificationsWidget } from "./notifications-widget"
-
-function getTodayRange() {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const end = new Date(start.getTime() + 86_400_000)
-  return { start, end }
-}
 
 async function getEmployeeData(userId: number) {
   const employee = await prisma.employee.findFirst({

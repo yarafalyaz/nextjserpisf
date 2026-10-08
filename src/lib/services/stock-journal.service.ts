@@ -104,8 +104,7 @@ export const stockJournalService = {
 
     // Split the debit into goods / freight / admin when both the line slices and
     // the target accounts are available; otherwise post one blended Inventory
-    // debit. goodsValue is the residual so the debits always equal totalValue.
-    const goodsValue = goodsOnlyLines ? sumValue(goodsOnlyLines) : 0
+    // debit.
     const shippingValue = shippingLines ? sumValue(shippingLines) : 0
     const adminValue = adminLines ? sumValue(adminLines) : 0
     const canSplit =
@@ -351,8 +350,7 @@ export const stockJournalService = {
     items: JournalItemInput[],
     srDocumentNo: string,
     srId: number,
-    userId?: number,
-    costCenterId?: number | null
+    userId?: number
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.salesReturn) return null
@@ -398,8 +396,7 @@ export const stockJournalService = {
     items: JournalItemInput[],
     prDocumentNo: string,
     prId: number,
-    userId?: number,
-    costCenterId?: number | null
+    userId?: number
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.purchaseReturn) return null

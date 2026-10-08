@@ -105,8 +105,6 @@ export async function syncServicePurchaseOrderCost(
     select: { id: true, amount: true, productionOrderId: true },
   })
 
-  const existingTotal = existingLines.reduce((s, l) => safeAdd(s, Number(l.amount), 2), 0)
-
   if (desiredTotal === 0) {
     if (existingLines.length) {
       for (const line of existingLines) {

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
   Package,
@@ -25,7 +25,6 @@ import {
 import { Button } from "@/components/ui/shadcn/button"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { StatCard } from "@/components/ui/empty-state"
-import { StatusChip } from "@/components/ui/status-chip"
 
 async function getWarehouseData() {
   const [lowStockItems, recentMoves, warehouseCount, pendingReceipts] =

@@ -80,7 +80,7 @@ function Calendar({
           ) : (
             <ChevronRight className="size-4" {...chevronProps} />
           ),
-        Dropdown: ({ value, onChange, options, ...dropdownProps }: DropdownProps) => {
+        Dropdown: ({ value, onChange, options }: DropdownProps) => {
           const selected = options?.find((option) => option.value === value)
           const handleChange = (newValue: string) => {
             const changeEvent = {

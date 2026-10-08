@@ -2,18 +2,13 @@ import { prisma } from "@/lib/db/prisma"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
-  Landmark,
   Receipt,
   CreditCard,
   BookOpenCheck,
   CircleDollarSign,
   Coins,
   PiggyBank,
-  Target,
-  FileSpreadsheet,
-  BarChart3,
   ArrowUpRight,
-  DollarSign,
   AlertTriangle,
   TrendingUp,
   TrendingDown,
@@ -27,7 +22,6 @@ import {
   CardTitle,
 } from "@/components/ui/shadcn/card"
 import { Button } from "@/components/ui/shadcn/button"
-import { Badge } from "@/components/ui/shadcn/badge"
 import { StatCard } from "@/components/ui/empty-state"
 import { StatusChip } from "@/components/ui/status-chip"
 
@@ -35,8 +29,6 @@ async function getFinanceData() {
   const startOfMonth = new Date()
   startOfMonth.setDate(1)
   startOfMonth.setHours(0, 0, 0, 0)
-
-  const now = new Date()
 
   const [revenueAgg, receivablesAgg, recentPayments, recentInvoices, pendingApprovals, expenseAgg] =
     await Promise.all([

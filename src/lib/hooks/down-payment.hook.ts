@@ -200,17 +200,18 @@ export async function onDownPaymentConfirmed(
 
     try {
       // Look up project info from quotation
-      const projectName = quotation.projectId
-        ? (await tx.project.findUnique({ where: { id: quotation.projectId }, select: { name: true, startDate: true, endDate: true } }))?.name ?? "-"
-        : "-";
+      const project = quotation.projectId
+        ? await tx.project.findUnique({ where: { id: quotation.projectId }, select: { name: true, startDate: true, endDate: true } })
+        : null;
+      const projectName = project?.name ?? "-";
       const customerName = quotation.customer?.name ?? "-";
       const fmtDate = (d: Date | null) => !d ? "-" : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
       bomNotes += `\n[INFORMASI PROYEK]\n`;
       bomNotes += `Nama Proyek  : ${projectName}\n`;
       bomNotes += `Pelanggan    : ${customerName}\n`;
-      bomNotes += `Tanggal Mulai: -\n`;
-      bomNotes += `Tanggal Selesai: -\n`;
+      bomNotes += `Tanggal Mulai: ${fmtDate(project?.startDate ?? null)}\n`;
+      bomNotes += `Tanggal Selesai: ${fmtDate(project?.endDate ?? null)}\n`;
 
       const validItemNames = Array.from(
         new Set(

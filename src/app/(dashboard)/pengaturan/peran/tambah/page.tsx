@@ -5,7 +5,6 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { createRole } from "@/actions/roles.actions"
 import { Button } from "@/components/ui/button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import Link from "next/link"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 
 import type { Metadata } from "next"

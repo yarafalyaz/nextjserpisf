@@ -2,7 +2,7 @@
 
 import { PrismaClient, Prisma, StockMove } from '@prisma/client'
 import { notificationService } from './notification.service'
-import { safeAdd, safeSubtract, safeMultiply, safeDivide } from '@/lib/utils/math'
+import { safeDivide } from '@/lib/utils/math'
 import { consumeFifoLayers } from './inventory-fifo'
 import { resolveCostingMethodForItem } from './costing-method.service'
 

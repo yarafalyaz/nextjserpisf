@@ -4,7 +4,6 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import Link from "next/link"
 
 export const metadata = { title: "Detail Aturan Alokasi" }
 

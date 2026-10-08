@@ -75,6 +75,7 @@ const columns = [
 export function SkfValueTable({ values, skfs, costCenters }: Props) {
   const [skfFilter, setSkfFilter] = useState("")
   const [periodFilter, setPeriodFilter] = useState("")
+  const [costCenterFilter, setCostCenterFilter] = useState("")
 
   const periods = useMemo(() => {
     const set = new Set(values.map((v) => v.period))
@@ -85,9 +86,10 @@ export function SkfValueTable({ values, skfs, costCenters }: Props) {
     return values.filter((v) => {
       if (skfFilter && v.statisticalKeyFigureId !== Number(skfFilter)) return false
       if (periodFilter && v.period !== periodFilter) return false
+      if (costCenterFilter && String(v.costCenterId ?? "") !== costCenterFilter) return false
       return true
     })
-  }, [values, skfFilter, periodFilter])
+  }, [values, skfFilter, periodFilter, costCenterFilter])
 
   return (
     <div className="space-y-4">
@@ -108,8 +110,16 @@ export function SkfValueTable({ values, skfs, costCenters }: Props) {
             placeholder="Semua Periode"
           />
         </div>
-        {(skfFilter || periodFilter) && (
-          <Button variant="outline" onPress={() => { setSkfFilter(""); setPeriodFilter("") }}>
+        <div className="w-64">
+          <Combobox
+            options={costCenters.map((c) => ({ value: String(c.id), label: `${c.code} — ${c.name}` }))}
+            value={costCenterFilter}
+            onChange={(v) => setCostCenterFilter(v ?? "")}
+            placeholder="Semua Pusat Biaya"
+          />
+        </div>
+        {(skfFilter || periodFilter || costCenterFilter) && (
+          <Button variant="outline" onPress={() => { setSkfFilter(""); setPeriodFilter(""); setCostCenterFilter("") }}>
             Reset
           </Button>
         )}

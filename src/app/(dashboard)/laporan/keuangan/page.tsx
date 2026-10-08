@@ -17,8 +17,7 @@ import {
   DetailTableFoot,
   DetailTableFootRow,
 } from "@/components/ui/detail-table";
-import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
-import { ReportNarration } from "@/components/reports/report-narration";
+import { ReportSection } from "@/components/reports/report-section"
 import { FormSelect } from "@/components/ui/form-select";
 import { Label } from "@/components/ui/shadcn/label";
 import { Button } from "@/components/ui/button";

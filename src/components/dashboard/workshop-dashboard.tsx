@@ -1,12 +1,11 @@
 import { prisma } from "@/lib/db/prisma"
-import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import {
   Wrench,
   FolderKanban,
   Settings2,
   Car,
-  AlertTriangle,
   CheckCircle2,
   Clock,
   ArrowUpRight,
@@ -22,7 +21,6 @@ import {
 import { Badge } from "@/components/ui/shadcn/badge"
 import { Button } from "@/components/ui/shadcn/button"
 import { StatCard } from "@/components/ui/empty-state"
-import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 const DONE_STATES = ["completed", "cancelled", "done", "closed"]

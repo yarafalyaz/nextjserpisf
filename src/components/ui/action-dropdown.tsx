@@ -103,7 +103,7 @@ export function ActionDropdown({ viewHref, editHref, printAction, deleteAction, 
   const hasDelete = !!deleteAction && !!deleteId && canDelete
   const hasPrint = !!printAction
   const hasProcess = !!processAction && !!deleteId && canProcess
-  const hasAnyAction = hasEdit || hasDelete || hasPrint || hasProcess
+  const hasAnyAction = hasView || hasEdit || hasDelete || hasPrint || hasProcess
 
   if (!hasAnyAction) return null
 

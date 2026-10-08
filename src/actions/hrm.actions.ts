@@ -13,10 +13,7 @@ import {
   generateDocumentNumberBatch,
 } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
-import {
-  requireId,
-  safeNumber,
-} from "@/lib/utils/safe-parse";
+import { requireId } from "@/lib/utils/safe-parse";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   leaveRequestSchema,
@@ -34,46 +31,11 @@ import {
   QUOTA_LEAVE_TYPES,
 } from "@/lib/services/leave-quota.service";
 import { logActivity } from "@/lib/services/activity-log.service";
-import { onPayrollPaid, onEmployeeLoanDisbursed, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
+import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 
-
-function getWibNow(now = new Date()) {
-  const wibOffset = 7 * 60 * 60 * 1000;
-  return new Date(now.getTime() + wibOffset);
-}
-
-function getWibDateOnly(now = new Date()) {
-  const wibNow = getWibNow(now);
-  return new Date(
-    Date.UTC(
-      wibNow.getUTCFullYear(),
-      wibNow.getUTCMonth(),
-      wibNow.getUTCDate(),
-    ),
-  );
-}
-
-function toMinutes(hhmm: string) {
-  const [h, m] = hhmm.split(":").map((v) => Number(v || 0));
-  return h * 60 + m;
-}
-
-/** Menit irisan antara periode kerja [inMin,outMin] dengan jam istirahat (ISOMA). */
-function breakOverlapMinutes(
-  inMin: number,
-  outMin: number,
-  breakStart?: string | null,
-  breakEnd?: string | null,
-): number {
-  if (!breakStart || !breakEnd) return 0;
-  const bs = toMinutes(breakStart);
-  const be = toMinutes(breakEnd);
-  if (be <= bs || outMin <= inMin) return 0;
-  return Math.max(0, Math.min(outMin, be) - Math.max(inMin, bs));
-}
 
 // ==================== LEAVE REQUEST ACTIONS ====================
 
@@ -457,8 +419,6 @@ interface PayrollEstimationResult {
   bpjsEmploymentEmployee: number;
   pph21: number;
 }
-
-type PayrollSessionUser = { id: number | string; roles: readonly string[] };
 
 function assertPayrollDateRange(startDateStr: string, endDateStr: string): void {
   const startDate = new Date(startDateStr);

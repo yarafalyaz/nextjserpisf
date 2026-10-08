@@ -17,7 +17,6 @@ import {
   onPurchaseReturnProcessed,
   onVendorBillPosted,
   onVendorPaymentCreated,
-  deleteJournalByReference,
   deleteJournalByReferenceTx,
 } from "@/lib/hooks/accounting.hook";
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook";

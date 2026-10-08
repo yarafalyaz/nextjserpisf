@@ -13,11 +13,6 @@ const requiredId = (field: string) =>
 
 const optionalId = z.coerce.number().int().positive().optional()
 
-const optionalNum = (min?: number) => {
-  const base = min !== undefined ? z.coerce.number().min(min) : z.coerce.number()
-  return base.optional()
-}
-
 const optionalBool = z.boolean().optional()
 
 // Vehicle production year: bounded both sides. The previous `optionalNum(1900)`

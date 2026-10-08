@@ -9,7 +9,6 @@ const optionalString = (max: number) =>
 
 const requiredId = z.coerce.number().int().min(1, "ID wajib diisi");
 const optionalId = z.coerce.number().int().min(1).optional();
-const optionalNumber = z.coerce.number().min(0).optional();
 
 // ==================== QUOTATION ====================
 

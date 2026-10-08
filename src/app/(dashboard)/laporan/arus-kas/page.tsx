@@ -20,7 +20,6 @@ import {
 import { ReportDateFilter } from "@/components/reports/report-date-filter";
 import { ReportLetterhead } from "@/components/reports/report-letterhead";
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section";
-import { ReportNarration } from "@/components/reports/report-narration";
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow";
 
 import type { Metadata } from "next";

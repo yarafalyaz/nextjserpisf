@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
 import { apiError, apiOk } from "../api-response"
-import { NextResponse } from "next/server"
 
 describe("api-response", () => {
   describe("apiError", () => {

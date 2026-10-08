@@ -397,6 +397,28 @@ export function GoodsReceiptForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              name="date"
+              label="Tanggal Penerimaan"
+              value={date}
+              onChange={setDate}
+            />
+            <p className="text-xs text-muted-foreground">
+              Tanggal transaksi penerimaan. Dipakai untuk cutoff periode laporan.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="notes">Catatan</Label>
+            <textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Catatan penerimaan (opsional)"
+              rows={2}
+              className="form-input"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="shippingCost">Ongkir Aktual</Label>
             <input
               id="shippingCost"

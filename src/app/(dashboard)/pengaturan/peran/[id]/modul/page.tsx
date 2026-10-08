@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ICON_MAP, ACTION_LABELS } from "@/lib/auth/modules"
+import { ICON_MAP } from "@/lib/auth/modules"
 import { toggleModuleAccess } from "@/actions/module-access.actions"
 import { ChevronRight, Check, X } from "lucide-react"
 

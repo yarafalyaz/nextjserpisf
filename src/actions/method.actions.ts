@@ -19,7 +19,7 @@ import {
 
 export async function createPaymentMethod(formData: FormData) {
   try {
-    const user = await requirePermission("create_payment_methods")
+    await requirePermission("create_payment_methods")
 
     const parsed = parseFormData(createPaymentMethodSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -89,7 +89,7 @@ export async function deletePaymentMethod(id: number) {
 
 export async function createShippingMethod(formData: FormData) {
   try {
-    const user = await requirePermission("create_shipping_methods")
+    await requirePermission("create_shipping_methods")
 
     const parsed = parseFormData(createShippingMethodSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
