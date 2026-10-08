@@ -8,6 +8,7 @@ import { apiError } from "@/lib/api-response"
 import { approveStep, rejectStep } from "@/actions/approval.actions"
 import { requestApprovalIfConfigured } from "@/lib/services/approval-workflow.service"
 import { onEmployeeLoanDisbursed } from "@/lib/hooks/accounting.hook"
+import { approveOvertime } from "@/actions/hrm.actions"
 import { assertCSRF } from "@/lib/security/csrf"
 
 
@@ -130,6 +131,18 @@ export async function POST(
           const docStatus = modelType === "EmployeeLoan"
             ? (updatedApproval.status === "approved" ? "active" : Status.REJECTED)
             : (updatedApproval.status === "approved" ? Status.APPROVED : Status.REJECTED)
+          // Domain side-effect on completion: approving overtime must COMPUTE the
+          // pay value (calculatedValue) — the approval engine only flips status,
+          // it never runs domain logic. Without this, workflow-approved overtime
+          // carried calculatedValue = 0 and the overtime pay silently vanished
+          // from payroll. approveOvertime is idempotent, so a repeat click is a
+          // no-op.
+          if (modelType === "OvertimeRequest" && updatedApproval.status === "approved") {
+            const result = await approveOvertime(id)
+            if (result && result.success === false) {
+              return apiError("INTERNAL_ERROR", result.error || "Gagal menghitung nilai lembur")
+            }
+          }
           revalidatePath(config.revalidate)
           return NextResponse.json({ success: true, status: docStatus })
         }
@@ -164,6 +177,16 @@ export async function POST(
         }
         return updateResult
       })
+    } else if (modelType === "OvertimeRequest" && newStatus === Status.APPROVED) {
+      // No workflow configured: this status button is the only approval gate.
+      // Route through approveOvertime so the pay value (calculatedValue) is
+      // computed — a plain status flip would leave it 0 and drop the pay from
+      // payroll.
+      const res = await approveOvertime(id)
+      if (res && res.success === false) {
+        return apiError("CONFLICT", res.error || "Gagal menyetujui lembur")
+      }
+      result = { count: 1 }
     } else {
       result = await delegate.updateMany({
         where: { id, status: { in: allowedFrom } },

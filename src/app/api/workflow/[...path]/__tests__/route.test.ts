@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   findUniqueApproval: vi.fn(),
   approveStepMock: vi.fn(),
   rejectStepMock: vi.fn(),
+  approveOvertimeMock: vi.fn(),
   requestApprovalMock: vi.fn(),
   assertCSRFMock: vi.fn().mockResolvedValue(undefined),
 }))
@@ -20,6 +21,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/actions/approval.actions", () => ({
   approveStep: (...a: unknown[]) => mocks.approveStepMock(...a),
   rejectStep: (...a: unknown[]) => mocks.rejectStepMock(...a),
+}))
+
+vi.mock("@/actions/hrm.actions", () => ({
+  approveOvertime: (...a: unknown[]) => mocks.approveOvertimeMock(...a),
 }))
 
 vi.mock("@/lib/services/approval-workflow.service", () => ({
@@ -55,6 +60,11 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: (...a: unknown[]) => mocks.findUnique(...a),
       update: (...a: unknown[]) => mocks.update(...a),
     },
+    overtimeRequest: {
+      updateMany: (...a: unknown[]) => mocks.updateMany(...a),
+      findUnique: (...a: unknown[]) => mocks.findUnique(...a),
+      update: (...a: unknown[]) => mocks.update(...a),
+    },
     approvalWorkflow: {
       findFirst: (...a: unknown[]) => mocks.findFirstWorkflow(...a),
     },
@@ -81,6 +91,7 @@ describe("POST /api/workflow/[...path]", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.findFirstWorkflow.mockResolvedValue(null) // Tanpa workflow secara default
+    mocks.approveOvertimeMock.mockResolvedValue({ success: true })
   })
 
   it("returns 401 when not authenticated", async () => {
@@ -152,6 +163,42 @@ describe("POST /api/workflow/[...path]", () => {
     expect(json.success).toBe(true)
     expect(json.status).toBe("approved")
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/penjualan/penawaran")
+  })
+
+  it("computes overtime value via approveOvertime when no workflow is configured", async () => {
+    // Regression: a plain status flip left OvertimeRequest.calculatedValue = 0
+    // and dropped the pay from payroll. The route must delegate to the domain
+    // action instead of doing a generic updateMany.
+    mocks.authFn.mockResolvedValue(adminSession)
+    mocks.findFirstWorkflow.mockResolvedValue(null)
+
+    const res = await POST(makeReq(), makeParams(["sdm", "lembur", "7", "approve"]))
+    const json = await res.json()
+    expect(json.success).toBe(true)
+    expect(json.status).toBe("approved")
+    expect(mocks.approveOvertimeMock).toHaveBeenCalledWith(7)
+    // The generic flip must NOT run for overtime.
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("surfaces approveOvertime failure as a conflict", async () => {
+    mocks.authFn.mockResolvedValue(adminSession)
+    mocks.findFirstWorkflow.mockResolvedValue(null)
+    mocks.approveOvertimeMock.mockResolvedValue({ success: false, error: "sudah diproses" })
+
+    const res = await POST(makeReq(), makeParams(["sdm", "lembur", "7", "approve"]))
+    expect(res.status).toBe(409)
+  })
+
+  it("still flips overtime to rejected via the generic path", async () => {
+    mocks.authFn.mockResolvedValue(adminSession)
+    mocks.findFirstWorkflow.mockResolvedValue(null)
+    mocks.updateMany.mockResolvedValue({ count: 1 })
+
+    const res = await POST(makeReq(), makeParams(["sdm", "lembur", "7", "reject"]))
+    const json = await res.json()
+    expect(json.status).toBe("rejected")
+    expect(mocks.approveOvertimeMock).not.toHaveBeenCalled()
   })
 
   it("rejects successfully", async () => {
