@@ -1,5 +1,6 @@
 import { prisma, TxClient } from "@/lib/db/prisma"
-import { safeAdd, safeMultiply } from "@/lib/utils/math"
+import { safeAdd, safeSubtract, safeMultiply } from "@/lib/utils/math"
+import { stockJournalService } from "@/lib/services/stock-journal.service"
 
 /**
  * Non-material production cost rollup (PRD FAB-06/07/08/09).
@@ -24,19 +25,35 @@ export async function applyProductionCostDelta(
   productionOrderId: number,
   delta: number,
   client: TxClient | typeof prisma = prisma,
+  actor?: { userId?: number; costLineId?: number },
 ): Promise<void> {
   if (delta === 0) return
   await client.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`
   const order = await client.productionOrder.findUnique({
     where: { id: productionOrderId },
-    select: { totalActualCost: true },
+    select: { totalActualCost: true, documentNo: true },
   })
   if (!order) return
-  const next = Math.max(0, safeAdd(Number(order.totalActualCost), delta, 2))
+  const previous = Number(order.totalActualCost)
+  const next = Math.max(0, safeAdd(previous, delta, 2))
   await client.productionOrder.update({
     where: { id: productionOrderId },
     data: { totalActualCost: next },
   })
+  // Non-material cost must be DEBITED to WIP too, or the finished-goods receipt
+  // credits WIP by the full actual cost while only the material portion was ever
+  // debited — leaving WIP negative per job. Journal the EFFECTIVE change (the
+  // clamp above can absorb part of a negative delta) so the GL mirrors the rollup.
+  const effective = safeSubtract(next, previous, 2)
+  if (effective !== 0 && client !== prisma) {
+    await stockJournalService.onProductionCostAbsorbed(
+      client as TxClient,
+      effective,
+      order.documentNo ?? `PO-${productionOrderId}`,
+      actor?.costLineId ?? productionOrderId,
+      actor?.userId,
+    )
+  }
 }
 
 /** Categories that are genuinely non-material (i.e. belong in ProductionCost). */
@@ -98,7 +115,10 @@ export async function syncServicePurchaseOrderCost(
       for (const line of existingLines) {
         await client.productionCost.delete({ where: { id: line.id } })
         if (line.productionOrderId != null) {
-          await applyProductionCostDelta(line.productionOrderId, -Number(line.amount), client)
+          await applyProductionCostDelta(line.productionOrderId, -Number(line.amount), client, {
+            userId: input.createdBy ?? undefined,
+            costLineId: line.id,
+          })
         }
       }
     }
@@ -143,7 +163,10 @@ export async function syncServicePurchaseOrderCost(
         },
       })
     }
-    await applyProductionCostDelta(orderId, target - currentAmount, client)
+    await applyProductionCostDelta(orderId, target - currentAmount, client, {
+      userId: input.createdBy ?? undefined,
+      costLineId: existing?.id,
+    })
   }
 
   // Clean up any orphaned lines for production orders that no longer exist.
@@ -151,7 +174,10 @@ export async function syncServicePurchaseOrderCost(
     if (line.productionOrderId == null || !productionOrders.some((o) => o.id === line.productionOrderId)) {
       await client.productionCost.delete({ where: { id: line.id } })
       if (line.productionOrderId != null) {
-        await applyProductionCostDelta(line.productionOrderId, -Number(line.amount), client)
+        await applyProductionCostDelta(line.productionOrderId, -Number(line.amount), client, {
+          userId: input.createdBy ?? undefined,
+          costLineId: line.id,
+        })
       }
     }
   }
@@ -198,7 +224,10 @@ export async function syncReworkCostToOrder(
   if (desired === 0) {
     if (existing) {
       await client.productionCost.delete({ where: { id: existing.id } })
-      await applyProductionCostDelta(productionOrderId, -currentAmount, client)
+      await applyProductionCostDelta(productionOrderId, -currentAmount, client, {
+        userId: input.createdBy ?? undefined,
+        costLineId: existing.id,
+      })
     }
     return { posted: 0, productionOrderId }
   }
@@ -226,6 +255,9 @@ export async function syncReworkCostToOrder(
       },
     })
   }
-  await applyProductionCostDelta(productionOrderId, desired - currentAmount, client)
+  await applyProductionCostDelta(productionOrderId, desired - currentAmount, client, {
+    userId: input.createdBy ?? undefined,
+    costLineId: existing?.id,
+  })
   return { posted: desired, productionOrderId }
 }

@@ -81,7 +81,10 @@ export async function createProductionCost(formData: FormData) {
       })
       // Only production orders roll into HPP.
       if (v.productionOrderId) {
-        await applyProductionCostDelta(v.productionOrderId, amount, tx)
+        await applyProductionCostDelta(v.productionOrderId, amount, tx, {
+          userId: Number(user.id),
+          costLineId: created.id,
+        })
       }
       return created
     })
@@ -108,7 +111,7 @@ export async function createProductionCost(formData: FormData) {
  */
 export async function updateProductionCost(id: number, formData: FormData) {
   try {
-    await requirePermission("manage_production_costs")
+    const user = await requirePermission("manage_production_costs")
 
     const parsed = parseFormData(updateProductionCostSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -140,7 +143,10 @@ export async function updateProductionCost(id: number, formData: FormData) {
       })
       if (existing.productionOrderId) {
         const delta = safeSubtract(v.amount, Number(existing.amount), 2)
-        await applyProductionCostDelta(existing.productionOrderId, delta, tx)
+        await applyProductionCostDelta(existing.productionOrderId, delta, tx, {
+          userId: Number(user.id),
+          costLineId: id,
+        })
       }
     })
 
@@ -158,7 +164,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
 /** Remove a cost line and subtract its amount from the production order total. */
 export async function deleteProductionCost(id: number) {
   try {
-    await requirePermission("manage_production_costs")
+    const user = await requirePermission("manage_production_costs")
 
     const existing = await prisma.productionCost.findUnique({
       where: { id },
@@ -169,7 +175,10 @@ export async function deleteProductionCost(id: number) {
     await prisma.$transaction(async (tx) => {
       await tx.productionCost.delete({ where: { id } })
       if (existing.productionOrderId) {
-        await applyProductionCostDelta(existing.productionOrderId, -Number(existing.amount), tx)
+        await applyProductionCostDelta(existing.productionOrderId, -Number(existing.amount), tx, {
+          userId: Number(user.id),
+          costLineId: id,
+        })
       }
     })
 
@@ -262,7 +271,7 @@ export async function pullLaborCostFromTimesheets(
         totalAdded = Math.round((totalAdded + amount) * 100) / 100
       }
       if (totalAdded > 0) {
-        await applyProductionCostDelta(productionOrderId, totalAdded, tx)
+        await applyProductionCostDelta(productionOrderId, totalAdded, tx, { userId: Number(user.id) })
       }
     })
 
@@ -324,7 +333,10 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
           createdBy: Number(user.id),
         },
       })
-      await applyProductionCostDelta(v.productionOrderId, amount, tx)
+      await applyProductionCostDelta(v.productionOrderId, amount, tx, {
+        userId: Number(user.id),
+        costLineId: created.id,
+      })
       return created
     })
 

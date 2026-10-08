@@ -81,6 +81,49 @@ describe("stockJournalService", () => {
     });
   });
 
+  describe("onProductionCostAbsorbed (non-material production cost → WIP)", () => {
+    it("debits WIP and credits the absorption account for a positive amount", async () => {
+      await stockJournalService.onProductionCostAbsorbed(tx, 300, "MO-9", 9, 42);
+      expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({
+        referenceType: "ProductionCost",
+        referenceId: 9,
+        entries: [
+          expect.objectContaining({ accountId: 400, debit: 300, credit: 0 }), // Dr WIP
+          expect.objectContaining({ accountId: 500, debit: 0, credit: 300 }), // Cr absorption
+        ],
+      }));
+    });
+
+    it("reverses (Dr absorption / Cr WIP) for a negative amount", async () => {
+      await stockJournalService.onProductionCostAbsorbed(tx, -300, "MO-9", 9, 42);
+      expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({
+        entries: [
+          expect.objectContaining({ accountId: 500, debit: 300, credit: 0 }),
+          expect.objectContaining({ accountId: 400, debit: 0, credit: 300 }),
+        ],
+      }));
+    });
+
+    it("does nothing for a zero amount", async () => {
+      const res = await stockJournalService.onProductionCostAbsorbed(tx, 0, "MO-9", 9, 42);
+      expect(res).toBeNull();
+      expect(mocks.createJournal).not.toHaveBeenCalled();
+    });
+
+    it("fails closed when WIP or the absorption account is unconfigured", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        wipAccountId: null,
+        materialExpenseAccountId: null,
+        materialIssueExpenseAccountId: null,
+        cogsAccountId: null,
+      });
+      await expect(
+        stockJournalService.onProductionCostAbsorbed(tx, 300, "MO-9", 9, 42),
+      ).rejects.toThrow("Barang Dalam Proses");
+    });
+  });
+
   describe("onProductionOrderCompleted", () => {
     it("debits finished goods and credits WIP when a production order completes", async () => {
       await stockJournalService.onProductionOrderCompleted(

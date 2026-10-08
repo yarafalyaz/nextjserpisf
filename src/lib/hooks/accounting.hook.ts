@@ -877,17 +877,23 @@ export async function onSalesReturnCompleted(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (
-    !settings.salesReturnAccountId ||
-    !settings.salesReceivableAccountId ||
-    !settings.inventoryAccountId
-  )
-    return;
+  // Sales-return + inventory mappings are always needed. The AR mapping is only
+  // needed when the return is tied to an invoice (see below) — resolved after we
+  // know whether there is a linked invoice.
+  if (!settings.salesReturnAccountId || !settings.inventoryAccountId) return;
 
   const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
     include: { items: true },
   });
+
+  // A return tied to an invoice relieves the customer's receivable. A return
+  // NOT tied to any invoice has no receivable to reduce — booking Cr. Piutang
+  // anyway would drive AR negative with no offsetting invoice. For that case we
+  // book only the inventory/cost legs (goods physically come back) and skip the
+  // price/AR legs entirely.
+  const linkedToInvoice = salesReturn.salesInvoiceId != null;
+  if (linkedToInvoice && !settings.salesReceivableAccountId) return;
 
   // Idempotency check
   const existing = await db.journal.findFirst({
@@ -899,10 +905,12 @@ export async function onSalesReturnCompleted(
   // goods come back into inventory at cost. The margin nets into the Sales Return
   // contra-revenue account. This single journal owns all GL for a sales return
   // (the stock hook only moves stock now).
-  const priceTotal = salesReturn.items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.price ?? 0),
-    0,
-  );
+  const priceTotal = linkedToInvoice
+    ? salesReturn.items.reduce(
+        (sum, item) => sum + Number(item.qty) * Number(item.price ?? 0),
+        0,
+      )
+    : 0;
   const costTotal = salesReturn.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost ?? 0),
     0,
@@ -920,6 +928,8 @@ export async function onSalesReturnCompleted(
 
     const journalNumber = await generateJournalNumber(tx, "SR", returnId);
 
+    const totalAmount = priceTotal + costTotal;
+
     const journal = await tx.journal.create({
       data: {
         journalNumber,
@@ -929,17 +939,25 @@ export async function onSalesReturnCompleted(
         description: `Retur Penjualan ${salesReturn.documentNo}`,
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: priceTotal + costTotal,
-        totalCredit: priceTotal + costTotal,
+        totalDebit: totalAmount,
+        totalCredit: totalAmount,
         createdBy: userId ?? null,
       },
     });
 
     // Dr. Retur Penjualan (harga jual) + Cr. Piutang (harga jual) +
     // Dr. Persediaan (cost) + Cr. Retur Penjualan (cost) — batch eliminates 4
-    // sequential tx.journalEntry.create round-trips.
-    await tx.journalEntry.createMany({
-      data: [
+    // sequential tx.journalEntry.create round-trips. The price/AR legs are only
+    // included when the return is tied to an invoice (see `linkedToInvoice`).
+    const entryRows: {
+      journalId: number;
+      accountId: number;
+      debit: number;
+      credit: number;
+      memo: string;
+    }[] = [];
+    if (linkedToInvoice && priceTotal > 0) {
+      entryRows.push(
         {
           journalId: journal.id,
           accountId: settings.salesReturnAccountId!,
@@ -954,6 +972,10 @@ export async function onSalesReturnCompleted(
           credit: priceTotal,
           memo: "Pengurangan Piutang (Retur)",
         },
+      );
+    }
+    if (costTotal > 0) {
+      entryRows.push(
         {
           journalId: journal.id,
           accountId: settings.inventoryAccountId!,
@@ -968,8 +990,9 @@ export async function onSalesReturnCompleted(
           credit: costTotal,
           memo: "HPP Retur Masuk Kembali",
         },
-      ],
-    });
+      );
+    }
+    await tx.journalEntry.createMany({ data: entryRows });
   });
 }
 

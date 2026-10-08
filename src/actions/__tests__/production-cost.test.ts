@@ -90,7 +90,7 @@ describe("createProductionCost", () => {
     )
 
     expect(res.success).toBe(true)
-    expect(applyDeltaMock).toHaveBeenCalledWith(1, 250000, expect.anything())
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 250000, expect.anything(), expect.objectContaining({ costLineId: expect.anything() }))
     const arg = costCreateMock.mock.calls[0][0]
     expect(arg.data.category).toBe("labor")
     expect(Number(arg.data.amount)).toBe(250000)
@@ -133,7 +133,7 @@ describe("updateProductionCost", () => {
     const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
 
     expect(res.success).toBe(true)
-    expect(applyDeltaMock).toHaveBeenCalledWith(1, 200, expect.anything())
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 200, expect.anything(), expect.anything())
   })
 })
 
@@ -145,7 +145,7 @@ describe("deleteProductionCost", () => {
     const res = await deleteProductionCost(5)
 
     expect(res.success).toBe(true)
-    expect(applyDeltaMock).toHaveBeenCalledWith(1, -400, expect.anything())
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, -400, expect.anything(), expect.anything())
   })
 })
 
@@ -167,7 +167,7 @@ describe("pullLaborCostFromTimesheets", () => {
     // 4*25000 + 6*25000 = 250000
     expect(res.added).toBe(250000)
     expect(costCreateMock).toHaveBeenCalledTimes(2)
-    expect(applyDeltaMock).toHaveBeenCalledWith(1, 250000, expect.anything())
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 250000, expect.anything(), expect.anything())
     const first = costCreateMock.mock.calls[0][0]
     expect(first.data.sourceTimesheetId).toBe(11)
     expect(Number(first.data.rate)).toBe(25000)
@@ -188,7 +188,7 @@ describe("pullLaborCostFromTimesheets", () => {
     expect(res.success).toBe(true)
     expect(res.count).toBe(1)
     expect(costCreateMock).toHaveBeenCalledTimes(1)
-    expect(applyDeltaMock).toHaveBeenCalledWith(1, 150000, expect.anything())
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 150000, expect.anything(), expect.anything())
   })
 
   it("fails when the work order has no linked project", async () => {
@@ -234,7 +234,7 @@ describe("applyOverheadToProductionOrder (PRD FAB-07)", () => {
         }),
       }),
     )
-    expect(applyDeltaMock).toHaveBeenCalledWith(1, 600000, expect.anything())
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 600000, expect.anything(), expect.anything())
   })
 
   it("rejects a non-positive applied amount", async () => {

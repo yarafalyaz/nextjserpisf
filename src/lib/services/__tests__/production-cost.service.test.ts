@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+// The delta rollup now also posts the non-material cost as Dr WIP / Cr absorption.
+// Stub that journal service so these unit tests exercise only the rollup maths.
+const absorbedMock = vi.fn().mockResolvedValue(undefined)
+vi.mock("@/lib/services/stock-journal.service", () => ({
+  stockJournalService: {
+    onProductionCostAbsorbed: (...a: unknown[]) => absorbedMock(...a),
+  },
+}))
+
 // Tests for the non-material production cost rollup (PRD FAB-06/07/08/09).
 // The HPP of a production order = material (applied by issueMaterial) + the
 // non-material cost lines. This module must apply only the DELTA so the material
@@ -53,6 +62,7 @@ beforeEach(() => {
   orderFindManyMock.mockReset()
   costFindManyMock.mockReset()
   poFindUniqueMock.mockReset()
+  absorbedMock.mockClear()
 })
 
 describe("applyProductionCostDelta", () => {

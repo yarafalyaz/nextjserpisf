@@ -532,6 +532,65 @@ export const stockJournalService = {
     })
   },
 
+  /**
+   * Non-material production cost absorbed into WIP (labor/machine/overhead/
+   * subcontract/service/rework — PRD FAB-06..09).
+   *
+   * Material value enters WIP via `onProductionOrderMaterialIssue`; the finished-
+   * goods receipt later credits WIP by the order's FULL actual cost (material +
+   * non-material). Without this debit the non-material portion would be credited
+   * out of WIP without ever being debited, driving WIP negative per job and
+   * leaving the GL unbalanced. Credits the configured absorption account
+   * (materialExpense → materialIssueExpense → cogs). Fails closed when WIP or the
+   * absorption account is unconfigured. Positive `amount` absorbs cost; negative
+   * reverses it (debit/credit swapped).
+   */
+  async onProductionCostAbsorbed(
+    tx: Prisma.TransactionClient,
+    amount: number,
+    productionOrderNo: string,
+    referenceId: number,
+    userId?: number,
+    transactionDate?: Date,
+  ) {
+    const accounts = await getAccountIds()
+    const absorption = accounts.materialExpense ?? accounts.materialIssueExpense ?? accounts.cogs
+    if (!accounts.wip || !absorption) {
+      throw new Error(
+        "Akun Barang Dalam Proses dan akun Beban Material harus diatur untuk membukukan biaya produksi non-material.",
+      )
+    }
+    const value = Math.round(Math.abs(amount) * 100) / 100
+    if (value <= 0) return null
+
+    const isAbsorb = amount > 0
+    const journalNumber = await generateDocumentNumber('JRN')
+    const journalSvc = new JournalService(tx)
+    return journalSvc.createJournal({
+      journalNumber,
+      transactionDate: transactionDate ?? new Date(),
+      referenceType: 'ProductionCost',
+      referenceId,
+      type: 'PROD',
+      description: `Biaya Produksi Non-Material ${productionOrderNo}`,
+      createdBy: userId,
+      entries: [
+        {
+          accountId: isAbsorb ? accounts.wip : absorption,
+          debit: value,
+          credit: 0,
+          memo: `${isAbsorb ? 'Debit' : 'Kredit'} Barang Dalam Proses - ${productionOrderNo}`,
+        },
+        {
+          accountId: isAbsorb ? absorption : accounts.wip,
+          debit: 0,
+          credit: value,
+          memo: `${isAbsorb ? 'Kredit' : 'Debit'} Beban Material - ${productionOrderNo}`,
+        },
+      ],
+    })
+  },
+
   /** Finished goods receipt — transfer accumulated production cost out of WIP. */
   async onProductionOrderCompleted(
     tx: Prisma.TransactionClient,

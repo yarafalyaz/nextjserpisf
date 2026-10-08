@@ -1226,6 +1226,7 @@ describe("onSalesReturnCompleted", () => {
     mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       documentNo: "SR-1",
+      salesInvoiceId: 55,
       items: [{ qty: 2, price: 100, cost: 60 }],
     });
     mocks.journalFindFirst.mockResolvedValue(null);
@@ -1281,6 +1282,37 @@ describe("onSalesReturnCompleted", () => {
           debit: 0,
           credit: 120,
         }),
+      }),
+    );
+  });
+
+  it("skips the price/AR legs for a return NOT tied to an invoice (no receivable to relieve)", async () => {
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-1",
+      salesInvoiceId: null,
+      items: [{ qty: 2, price: 100, cost: 60 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    await onSalesReturnCompleted(1, 999);
+
+    // Only the two cost legs post; total = costTotal (120), not price+cost.
+    expect(mocks.journalCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ totalDebit: 120, totalCredit: 120 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(2);
+    // Never credits Accounts Receivable.
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 110 }),
+      }),
+    );
+    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 130, debit: 120, credit: 0 }),
       }),
     );
   });
