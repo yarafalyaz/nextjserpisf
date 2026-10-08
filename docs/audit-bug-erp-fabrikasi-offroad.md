@@ -180,3 +180,18 @@ Penyempurnaan UI keterhubungan (relasi sudah ada, halaman belum menampilkan):
 - Detail **Mutasi Stok**: menautkan balik ke dokumen sumber & barang via helper baru `referenceHref()` (`src/lib/utils/format.ts`).
 
 Migrasi & test: `syncServicePurchaseOrderCost` unit suite, integrasi PO-jasa→HPP (`purchase.actions.test.ts`), dan `referenceHref` (`format.test.ts`). DB Docker sudah dimigrasikan. **Catatan deploy:** migrasi ini menambah satu migrasi baru ke daftar (total 11) — jalankan `prisma migrate deploy` di produksi.
+
+## 8. Ubah Item Penjualan Sampai Ada Pelunasan (Fabrikasi Custom) — 8 Okt 2026
+
+Kebijakan bisnis: bengkel fabrikasi custom mengubah daftar item penawaran/pesanan/faktur **terus-menerus sampai pelanggan benar-benar membayar**. **DP (mis. 50% di awal) BUKAN pelunasan** — DP hanya uang muka yang direkonsiliasi di akhir, sehingga DP **tidak** mengunci item. Sebelumnya: faktur terkunci begitu `status !== "draft"` (yaitu terkunci saat posting/pembayaran sebagian walau hanya DP), pesanan hanya bisa ubah header (tanpa editor item), penawaran terkunci saat `converted`.
+
+Aturan baru (commit `85e42fa7`):
+
+- **Pembeda pelunasan nyata** — `src/lib/services/sales-settlement.service.ts`: `hasRealSettlement` / `salesOrderHasRealSettlement` / `quotationHasRealSettlement`. "Pelunasan nyata" = ada `SalesPayment` dengan `paymentMethod != "down_payment"` pada faktur terkait. DP tetap masuk `paidAmount` (sisa tagihan & laporan tetap benar), hanya tidak mengunci item.
+- **Penawaran** (`updateQuotation`): blokir hanya bila `cancelled` atau sudah ada pelunasan nyata (bukan lagi `converted`). `resyncOnEdit` berjalan selama belum ada pelunasan nyata, termasuk menyinkronkan ke faktur `posted`.
+- **Pesanan** (`updateSalesOrder`): menerima `items`/`taxRate`/`discount`; tidak lagi blokir non-draft (blokir hanya `cancelled`/`completed` atau sudah ada pelunasan nyata). Total dihitung ulang atomik.
+- **Faktur** (`updateSalesInvoice`): blokir hanya bila `cancelled` atau sudah ada pelunasan nyata. Bila sudah diposting, ubah item memicu reverse stok (qtyOnHand + FIFO) + hapus jurnal AR/revenue + COGS, lalu re-post dari baris baru — jurnal pembayaran/DP dipertahankan.
+- **Ekstraksi** `reverseSalesInvoicePostingTx` → `src/lib/services/sales-invoice-posting.service.ts` (dengan opsi `reversePaymentJournals`), dipakai ulang oleh alur hapus/void dan alur ubah-item faktur serta `resyncOnEdit`.
+- **UI**: `InvoiceItemsEditor` mendapat `variant="order"`; halaman detail pesanan memakai editor yang sama. Halaman faktur: tombol "Ubah Item" mengikuti aturan pelunasan (`status !== cancelled && tidak ada pembayaran non-DP`) — kini konsisten dengan server (sebelumnya tombol tampil untuk `posted`/`partial` tapi server menolak).
+
+Tes: aturan pelunasan (boleh ubah saat belum lunas; blokir saat sudah ada pembayaran nyata) untuk ketiga dokumen, reverse+repost faktur `posted`, dan suite `sales-invoice-posting.service`.
