@@ -71,9 +71,7 @@ const mocks = vi.hoisted(() => {
 const {
   requirePermissionMock,
   revalidateMock,
-  redirectMock,
   logActivityMock,
-  assertApprovedMock,
   requestApprovalMock,
   generateDocNumMock,
   prismaMock,
