@@ -39,6 +39,12 @@ test.describe("Aset Kategori CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Kategori Aset" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
+    // The per-category GL mapping section must render (it is what makes the
+    // depreciation/acquisition cron honour a category-specific account).
+    await expect(page.getByText("Mapping Akun (opsional)")).toBeVisible({ timeout: 10000 })
+    await expect(page.locator("#depreciationExpenseAccountId")).toBeAttached()
+    await expect(page.locator("#accumulatedDepreciationAccountId")).toBeAttached()
+
     const nameInput = page.locator("#name")
     await expect(nameInput).toBeVisible({ timeout: 10000 })
     await nameInput.fill(name)
