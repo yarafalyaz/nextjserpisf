@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteExpenseCategory } from "@/actions/expense-category.actions"
 import { bulkDelete } from "@/actions/bulk.actions"

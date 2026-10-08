@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteBarcode } from "@/actions/master.actions"

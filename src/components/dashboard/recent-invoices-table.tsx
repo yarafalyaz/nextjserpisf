@@ -1,18 +1,13 @@
 "use client"
 
-import {
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
+import { flexRender, useTable } from "@tanstack/react-table"
 import type {
-  ColumnDef,
   RowSelectionState,
   SortingState,
-  VisibilityState,
+  ColumnVisibilityState,
 } from "@tanstack/react-table"
+import type { ErpColumnDef } from "@/lib/table"
+import { erpTableFeatures } from "@/lib/table"
 import type { ReactNode } from "react"
 import { useId, useMemo, useState } from "react"
 import Link from "next/link"
@@ -105,7 +100,7 @@ function SortButton({
   )
 }
 
-const columns: ColumnDef<InvoiceRow>[] = [
+const columns: ErpColumnDef<InvoiceRow>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -229,7 +224,7 @@ const columns: ColumnDef<InvoiceRow>[] = [
 export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({})
   const [statusTab, setStatusTab] = useState("all")
   const [query, setQuery] = useState("")
   const titleId = useId()
@@ -264,20 +259,16 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
     [data]
   )
 
-  // TanStack Table intentionally returns functions from useReactTable; this
-  // matches the established local DataTable lint handling.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
+  // TanStack Table's useTable returns functions by design.
+  const table = useTable({
+    features: erpTableFeatures,
     data: filteredData,
     columns,
     state: { sorting, rowSelection, columnVisibility },
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: 8 } },
+    initialState: { pagination: { pageIndex: 0, pageSize: 8 } },
     enableRowSelection: true,
   })
 
@@ -416,7 +407,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
               className="flex items-center justify-between gap-3 sm:justify-end"
             >
               <span aria-live="polite" aria-atomic="true">
-                Halaman {table.getState().pagination.pageIndex + 1} dari {Math.max(table.getPageCount(), 1)}
+                Halaman {table.state.pagination.pageIndex + 1} dari {Math.max(table.getPageCount(), 1)}
               </span>
               <div className="flex gap-1.5">
                 <Button

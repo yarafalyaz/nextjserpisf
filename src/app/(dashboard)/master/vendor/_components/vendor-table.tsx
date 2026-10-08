@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
@@ -22,7 +22,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/pemasok/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={`/master/vendor/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -47,8 +47,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/master/pemasok/${info.row.original.id}`}
-        editHref={`/master/pemasok/${info.row.original.id}/ubah`}
+        viewHref={`/master/vendor/${info.row.original.id}`}
+        editHref={`/master/vendor/${info.row.original.id}/ubah`}
         deleteAction={deleteVendor}
         deleteId={info.row.original.id}
         editPermission="edit_vendors"
@@ -71,7 +71,7 @@ export function VendorTable({ data }: VendorTableProps) {
       pageSize={20}
       selectable={true}
       searchColumn="name"
-      searchPlaceholder="Cari nama atau telepon pemasok..."
+      searchPlaceholder="Cari nama atau telepon vendor..."
       onBulkDelete={(ids) => bulkDelete("vendor", ids)}
     />
   )

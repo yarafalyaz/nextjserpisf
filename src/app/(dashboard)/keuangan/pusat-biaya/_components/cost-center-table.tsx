@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"

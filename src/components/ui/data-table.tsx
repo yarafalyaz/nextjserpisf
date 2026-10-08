@@ -1,20 +1,15 @@
 "use client"
 
 import type {
-  ColumnDef,
   ColumnFiltersState,
   RowSelectionState,
   SortingState,
-  VisibilityState,
+  ColumnVisibilityState,
+  RowData,
 } from "@tanstack/react-table"
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
+import { flexRender, useTable } from "@tanstack/react-table"
+import type { ErpColumnDef } from "@/lib/table"
+import { erpTableFeatures } from "@/lib/table"
 import {
   ArrowUpDown,
   ChevronUp,
@@ -75,10 +70,10 @@ export interface ServerPagination {
   total: number
 }
 
-interface DataTableProps<TData> {
+interface DataTableProps<TData extends RowData> {
   data: TData[]
    
-  columns: ColumnDef<TData, any>[]
+  columns: ErpColumnDef<TData, any>[]
   ariaLabel?: string
   pageSize?: number
   selectable?: boolean
@@ -112,7 +107,7 @@ interface DataTableProps<TData> {
   /** When provided, the table uses URL-based pagination (?halaman=N) instead of client-side. */
   serverPagination?: ServerPagination
   /** Initial column visibility state. */
-  initialColumnVisibility?: VisibilityState
+  initialColumnVisibility?: ColumnVisibilityState
 }
 
 /** Resolve a human-friendly label for a column (used in the visibility menu). */
@@ -146,7 +141,7 @@ export function DataTable<TData extends { id: number | string }>({
   const [sorting, setSorting] = useState<SortingState>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(initialColumnVisibility || {})
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>(initialColumnVisibility || {})
   const [isDeleting, setIsDeleting] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteIds, setPendingDeleteIds] = useState<number[]>([])
@@ -165,6 +160,7 @@ export function DataTable<TData extends { id: number | string }>({
   // Sync local input value when URL changes (e.g. forward/backward navigation)
   useEffect(() => {
     if (isServer) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Keep controlled search input synchronized with browser navigation.
       setServerSearch(searchParams.get(searchParam) ?? "")
     }
   }, [isServer, searchParams, searchParam])
@@ -205,19 +201,13 @@ export function DataTable<TData extends { id: number | string }>({
     return { pageIndex: 0, pageSize }
   }, [isServer, serverPagination, pageSize])
 
-  // React Compiler cannot memoize TanStack Table's useReactTable (it returns
-  // functions by design); this is a known, expected incompatibility, not a bug.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
+  const table = useTable({
+    features: erpTableFeatures,
     columns,
     data,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: isServer ? undefined : getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     pageCount: isServer ? serverPageCount : undefined,
     manualPagination: isServer,
-    initialState: { pagination: { pageSize } },
+    initialState: { pagination: { pageSize, pageIndex: 0 } },
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
     onColumnFiltersChange: setColumnFilters,
@@ -246,7 +236,7 @@ export function DataTable<TData extends { id: number | string }>({
   useEffect(() => {
     if (isMobile) {
       const leaf = table.getAllLeafColumns()
-      const vis: VisibilityState = {}
+      const vis: ColumnVisibilityState = {}
       let budget = Math.max(1, mobileColumns)
       const hasActions = leaf.some((c) => isActionsColumn(c.id))
       if (hasActions) budget -= 1 // reserve a slot for the actions column
@@ -259,6 +249,7 @@ export function DataTable<TData extends { id: number | string }>({
         if (shown < budget) { vis[col.id] = true; shown++ }
         else { vis[col.id] = false }
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Visibility is derived from the current viewport and column metadata.
       setColumnVisibility(vis)
     } else {
       setColumnVisibility(initialColumnVisibility || {})
@@ -267,8 +258,8 @@ export function DataTable<TData extends { id: number | string }>({
   }, [isMobile, mobileColumns, initialColumnVisibility])
 
   // --- Pagination display values ---
-  const currentPageSize = isServer ? serverPagination!.pageSize : table.getState().pagination.pageSize
-  const pageIndex = isServer ? serverPagination!.page - 1 : table.getState().pagination.pageIndex
+  const currentPageSize = isServer ? serverPagination!.pageSize : table.state.pagination.pageSize
+  const pageIndex = isServer ? serverPagination!.page - 1 : table.state.pagination.pageIndex
   const pageCount = isServer ? serverPageCount : table.getPageCount()
   const totalRows = isServer ? serverPagination!.total : table.getFilteredRowModel().rows.length
   const selectedCount = table.getFilteredSelectedRowModel().rows.length

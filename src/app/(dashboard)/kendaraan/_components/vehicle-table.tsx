@@ -4,7 +4,7 @@ import { Pencil } from "lucide-react"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { bulkDelete } from "@/actions/bulk.actions"
-import type { ColumnDef } from "@tanstack/react-table"
+import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 
 interface VehicleRow {
   id: number

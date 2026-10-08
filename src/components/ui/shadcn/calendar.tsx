@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker, type DropdownProps } from "react-day-picker"
+import { DayPicker, type DropdownProps } from "@daypicker/react"
 import { id as idLocale } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
@@ -30,8 +30,8 @@ function Calendar({
       showOutsideDays={showOutsideDays}
       locale={idLocale}
       captionLayout="dropdown"
-      fromYear={2000}
-      toYear={2099}
+      startMonth={new Date(2000, 0)}
+      endMonth={new Date(2099, 11)}
       className={cn("p-3", className)}
       classNames={{
         months: "relative flex flex-col sm:flex-row gap-2",
@@ -39,7 +39,6 @@ function Calendar({
         month_caption: "flex h-9 items-center justify-center px-9",
         caption_label: cn("text-sm font-medium", isDropdown && "hidden"),
         dropdowns: "flex justify-center gap-1.5 items-center z-10",
-        caption_dropdowns: "flex justify-center gap-1.5 items-center z-10",
         nav: "absolute top-0 inset-x-0 flex items-center justify-between px-1 h-9",
         button_previous: cn(
           buttonVariants({ variant: "outline" }),

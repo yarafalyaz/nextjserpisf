@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { formatCurrency } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
 import { bulkDelete } from "@/actions/bulk.actions"
-import type { ColumnDef } from "@tanstack/react-table"
+import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 
 interface AssetRow {
   id: number

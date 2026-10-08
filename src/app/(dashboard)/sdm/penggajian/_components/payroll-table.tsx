@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import { useMemo } from "react"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
