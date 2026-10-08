@@ -109,6 +109,42 @@ describe("GoodsReceiptForm — item row layout", () => {
     container.remove()
   })
 
+  it("shows a zero sisa and locks Qty Terima when the line is already fully received", () => {
+    const po = {
+      ...mockPO,
+      items: [
+        {
+          ...mockPO.items[0],
+          qty: 10,
+          receivedQty: 10, // GR-derived: already received in full
+        },
+      ],
+    }
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <GoodsReceiptForm
+          purchaseOrders={[po]}
+          warehouses={mockWarehouses}
+          racks={mockRacks}
+          rackRows={mockRackRows}
+          defaultPoId={5}
+        />,
+      )
+    })
+
+    const qtyInputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="number"]'),
+    ).filter((i) => i.closest("tbody"))
+    expect(qtyInputs[0].disabled).toBe(true)
+
+    unmount(root)
+    container.remove()
+  })
+
   it("prefills rack and baris from the item defaults", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)

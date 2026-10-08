@@ -17,7 +17,7 @@ export default async function CreateGoodsReceiptPage({
   await requirePermission("create_goods_receipts")
   const params = await searchParams
 
-  const [purchaseOrders, warehouses, racks, rackRows, itemRecords] = await Promise.all([
+  const [purchaseOrders, warehouses, racks, rackRows, itemRecords, receivedGrItems] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where: { status: { in: ["ordered", "approved"] } },
       include: { vendor: true, items: true },
@@ -46,7 +46,45 @@ export default async function CreateGoodsReceiptPage({
         uomConversions: { select: { code: true, factorToBase: true } },
       },
     }),
+    // Real received qty per PO+item. PurchaseOrderItem.receivedQty is a dead
+    // column (never written), so "sisa" must be derived from the goods receipts
+    // themselves — otherwise every PO looks fully un-received even after it has
+    // been (partially) received. Exclude cancelled receipts.
+    prisma.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: { status: { not: "cancelled" } },
+      },
+      select: {
+        itemId: true,
+        qty: true,
+        uom: true,
+        goodsReceipt: { select: { purchaseOrderId: true } },
+      },
+    }),
   ])
+
+  // Aggregate received qty, converted to each item's BASE unit (the PO unit),
+  // keyed by `${purchaseOrderId}:${itemId}` — mirrors the verify hook's math.
+  const convByItem = new Map(
+    itemRecords.map((i) => [
+      i.id,
+      new Map(i.uomConversions.map((u) => [u.code, Number(u.factorToBase)])),
+    ]),
+  )
+  const unitByItem = new Map(itemRecords.map((i) => [i.id, i.unitOfMeasure]))
+  const receivedByPoItem = new Map<string, number>()
+  for (const grItem of receivedGrItems) {
+    const base = unitByItem.get(grItem.itemId) ?? "PCS"
+    const factor =
+      grItem.uom && grItem.uom !== base
+        ? convByItem.get(grItem.itemId)?.get(grItem.uom) ?? 1
+        : 1;
+    const key = `${grItem.goodsReceipt.purchaseOrderId}:${grItem.itemId}`
+    receivedByPoItem.set(
+      key,
+      (receivedByPoItem.get(key) ?? 0) + Number(grItem.qty) * (factor > 0 ? factor : 1),
+    )
+  }
 
   const itemMap = new Map(
     itemRecords.map((i) => [
@@ -80,7 +118,8 @@ export default async function CreateGoodsReceiptPage({
       qty: Number(item.qty),
       unitPrice: Number(item.unitPrice),
       total: Number(item.total),
-      receivedQty: Number(item.receivedQty),
+      // Sisa = ordered − actually received (from GRs), NOT the dead PO column.
+      receivedQty: receivedByPoItem.get(`${po.id}:${item.itemId}`) ?? 0,
       item: itemMap.get(item.itemId) ?? {
         name: "",
         sku: "",

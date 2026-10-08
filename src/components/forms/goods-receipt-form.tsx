@@ -464,9 +464,15 @@ export function GoodsReceiptForm({
                 <thead>
                   <tr className="bg-surface-secondary align-bottom">
                     <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ minWidth: "220px" }}>Item</th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>Dipesan</th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>Sisa</th>
-                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>Qty Terima</th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>
+                      Dipesan<span className="block text-[0.625rem] font-normal text-muted-foreground">PO</span>
+                    </th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "80px" }}>
+                      Sisa<span className="block text-[0.625rem] font-normal text-muted-foreground">belum diterima</span>
+                    </th>
+                    <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>
+                      Qty Terima<span className="block text-[0.625rem] font-normal text-muted-foreground">kali ini</span>
+                    </th>
                     <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ width: "110px" }}>Satuan</th>
                     <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>Harga Beli</th>
                     <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "110px" }}>
@@ -518,7 +524,7 @@ export function GoodsReceiptForm({
                           <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
                             {row.qtyOrdered}
                           </td>
-                          <td className="py-2.5 px-3 text-right tabular-nums text-muted-foreground">
+                          <td className="py-2.5 px-3 text-right tabular-nums font-medium text-foreground">
                             {Math.max(row.qtyOrdered - row.qtyReceivedBefore, 0)}
                           </td>
                           <td className="py-2.5 px-3 text-right">
@@ -531,6 +537,14 @@ export function GoodsReceiptForm({
                               )}
                               step="any"
                               value={row.qty}
+                              disabled={
+                                row.qtyOrdered - row.qtyReceivedBefore <= 0
+                              }
+                              title={
+                                row.qtyOrdered - row.qtyReceivedBefore <= 0
+                                  ? "Item ini sudah diterima penuh"
+                                  : undefined
+                              }
                               onChange={(e) =>
                                 updateItem(index, {
                                   qty: Number(e.target.value),

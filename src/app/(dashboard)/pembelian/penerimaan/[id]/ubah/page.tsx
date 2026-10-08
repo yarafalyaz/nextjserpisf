@@ -55,7 +55,7 @@ export default async function EditPage({
     })),
   };
 
-  const [purchaseOrders, warehouses, racks, rackRows, itemRecords] = await Promise.all([
+  const [purchaseOrders, warehouses, racks, rackRows, itemRecords, receivedGrItems] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where: {
         status: { in: ["approved", "ordered", "partial_received", "received"] },
@@ -90,6 +90,22 @@ export default async function EditPage({
         uomConversions: { select: { code: true, factorToBase: true } },
       },
     }),
+    // Real received qty from OTHER receipts (excludes this one) so edit-mode
+    // "sisa" is correct. PurchaseOrderItem.receivedQty is a dead column.
+    prisma.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: {
+          id: { not: numId },
+          status: { not: "cancelled" },
+        },
+      },
+      select: {
+        itemId: true,
+        qty: true,
+        uom: true,
+        goodsReceipt: { select: { purchaseOrderId: true } },
+      },
+    }),
   ]);
 
   const itemMap = new Map(
@@ -112,6 +128,27 @@ export default async function EditPage({
     ]),
   );
 
+  const convByItem = new Map(
+    itemRecords.map((i) => [
+      i.id,
+      new Map(i.uomConversions.map((u) => [u.code, Number(u.factorToBase)])),
+    ]),
+  );
+  const unitByItem = new Map(itemRecords.map((i) => [i.id, i.unitOfMeasure]));
+  const receivedExcludingThis = new Map<string, number>();
+  for (const grItem of receivedGrItems) {
+    const base = unitByItem.get(grItem.itemId) ?? "PCS";
+    const factor =
+      grItem.uom && grItem.uom !== base
+        ? convByItem.get(grItem.itemId)?.get(grItem.uom) ?? 1
+        : 1;
+    const key = `${grItem.goodsReceipt.purchaseOrderId}:${grItem.itemId}`;
+    receivedExcludingThis.set(
+      key,
+      (receivedExcludingThis.get(key) ?? 0) + Number(grItem.qty) * (factor > 0 ? factor : 1),
+    );
+  }
+
   const purchaseOrderOptions = purchaseOrders.map((po) => ({
     id: po.id,
     documentNo: po.documentNo,
@@ -125,7 +162,9 @@ export default async function EditPage({
       qty: Number(item.qty),
       unitPrice: Number(item.unitPrice),
       total: Number(item.total),
-      receivedQty: Number(item.receivedQty),
+      // Received EXCLUDING this GR (so editing doesn't count its own lines as
+      // already received). PurchaseOrderItem.receivedQty is a dead column.
+      receivedQty: receivedExcludingThis.get(`${po.id}:${item.itemId}`) ?? 0,
       item: itemMap.get(item.itemId) ?? {
         name: "",
         sku: "",
