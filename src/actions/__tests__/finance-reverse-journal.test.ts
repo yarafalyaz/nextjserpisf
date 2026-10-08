@@ -108,6 +108,21 @@ describe("reverseJournal", () => {
     )
   })
 
+  it("dates the reversal journal to the ORIGINAL transactionDate (so period reports net to zero)", async () => {
+    const originalDate = new Date("2026-06-15")
+    await reverseJournal(7)
+
+    const created = journalCreateMock.mock.calls[0][0] as {
+      data: { transactionDate: Date; status: string; referenceId: number }
+    }
+    // Same period as the original → the (REVERSED original + reversal) pair
+    // stays inside one period; a period P&L for June nets to zero and July is
+    // not polluted by a reversal of a June journal.
+    expect(created.data.transactionDate).toEqual(originalDate)
+    expect(created.data.status).toBe("POSTED")
+    expect(created.data.referenceId).toBe(7)
+  })
+
   it("rolls the REVERSING claim back to POSTED when the reversal tx throws", async () => {
     // First call to journalUpdateMany = the claim (succeeds). Second call =
     // the rollback inside the inner catch (must run to keep journal retryable).

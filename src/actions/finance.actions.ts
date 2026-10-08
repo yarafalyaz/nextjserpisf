@@ -1208,7 +1208,17 @@ export async function reverseJournal(journalId: number) {
         const reversalJournal = await tx.journal.create({
           data: {
             journalNumber: documentNo,
-            transactionDate: new Date(),
+            // Date the reversal to the ORIGINAL journal's transactionDate, not
+            // today. The reversal is a correction of the original period: if it
+            // were stamped with today's date, a period income statement for the
+            // original period would still include the (now REVERSED) original
+            // with no offsetting entry in that period, and the reversal would
+            // wrongly land in the current period. Using the original date keeps
+            // the (REVERSED original + POSTED reversal) pair inside the same
+            // period, so PERIOD and CUMULATIVE reports both net to zero.
+            // Safe because we only get here after assertPeriodOpen(original date)
+            // passed, i.e. the original period is still open.
+            transactionDate: journal.transactionDate,
             description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
             type: journal.type,
             status: "POSTED",

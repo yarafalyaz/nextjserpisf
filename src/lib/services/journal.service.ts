@@ -146,11 +146,14 @@ export class JournalService {
           costCenterId: e.costCenterId ?? null,
         }))
 
-        // Create reversal journal
+        // Create reversal journal. Date it to the ORIGINAL's transactionDate so
+        // the (REVERSED original + POSTED reversal) pair stays inside the same
+        // period — otherwise a period report would include the reversed original
+        // with no offset and the reversal would land in the current period.
         const reversal = await tx.journal.create({
           data: {
             journalNumber: reversalNumber,
-            transactionDate: new Date(),
+            transactionDate: original.transactionDate,
             referenceType: 'Journal',
             referenceId: original.id,
             description: `Reversal of ${original.journalNumber}`,
