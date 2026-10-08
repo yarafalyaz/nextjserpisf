@@ -68,6 +68,10 @@ export async function createAssetCategory(formData: FormData) {
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
         usefulLife: data.usefulLife ?? null,
+        assetAccountId: data.assetAccountId ?? null,
+        accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
+        depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
+        gainLossAccountId: data.gainLossAccountId ?? null,
       },
     });
 
@@ -339,6 +343,10 @@ export async function updateAssetCategory(id: number, formData: FormData) {
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
         usefulLife: data.usefulLife ?? null,
+        assetAccountId: data.assetAccountId ?? null,
+        accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
+        depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
+        gainLossAccountId: data.gainLossAccountId ?? null,
       },
     });
 

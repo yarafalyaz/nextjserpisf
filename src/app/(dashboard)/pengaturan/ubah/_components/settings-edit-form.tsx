@@ -24,7 +24,6 @@ interface Account {
   code: string
   name: string
 }
-
 interface SettingsEditFormProps {
   settings: SettingsFormValues
   accounts: Account[]
@@ -136,6 +135,8 @@ interface SettingsFormValues {
   showIsActiveField?: boolean | null
   showTaxId?: boolean | null
   defaultProjectStages?: string | null
+  depreciationExpenseAccountId?: number | null
+  accumulatedDepreciationAccountId?: number | null
   stockAdjustmentAccountId?: number | null
   stockAdjustmentPrefix?: string | null
   stockMovementPrefix?: string | null
@@ -268,6 +269,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [payrollBank, setPayrollBank] = useState(settings.payrollBankAccountId ? String(settings.payrollBankAccountId) : "")
   const [employeeReceivable, setEmployeeReceivable] = useState(settings.employeeReceivableAccountId ? String(settings.employeeReceivableAccountId) : "")
   const [payrollJournalType, setPayrollJournalType] = useState(settings.payrollJournalTypeId ? String(settings.payrollJournalTypeId) : "")
+  const [depreciationExpense, setDepreciationExpense] = useState(settings.depreciationExpenseAccountId ? String(settings.depreciationExpenseAccountId) : "")
+  const [accumulatedDepreciation, setAccumulatedDepreciation] = useState(settings.accumulatedDepreciationAccountId ? String(settings.accumulatedDepreciationAccountId) : "")
   const logoInputRef = useRef<HTMLInputElement>(null)
   const signatureInputRef = useRef<HTMLInputElement>(null)
 
@@ -345,6 +348,13 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "payrollBankAccountId", label: "Bank Penggajian", value: payrollBank, onChange: setPayrollBank },
         { name: "employeeReceivableAccountId", label: "Piutang Karyawan", value: employeeReceivable, onChange: setEmployeeReceivable },
         { name: "payrollJournalTypeId", label: "Tipe Jurnal Penggajian", value: payrollJournalType, onChange: setPayrollJournalType },
+      ],
+    },
+    {
+      title: "Aset Tetap",
+      items: [
+        { name: "depreciationExpenseAccountId", label: "Beban Penyusutan", value: depreciationExpense, onChange: setDepreciationExpense },
+        { name: "accumulatedDepreciationAccountId", label: "Akumulasi Penyusutan", value: accumulatedDepreciation, onChange: setAccumulatedDepreciation },
       ],
     },
   ]
@@ -1015,6 +1025,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <input type="hidden" name="payrollBankAccountId" value={payrollBank} />
             <input type="hidden" name="employeeReceivableAccountId" value={employeeReceivable} />
             <input type="hidden" name="payrollJournalTypeId" value={payrollJournalType} />
+            <input type="hidden" name="depreciationExpenseAccountId" value={depreciationExpense} />
+            <input type="hidden" name="accumulatedDepreciationAccountId" value={accumulatedDepreciation} />
             <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>

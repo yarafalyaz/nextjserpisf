@@ -3,6 +3,10 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db/prisma"
 import { isValidCronRequest } from "@/lib/security/cron"
 import { computeMonthlyDepreciation } from "@/lib/finance/asset-depreciation"
+import {
+  resolveDepreciationAccounts,
+  hasCompleteDepreciationAccounts,
+} from "@/lib/finance/depreciation-accounts"
 import { apiError } from "@/lib/api-response"
 import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
 
@@ -51,14 +55,11 @@ export async function GET(request: Request) {
     let skipped = 0
     const errorDetails: string[] = []
 
-    // Fix #36: Validate account IDs exist before processing
-    const depExpAccountId = parseInt(process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID || "0")
-    const accDepAccountId = parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0")
-    if (!depExpAccountId || !accDepAccountId) {
-      return NextResponse.json({
-        error: "DEPRECIATION_EXPENSE_ACCOUNT_ID dan ACCUMULATED_DEPRECIATION_ACCOUNT_ID harus di-set di environment variables",
-      }, { status: 500 })
-    }
+    // Global fallback account mappings (UI: Pengaturan → Mapping Akun). The env
+    // vars are kept only as a last resort for pre-UI deployments.
+    const settings = await prisma.systemSetting.findFirst({
+      select: { depreciationExpenseAccountId: true, accumulatedDepreciationAccountId: true },
+    })
 
     const periodStart = new Date(year, month - 1, 1)
     const periodEndExclusive = new Date(year, month, 1)
@@ -80,7 +81,15 @@ export async function GET(request: Request) {
 
     // Pure pass: compute each asset's monthly depreciation and collect only the
     // ones that will actually post a journal. No DB round-trips in this loop.
-    const toProcess: { asset: (typeof assets)[number]; monthlyDepreciation: number }[] = []
+    // Accounts are resolved PER ASSET: the category mapping takes precedence over
+    // the global settings mapping, which takes precedence over the env fallback.
+    const toProcess: {
+      asset: (typeof assets)[number]
+      monthlyDepreciation: number
+      expenseAccountId: number
+      accumulatedAccountId: number
+    }[] = []
+    let missingAccounts = 0
     for (const asset of assets) {
       const category = asset.category
       if (!category) continue
@@ -106,7 +115,35 @@ export async function GET(request: Request) {
       })
 
       if (monthlyDepreciation <= 0) { skipped++; continue }
-      toProcess.push({ asset, monthlyDepreciation })
+
+      // Category mapping wins; settings mapping is the global fallback; env last.
+      const accounts = resolveDepreciationAccounts({
+        categoryExpenseAccountId: category.depreciationExpenseAccountId,
+        categoryAccumDepAccountId: category.accumulatedDepreciationAccountId,
+        settingsExpenseAccountId: settings?.depreciationExpenseAccountId ?? null,
+        settingsAccumDepAccountId: settings?.accumulatedDepreciationAccountId ?? null,
+        envExpenseAccountId: process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID,
+        envAccumDepAccountId: process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID,
+      })
+
+      // Cannot post a depreciation journal without both accounts. Count it as an
+      // error (not a silent skip) so an under-configured deployment is visible
+      // in the cron result instead of quietly depreciating nothing.
+      if (!hasCompleteDepreciationAccounts(accounts)) {
+        missingAccounts++
+        errors++
+        errorDetails.push(
+          `Asset ${asset.id} (${asset.name}): akun beban/akumulasi penyusutan belum dipetakan (kategori atau Mapping Akun)`,
+        )
+        continue
+      }
+
+      toProcess.push({
+        asset,
+        monthlyDepreciation,
+        expenseAccountId: accounts.expenseAccountId,
+        accumulatedAccountId: accounts.accumulatedAccountId,
+      })
     }
 
     // Reserve a contiguous block of journal numbers in ONE atomic round-trip,
@@ -119,7 +156,7 @@ export async function GET(request: Request) {
     // atomic $transaction (asset value + history + balanced journal), and the
     // period-encoded referenceType keeps them idempotent against double runs.
     const results = await Promise.allSettled(
-      toProcess.map(({ asset, monthlyDepreciation }, i) => {
+      toProcess.map(({ asset, monthlyDepreciation, expenseAccountId, accumulatedAccountId }, i) => {
         const newValue = Number(asset.currentValue) - monthlyDepreciation
         const depreciationDecimal = new Prisma.Decimal(monthlyDepreciation.toFixed(2))
         const newValueDecimal = new Prisma.Decimal(newValue.toFixed(2))
@@ -162,14 +199,14 @@ export async function GET(request: Request) {
                 create: [
                   {
                     // Debit: Depreciation Expense
-                    accountId: depExpAccountId,
+                    accountId: expenseAccountId,
                     debit: depreciationDecimal,
                     credit: new Prisma.Decimal(0),
                     memo: `Beban penyusutan - ${asset.name}`,
                   },
                   {
                     // Credit: Accumulated Depreciation
-                    accountId: accDepAccountId,
+                    accountId: accumulatedAccountId,
                     debit: new Prisma.Decimal(0),
                     credit: depreciationDecimal,
                     memo: `Akumulasi penyusutan - ${asset.name}`,
@@ -199,6 +236,7 @@ export async function GET(request: Request) {
       processed,
       skipped,
       errors,
+      missingAccounts,
       errorDetails: errorDetails.slice(0, 10),
     })
   } catch (error) {

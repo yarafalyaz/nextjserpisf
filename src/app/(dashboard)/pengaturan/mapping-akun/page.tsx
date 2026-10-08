@@ -107,6 +107,13 @@ export default async function AccountMappingPage() {
         { label: "Tipe Jurnal Penggajian", value: accountName(settings?.payrollJournalTypeId) },
       ],
     },
+    {
+      title: "Aset Tetap",
+      items: [
+        { label: "Beban Penyusutan", value: accountName(settings?.depreciationExpenseAccountId) },
+        { label: "Akumulasi Penyusutan", value: accountName(settings?.accumulatedDepreciationAccountId) },
+      ],
+    },
   ]
 
   const allMappings = mappingGroups.flatMap((g) => g.items)

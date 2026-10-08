@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   computeMonthlyDepreciation: vi.fn(),
   docSeqNextBatch: vi.fn(),
+  systemSettingFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/security/cron", () => ({
@@ -42,6 +43,7 @@ vi.mock("@/lib/db/prisma", () => ({
       create: (...a: unknown[]) => mocks.assetHistoryCreate(...a),
     },
     journal: { create: (...a: unknown[]) => mocks.journalCreate(...a) },
+    systemSetting: { findFirst: (...a: unknown[]) => mocks.systemSettingFindFirst(...a) },
     $transaction: (...a: unknown[]) => mocks.transaction(...a),
   },
 }))
@@ -62,6 +64,12 @@ describe("GET /api/cron/asset-depreciation", () => {
     mocks.isValidCron.mockReturnValue(true)
     mocks.assetFindMany.mockResolvedValue([])
     mocks.assetHistoryFindMany.mockResolvedValue([])
+    // Global mapping present by default (the env vars below are the last-resort
+    // fallback and are also set, mirroring a configured deployment).
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      depreciationExpenseAccountId: 600,
+      accumulatedDepreciationAccountId: 601,
+    })
     // Default: 1-asset block reserves 1 sequence number
     mocks.docSeqNextBatch.mockImplementation(async (_key: string, count: number) =>
       Array.from({ length: count }, (_, i) => i + 1)
@@ -75,13 +83,46 @@ describe("GET /api/cron/asset-depreciation", () => {
     expect(res.status).toBe(401)
   })
 
-  it("returns 500 when account env vars missing", async () => {
+  it("reports missingAccounts (not a 500) when no account is mapped anywhere", async () => {
+    // The cron no longer hard-fails when accounts are unset — it would otherwise
+    // be impossible for a deployment to see WHICH assets could not depreciate.
     delete process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID
     delete process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID
+    mocks.systemSettingFindFirst.mockResolvedValue(null)
+    mocks.assetFindMany.mockResolvedValue([
+      { id: 1, name: "X", currentValue: 100, purchaseCost: 1000, residualValue: 0, depreciationMethod: null, category: { depreciationRate: 10, usefulLife: 0 } },
+    ])
+    mocks.assetHistoryFindMany.mockResolvedValue([])
+    mocks.computeMonthlyDepreciation.mockReturnValue(50)
+
     const res = await GET(makeReq())
-    expect(res.status).toBe(500)
+    expect(res.status).toBe(200)
     const json = await res.json()
-    expect(json.error).toContain("DEPRECIATION_EXPENSE_ACCOUNT_ID")
+    expect(json.missingAccounts).toBe(1)
+    expect(json.processed).toBe(0)
+    expect(json.errorDetails[0]).toContain("belum dipetakan")
+  })
+
+  it("uses the per-category account mapping over the env fallback", async () => {
+    mocks.assetFindMany.mockResolvedValue([
+      {
+        id: 1, name: "Machine", currentValue: 950, purchaseCost: 1000, residualValue: 0, depreciationMethod: null,
+        category: { depreciationRate: 10, usefulLife: 0, depreciationExpenseAccountId: 700, accumulatedDepreciationAccountId: 701 },
+      },
+    ])
+    mocks.assetHistoryFindMany.mockResolvedValue([])
+    mocks.computeMonthlyDepreciation.mockReturnValue(50)
+
+    await GET(makeReq())
+    // Inspect the journal.create call arguments to prove the CATEGORY accounts
+    // (700/701) were used, not the env vars (500/501) nor the settings (600/601).
+    const call = mocks.journalCreate.mock.calls[0]?.[0]
+    expect(call).toBeTruthy()
+    const accounts = call.data.entries.create.map((e: any) => e.accountId)
+    expect(accounts).toContain(700)
+    expect(accounts).toContain(701)
+    expect(accounts).not.toContain(500)
+    expect(accounts).not.toContain(600)
   })
 
   it("returns 500 on top-level error", async () => {

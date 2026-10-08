@@ -12,6 +12,12 @@ const requiredId = (field: string) =>
   z.coerce.number({ error: `${field} wajib diisi` }).int().positive()
 
 const optionalId = z.coerce.number().int().positive().optional()
+// Optional account/relation selector from a <select> that may submit "" when
+// nothing is chosen (empty string would coerce to 0 and fail .positive()).
+const optionalRefId = z
+  .union([z.literal(""), z.coerce.number().int().positive()])
+  .optional()
+  .transform((v) => (v === "" || v === undefined ? undefined : v))
 
 const optionalNum = (min?: number) => {
   const base = min !== undefined ? z.coerce.number().min(min) : z.coerce.number()
@@ -30,6 +36,10 @@ export const assetCategorySchema = z.object({
   code: optionalStr(50),
   depreciationRate: optionalNum(0),
   usefulLife: optionalNum(0),
+  assetAccountId: optionalRefId,
+  accumulatedDepreciationAccountId: optionalRefId,
+  depreciationExpenseAccountId: optionalRefId,
+  gainLossAccountId: optionalRefId,
 })
 
 // ==================== Asset Brand ====================

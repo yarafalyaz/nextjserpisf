@@ -21,9 +21,10 @@ export default async function EditPage({
   const numId = Number(id)
   if (Number.isNaN(numId)) notFound()
 
-  const data = await prisma.assetCategory.findUnique({
-    where: { id: numId },
-  })
+  const [data, accounts] = await Promise.all([
+    prisma.assetCategory.findUnique({ where: { id: numId } }),
+    prisma.account.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true } }),
+  ])
 
   if (!data) notFound()
 
@@ -37,7 +38,20 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <AssetCategoryForm category={data ? { id: data.id, name: data.name, code: data.code, depreciationRate: data.depreciationRate ? Number(data.depreciationRate) : null, usefulLife: data.usefulLife } : undefined} />
+      <AssetCategoryForm
+        accounts={accounts}
+        category={{
+          id: data.id,
+          name: data.name,
+          code: data.code,
+          depreciationRate: data.depreciationRate ? Number(data.depreciationRate) : null,
+          usefulLife: data.usefulLife,
+          assetAccountId: data.assetAccountId,
+          accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId,
+          depreciationExpenseAccountId: data.depreciationExpenseAccountId,
+          gainLossAccountId: data.gainLossAccountId,
+        }}
+      />
     </div>
   )
 }

@@ -228,6 +228,8 @@ model SystemSetting {
   payrollBankAccountId          Int?    @map("payroll_bank_account_id")
   employeeReceivableAccountId   Int?    @map("employee_receivable_account_id")
   payrollJournalTypeId          Int?    @map("payroll_journal_type_id")
+  depreciationExpenseAccountId     Int?  @map("depreciation_expense_account_id")
+  accumulatedDepreciationAccountId Int? @map("accumulated_depreciation_account_id")
   defaultProjectStages          String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
 
   // Storage / CDN configuration

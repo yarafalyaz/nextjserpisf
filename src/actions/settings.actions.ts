@@ -242,6 +242,10 @@ export async function updateSystemSettings(formData: FormData) {
       payrollBankAccountId: intNull("payrollBankAccountId"),
       employeeReceivableAccountId: intNull("employeeReceivableAccountId"),
       payrollJournalTypeId: intNull("payrollJournalTypeId"),
+
+      // Accounting - Fixed Assets
+      depreciationExpenseAccountId: intNull("depreciationExpenseAccountId"),
+      accumulatedDepreciationAccountId: intNull("accumulatedDepreciationAccountId"),
     },
   })
 
