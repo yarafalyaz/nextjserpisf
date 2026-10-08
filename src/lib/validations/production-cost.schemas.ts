@@ -25,6 +25,33 @@ export const PRODUCTION_COST_CATEGORIES = [
 
 export type ProductionCostCategory = (typeof PRODUCTION_COST_CATEGORIES)[number]
 
+// Overhead drivers (PRD FAB-07: an auditable basis for overhead allocation).
+export const OVERHEAD_DRIVERS = [
+  "machine_hours",
+  "labor_hours",
+  "quantity",
+  "skf",
+] as const
+
+export type OverheadDriver = (typeof OVERHEAD_DRIVERS)[number]
+
+export const OVERHEAD_DRIVER_LABELS: Record<OverheadDriver, string> = {
+  machine_hours: "Jam Mesin",
+  labor_hours: "Jam Tenaga Kerja",
+  quantity: "Kuantitas",
+  skf: "Nilai SKF",
+}
+
+export const applyOverheadSchema = z.object({
+  productionOrderId: z.coerce.number().int().positive({ message: "Perintah produksi wajib dipilih" }),
+  driverType: z.enum(OVERHEAD_DRIVERS, { message: "Dasar alokasi overhead tidak valid" }),
+  driverQty: z.coerce.number().min(0).max(1_000_000),
+  rate: z.coerce.number().min(0).max(1_000_000_000),
+  description: optionalString(2000),
+})
+
+export type ApplyOverheadInput = z.infer<typeof applyOverheadSchema>
+
 export const createProductionCostSchema = z.object({
   productionOrderId: optionalPositiveId(),
   workOrderId: optionalPositiveId(),

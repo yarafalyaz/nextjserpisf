@@ -29,6 +29,7 @@ const reportsModules: ModuleItem[] = [
   { label: "Umur Persediaan", href: "/laporan/umur-stok", icon: Package, desc: "Umur persediaan" },
   { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, desc: "Laba per pusat" },
   { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, desc: "Perbandingan biaya perolehan antar pemasok" },
+  { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, desc: "Applied vs aktual, selisih under/over-absorption" },
 ]
 
 export default async function ReportsPage() {

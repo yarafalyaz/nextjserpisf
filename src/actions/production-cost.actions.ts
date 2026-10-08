@@ -10,8 +10,11 @@ import { safeSubtract } from "@/lib/utils/math"
 import {
   createProductionCostSchema,
   updateProductionCostSchema,
+  applyOverheadSchema,
+  OVERHEAD_DRIVER_LABELS,
 } from "@/lib/validations/production-cost.schemas"
 import { applyProductionCostDelta } from "@/lib/services/production-cost.service"
+import { safeMultiply, safeRound } from "@/lib/utils/math"
 
 /**
  * Add a non-material cost line (labor/machine/overhead/subcontract/service) to a
@@ -263,10 +266,7 @@ export async function pullLaborCostFromTimesheets(
       }
     })
 
-    await logActivity(
-      "create",
-      "ProductionCost",
-      productionOrderId,
+    await logActivity("create", "ProductionCost", productionOrderId,
       `Menarik ${toCreate.length} timesheet → biaya tenaga kerja Rp${totalAdded} ke perintah produksi #${productionOrderId}`,
     )
     revalidatePath(`/produksi/production-orders/${productionOrderId}`)
@@ -274,6 +274,69 @@ export async function pullLaborCostFromTimesheets(
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[pullLaborCostFromTimesheets]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * Apply overhead to a production order using an auditable driver (PRD FAB-07).
+ * Applied overhead = driver qty × rate (jam mesin/jam tenaga kerja/kuantitas/SKF).
+ * Creates a `ProductionCost` line tagged `isAppliedOverhead` + `driverType` so the
+ * under/over-absorption report can isolate system-applied overhead, then rolls the
+ * amount into the order's HPP via the shared delta mechanism.
+ */
+export async function applyOverheadToProductionOrder(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_production_costs")
+
+    const parsed = parseFormData(applyOverheadSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
+
+    const amount = safeRound(safeMultiply(v.driverQty, v.rate, 0), 2)
+    if (amount <= 0) {
+      return { success: false, error: "Nilai overhead harus lebih dari 0 (kuantitas driver × tarif)." }
+    }
+
+    const order = await prisma.productionOrder.findUnique({
+      where: { id: v.productionOrderId },
+      select: { id: true, status: true, documentNo: true },
+    })
+    if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+    if (order.status === "completed" || order.status === "cancelled") {
+      return { success: false, error: `Overhead tidak dapat diterapkan ke perintah berstatus '${order.status}'.` }
+    }
+
+    const driverLabel = OVERHEAD_DRIVER_LABELS[v.driverType]
+
+    const cost = await prisma.$transaction(async (tx) => {
+      const created = await tx.productionCost.create({
+        data: {
+          productionOrderId: v.productionOrderId,
+          category: "overhead",
+          description: v.description ?? `Overhead applied — ${driverLabel} (${v.driverQty} × ${v.rate})`,
+          hours: v.driverQty,
+          rate: v.rate,
+          amount,
+          driverType: v.driverType,
+          isAppliedOverhead: true,
+          postedAt: new Date(),
+          createdBy: Number(user.id),
+        },
+      })
+      await applyProductionCostDelta(v.productionOrderId, amount, tx)
+      return created
+    })
+
+    await logActivity("create", "ProductionCost", cost.id,
+      `Menerapkan overhead applied Rp${amount} (${driverLabel} ${v.driverQty} × ${v.rate}) ke perintah produksi #${v.productionOrderId}`,
+    )
+    revalidatePath("/produksi/production-orders")
+    revalidatePath(`/produksi/production-orders/${v.productionOrderId}`)
+    return { success: true, id: cost.id, amount }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[applyOverheadToProductionOrder]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

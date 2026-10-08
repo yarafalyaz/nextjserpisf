@@ -59,6 +59,7 @@ import {
   updateProductionCost,
   deleteProductionCost,
   pullLaborCostFromTimesheets,
+  applyOverheadToProductionOrder,
 } from "../production-cost.actions"
 
 function fd(payload: Record<string, string | number | null | undefined>): FormData {
@@ -206,5 +207,61 @@ describe("pullLaborCostFromTimesheets", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("Tarif")
     expect(timesheetFindManyMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("applyOverheadToProductionOrder (PRD FAB-07)", () => {
+  it("applies driver × rate as an overhead applied line and rolls it into HPP", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", documentNo: "MO-001" })
+    costCreateMock.mockResolvedValue({ id: 77 })
+
+    const res = await applyOverheadToProductionOrder(
+      fd({ productionOrderId: 1, driverType: "machine_hours", driverQty: 12, rate: 50000 }),
+    )
+
+    expect(res.success).toBe(true)
+    expect((res as { amount?: number }).amount).toBe(600000)
+    expect(costCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          productionOrderId: 1,
+          category: "overhead",
+          driverType: "machine_hours",
+          isAppliedOverhead: true,
+          hours: 12,
+          rate: 50000,
+          amount: 600000,
+        }),
+      }),
+    )
+    expect(applyDeltaMock).toHaveBeenCalledWith(1, 600000, expect.anything())
+  })
+
+  it("rejects a non-positive applied amount", async () => {
+    const res = await applyOverheadToProductionOrder(
+      fd({ productionOrderId: 1, driverType: "labor_hours", driverQty: 0, rate: 50000 }),
+    )
+    expect(res.success).toBe(false)
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("refuses to apply overhead to a completed order", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "completed" })
+
+    const res = await applyOverheadToProductionOrder(
+      fd({ productionOrderId: 1, driverType: "quantity", driverQty: 5, rate: 1000 }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("completed")
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects an invalid driver type", async () => {
+    const res = await applyOverheadToProductionOrder(
+      fd({ productionOrderId: 1, driverType: "bogus", driverQty: 5, rate: 1000 }),
+    )
+    expect(res.success).toBe(false)
+    expect(orderFindUniqueMock).not.toHaveBeenCalled()
   })
 })

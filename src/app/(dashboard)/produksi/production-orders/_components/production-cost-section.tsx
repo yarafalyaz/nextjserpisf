@@ -21,7 +21,9 @@ import {
   createProductionCost,
   deleteProductionCost,
   pullLaborCostFromTimesheets,
+  applyOverheadToProductionOrder,
 } from "@/actions/production-cost.actions"
+import { OVERHEAD_DRIVER_LABELS } from "@/lib/validations/production-cost.schemas"
 
 const CATEGORY_OPTIONS = [
   { value: "labor", label: "Tenaga kerja" },
@@ -32,6 +34,8 @@ const CATEGORY_OPTIONS = [
   { value: "rework", label: "Rework" },
   { value: "other", label: "Lain-lain" },
 ]
+
+const DRIVER_OPTIONS = Object.entries(OVERHEAD_DRIVER_LABELS).map(([value, label]) => ({ value, label }))
 
 const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
   CATEGORY_OPTIONS.map((o) => [o.value, o.label]),
@@ -70,7 +74,17 @@ export function ProductionCostSection({
   const [rate, setRate] = useState("")
   const [amount, setAmount] = useState("")
 
+  // Driver-based overhead application (PRD FAB-07).
+  const [overheadOpen, setOverheadOpen] = useState(false)
+  const [driverType, setDriverType] = useState("machine_hours")
+  const [driverQty, setDriverQty] = useState("")
+  const [driverRate, setDriverRate] = useState("")
+
   const total = costs.reduce((s, c) => s + c.amount, 0)
+  const overheadPreview =
+    Number.isFinite(Number(driverQty)) && Number.isFinite(Number(driverRate))
+      ? Math.round(Number(driverQty) * Number(driverRate) * 100) / 100
+      : 0
 
   // Auto-derive amount from hours × rate while the user types, unless they
   // typed an explicit amount (which always wins).
@@ -119,6 +133,27 @@ export function ProductionCostSection({
     })
   }
 
+  function handleApplyOverhead(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData()
+    formData.set("productionOrderId", String(productionOrderId))
+    formData.set("driverType", driverType)
+    formData.set("driverQty", driverQty)
+    formData.set("rate", driverRate)
+    startTransition(async () => {
+      const result = await applyOverheadToProductionOrder(formData)
+      if (result && !result.success) {
+        showError(result.error || "Gagal menerapkan overhead")
+        return
+      }
+      showSuccess(`Overhead ${formatCurrency((result as { amount?: number }).amount ?? 0)} diterapkan`)
+      setOverheadOpen(false)
+      setDriverQty("")
+      setDriverRate("")
+      router.refresh()
+    })
+  }
+
   function handlePullLabor() {
     if (!workOrderId) {
       showError("Perintah produksi belum tertaut ke perintah kerja.")
@@ -147,11 +182,59 @@ export function ProductionCostSection({
           Biaya Non-Material (Tenaga Kerja / Overhead / Subkontrak)
         </h2>
         {canManage && (
-          <Button onPress={() => setOpen((v) => !v)} type="button" aria-label="Tambah biaya">
-            <Plus size={14} /> Tambah Biaya
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onPress={() => setOverheadOpen((v) => !v)} type="button" aria-label="Terapkan overhead">
+              Terapkan Overhead
+            </Button>
+            <Button onPress={() => setOpen((v) => !v)} type="button" aria-label="Tambah biaya">
+              <Plus size={14} /> Tambah Biaya
+            </Button>
+          </div>
         )}
       </div>
+
+      {overheadOpen && canManage && (
+        <form onSubmit={handleApplyOverhead} className="p-4 px-5 border-b border-default bg-surface-secondary">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Overhead applied = kuantitas driver × tarif. Dasar alokasi dicatat untuk audit (FAB-07).
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="driverType">Dasar Alokasi *</Label>
+              <Select value={driverType} onValueChange={setDriverType}>
+                <SelectTrigger id="driverType"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DRIVER_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="driverQty">Kuantitas Driver *</Label>
+              <Input id="driverQty" name="driverQty" type="number" step="0.01" min="0" value={driverQty} onChange={(e) => setDriverQty(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="driverRate">Tarif per Driver (Rp) *</Label>
+              <Input id="driverRate" name="rate" type="number" step="0.01" min="0" value={driverRate} onChange={(e) => setDriverRate(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Overhead Applied</Label>
+              <div className="flex h-9 items-center rounded-md border border-default px-3 text-sm font-semibold">
+                {formatCurrency(overheadPreview)}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button type="button" isDisabled={isPending} onPress={() => setOverheadOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit" variant="primary" isDisabled={isPending || overheadPreview <= 0} id="submit-overhead">
+              {isPending ? "Menyimpan..." : "Terapkan Overhead"}
+            </Button>
+          </div>
+        </form>
+      )}
 
       {open && canManage && (
         <form onSubmit={handleSubmit} className="p-4 px-5 border-b border-default bg-surface-secondary">

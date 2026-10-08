@@ -1819,6 +1819,12 @@ model ProductionCost {
   hours             Decimal?         @db.Decimal(10, 2)
   rate              Decimal?         @db.Decimal(15, 2)
   amount            Decimal          @default(0.00) @db.Decimal(15, 2)
+  // Driver-based applied overhead (PRD FAB-07 / REP-16). A driver (machine hours,
+  // labor hours, quantity, SKF) × a rate produces the applied overhead amount;
+  // `isAppliedOverhead` distinguishes auto-applied overhead from a manual line so
+  // the under/over-absorption report can isolate it.
+  driverType        String?          @map("driver_type")
+  isAppliedOverhead Boolean          @default(false) @map("is_applied_overhead")
   sourceTimesheetId Int?             @map("source_timesheet_id")
   nonconformanceId  Int?             @map("nonconformance_id")
   purchaseOrderId   Int?             @map("purchase_order_id")

@@ -223,6 +223,7 @@ const navigation: NavItem[] = [
       { label: "Laba Rugi per CC", href: "/laporan/laba-rugi-per-pusat-biaya", icon: TrendingUp, permission: "view_reports" },
       { label: "Anggaran vs Realisasi", href: "/laporan/anggaran-vs-realisasi", icon: TrendingUp, permission: "view_reports" },
       { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, permission: "view_reports" },
+      { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
     ],
   },
   { label: "Pengaturan", href: "/pengaturan", icon: Cog, permission: "manage_settings" },
