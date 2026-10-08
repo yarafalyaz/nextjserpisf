@@ -39,10 +39,23 @@ export default async function ProductionOrderDetailPage({
         orderBy: { createdAt: "asc" },
         include: { vendor: { select: { name: true } } },
       },
+      genealogy: {
+        include: { materials: true },
+      },
     },
   })
 
   if (!order) notFound()
+
+  // Resolve item names for genealogy materials.
+  const geneItemIds = order.genealogy?.materials.map((m) => m.itemId) ?? []
+  const geneItemRows = geneItemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: geneItemIds } },
+        select: { id: true, name: true, sku: true },
+      })
+    : []
+  const geneItemMap = new Map(geneItemRows.map((i) => [i.id, i]))
 
   // Link to a work order (if any) so labor cost can be pulled from its project's
   // timesheets. A production order is not directly tied to a project or WO, so
@@ -189,6 +202,84 @@ export default async function ProductionOrderDetailPage({
         canManage={canManageCosts}
         hasProject={!!linkedWorkOrder?.projectId}
       />
+
+      {/* Production genealogy (PRD line 369 / REP-13) */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Genealogi Produksi</h2>
+        </div>
+        <div className="p-4 px-5">
+          {!order.genealogy ? (
+            <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
+              Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta material yang dipakai.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Unit Hasil</span>
+                  <span className="text-[0.9375rem] text-foreground font-medium">{order.product.name}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Qty</span>
+                  <span className="text-[0.9375rem] text-foreground font-medium">{Number(order.genealogy.outputQty)}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Batch</span>
+                  <span className="text-[0.9375rem] text-foreground font-medium font-mono">{order.genealogy.outputBatch ?? "-"}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diselesaikan</span>
+                  <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(order.genealogy.completedAt)}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">HPP / Unit</span>
+                  <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(order.genealogy.unitCost))}</span>
+                </div>
+              </div>
+
+              {(order.genealogy.outputSerials as string[] | null)?.length ? (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Serial Hasil</span>
+                  <span className="text-sm text-foreground font-mono">
+                    {((order.genealogy.outputSerials as string[]) ?? []).join(", ")}
+                  </span>
+                </div>
+              ) : null}
+
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-2">Material yang Dipakai</h3>
+                {order.genealogy.materials.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Tidak ada material tercatat.</p>
+                ) : (
+                  <DetailTable>
+                    <DetailTableHead>
+                      <DetailTableTh>Barang</DetailTableTh>
+                      <DetailTableTh align="right">Qty</DetailTableTh>
+                      <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
+                      <DetailTableTh align="right">Total</DetailTableTh>
+                    </DetailTableHead>
+                    <DetailTableBody>
+                      {order.genealogy.materials.map((m) => (
+                        <DetailTableRow key={m.id}>
+                          <DetailTableTd>
+                            {geneItemMap.get(m.itemId)
+                              ? `${geneItemMap.get(m.itemId)!.sku} — ${geneItemMap.get(m.itemId)!.name}`
+                              : `Item #${m.itemId}`}
+                          </DetailTableTd>
+                          <DetailTableTd align="right">{Number(m.qty)}</DetailTableTd>
+                          <DetailTableTd align="right">{formatCurrency(Number(m.unitCost))}</DetailTableTd>
+                          <DetailTableTd align="right">{formatCurrency(Number(m.totalCost))}</DetailTableTd>
+                        </DetailTableRow>
+                      ))}
+                    </DetailTableBody>
+                  </DetailTable>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

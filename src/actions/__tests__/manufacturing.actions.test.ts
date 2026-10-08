@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     customer: buildModelMock(),
     item: buildModelMock(),
     productionOrderMaterial: buildModelMock(),
+    productionGenealogy: buildModelMock(),
     productMaterial: buildModelMock(),
     bomRevision: buildModelMock(),
     warehouse: buildModelMock(),
@@ -344,6 +345,18 @@ describe("Production Order Actions", () => {
     )
     expect(mocks.productionRoundingJournalMock).toHaveBeenCalledWith(
       mocks.prismaMock, 0, "MO-008", 8, 1,
+    )
+    // Production genealogy (REP-13) is recorded in the same transaction.
+    expect(mocks.prismaMock.productionGenealogy.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          productionOrderId: 8,
+          documentNo: "MO-008",
+          outputItemId: 10,
+          outputBatch: "MO-008",
+          completedBy: 1,
+        }),
+      }),
     )
   })
 

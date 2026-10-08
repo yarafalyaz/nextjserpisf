@@ -1592,6 +1592,7 @@ model ProductionOrder {
   updatedAt         DateTime                  @updatedAt @map("updated_at")
   materials         ProductionOrderMaterial[]
   costs             ProductionCost[]
+  genealogy         ProductionGenealogy?
   product           Product                   @relation(fields: [productId], references: [id])
   bomRevision       BomRevision?              @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
 
@@ -1616,6 +1617,54 @@ model ProductionOrderMaterial {
   @@index([productionOrderId], map: "production_order_materials_production_order_id_fkey")
   @@index([itemId])
   @@map("production_order_materials")
+}
+
+/// Production genealogy (PRD line 369 / REP-13). When a production order
+/// completes, one `ProductionGenealogy` row records the finished unit — its
+/// output item, the finished serial/lot, the operator who completed it, and the
+/// timespan — while `ProductionGenealogyMaterial` rows record the consumed
+/// materials (item, qty, cost, and the serial/lot numbers consumed). This makes
+/// "unit X was built from materials Y (serials Z) by operator O" traceable, so a
+/// defect can be traced forward to affected finished goods and backward to the
+/// source lots/serials.
+model ProductionGenealogy {
+  id                Int                           @id @default(autoincrement())
+  productionOrderId Int                           @map("production_order_id")
+  documentNo        String                        @map("document_no")
+  outputItemId      Int                           @map("output_item_id")
+  outputQty         Decimal                       @map("output_qty") @db.Decimal(15, 2)
+  outputSerials     Json?                         @map("output_serials")
+  outputBatch       String?                       @map("output_batch")
+  unitCost          Decimal                       @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
+  totalCost         Decimal                       @default(0.00) @map("total_cost") @db.Decimal(15, 2)
+  completedBy       Int?                          @map("completed_by")
+  completedAt       DateTime                      @map("completed_at")
+  createdAt         DateTime                      @default(now()) @map("created_at")
+  materials         ProductionGenealogyMaterial[]
+  productionOrder   ProductionOrder              @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([productionOrderId], map: "production_genealogy_production_order_id_unique")
+  @@index([outputItemId], map: "production_genealogy_output_item_id_fkey")
+  @@index([documentNo])
+  @@index([completedAt])
+  @@index([createdAt])
+  @@map("production_genealogy")
+}
+
+model ProductionGenealogyMaterial {
+  id                Int                  @id @default(autoincrement())
+  genealogyId       Int                  @map("genealogy_id")
+  itemId            Int                  @map("item_id")
+  qty               Decimal              @db.Decimal(15, 2)
+  unitCost          Decimal              @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
+  totalCost         Decimal              @default(0.00) @map("total_cost") @db.Decimal(15, 2)
+  serialNumbers     Json?                @map("serial_numbers")
+  batchNumber       String?              @map("batch_number")
+  genealogy         ProductionGenealogy  @relation(fields: [genealogyId], references: [id], onDelete: Cascade)
+
+  @@index([genealogyId], map: "production_genealogy_materials_genealogy_id_fkey")
+  @@index([itemId])
+  @@map("production_genealogy_materials")
 }
 
 /// Master checklist for quality control (PRD FAB-10). Versioned so a released

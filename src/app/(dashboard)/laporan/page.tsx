@@ -3,6 +3,7 @@ import {
 } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ModuleGrid, type ModuleItem } from "@/components/ui/module-grid"
+import { requirePermission } from "@/lib/auth/permissions"
 
 import type { Metadata } from "next"
 
@@ -27,9 +28,12 @@ const reportsModules: ModuleItem[] = [
   { label: "Umur Hutang", href: "/laporan/hutang-jatuh-tempo", icon: Clock, desc: "Umur hutang" },
   { label: "Umur Persediaan", href: "/laporan/umur-stok", icon: Package, desc: "Umur persediaan" },
   { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, desc: "Laba per pusat" },
+  { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, desc: "Perbandingan biaya perolehan antar pemasok" },
 ]
 
-export default function ReportsPage() {
+export default async function ReportsPage() {
+  await requirePermission("view_reports")
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Laporan" }]} />

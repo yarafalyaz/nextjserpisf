@@ -21,6 +21,7 @@ import {
 import { computeProjectStatus } from "@/lib/services/project-status";
 import { resolveEffectiveBom } from "@/lib/services/bom-revision.service";
 import { assertWorkOrderQcCleared } from "@/lib/services/qc.service";
+import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -903,6 +904,35 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
         2,
       );
       await tx.productionOrder.update({ where: { id }, data: { variance } });
+
+      // Production genealogy (PRD line 369 / REP-13): record the finished unit
+      // and the materials consumed, in the same transaction as completion.
+      const materialRows = await tx.productionOrderMaterial.findMany({
+        where: { productionOrderId: id },
+        select: { itemId: true, actualQty: true, actualCost: true },
+      });
+      await recordProductionGenealogy(tx, {
+        productionOrderId: id,
+        documentNo: order.documentNo,
+        outputItemId: outputItem.id,
+        outputQty: qty,
+        outputSerials: serials,
+        outputBatch: outputItem.trackBatch ? order.documentNo : null,
+        unitCost,
+        totalCost: actualCost,
+        completedBy: Number(user.id),
+        materials: materialRows.map((m) => {
+          const mq = Number(m.actualQty ?? 0);
+          const mc = Number(m.actualCost ?? 0);
+          return {
+            itemId: m.itemId,
+            qty: mq,
+            unitCost: mq > 0 ? Math.round((mc / mq) * 100) / 100 : 0,
+            totalCost: mc,
+          };
+        }),
+      });
+
       return { variance, totalActualCost: actualCost, totalStandardCost: Number(order.totalStandardCost) };
     });
 
