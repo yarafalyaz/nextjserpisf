@@ -52,7 +52,7 @@ export default async function JournalsPage({
   const data = toPlain(journals)
 
   const statusChips = (() => {
-    const statuses = ["", "draft", "posted"]
+    const statuses = ["", "draft", "posted", "reversed"]
     return (
       <>
         {statuses.map((dbStatus) => {

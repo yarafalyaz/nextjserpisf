@@ -33,9 +33,13 @@ export default async function PettyCashPage({
     }),
   };
 
-  // Current balance
+  // Current balance = balanceAfter of the chronologically LAST record, i.e. the
+  // max (date, id) — the same canonical order the chain is maintained in
+  // (recalcPettyCashChain: date asc, id asc). Ordering by `createdAt desc` could
+  // surface a backdated entry (created later, dated earlier) whose balanceAfter
+  // is NOT the current balance.
   const lastRecord = await prisma.pettyCash.findFirst({
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ date: "desc" }, { id: "desc" }],
     select: { balanceAfter: true },
   });
   const currentBalance = lastRecord ? Number(lastRecord.balanceAfter) : 0;

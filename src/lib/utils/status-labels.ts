@@ -38,6 +38,8 @@ export const STATUS_LABELS: Record<string, string> = {
   // Sales
   confirmed: "Terkonfirmasi",
   posted: "Diposting",
+  reversed: "Dibalik",
+  reversing: "Sedang Dibalik",
 
   // CRM
   new: "Baru",
@@ -101,6 +103,8 @@ export const statusToIndo: Record<string, string> = {
   issued: "keluar",
   confirmed: "konfirmasi",
   posted: "posting",
+  reversed: "dibalik",
+  reversing: "sedang-dibalik",
   new: "baru",
   open: "buka",
   resolved: "terselesaikan",

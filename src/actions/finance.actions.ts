@@ -523,9 +523,13 @@ export async function createPettyCash(formData: FormData) {
     const pettyCash = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
 
-      // Calculate balanceBefore from the last petty cash record
+      // Calculate balanceBefore from the chronologically LAST petty cash record.
+      // The chain is ordered (date asc, id asc) — see recalcPettyCashChain — so
+      // the tail balance must come from the max (date, id), NOT `createdAt desc`.
+      // A backdated entry created later would otherwise be treated as the tail
+      // and make this OUT overdraw pre-check reject/allow the wrong amount.
       const lastRecord = await tx.pettyCash.findFirst({
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ date: "desc" }, { id: "desc" }],
       });
       const balanceBefore = lastRecord ? Number(lastRecord.balanceAfter) : 0;
 
