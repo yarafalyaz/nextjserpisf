@@ -155,3 +155,28 @@ Semua bug perilaku (B1, B2, B3, B4) dan risiko teknis (R1, R2) **sudah diperbaik
 3. **G1/G2/G3/G4** — roadmap PRD, di luar perbaikan bug.
 
 Setiap perbaikan bug mengikuti aturan repo: **sertakan regression test** (`src/**/__tests__/*.test.ts`) dan jalankan `npm run ci:quick` dengan `TZ=Asia/Jakarta`.
+
+---
+
+## 7. Perbaikan Integrasi Antar-Modul (8 Okt 2026)
+
+Audit keterhubungan modul menemukan kolom foreign-key yang **tanpa relasi Prisma** sehingga rantai dokumen putus di lapisan data/UI. Diperbaiki pada commit `8d9bd254` (migrasi `prisma/migrations/20261008130000_integration_relations/`):
+
+| Gap | Sebelum | Sesudah |
+| --- | --- | --- |
+| **PO jasa → HPP** | `ProductionCost.purchaseOrderId` tak pernah diisi; nilai PO jasa tak pernah masuk HPP | `syncServicePurchaseOrderCost()` mencerminkan nilai tagihan PO jasa ke baris `ProductionCost` (`subcontract`) pada perintah produksi milik work order-nya (delta, dipisah bila banyak order). Dipanggil di create/confirm/update/void/delete VendorBill. |
+| **WorkOrder ↔ ProductionOrder** | Tak ada relasi; halaman pakai heuristik cocok-item yang rapuh | `ProductionOrder.workOrderId` (FK, onDelete SetNull); halaman detail memakai relasi nyata, fallback heuristik hanya untuk order lama. |
+| **SalesReturn → SalesInvoice/Customer** | Kolom FK ada, tanpa relasi; retur tak bisa menampilkan faktur | Relasi `SalesReturn.salesInvoice`/`customer` + back-relations `SalesInvoice.salesReturns[]`, `Customer.salesReturns[]`. |
+| **VendorBill → GoodsReceipt** | FK tanpa relasi | `VendorBill.goodsReceipt` + `GoodsReceipt.vendorBills[]`; detail tagihan menampilkan & menautkan GR. |
+| **VendorPaymentAllocation → VendorBill** | FK tanpa relasi | `VendorPaymentAllocation.vendorBill` + `VendorBill.allocations[]`. |
+| **VehicleFitmentRule → Item/BomRevision** | FK tanpa relasi; detail menampilkan teks | Relasi + link ke barang & revisi BOM. |
+
+Penyempurnaan UI keterhubungan (relasi sudah ada, halaman belum menampilkan):
+
+- Detail **Perintah Produksi**: menampilkan Revisi BOM + Perintah Kerja (link), baris biaya menautkan PO jasa & NCR.
+- Detail **Perintah Kerja**: menampilkan kendaraan, proyek, revisi BOM, serta tabel Pesanan Pembelian & Perintah Produksi terkait.
+- Detail **Pesanan Pembelian**: menampilkan Perintah Kerja terkait + daftar tagihan vendor.
+- Detail **Kendaraan Pelanggan**: menampilkan daftar Perintah Kerja & Penawaran.
+- Detail **Mutasi Stok**: menautkan balik ke dokumen sumber & barang via helper baru `referenceHref()` (`src/lib/utils/format.ts`).
+
+Migrasi & test: `syncServicePurchaseOrderCost` unit suite, integrasi PO-jasa→HPP (`purchase.actions.test.ts`), dan `referenceHref` (`format.test.ts`). DB Docker sudah dimigrasikan. **Catatan deploy:** migrasi ini menambah satu migrasi baru ke daftar (total 11) — jalankan `prisma migrate deploy` di produksi.
