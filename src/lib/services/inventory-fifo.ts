@@ -1,6 +1,32 @@
 import { Prisma } from "@prisma/client"
+import { resolveCostingMethodForItem } from "./costing-method.service"
 
 type Tx = Prisma.TransactionClient
+
+/** A batch lot that was actually decremented by `consumeFifoLayers`. */
+export type ConsumedBatch = {
+  batchNumber: string
+  warehouseId: number | null
+  qty: number
+}
+
+/** Cost consumed plus the lot/serial attribution needed to mirror the movement. */
+export type FifoConsumption = {
+  consumedCost: number
+  shortfall: number
+  /**
+   * Serial numbers marked `used` by this call. Callers that MOVE stock instead
+   * of selling it (e.g. a warehouse transfer) must re-activate these at the
+   * destination, otherwise the units stay `used` forever and are unsellable.
+   */
+  consumedSerials: string[]
+  /**
+   * Batch lots actually decremented by this call. Callers that move stock must
+   * re-create them in the destination warehouse to keep per-warehouse lot qty
+   * and expiry reporting correct.
+   */
+  consumedBatches: ConsumedBatch[]
+}
 
 /**
  * Per-warehouse FIFO inventory helpers.
@@ -52,9 +78,11 @@ export async function consumeFifoLayers(
     allowShortfall?: boolean
     serialNumbers?: string[] | null
   }
-): Promise<{ consumedCost: number; shortfall: number }> {
+): Promise<FifoConsumption> {
   const { itemId, warehouseId, qty, label, allowShortfall = false, serialNumbers } = opts
-  if (qty <= 0) return { consumedCost: 0, shortfall: 0 }
+  if (qty <= 0) {
+    return { consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [] }
+  }
 
   // Locking read: fetch + lock candidate FIFO layers with FOR UPDATE so concurrent
   // stock-out for the same item serializes and reads the LATEST committed remaining
@@ -70,7 +98,8 @@ export async function consumeFifoLayers(
                FOR UPDATE`
   )
 
-  // Fetch effective costing method (per category, fallback to item costingMethod)
+  // Fetch effective costing method (category → item → company default → fifo).
+  // Resolved through the shared service so receive and sell always agree.
   const item = await tx.item.findUnique({
     where: { id: itemId },
     select: {
@@ -82,7 +111,7 @@ export async function consumeFifoLayers(
       }
     }
   })
-  const costingMethod = (item?.category?.costingMethod || item?.costingMethod || "fifo").toLowerCase()
+  const costingMethod = await resolveCostingMethodForItem(item, tx)
 
   let averageCost = 0
   if (costingMethod === "average") {
@@ -117,6 +146,10 @@ export async function consumeFifoLayers(
   let consumedCost = 0
   const batchConsumption = new Map<string, number>()
   const layerUpdates: Promise<any>[] = []
+  // Attribution of what this call actually took, for callers that move (not sell)
+  // the stock and must mirror the lots/serials into another warehouse.
+  const consumedBatches: ConsumedBatch[] = []
+  const consumedSerials: string[] = []
 
   for (const layer of layers) {
     if (toConsume <= 0) break
@@ -191,6 +224,14 @@ export async function consumeFifoLayers(
               })
             )
             remainingToDecrement -= deduct
+            // Record only what was ACTUALLY decremented (a missing/undersized lot
+            // row leaves part of qtyOut undecremented); reporting qtyOut here would
+            // make a transfer re-create stock that was never removed at the source.
+            consumedBatches.push({
+              batchNumber,
+              warehouseId: batch.warehouseId,
+              qty: Math.round(deduct * 100) / 100,
+            })
           }
         }
       }
@@ -216,12 +257,13 @@ export async function consumeFifoLayers(
 
         const found = await tx.itemSerial.findMany({
           where: { itemId, serialNumber: { in: picked }, status: "available", ...(warehouseId != null ? { warehouseId } : {}) },
-          select: { id: true },
+          select: { id: true, serialNumber: true },
         })
         if (found.length !== picked.length) {
           throw new Error(`Sebagian nomor seri tidak tersedia/sudah terpakai untuk item #${itemId}.`)
         }
         await tx.itemSerial.updateMany({ where: { id: { in: found.map((s) => s.id) } }, data: { status: "used" } })
+        consumedSerials.push(...found.map((s) => s.serialNumber))
       } else {
         // Auto FIFO: mark the oldest available serials.
         const need = Math.round(consumedQty)
@@ -230,7 +272,7 @@ export async function consumeFifoLayers(
             where: { itemId, status: "available", ...(warehouseId != null ? { warehouseId } : {}) },
             orderBy: { createdAt: "asc" },
             take: need,
-            select: { id: true },
+            select: { id: true, serialNumber: true },
           })
           if (serials.length !== need) {
             throw new Error(
@@ -241,12 +283,18 @@ export async function consumeFifoLayers(
             where: { id: { in: serials.map((s) => s.id) }, status: "available" },
             data: { status: "used" },
           })
+          consumedSerials.push(...serials.map((s) => s.serialNumber))
         }
       }
     }
   }
 
-  return { consumedCost, shortfall: Math.max(0, toConsume) }
+  return {
+    consumedCost,
+    shortfall: Math.max(0, toConsume),
+    consumedSerials,
+    consumedBatches,
+  }
 }
 
 /** Create an inbound FIFO layer scoped to a warehouse (and optional batch). */

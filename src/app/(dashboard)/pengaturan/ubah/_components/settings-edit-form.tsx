@@ -620,11 +620,13 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                   name="costingMethod"
                   defaultValue={settings.costingMethod || "FIFO"}
                   options={[
-                    { value: "FIFO", label: "FIFO" },
-                    { value: "LIFO", label: "LIFO" },
-                    { value: "Average", label: "Average" },
+                    { value: "FIFO", label: "FIFO (per lapisan pembelian)" },
+                    { value: "Average", label: "Average (rata-rata bergerak)" },
                   ]}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Berlaku sebagai default perusahaan. Bisa ditimpa per kategori atau per barang.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="fiscalYearStartMonth">Awal Tahun Fiskal (Bulan)</Label>

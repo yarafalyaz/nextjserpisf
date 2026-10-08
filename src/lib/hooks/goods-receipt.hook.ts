@@ -5,6 +5,7 @@ import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { allocateLandedCost } from "@/lib/services/landed-cost.service";
+import { getGlobalCostingMethod, resolveCostingMethod } from "@/lib/services/costing-method.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { PurchaseStatus, Status } from "@/lib/constants";
 
@@ -123,6 +124,20 @@ export async function onGoodsReceiptVerified(
         })
       : [];
     const metaByItem = new Map(grItemMetas.map((it) => [it.id, it]));
+    // Resolve the effective costing method ONCE per item (category → item →
+    // company default → fifo) using the same shared resolver the sale/consume
+    // path uses, so receiving and selling never disagree on HPP.
+    const globalCostingMethod = await getGlobalCostingMethod(tx);
+    const costingMethodByItem = new Map(
+      grItemMetas.map((it) => [
+        it.id,
+        resolveCostingMethod({
+          categoryMethod: it.category?.costingMethod,
+          itemMethod: it.costingMethod,
+          globalMethod: globalCostingMethod,
+        }),
+      ]),
+    );
 
     const enteredUoms = [
       ...new Set<string>([
@@ -341,7 +356,7 @@ export async function onGoodsReceiptVerified(
 
       // Recalculate average cost if item uses average costing method
       if (itemMeta) {
-        const costingMethod = (itemMeta.category?.costingMethod || itemMeta.costingMethod || "average").toLowerCase();
+        const costingMethod = costingMethodByItem.get(item.itemId) ?? "fifo";
         
         const running = itemRunningData.get(item.itemId) || { qtyOnHand: Number(itemMeta.qtyOnHand ?? 0), cost: Number(itemMeta.cost ?? 0) };
         const oldQty = running.qtyOnHand;

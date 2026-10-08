@@ -8,7 +8,10 @@ function mockTx(opts: {
   layers?: { id: number; remaining: number; unitCost: number; batchNumber: string | null }[];
   trackSerial?: boolean;
   itemBatch?: { id: number; qty: number } | null;
-  availableSerials?: { id: number }[];
+  availableSerials?: { id: number; serialNumber?: string }[];
+  costingMethod?: string | null;
+  categoryMethod?: string | null;
+  globalMethod?: string | null;
 }) {
   const layerUpdate = vi.fn().mockResolvedValue({});
   const batchUpdate = vi.fn().mockResolvedValue({});
@@ -24,12 +27,19 @@ function mockTx(opts: {
     $queryRaw: vi.fn().mockResolvedValue(opts.layers ?? []),
     itemBatch: {
       findMany: vi.fn().mockResolvedValue(
-        opts.itemBatch ? [{ id: opts.itemBatch.id, batchNumber: "BATCH-A", qty: opts.itemBatch.qty }] : [],
+        opts.itemBatch ? [{ id: opts.itemBatch.id, batchNumber: "BATCH-A", qty: opts.itemBatch.qty, warehouseId: 2 }] : [],
       ),
       update: batchUpdate,
     },
     item: {
-      findUnique: vi.fn().mockResolvedValue({ trackSerial: opts.trackSerial ?? false }),
+      findUnique: vi.fn().mockResolvedValue({
+        trackSerial: opts.trackSerial ?? false,
+        costingMethod: opts.costingMethod ?? null,
+        category: { costingMethod: opts.categoryMethod ?? null },
+      }),
+    },
+    systemSetting: {
+      findFirst: vi.fn().mockResolvedValue({ costingMethod: opts.globalMethod ?? "FIFO" }),
     },
     itemSerial: {
       findMany: vi.fn().mockResolvedValue(opts.availableSerials ?? []),
@@ -88,7 +98,7 @@ describe("inventory-fifo", () => {
     it("returns zero when qty <= 0", async () => {
       const tx = mockTx({});
       const result = await consumeFifoLayers(tx, { itemId: 1, qty: 0 });
-      expect(result).toEqual({ consumedCost: 0, shortfall: 0 });
+      expect(result).toEqual({ consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [] });
       expect(tx.$queryRaw).not.toHaveBeenCalled();
     });
 
@@ -121,6 +131,53 @@ describe("inventory-fifo", () => {
       expect(result.consumedCost).toBe(130);
       expect(result.shortfall).toBe(0);
       expect(tx._spies.layerUpdate).toHaveBeenCalledTimes(2);
+    });
+
+    it("average mode: books the weighted-average cost, not the oldest layer's cost", async () => {
+      const tx = mockTx({
+        costingMethod: "average",
+        layers: [
+          { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
+          { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
+        ],
+      });
+
+      // Weighted average over the remaining layers: (10*4 + 30*6) / 40 = 220/40 = 5.5
+      const result = await consumeFifoLayers(tx, { itemId: 1, qty: 20 });
+
+      expect(result.consumedCost).toBe(20 * 5.5); // 110 — NOT 20*4 (FIFO would be 10*4+10*6=100)
+      expect(result.shortfall).toBe(0);
+    });
+
+    it("category method overrides the item method (average via category)", async () => {
+      const tx = mockTx({
+        costingMethod: "fifo",
+        categoryMethod: "average",
+        layers: [{ id: 1, remaining: 100, unitCost: 7, batchNumber: null }],
+      });
+
+      const result = await consumeFifoLayers(tx, { itemId: 1, qty: 10 });
+
+      // average of a single layer is its own cost, but the point is the branch
+      // was chosen by the category method, not the item method.
+      expect(result.consumedCost).toBe(70);
+    });
+
+    it("defaults to fifo when neither item nor category nor global method is set", async () => {
+      const tx = mockTx({
+        costingMethod: null,
+        categoryMethod: null,
+        globalMethod: "FIFO",
+        layers: [
+          { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
+          { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
+        ],
+      });
+
+      const result = await consumeFifoLayers(tx, { itemId: 1, qty: 25 });
+
+      // FIFO: 10@4 + 15@6 = 130
+      expect(result.consumedCost).toBe(130);
     });
 
     it("throws when insufficient stock and allowShortfall is false", async () => {
@@ -160,7 +217,9 @@ describe("inventory-fifo", () => {
         itemBatch: { id: 99, qty: 50 },
       });
 
-      await consumeFifoLayers(tx, { itemId: 1, warehouseId: 2, qty: 10 });
+      const result = await consumeFifoLayers(tx, { itemId: 1, warehouseId: 2, qty: 10 });
+
+      expect(result.consumedBatches).toEqual([{ batchNumber: "BATCH-A", warehouseId: 2, qty: 10 }]);
 
       expect(tx._spies.batchUpdate).toHaveBeenCalledWith({
         where: { id: 99 },
@@ -219,10 +278,15 @@ describe("inventory-fifo", () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
         trackSerial: true,
-        availableSerials: [{ id: 11 }, { id: 12 }, { id: 13 }],
+        availableSerials: [
+          { id: 11, serialNumber: "SN-1" },
+          { id: 12, serialNumber: "SN-2" },
+          { id: 13, serialNumber: "SN-3" },
+        ],
       });
 
-      await consumeFifoLayers(tx, { itemId: 1, qty: 3 });
+      const result = await consumeFifoLayers(tx, { itemId: 1, qty: 3 });
+      expect(result.consumedSerials).toEqual(["SN-1", "SN-2", "SN-3"]);
 
       expect(tx._spies.serialUpdateMany).toHaveBeenCalledWith({
         where: { id: { in: [11, 12, 13] }, status: "available" },
@@ -234,14 +298,15 @@ describe("inventory-fifo", () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
         trackSerial: true,
-        availableSerials: [{ id: 21 }, { id: 22 }],
+        availableSerials: [{ id: 21, serialNumber: "SN-1" }, { id: 22, serialNumber: "SN-2" }],
       });
 
-      await consumeFifoLayers(tx, {
+      const result = await consumeFifoLayers(tx, {
         itemId: 1,
         qty: 2,
         serialNumbers: ["SN-1", "SN-2"],
       });
+      expect(result.consumedSerials).toEqual(["SN-1", "SN-2"]);
 
       expect(tx.itemSerial.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

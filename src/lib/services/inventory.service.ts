@@ -4,6 +4,7 @@ import { PrismaClient, Prisma, StockMove } from '@prisma/client'
 import { notificationService } from './notification.service'
 import { safeAdd, safeSubtract, safeMultiply, safeDivide } from '@/lib/utils/math'
 import { consumeFifoLayers } from './inventory-fifo'
+import { resolveCostingMethodForItem } from './costing-method.service'
 
 type TxClient = Omit<
   PrismaClient,
@@ -99,7 +100,9 @@ export class InventoryService {
     `
 
     if (item) {
-      const costingMethod = (item.category?.costingMethod || item.costingMethod || "average").toLowerCase()
+      // Shared resolver keeps this path consistent with the sale/consume and
+      // goods-receipt paths (category → item → company default → fifo).
+      const costingMethod = await resolveCostingMethodForItem(item, tx)
       if (costingMethod === "average") {
         const oldQty = Number(item.qtyOnHand ?? 0)
         const oldCost = Number(item.cost ?? 0)
