@@ -55,6 +55,56 @@ export const updateProductionOrderSchema = z.object({
 
 export type UpdateProductionOrderInput = z.infer<typeof updateProductionOrderSchema>
 
+// ==================== BOM REVISION ====================
+// A revision is a frozen snapshot of the product's working BOM
+// (Product.materials). Creating one snapshots the current lines; releasing it
+// supersedes the previous released revision. Lines are only editable while the
+// revision is still draft.
+
+const bomRevisionLineSchema = z.object({
+  itemId: z.coerce.number().int().positive("Material item tidak valid"),
+  qty: z.coerce.number().positive("Qty material harus > 0").max(1_000_000, "Qty terlalu besar"),
+})
+
+export const createBomRevisionSchema = z.object({
+  productId: z.coerce.number().int().positive("Produk wajib dipilih"),
+  effectiveDate: optionalString(30),
+  notes: optionalString(1000),
+})
+
+export const updateBomRevisionSchema = z.object({
+  effectiveDate: optionalString(30),
+  notes: optionalString(1000),
+})
+
+/** Validate the parallel `revisionItemId[]` / `revisionQty[]` arrays of a draft
+ * revision edit. Same shape/behaviour as parseMaterialRows. */
+export function parseRevisionRows(
+  itemIds: string[],
+  qtys: string[],
+): { success: true; data: { itemId: number; qty: number }[] } | { success: false; error: string } {
+  const merged = new Map<number, number>()
+  const errors: string[] = []
+
+  for (let i = 0; i < itemIds.length; i++) {
+    const rawId = (itemIds[i] ?? "").trim()
+    const rawQty = (qtys[i] ?? "").trim()
+    if (rawId === "" || rawQty === "" || rawId === "0" || rawQty === "0") continue
+
+    const r = bomRevisionLineSchema.safeParse({ itemId: rawId, qty: rawQty })
+    if (!r.success) {
+      errors.push(`Baris #${i + 1}: ${r.error.issues.map((iss) => iss.message).join(", ")}`)
+      continue
+    }
+    merged.set(r.data.itemId, (merged.get(r.data.itemId) ?? 0) + r.data.qty)
+  }
+
+  if (errors.length > 0) {
+    return { success: false, error: "Validasi gagal: " + errors.join("; ") }
+  }
+  return { success: true, data: Array.from(merged, ([itemId, qty]) => ({ itemId, qty })) }
+}
+
 // ==================== PRODUCT MATERIALS (BOM rows) ====================
 // Dynamic material rows posted as parallel arrays of form fields
 // `materialItemId[]` and `materialQty[]` (read via formData.getAll, so they

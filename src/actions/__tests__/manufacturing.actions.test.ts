@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => {
     customer: buildModelMock(),
     item: buildModelMock(),
     productionOrderMaterial: buildModelMock(),
+    productMaterial: buildModelMock(),
+    bomRevision: buildModelMock(),
     warehouse: buildModelMock(),
     itemBatch: buildModelMock(),
     itemSerial: buildModelMock(),
@@ -362,8 +364,13 @@ describe("Production Order Actions", () => {
     mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({
       id: 1,
       standardCost: 1000,
-      materials: [{ itemId: 1, qty: 2 }, { itemId: 2, qty: 3 }]
     })
+    // No released revision → resolveEffectiveBom falls back to the working BOM.
+    mocks.prismaMock.bomRevision.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.productMaterial.findMany.mockResolvedValue([
+      { itemId: 1, qty: 2 },
+      { itemId: 2, qty: 3 },
+    ])
     // BOM item standard costs (createProductionOrder now stamps standardCost
     // on each material line + rolls up totalStandardCost = productStd * qty).
     mocks.prismaMock.item.findMany.mockResolvedValue([
@@ -392,6 +399,24 @@ describe("Production Order Actions", () => {
         }
       })
     }))
+  })
+
+  it("createProductionOrder pins a released BOM revision when one exists", async () => {
+    mocks.prismaMock.product.findUniqueOrThrow.mockResolvedValue({ id: 1, standardCost: 0 })
+    mocks.prismaMock.bomRevision.findFirst.mockResolvedValue({
+      id: 77, revisionNo: 3,
+      materials: [{ itemId: 9, qty: 4 }],
+    })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 9, standardCost: 25 }])
+
+    const res = await actions.createProductionOrder(fdMap({ productId: 1, qty: 2 }))
+
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.productionOrder.create.mock.calls[0][0]
+    expect(arg.data.bomRevisionId).toBe(77)
+    expect(arg.data.materials.create).toEqual([{ itemId: 9, qty: 8, standardCost: 25 }])
+    // Working BOM must not be consulted when a released revision exists.
+    expect(mocks.prismaMock.productMaterial.findMany).not.toHaveBeenCalled()
   })
 
   it("createProductionOrder handles validation error", async () => {

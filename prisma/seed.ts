@@ -298,6 +298,10 @@ async function main() {
       "delete_products",
       "create_production_orders",
       "delete_production_orders",
+      // BOM revisions: create/edit/release/delete a versioned BOM snapshot.
+      // Kept as one capability so a role either governs BOM revisions or not.
+      "manage_bom_revisions",
+      "view_bom_revisions",
       "view_employee_loans",
       "manage_settings",
       "manage_users",
@@ -342,6 +346,13 @@ async function main() {
       // Approval permissions terpisah dari edit_* (Separation of Duties).
       "approve_vendor_payments",
       "approve_purchase_returns",
+      // Approving/disbursing an employee loan gets its own permission. It used
+      // to reuse "create_loans" in both approval.actions.ts and the status
+      // workflow route, so whoever could raise a loan could also approve and
+      // disburse it — no separation of duties, and a self-approval path.
+      // Granted to admin/super_admin via "ALL"; grant it explicitly to finance
+      // if that role is meant to approve loans.
+      "approve_loans",
     ];
 
     for (const name of permissions) {
@@ -519,6 +530,8 @@ async function main() {
       "edit_production_orders",
       "create_products",
       "edit_products",
+      "manage_bom_revisions",
+      "view_bom_revisions",
       "view_timesheets",
       "create_timesheets",
       "view_overtime",
@@ -1099,6 +1112,33 @@ async function main() {
     } else {
       console.log("⚠️ vehicles.json not found, skipping vehicle seeding");
     }
+
+    // === UNITS OF MEASURE ===
+    // The item form's "Satuan" dropdown reads this master. Without a baseline
+    // the dropdown would collapse to whatever rows already exist, so seed the
+    // common units (the same set the form used to hard-code). Symbols are
+    // UPPERCASE to match Item.unitOfMeasure and UomConversion.code. Any symbol
+    // that already exists (case-insensitive) is skipped so re-seeding is safe.
+    const unitsOfMeasure = [
+      { name: "Pieces", symbol: "PCS" },
+      { name: "Set", symbol: "SET" },
+      { name: "Kilogram", symbol: "KG" },
+      { name: "Liter", symbol: "LTR" },
+      { name: "Meter", symbol: "MTR" },
+      { name: "Box", symbol: "BOX" },
+    ];
+    for (const uom of unitsOfMeasure) {
+      const [existing] = await conn.query(
+        "SELECT id FROM unit_of_measures WHERE UPPER(symbol) = ? LIMIT 1",
+        [uom.symbol],
+      );
+      if (existing.length > 0) continue;
+      await conn.query(
+        "INSERT INTO unit_of_measures (name, symbol, is_active, created_at, updated_at) VALUES (?, ?, 1, NOW(), NOW())",
+        [uom.name, uom.symbol],
+      );
+    }
+    console.log(`✅ ${unitsOfMeasure.length} units of measure seeded/checked`);
 
     // === EXPENSE CATEGORIES ===
     const expenseCategories = [

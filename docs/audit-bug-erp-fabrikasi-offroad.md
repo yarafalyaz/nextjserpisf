@@ -21,7 +21,7 @@ Fondasi inti (FIFO per gudang, serial/batch, period lock, jurnal stok, idempoten
 | R2 | `startWorkOrder` tidak pakai klaim atomik | **DIPERBAIKI** | Dua start paralel | P3 |
 | R4 | `completeWorkOrder` menerima status `pending` | Keputusan bisnis (dibiarkan) | Bisa melewati `in_progress` | P3 |
 | G1 | Belum ada modul QC/inspection/NCR/rework | GAP PRD | Tidak bisa menandai cacat & pengerjaan ulang | P0 |
-| G2 | Belum ada snapshot revisi BOM/order & engineering change | GAP PRD | Perubahan BOM memengaruhi order lama | P0 |
+| G2 | Belum ada snapshot revisi BOM/order & engineering change | **GAP PRD — SEBAGIAN DIPERBAIKI** | Perubahan BOM memengaruhi order lama | P0 |
 | G3 | HPP hanya dari material; tanpa tenaga kerja/overhead/mesin | GAP PRD | Margin kendaraan tidak akurat | P1 |
 | G4 | Belum ada biaya jasa/subkontrak ke HPP pekerjaan | GAP PRD | Penawaran jasa tak tercermin di biaya | P1 |
 
@@ -120,7 +120,7 @@ Ditambahkan **stock guard**: sebelum posting, ketersediaan per gudang (jumlah `I
 Merujuk `docs/prd-erp-fabrikasi-offroad.md`:
 
 - **G1 — QC / Inspeksi / NCR / Rework / Keselamatan (P0).** Tidak ada model maupun aksi QC. Pencarian `trackSerial|QC|inspection` di `prisma/schema.prisma` tidak menemukan entitas QC. Tahap proyek "Quality Check" hanya berupa status.
-- **G2 — Engineering/BOM & kontrol revisi (P0).** `Product` + `ProductMaterial` ada, tetapi tanpa versi/revisi dan tanpa snapshot BOM pada Production Order maupun Work Order. Perubahan BOM bisa mengubah dasar order lama.
+- **G2 — Engineering/BOM & kontrol revisi (P0)** — **DIPERBAIKI SEBAGIAN (7 Okt 2026).** Ditambahkan model `BomRevision` + `BomRevisionMaterial`: snapshot BOM ber-versi per produk (draft → released → superseded). `ProductionOrder` dan `WorkOrder` kini menyimpan `bomRevisionId`, dan `createProductionOrder` memakai `resolveEffectiveBom()` untuk memilih revisi **released** terakhir (fallback ke BOM kerja bila belum ada revisi rilis), sehingga perubahan BOM master tidak lagi mengubah dasar order yang sudah dirilis. UI lengkap: halaman `/produksi/bom-revisi` (list/tambah/detail/ubah), aksi create/update/release/delete, izin `manage_bom_revisions` & `view_bom_revisions`, entri sidebar + registry modul. Migrasi: `prisma/migrations/20261007180000_add_bom_revisions/` (sudah diterapkan ke DB Docker). Regression test: `src/actions/__tests__/bom-revision.test.ts` (14 kasus) + `src/lib/services/__tests__/bom-revision.service.test.ts`. **Sisa:** routing/work-center multi-level BOM, fitment per konfigurasi kendaraan (VEH-07), dan change-order pelanggan (SAL-06/SAL-14) belum termasuk.
 - **G3 — HPP non-material (P1).** HPP/`totalActualCost` hanya dari konsumsi material (`material-issue.hook.ts`). Tidak ada tenaga kerja, overhead, jam mesin, atau subkontrak.
 - **G4 — Biaya jasa/subkontrak (P1).** Item jasa memang dicatat sebagai "service" di Work Order notes (`down-payment.hook.ts:320–331`), tetapi **tidak** masuk ke biaya/HPP pekerjaan.
 - **G5 — Genealogi produk (P2).** Tidak ada relasi unit hasil → material/serial/operator yang dipakai.

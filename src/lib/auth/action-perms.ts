@@ -72,6 +72,8 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/produksi/perintah-kerja", edit: "edit_work_orders", delete: "delete_work_orders" },
   { prefix: "/produksi/production-orders", edit: "edit_production_orders", delete: "delete_production_orders" },
   { prefix: "/produksi/products", edit: "edit_products", delete: "delete_products" },
+  // BOM revisions are governed by a single capability (create/edit/release/delete).
+  { prefix: "/produksi/bom-revisi", edit: "manage_bom_revisions", delete: "manage_bom_revisions" },
 
   // SDM — tasks reuse project edit perms
   { prefix: "/proyek/tugas", edit: "edit_projects", delete: "delete_projects" },

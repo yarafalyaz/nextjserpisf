@@ -32,6 +32,7 @@ export default async function ProductDetailPage({
     where: { id: numId },
     include: {
       materials: true,
+      bomRevisions: { orderBy: { revisionNo: "desc" }, take: 10 },
       productionOrders: { take: 5, orderBy: { createdAt: "desc" } },
       vehicleBrand: true,
       vehicleModel: true,
@@ -114,9 +115,36 @@ export default async function ProductDetailPage({
         )}
       </DetailSection>
 
+      {/* BOM Revisions */}
+      <DetailSection title="Revisi BOM">
+        {product.bomRevisions.length === 0 ? (
+          <p className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+            Belum ada revisi. Revisi membekukan BOM saat ini agar order produksi yang dirilis tidak berubah bila BOM master disunting.
+          </p>
+        ) : (
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Revisi</DetailTableTh>
+              <DetailTableTh>Status</DetailTableTh>
+              <DetailTableTh>Berlaku</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {product.bomRevisions.map((rev) => (
+                <DetailTableRow key={rev.id}>
+                  <DetailTableTd className="font-mono">
+                    <Link href={`/produksi/bom-revisi/${rev.id}`}>Rev {rev.revisionNo}</Link>
+                  </DetailTableTd>
+                  <DetailTableTd><StatusChip status={rev.status} /></DetailTableTd>
+                  <DetailTableTd>{formatDate(rev.effectiveDate)}</DetailTableTd>
+                </DetailTableRow>
+              ))}
+            </DetailTableBody>
+          </DetailTable>
+        )}
+      </DetailSection>
+
       {/* Recent Production Orders */}
-      <DetailSection title="Perintah Produksi Terbaru">
-        {product.productionOrders.length === 0 ? (
+      <DetailSection title="Perintah Produksi Terbaru">        {product.productionOrders.length === 0 ? (
           <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada perintah produksi</p>
         ) : (
           <DetailTable>

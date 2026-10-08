@@ -1506,6 +1506,7 @@ model Product {
   materials            ProductMaterial[]
   productVehicleModels ProductVehicleModel[]
   productionOrders     ProductionOrder[]
+  bomRevisions         BomRevision[]
   inventoryItem        Item?                 @relation("ProductInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
   vehicleBrand         VehicleBrand?         @relation(fields: [vehicleBrandId], references: [id], onDelete: SetNull)
   vehicleModel         VehicleModel?         @relation(fields: [vehicleModelId], references: [id], onDelete: SetNull)
@@ -1528,10 +1529,54 @@ model ProductMaterial {
   @@map("product_materials")
 }
 
+/// Immutable, versioned snapshot of a product's BOM (PRD FAB-02 / MOD-04).
+/// `Product.materials` remains the editable working copy; releasing a revision
+/// freezes its lines here so production orders pin the exact revision that was
+/// in force when the order was released. A released revision's lines are never
+/// mutated — a new revision is created instead. Status: draft → released →
+/// superseded (the previous released revision is marked superseded on release).
+model BomRevision {
+  id            Int                  @id @default(autoincrement())
+  productId     Int                  @map("product_id")
+  revisionNo    Int                  @map("revision_no")
+  status        String               @default("draft")
+  effectiveDate DateTime             @map("effective_date")
+  notes         String?              @db.Text
+  releasedAt    DateTime?            @map("released_at")
+  releasedBy    Int?                 @map("released_by")
+  createdBy     Int?                 @map("created_by")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+  product       Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  materials     BomRevisionMaterial[]
+  productionOrders ProductionOrder[]
+  workOrders    WorkOrder[]
+
+  @@unique([productId, revisionNo], map: "bom_revisions_product_revision_unique")
+  @@index([productId], map: "bom_revisions_product_id_fkey")
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("bom_revisions")
+}
+
+model BomRevisionMaterial {
+  id            Int         @id @default(autoincrement())
+  bomRevisionId Int         @map("bom_revision_id")
+  itemId        Int         @map("item_id")
+  qty           Decimal     @db.Decimal(15, 2)
+  bomRevision   BomRevision @relation(fields: [bomRevisionId], references: [id], onDelete: Cascade)
+
+  @@index([bomRevisionId], map: "bom_revision_materials_bom_revision_id_fkey")
+  @@index([itemId])
+  @@map("bom_revision_materials")
+}
+
 model ProductionOrder {
   id                Int                       @id @default(autoincrement())
   documentNo        String                    @unique @map("document_no")
   productId         Int                       @map("product_id")
+  bomRevisionId     Int?                      @map("bom_revision_id")
   qty               Decimal                   @db.Decimal(15, 2)
   status            String                    @default("draft")
   startDate         DateTime?                 @map("start_date")
@@ -1545,8 +1590,10 @@ model ProductionOrder {
   updatedAt         DateTime                  @updatedAt @map("updated_at")
   materials         ProductionOrderMaterial[]
   product           Product                   @relation(fields: [productId], references: [id])
+  bomRevision       BomRevision?              @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
 
   @@index([productId], map: "production_orders_product_id_fkey")
+  @@index([bomRevisionId])
   @@index([status])
   @@index([createdBy])
   @@index([createdAt])
@@ -1576,6 +1623,7 @@ model WorkOrder {
   documentNo        String           @unique @map("document_no")
   quotationId       Int?             @map("quotation_id")
   projectId         Int?             @map("project_id")
+  bomRevisionId     Int?             @map("bom_revision_id")
   customerId        Int              @map("customer_id")
   date              DateTime
   notes             String?          @db.Text
@@ -1588,12 +1636,14 @@ model WorkOrder {
   customerVehicle   CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
   quotation         Quotation?       @relation(fields: [quotationId], references: [id])
   project           Project?         @relation(fields: [projectId], references: [id])
+  bomRevision       BomRevision?     @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
   @@index([status], map: "idx_work_orders_status")
   @@index([customerVehicleId])
   @@index([projectId])
+  @@index([bomRevisionId])
   @@index([createdBy])
   @@index([createdAt])
   @@map("work_orders")

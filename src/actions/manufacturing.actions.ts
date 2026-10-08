@@ -14,8 +14,12 @@ import {
   createProductionOrderSchema,
   updateProductionOrderSchema,
   parseMaterialRows,
+  createBomRevisionSchema,
+  updateBomRevisionSchema,
+  parseRevisionRows,
 } from "@/lib/validations/manufacturing.schemas";
 import { computeProjectStatus } from "@/lib/services/project-status";
+import { resolveEffectiveBom } from "@/lib/services/bom-revision.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -214,6 +218,211 @@ export async function calculateStandardCost(productId: number) {
   }
 }
 
+// ==================== BOM REVISION ACTIONS ====================
+
+/**
+ * Create a new BOM revision for a product by snapshotting its current working
+ * BOM (`Product.materials`). The revision starts as `draft` and its lines can
+ * be edited until it is released. revisionNo is the next integer for the
+ * product. This does not touch the working BOM or any released revision.
+ */
+export async function createBomRevision(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_bom_revisions");
+
+    const parsed = parseFormData(createBomRevisionSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const product = await prisma.product.findUniqueOrThrow({
+      where: { id: v.productId },
+      include: { materials: true },
+    });
+
+    const revision = await prisma.$transaction(async (tx) => {
+      const latest = await tx.bomRevision.findFirst({
+        where: { productId: v.productId },
+        orderBy: { revisionNo: "desc" },
+        select: { revisionNo: true },
+      });
+      const nextNo = (latest?.revisionNo ?? 0) + 1;
+
+      return tx.bomRevision.create({
+        data: {
+          productId: v.productId,
+          revisionNo: nextNo,
+          status: "draft",
+          effectiveDate: v.effectiveDate ? new Date(v.effectiveDate) : new Date(),
+          notes: v.notes ?? null,
+          createdBy: Number(user.id),
+          materials: {
+            create: product.materials.map((m) => ({ itemId: m.itemId, qty: m.qty })),
+          },
+        },
+      });
+    });
+
+    await logActivity(
+      "create",
+      "BomRevision",
+      revision.id,
+      `Membuat revisi BOM #${revision.revisionNo} untuk produk #${v.productId}`,
+    );
+    revalidatePath("/produksi/bom-revisi");
+    revalidatePath(`/produksi/products/${v.productId}`);
+    return { success: true, id: revision.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createBomRevision]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Edit a DRAFT revision: replace its lines and/or metadata. A released (or
+ * superseded) revision is immutable — editing it must go through a new
+ * revision, so this is rejected unless the revision is still `draft`.
+ */
+export async function updateBomRevision(id: number, formData: FormData) {
+  try {
+    await requirePermission("manage_bom_revisions");
+
+    const parsed = parseFormData(updateBomRevisionSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const itemIds = formData.getAll("revisionItemId") as string[];
+    const qtys = formData.getAll("revisionQty") as string[];
+    const linesParsed = parseRevisionRows(itemIds, qtys);
+    if (!linesParsed.success) return { success: false, error: linesParsed.error };
+
+    const existing = await prisma.bomRevision.findUnique({
+      where: { id },
+      select: { id: true, status: true, productId: true },
+    });
+    if (!existing) return { success: false, error: "Revisi BOM tidak ditemukan" };
+    if (existing.status !== "draft") {
+      return {
+        success: false,
+        error: `Revisi berstatus '${existing.status}' tidak dapat diubah; buat revisi baru.`,
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bomRevision.update({
+        where: { id },
+        data: {
+          effectiveDate: v.effectiveDate ? new Date(v.effectiveDate) : undefined,
+          notes: v.notes ?? null,
+          materials: {
+            deleteMany: {},
+            create: linesParsed.data.map((m) => ({ itemId: m.itemId, qty: m.qty })),
+          },
+        },
+      });
+    });
+
+    await logActivity("update", "BomRevision", id, `Memperbarui revisi BOM #${id}`);
+    revalidatePath("/produksi/bom-revisi");
+    revalidatePath(`/produksi/products/${existing.productId}`);
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateBomRevision]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Release a draft revision: draft → released. The previously released revision
+ * for the same product is marked `superseded` in the same transaction so at
+ * most one revision is ever `released` at a time. Releasing an empty revision
+ * is rejected — an order later pinned to it would consume nothing.
+ */
+export async function releaseBomRevision(id: number) {
+  try {
+    const user = await requirePermission("manage_bom_revisions");
+
+    const revision = await prisma.bomRevision.findUnique({
+      where: { id },
+      include: { materials: true },
+    });
+    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
+    if (revision.materials.length === 0) {
+      return { success: false, error: "Revisi BOM tidak boleh kosong sebelum dirilis." };
+    }
+
+    const claimed = await prisma.bomRevision.updateMany({
+      where: { id, status: "draft" },
+      data: { status: "released", releasedAt: new Date(), releasedBy: Number(user.id) },
+    });
+    if (claimed.count === 0) {
+      return { success: false, error: "Hanya revisi berstatus draft yang dapat dirilis." };
+    }
+
+    // Supersede any other released revision for the same product.
+    await prisma.bomRevision.updateMany({
+      where: { productId: revision.productId, status: "released", id: { not: id } },
+      data: { status: "superseded" },
+    });
+
+    await logActivity(
+      "release",
+      "BomRevision",
+      id,
+      `Merilis revisi BOM #${revision.revisionNo} (produk #${revision.productId})`,
+    );
+    revalidatePath("/produksi/bom-revisi");
+    revalidatePath(`/produksi/products/${revision.productId}`);
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[releaseBomRevision]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Delete a DRAFT revision only. Released/superseded revisions are historical
+ * records that orders may point at — they must not be deleted, so this rejects
+ * anything not in `draft`. Also refuses when a production order already pins it.
+ */
+export async function deleteBomRevision(id: number) {
+  try {
+    await requirePermission("manage_bom_revisions");
+
+    const revision = await prisma.bomRevision.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        productId: true,
+        _count: { select: { productionOrders: true, workOrders: true } },
+      },
+    });
+    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
+    if (revision.status !== "draft") {
+      return { success: false, error: "Hanya revisi draft yang dapat dihapus." };
+    }
+    if (revision._count.productionOrders > 0 || revision._count.workOrders > 0) {
+      return {
+        success: false,
+        error: "Revisi BOM sudah dipakai oleh perintah kerja/produksi dan tidak dapat dihapus.",
+      };
+    }
+
+    await prisma.bomRevision.delete({ where: { id } });
+    await logActivity("delete", "BomRevision", id, `Menghapus revisi BOM #${id}`);
+    revalidatePath("/produksi/bom-revisi");
+    revalidatePath(`/produksi/products/${revision.productId}`);
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteBomRevision]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
 /**
  * Resolve a per-item standard cost for production: prefer item.standardCost,
  * fall back to purchasePrice (mirrors Laravel issueMaterial cost resolution).
@@ -233,14 +442,19 @@ export async function createProductionOrder(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("MO");
 
-    // Get product materials (BOM) to auto-populate production order materials
+    // Snapshot the BOM in force right now. Prefer the latest *released* revision
+    // (frozen lines) and fall back to the working BOM for products that have no
+    // released revision yet. Pinning bomRevisionId means later edits to the
+    // master BOM cannot change the basis of this order (PRD FAB-02).
     const product = await prisma.product.findUniqueOrThrow({
       where: { id: v.productId },
-      include: { materials: true },
+      select: { id: true, standardCost: true },
     });
+    const effectiveBom = await resolveEffectiveBom(v.productId);
+    const bomLines = effectiveBom.lines;
 
     // Per-item standard cost for each BOM line (stamped on the order material).
-    const bomItemIds = product.materials.map((m) => m.itemId);
+    const bomItemIds = bomLines.map((m) => m.itemId);
     const bomItems = bomItemIds.length
       ? await prisma.item.findMany({
           where: { id: { in: bomItemIds } },
@@ -256,9 +470,9 @@ export async function createProductionOrder(formData: FormData) {
     // that throw silently swallowed, leaving totalStandardCost = 0 and a bogus
     // full-actual variance at completion.
     let productStdCost = Number(product.standardCost);
-    if (productStdCost <= 0 && product.materials.length > 0) {
-      productStdCost = product.materials.reduce(
-        (sum, m) => safeAdd(sum, safeMultiply(bomCostMap.get(m.itemId) ?? 0, Number(m.qty), 2), 2),
+    if (productStdCost <= 0 && bomLines.length > 0) {
+      productStdCost = bomLines.reduce(
+        (sum, m) => safeAdd(sum, safeMultiply(bomCostMap.get(m.itemId) ?? 0, m.qtyPerUnit, 2), 2),
         0,
       );
     }
@@ -267,6 +481,7 @@ export async function createProductionOrder(formData: FormData) {
       data: {
         documentNo,
         productId: v.productId,
+        bomRevisionId: effectiveBom.revisionId,
         qty: v.qty,
         startDate: v.startDate ? new Date(v.startDate) : null,
         endDate: v.endDate ? new Date(v.endDate) : null,
@@ -276,9 +491,9 @@ export async function createProductionOrder(formData: FormData) {
         totalStandardCost: safeMultiply(productStdCost, v.qty, 2),
         createdBy: Number(user.id),
         materials: {
-          create: product.materials.map((m) => ({
+          create: bomLines.map((m) => ({
             itemId: m.itemId,
-            qty: safeMultiply(Number(m.qty), v.qty, 4),
+            qty: safeMultiply(m.qtyPerUnit, v.qty, 4),
             standardCost: bomCostMap.get(m.itemId) ?? 0,
           })),
         },
