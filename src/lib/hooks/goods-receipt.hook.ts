@@ -281,9 +281,17 @@ export async function onGoodsReceiptVerified(
       poDiscount: Number(landedPo?.discount ?? 0),
       shippingCost: Number(goodsReceipt.shippingCost ?? 0),
       otherCost: Number(goodsReceipt.otherCost ?? 0),
+      adminFee: Number(goodsReceipt.adminFee ?? 0),
     });
 
     const journalLines: { qty: number; cost: number }[] = [];
+    // Bank/admin fee + freight are ALSO capitalised into the line cost (HPP), but
+    // captured per line here so the GR journal can post them to their own
+    // accounts (Debit Beban Admin Bank / Debit Ongkir) and show the breakdown the
+    // store receipt prints (goods · ongkir · admin).
+    const goodsOnlyLines: { qty: number; cost: number }[] = [];
+    const shippingLines: { qty: number; cost: number }[] = [];
+    const adminLines: { qty: number; cost: number }[] = [];
     // Service lines (vendor labour/subcontract) do NOT move stock; their cost is
     // expensed instead (PRD FAB-08). Collected separately for the service journal.
     const serviceJournalLines: { qty: number; cost: number }[] = [];
@@ -301,7 +309,9 @@ export async function onGoodsReceiptVerified(
     let lineIdx = 0;
     for (const item of goodsReceipt.items) {
       const smDocNo = smDocNos[docIdx++];
-      const landedPerUnit = landed.perUnitAdditions[lineIdx++] ?? 0;
+      const landedIdx = lineIdx++;
+      const landedPerUnit = landed.perUnitAdditions[landedIdx] ?? 0;
+      const landedAdminPerUnit = landed.adminPerUnitAdditions[landedIdx] ?? 0;
 
       // Per-line destination warehouse (the GR form lets each line target a
       // different warehouse). Fall back to the header warehouse when a line
@@ -350,6 +360,18 @@ export async function onGoodsReceiptVerified(
       // Capture the BASE-converted values for the GL journal so it matches
       // the stock subledger (qty*cost invariant under UoM conversion).
       journalLines.push({ qty: baseQty, cost: baseUnitCostWithLanded });
+      // Component split (same total): goods-only, the admin-fee portion, and the
+      // residual freight/other portion. goods + shipping + admin == the
+      // capitalised line value, so the split journal balances to the cent.
+      const lineAdminUnit = landedAdminPerUnit;
+      const lineFreightUnit = landedPerUnit - landedAdminPerUnit;
+      goodsOnlyLines.push({ qty: baseQty, cost: baseUnitCost });
+      if (lineFreightUnit !== 0) {
+        shippingLines.push({ qty: baseQty, cost: lineFreightUnit });
+      }
+      if (lineAdminUnit !== 0) {
+        adminLines.push({ qty: baseQty, cost: lineAdminUnit });
+      }
 
       // Update item qtyOnHand (global total, in base units)
       await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${baseQty} WHERE id = ${item.itemId}`;
@@ -473,7 +495,12 @@ export async function onGoodsReceiptVerified(
         goodsReceiptId,
         userId,
         null,
-        goodsReceipt.date
+        goodsReceipt.date,
+        // Component split for the journal breakdown (goods + ongkir + admin).
+        // `undefined` slices fall back to a single blended inventory debit.
+        goodsOnlyLines.length > 0 ? goodsOnlyLines : undefined,
+        shippingLines.length > 0 ? shippingLines : undefined,
+        adminLines.length > 0 ? adminLines : undefined,
       );
     }
 

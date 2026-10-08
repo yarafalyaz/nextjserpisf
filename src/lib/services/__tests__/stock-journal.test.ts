@@ -36,6 +36,8 @@ const FULL_ACCOUNTS = {
   purchaseInventoryAccountId: 600,
   purchaseReturnAccountId: 700,
   salesReturnAccountId: 800,
+  purchaseShippingAccountId: 620,
+  purchaseAdminFeeAccountId: 630,
 };
 
 describe("stockJournalService", () => {
@@ -174,6 +176,84 @@ describe("stockJournalService", () => {
     it("returns null when total value is zero", async () => {
       const result = await stockJournalService.onGoodsReceipt(tx, [{ qty: 0, cost: 0 }], "GR-1", 1);
       expect(result).toBeNull();
+    });
+
+    it("splits the debit into Persediaan + Ongkir + Beban Admin when components are supplied", async () => {
+      // Blended line: 1 unit @ 151000 (goods 130000 + ongkir 20000 + admin 1000).
+      await stockJournalService.onGoodsReceipt(
+        tx,
+        [{ qty: 1, cost: 151000 }],
+        "GR-1",
+        1,
+        42,
+        null,
+        undefined,
+        [{ qty: 1, cost: 130000 }], // goods only
+        [{ qty: 1, cost: 20000 }],  // ongkir
+        [{ qty: 1, cost: 1000 }],   // admin bank
+      );
+
+      const call = mocks.createJournal.mock.calls[0][0];
+      // Debits sum to the credit (balanced)
+      const debits = call.entries
+        .filter((e: { debit: number }) => e.debit > 0)
+        .reduce((s: number, e: { debit: number }) => s + e.debit, 0);
+      expect(debits).toBe(151000);
+      expect(call.entries).toEqual([
+        expect.objectContaining({ accountId: 100, debit: 130000, credit: 0 }),
+        expect.objectContaining({ accountId: 620, debit: 20000, credit: 0 }),
+        expect.objectContaining({ accountId: 630, debit: 1000, credit: 0 }),
+        expect.objectContaining({ accountId: 600, debit: 0, credit: 151000 }),
+      ]);
+    });
+
+    it("folds the shipping line back into Persediaan when no shipping account is set", async () => {
+      mocks.getSystemSettings.mockResolvedValue({
+        ...FULL_ACCOUNTS,
+        purchaseShippingAccountId: null,
+      });
+
+      await stockJournalService.onGoodsReceipt(
+        tx,
+        [{ qty: 1, cost: 151000 }],
+        "GR-1",
+        1,
+        42,
+        null,
+        undefined,
+        [{ qty: 1, cost: 130000 }],
+        [{ qty: 1, cost: 20000 }],
+        [{ qty: 1, cost: 1000 }],
+      );
+
+      const call = mocks.createJournal.mock.calls[0][0];
+      // Goods + shipping folded → 150000 inventory debit, admin still separate.
+      expect(call.entries).toEqual([
+        expect.objectContaining({ accountId: 100, debit: 150000, credit: 0 }),
+        expect.objectContaining({ accountId: 630, debit: 1000, credit: 0 }),
+        expect.objectContaining({ accountId: 600, debit: 0, credit: 151000 }),
+      ]);
+    });
+
+    it("falls back to a single blended Inventory debit when no split is supplied", async () => {
+      await stockJournalService.onGoodsReceipt(
+        tx,
+        [{ qty: 1, cost: 151000 }],
+        "GR-1",
+        1,
+        42,
+        null,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
+
+      const call = mocks.createJournal.mock.calls[0][0];
+      expect(call.entries).toEqual([
+        expect.objectContaining({ accountId: 100, debit: 151000, credit: 0 }),
+        expect.objectContaining({ accountId: 600, debit: 0, credit: 151000 }),
+      ]);
     });
   });
 

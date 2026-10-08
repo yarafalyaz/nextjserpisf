@@ -112,6 +112,7 @@ interface SettingsFormValues {
   purchaseReturnAccountId?: number | null
   purchaseReturnPrefix?: string | null
   purchaseShippingAccountId?: number | null
+  purchaseAdminFeeAccountId?: number | null
   purchaseTaxAccountId?: number | null
   quotationCodePrefix?: string | null
   quotationFooterNotes?: string | null
@@ -245,6 +246,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [purchaseExpense, setPurchaseExpense] = useState(settings.purchaseExpenseAccountId ? String(settings.purchaseExpenseAccountId) : "")
   const [purchaseDiscount, setPurchaseDiscount] = useState(settings.purchaseDiscountAccountId ? String(settings.purchaseDiscountAccountId) : "")
   const [purchaseShipping, setPurchaseShipping] = useState(settings.purchaseShippingAccountId ? String(settings.purchaseShippingAccountId) : "")
+  const [purchaseAdminFee, setPurchaseAdminFee] = useState(settings.purchaseAdminFeeAccountId ? String(settings.purchaseAdminFeeAccountId) : "")
   const [purchaseReturn, setPurchaseReturn] = useState(settings.purchaseReturnAccountId ? String(settings.purchaseReturnAccountId) : "")
   
   const [inventoryAcc, setInventoryAcc] = useState(settings.inventoryAccountId ? String(settings.inventoryAccountId) : "")
@@ -309,6 +311,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "purchaseExpenseAccountId", label: "Beban Pembelian", value: purchaseExpense, onChange: setPurchaseExpense },
         { name: "purchaseDiscountAccountId", label: "Diskon Pembelian", value: purchaseDiscount, onChange: setPurchaseDiscount },
         { name: "purchaseShippingAccountId", label: "Ongkos Kirim", value: purchaseShipping, onChange: setPurchaseShipping },
+        { name: "purchaseAdminFeeAccountId", label: "Beban Admin Bank", value: purchaseAdminFee, onChange: setPurchaseAdminFee },
         { name: "purchaseReturnAccountId", label: "Retur Pembelian", value: purchaseReturn, onChange: setPurchaseReturn },
       ],
     },
@@ -377,6 +380,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     setPurchaseExpense(findAccount([["beban", "pembelian"], ["purchase", "expense"]]))
     setPurchaseDiscount(findAccount([["diskon", "pembelian"], ["purchase", "discount"]]))
     setPurchaseShipping(findAccount([["ongkos", "kirim"], ["shipping"], ["ongkir"]]))
+    setPurchaseAdminFee(findAccount([["admin", "bank"], ["admin", "transfer"], ["beban", "admin"], ["bank", "fee"]]))
     setPurchaseReturn(findAccount([["retur", "pembelian"], ["purchase", "return"]]))
 
     setInventoryAcc(findAccount([["persediaan", "barang", "dagang"], ["persediaan", "sparepart"], ["persediaan"], ["inventory"]]))
@@ -987,6 +991,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <input type="hidden" name="purchaseExpenseAccountId" value={purchaseExpense} />
             <input type="hidden" name="purchaseDiscountAccountId" value={purchaseDiscount} />
             <input type="hidden" name="purchaseShippingAccountId" value={purchaseShipping} />
+            <input type="hidden" name="purchaseAdminFeeAccountId" value={purchaseAdminFee} />
             <input type="hidden" name="purchaseReturnAccountId" value={purchaseReturn} />
             <input type="hidden" name="inventoryAccountId" value={inventoryAcc} />
             <input type="hidden" name="inventoryAdjustmentAccountId" value={inventoryAdjustment} />

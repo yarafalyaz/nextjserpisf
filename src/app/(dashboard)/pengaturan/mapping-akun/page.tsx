@@ -72,6 +72,7 @@ export default async function AccountMappingPage() {
         { label: "Beban Pembelian", value: accountName(settings?.purchaseExpenseAccountId) },
         { label: "Diskon Pembelian", value: accountName(settings?.purchaseDiscountAccountId) },
         { label: "Ongkos Kirim", value: accountName(settings?.purchaseShippingAccountId) },
+        { label: "Beban Admin Bank", value: accountName(settings?.purchaseAdminFeeAccountId) },
         { label: "Retur Pembelian", value: accountName(settings?.purchaseReturnAccountId) },
       ],
     },

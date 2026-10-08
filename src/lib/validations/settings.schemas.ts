@@ -144,6 +144,7 @@ export const updateSystemSettingsSchema = z.object({
   purchaseExpenseAccountId: optionalInt(),
   purchaseDiscountAccountId: optionalInt(),
   purchaseShippingAccountId: optionalInt(),
+  purchaseAdminFeeAccountId: optionalInt(),
   purchaseReturnAccountId: optionalInt(),
 
   // Accounting - Inventory

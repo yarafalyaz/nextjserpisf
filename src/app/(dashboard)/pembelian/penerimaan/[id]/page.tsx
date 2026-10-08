@@ -154,8 +154,76 @@ export default async function GoodsReceiptDetailPage({
               {formatDate(receipt.createdAt)}
             </span>
           </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Ongkir Aktual
+            </span>
+            <span className="text-[0.9375rem] text-foreground font-medium">
+              {Number(receipt.shippingCost) > 0 ? (
+                formatCurrency(Number(receipt.shippingCost))
+              ) : (
+                <span className="text-muted-foreground">
+                  Pakai estimasi PO
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Biaya Lain
+            </span>
+            <span className="text-[0.9375rem] text-foreground font-medium">
+              {formatCurrency(Number(receipt.otherCost))}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Admin Bank
+            </span>
+            <span className="text-[0.9375rem] text-foreground font-medium">
+              {formatCurrency(Number(receipt.adminFee))}
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Landed-cost breakdown — the freight the PO estimated and the discount
+          that reduce HPP. Only shown when the PO carries any. */}
+      {(Number(receipt.purchaseOrder.shippingCost) > 0 ||
+        Number(receipt.purchaseOrder.serviceFee) > 0 ||
+        Number(receipt.purchaseOrder.discount) > 0) && (
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+          <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">
+            Komponen Landed Cost (estimasi PO)
+          </h2>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Ongkir (PO)
+              </span>
+              <span className="text-[0.9375rem] text-foreground font-medium">
+                {formatCurrency(Number(receipt.purchaseOrder.shippingCost))}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Biaya Layanan (PO)
+              </span>
+              <span className="text-[0.9375rem] text-foreground font-medium">
+                {formatCurrency(Number(receipt.purchaseOrder.serviceFee))}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Diskon Nota (PO)
+              </span>
+              <span className="text-[0.9375rem] text-foreground font-medium">
+                − {formatCurrency(Number(receipt.purchaseOrder.discount))}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

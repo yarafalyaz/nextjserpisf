@@ -210,6 +210,7 @@ model SystemSetting {
   purchaseExpenseAccountId      Int?    @map("purchase_expense_account_id")
   purchaseDiscountAccountId     Int?    @map("purchase_discount_account_id")
   purchaseShippingAccountId     Int?    @map("purchase_shipping_account_id")
+  purchaseAdminFeeAccountId     Int?    @map("purchase_admin_fee_account_id")
   purchaseReturnAccountId       Int?    @map("purchase_return_account_id")
   inventoryAccountId            Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId  Int?    @map("inventory_adjustment_account_id")
@@ -1088,6 +1089,10 @@ model GoodsReceipt {
   // derives this receipt's proportional share of the PO estimate instead.
   shippingCost    Decimal            @default(0.00) @map("shipping_cost") @db.Decimal(15, 2)
   otherCost       Decimal            @default(0.00) @map("other_cost") @db.Decimal(15, 2)
+  // Bank / payment admin fee for THIS receipt (e.g. "Admin BCA 1.000" printed on
+  // a Tokopedia/Shopee purchase). Capitalised into HPP like shippingCost, but
+  // posted to its own expense account so the journal shows the breakdown.
+  adminFee        Decimal            @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
   status          String             @default("draft")
   createdBy       Int?               @map("created_by")
   createdAt       DateTime           @default(now()) @map("created_at")

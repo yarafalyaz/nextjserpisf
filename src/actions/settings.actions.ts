@@ -218,6 +218,7 @@ export async function updateSystemSettings(formData: FormData) {
       purchaseExpenseAccountId: intNull("purchaseExpenseAccountId"),
       purchaseDiscountAccountId: intNull("purchaseDiscountAccountId"),
       purchaseShippingAccountId: intNull("purchaseShippingAccountId"),
+      purchaseAdminFeeAccountId: intNull("purchaseAdminFeeAccountId"),
       purchaseReturnAccountId: intNull("purchaseReturnAccountId"),
 
       // Accounting - Inventory

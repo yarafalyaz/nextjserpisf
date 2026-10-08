@@ -723,6 +723,7 @@ export async function createGoodsReceipt(formData: FormData) {
           notes: v.notes ?? null,
           shippingCost: v.shippingCost ?? 0,
           otherCost: v.otherCost ?? 0,
+          adminFee: v.adminFee ?? 0,
           status: "draft",
           createdBy: Number(user.id),
           items: {
@@ -2037,6 +2038,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           notes: v.notes ?? null,
           shippingCost: v.shippingCost ?? 0,
           otherCost: v.otherCost ?? 0,
+          adminFee: v.adminFee ?? 0,
         },
       });
 

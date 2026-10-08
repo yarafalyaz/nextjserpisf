@@ -27,6 +27,8 @@ type AccountIds = {
   purchaseInventory?: number | null
   purchaseReturn?: number | null
   salesReturn?: number | null
+  purchaseShipping?: number | null
+  purchaseAdminFee?: number | null
 }
 
 async function getAccountIds(): Promise<AccountIds> {
@@ -41,6 +43,8 @@ async function getAccountIds(): Promise<AccountIds> {
     purchaseInventory: s.purchaseInventoryAccountId,
     purchaseReturn: s.purchaseReturnAccountId,
     salesReturn: s.salesReturnAccountId,
+    purchaseShipping: s.purchaseShippingAccountId,
+    purchaseAdminFee: s.purchaseAdminFeeAccountId,
   }
 }
 
@@ -56,8 +60,15 @@ export const stockJournalService = {
   /**
    * Goods Receipt (verified) — Stock IN from vendor.
    *
-   *   Dr Inventory Account          (inventoryAccountId)
+   *   Dr Inventory Account          (inventoryAccountId)          — goods value
+   *   Dr Ongkos Kirim Account       (purchaseShippingAccountId)   — freight/other
+   *   Dr Beban Admin Bank Account   (purchaseAdminFeeAccountId)   — bank/admin fee
    *   Cr Purchase Inventory Account  (purchaseInventoryAccountId — clearing)
+   *
+   * The three debits always sum to the credit. When the split arrays are not
+   * supplied, or the freight/admin accounts are not configured, the whole value
+   * is posted as a single blended Inventory debit (legacy behaviour) so the
+   * journal still balances.
    *
    * Purchase Inventory account acts as clearing/suspense and gets reversed
    * when vendor bill is entered.
@@ -69,13 +80,77 @@ export const stockJournalService = {
     grId: number,
     userId?: number,
     costCenterId?: number | null,
-    transactionDate?: Date
+    transactionDate?: Date,
+    goodsOnlyLines?: JournalItemInput[],
+    shippingLines?: JournalItemInput[],
+    adminLines?: JournalItemInput[],
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.purchaseInventory) return null
 
     const totalValue = sumValue(items)
     if (totalValue <= 0) return null
+
+    const entries: {
+      accountId: number
+      debit: number
+      credit: number
+      memo: string
+    }[] = []
+
+    // Split the debit into goods / freight / admin when both the line slices and
+    // the target accounts are available; otherwise post one blended Inventory
+    // debit. goodsValue is the residual so the debits always equal totalValue.
+    const goodsValue = goodsOnlyLines ? sumValue(goodsOnlyLines) : 0
+    const shippingValue = shippingLines ? sumValue(shippingLines) : 0
+    const adminValue = adminLines ? sumValue(adminLines) : 0
+    const canSplit =
+      !!goodsOnlyLines &&
+      accounts.purchaseAdminFee != null &&
+      adminValue > 0
+
+    if (canSplit) {
+      const residualGoods = Math.round((totalValue - shippingValue - adminValue) * 100) / 100
+      entries.push({
+        accountId: accounts.inventory,
+        debit: residualGoods,
+        credit: 0,
+        memo: `Debit Persediaan (barang) - GR ${grDocumentNo}`,
+      })
+      if (shippingValue !== 0 && accounts.purchaseShipping != null) {
+        entries.push({
+          accountId: accounts.purchaseShipping,
+          debit: shippingValue,
+          credit: 0,
+          memo: `Debit Ongkir - GR ${grDocumentNo}`,
+        })
+      } else if (shippingValue !== 0) {
+        // No shipping account configured → fold back into Persediaan.
+        entries[0].debit = Math.round((entries[0].debit + shippingValue) * 100) / 100
+      }
+      if (adminValue !== 0) {
+        entries.push({
+          accountId: accounts.purchaseAdminFee!,
+          debit: adminValue,
+          credit: 0,
+          memo: `Debit Beban Admin Bank - GR ${grDocumentNo}`,
+        })
+      }
+    } else {
+      entries.push({
+        accountId: accounts.inventory,
+        debit: totalValue,
+        credit: 0,
+        memo: `Debit Persediaan - GR ${grDocumentNo}`,
+      })
+    }
+
+    entries.push({
+      accountId: accounts.purchaseInventory!,
+      debit: 0,
+      credit: totalValue,
+      memo: `Kredit Hutang Pembelian (clearing) - GR ${grDocumentNo}`,
+    })
 
     const journalNumber = await generateDocumentNumber('JRN')
     const journalSvc = new JournalService(tx)
@@ -87,20 +162,7 @@ export const stockJournalService = {
       type: 'GR',
       description: `Penerimaan Barang ${grDocumentNo}`,
       createdBy: userId,
-      entries: [
-        {
-          accountId: accounts.inventory,
-          debit: totalValue,
-          credit: 0,
-          memo: `Debit Persediaan - GR ${grDocumentNo}`,
-        },
-        {
-          accountId: accounts.purchaseInventory!,
-          debit: 0,
-          credit: totalValue,
-          memo: `Kredit Hutang Pembelian (clearing) - GR ${grDocumentNo}`,
-        },
-      ],
+      entries,
     })
   },
 

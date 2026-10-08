@@ -58,6 +58,9 @@ export const goodsReceiptSchema = z.object({
   // falls back to this receipt's proportional share of the PO estimate.
   shippingCost: optionalNumber(0),
   otherCost: optionalNumber(0),
+  // Bank/payment admin fee (e.g. "Admin BCA"). Capitalised into HPP and posted
+  // to its own expense account.
+  adminFee: optionalNumber(0),
   items: optionalString(50000), // JSON string, parsed separately
 })
 

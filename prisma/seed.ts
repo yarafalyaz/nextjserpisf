@@ -814,6 +814,7 @@ async function main() {
       ["5600", "Beban Pembelian", "EXPENSE"],
       ["5700", "Diskon Pembelian", "EXPENSE"],
       ["5800", "Ongkos Kirim", "EXPENSE"],
+      ["5810", "Beban Admin Bank", "EXPENSE"],
       ["5900", "Retur Pembelian", "EXPENSE"],
     ];
 
