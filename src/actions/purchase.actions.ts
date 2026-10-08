@@ -799,6 +799,22 @@ export async function createVendorBill(formData: FormData) {
     const bill = await prisma.$transaction(async (tx) => {
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
+
+        // Integrity: a PO-linked bill (goods OR service) must belong to the
+        // SAME vendor as the bill, otherwise AP would be recognised against the
+        // wrong vendor and the 3-way match would compare unrelated documents.
+        // Service POs (e.g. sub-contract) flow through the same guard so a
+        // service bill can never be booked to a different vendor than the one on
+        // the PO it settles.
+        const po = await tx.purchaseOrder.findUniqueOrThrow({
+          where: { id: v.purchaseOrderId },
+          select: { vendorId: true, documentNo: true, isService: true },
+        });
+        if (po.vendorId !== v.vendorId) {
+          throw new Error(
+            `Pemasok tagihan tidak sesuai dengan pemasok PO ${po.documentNo}.`,
+          );
+        }
       }
 
       await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, v.subtotal);

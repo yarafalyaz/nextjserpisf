@@ -29,6 +29,14 @@ interface BillItem {
 
 interface VendorBillFormProps {
   vendors: { id: number; name: string }[];
+  /** Purchase orders selectable to settle. Service POs are tagged "Jasa". */
+  purchaseOrders?: {
+    id: number;
+    documentNo: string;
+    vendorId: number;
+    isService: boolean;
+    grandTotal: number;
+  }[];
   bill?: {
     id: number;
     vendorId: number;
@@ -55,16 +63,24 @@ interface VendorBillFormProps {
   }[];
 }
 
-export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
+export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: VendorBillFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [date, setDate] = useState(
-    bill?.date ?? toLocalDateOnly(new Date()),
+    bill?.date || toLocalDateOnly(new Date()),
   );
   const [dueDate, setDueDate] = useState(bill?.dueDate ?? "");
   const [vendorId, setVendorId] = useState<string | null>(
     bill?.vendorId ? String(bill.vendorId) : null,
   );
+  const [purchaseOrderId, setPurchaseOrderId] = useState<string | null>(
+    bill?.purchaseOrderId ? String(bill.purchaseOrderId) : null,
+  );
+  // POs offered for settlement: only the selected vendor's POs (keeps the bill
+  // and PO vendor consistent) — service POs are included and tagged "Jasa".
+  const vendorPurchaseOrders = vendorId
+    ? purchaseOrders.filter((po) => String(po.vendorId) === vendorId)
+    : purchaseOrders;
   const [billItems, setBillItems] = useState<BillItem[]>(
     bill?.items && bill.items.length > 0
       ? bill.items.map((it) => ({
@@ -179,9 +195,42 @@ export function VendorBillForm({ vendors, items, bill }: VendorBillFormProps) {
                 label: v.name,
               }))}
               value={vendorId}
-              onChange={setVendorId}
+              onChange={(value) => {
+                setVendorId(value);
+                // A PO belongs to exactly one vendor — clear a stale selection
+                // when the vendor changes so we cannot book AP to the wrong one.
+                if (
+                  value &&
+                  purchaseOrderId &&
+                  !purchaseOrders.some(
+                    (po) =>
+                      String(po.id) === purchaseOrderId &&
+                      String(po.vendorId) === value,
+                  )
+                ) {
+                  setPurchaseOrderId(null);
+                }
+              }}
               placeholder="Cari pemasok..."
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="purchaseOrderId">PO Terkait</Label>
+            <Combobox
+              id="purchaseOrderId"
+              options={vendorPurchaseOrders.map((po) => ({
+                value: String(po.id),
+                label: `${po.documentNo}${po.isService ? " · Jasa" : ""} — ${po.grandTotal.toLocaleString("id-ID")}`,
+              }))}
+              value={purchaseOrderId}
+              onChange={setPurchaseOrderId}
+              placeholder="Pilih PO (opsional)..."
+            />
+            <input type="hidden" name="purchaseOrderId" value={purchaseOrderId ?? ""} />
+            <p className="text-xs text-muted-foreground">
+              Kaitkan tagihan ke PO agar 3-way match berjalan. PO jasa ditandai &quot;Jasa&quot;
+              dan bebannya masuk ke akun beban (bukan persediaan).
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker

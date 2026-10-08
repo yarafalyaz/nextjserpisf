@@ -80,7 +80,14 @@ export default async function VendorBillDetailPage({
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pesanan Pembelian</span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               {bill.purchaseOrder ? (
-                <Link href={`/pembelian/pesanan/${bill.purchaseOrder.id}`}>{bill.purchaseOrder.documentNo}</Link>
+                <span className="inline-flex items-center gap-2">
+                  <Link href={`/pembelian/pesanan/${bill.purchaseOrder.id}`}>{bill.purchaseOrder.documentNo}</Link>
+                  {bill.purchaseOrder.isService && (
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[0.6875rem] font-medium text-primary">
+                      Tagihan Jasa
+                    </span>
+                  )}
+                </span>
               ) : "-"}
             </span>
           </div>

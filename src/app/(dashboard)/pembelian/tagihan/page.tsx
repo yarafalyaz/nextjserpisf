@@ -40,7 +40,7 @@ export default async function VendorBillsPage({
 
   const rawBills = await prisma.vendorBill.findMany({
     where,
-    include: { vendor: true },
+    include: { vendor: true, purchaseOrder: { select: { documentNo: true, isService: true } } },
     take,
     skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },

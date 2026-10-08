@@ -444,6 +444,74 @@ describe("Production Order Actions", () => {
     expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
   })
 
+  it("releases only a partial quantity, keeping the order in_progress with WIP (FAB-09)", async () => {
+    // Order of 10, cost 100000 → unitCost 10000. Completing 4 releases 40000,
+    // leaving 60000 as WIP; the order must NOT flip to completed.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 0,
+      totalActualCost: 100000, totalStandardCost: 90000,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+
+    const res = await actions.completeProductionOrder(8, [], 4)
+
+    expect(res).toMatchObject({ success: true, releasedQty: 4, completedQty: 4, isFinal: false })
+    expect(mocks.prismaMock.stockMove.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ itemId: 10, qty: 4, cost: 10000 }),
+    }))
+    // WIP cost released: 40000 (4 × 10000), remainder 60000 stays.
+    const update = mocks.prismaMock.productionOrder.update.mock.calls[0][0]
+    expect(update.data.completedQty).toBe(4)
+    expect(update.data.totalActualCost).toBe(60000)
+    expect(update.data.status).toBeUndefined() // still in_progress
+    // Genealogy is NOT recorded on a partial release.
+    expect(mocks.prismaMock.productionGenealogy.create).not.toHaveBeenCalled()
+  })
+
+  it("completes the order once the released quantity reaches the full order qty", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 6,
+      totalActualCost: 40000, totalStandardCost: 90000,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+
+    const res = await actions.completeProductionOrder(8, [], 4)
+
+    expect(res).toMatchObject({ success: true, completedQty: 10, isFinal: true })
+    const update = mocks.prismaMock.productionOrder.update.mock.calls[0][0]
+    expect(update.data.status).toBe("completed")
+    expect(update.data.endDate).toBeInstanceOf(Date)
+    // Remaining WIP cost is zeroed on final completion.
+    expect(update.data.totalActualCost).toBe(0)
+    // Genealogy is recorded on the final release.
+    expect(mocks.prismaMock.productionGenealogy.create).toHaveBeenCalled()
+  })
+
+  it("rejects completing more than the remaining quantity", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 8,
+      totalActualCost: 20000, totalStandardCost: 90000,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    const res = await actions.completeProductionOrder(8, [], 5)
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/melebihi sisa/i)
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
+  })
+
   it("carries the issued material lots/serials into the production genealogy (REP-13)", async () => {
     mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
       id: 8, documentNo: "MO-008", status: "in_progress", qty: 1,

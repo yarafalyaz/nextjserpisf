@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
@@ -16,6 +16,7 @@ interface VendorBill {
   grandTotal: number | string
   status: string
   vendor: { name: string }
+  purchaseOrder?: { documentNo: string; isService: boolean } | null
 }
 
 const columnHelper = createColumnHelper<VendorBill>()
@@ -33,6 +34,24 @@ const columns = [
     id: "vendorName",
     header: "Vendor",
     cell: (info) => info.row.original.vendor.name,
+  }),
+  columnHelper.display({
+    id: "po",
+    header: "PO",
+    cell: (info) => {
+      const po = info.row.original.purchaseOrder
+      if (!po) return <span className="text-muted-foreground">-</span>
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="font-mono text-xs">{po.documentNo}</span>
+          {po.isService && (
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.6875rem] font-medium text-primary">
+              Jasa
+            </span>
+          )}
+        </span>
+      )
+    },
   }),
   columnHelper.accessor("date", {
     header: "Tanggal",

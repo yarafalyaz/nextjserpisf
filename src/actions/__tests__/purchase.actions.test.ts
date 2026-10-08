@@ -347,6 +347,8 @@ describe("Goods Receipt Actions", () => {
 describe("Vendor Bill Actions", () => {
   beforeEach(() => {
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    // PO-linked bills now validate the bill vendor against the PO vendor.
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
   })
 
   it("createVendorBill succeeds", async () => {
@@ -359,6 +361,45 @@ describe("Vendor Bill Actions", () => {
       subtotal: "1000",
       tax: "0",
       grandTotal: "1000"
+    }))
+    expect(res?.success).toBe(true)
+  })
+
+  it("createVendorBill rejects a bill whose vendor does not match the PO vendor", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, vendorId: 99, documentNo: "PO-001", isService: true,
+    })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/pemasok tagihan tidak sesuai/i)
+    // The wrong-vendor bill must never be created nor matched.
+    expect(mocks.prismaMock.vendorBill.create).not.toHaveBeenCalled()
+  })
+
+  it("createVendorBill accepts a service PO bill once goods value matches", async () => {
+    // Service GR expensed Dr Expense / Cr clearing; the bill (goods-based because
+    // a GR exists) debits clearing → net Dr Expense / Cr AP. The 3-way match still
+    // applies to the service value received.
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, vendorId: 1, documentNo: "PO-SVC", isService: true,
+    })
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 5000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      subtotal: "5000",
+      tax: "0",
+      grandTotal: "5000",
     }))
     expect(res?.success).toBe(true)
   })
@@ -757,6 +798,7 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("DOC-001")
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
   })
 
   it("createVendorBill fails 3-way match (no GRs)", async () => {

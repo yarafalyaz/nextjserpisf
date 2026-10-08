@@ -762,8 +762,19 @@ export async function issueMaterial(
   }
 }
 
-/** Complete production, receive the finished item into inventory, and settle WIP. */
-export async function completeProductionOrder(id: number, serialNumbers: string[] = []) {
+/** Complete production, receive the finished item into inventory, and settle WIP.
+ *
+ * Supports partial completion (PRD FAB-09): pass `qtyToComplete` to release only
+ * part of the order's output. The released units carry their equivalent share of
+ * cost (unitCost = totalActualCost / order.qty); the remainder stays as WIP on the
+ * order (still `in_progress`) until the full quantity is released. Omitting the
+ * argument completes the whole remaining quantity.
+ */
+export async function completeProductionOrder(
+  id: number,
+  serialNumbers: string[] = [],
+  qtyToComplete?: number,
+) {
   try {
     const user = await requirePermission("edit_production_orders");
     const warehouseScope = await getWarehouseScope(user);
@@ -778,6 +789,7 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
           documentNo: true,
           status: true,
           qty: true,
+          completedQty: true,
           totalActualCost: true,
           totalStandardCost: true,
           product: {
@@ -826,13 +838,35 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
       });
       if (!validWarehouse) throw new Error("Gudang default item hasil produksi tidak aktif.");
 
-      const qty = Number(order.qty);
+      const orderQty = Number(order.qty);
+      const alreadyCompleted = Number(order.completedQty ?? 0);
       const actualCost = Number(order.totalActualCost);
-      if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(actualCost) || actualCost < 0) {
+      if (!Number.isFinite(orderQty) || orderQty <= 0 || !Number.isFinite(actualCost) || actualCost < 0) {
         throw new Error("Kuantitas hasil atau biaya aktual produksi tidak valid.");
       }
-      const unitCost = Math.round((actualCost / qty) * 100) / 100;
-      const inventoryValue = safeMultiply(qty, unitCost, 2);
+      const remaining = Math.round((orderQty - alreadyCompleted) * 100) / 100;
+      if (remaining <= 0) {
+        throw new Error("Seluruh kuantitas order sudah diselesaikan.");
+      }
+      // Release quantity: default to the whole remainder (legacy behaviour).
+      const qty = qtyToComplete != null ? Math.round(Number(qtyToComplete) * 100) / 100 : remaining;
+      if (!Number.isFinite(qty) || qty <= 0) {
+        throw new Error("Kuantitas yang diselesaikan harus lebih dari 0.");
+      }
+      if (qty > remaining + 1e-9) {
+        throw new Error(`Kuantitas melebihi sisa order. Sisa yang belum selesai: ${remaining}.`);
+      }
+      const isFinal = qty >= remaining - 1e-9;
+      // A partial release needs a distinct batch/lot per step (the batch table is
+      // unique per item+batch); the final release keeps the plain document number
+      // for continuity with existing single-pass orders.
+      const releaseBatch = isFinal && alreadyCompleted === 0 ? order.documentNo : `${order.documentNo}-R${alreadyCompleted + qty}`;
+
+      // Equivalent unit cost: the whole order's cost spread over its full planned
+      // qty. A partial release takes only its share, leaving the rest as WIP
+      // (FAB-09: "Produksi parsial membagi biaya berdasarkan hasil/ekuivalen").
+      const unitCost = Math.round((actualCost / orderQty) * 100) / 100;
+      const releaseCost = safeMultiply(qty, unitCost, 2);
       const serials = serialNumbers.map((serial) => String(serial).trim()).filter(Boolean);
       if (outputItem.trackSerial) {
         if (!Number.isInteger(qty) || serials.length !== qty) {
@@ -871,7 +905,7 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
       await createInLayer(tx, {
         itemId: outputItem.id,
         warehouseId,
-        batchNumber: outputItem.trackBatch ? order.documentNo : null,
+        batchNumber: outputItem.trackBatch ? releaseBatch : null,
         stockMoveId: move.id,
         qty,
         unitCost,
@@ -880,7 +914,7 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
         await tx.itemBatch.create({
           data: {
             itemId: outputItem.id,
-            batchNumber: order.documentNo,
+            batchNumber: releaseBatch,
             manufacturingDate: new Date(),
             qty,
             warehouseId,
@@ -910,64 +944,85 @@ export async function completeProductionOrder(id: number, serialNumbers: string[
         id,
         Number(user.id),
       );
+      // Rounding variance for THIS release: what we carried into inventory
+      // (qty × unitCost) vs the slice of WIP cost released (releaseCost).
       await stockJournalService.onProductionOrderCostRoundingVariance(
         tx,
-        safeSubtract(actualCost, inventoryValue, 2),
+        safeSubtract(releaseCost, safeMultiply(qty, unitCost, 2), 2),
         order.documentNo,
         id,
         Number(user.id),
       );
 
-      const claim = await tx.productionOrder.updateMany({
-        where: { id, status: "in_progress" },
-        data: { status: "completed", endDate: new Date() },
-      });
-      if (claim.count === 0) throw new Error("Perintah produksi sudah diproses oleh pengguna lain.");
+      // Advance the completed quantity and release the equivalent share of WIP
+      // cost. On a partial release the order stays `in_progress` with the
+      // remaining cost still held as WIP (PRD FAB-09).
+      const newCompleted = Math.round((alreadyCompleted + qty) * 100) / 100;
+      const remainingCost = Math.max(0, safeSubtract(actualCost, releaseCost, 2));
       const variance = safeSubtract(
         Number(order.totalActualCost),
         Number(order.totalStandardCost),
         2,
       );
-      await tx.productionOrder.update({ where: { id }, data: { variance } });
-
-      // Production genealogy (PRD line 369 / REP-13): record the finished unit
-      // and the materials consumed, in the same transaction as completion.
-      const materialRows = await tx.productionOrderMaterial.findMany({
-        where: { productionOrderId: id },
-        select: {
-          itemId: true,
-          actualQty: true,
-          actualCost: true,
-          serialNumbers: true,
-          batchNumbers: true,
+      await tx.productionOrder.update({
+        where: { id },
+        data: {
+          completedQty: newCompleted,
+          totalActualCost: isFinal ? 0 : remainingCost,
+          variance,
+          ...(isFinal ? { status: "completed", endDate: new Date() } : {}),
         },
       });
-      await recordProductionGenealogy(tx, {
-        productionOrderId: id,
-        documentNo: order.documentNo,
-        outputItemId: outputItem.id,
-        outputQty: qty,
-        outputSerials: serials,
-        outputBatch: outputItem.trackBatch ? order.documentNo : null,
-        unitCost,
-        totalCost: actualCost,
-        completedBy: Number(user.id),
-        materials: materialRows.map((m) => {
-          const mq = Number(m.actualQty ?? 0);
-          const mc = Number(m.actualCost ?? 0);
-          return {
-            itemId: m.itemId,
-            qty: mq,
-            unitCost: mq > 0 ? Math.round((mc / mq) * 100) / 100 : 0,
-            totalCost: mc,
-            // Source lot/serial attribution captured at issue time.
-            serialNumbers: toStringArray(m.serialNumbers),
-            batchNumbers: toStringArray(m.batchNumbers),
-          };
-        }),
-      });
 
-      return { variance, totalActualCost: actualCost, totalStandardCost: Number(order.totalStandardCost) };
+      // Production genealogy (PRD line 369 / REP-13) is recorded once, on the
+      // FINAL release, so the unique-per-order record still holds under partial
+      // completion.
+      if (isFinal) {
+        const materialRows = await tx.productionOrderMaterial.findMany({
+          where: { productionOrderId: id },
+          select: {
+            itemId: true,
+            actualQty: true,
+            actualCost: true,
+            serialNumbers: true,
+            batchNumbers: true,
+          },
+        });
+        await recordProductionGenealogy(tx, {
+          productionOrderId: id,
+          documentNo: order.documentNo,
+          outputItemId: outputItem.id,
+          outputQty: orderQty,
+          outputSerials: serials,
+          outputBatch: outputItem.trackBatch ? order.documentNo : null,
+          unitCost,
+          totalCost: releaseCost,
+          completedBy: Number(user.id),
+          materials: materialRows.map((m) => {
+            const mq = Number(m.actualQty ?? 0);
+            const mc = Number(m.actualCost ?? 0);
+            return {
+              itemId: m.itemId,
+              qty: mq,
+              unitCost: mq > 0 ? Math.round((mc / mq) * 100) / 100 : 0,
+              totalCost: mc,
+              // Source lot/serial attribution captured at issue time.
+              serialNumbers: toStringArray(m.serialNumbers),
+              batchNumbers: toStringArray(m.batchNumbers),
+            };
+          }),
+        });
+      }
+
+      return {
+        variance,
+        totalActualCost: actualCost,
+        totalStandardCost: Number(order.totalStandardCost),
+        releasedQty: qty,
+        completedQty: newCompleted,
+        isFinal,
+        remainingWipCost: isFinal ? 0 : remainingCost,
+      };
     });
 
     await logActivity("complete", "ProductionOrder", id, `Menyelesaikan perintah produksi #${id}`);

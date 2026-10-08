@@ -23,9 +23,11 @@ interface Props {
   items: { id: number; label: string }[]
   outputQty: number
   outputTracksSerial: boolean
+  /** Units already released to stock (for partial completion, FAB-09). */
+  completedQty?: number
 }
 
-export function ProductionOrderActions({ orderId, status, items, outputQty, outputTracksSerial }: Props) {
+export function ProductionOrderActions({ orderId, status, items, outputQty, outputTracksSerial, completedQty = 0 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -34,6 +36,8 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
   const [issueItemId, setIssueItemId] = useState<string | null>(null)
   const [issueQty, setIssueQty] = useState("")
   const [serialNumbersText, setSerialNumbersText] = useState("")
+  const remainingQty = Math.max(0, outputQty - completedQty)
+  const [completeQty, setCompleteQty] = useState("")
 
   function doConfirm() {
     startTransition(async () => {
@@ -45,18 +49,35 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
     })
   }
 
+  function openComplete() {
+    setCompleteQty(String(remainingQty))
+    setCompleteOpen(true)
+  }
+
   function doComplete() {
     const serialNumbers = serialNumbersText
       .split(/[\n,]+/)
       .map((serial) => serial.trim())
       .filter(Boolean)
+    const qty = completeQty === "" ? undefined : Number(completeQty)
+    if (qty !== undefined && (!Number.isFinite(qty) || qty <= 0)) {
+      return showError("Kuantitas yang diselesaikan harus lebih dari 0")
+    }
+    const isPartial = qty !== undefined && qty < remainingQty
     startTransition(async () => {
-      const res = await completeProductionOrder(orderId, serialNumbers)
+      const res = await completeProductionOrder(orderId, serialNumbers, qty)
       if (!res.success) return showError(res.error || "Gagal menyelesaikan")
-      const variance = "variance" in res ? res.variance : 0
-      showSuccess(`Selesai. Varians: ${variance.toLocaleString("id-ID")}`)
+      if ("isFinal" in res && !res.isFinal) {
+        showSuccess(`Diselesaikan parsial: ${qty} unit. Sisa ${Math.round(((remainingQty - (qty ?? 0)) * 100)) / 100} unit tetap WIP.`)
+      } else {
+        const variance = "variance" in res ? res.variance : 0
+        showSuccess(`Selesai. Varians: ${variance.toLocaleString("id-ID")}`)
+      }
       setCompleteOpen(false)
-      router.refresh()
+      setSerialNumbersText("")
+      setCompleteQty("")
+      if (isPartial) router.refresh()
+      else router.refresh()
     })
   }
 
@@ -88,7 +109,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
         </Button>
       )}
       {status === "in_progress" && (
-        <Button type="button" size="sm" onClick={() => setCompleteOpen(true)} disabled={isPending}>
+        <Button type="button" size="sm" onClick={openComplete} disabled={isPending}>
           <Flag size={14} aria-hidden="true" /> Selesaikan
         </Button>
       )}
@@ -118,9 +139,25 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       >
         <div className="space-y-2">
           <p>Hasil produksi akan masuk ke persediaan dan biaya dipindahkan dari WIP.</p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="completeQty">Kuantitas diselesaikan (sudah: {completedQty}, sisa: {remainingQty})</Label>
+            <Input
+              id="completeQty"
+              type="number"
+              min="0"
+              max={remainingQty}
+              step="0.01"
+              value={completeQty}
+              onChange={(event) => setCompleteQty(event.target.value)}
+              placeholder={String(remainingQty)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Kurangi nilainya untuk menyelesaikan sebagian; sisanya tetap WIP (produksi parsial).
+            </p>
+          </div>
           {outputTracksSerial && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="productionSerials">Serial number ({outputQty} baris)</Label>
+              <Label htmlFor="productionSerials">Serial number ({(completeQty === "" ? remainingQty : Number(completeQty)) || 0} baris)</Label>
               <Textarea
                 id="productionSerials"
                 value={serialNumbersText}

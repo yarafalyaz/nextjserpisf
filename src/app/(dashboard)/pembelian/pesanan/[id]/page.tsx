@@ -38,6 +38,7 @@ export default async function PurchaseOrderDetailPage({
       items: true,
       goodsReceipts: { include: { items: true } },
       purchaseReturns: true,
+      vendorBills: { where: { status: { notIn: ["cancelled"] } }, select: { id: true } },
     },
   })
 
@@ -65,6 +66,11 @@ export default async function PurchaseOrderDetailPage({
         actions={
           <>
             <Button href={`/pembelian/pesanan/${po.id}/ubah`} variant="primary">Ubah</Button>
+            {po.vendorBills.length === 0 && po.status !== "cancelled" && (
+              <Button href={`/pembelian/tagihan/tambah?poId=${po.id}`}>
+                {po.isService ? "Buat Tagihan Jasa" : "Buat Tagihan"}
+              </Button>
+            )}
             <PrintButton />
             <DeleteButton id={po.id} action={deletePurchaseOrder} />
             <BackButton href="/pembelian/pesanan" />
