@@ -16,8 +16,9 @@ export default async function CreatePurchaseOrderPage({
 }) {
   await requirePermission("create_purchase_orders")
   const params = await searchParams
+  const prId = params.prId ? Number(params.prId) : undefined
 
-  const [vendors, items] = await Promise.all([
+  const [vendors, items, approvedPRs, preselectedPR] = await Promise.all([
     prisma.vendor.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -28,6 +29,18 @@ export default async function CreatePurchaseOrderPage({
       orderBy: { name: "asc" },
       select: { id: true, sku: true, name: true, cost: true, unitOfMeasure: true },
     }),
+    // PR yang siap dipesan (belum dibuatkan PO): approved / partial_ordered.
+    prisma.purchaseRequest.findMany({
+      where: { status: { in: ["approved", "partial_ordered"] } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, documentNo: true, title: true },
+    }),
+    prId
+      ? prisma.purchaseRequest.findUnique({
+          where: { id: prId },
+          include: { items: true },
+        })
+      : Promise.resolve(null),
   ])
 
   return (
@@ -39,7 +52,24 @@ export default async function CreatePurchaseOrderPage({
       <PurchaseOrderForm
         vendors={vendors}
         items={JSON.parse(JSON.stringify(items))}
-        defaultPrId={params.prId ? Number(params.prId) : undefined}
+        defaultPrId={preselectedPR?.id}
+        purchaseRequests={JSON.parse(JSON.stringify(approvedPRs))}
+        preselectedPR={
+          preselectedPR
+            ? JSON.parse(
+                JSON.stringify({
+                  id: preselectedPR.id,
+                  documentNo: preselectedPR.documentNo,
+                  title: preselectedPR.title,
+                  items: preselectedPR.items.map((it) => ({
+                    itemId: it.itemId,
+                    qty: Number(it.qty),
+                    notes: it.notes,
+                  })),
+                }),
+              )
+            : null
+        }
       />
     </div>
   )

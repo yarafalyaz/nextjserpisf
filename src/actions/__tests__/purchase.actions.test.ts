@@ -190,6 +190,35 @@ describe("Purchase Order Actions", () => {
     expect(arg.data.workOrderId).toBe(9)
   })
 
+  it("createPurchaseOrder links the purchase request (PR -> PO)", async () => {
+    const { onPurchaseOrderCreated } = await import("@/lib/hooks/purchase-order.hook")
+    vi.mocked(onPurchaseOrderCreated).mockClear()
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      purchaseRequestId: "42",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.create.mock.calls[0][0]
+    expect(arg.data.purchaseRequestId).toBe(42)
+    // The PR-status hook must run for the linked request.
+    expect(vi.mocked(onPurchaseOrderCreated)).toHaveBeenCalled()
+  })
+
+  it("createPurchaseOrder without a purchase request leaves the link null", async () => {
+    const { onPurchaseOrderCreated } = await import("@/lib/hooks/purchase-order.hook")
+    vi.mocked(onPurchaseOrderCreated).mockClear()
+    await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    const arg = mocks.prismaMock.purchaseOrder.create.mock.calls[0][0]
+    expect(arg.data.purchaseRequestId).toBeNull()
+    expect(vi.mocked(onPurchaseOrderCreated)).not.toHaveBeenCalled()
+  })
+
   describe("createServicePurchaseOrderFromWorkOrder (PRD FAB-08 / PUR-17)", () => {
     function wireServiceWo() {
       mocks.prismaMock.vendor.findFirst.mockResolvedValue({ id: 3 })

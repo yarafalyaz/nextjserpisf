@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,6 +50,13 @@ interface PurchaseOrderFormProps {
     unitOfMeasure: string;
   }[];
   defaultPrId?: number;
+  purchaseRequests?: { id: number; documentNo: string; title?: string | null }[];
+  preselectedPR?: {
+    id: number;
+    documentNo: string;
+    title?: string | null;
+    items: { itemId: number; qty: number; notes?: string | null }[];
+  } | null;
 }
 
 interface POItem {
@@ -62,11 +70,22 @@ export function PurchaseOrderForm({
   vendors,
   items,
   defaultPrId,
+  purchaseRequests,
+  preselectedPR,
   order,
 }: PurchaseOrderFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isService, setIsService] = useState<boolean>((order as any)?.isService ?? false);
+  const [linkedPR, setLinkedPR] = useState<{
+    id: number;
+    documentNo: string;
+    title?: string | null;
+  } | null>(
+    preselectedPR
+      ? { id: preselectedPR.id, documentNo: preselectedPR.documentNo, title: preselectedPR.title }
+      : null,
+  );
   const [poItems, setPoItems] = useState<POItem[]>(
     order?.items && order.items.length > 0
       ? order.items.map((it) => ({
@@ -75,7 +94,17 @@ export function PurchaseOrderForm({
           unitPrice: it.unitPrice,
           discount: it.discount ?? 0,
         }))
-      : [{ itemId: 0, qty: 1, unitPrice: 0, discount: 0 }],
+      : preselectedPR && preselectedPR.items.length > 0
+        ? preselectedPR.items.map((it) => {
+            const master = items.find((i) => i.id === it.itemId);
+            return {
+              itemId: it.itemId,
+              qty: it.qty,
+              unitPrice: master ? Number(master.cost) : 0,
+              discount: 0,
+            };
+          })
+        : [{ itemId: 0, qty: 1, unitPrice: 0, discount: 0 }],
   );
 
   const {
@@ -97,6 +126,32 @@ export function PurchaseOrderForm({
       purchaseRequestId: defaultPrId,
     },
   });
+
+  function handlePRChange(prId: string) {
+    const id = prId ? Number(prId) : undefined;
+    setValue("purchaseRequestId", id);
+    if (!id) {
+      setLinkedPR(null);
+      return;
+    }
+    const pr = purchaseRequests?.find((p) => p.id === id);
+    setLinkedPR(pr ? { id: pr.id, documentNo: pr.documentNo, title: pr.title } : null);
+    // Prefill items from the selected PR (only when the grid is still empty/untouched).
+    const full = preselectedPR && preselectedPR.id === id ? preselectedPR : null;
+    if (full && full.items.length > 0) {
+      setPoItems(
+        full.items.map((it) => {
+          const master = items.find((i) => i.id === it.itemId);
+          return {
+            itemId: it.itemId,
+            qty: it.qty,
+            unitPrice: master ? Number(master.cost) : 0,
+            discount: 0,
+          };
+        }),
+      );
+    }
+  }
 
   function addItem() {
     setPoItems([...poItems, { itemId: 0, qty: 1, unitPrice: 0, discount: 0 }]);
@@ -157,6 +212,55 @@ export function PurchaseOrderForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <FormCard>
+        {(purchaseRequests && purchaseRequests.length > 0) || linkedPR ? (
+          <FormSection title="Permintaan Pembelian" columns={1}>
+            {linkedPR ? (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-muted-foreground">Terkait Permintaan</span>
+                    <Link
+                      href={`/pembelian/permintaan/${linkedPR.id}`}
+                      className="font-mono text-sm font-medium text-foreground hover:underline"
+                    >
+                      {linkedPR.documentNo}
+                    </Link>
+                  </div>
+                  {linkedPR.title ? (
+                    <span className="text-sm text-muted-foreground">{linkedPR.title}</span>
+                  ) : null}
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Item di bawah terisi dari permintaan ini. Setelah PO disimpan, permintaan
+                  otomatis ditandai dipesan.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Bila PO ini dibuat untuk memenuhi permintaan pembelian, pilih permintaannya di bawah.
+              </p>
+            )}
+            {purchaseRequests && purchaseRequests.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="purchaseRequestId">Permintaan Pembelian (opsional)</Label>
+                <Combobox
+                  id="purchaseRequestId"
+                  value={linkedPR ? String(linkedPR.id) : null}
+                  onChange={(key) => handlePRChange(key ?? "")}
+                  placeholder="Cari permintaan (No. dokumen)..."
+                  options={purchaseRequests.map((p) => ({
+                    value: String(p.id),
+                    label: p.title ? `${p.documentNo} — ${p.title}` : p.documentNo,
+                  }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Kosongkan bila PO tidak terkait permintaan (mis. pembelian langsung).
+                </p>
+              </div>
+            )}
+          </FormSection>
+        ) : null}
+
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="vendorId">Pemasok *</Label>

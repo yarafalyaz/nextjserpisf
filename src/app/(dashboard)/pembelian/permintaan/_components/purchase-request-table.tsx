@@ -1,6 +1,6 @@
 "use client"
 
-import { createColumnHelper } from "@tanstack/react-table"
+import { createColumnHelper } from "@/lib/table"
 import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
@@ -54,6 +54,25 @@ const columns = [
     cell: (info) => {
       const val = info.getValue()
       return <StatusChip status={val} />
+    },
+  }),
+  columnHelper.display({
+    id: "pesanan",
+    header: "Pesanan",
+    enableSorting: false,
+    cell: (info) => {
+      const pr = info.row.original
+      if (pr.status !== "approved" && pr.status !== "partial_ordered") {
+        return <span className="text-muted-foreground">-</span>
+      }
+      return (
+        <Link
+          href={`/pembelian/pesanan/tambah?prId=${pr.id}`}
+          className="text-primary hover:underline font-medium"
+        >
+          Buat PO
+        </Link>
+      )
     },
   }),
   columnHelper.display({

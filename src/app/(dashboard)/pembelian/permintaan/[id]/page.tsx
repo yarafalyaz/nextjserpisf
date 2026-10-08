@@ -53,6 +53,11 @@ export default async function PurchaseRequestDetailPage({
         badge={<StatusChip status={request.status} />}
         actions={
           <>
+            {(request.status === "approved" || request.status === "partial_ordered") && (
+              <Button href={`/pembelian/pesanan/tambah?prId=${request.id}`} variant="primary">
+                Buat Pesanan
+              </Button>
+            )}
             <Button href={`/pembelian/permintaan/${request.id}/ubah`} variant="primary">Ubah</Button>
             <PrintButton />
             <DeleteButton id={request.id} action={deletePurchaseRequest} />
