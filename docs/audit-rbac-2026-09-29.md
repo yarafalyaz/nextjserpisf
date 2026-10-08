@@ -265,16 +265,15 @@ Audit ulang setelah perbaikan (skrip ad-hoc, semuanya bersih):
 
 ---
 
-## 8. Sisa temuan (belum diubah)
+## 8. Sisa temuan & tindak lanjut lanjutan
 
-1. **9 halaman hub modul tanpa guard**: `/master`, `/penjualan`, `/pembelian`,
-   `/inventaris`, `/produksi`, `/sdm`, `/keuangan`, `/crm`, `/laporan`. Semua
-   berupa grid navigasi statis; seluruh link tujuannya sudah dijaga. Gerbang yang
-   tepat adalah "punya salah satu izin modul", bukan satu izin tunggal, sehingga
-   perlu helper khusus bila ingin ditutup.
-2. **Komentar lama di `ActionDropdown`** menyebut rute tanpa `ROUTE_PERMS` akan
-   "always show", padahal implementasinya menyembunyikan tombol. Nama/konsistensi
-   komentar bisa diperbaiki agar tidak menyesatkan.
+1. **9 halaman hub modul navigasi (SELESAI - 2026-09-29)**:
+   - Ditambahkan helper `requireAnyPermission(permissions: string[])` dan `hasAnyPermission` di `src/lib/auth/permissions.ts`.
+   - 9 halaman hub (`/master`, `/penjualan`, `/pembelian`, `/inventaris`, `/produksi`, `/sdm`, `/keuangan`, `/crm`, `/laporan`) kini dipasangi guard (`requireAnyPermission` untuk 8 modul dan `requirePermission("view_reports")` untuk laporan).
+   - `ModuleGrid` diperbarui agar menyaring card link berdasarkan `userPermissions` (super_admin tetap melihat seluruh modul).
+   - Invarian dikunci di `src/__tests__/page-action-permission-parity.test.ts` (test baru untuk 13 halaman hub modul) dan `src/__tests__/permission-seed-parity.test.ts` (memastikan semua izin `requireAnyPermission` ada di seed).
+2. **Komentar dan peringatan di `ActionDropdown` (SELESAI - 2026-09-29)**:
+   - JSDoc `editPermission`/`deletePermission` dan pesan `console.warn` diselaraskan agar tidak lagi menyebut "always show" / "show for all users", melainkan fail-closed (tombol disembunyikan bagi non-super_admin bila route tidak terdaftar).
 3. `ROUTE_PERMS` untuk `/inventaris/rak` memakai `create_warehouses` (bukan
    `edit_warehouses`) — konsisten dengan action `updateRack`, tetapi secara
    semantik perlu ditinjau ulang bila kelak rak dikelola lebih luas.
