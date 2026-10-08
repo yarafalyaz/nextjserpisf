@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Tambah Barang" }
 export default async function CreateItemPage() {
   await requirePermission("create_items")
 
-  const [categories, brands, vendors, warehouses, racks, rackRows, generatedCode] = await Promise.all([
+  const [categories, brands, vendors, warehouses, racks, rackRows, generatedCode, unitOptions] = await Promise.all([
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -22,6 +22,8 @@ export default async function CreateItemPage() {
     prisma.rack.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, warehouseId: true } }),
     prisma.rackRow.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, rackId: true } }),
     peekNextDocumentNumber("ITM", "simple"),
+    // Master satuan → the "Satuan" dropdown (previously a hard-coded list).
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
   ])
   const settings = await getSystemSettings()
   const enableAutoCode = settings.enableAutoItemCode !== false
@@ -45,6 +47,7 @@ export default async function CreateItemPage() {
         warehouses={warehouses}
         racks={racks}
         rackRows={rackRows}
+        unitOptions={unitOptions}
         generatedCode={generatedCode}
         enableAutoCode={enableAutoCode}
         baseUrl={baseUrl}
