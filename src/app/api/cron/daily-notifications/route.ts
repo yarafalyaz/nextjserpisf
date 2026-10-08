@@ -69,7 +69,17 @@ export async function GET(request: Request) {
   `
 
   if (lowStockItems.length > 0) {
-    const count = lowStockItems.length
+    // Headline count must be the TRUE total, not the LIMIT-20 sample (else a
+    // shop with 200 low items sees "20 Menipis"). Sample list stays capped.
+    const [{ count }] = await prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) AS count
+      FROM items
+      WHERE is_active = true
+        AND min_stock > 0
+        AND qty_on_hand <= min_stock
+        AND deleted_at IS NULL
+    `
+    const total = Number(count)
     const itemList = lowStockItems
       .slice(0, 5)
       .map((i) => `• ${i.name} (Stok: ${i.qty_on_hand}, Min: ${i.min_stock})`)
@@ -77,26 +87,27 @@ export async function GET(request: Request) {
 
     await notificationService.notifyUsers(
       adminIds,
-      `${count} Barang Stok Menipis`,
-      itemList + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
+      `${total} Barang Stok Menipis`,
+      itemList + (total > 5 ? `\n...dan ${total - 5} lainnya` : ""),
       "warning"
     )
-    results.lowStock = count
+    results.lowStock = total
   }
 
   // 2. Overdue invoices
-  const overdueInvoices = await prisma.salesInvoice.findMany({
-    where: {
-      dueDate: { lt: dayStart },
-      paymentStatus: { not: "paid" },
-      status: { not: "cancelled" },
-      deletedAt: null,
-    },
-    take: 20,
-  })
+  const overdueWhere = {
+    dueDate: { lt: dayStart },
+    paymentStatus: { not: "paid" as const },
+    status: { not: "cancelled" as const },
+    deletedAt: null,
+  }
+  const [overdueCount, overdueInvoices] = await Promise.all([
+    prisma.salesInvoice.count({ where: overdueWhere }),
+    prisma.salesInvoice.findMany({ where: overdueWhere, take: 20 }),
+  ])
 
-  if (overdueInvoices.length > 0) {
-    const count = overdueInvoices.length
+  if (overdueCount > 0) {
+    const count = overdueCount
     const totalOverdue = overdueInvoices.reduce(
       (sum, inv) => sum + (Number(inv.grandTotal) - Number(inv.paidAmount)),
       0

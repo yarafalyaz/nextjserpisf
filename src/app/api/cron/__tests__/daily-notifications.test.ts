@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   prisma: {
     user: { findMany: vi.fn().mockResolvedValue([{ id: 1 }]) },
     $queryRaw: vi.fn().mockResolvedValue([]),
-    salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
+    salesInvoice: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
     purchaseOrder: { findMany: vi.fn().mockResolvedValue([]) },
     attendance: { findMany: vi.fn().mockResolvedValue([]) },
     holiday: { findFirst: vi.fn().mockResolvedValue(null) },
