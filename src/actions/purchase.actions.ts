@@ -2100,15 +2100,46 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
       });
       if (latestStatus && latestStatus.status !== "draft")
         throw new Error("Hanya GR draft yang dapat diedit");
-      // Snapshot ordered qty per item so "Qty Dipesan" survives an edit — the
-      // GR line carries its own copy of the PO quantity.
+      // Lock the (possibly new) PO and re-apply the SAME guards the create path
+      // enforces: the PO must be in a receivable status, and every submitted line
+      // must belong to the PO. Without these, an edit could re-point a draft GR at
+      // a draft/cancelled PO or add an item that is not on the PO — the verification
+      // over-receive guard only iterates the PO's own lines, so an off-PO item is
+      // never capped and unordered stock is received.
+      await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       const poForItems = await tx.purchaseOrder.findUniqueOrThrow({
         where: { id: v.purchaseOrderId },
-        select: { items: { select: { itemId: true, qty: true } } },
+        select: { status: true, items: { select: { itemId: true, qty: true } } },
       });
+      if (
+        poForItems.status !== "approved" &&
+        poForItems.status !== "ordered" &&
+        poForItems.status !== "partial_received"
+      ) {
+        throw new Error(
+          `Penerimaan barang hanya bisa dibuat dari PO berstatus 'approved', 'ordered', atau 'partial_received' (status saat ini: '${poForItems.status}').`,
+        );
+      }
       const orderedQtyByItem = new Map(
         poForItems.items.map((i) => [i.itemId, Number(i.qty)]),
       );
+      // Membership check: aggregate per item so a duplicate line can't pass two
+      // independent checks.
+      const submittedQtyByItem = new Map<number, number>();
+      for (const item of items) {
+        if (item.itemId <= 0 || item.qty <= 0) continue;
+        submittedQtyByItem.set(
+          item.itemId,
+          (submittedQtyByItem.get(item.itemId) ?? 0) + Number(item.qty),
+        );
+      }
+      for (const itemId of submittedQtyByItem.keys()) {
+        if ((orderedQtyByItem.get(itemId) ?? 0) === 0) {
+          throw new Error(
+            `Item #${itemId} tidak ada dalam pesanan pembelian (PO).`,
+          );
+        }
+      }
       const updated = await tx.goodsReceipt.update({
         where: { id },
         data: {
@@ -2198,6 +2229,9 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
     const updPrCostMap = new Map(
       updPrCostRows.map((r) => [r.id, Number(r.cost ?? 0)]),
     );
+    // Entered-unit cost map, resolved inside the tx once the GR UoM is known
+    // (mirrors the create path's prDocumentCostMap).
+    let updPrDocumentCostMap = updPrCostMap;
 
     // Keep existing documentNo (do not regenerate), and replace items atomically.
     // The over-return guard runs INSIDE the transaction (under a PO row lock) to
@@ -2226,8 +2260,31 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
             },
             itemId: { in: updPrIds },
           },
-          select: { itemId: true, qty: true },
+          select: { itemId: true, qty: true, uom: true },
         });
+        // Entered-unit cost = base cost × UoM factor, exactly as the create path
+        // does. PurchaseReturnItem.qty is stored in the ENTERED unit (the stock
+        // hook multiplies by the same factor to reach base), so storing the base
+        // cost verbatim here would book the AP-relief journal factor× too small
+        // for any item with a UoM conversion — a create/edit asymmetry.
+        const updUomByItem = new Map<number, string | null>();
+        for (const line of grItems) {
+          if (!updUomByItem.has(line.itemId)) updUomByItem.set(line.itemId, line.uom);
+        }
+        const updFactorRows = await Promise.all(
+          updPrIds.map(
+            async (itemId) =>
+              [itemId, await toBaseFactor(tx, itemId, updUomByItem.get(itemId))] as const,
+          ),
+        );
+        const updFactorByItem = new Map(updFactorRows);
+        updPrDocumentCostMap = new Map(
+          [...updPrCostMap].map(([itemId, cost]) => [
+            itemId,
+            cost * (updFactorByItem.get(itemId) ?? 1),
+          ]),
+        );
+
         const receivedQtyByItem = new Map<number, number>();
         for (const it of grItems) {
           receivedQtyByItem.set(
@@ -2293,7 +2350,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
               // pattern) so a tampered 0/undefined qty is treated as essentially zero
               // rather than crashing the Prisma insert with a string-to-Int error.
               qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: updPrCostMap.get(Number(item.itemId)) ?? 0,
+              cost: updPrDocumentCostMap.get(Number(item.itemId)) ?? 0,
             })),
           },
         },

@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => {
     batch: buildModelMock(),
     vendor: buildModelMock(),
     item: buildModelMock(),
+    uomConversion: buildModelMock(),
     transactionAttachment: buildModelMock(),
     approvalWorkflow: buildModelMock(),
     approval: buildModelMock(),
@@ -1495,7 +1496,7 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
   it("updateGoodsReceipt succeeds when status is draft inside transaction", async () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
     mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValueOnce({ status: "draft" })
-    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, items: [] })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved", items: [] })
     mocks.prismaMock.goodsReceipt.update.mockResolvedValueOnce({ id: 1 })
     const res = await actions.updateGoodsReceipt(1, fdMap({ date: "2026-06-12", purchaseOrderId: "1", warehouseId: "1" }))
     expect(res?.success).toBe(true)
@@ -1516,12 +1517,63 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
     mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
     mocks.prismaMock.purchaseReturn.findUnique.mockResolvedValueOnce({ status: "draft" })
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 10, cost: 200 }])
-    
+
     const res = await actions.updatePurchaseReturn(1, fdMap({
       purchaseOrderId: "1", date: "2026-06-12",
       items: JSON.stringify([{ itemId: 10, qty: 5 }])
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("updatePurchaseReturn stores the entered-unit cost (base cost × UoM factor) like create", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseReturn.findUnique.mockResolvedValueOnce({ status: "draft" })
+    mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 10, cost: 200 }])
+    // GR line entered in "BOX"; item's base unit is "PCS"; conversion factor 12.
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
+      { itemId: 10, qty: 12, uom: "BOX" },
+    ])
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ unitOfMeasure: "PCS" })
+    mocks.prismaMock.uomConversion.findUnique.mockResolvedValue({ factorToBase: 12 })
+
+    const res = await actions.updatePurchaseReturn(1, fdMap({
+      purchaseOrderId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 10, qty: 5 }]),
+    }))
+
+    expect(res?.success).toBe(true)
+    const updateArg = mocks.prismaMock.purchaseReturn.update.mock.calls.at(-1)?.[0]
+    // 200 (base cost) × 12 (factor) = 2400, else the AP-relief journal is 12× small.
+    expect(updateArg.data.items.create[0].cost).toBe(2400)
+  })
+
+  it("updateGoodsReceipt refuses when the (new) PO is not in a receivable status", async () => {
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValueOnce({ status: "draft" })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      status: "draft",
+      items: [],
+    })
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      date: "2026-06-12", purchaseOrderId: "1", warehouseId: "1",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/approved.*ordered|berstatus/i)
+  })
+
+  it("updateGoodsReceipt refuses an item that is not on the PO", async () => {
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValueOnce({ status: "draft" })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1,
+      status: "approved",
+      items: [{ itemId: 101, qty: 10 }],
+    })
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      date: "2026-06-12", purchaseOrderId: "1", warehouseId: "1",
+      items: JSON.stringify([{ itemId: 999, qty: 1, unitCost: 100 }]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tidak ada dalam pesanan/i)
   })
 
   it("createPurchaseReturn runs cost map callback", async () => {

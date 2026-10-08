@@ -1409,7 +1409,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
 
   const itemsJson = v.items
   const items = itemsJson
-    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number }>>(itemsJson) ?? [])
+    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; description?: string | null }>>(itemsJson) ?? [])
     : null
 
   const salesOrder = await prisma.$transaction(async (tx) => {
@@ -1452,7 +1452,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
             return {
               salesOrderId: id,
               itemId: item.itemId,
-              description: null,
+              description: item.description ?? null,
               qty: safeQty,
               unitPrice: safePrice,
               discount: safeDiscount,
@@ -1505,7 +1505,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   const v = parsed.data
 
   const itemsJson = v.items
-  const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null }>>(itemsJson) ?? []) : null
+  const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null; description?: string | null }>>(itemsJson) ?? []) : null
 
   const result = await prisma.$transaction(async (tx) => {
     if (typeof tx.$executeRaw === "function") {
@@ -1565,7 +1565,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
             return {
               salesInvoiceId: id,
               itemId: item.itemId,
-              description: null,
+              description: item.description ?? null,
               qty: safeQty,
               uom: item.uom || null,
               unitPrice: safePrice,
