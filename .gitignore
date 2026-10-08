@@ -67,3 +67,21 @@ memory/
 .autopilot/
 silengkap-autopilot.log
 *-autopilot.log
+
+# Local AI-agent / editor tooling config & skills (per-developer, not product code)
+.commandcode/
+.mcp.json
+opencode.json
+/skills/
+
+# Ad-hoc one-off debug/diagnostic scripts (not part of the app)
+/scripts/tmp-*
+/scripts/check-categories.ts
+/scripts/check-counters.ts
+/scripts/check-draft-dps.ts
+/scripts/diag-currencies.ts
+/search_oke.ts
+
+# Loose scratch assets at repo root (manuals, sample dumps — keep out of git)
+/QUO.pdf
+/Sample/
