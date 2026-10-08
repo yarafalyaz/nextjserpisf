@@ -215,11 +215,10 @@ export async function calculateStandardCost(productId: number) {
       data: { standardCost: total },
     });
 
-    // Persisted rollup is rendered by the product pages, so refresh them. (This
-    // action is not wired to any UI yet: production-order flows deliberately
-    // derive the rollup inline - see createProductionOrder - to avoid this
-    // action's `edit_products` check. Revalidating here keeps a future
-    // "recalculate" button from leaving the pages stale.)
+    // Persisted rollup is rendered by the product pages, so refresh them. Wired
+    // to the product detail page's "Hitung Ulang HPP Standar" button; the
+    // production-order flows still derive the rollup inline (see
+    // createProductionOrder) to avoid this action's `edit_products` check.
     revalidatePath("/produksi/products");
     revalidatePath(`/produksi/products/${productId}`);
 
