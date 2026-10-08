@@ -14,6 +14,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppTimePicker } from "@/components/ui/time-picker"
 import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { resolveInventoryAccounts } from "@/lib/utils/account-automap"
 import { Button } from "@/components/ui/button"
 import { SafeImage } from "@/components/ui/safe-image"
 import { Plus, Trash2 } from "lucide-react"
@@ -368,6 +369,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       return ""
     }
 
+    // Resolve Persediaan + clearing together so they never collapse onto the
+    // same account (that would make the GR journal net to zero). See
+    // resolveInventoryAccounts for the rule + tests.
+    const { inventoryAccountId, purchaseInventoryAccountId } = resolveInventoryAccounts(accounts)
+
     setSalesReceivable(findAccount([["piutang", "usaha"], ["piutang", "dagang"], ["receivable"]]))
     setSalesRevenue(findAccount([["pendapatan", "penjualan"], ["revenue"], ["penjualan"]]))
     setSalesTax(findAccount([["ppn", "keluaran"], ["ppn", "keluar"], ["tax", "out"]]))
@@ -375,7 +381,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     setSalesAcc(findAccount([["pendapatan", "penjualan"], ["akun", "penjualan"], ["sales", "account"], ["penjualan"]]))
 
     setPurchasePayable(findAccount([["hutang", "usaha"], ["utang", "usaha"], ["hutang", "dagang"], ["payable"]]))
-    setPurchaseInventory(findAccount([["persediaan", "barang", "dagang"], ["persediaan", "sparepart"], ["persediaan"], ["inventory"]]))
+    setPurchaseInventory(purchaseInventoryAccountId)
     setPurchaseTax(findAccount([["ppn", "masukan"], ["ppn", "masuk"], ["tax", "in"]]))
     setPurchaseExpense(findAccount([["beban", "pembelian"], ["purchase", "expense"]]))
     setPurchaseDiscount(findAccount([["diskon", "pembelian"], ["purchase", "discount"]]))
@@ -383,7 +389,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     setPurchaseAdminFee(findAccount([["admin", "bank"], ["admin", "transfer"], ["beban", "admin"], ["bank", "fee"]]))
     setPurchaseReturn(findAccount([["retur", "pembelian"], ["purchase", "return"]]))
 
-    setInventoryAcc(findAccount([["persediaan", "barang", "dagang"], ["persediaan", "sparepart"], ["persediaan"], ["inventory"]]))
+    setInventoryAcc(inventoryAccountId)
     setInventoryAdjustment(findAccount([["penyesuaian", "persediaan"], ["inventory", "adj"]]))
     setStockAdjustmentAcc(findAccount([["penyesuaian", "persediaan"], ["inventory", "adj"], ["stock", "adjustment"]]))
     setCogsAcc(findAccount([["harga", "pokok", "penjualan"], ["hpp"], ["cogs"]]))
