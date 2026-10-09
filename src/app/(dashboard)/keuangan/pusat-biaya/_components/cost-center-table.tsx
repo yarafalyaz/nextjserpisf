@@ -8,9 +8,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteCostCenter } from "@/actions/finance.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { cn } from "@/lib/utils"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface CostCenterData {
   id: number
+  slug: string | null
   code: string
   name: string
   parentId?: number | null
@@ -33,7 +35,7 @@ const columns = [
       return (
         <div className={cn("flex items-center gap-1.5", row._depth && `ml-${row._depth * 4}`)}>
           {hasChildren && <ChevronRight className="size-3 text-muted-foreground shrink-0" />}
-          <Link href={`/keuangan/pusat-biaya/${row.id}`} className="text-foreground hover:underline font-medium">
+          <Link href={entityHref("/keuangan/pusat-biaya", row)} className="text-foreground hover:underline font-medium">
             {info.getValue()}
           </Link>
         </div>
@@ -46,8 +48,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/keuangan/pusat-biaya/${info.row.original.id}`}
-        editHref={`/keuangan/pusat-biaya/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/keuangan/pusat-biaya", info.row.original)}
+        editHref={entityEditHref("/keuangan/pusat-biaya", info.row.original)}
         deleteAction={deleteCostCenter}
         deleteId={info.row.original.id}
       />

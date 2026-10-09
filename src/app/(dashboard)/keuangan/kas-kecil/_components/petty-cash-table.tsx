@@ -7,9 +7,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePettyCash } from "@/actions/finance.actions"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface PettyCashData {
   id: number
+  slug: string | null
   documentNo: string
   date: string
   type: string
@@ -27,7 +29,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/keuangan/kas-kecil/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/keuangan/kas-kecil", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -70,7 +72,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/keuangan/kas-kecil/${info.row.original.id}`}
+        viewHref={entityHref("/keuangan/kas-kecil", info.row.original)}
         deleteAction={deletePettyCash}
         deleteId={info.row.original.id}
         deletePermission="delete_petty_cash"

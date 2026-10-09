@@ -39,6 +39,7 @@ export default async function ApprovalsPage({
 
   const data = approvals.map((a) => ({
     id: a.id,
+    slug: a.slug,
     workflowName: a.workflow.name,
     referenceType: a.referenceType,
     referenceId: a.referenceId,

@@ -1,0 +1,116 @@
+export const dynamic = "force-dynamic";
+
+import { prisma } from "@/lib/db/prisma";
+import { formatDate, formatCurrency } from "@/lib/utils/format";
+import { notFound } from "next/navigation";
+import { DeleteButton } from "@/components/ui/delete-button";
+import { deleteBudget } from "@/actions/finance.actions";
+import { PageHeader, BackButton } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import { Pencil } from "lucide-react";
+
+import type { Metadata } from "next";
+
+import { requirePermission } from "@/lib/auth/permissions";
+import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { entityEditHref } from "@/lib/utils/entity-url";
+export const metadata: Metadata = { title: "Anggaran" };
+
+export default async function BudgetDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  await requirePermission("view_budgets");
+
+  const { slug } = await params;
+
+  const budget = await resolveEntity(
+    { segment: slug, fallbackWhere: {} },
+    {
+      bySlug: (s) => prisma.budget.findFirst({ where: { slug: s } }),
+      byId: (id) => prisma.budget.findUnique({ where: { id } }),
+    },
+  );
+
+  if (!budget) notFound();
+
+  const [account, costCenter] = await Promise.all([
+    budget.accountId
+      ? prisma.account.findUnique({
+          where: { id: budget.accountId },
+          select: { code: true, name: true },
+        })
+      : Promise.resolve(null),
+    budget.costCenterId
+      ? prisma.costCenter.findUnique({
+          where: { id: budget.costCenterId },
+          select: { code: true, name: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title={`Anggaran: ${budget.name}`}
+        breadcrumbs={[
+          { label: "Dasbor", href: "/" },
+          { label: "Keuangan", href: "/keuangan" },
+          { label: "Anggaran", href: "/keuangan/anggaran" },
+          { label: budget.name },
+        ]}
+        actions={
+          <>
+            <Button
+              href={entityEditHref("/keuangan/anggaran", budget)}
+              variant="primary"
+            >
+              <Pencil size={14} /> Ubah
+            </Button>
+            <DeleteButton id={budget.id} action={deleteBudget} />
+            <BackButton href="/keuangan/anggaran" />
+          </>
+        }
+      />
+
+      <DetailCard>
+        <DetailField label="Nama" value={budget.name} />
+        <DetailField
+          label="Jumlah Anggaran"
+          value={formatCurrency(Number(budget.amount))}
+        />
+        <DetailField
+          label="Akun"
+          value={
+            budget.accountId != null
+              ? account
+                ? `${account.code} - ${account.name}`
+                : `#${budget.accountId}`
+              : "-"
+          }
+        />
+        {budget.costCenterId && (
+          <DetailField
+            label="Pusat Biaya"
+            value={
+              costCenter
+                ? `${costCenter.code} - ${costCenter.name}`
+                : `#${budget.costCenterId}`
+            }
+          />
+        )}
+        <DetailField
+          label="Tanggal Mulai"
+          value={formatDate(budget.startDate)}
+        />
+        <DetailField
+          label="Tanggal Selesai"
+          value={formatDate(budget.endDate)}
+        />
+        <DetailField label="Dibuat" value={formatDate(budget.createdAt)} />
+      </DetailCard>
+    </div>
+  );
+}

@@ -19,6 +19,7 @@ import {
 } from "@/lib/validations/asset.schemas";
 import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
+import { nextSlug } from "@/lib/utils/slug-db";
 
 // ==================== ASSET GL HELPERS ====================
 // Asset GL accounts resolve with the SAME precedence as depreciation:
@@ -85,6 +86,7 @@ export async function createAssetCategory(formData: FormData) {
 
     const category = await prisma.assetCategory.create({
       data: {
+        slug: await nextSlug("assetCategory", data.name),
         name: data.name,
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
@@ -123,6 +125,7 @@ export async function createAssetBrand(formData: FormData) {
 
     const brand = await prisma.assetBrand.create({
       data: {
+        slug: await nextSlug("assetBrand", data.name),
         name: data.name,
       },
     });
@@ -147,6 +150,10 @@ export async function createAssetTransfer(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
 
+    // AssetTransfer has no name/number of its own; slug falls back to the
+    // constant stem "transfer" (→ transfer, transfer-2, ...).
+    const slug = await nextSlug("assetTransfer", "transfer")
+
     // Atomicity guard: a successful assetTransfer.create followed by a failed
     // asset.update (FK violation, transient DB error, lost connection) would
     // orphan the transfer record with a stale asset.location, silently desyncing
@@ -158,6 +165,7 @@ export async function createAssetTransfer(formData: FormData) {
       async (tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0]) => {
         const created = await tx.assetTransfer.create({
           data: {
+            slug,
             assetId: data.assetId,
             fromLocation: data.fromLocation ?? null,
             toLocation: data.toLocation,
@@ -342,6 +350,7 @@ export async function updateAssetBrand(id: number, formData: FormData) {
     await prisma.assetBrand.update({
       where: { id },
       data: {
+        slug: await nextSlug("assetBrand", data.name, { excludeId: id }),
         name: data.name,
       },
     });
@@ -369,6 +378,7 @@ export async function updateAssetCategory(id: number, formData: FormData) {
     await prisma.assetCategory.update({
       where: { id },
       data: {
+        slug: await nextSlug("assetCategory", data.name, { excludeId: id }),
         name: data.name,
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
@@ -447,6 +457,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
         const updated = await tx.assetTransfer.update({
           where: { id },
           data: {
+            slug: await nextSlug("assetTransfer", "transfer", { excludeId: id }),
             assetId: data.assetId,
             fromLocation: data.fromLocation ?? null,
             toLocation: data.toLocation,
@@ -527,6 +538,7 @@ export async function createAsset(formData: FormData) {
     const asset = await prisma.$transaction(async (tx) => {
       const created = await tx.asset.create({
         data: {
+          slug: await nextSlug("asset", data.name),
           name: data.name,
           code: code,
           categoryId: data.categoryId ?? null,
@@ -656,6 +668,7 @@ export async function updateAsset(id: number, formData: FormData) {
     await prisma.asset.update({
       where: { id },
       data: {
+        slug: await nextSlug("asset", data.name, { excludeId: id }),
         name: data.name,
         categoryId: data.categoryId ?? null,
         purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,

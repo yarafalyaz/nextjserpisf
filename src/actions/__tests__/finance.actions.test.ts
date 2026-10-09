@@ -786,6 +786,7 @@ describe("Additional Branches", () => {
 
   it("updatePettyCash covers attachment update", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "PC-01" })
     mocks.prismaMock.pettyCash.update.mockResolvedValue({ id: 1 })
     const fd = fdMap({ amount: 100, type: "IN", date: "2024-01-01", accountId: 1, attachmentIds: "[9, 10]" })
     const res = await actions.updatePettyCash(1, fd)

@@ -6,9 +6,11 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAssetBrand } from "@/actions/asset.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface AssetBrandData {
   id: number
+  slug: string | null
   name: string
   _count: { models: number }
 }
@@ -19,7 +21,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/aset/merek/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/aset/merek", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -35,8 +37,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/aset/merek/${info.row.original.id}`}
-        editHref={`/aset/merek/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/aset/merek", info.row.original)}
+        editHref={entityEditHref("/aset/merek", info.row.original)}
         deleteAction={deleteAssetBrand}
         deleteId={info.row.original.id}
         deletePermission="delete_asset_brands"

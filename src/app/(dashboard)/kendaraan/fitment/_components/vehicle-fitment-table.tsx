@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteVehicleFitment } from "@/actions/vehicle-fitment.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 const RESULT_LABEL: Record<string, string> = {
   compatible: "Cocok",
@@ -21,6 +22,7 @@ const RESULT_CLASS: Record<string, string> = {
 
 interface VehicleFitmentData {
   id: number
+  slug: string | null
   itemSku: string | null
   itemName: string
   brandName: string | null
@@ -48,7 +50,7 @@ const columns = [
   columnHelper.accessor("itemName", {
     header: "Item",
     cell: (info) => (
-      <Link href={`/kendaraan/fitment/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/kendaraan/fitment", info.row.original)} className="text-foreground hover:underline font-medium">
         <span className="font-mono text-xs text-muted-foreground mr-1.5">{info.row.original.itemSku}</span>
         {info.getValue()}
       </Link>
@@ -96,8 +98,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/kendaraan/fitment/${info.row.original.id}`}
-        editHref={`/kendaraan/fitment/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/kendaraan/fitment", info.row.original)}
+        editHref={entityEditHref("/kendaraan/fitment", info.row.original)}
         deleteAction={deleteVehicleFitment}
         deleteId={info.row.original.id}
         editPermission="edit_vehicle_fitments"

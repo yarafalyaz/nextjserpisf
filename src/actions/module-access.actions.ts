@@ -29,7 +29,7 @@ export async function toggleModuleAccess(formData: FormData) {
     // Fetch the role's name to protect super_admin
     const role = await prisma.role.findUnique({
       where: { id: roleId },
-      select: { name: true },
+      select: { name: true, slug: true },
     })
     if (role?.name === "super_admin" && !actor.roles.includes("super_admin")) {
       throw new Error("Hanya super_admin yang dapat mengubah peran super_admin")
@@ -55,9 +55,11 @@ export async function toggleModuleAccess(formData: FormData) {
       update: { allowed },
     })
 
-    revalidatePath(`/pengaturan/peran/${roleId}`)
-    revalidatePath(`/pengaturan/peran/${roleId}/modul`)
     revalidatePath("/pengaturan/peran")
+    if (role?.slug) {
+      revalidatePath(`/pengaturan/peran/${role.slug}`)
+      revalidatePath(`/pengaturan/peran/${role.slug}/modul`)
+    }
 
     await logActivity(
       allowed ? "grant" : "revoke",

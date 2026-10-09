@@ -9,9 +9,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteOvertimeRequest } from "@/actions/hrm.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface OvertimeRequest {
   id: number
+  slug: string | null
   employee: { name: string }
   project?: { name: string } | null
   date: Date | string
@@ -27,7 +29,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/lembur/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/sdm/lembur", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -62,7 +64,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/sdm/lembur/${info.row.original.id}`}
+        viewHref={entityHref("/sdm/lembur", info.row.original)}
         deleteAction={deleteOvertimeRequest}
         deleteId={info.row.original.id}
       />

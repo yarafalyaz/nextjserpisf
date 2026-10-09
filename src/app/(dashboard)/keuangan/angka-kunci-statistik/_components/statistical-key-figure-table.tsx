@@ -6,9 +6,11 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteStatisticalKeyFigure } from "@/actions/finance.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface StatisticalKeyFigureData {
   id: number
+  slug: string | null
   code: string | null
   name: string
   unit: string | null
@@ -26,7 +28,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/keuangan/angka-kunci-statistik/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/keuangan/angka-kunci-statistik", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -49,7 +51,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/keuangan/angka-kunci-statistik/${info.row.original.id}`}
+        viewHref={entityHref("/keuangan/angka-kunci-statistik", info.row.original)}
         deleteAction={deleteStatisticalKeyFigure}
         deleteId={info.row.original.id}
       />

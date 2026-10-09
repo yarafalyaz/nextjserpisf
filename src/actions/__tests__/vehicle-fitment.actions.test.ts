@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
       update: vi.fn(),
       delete: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
     },
     productMaterial: { findMany: vi.fn() },
   },
@@ -36,6 +37,8 @@ function fdMap(payload: Record<string, string>): FormData {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  // nextSlug() probes for a free slug via findFirst → null means it's free.
+  mocks.prisma.vehicleFitmentRule.findFirst.mockResolvedValue(null)
 })
 
 describe("createVehicleFitment", () => {

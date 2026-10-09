@@ -7,9 +7,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteJournal } from "@/actions/finance.actions"
 import { formatDate, formatReferenceType } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface JournalData {
   id: number
+  slug: string | null
   journalNumber: string
   transactionDate: string
   referenceType: string | null
@@ -29,7 +31,7 @@ const columns = [
     // The linked journal number is the card's headline; the date becomes a detail line.
     meta: { mobilePrimary: true },
     cell: (info) => (
-      <Link href={`/keuangan/jurnal/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/keuangan/jurnal", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -57,7 +59,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/keuangan/jurnal/${info.row.original.id}`}
+        viewHref={entityHref("/keuangan/jurnal", info.row.original)}
         deleteAction={deleteJournal}
         deleteId={info.row.original.id}
         editPermission="edit_journals"

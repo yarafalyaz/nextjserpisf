@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { formatCurrency } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 
 interface AssetRow {
   id: number
+  slug: string | null
   code: string
   name: string
   category?: { id: number; name: string } | null
@@ -38,7 +40,7 @@ export function AssetTable({
       accessorKey: "code",
       header: "Kode",
       cell: ({ row }) => (
-        <Link href={`/aset/${row.original.id}`} className="font-medium text-foreground hover:underline">
+        <Link href={entityHref("/aset", row.original)} className="font-medium text-foreground hover:underline">
           {row.original.code}
         </Link>
       ),
@@ -133,7 +135,7 @@ export function AssetTable({
       cell: ({ row }) => (
         <div className="flex items-center gap-1 justify-end">
           <Link
-            href={`/aset/${row.original.id}`}
+            href={entityHref("/aset", row.original)}
             className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label={`Detail aset ${row.original.name}`}
           >

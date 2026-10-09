@@ -7,9 +7,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAssetTransfer } from "@/actions/asset.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface AssetTransferData {
   id: number
+  slug: string | null
   asset: { name: string }
   fromLocation: string | null
   toLocation: string
@@ -23,7 +25,7 @@ const columns = [
     id: "assetName",
     header: "Aset",
     cell: (info) => (
-      <Link href={`/aset/transfer/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/aset/transfer", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -46,7 +48,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/aset/transfer/${info.row.original.id}`}
+        viewHref={entityHref("/aset/transfer", info.row.original)}
         deleteAction={deleteAssetTransfer}
         deleteId={info.row.original.id}
         deletePermission="delete_asset_transfers"

@@ -8,9 +8,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteTimesheet } from "@/actions/hrm.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface Timesheet {
   id: number
+  slug: string | null
   employee: { name: string }
   date: Date | string
   hours: number | string
@@ -24,7 +26,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/lembar-waktu/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/sdm/lembar-waktu", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -47,7 +49,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/sdm/lembar-waktu/${info.row.original.id}`}
+        viewHref={entityHref("/sdm/lembar-waktu", info.row.original)}
         deleteAction={deleteTimesheet}
         deleteId={info.row.original.id}
       />

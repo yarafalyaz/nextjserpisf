@@ -6,9 +6,11 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAssetCategory } from "@/actions/asset.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface AssetCategoryData {
   id: number
+  slug: string | null
   name: string
   depreciationRate: number | null
   usefulLife: number | null
@@ -20,7 +22,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/aset/kategori/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/aset/kategori", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -45,8 +47,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/aset/kategori/${info.row.original.id}`}
-        editHref={`/aset/kategori/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/aset/kategori", info.row.original)}
+        editHref={entityEditHref("/aset/kategori", info.row.original)}
         deleteAction={deleteAssetCategory}
         deleteId={info.row.original.id}
         deletePermission="delete_asset_categories"

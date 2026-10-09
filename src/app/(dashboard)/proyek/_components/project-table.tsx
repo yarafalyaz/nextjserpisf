@@ -8,9 +8,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteProject } from "@/actions/project.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface ProjectData {
   id: number
+  slug: string | null
   name: string | null
   documentNo: string | null
   customer: { name: string }
@@ -36,7 +38,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Judul Proyek",
     cell: (info) => (
-      <Link href={`/proyek/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/proyek", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue() || "-"}
       </Link>
     ),
@@ -66,8 +68,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/proyek/${info.row.original.id}`}
-        editHref={`/proyek/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/proyek", info.row.original)}
+        editHref={entityEditHref("/proyek", info.row.original)}
         deleteAction={deleteProject}
         deleteId={info.row.original.id}
         editPermission="edit_projects"

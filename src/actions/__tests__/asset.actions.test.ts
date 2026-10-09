@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
       delete: vi.fn(),
       update: vi.fn(),
       findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     systemSetting: {
       findFirst: vi.fn().mockResolvedValue(null),
@@ -22,13 +23,14 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(),
       delete: vi.fn(),
       update: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     assetTransfer: {
       create: vi.fn(),
       delete: vi.fn(),
       update: vi.fn(),
       findUniqueOrThrow: vi.fn(),
-      findFirst: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     asset: {
       update: vi.fn(),
@@ -36,6 +38,7 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn(),
     },
     assetHistory: {

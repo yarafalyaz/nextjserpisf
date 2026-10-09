@@ -49,6 +49,7 @@ export default async function EmployeeLoansPage({
 
   const data = loans.map((l) => ({
     id: l.id,
+    slug: l.slug,
     employee: { name: l.employee.name },
     loanDate: l.loanDate.toISOString(),
     totalAmount: Number(l.totalAmount),

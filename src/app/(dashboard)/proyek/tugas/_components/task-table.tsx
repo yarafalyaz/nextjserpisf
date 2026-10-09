@@ -7,9 +7,11 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteTask } from "@/actions/project.actions"
 import { formatDate } from "@/lib/utils/format"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface TaskData {
   id: number
+  slug: string | null
   name: string
   project: { name: string }
   assignee: { name: string } | null
@@ -33,7 +35,7 @@ const columns = [
     // The task name is the card's headline (the "No" column is hidden on mobile).
     meta: { mobilePrimary: true },
     cell: (info) => (
-      <Link href={`/proyek/tugas/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/proyek/tugas", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -71,8 +73,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/proyek/tugas/${info.row.original.id}`}
-        editHref={`/proyek/tugas/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/proyek/tugas", info.row.original)}
+        editHref={entityEditHref("/proyek/tugas", info.row.original)}
         deleteAction={deleteTask}
         deleteId={info.row.original.id}
       />

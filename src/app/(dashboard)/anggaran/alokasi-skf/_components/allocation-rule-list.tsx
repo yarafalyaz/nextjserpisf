@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
 import { executeAllocation, deleteAllocationRule } from "@/actions/allocation.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface AllocationRuleData {
   id: number
+  slug: string | null
   name: string
   description: string | null
   isActive: boolean
@@ -108,7 +110,7 @@ export function AllocationRuleList({ data }: Props) {
       enableSorting: false,
       cell: (info) => (
         <ActionDropdown
-          viewHref={`/anggaran/alokasi-skf/${info.row.original.id}`}
+          viewHref={entityHref("/anggaran/alokasi-skf", info.row.original)}
           deleteAction={deleteAllocationRule}
           deleteId={info.row.original.id}
         />

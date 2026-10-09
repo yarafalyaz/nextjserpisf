@@ -7,9 +7,11 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface LeadData {
   id: number
+  slug: string | null
   name: string
   email: string | null
   company: string | null
@@ -24,7 +26,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/crm/leads/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/crm/leads", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -58,8 +60,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/crm/leads/${info.row.original.id}`}
-        editHref={`/crm/leads/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/crm/leads", info.row.original)}
+        editHref={entityEditHref("/crm/leads", info.row.original)}
         editPermission="edit_leads"
         deletePermission="delete_leads"
       />

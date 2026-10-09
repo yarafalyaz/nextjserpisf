@@ -9,9 +9,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteLeaveRequest } from "@/actions/hrm.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface LeaveRequest {
   id: number
+  slug: string | null
   employee: { name: string }
   type: string
   startDate: Date | string
@@ -47,7 +49,7 @@ const columns = [
     id: "employeeName",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/cuti/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/sdm/cuti", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -90,7 +92,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/sdm/cuti/${info.row.original.id}`}
+        viewHref={entityHref("/sdm/cuti", info.row.original)}
         deleteAction={deleteLeaveRequest}
         deleteId={info.row.original.id}
       />

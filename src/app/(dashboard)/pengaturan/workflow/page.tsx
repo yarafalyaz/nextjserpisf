@@ -30,6 +30,7 @@ export default async function WorkflowPage({
     skip: (page - 1) * pageSize,
     select: {
       id: true,
+      slug: true,
       name: true,
       modelType: true,
       isActive: true,
@@ -41,6 +42,7 @@ export default async function WorkflowPage({
 
   const data = workflows.map((wf) => ({
     id: wf.id,
+    slug: wf.slug,
     name: wf.name,
     modelType: wf.modelType,
     stepCount: wf._count.steps,

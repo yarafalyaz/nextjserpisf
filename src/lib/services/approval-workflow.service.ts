@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma"
+import { nextSlug } from "@/lib/utils/slug-db"
 
 /**
  * Generic approval-workflow integration.
@@ -42,6 +43,7 @@ export async function requestApprovalIfConfigured(
       data: {
         workflowId: lockedWorkflow.id,
         referenceType,
+        slug: await nextSlug("approval", referenceType),
         referenceId,
         currentStep: 1,
         status: "pending",

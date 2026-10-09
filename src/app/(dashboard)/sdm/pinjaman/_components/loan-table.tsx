@@ -9,9 +9,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteEmployeeLoan } from "@/actions/hrm.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface LoanData {
   id: number
+  slug: string | null
   employee: { name: string }
   loanDate: string
   totalAmount: number
@@ -27,7 +29,7 @@ const columns = [
     id: "employee",
     header: "Karyawan",
     cell: (info) => (
-      <Link href={`/sdm/pinjaman/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/sdm/pinjaman", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue().name}
       </Link>
     ),
@@ -61,7 +63,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/sdm/pinjaman/${info.row.original.id}`}
+        viewHref={entityHref("/sdm/pinjaman", info.row.original)}
         deleteAction={deleteEmployeeLoan}
         deleteId={info.row.original.id}
       />

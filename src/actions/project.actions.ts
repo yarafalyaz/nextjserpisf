@@ -10,6 +10,7 @@ import { computeProjectStatus } from "@/lib/services/project-status"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import type { TxClient } from "@/lib/db/prisma"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { nextSlug } from "@/lib/utils/slug-db"
 import {
   createProjectSchema,
   updateProjectSchema,
@@ -30,6 +31,7 @@ export async function createProject(formData: FormData) {
 
   const project = await prisma.project.create({
     data: {
+      slug: await nextSlug("project", data.name || documentNo),
       name: data.name,
       documentNo,
       description: data.description ?? null,
@@ -75,6 +77,7 @@ export async function updateProject(projectId: number, formData: FormData) {
   await prisma.project.update({
     where: { id: projectId },
     data: {
+      slug: await nextSlug("project", data.name, { excludeId: projectId }),
       name: data.name,
       description: data.description ?? null,
       customerId: data.customerId,
@@ -579,6 +582,7 @@ export async function createTask(formData: FormData) {
 
   const task = await prisma.task.create({
     data: {
+      slug: await nextSlug("task", data.name),
       projectId: data.projectId,
       name: data.name,
       description: data.description ?? null,
@@ -633,6 +637,7 @@ export async function updateTask(formData: FormData) {
   await prisma.task.update({
     where: { id: data.id },
     data: {
+      slug: await nextSlug("task", data.name, { excludeId: data.id }),
       projectId: data.projectId,
       name: data.name,
       description: data.description ?? null,

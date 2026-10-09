@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { deleteRole } from "@/actions/roles.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 import type { Metadata } from "next"
 import { CanCreate } from "@/components/auth/can-create"
@@ -68,10 +69,10 @@ export default async function RolesPage() {
                     <DetailTableTd>{formatDate(role.createdAt)}</DetailTableTd>
                     <DetailTableTd>
                       <div className="flex items-center gap-1">
-                        <Link href={`/pengaturan/peran/${role.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+                        <Link href={entityHref("/pengaturan/peran", role)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Detail
                         </Link>
-                        <Link href={`/pengaturan/peran/${role.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
+                        <Link href={entityEditHref("/pengaturan/peran", role)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Ubah
                         </Link>
                         <form action={async () => {

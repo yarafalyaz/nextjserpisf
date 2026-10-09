@@ -80,6 +80,7 @@ export default async function PettyCashPage({
 
   const data = records.map((r) => ({
     id: r.id,
+    slug: r.slug,
     documentNo: r.documentNo,
     date: r.date.toISOString(),
     type: r.type,

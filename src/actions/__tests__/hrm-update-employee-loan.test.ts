@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     prismaMock: {
       employeeLoan: {
         findUniqueOrThrow: vi.fn(),
+        findFirst: vi.fn().mockResolvedValue(null),
         updateMany: vi.fn(),
       },
       // getHrScope() looks up the caller's employee row for non-privileged roles.

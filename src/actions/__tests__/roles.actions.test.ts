@@ -22,6 +22,7 @@ vi.mock("@/lib/db/prisma", () => ({
       update: (...a: unknown[]) => roleUpdateMock(...a),
       delete: (...a: unknown[]) => roleDeleteMock(...a),
       findUnique: (...a: unknown[]) => roleFindUniqueMock(...a),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     permission: {
       findMany: (...a: unknown[]) => permissionFindManyMock(...a),

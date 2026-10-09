@@ -6,9 +6,11 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatDate } from "@/lib/utils/format"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface TicketData {
   id: number
+  slug: string | null
   subject: string
   priority: string
   status: string
@@ -21,7 +23,7 @@ const columns = [
   columnHelper.accessor("subject", {
     header: "Subjek",
     cell: (info) => (
-      <Link href={`/crm/tickets/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/crm/tickets", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -50,7 +52,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/crm/tickets/${info.row.original.id}`}
+        viewHref={entityHref("/crm/tickets", info.row.original)}
         editPermission="edit_tickets"
         deletePermission="delete_tickets"
       />

@@ -7,6 +7,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage } from "@/lib/utils/error"
 import { requireId, requireString } from "@/lib/utils/safe-parse"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { nextSlug } from "@/lib/utils/slug-db"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // List all allocation rules
@@ -70,6 +71,7 @@ export async function createAllocationRule(formData: FormData) {
     const rule = await prisma.allocationRule.create({
       data: {
         name,
+        slug: await nextSlug("allocationRule", name),
         sourceAccountId,
         skfId,
         description,

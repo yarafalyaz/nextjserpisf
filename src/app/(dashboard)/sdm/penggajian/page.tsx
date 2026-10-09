@@ -87,6 +87,7 @@ export default async function PayrollPage({
 
   const data = payrolls.map((p) => ({
     id: p.id,
+    slug: p.slug,
     documentNo: p.documentNo,
     period: p.period,
     employeeName: p.employee?.name ?? null,

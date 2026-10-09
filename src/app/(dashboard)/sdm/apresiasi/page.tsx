@@ -46,6 +46,7 @@ export default async function AppreciationsPage({
 
   const data = appreciations.map((a) => ({
     id: a.id,
+    slug: a.slug,
     employee: { name: a.employee.name },
     date: a.date.toISOString(),
     type: a.type,

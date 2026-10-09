@@ -34,6 +34,7 @@ import {
   findFirstNegativeBalance,
 } from "@/lib/finance/petty-cash-chain";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
+import { nextSlug } from "@/lib/utils/slug-db";
 
 // ==================== BANK STATEMENT ACTIONS ====================
 
@@ -53,6 +54,7 @@ export async function createBankStatement(formData: FormData) {
         accountNumber: v.accountNumber ?? null,
         date: v.date,
         reference: v.reference ?? null,
+        slug: await nextSlug("bankStatement", v.reference),
         periodStart: v.periodStart ?? null,
         periodEnd: v.periodEnd ?? null,
         openingBalance: v.openingBalance,
@@ -144,6 +146,7 @@ export async function createJournal(formData: FormData) {
       const j = await tx.journal.create({
         data: {
           journalNumber: documentNo,
+          slug: await nextSlug("journal", documentNo),
           transactionDate: new Date(formData.get("transactionDate") as string),
           description: formData.get("description") as string | null,
           type: (formData.get("type") as string) || "GENERAL",
@@ -257,6 +260,7 @@ export async function createExpense(formData: FormData) {
     const expense = await prisma.expense.create({
       data: {
         documentNo,
+        slug: await nextSlug("expense", documentNo),
         accountId: v.accountId,
         paidFromAccountId: v.paidFromAccountId ?? null,
         projectId: v.projectId ?? null,
@@ -590,6 +594,7 @@ export async function createPettyCash(formData: FormData) {
       const created = await tx.pettyCash.create({
         data: {
           documentNo,
+          slug: await nextSlug("pettyCash", documentNo),
           type,
           amount,
           balanceBefore,
@@ -652,6 +657,7 @@ export async function createBankReconciliation(formData: FormData) {
     const reconciliation = await prisma.bankReconciliation.create({
       data: {
         reconciliationNumber,
+        slug: await nextSlug("bankReconciliation", reconciliationNumber),
         accountId: v.accountId,
         statementDate: v.statementDate,
         statementBalance: v.statementBalance,
@@ -839,6 +845,7 @@ export async function createBudget(formData: FormData) {
     const budget = await prisma.budget.create({
       data: {
         name: v.name,
+        slug: await nextSlug("budget", v.name),
         accountId: v.accountId,
         costCenterId: v.costCenterId ?? null,
         amount: v.amount,
@@ -873,6 +880,7 @@ export async function createCostCenter(formData: FormData) {
       data: {
         code: v.code,
         name: v.name,
+        slug: await nextSlug("costCenter", v.name),
         description: v.description ?? null,
         isActive: v.isActive,
         parentId: v.parentId ?? null,
@@ -908,6 +916,7 @@ export async function updateCostCenter(id: number, formData: FormData) {
       data: {
         code: v.code,
         name: v.name,
+        slug: await nextSlug("costCenter", v.name, { excludeId: id }),
         description: v.description ?? null,
         isActive: v.isActive,
         // Must be written on update as well: cost-center-form renders the "Induk"
@@ -1164,6 +1173,7 @@ export async function updateJournal(id: number, formData: FormData) {
           type: journalType,
           totalDebit,
           totalCredit,
+          slug: await nextSlug("journal", existing.journalNumber, { excludeId: id }),
         },
       });
 
@@ -1356,6 +1366,7 @@ export async function updateExpense(id: number, formData: FormData) {
         vendorId: v.vendorId ?? null,
         receiptImage: v.receiptImage ?? null,
         status: "draft",
+        slug: await nextSlug("expense", existingExpense.documentNo, { excludeId: id }),
       },
     });
 
@@ -1401,6 +1412,13 @@ export async function updatePettyCash(id: number, formData: FormData) {
     const amount = v.amount;
 
     const pettyCash = await prisma.$transaction(async (tx) => {
+      // Existing documentNo is preserved across edits; reuse it to keep the slug
+      // stable (slug is derived from the immutable document number).
+      const existingPettyCash = await tx.pettyCash.findUniqueOrThrow({
+        where: { id },
+        select: { documentNo: true },
+      });
+
       // Remove the stale journal so it can be rebuilt with the new amount/type
       // (the create-hook is idempotent and would otherwise skip the update).
       await deletePettyCashJournal(tx, id);
@@ -1417,6 +1435,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
           projectId: v.projectId ?? null,
           vendorId: v.vendorId ?? null,
           categoryId: v.categoryId ?? null,
+          slug: await nextSlug("pettyCash", existingPettyCash.documentNo, { excludeId: id }),
         },
       });
 
@@ -1469,6 +1488,7 @@ export async function updateBudget(id: number, formData: FormData) {
       where: { id },
       data: {
         name: v.name,
+        slug: await nextSlug("budget", v.name, { excludeId: id }),
         accountId: v.accountId,
         costCenterId: v.costCenterId ?? null,
         amount: v.amount,

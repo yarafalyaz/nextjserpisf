@@ -7,6 +7,7 @@ import Link from "next/link"
 import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { entityHref } from "@/lib/utils/entity-url"
 
 import type { Metadata } from "next"
 
@@ -66,7 +67,7 @@ export default async function BankStatementsPage({
                     <DetailTableTd>{formatDate(stmt.date)}</DetailTableTd>
                     <DetailTableTd>{stmt.reference || "-"}</DetailTableTd>
                     <DetailTableTd>
-                      <Link href={`/keuangan/laporan-bank/${stmt.id}`} className="button button--ghost button--sm"><Eye size={16} /></Link>
+                      <Link href={entityHref("/keuangan/laporan-bank", stmt)} className="button button--ghost button--sm"><Eye size={16} /></Link>
                     </DetailTableTd>
                   </DetailTableRow>
                 ))

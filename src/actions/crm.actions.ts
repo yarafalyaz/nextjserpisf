@@ -9,6 +9,7 @@ import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createTicketSchema, updateTicketSchema, leadActivitySchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
+import { nextSlug } from "@/lib/utils/slug-db"
 
 // Soft-delete helper, mirrors the convention in master.actions.ts: try hard
 // delete first; if a FK constraint blocks it, fall back to stamping deletedAt.
@@ -51,6 +52,7 @@ export async function createTicket(formData: FormData) {
 
   const ticket = await prisma.crmTicket.create({
     data: {
+      slug: await nextSlug("crmTicket", data.subject || ticketNumber),
       ticketNumber,
       subject: data.subject,
       description: data.description ?? null,
@@ -95,6 +97,7 @@ export async function updateTicket(id: number, formData: FormData) {
   const ticket = await prisma.crmTicket.update({
     where: { id },
     data: {
+      slug: await nextSlug("crmTicket", data.subject, { excludeId: id }),
       subject: data.subject,
       description: data.description ?? null,
       customerId: data.customerId ?? null,

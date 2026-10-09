@@ -8,9 +8,11 @@ import { Badge } from "@/components/ui/shadcn/badge"
 import { cn } from "@/lib/utils"
 import { deleteApprovalWorkflow } from "@/actions/approval.actions"
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
+import { entityEditHref } from "@/lib/utils/entity-url"
 
 interface WorkflowRow {
   id: number
+  slug: string | null
   name: string
   modelType: string
   stepCount: number
@@ -24,7 +26,7 @@ const columns = [
     header: "Nama",
     cell: (info) => (
       <Link
-        href={`/pengaturan/workflow/${info.row.original.id}/ubah`}
+        href={entityEditHref("/pengaturan/workflow", info.row.original)}
         className="text-foreground hover:underline font-medium"
       >
         {info.getValue()}
@@ -64,8 +66,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/pengaturan/workflow/${info.row.original.id}/ubah`}
-        editHref={`/pengaturan/workflow/${info.row.original.id}/ubah`}
+        viewHref={entityEditHref("/pengaturan/workflow", info.row.original)}
+        editHref={entityEditHref("/pengaturan/workflow", info.row.original)}
         deleteAction={deleteApprovalWorkflow}
         deleteId={info.row.original.id}
       />

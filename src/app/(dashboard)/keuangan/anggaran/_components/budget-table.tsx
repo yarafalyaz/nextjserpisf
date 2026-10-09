@@ -7,9 +7,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteBudget } from "@/actions/finance.actions"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface BudgetData {
   id: number
+  slug: string | null
   name: string
   amount: number
   startDate: string
@@ -22,7 +24,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/keuangan/anggaran/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/keuangan/anggaran", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -45,7 +47,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/keuangan/anggaran/${info.row.original.id}`}
+        viewHref={entityHref("/keuangan/anggaran", info.row.original)}
         deleteAction={deleteBudget}
         deleteId={info.row.original.id}
       />

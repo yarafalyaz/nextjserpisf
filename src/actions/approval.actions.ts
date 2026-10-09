@@ -19,6 +19,7 @@ import {
 } from "@/lib/validations/approval.schemas";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions";
+import { nextSlug } from "@/lib/utils/slug-db";
 
 type WorkflowStepInput = {
   name?: string;
@@ -147,6 +148,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
     // transaction and is idempotent on documentNo), so we capture the id here
     // and run it below rather than nesting it inside this transaction.
     let expenseToSync: number | null = null;
+    let approvalSlug: string | null = null;
 
     // Serialize concurrent approve/reject on the same approval. Without the row
     // lock, a double-clicked button or two concurrent approvers both pass the
@@ -164,6 +166,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
       if (!approval) throw new Error("Approval tidak ditemukan");
       if (approval.status !== "pending")
         throw new Error("Approval sudah diproses");
+      approvalSlug = approval.slug;
 
       const totalSteps = approval.workflow.steps.length;
       if (
@@ -255,7 +258,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
       approvalId,
       "Menyetujui langkah persetujuan",
     );
-    revalidatePath(`/pengaturan/persetujuan/${approvalId}`);
+    revalidatePath(`/pengaturan/persetujuan/${approvalSlug ?? approvalId}`);
     revalidatePath("/pengaturan/persetujuan");
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -275,6 +278,8 @@ export async function rejectStep(approvalId: number, formData: FormData) {
     if (!parsed.success) throw new Error(parsed.error);
     const { notes } = parsed.data;
 
+    let approvalSlug: string | null = null;
+
     // Serialize concurrent approve/reject on the same approval (see approveStep).
     await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM approvals WHERE id = ${approvalId} FOR UPDATE`;
@@ -289,6 +294,7 @@ export async function rejectStep(approvalId: number, formData: FormData) {
       if (!approval) throw new Error("Approval tidak ditemukan");
       if (approval.status !== "pending")
         throw new Error("Approval sudah diproses");
+      approvalSlug = approval.slug;
 
       const totalSteps = approval.workflow.steps.length;
       if (
@@ -351,7 +357,7 @@ export async function rejectStep(approvalId: number, formData: FormData) {
       approvalId,
       "Menolak langkah persetujuan",
     );
-    revalidatePath(`/pengaturan/persetujuan/${approvalId}`);
+    revalidatePath(`/pengaturan/persetujuan/${approvalSlug ?? approvalId}`);
     revalidatePath("/pengaturan/persetujuan");
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -385,6 +391,7 @@ export async function createApprovalWorkflow(formData: FormData) {
     const wf = await prisma.approvalWorkflow.create({
       data: {
         name,
+        slug: await nextSlug("approvalWorkflow", name),
         modelType,
         code: code || null,
         isActive: isActive !== false,
@@ -450,6 +457,7 @@ export async function updateApprovalWorkflow(id: number, formData: FormData) {
         where: { id },
         data: {
           name,
+          slug: await nextSlug("approvalWorkflow", name, { excludeId: id }),
           modelType,
           code: code || null,
           isActive: isActive !== false,

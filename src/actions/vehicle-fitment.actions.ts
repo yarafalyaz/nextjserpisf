@@ -15,6 +15,7 @@ import {
   evaluateFitment,
   evaluateProductFitment,
 } from "@/lib/services/vehicle-fitment.service";
+import { nextSlug } from "@/lib/utils/slug-db";
 
 // ==================== VEHICLE FITMENT RULE ACTIONS (VEH-07) ====================
 
@@ -45,12 +46,13 @@ export async function createVehicleFitment(formData: FormData) {
         source: v.source ?? null,
         notes: v.notes ?? null,
         createdBy: Number(user.id),
+        slug: await nextSlug("vehicleFitmentRule", "fitment"),
       },
     });
 
     revalidatePath("/kendaraan/fitment");
     await logActivity("create", "VehicleFitmentRule", rule.id, "Membuat aturan fitment kendaraan");
-    return { success: true, id: rule.id };
+    return { success: true, id: rule.id, slug: rule.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVehicleFitment]", getErrorMessage(e) || e);
@@ -90,9 +92,9 @@ export async function updateVehicleFitment(id: number, formData: FormData) {
     });
 
     revalidatePath("/kendaraan/fitment");
-    revalidatePath(`/kendaraan/fitment/${id}`);
+    revalidatePath(`/kendaraan/fitment/${rule.slug ?? id}`);
     await logActivity("update", "VehicleFitmentRule", id, "Memperbarui aturan fitment kendaraan");
-    return { success: true, id: rule.id };
+    return { success: true, id: rule.id, slug: rule.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateVehicleFitment]", getErrorMessage(e) || e);

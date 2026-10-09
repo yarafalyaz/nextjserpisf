@@ -8,9 +8,11 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { deleteExpense, approveExpense } from "@/actions/finance.actions"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface ExpenseData {
   id: number
+  slug: string | null
   documentNo: string
   date: string
   description: string | null
@@ -26,7 +28,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/keuangan/pengeluaran/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/keuangan/pengeluaran", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -69,7 +71,7 @@ const columns = [
       const canApprove = row.status === "draft" || row.status === "pending"
       return (
         <ActionDropdown
-          viewHref={`/keuangan/pengeluaran/${row.id}`}
+          viewHref={entityHref("/keuangan/pengeluaran", row)}
           deleteAction={deleteExpense}
           deleteId={row.id}
           editPermission="edit_expenses"

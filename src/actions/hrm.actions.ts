@@ -14,6 +14,7 @@ import {
 } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
 import { requireId } from "@/lib/utils/safe-parse";
+import { nextSlug } from "@/lib/utils/slug-db";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   leaveRequestSchema,
@@ -150,6 +151,7 @@ export async function createLeaveRequest(formData: FormData) {
 
       const created = await tx.leaveRequest.create({
         data: {
+          slug: await nextSlug("leaveRequest", "cuti"),
           employeeId,
           type: v.type,
           startDate,
@@ -291,6 +293,7 @@ export async function createOvertimeRequest(formData: FormData) {
     const overtime = await prisma.$transaction(async (tx) => {
       const created = await tx.overtimeRequest.create({
         data: {
+          slug: await nextSlug("overtimeRequest", "lembur"),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
           date: new Date(v.date),
@@ -994,6 +997,7 @@ export async function generateBulkPayroll(
     // catch block of the old loop too).
     const rows: {
       documentNo: string;
+      slug: string | null;
       employeeId: number;
       period: string;
       startDate: Date;
@@ -1060,6 +1064,7 @@ export async function generateBulkPayroll(
       const netSalary = Math.max(0, safeSubtract(gross, deds, 0));
 
       rows.push({
+        slug: await nextSlug("payroll", documentNo),
         documentNo,
         employeeId: empId,
         period,
@@ -1235,6 +1240,7 @@ export async function processPayroll(formData: FormData) {
     const payroll = await prisma.$transaction(async (tx) => {
       const created = await tx.payroll.create({
         data: {
+        slug: await nextSlug("payroll", documentNo),
         documentNo,
         employeeId,
         period,
@@ -1405,6 +1411,7 @@ export async function updatePayroll(id: number, formData: FormData) {
     const payroll = await prisma.payroll.update({
       where: { id },
       data: {
+        slug: await nextSlug("payroll", existing.documentNo, { excludeId: id }),
         employeeId,
         costCenterId: v.costCenterId ?? null,
         period: v.period,
@@ -1606,6 +1613,7 @@ export async function createEmployeeLoan(formData: FormData) {
     const loan = await prisma.$transaction(async (tx) => {
       const created = await tx.employeeLoan.create({
         data: {
+          slug: await nextSlug("employeeLoan", "pinjaman"),
           employeeId: v.employeeId,
           loanDate: new Date(v.loanDate),
           totalAmount,
@@ -1655,6 +1663,7 @@ export async function createTimesheet(formData: FormData) {
 
     const timesheet = await prisma.timesheet.create({
       data: {
+        slug: await nextSlug("timesheet", "lembar-waktu"),
         employeeId: v.employeeId,
         projectId: v.projectId,
         taskId: v.taskId ?? null,
@@ -2071,6 +2080,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       return await tx.leaveRequest.update({
         where: { id },
         data: {
+          slug: await nextSlug("leaveRequest", "cuti", { excludeId: id }),
           employeeId,
           type: v.type,
           startDate,
@@ -2143,6 +2153,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       const changed = await tx.overtimeRequest.updateMany({
         where: { id, status: "pending" },
         data: {
+          slug: await nextSlug("overtimeRequest", "lembur", { excludeId: id }),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
           date: new Date(v.date),
@@ -2240,6 +2251,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
       const changed = await tx.employeeLoan.updateMany({
         where: { id, status: "pending" },
         data: {
+          slug: await nextSlug("employeeLoan", "pinjaman", { excludeId: id }),
           employeeId: v.employeeId,
           loanDate: new Date(v.loanDate),
           totalAmount,
@@ -2295,6 +2307,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
     const timesheet = await prisma.timesheet.update({
       where: { id },
       data: {
+        slug: await nextSlug("timesheet", "lembar-waktu", { excludeId: id }),
         employeeId: v.employeeId,
         projectId: v.projectId,
         taskId: v.taskId ?? null,
@@ -2335,6 +2348,7 @@ export async function createAppreciation(formData: FormData) {
 
     const appreciation = await prisma.appreciation.create({
       data: {
+        slug: await nextSlug("appreciation", "apresiasi"),
         employeeId: v.employeeId,
         date: new Date(v.date),
         type: v.type,
@@ -2375,6 +2389,7 @@ export async function updateAppreciation(formData: FormData) {
     const appreciation = await prisma.appreciation.update({
       where: { id },
       data: {
+        slug: await nextSlug("appreciation", "apresiasi", { excludeId: id }),
         employeeId: v.employeeId,
         date: new Date(v.date),
         type: v.type,

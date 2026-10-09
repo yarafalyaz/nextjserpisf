@@ -7,9 +7,11 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate } from "@/lib/utils/format"
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface ApprovalData {
   id: number
+  slug: string | null
   workflowName: string
   referenceType: string
   referenceId: number
@@ -54,7 +56,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <Link
-        href={`/pengaturan/persetujuan/${info.row.original.id}`}
+        href={entityHref("/pengaturan/persetujuan", info.row.original)}
         className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-default text-foreground hover:bg-muted transition-all"
       >
         Lihat

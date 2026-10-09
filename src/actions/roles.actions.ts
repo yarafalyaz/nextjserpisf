@@ -8,6 +8,7 @@ import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createRoleSchema, updateRoleSchema } from "@/lib/validations/roles.schemas"
+import { nextSlug } from "@/lib/utils/slug-db"
 
 // Least-privilege guard: a non-super-admin must not attach a permission they
 // don't already hold. Without this, a manage_settings holder could mint/modify
@@ -53,6 +54,7 @@ export async function createRole(formData: FormData) {
   const role = await prisma.role.create({
     data: {
       name: name.trim(),
+      slug: await nextSlug("role", name.trim()),
       guardName: "web",
       permissions: {
         connect: permissionIds.map((id) => ({ id })),
@@ -102,6 +104,7 @@ export async function updateRole(id: number, formData: FormData) {
     where: { id },
     data: {
       name: name.trim(),
+      slug: await nextSlug("role", name.trim(), { excludeId: id }),
       permissions: {
         set: permissionIds.map((pid) => ({ id: pid })),
       },

@@ -19,6 +19,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table";
+import { entityHref } from "@/lib/utils/entity-url";
 
 import type { Metadata } from "next";
 
@@ -135,7 +136,7 @@ export default async function BankReconciliationPage({
                     <DetailTableTd>{formatDate(r.createdAt)}</DetailTableTd>
                     <DetailTableTd>
                       <Link
-                        href={`/keuangan/rekonsiliasi-bank/${r.id}`}
+                        href={entityHref("/keuangan/rekonsiliasi-bank", r)}
                         className="button button--ghost button--sm"
                       >
                         Eye

@@ -19,6 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     journal: {
       findUniqueOrThrow: (...a: unknown[]) => journalFindUniqueOrThrowMock(...a),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     transactionAttachment: {
       updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a),

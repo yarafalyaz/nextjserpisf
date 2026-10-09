@@ -1223,6 +1223,7 @@ export async function createLead(formData: FormData) {
     const leadNumber = await generateDocumentNumber("LEAD", "simple");
 
     const data = {
+      slug: await nextSlug("lead", v.name || leadNumber),
       leadNumber,
       name: v.name,
       email: v.email ?? null,
@@ -1291,6 +1292,7 @@ export async function updateLead(id: number, formData: FormData) {
       await tx.lead.update({
         where: { id },
         data: {
+          slug: await nextSlug("lead", v.name || existing.leadNumber, { excludeId: id }),
           name: v.name,
           email: v.email ?? null,
           phone: v.phone ?? null,
@@ -1631,6 +1633,7 @@ export async function createStatisticalKeyFigure(formData: FormData) {
     const figure = await prisma.statisticalKeyFigure.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("statisticalKeyFigure", requireString(formData.get("name"), "name")),
         code: (formData.get("code") as string) || null,
         unit: formData.get("unit") as string,
         type: (formData.get("type") as string) || null,
@@ -1663,6 +1666,7 @@ export async function updateStatisticalKeyFigure(
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("statisticalKeyFigure", requireString(formData.get("name"), "name"), { excludeId: id }),
         code: (formData.get("code") as string) || null,
         unit: formData.get("unit") as string,
         type: (formData.get("type") as string) || null,

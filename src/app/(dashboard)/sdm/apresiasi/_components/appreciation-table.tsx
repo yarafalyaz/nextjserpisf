@@ -8,9 +8,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAppreciation } from "@/actions/hrm.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface AppreciationData {
   id: number
+  slug: string | null
   employee: { name: string }
   date: string
   type: string
@@ -39,7 +41,7 @@ const columns = [
     // The employee is the card's headline (the "No" column is hidden on mobile).
     meta: { mobilePrimary: true },
     cell: (info) => (
-      <Link href={`/sdm/apresiasi/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/sdm/apresiasi", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue().name}
       </Link>
     ),
@@ -66,8 +68,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/sdm/apresiasi/${info.row.original.id}`}
-        editHref={`/sdm/apresiasi/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/sdm/apresiasi", info.row.original)}
+        editHref={entityEditHref("/sdm/apresiasi", info.row.original)}
         deleteAction={deleteAppreciation}
         deleteId={info.row.original.id}
       />
