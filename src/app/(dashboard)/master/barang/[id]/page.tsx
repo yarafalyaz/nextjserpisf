@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate, formatReferenceType } from "@/lib/utils/format"
 import Link from "next/link"
+import Image from "next/image"
 import { notFound } from "next/navigation"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -234,6 +235,20 @@ export default async function ItemDetailPage({
             label: "Info",
             content: (
               <>
+                {item.image && (
+                  <DetailSection title="Gambar Barang">
+                    <div className="flex justify-center">
+                      <Image
+                        src={item.image}
+                        alt={item.name}
+                        width={320}
+                        height={320}
+                        className="h-64 w-64 rounded-xl border border-default object-contain bg-surface"
+                        unoptimized
+                      />
+                    </div>
+                  </DetailSection>
+                )}
                 <DetailCard>
                   <DetailField label="SKU" value={item.sku} mono />
                   <DetailField label="Kategori" value={item.category?.name || "-"} />
