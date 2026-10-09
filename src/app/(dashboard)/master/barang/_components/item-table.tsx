@@ -85,6 +85,9 @@ const columns = [
     id: "location",
     header: "Posisi",
     enableSorting: false,
+    // Always show the location on mobile: the default mobile budget (3 columns)
+    // would otherwise hide it behind Nama/Stok/Harga Jual.
+    meta: { mobile: true },
     cell: (info) => {
       const { warehouse, rack, rackRow } = info.row.original
       const parts = [warehouse?.name, rack?.name, rackRow?.name].filter(Boolean)
