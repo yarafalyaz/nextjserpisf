@@ -15,11 +15,14 @@ async function waitForHydration(page: Page) {
 
 test.describe("Kendaraan CRUD", () => {
   test("create → update → delete", async ({ page }, testInfo) => {
-    const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
-    const plate = `B${String(ts).slice(-4)}E2E`
-    const updatedPlate = `D${String(ts).slice(-4)}E2E`
-    const color = `Hitam E2E ${ts}`
-    const updatedColor = `Putih E2E ${ts}`
+    // Unique per run: `plate` must not collide with rows left by earlier runs
+    // (the previous `${ts}`-slice trick yielded a constant "-0-0" suffix, so
+    // every run reused "D-0-0E2E" and the delete assertion found an old row).
+    const run = String(Date.now()).slice(-6) + String(testInfo.parallelIndex)
+    const plate = `B${run}E2E`
+    const updatedPlate = `D${run}E2E`
+    const color = `Hitam E2E ${run}`
+    const updatedColor = `Putih E2E ${run}`
 
     await page.goto("/kendaraan/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
@@ -59,11 +62,21 @@ test.describe("Kendaraan CRUD", () => {
     const updatedDetailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: updatedPlate }).first()
     await expect(updatedDetailLink).toBeVisible({ timeout: 30000 })
     await updatedDetailLink.click()
+    await page.waitForLoadState("networkidle")
 
-    const deleteBtn = page.getByRole("button").filter({ has: page.locator("svg.lucide-trash2") }).first()
+    // The delete affordance is DeleteButton, which renders a Trash2 icon. Select
+    // by its accessible name instead of the icon's CSS class: lucide-react >= 1.53
+    // emits `lucide-<kebab-name>` (so `lucide-trash-2`, aliased `lucide-trash`),
+    // not the old `lucide-trash2` - a class selector silently matched nothing.
+    const deleteBtn = page.getByRole("button", { name: "Hapus" }).first()
     await expect(deleteBtn).toBeVisible({ timeout: 30000 })
     await deleteBtn.click()
-    await page.locator("button").filter({ hasText: "Hapus" }).last().click()
+
+    // Confirm dialog: wait for it to mount (Radix portals the content) before
+    // clicking the action button, which is the only "Hapus" with visible text.
+    const confirmDialog = page.getByRole("alertdialog")
+    await expect(confirmDialog).toBeVisible({ timeout: 10000 })
+    await confirmDialog.getByRole("button", { name: "Hapus" }).click()
 
     // deleteVehicle action hanya revalidatePath tanpa redirect; tunggu transition lalu cek list terfilter
     await page.waitForTimeout(2000)
