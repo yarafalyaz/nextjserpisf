@@ -45,6 +45,8 @@ export default async function QcInspectionsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.qcInspection.count({ where })
+
   const tableData = inspections.map((i) => ({
     id: i.id,
     documentNo: i.documentNo,
@@ -85,7 +87,7 @@ export default async function QcInspectionsPage({
         </CanCreate>
       </div>
 
-      <QcInspectionTable data={tableData} />
+      <QcInspectionTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

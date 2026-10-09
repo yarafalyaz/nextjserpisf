@@ -48,6 +48,8 @@ export default async function ProjectsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.project.count({ where })
+
   const tableData = toPlain(projects)
 
   const statusChips = ["", "active", "completed", "cancelled"].map((dbStatus) => {
@@ -77,6 +79,9 @@ export default async function ProjectsPage({
 
       <ProjectTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari proyek..." action="/proyek" />}
         filters={statusChips}
       />

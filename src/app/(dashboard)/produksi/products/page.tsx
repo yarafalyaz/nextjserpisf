@@ -46,6 +46,8 @@ export default async function ProductsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.product.count({ where })
+
   const tableData = products.map((p) => ({
     id: p.id,
     name: p.name,
@@ -68,7 +70,7 @@ export default async function ProductsPage({
         </CanCreate>
       </div>
 
-      <ProductTable data={tableData} />
+      <ProductTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

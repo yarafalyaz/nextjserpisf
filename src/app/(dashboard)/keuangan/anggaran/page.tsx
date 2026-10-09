@@ -20,7 +20,7 @@ export default async function BudgetsPage({
   await requirePermission("view_budgets")
 
   const params = await searchParams
-  const { skip, take } = parsePagination(params)
+  const { page, pageSize, skip, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -28,7 +28,7 @@ export default async function BudgetsPage({
     }),
   }
 
-  const [budgets] = await Promise.all([
+  const [budgets, total] = await Promise.all([
     prisma.budget.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -54,7 +54,7 @@ export default async function BudgetsPage({
         </Link>
       </div>
 
-      <BudgetTable data={data} />
+      <BudgetTable data={data} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

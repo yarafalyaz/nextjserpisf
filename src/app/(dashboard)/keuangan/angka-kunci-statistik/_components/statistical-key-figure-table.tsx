@@ -59,15 +59,18 @@ const columns = [
 
 interface StatisticalKeyFigureTableProps {
   data: StatisticalKeyFigureData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function StatisticalKeyFigureTable({ data }: StatisticalKeyFigureTableProps) {
+export function StatisticalKeyFigureTable({ data, total, page, pageSize }: StatisticalKeyFigureTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar angka kunci statistik"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama..."

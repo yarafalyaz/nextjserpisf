@@ -55,15 +55,18 @@ const columns = [
 
 interface BudgetTableProps {
   data: BudgetData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function BudgetTable({ data }: BudgetTableProps) {
+export function BudgetTable({ data, total, page, pageSize }: BudgetTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar budget"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama anggaran..."

@@ -43,6 +43,8 @@ export default async function QcChecklistsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.qcChecklist.count({ where })
+
   const tableData = checklists.map((c) => ({
     id: c.id,
     code: c.code,
@@ -81,7 +83,7 @@ export default async function QcChecklistsPage({
         </CanCreate>
       </div>
 
-      <QcChecklistTable data={tableData} />
+      <QcChecklistTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

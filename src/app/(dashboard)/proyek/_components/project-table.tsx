@@ -79,17 +79,20 @@ const columns = [
 
 interface ProjectTableProps {
   data: ProjectData[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function ProjectTable({ data, toolbar, filters }: ProjectTableProps) {
+export function ProjectTable({ data, total, page, pageSize, toolbar, filters }: ProjectTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar proyek"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

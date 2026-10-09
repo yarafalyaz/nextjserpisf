@@ -60,13 +60,13 @@ const columns = [
   }),
 ]
 
-export function BomRevisionTable({ data }: { data: BomRevisionRow[] }) {
+export function BomRevisionTable({ data, total, page, pageSize }: { data: BomRevisionRow[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar revisi BOM"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       searchColumn="productName"
       searchPlaceholder="Cari produk..."
     />

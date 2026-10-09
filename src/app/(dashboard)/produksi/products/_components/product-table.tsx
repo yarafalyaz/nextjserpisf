@@ -45,15 +45,18 @@ const columns = [
 
 interface ProductTableProps {
   data: Product[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function ProductTable({ data }: ProductTableProps) {
+export function ProductTable({ data, total, page, pageSize }: ProductTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar produk"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama produk..."

@@ -64,17 +64,20 @@ const columns = [
 
 interface ProductionOrderTableProps {
   data: ProductionOrder[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function ProductionOrderTable({ data, toolbar, filters }: ProductionOrderTableProps) {
+export function ProductionOrderTable({ data, total, page, pageSize, toolbar, filters }: ProductionOrderTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar perintah produksi"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

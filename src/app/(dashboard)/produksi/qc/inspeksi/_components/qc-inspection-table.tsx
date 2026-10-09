@@ -62,13 +62,13 @@ const columns = [
   }),
 ]
 
-export function QcInspectionTable({ data }: { data: QcInspectionRow[] }) {
+export function QcInspectionTable({ data, total, page, pageSize }: { data: QcInspectionRow[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar inspeksi QC"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. dokumen..."
     />

@@ -37,6 +37,8 @@ export default async function StatisticalKeyFiguresPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.statisticalKeyFigure.count({ where })
+
   const data = toPlain(figures)
 
   return (
@@ -53,7 +55,7 @@ export default async function StatisticalKeyFiguresPage({
         </div>
       </div>
 
-      <StatisticalKeyFigureTable data={data} />
+      <StatisticalKeyFigureTable data={data} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

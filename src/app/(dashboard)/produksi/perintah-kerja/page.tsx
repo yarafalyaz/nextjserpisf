@@ -46,6 +46,8 @@ export default async function WorkOrdersPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.workOrder.count({ where })
+
   const tableData = toPlain(workOrders)
 
   const statusChips = ["", "draft", "in_progress", "completed"].map((dbStatus) => {
@@ -77,6 +79,9 @@ export default async function WorkOrdersPage({
 
       <WorkOrderTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen atau pelanggan..." action="/produksi/perintah-kerja" />}
         filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />

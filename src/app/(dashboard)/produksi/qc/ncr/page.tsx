@@ -44,6 +44,8 @@ export default async function NonconformancesPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.nonconformance.count({ where })
+
   const tableData = rows.map((r) => ({
     id: r.id,
     documentNo: r.documentNo,
@@ -83,7 +85,7 @@ export default async function NonconformancesPage({
         </CanCreate>
       </div>
 
-      <NonconformanceTable data={tableData} />
+      <NonconformanceTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

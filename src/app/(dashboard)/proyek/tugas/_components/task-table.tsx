@@ -82,16 +82,19 @@ const columns = [
 
 interface TaskTableProps {
   data: TaskData[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
 }
 
-export function TaskTable({ data, toolbar }: TaskTableProps) {
+export function TaskTable({ data, total, page, pageSize, toolbar }: TaskTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar tugas proyek"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       toolbar={toolbar}
     />
   )

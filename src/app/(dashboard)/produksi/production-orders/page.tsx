@@ -45,6 +45,8 @@ export default async function ProductionOrdersPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.productionOrder.count({ where })
+
   const data = toPlain(
     orders.map((o) => ({
       id: o.id,
@@ -85,6 +87,9 @@ export default async function ProductionOrdersPage({
 
       <ProductionOrderTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/produksi/production-orders" />}
         filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />

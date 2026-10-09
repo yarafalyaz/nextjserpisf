@@ -65,13 +65,13 @@ const columns = [
   }),
 ]
 
-export function QcChecklistTable({ data }: { data: QcChecklistRow[] }) {
+export function QcChecklistTable({ data, total, page, pageSize }: { data: QcChecklistRow[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar checklist QC"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       searchColumn="name"
       searchPlaceholder="Cari checklist..."
     />

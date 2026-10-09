@@ -48,6 +48,8 @@ export default async function TasksPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.task.count({ where })
+
   const tableData = toPlain(tasks)
 
   const statusChips = ["", "pending", "in_progress", "completed", "cancelled"].map((dbStatus) => {
@@ -77,6 +79,9 @@ export default async function TasksPage({
 
       <TaskTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={
           <>
             <AppSearchField placeholder="Cari tugas..." action="/proyek/tugas" />

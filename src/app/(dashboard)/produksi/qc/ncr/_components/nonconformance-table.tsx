@@ -60,13 +60,13 @@ const columns = [
   }),
 ]
 
-export function NonconformanceTable({ data }: { data: NonconformanceRow[] }) {
+export function NonconformanceTable({ data, total, page, pageSize }: { data: NonconformanceRow[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar nonconformance"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. NCR..."
     />

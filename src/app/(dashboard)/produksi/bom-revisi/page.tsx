@@ -43,6 +43,8 @@ export default async function BomRevisionsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.bomRevision.count({ where })
+
   const tableData = revisions.map((r) => ({
     id: r.id,
     revisionNo: r.revisionNo,
@@ -80,7 +82,7 @@ export default async function BomRevisionsPage({
         </CanCreate>
       </div>
 
-      <BomRevisionTable data={tableData} />
+      <BomRevisionTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }
