@@ -163,6 +163,12 @@ export function DataTable<TData extends { id: number | string }>({
     if (isServer) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Keep controlled search input synchronized with browser navigation.
       setServerSearch(searchParams.get(searchParam) ?? "")
+      // A URL change means the navigation already happened; drop any pending
+      // debounced push so it can't override a newer navigation.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        debounceRef.current = null
+      }
     }
   }, [isServer, searchParams, searchParam])
 
@@ -341,6 +347,21 @@ export function DataTable<TData extends { id: number | string }>({
                           }, 400)
                         } else {
                           table.getColumn(searchColumn)?.setFilterValue(val)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        // In server mode the box navigates on a debounce; Enter
+                        // should push immediately and cancel the pending timer so
+                        // a late timer can't hijack a subsequent navigation (e.g.
+                        // the user clicks a row action right after searching).
+                        if (isServer && e.key === "Enter") {
+                          e.preventDefault()
+                          if (debounceRef.current) {
+                            clearTimeout(debounceRef.current)
+                            debounceRef.current = null
+                          }
+                          const qs = buildServerSearchUrl(searchParams, searchParam, serverSearch)
+                          router.push(`${pathname}${qs ? `?${qs}` : ""}`)
                         }
                       }}
                       placeholder={searchPlaceholder}
