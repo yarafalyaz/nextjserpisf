@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
 } from "@/components/ui/shadcn/command";
 
 export interface ComboboxOption {
@@ -37,12 +38,23 @@ interface ComboboxProps {
   emptyText?: string;
   /** Marks the field as required. */
   required?: boolean;
+  /**
+   * Enables the "＋ <createNewLabel>" affordance at the bottom of the list.
+   * Fired with the current search term, so a caller can prefill the quick-add
+   * form (e.g. a category named after what the user typed).
+   */
+  onCreateNew?: (search: string) => void;
+  /** Label of the create-new row. Default "Tambah baru...". */
+  createNewLabel?: string;
   "aria-label"?: string;
 }
 
 /**
  * Searchable combobox built on shadcn/ui Popover + Command.
  * Maintains the same API as the previous custom implementation.
+ *
+ * When `onCreateNew` is set, a "Tambah baru..." row is rendered below the
+ * options so a missing master record can be created without leaving the form.
  */
 export function Combobox({
   options,
@@ -55,16 +67,25 @@ export function Combobox({
   className,
   emptyText = "Tidak ada data",
   required,
+  onCreateNew,
+  createNewLabel = "Tambah baru...",
   "aria-label": ariaLabel,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const selected = options.find((o) => o.value === value) || null;
 
   return (
     <div className={cn("relative w-full", className)}>
       {name && <input type="hidden" name={name} value={value ?? ""} />}
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setSearch("");
+        }}
+      >
         <PopoverTrigger asChild>
           <Button
             id={id}
@@ -91,9 +112,13 @@ export function Combobox({
           className="w-(--radix-popover-trigger-width) p-0"
         >
           <Command>
-            <CommandInput placeholder={placeholder} />
+            <CommandInput
+              placeholder={placeholder}
+              value={search}
+              onValueChange={setSearch}
+            />
             <CommandList>
-              <CommandEmpty>{emptyText}</CommandEmpty>
+              {!onCreateNew && <CommandEmpty>{emptyText}</CommandEmpty>}
               <CommandGroup>
                 {options.map((opt) => (
                   <CommandItem
@@ -114,6 +139,26 @@ export function Combobox({
                   </CommandItem>
                 ))}
               </CommandGroup>
+              {onCreateNew && (
+                <>
+                  <CommandSeparator />
+                  <CommandGroup>
+                    <CommandItem
+                      // A stable, non-colliding value; `cmdk` filters on this so
+                      // it must always survive the active search term.
+                      value={`__create_new__ ${search}`}
+                      onSelect={() => {
+                        onCreateNew(search.trim());
+                        setOpen(false);
+                      }}
+                      className="text-primary"
+                    >
+                      <Plus className="mr-2 size-4" aria-hidden="true" />
+                      {createNewLabel}
+                    </CommandItem>
+                  </CommandGroup>
+                </>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>
