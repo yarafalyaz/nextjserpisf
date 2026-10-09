@@ -28,11 +28,14 @@ export default async function VehiclesPage({
   const { page, pageSize, take } = parsePagination(params)
 
   const where = {
+    deletedAt: null,
     ...(params.cari && {
       OR: [
-        { plateNumber: { contains: params.cari } },
-        { color: { contains: params.cari } },
+        { name: { contains: params.cari } },
+        { year: Number.isNaN(Number(params.cari)) ? undefined : Number(params.cari) },
         { variant: { name: { contains: params.cari } } },
+        { variant: { model: { name: { contains: params.cari } } } },
+        { variant: { model: { brand: { name: { contains: params.cari } } } } },
       ],
     }),
   }

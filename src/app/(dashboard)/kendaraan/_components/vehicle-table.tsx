@@ -8,9 +8,8 @@ import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 
 interface VehicleRow {
   id: number
-  plateNumber?: string | null
+  name?: string | null
   year?: number | null
-  color?: string | null
   variant?: {
     id: number
     name: string
@@ -25,15 +24,15 @@ interface VehicleRow {
 export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow[]; total: number; page: number; pageSize: number }) {
   const columns: ColumnDef<VehicleRow>[] = [
     {
-      id: "plateNumber",
-      accessorKey: "plateNumber",
-      header: "Plat Nomor",
+      id: "name",
+      accessorKey: "name",
+      header: "Tipe Kendaraan",
       cell: ({ row }) => (
         <Link href={`/kendaraan/${row.original.id}`} className="font-medium text-foreground hover:underline">
-          {row.original.plateNumber ?? "-"}
+          {row.original.name ?? row.original.variant?.name ?? "-"}
         </Link>
       ),
-      size: 130,
+      size: 180,
     },
     {
       id: "brand",
@@ -64,21 +63,6 @@ export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow
       size: 80,
     },
     {
-      id: "color",
-      accessorKey: "color",
-      header: "Warna",
-      cell: ({ row }) => {
-        const c = row.original.color
-        return c ? (
-          <div className="flex items-center gap-2">
-            <span className="size-3 rounded-full border border-default shrink-0" style={{ backgroundColor: c }} />
-            <span className="text-sm">{c}</span>
-          </div>
-        ) : <span className="text-muted-foreground">-</span>
-      },
-      size: 110,
-    },
-    {
       id: "actions",
       header: "",
       cell: ({ row }) => (
@@ -104,8 +88,8 @@ export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow
         ariaLabel="Daftar kendaraan"
         serverPagination={{ total, page, pageSize }}
         selectable={true}
-        searchColumn="plateNumber"
-        searchPlaceholder="Cari plat nomor, warna, atau varian..."
+        searchColumn="name"
+        searchPlaceholder="Cari nama tipe, merek, model, atau varian..."
         onBulkDelete={(ids) => bulkDelete("vehicle", ids)}
       />
   )

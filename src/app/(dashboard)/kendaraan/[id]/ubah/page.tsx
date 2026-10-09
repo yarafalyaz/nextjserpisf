@@ -25,32 +25,27 @@ export default async function EditPage({
     where: { id: numId },
     include: {
       variant: { include: { model: true } },
-      customerVehicles: { take: 1 },
     },
   })
 
   if (!data) notFound()
 
-  const [brands, models, variants, customers] = await Promise.all([
+  const [brands, models, variants] = await Promise.all([
     prisma.vehicleBrand.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.vehicleModel.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, vehicleBrandId: true } }),
     prisma.vehicleVariant.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, vehicleModelId: true, drivetrain: true, transmission: true },
     }),
-    prisma.customer.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ])
 
   const vehicle = {
     id: data.id,
-    plateNumber: data.plateNumber ?? "",
-    plateNo: data.plateNumber ?? "",
+    name: data.name ?? "",
     brandId: data.variant?.model?.vehicleBrandId ?? null,
     modelId: data.variant?.vehicleModelId ?? null,
     variantId: data.vehicleVariantId ?? null,
     year: data.year ?? null,
-    color: data.color ?? null,
-    customerId: data.customerVehicles[0]?.customerId ?? null,
   }
 
   return (
@@ -65,7 +60,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah Kendaraan</h1>
       </div>
-      <VehicleForm vehicle={vehicle} brands={brands} models={models} variants={variants} customers={customers} />
+      <VehicleForm vehicle={vehicle} brands={brands} models={models} variants={variants} />
     </div>
   )
 }

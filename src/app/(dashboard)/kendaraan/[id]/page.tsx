@@ -53,7 +53,7 @@ export default async function VehicleDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Kendaraan ${vehicle.plateNumber || `#${vehicle.id}`}`}
+        title={`Kendaraan ${vehicle.name || variantName || `#${vehicle.id}`}`}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Kendaraan", href: "/kendaraan" },
@@ -69,12 +69,11 @@ export default async function VehicleDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="No. Plat" value={vehicle.plateNumber || "-"} mono />
+        <DetailField label="Nama Tipe" value={vehicle.name || "-"} />
         <DetailField label="Merek" value={brandName} />
         <DetailField label="Model" value={modelName} />
         <DetailField label="Varian" value={variantName} />
-        <DetailField label="Tahun" value={vehicle.year || "-"} />
-        <DetailField label="Warna" value={vehicle.color || "-"} />
+        <DetailField label="Tahun Model" value={vehicle.year || "-"} />
         <DetailField label="Dibuat" value={formatDate(vehicle.createdAt)} />
       </DetailCard>
 

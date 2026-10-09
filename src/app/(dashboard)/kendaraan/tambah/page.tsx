@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Tambah Kendaraan" }
 export default async function CreateVehiclePage() {
   await requirePermission("create_vehicles")
 
-  const [brands, models, variants, customers] = await Promise.all([
+  const [brands, models, variants] = await Promise.all([
     prisma.vehicleBrand.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
@@ -25,11 +25,6 @@ export default async function CreateVehiclePage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, vehicleModelId: true, drivetrain: true, transmission: true },
     }),
-    prisma.customer.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
   ])
 
   return (
@@ -38,7 +33,7 @@ export default async function CreateVehiclePage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Kendaraan</h1>
       </div>
-      <VehicleForm brands={brands} models={models} variants={variants} customers={customers} />
+      <VehicleForm brands={brands} models={models} variants={variants} />
     </div>
   )
 }

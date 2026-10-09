@@ -6,10 +6,7 @@ import { createVehicle, updateVehicle } from "@/actions/vehicle.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
-import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
-import { QuickAddSelect } from "@/components/ui/quick-add-select"
-import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 
 interface Variant {
@@ -24,22 +21,20 @@ interface VehicleFormProps {
   brands: { id: number; name: string }[]
   models: { id: number; name: string; vehicleBrandId: number }[]
   variants: Variant[]
-  customers: { id: number; name: string }[]
   vehicle?: {
     id: number
-    plateNumber: string
-    plateNo?: string
+    name?: string | null
     brandId?: number | null
     modelId?: number | null
     variantId?: number | null
     year?: number | null
-    color?: string | null
-    customerId?: number | null
-    notes?: string | null
   }
 }
 
-export function VehicleForm({ brands, models, variants, customers, vehicle }: VehicleFormProps) {
+// `Vehicle` is the catalog TYPE master (variant + optional label/year). The
+// physical-unit attributes (plate, color, chassis, engine) are entered on the
+// customer-owned unit via /kendaraan/pelanggan, not here.
+export function VehicleForm({ brands, models, variants, vehicle }: VehicleFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -59,8 +54,6 @@ export function VehicleForm({ brands, models, variants, customers, vehicle }: Ve
   const [variantId, setVariantId] = useState<string | null>(
     vehicle?.variantId ? String(vehicle.variantId) : null
   )
-  const [customerId, setCustomerId] = useState<string | null>(vehicle?.customerId ? String(vehicle.customerId) : null)
-  const [customerOptions, setCustomerOptions] = useState(customers)
 
   // Cascade filters
   const filteredModels = useMemo(
@@ -108,10 +101,6 @@ export function VehicleForm({ brands, models, variants, customers, vehicle }: Ve
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="plateNo">No. Plat *</Label>
-          <Input id="plateNo" name="plateNo" placeholder="B 1234 ABC" required defaultValue={vehicle?.plateNo ?? ""} />
-        </div>
-        <div className="flex flex-col gap-1.5">
           <Label htmlFor="brandId">Merek</Label>
           <Combobox
             id="brandId"
@@ -135,7 +124,7 @@ export function VehicleForm({ brands, models, variants, customers, vehicle }: Ve
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="variantId">Tipe / Varian</Label>
+          <Label htmlFor="variantId">Tipe / Varian *</Label>
           <Combobox
             id="variantId"
             name="variantId"
@@ -150,34 +139,12 @@ export function VehicleForm({ brands, models, variants, customers, vehicle }: Ve
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerId">Pelanggan</Label>
-          <QuickAddSelect
-            id="customerId"
-            name="customerId"
-            options={customerOptions.map((c) => ({ value: String(c.id), label: c.name }))}
-            value={customerId}
-            onChange={setCustomerId}
-            placeholder="Cari pelanggan..."
-            title={QUICK_ADD.customer.title}
-            fields={QUICK_ADD.customer.fields}
-            action={QUICK_ADD.customer.action}
-            onCreated={(created) => {
-              setCustomerOptions((prev) => [...prev, { id: created.id, name: created.label }])
-              setCustomerId(String(created.id))
-            }}
-          />
+          <Label htmlFor="name">Nama Tipe</Label>
+          <Input id="name" name="name" placeholder="Fortuner 2.4 VRZ" defaultValue={vehicle?.name ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="year">Tahun</Label>
+          <Label htmlFor="year">Tahun Model</Label>
           <Input id="year" name="year" type="number" placeholder="2024" min={1900} max={2100} defaultValue={vehicle?.year ?? ""} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="color">Warna</Label>
-          <Input id="color" name="color" placeholder="Hitam" defaultValue={vehicle?.color ?? ""} />
-        </div>
-        <div className="flex flex-col gap-1.5 col-span-full">
-          <Label htmlFor="notes">Catatan</Label>
-          <Textarea id="notes" name="notes" rows={3} placeholder="Catatan kendaraan..." defaultValue={vehicle?.notes ?? ""} />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
