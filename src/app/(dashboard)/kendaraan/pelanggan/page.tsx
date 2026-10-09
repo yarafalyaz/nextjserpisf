@@ -33,19 +33,24 @@ export default async function CustomerVehiclesPage({
   const { page, pageSize, take } = parsePagination(params)
 
   const cari = params.cari?.trim()
-  const where = cari
-    ? {
-        OR: [
-          { vehicle: { plateNumber: { contains: cari } } },
-          { chassisNumber: { contains: cari } },
-          { engineNumber: { contains: cari } },
-          { vehicle: { variant: { name: { contains: cari } } } },
-          { vehicle: { variant: { model: { name: { contains: cari } } } } },
-          { vehicle: { variant: { model: { brand: { name: { contains: cari } } } } } },
-          { customer: { name: { contains: cari } } },
-        ],
-      }
-    : {}
+  const where = {
+    deletedAt: null,
+    ...(cari
+      ? {
+          OR: [
+            { plateNumber: { contains: cari } },
+            { color: { contains: cari } },
+            { chassisNumber: { contains: cari } },
+            { engineNumber: { contains: cari } },
+            { vehicle: { name: { contains: cari } } },
+            { vehicle: { variant: { name: { contains: cari } } } },
+            { vehicle: { variant: { model: { name: { contains: cari } } } } },
+            { vehicle: { variant: { model: { brand: { name: { contains: cari } } } } } },
+            { customer: { name: { contains: cari } } },
+          ],
+        }
+      : {}),
+  }
 
   const [vehicles, total] = await Promise.all([
     prisma.customerVehicle.findMany({

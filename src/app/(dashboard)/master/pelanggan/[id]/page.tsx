@@ -214,9 +214,9 @@ export default async function CustomerDetailPage({
                         {customer.customerVehicles.map((cv) => (
                           <DetailTableRow key={cv.id}>
                             <DetailTableTd>{cv.vehicle?.variant?.name || `Vehicle #${cv.vehicleId}`}</DetailTableTd>
-                            <DetailTableTd className="font-mono">{cv.vehicle?.plateNumber || "-"}</DetailTableTd>
+                            <DetailTableTd className="font-mono">{cv.plateNumber || "-"}</DetailTableTd>
                             <DetailTableTd>{cv.vehicle?.year || "-"}</DetailTableTd>
-                            <DetailTableTd>{cv.vehicle?.color || "-"}</DetailTableTd>
+                            <DetailTableTd>{cv.color || "-"}</DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

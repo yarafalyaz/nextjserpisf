@@ -113,7 +113,7 @@ export default async function CustomerVehicleDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plat Nomor</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{cv.vehicle?.plateNumber || "-"}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{cv.plateNumber || "-"}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tahun</span>
@@ -121,15 +121,11 @@ export default async function CustomerVehicleDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Warna</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{cv.vehicle?.color || "-"}</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tipe Kendaraan</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{cv.vehicleType || "-"}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{cv.color || "-"}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Transmisi</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{cv.transmission || "-"}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{cv.vehicle?.variant?.transmission || "-"}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Rangka</span>

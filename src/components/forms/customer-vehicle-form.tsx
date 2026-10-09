@@ -7,12 +7,10 @@ import {
   updateCustomerVehicle,
 } from "@/actions/vehicle.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
-import { TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Checkbox } from "@/components/ui/shadcn/checkbox";
-import { FormSelect } from "@/components/ui/form-select";
 import { Combobox } from "@/components/ui/combobox";
 import {
   FormCard,
@@ -37,11 +35,9 @@ interface VehicleData {
   brandId: number | null;
   modelId: number | null;
   variantId: number | null;
-  licensePlate: string;
+  plateNumber: string;
   year: number | null;
   color: string;
-  vehicleType: string;
-  transmission: string;
   chassisNumber: string;
   engineNumber: string;
   isActive: boolean;
@@ -176,11 +172,11 @@ export function CustomerVehicleForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="licensePlate">Plat Nomor</Label>
+            <Label htmlFor="plateNumber">Plat Nomor</Label>
             <Input
-              id="licensePlate"
-              name="licensePlate"
-              defaultValue={vehicle?.licensePlate || ""}
+              id="plateNumber"
+              name="plateNumber"
+              defaultValue={vehicle?.plateNumber || ""}
               placeholder="B 1234 ABC"
             />
           </div>
@@ -208,27 +204,6 @@ export function CustomerVehicleForm({
         </FormSection>
 
         <FormSection title="Detail Teknis">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vehicleType">Tipe Kendaraan</Label>
-            <Input
-              id="vehicleType"
-              name="vehicleType"
-              defaultValue={vehicle?.vehicleType || ""}
-              placeholder="SUV, Sedan, MPV..."
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="transmission">Transmisi</Label>
-            <FormSelect
-              id="transmission"
-              name="transmission"
-              defaultValue={vehicle?.transmission || undefined}
-              placeholder="Pilih Transmisi"
-              options={TRANSMISSION_OPTIONS}
-            />
-          </div>
-
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="chassisNumber">No. Rangka</Label>
             <Input

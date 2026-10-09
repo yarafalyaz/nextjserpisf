@@ -10,14 +10,13 @@ interface CustomerVehicleRow {
   id: number
   customerId: number
   isActive: boolean
-  vehicleType?: string | null
+  plateNumber?: string | null
+  color?: string | null
   chassisNumber?: string | null
   engineNumber?: string | null
   customer: { id: number; name: string }
   vehicle?: {
-    plateNumber?: string | null
     year?: number | null
-    color?: string | null
     variant?: {
       name: string
       model?: {
@@ -48,7 +47,7 @@ export function CustomerVehicleTable({
           href={`/master/pelanggan/${row.original.customerId}/kendaraan/${row.original.id}`}
           className="font-medium font-mono text-foreground hover:underline"
         >
-          {row.original.vehicle?.plateNumber ?? "-"}
+          {row.original.plateNumber ?? "-"}
         </Link>
       ),
       size: 130,
