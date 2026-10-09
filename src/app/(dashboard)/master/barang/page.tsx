@@ -54,6 +54,7 @@ export default async function ItemsPage({
     id: item.id,
     sku: item.sku,
     name: item.name,
+    image: item.image,
     category: item.category,
     qtyOnHand: Number(item.qtyOnHand),
     minStock: Number(item.minStock),

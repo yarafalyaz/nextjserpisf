@@ -2,6 +2,8 @@
 
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
+import Image from "next/image"
+import { Package } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItem } from "@/actions/master.actions"
@@ -12,6 +14,7 @@ interface Item {
   id: number
   sku: string
   name: string
+  image: string | null
   category: { name: string } | null
   qtyOnHand: number
   minStock: number
@@ -24,13 +27,29 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <div>
-        <Link href={`/master/barang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
-          {info.getValue()}
-        </Link>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {info.row.original.sku || "-"} | {info.row.original.category?.name || "-"}
-        </p>
+      <div className="flex items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-default bg-surface">
+          {info.row.original.image ? (
+            <Image
+              src={info.row.original.image}
+              alt={info.getValue()}
+              width={40}
+              height={40}
+              className="size-10 object-cover"
+              unoptimized
+            />
+          ) : (
+            <Package className="size-4 text-muted-foreground" aria-hidden="true" />
+          )}
+        </span>
+        <div className="min-w-0">
+          <Link href={`/master/barang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+            {info.getValue()}
+          </Link>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {info.row.original.sku || "-"} | {info.row.original.category?.name || "-"}
+          </p>
+        </div>
       </div>
     ),
   }),
