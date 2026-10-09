@@ -119,3 +119,57 @@ sengaja tidak disentuh.
 - `prisma/seed.ts` full run menggantung di Docker DB → seed via `seed-modules.ts` + SQL langsung.
 - `prisma generate` di container butuh `-u root`; restart app setelahnya.
 - Produksi harus mengonfigurasi pemetaan akun via UI (termasuk WIP + akun absorpsi) atau cross-posting gagal dengan suara.
+
+---
+
+## 6. Lanjutan Sesi (P2/P3 + perbaikan lingkungan)
+
+### 6.1 Sumber tunggal identitas unit kendaraan (`c24ece8c`)
+- `Vehicle` = unit fisik (satu baris per plat) menunjuk katalog merek/model/varian;
+  `CustomerVehicle` hanya tautan kepemilikan. Kolom `license_plate`/`year`/`color`
+  yang terduplikasi di `CustomerVehicle` **dihapus**; migrasi menyalin nilainya ke
+  `vehicles` (hanya bila sisi Vehicle NULL) sebelum drop. ~15 pembaca dialihkan
+  ke `customerVehicle.vehicle`.
+- Aksi create/update menulis identitas **hanya** ke Vehicle, termasuk jalur
+  relink ke Vehicle yang sudah ada (sebelumnya diam-diam membuang hasil edit).
+
+### 6.2 Registri kendaraan pelanggan lintas-pelanggan (`c24ece8c`)
+- Halaman baru `/kendaraan/pelanggan`: pencarian server-side by plat, rangka,
+  mesin, model/varian, dan nama pelanggan; entri navigasi di grup Kendaraan.
+
+### 6.3 DB dev disamakan + baseline migrasi (tidak ada commit kode)
+- `prisma migrate diff` mengungkap drift kecil (FK yang hilang, rename index,
+  tipe kolom) karena DB dev dibangun via `db push` di skema lama. Drift diterapkan
+  → DB dev **identik** dengan `schema.prisma` (diff 0 statement).
+- `_prisma_migrations` di-baseline dengan `migrate resolve --applied` untuk 31
+  migrasi → `prisma migrate status` = "Database schema is up to date!". Jalur
+  `prisma migrate deploy` produksi kini tervalidasi.
+
+### 6.4 Seed tak lagi "menggantung" — ternyata bug destructure (`1c3c74bb`)
+- Akar masalah "seed menggantung": `const [existing] = await conn.query("SELECT id
+  FROM unit_of_measures ...")` lalu `existing.length`. Driver `mariadb`
+  mengembalikan **array baris** (bukan `[rows, fields]`), jadi `existing` = baris
+  pertama → `undefined` saat SELECT kosong → `TypeError` menghentikan seluruh
+  seed. Diperbaiki (pakai array baris, sesuai pola cek lain di file).
+- Guard regresi statis di `permission-seed-parity.test.ts` menolak pola
+  `[row] = await conn.query(...)` + `row.length`.
+- `scripts/seed.ts` kini berjalan sampai "🎉 Seeding completed!".
+
+### 6.5 Skrip scratch/codemod dibersihkan (`1c3c74bb`)
+- Hapus diagnostik ad-hoc (`check-*`, `diag-*`, `tmp-*`) dan codemod yang sudah
+  selesai (`add-breadcrumbs`, `add_tests`, `find-target-coverage`, `migrate-css`,
+  `migrate-table-wrappers`, `refactor-errors`). `.gitignore` kini pola.
+
+### 6.6 E2E kendaraan diperbaiki + spec registri (`9cdbc40b`)
+- `vehicle-crud.spec.ts` mati sejak upgrade `lucide-react`: selector
+  `svg.lucide-trash2` tak pernah match (lucide ≥ 1.53 memakai
+  `lucide-<kebab-name>`, jadi `lucide-trash-2`). Dialihkan ke accessible name.
+- Plat yang dihasilkan selalu `D-0-0E2E` (slice `-retry-parallelIndex`), sehingga
+  assert akhir mencocokkan baris sisa run lama. Kini suffix unik per run.
+- Spec baru `customer-vehicle-registry.spec.ts` memverifikasi `/kendaraan/pelanggan`
+  (list + cari plat/rangka) — bukti E2E untuk 6.1 & 6.2.
+
+**Status akhir:** 3071 unit test lulus, `tsc` 0 error, `eslint` 0 error (33 warning
+pra-eksisting), `next build` sukses, spek E2E vehicle + registri hijau, seluruh
+halaman laporan render tanpa kegagalan.
+
