@@ -42,7 +42,7 @@ export default async function ItemsPage({
   const [rawItems, categories] = await Promise.all([
     prisma.item.findMany({
       where,
-      include: { category: true },
+      include: { category: true, warehouse: true, rack: true, rackRow: true },
       orderBy: { createdAt: "desc" },
       take,
     skip: (page - 1) * pageSize,
@@ -56,6 +56,9 @@ export default async function ItemsPage({
     name: item.name,
     image: item.image,
     category: item.category,
+    warehouse: item.warehouse ? { name: item.warehouse.name } : null,
+    rack: item.rack ? { name: item.rack.name } : null,
+    rackRow: item.rackRow ? { name: item.rackRow.name } : null,
     qtyOnHand: Number(item.qtyOnHand),
     minStock: Number(item.minStock),
     price: Number(item.price),

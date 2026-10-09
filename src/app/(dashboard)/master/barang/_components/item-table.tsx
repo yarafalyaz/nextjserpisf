@@ -3,7 +3,7 @@
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import Image from "next/image"
-import { Package } from "lucide-react"
+import { Package, MapPin } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItem } from "@/actions/master.actions"
@@ -16,6 +16,9 @@ interface Item {
   name: string
   image: string | null
   category: { name: string } | null
+  warehouse: { name: string } | null
+  rack: { name: string } | null
+  rackRow: { name: string } | null
   qtyOnHand: number
   minStock: number
   price: number
@@ -77,6 +80,31 @@ const columns = [
     id: "categoryName",
     header: "Kategori",
     cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.display({
+    id: "location",
+    header: "Posisi",
+    enableSorting: false,
+    cell: (info) => {
+      const { warehouse, rack, rackRow } = info.row.original
+      const parts = [warehouse?.name, rack?.name, rackRow?.name].filter(Boolean)
+      if (parts.length === 0) {
+        return <span className="text-muted-foreground">-</span>
+      }
+      return (
+        <div className="flex items-start gap-1.5">
+          <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-sm text-foreground">{warehouse?.name || "-"}</p>
+            {(rack || rackRow) && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {[rack?.name, rackRow?.name].filter(Boolean).join(" / ")}
+              </p>
+            )}
+          </div>
+        </div>
+      )
+    },
   }),
   columnHelper.display({
     id: "actions",
