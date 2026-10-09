@@ -5,7 +5,7 @@ import { apiError } from "@/lib/api-response";
 
 export async function GET(request: Request) {
   try {
-    if (!(await hasPermission("view_vehicles"))) {
+    if (!(await hasPermission("view_vehicle_brands"))) {
       return apiError("FORBIDDEN", "Forbidden");
     }
 

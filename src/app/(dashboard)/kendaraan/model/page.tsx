@@ -19,7 +19,7 @@ export default async function VehicleModelsPage({
 }: {
   searchParams: Promise<{ cari?: string }>
 }) {
-  await requirePermission("view_vehicles")
+  await requirePermission("view_vehicle_models")
 
   const params = await searchParams
 

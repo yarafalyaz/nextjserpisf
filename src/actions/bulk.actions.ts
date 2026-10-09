@@ -273,6 +273,10 @@ const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
   // Fixed assets and vehicles — have GL or dependent records guards
   "asset",
   "vehicle",
+  // Vehicle catalog — brand/model guards protect product compatibility tags and
+  // the ProductVehicleModel junction. (Variants have no bulk path of their own.)
+  "vehicleBrand",
+  "vehicleModel",
 ])
 
 export async function bulkDelete(model: ModelName, ids: number[]) {

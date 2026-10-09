@@ -21,7 +21,7 @@ export default async function VehicleModelDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requirePermission("view_vehicles")
+  await requirePermission("view_vehicle_models")
 
   const { id } = await params
   const numId = Number(id)

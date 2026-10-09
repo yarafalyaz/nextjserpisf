@@ -159,7 +159,7 @@ export const navigation: NavItem[] = [
       { label: "Kendaraan", href: "/kendaraan", icon: Car, permission: "view_vehicles" },
       { label: "Kendaraan Pelanggan", href: "/kendaraan/pelanggan", icon: Car, permission: "view_vehicles" },
       { label: "Merek", href: "/kendaraan/merek", icon: Tag, permission: "view_vehicle_brands" },
-      { label: "Model", href: "/kendaraan/model", icon: Layers, permission: "view_vehicles" },
+      { label: "Model", href: "/kendaraan/model", icon: Layers, permission: "view_vehicle_models" },
       { label: "Fitment", href: "/kendaraan/fitment", icon: Wrench, permission: "view_vehicle_fitments" },
     ],
   },

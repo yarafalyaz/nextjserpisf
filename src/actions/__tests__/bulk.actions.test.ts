@@ -111,6 +111,18 @@ describe("Bulk Actions", () => {
     expect(resVehicle?.success).toBe(false)
     expect(resVehicle?.message).toMatch(/harus dihapus satu per satu/)
   })
+  it("bulkDelete fails on vehicle brand and model (integrity guards)", async () => {
+    // deleteVehicleBrand/deleteVehicleModel guard against wiping product
+    // compatibility tags + the ProductVehicleModel junction. Raw bulk delete
+    // would bypass those guards, so both must be routed to the per-row action.
+    const resBrand = await bulkDelete("vehicleBrand", [1])
+    expect(resBrand?.success).toBe(false)
+    expect(resBrand?.message).toMatch(/harus dihapus satu per satu/)
+
+    const resModel = await bulkDelete("vehicleModel", [1])
+    expect(resModel?.success).toBe(false)
+    expect(resModel?.message).toMatch(/harus dihapus satu per satu/)
+  })
   it("bulkDelete fails on unknown model", async () => {
     const res = await bulkDelete("unknownModel" as any, [1])
     expect(res?.success).toBe(false)
