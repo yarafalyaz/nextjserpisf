@@ -1,7 +1,16 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+// Dev and the production build must not share `.next`: `next dev` keeps a
+// Turbopack cache under `.next/dev`, and a host `next build` writes
+// build-manifest/BUILD_ID over it. Interleaving the two corrupts the cache
+// ("failed to open ...sst: No such file or directory") and every route 500s.
+// In the dev Docker container `.next` is the host bind, so a build run from the
+// host would clobber the running dev cache — keep dev on its own distDir.
+const isDev = process.env.NODE_ENV === "development";
+
 const nextConfig: NextConfig = {
+  ...(isDev ? { distDir: ".next-dev" } : {}),
   output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
