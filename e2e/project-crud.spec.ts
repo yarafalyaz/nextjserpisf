@@ -78,7 +78,7 @@ test.describe("Proyek CRUD", () => {
     await row.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/proyek\/\d+\/ubah/, { timeout: 20000 })
+    await page.waitForURL(/\/proyek\/[^/]+\/ubah/, { timeout: 20000 })
     await page.waitForLoadState("networkidle")
 
     await page.locator("#name").fill(updated)

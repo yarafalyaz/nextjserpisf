@@ -43,7 +43,7 @@ test.describe("Master Karyawan CRUD", () => {
     await row.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/master\/karyawan\/\d+\/ubah/, { timeout: 20000 })
+    await page.waitForURL(/\/master\/karyawan\/[^/]+\/ubah/, { timeout: 20000 })
 
     await expect(page.locator("#name").first()).toHaveValue(name)
     await expect(page.locator("#email").first()).toHaveValue(email)

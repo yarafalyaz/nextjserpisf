@@ -57,14 +57,11 @@ async function crudMaster(
   await expect(rowCreate).toBeVisible({ timeout: 30000 })
   await rowCreate.locator("button[aria-label='Buka menu aksi']").click()
   await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
-  await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/\\d+\\/ubah`), { timeout: 30000 })
-  const currentUrl = page.url()
-  const idMatch = currentUrl.match(/\/(\d+)\/ubah/)
-  if (!idMatch) throw new Error("Could not parse ID from edit URL")
-  const id = idMatch[1]
+  await page.waitForURL(new RegExp(`${opts.listUrl.replace('/', '\\/')}\\/[^/]+\\/ubah`), { timeout: 30000 })
 
   // ─── UPDATE ───────────────────────────────────────────────────
-  await page.goto(`${opts.listUrl}/${id}/ubah`, { waitUntil: "domcontentloaded" })
+  // We are already on the edit page (URL now uses a slug); no need to
+  // re-navigate by a parsed id.
   await waitForHydration(page)
   for (const f of opts.fields) {
     if (f.updated) {
@@ -292,7 +289,7 @@ test.describe("Master Akun Mutation", () => {
     const nameRow = nameCell.locator("xpath=ancestor::tr")
     const editAnchor = nameRow.locator("a[href*='/ubah']").first()
     await editAnchor.click()
-    await page.waitForURL(/\/master\/akun\/\d+\/ubah/, { timeout: 30000 })
+    await page.waitForURL(/\/master\/akun\/[^/]+\/ubah/, { timeout: 30000 })
 
     // On edit form: fill name + re-select type (required)
     await waitForHydration(page)

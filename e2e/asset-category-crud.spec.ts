@@ -69,7 +69,7 @@ test.describe("Aset Kategori CRUD", () => {
     if (!detailHref) throw new Error("Could not find href on detail link")
     await page.goto(new URL(detailHref, page.url()).toString(), { waitUntil: "domcontentloaded" })
 
-    await page.waitForURL(/\/aset\/kategori\/\d+$/, { timeout: 30000 })
+    await page.waitForURL(/\/aset\/kategori\/[^/]+$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
@@ -84,7 +84,7 @@ test.describe("Aset Kategori CRUD", () => {
     await row.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/aset\/kategori\/\d+\/ubah$/, { timeout: 30000 })
+    await page.waitForURL(/\/aset\/kategori\/[^/]+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await waitForHydration(page)

@@ -57,7 +57,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     if (!detailHref) throw new Error("Could not find href on detail link")
     await page.goto(new URL(detailHref, page.url()).toString(), { waitUntil: "domcontentloaded" })
 
-    await page.waitForURL(/\/aset\/merek\/\d+$/, { timeout: 30000 })
+    await page.waitForURL(/\/aset\/merek\/[^/]+$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
@@ -73,7 +73,7 @@ test.describe("Aset Brand (Merek) CRUD", () => {
     await rowForEdit.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/aset\/merek\/\d+\/ubah$/, { timeout: 30000 })
+    await page.waitForURL(/\/aset\/merek\/[^/]+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").fill(updated)
     await waitForHydration(page)

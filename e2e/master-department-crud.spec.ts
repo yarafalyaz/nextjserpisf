@@ -77,7 +77,7 @@ test.describe("Master Departemen CRUD", () => {
     await rowForEdit.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/master\/departemen\/\d+\/ubah$/, { timeout: 30000 })
+    await page.waitForURL(/\/master\/departemen\/[^/]+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await waitForHydration(page)
     await page.locator("#name").fill(updated)

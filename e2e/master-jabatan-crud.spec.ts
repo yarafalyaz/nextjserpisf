@@ -72,7 +72,7 @@ test.describe("Master Jabatan CRUD", () => {
     await row.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/master\/jabatan\/\d+\/ubah$/, { timeout: 30000 })
+    await page.waitForURL(/\/master\/jabatan\/[^/]+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await waitForHydration(page)
     await page.locator("#name").fill(updated)

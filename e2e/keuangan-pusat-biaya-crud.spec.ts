@@ -83,7 +83,7 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await page.waitForTimeout(2000)
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/keuangan\/pusat-biaya\/\d+\/ubah$/, { timeout: 30000 })
+    await page.waitForURL(/\/keuangan\/pusat-biaya\/[^/]+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").fill(updated)

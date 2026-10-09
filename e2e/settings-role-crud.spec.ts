@@ -52,13 +52,13 @@ test.describe("Pengaturan Peran CRUD", () => {
     await expect(createdRow).toBeVisible({ timeout: 30000 })
     await createdRow.locator("a").filter({ hasText: "Detail" }).click({ force: true })
 
-    await page.waitForURL(/\/pengaturan\/peran\/\d+$/, { timeout: 30000 })
+    await page.waitForURL(/\/pengaturan\/peran\/[^/]+$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible({ timeout: 30000 })
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.getByRole("link", { name: "Ubah Peran" }).click({ force: true })
-    await page.waitForURL(/\/pengaturan\/peran\/\d+\/ubah$/, { timeout: 30000 })
+    await page.waitForURL(/\/pengaturan\/peran\/[^/]+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
     await page.locator("#name").first().fill(updated)
     await waitForHydration(page)

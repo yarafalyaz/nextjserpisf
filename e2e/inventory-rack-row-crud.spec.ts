@@ -81,15 +81,16 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     const detailLink = page.locator(`a[href^="/inventaris/baris-rak/"]`).filter({ hasText: name }).first()
     await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
-    const idMatch = href?.match(/\/inventaris\/baris-rak\/(\d+)/)
-    if (!idMatch) throw new Error("Could not parse rack row ID from detail link")
-    const id = idMatch[1]
+    if (!href) throw new Error("Could not resolve rack row detail href")
+    // The route now uses a human-readable slug; reuse it directly.
+    const key = href.split("/").pop()
+    if (!key) throw new Error("Could not parse rack row key from detail link")
 
-    await page.goto(`/inventaris/baris-rak/${id}`, { waitUntil: "domcontentloaded" })
+    await page.goto(`/inventaris/baris-rak/${key}`, { waitUntil: "domcontentloaded" })
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
-    await page.goto(`/inventaris/baris-rak/${id}/ubah`, { waitUntil: "domcontentloaded" })
+    await page.goto(`/inventaris/baris-rak/${key}/ubah`, { waitUntil: "domcontentloaded" })
     await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").first().fill(updated)
@@ -101,7 +102,9 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     // ─── DELETE ───────────────────────────────────────────────
     await closeMobileSidebarIfOpen(page)
-    const updatedRow = page.locator("tr").filter({ has: page.locator(`a[href='/inventaris/baris-rak/${id}']`) })
+    // Re-derive the row's link from the DOM by its (updated) name — the slug
+    // may have changed when the row was edited, so a captured key is stale.
+    const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
     await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
     
@@ -116,6 +119,6 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     await page.goto("/inventaris/baris-rak", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator(`a[href='/inventaris/baris-rak/${id}']`)).toHaveCount(0)
+    await expect(page.locator("body")).not.toContainText(updated)
   })
 })

@@ -1347,7 +1347,7 @@ export async function createRackRow(formData: FormData) {
         rackId: v.rackId,
         code,
         name: v.name,
-        slug: await nextSlug("rackRow", code ?? v.name),
+        slug: await nextSlug("rackRow", code || v.name),
       },
     });
 
@@ -1387,7 +1387,7 @@ export async function updateRackRow(id: number, formData: FormData) {
         rackId: v.rackId,
         code: v.code ?? null,
         name: v.name,
-        slug: await nextSlug("rackRow", v.code ?? v.name, { excludeId: id }),
+        slug: await nextSlug("rackRow", v.code || v.name, { excludeId: id }),
       },
     });
 

@@ -73,7 +73,7 @@ test.describe("Master Pajak CRUD", () => {
     await row.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
-    await page.waitForURL(/\/master\/pajak\/\d+\/ubah$/, { timeout: 30000 })
+    await page.waitForURL(/\/master\/pajak\/[^/]+\/ubah$/, { timeout: 30000 })
     await closeMobileSidebarIfOpen(page)
 
     // Edit form has no explicit id, use name attribute
