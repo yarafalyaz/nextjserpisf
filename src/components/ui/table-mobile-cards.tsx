@@ -36,9 +36,19 @@ export function headerLabel(column: { columnDef: { header?: unknown } }): string
   return typeof header === "string" && header.trim() ? header : ""
 }
 
-/** Is this the actions/buttons column (kept as the card footer)? */
+/**
+ * Is this the row-actions/buttons column (kept visible on mobile and moved to
+ * the card footer)?
+ *
+ * Matches the conventional ids (`actions`, `aksi`, `opsi`, `menu`, and prefixed
+ * forms like `row-actions`) as whole words. The anchoring matters: the activity
+ * log has an audit-value column with id `action` and header "Aksi" that must
+ * stay a normal detail line, not be mistaken for the actions menu.
+ */
 export function isActionsColumnId(id: string): boolean {
-  return /aksi|action|opsi|menu/i.test(id)
+  // `actions` (plural) is the convention; the singular `action` is NOT, because
+  // the activity log's audit-value column uses it. Hence no optional "s".
+  return /(^|[-_])(actions|aksi|opsi|menu)($|[-_])/i.test(id)
 }
 
 interface TableMobileCardsProps<TData extends { id: number | string }> {

@@ -26,6 +26,8 @@ const columns = [
   }),
   columnHelper.accessor("journalNumber", {
     header: "No. Dokumen",
+    // The linked journal number is the card's headline; the date becomes a detail line.
+    meta: { mobilePrimary: true },
     cell: (info) => (
       <Link href={`/keuangan/jurnal/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
         {info.getValue()}

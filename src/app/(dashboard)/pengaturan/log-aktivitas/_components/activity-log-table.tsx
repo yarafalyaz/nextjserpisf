@@ -172,6 +172,8 @@ export function ActivityLogTable({
     {
       accessorKey: "userName",
       header: "Pengguna",
+      // The user is the card's headline; the timestamp becomes a detail line.
+      meta: { mobilePrimary: true },
       cell: ({ row }) => (
         <span className="max-w-[140px] truncate">{row.original.userName}</span>
       ),
@@ -241,9 +243,11 @@ export function ActivityLogTable({
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      {/* Wrapping toolbar: on a phone the date pickers + filter comboboxes +
+          export button must wrap instead of overflowing the viewport. */}
+      <div className="flex flex-wrap items-center gap-2">
         {/* Date range */}
-        <div className="flex items-center gap-1">
+        <div className="flex w-full items-center gap-1 sm:w-auto">
           <AppDatePicker
             name="dateFrom"
             value={filterDateFrom}
@@ -260,37 +264,43 @@ export function ActivityLogTable({
         </div>
 
         {/* User filter */}
-        <Combobox
-          options={[
-            { value: "all", label: "Semua pengguna" },
-            ...users.map((u) => ({ value: String(u.id), label: u.name })),
-          ]}
-          value={filterUser}
-          onChange={(v) => onFilterChange("userId", v ?? "all")}
-          placeholder="Semua pengguna"
-        />
+        <div className="min-w-[180px] flex-1">
+          <Combobox
+            options={[
+              { value: "all", label: "Semua pengguna" },
+              ...users.map((u) => ({ value: String(u.id), label: u.name })),
+            ]}
+            value={filterUser}
+            onChange={(v) => onFilterChange("userId", v ?? "all")}
+            placeholder="Semua pengguna"
+          />
+        </div>
 
         {/* Action filter */}
-        <Combobox
-          options={[
-            { value: "all", label: "Semua aksi" },
-            ...actionList.map((a) => ({ value: a, label: actionLabel[a] || a })),
-          ]}
-          value={filterAction}
-          onChange={(v) => onFilterChange("action", v ?? "all")}
-          placeholder="Semua aksi"
-        />
+        <div className="min-w-[160px] flex-1">
+          <Combobox
+            options={[
+              { value: "all", label: "Semua aksi" },
+              ...actionList.map((a) => ({ value: a, label: actionLabel[a] || a })),
+            ]}
+            value={filterAction}
+            onChange={(v) => onFilterChange("action", v ?? "all")}
+            placeholder="Semua aksi"
+          />
+        </div>
 
         {/* Model filter */}
-        <Combobox
-          options={[
-            { value: "all", label: "Semua model" },
-            ...modelTypes.map((m) => ({ value: m, label: modelLabel[m] || m })),
-          ]}
-          value={filterModel}
-          onChange={(v) => onFilterChange("modelType", v ?? "all")}
-          placeholder="Semua model"
-        />
+        <div className="min-w-[160px] flex-1">
+          <Combobox
+            options={[
+              { value: "all", label: "Semua model" },
+              ...modelTypes.map((m) => ({ value: m, label: modelLabel[m] || m })),
+            ]}
+            value={filterModel}
+            onChange={(v) => onFilterChange("modelType", v ?? "all")}
+            placeholder="Semua model"
+          />
+        </div>
 
         {/* Export */}
         <a

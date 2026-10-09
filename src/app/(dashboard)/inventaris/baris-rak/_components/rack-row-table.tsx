@@ -32,6 +32,8 @@ const columns = [
   }),
   columnHelper.accessor("name", {
     header: "Nama",
+    // The row name (linked) is the card's headline; the code becomes a detail line.
+    meta: { mobilePrimary: true },
     cell: (info) => (
       <Link href={`/inventaris/baris-rak/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}

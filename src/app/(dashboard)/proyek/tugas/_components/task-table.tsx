@@ -24,10 +24,14 @@ const columns = [
   columnHelper.display({
     id: "no",
     header: "No",
+    // A row counter is meaningless on a phone card; keep it desktop-only.
+    meta: { mobile: false },
     cell: (info) => info.row.index + 1,
   }),
   columnHelper.accessor("name", {
     header: "Nama Tugas",
+    // The task name is the card's headline (the "No" column is hidden on mobile).
+    meta: { mobilePrimary: true },
     cell: (info) => (
       <Link href={`/proyek/tugas/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}

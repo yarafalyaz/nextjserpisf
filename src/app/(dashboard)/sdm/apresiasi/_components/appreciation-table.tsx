@@ -30,10 +30,14 @@ const columns = [
   columnHelper.display({
     id: "no",
     header: "No",
+    // A row counter is meaningless on a phone card; keep it desktop-only.
+    meta: { mobile: false },
     cell: (info) => info.row.index + 1,
   }),
   columnHelper.accessor("employee", {
     header: "Karyawan",
+    // The employee is the card's headline (the "No" column is hidden on mobile).
+    meta: { mobilePrimary: true },
     cell: (info) => (
       <Link href={`/sdm/apresiasi/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue().name}

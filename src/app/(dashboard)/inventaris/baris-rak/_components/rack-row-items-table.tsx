@@ -22,6 +22,8 @@ const columns = [
   }),
   columnHelper.accessor("name", {
     header: "Nama Barang",
+    // The item name (linked) is the card's headline; the SKU becomes a detail line.
+    meta: { mobilePrimary: true },
     cell: (info) => (
       <Link href={`/master/barang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
