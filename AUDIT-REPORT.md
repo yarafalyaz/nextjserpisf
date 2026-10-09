@@ -178,8 +178,21 @@ sengaja tidak disentuh.
 - `scripts/seed-remaining-e2e.ts` (sudah dijalankan CI sebelum shard E2E) kini
   men-seed satu checklist released `E2E-QC-01` + 2 item secara idempoten.
 
+### 6.8 Quick-add master data dari dalam select (`c69a4a79`, fitur)
+- Masalah: saat membuat pelanggan, kategori yang belum ada (mis. "DP 20%")
+  memaksa keluar form → buka `/master/kategori-pelanggan/tambah` → kembali dan
+  isi ulang.
+- `Combobox` kini punya prop opsional `onCreateNew(search)`: menampilkan baris
+  "＋ Tambah baru..." di bawah opsi dan mengirim kata kunci pencarian untuk
+  prefill. **Opt-in** — 87 pemakaian lain tak berubah (`CommandEmpty` tetap).
+- Diterapkan ke **Kategori Pelanggan** di form Pelanggan: baris itu membuka
+  dialog berisi field entitas sendiri (nama + DP %), memanggil
+  `createCustomerCategory`, lalu menambahkan opsi hasil `{id,name}` ke list lokal
+  dan memilihnya — tanpa reload, tanpa kehilangan isian. Form dialog diletakkan
+  **di luar** `<form>` pelanggan agar tidak nested.
+- Spec E2E `customer-category-quick-add.spec.ts` menguji alur penuh + teardown.
+
 **Status akhir:** 3071 unit test lulus, `tsc` 0 error, `eslint` 0 error (33 warning
-pra-eksisting), `next build` sukses, E2E chromium **407→411 hijau**
-(vehicle + registri + crud-surface + proyek/penjualan), seluruh halaman laporan
-render tanpa kegagalan.
+pra-eksisting), `next build` sukses, E2E chromium **411 hijau** + quick-add,
+seluruh halaman laporan render tanpa kegagalan.
 
