@@ -102,75 +102,29 @@ export async function createVehicle(formData: FormData) {
     const parsed = parseFormData(vehicleSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const { variantId, modelId, plateNo, year, color, customerId } =
-      parsed.data;
+    const { variantId, name, year } = parsed.data;
 
-    let vehicleVariantId: number | null = null;
-
-    // Prefer explicit variantId from form
-    if (variantId) {
-      vehicleVariantId = variantId;
-    } else if (modelId) {
-      // Fallback: pick first variant of selected model (or create "Standard")
-      const variant = await prisma.vehicleVariant.findFirst({
-        where: { vehicleModelId: modelId },
-      });
-      if (variant) {
-        vehicleVariantId = variant.id;
-      } else {
-        const newVariant = await prisma.vehicleVariant.create({
-          data: { vehicleModelId: modelId, name: "Standard" },
-        });
-        vehicleVariantId = newVariant.id;
-      }
-    }
-
-    // Atomic create: Vehicle row + optional CustomerVehicle link in one tx.
-    // Without the transaction wrapper, a prisma.vehicle.create success followed
-    // by a prisma.customerVehicle.create failure would orphan a Vehicle row
-    // (no FK from Vehicle → CustomerVehicle) — the vehicle would be invisible
-    // to any customer, take a plate number, and survive forever. Wrapping the
-    // pair in a single $transaction makes the failure mode roll back the
-    // Vehicle insert too.
-    const { vehicle, customerVehicleId } = await prisma.$transaction(
-      async (tx) => {
-        const created = await tx.vehicle.create({
-          data: {
-            plateNumber: plateNo,
-            vehicleVariantId,
-            year: year ?? null,
-            color: color ?? null,
-          },
-        });
-
-        let cvId: number | null = null;
-        if (customerId) {
-          const cv = await tx.customerVehicle.create({
-            data: { customerId, vehicleId: created.id },
-          });
-          cvId = cv.id;
-        }
-
-        return { vehicle: created, customerVehicleId: cvId };
+    // `Vehicle` is the catalog type master: it only carries the variant link,
+    // an optional label and a model year. Physical-unit attributes (plate,
+    // color) live on CustomerVehicle. No customer linkage here — a customer's
+    // ownership of this type is created via /kendaraan/pelanggan.
+    const vehicle = await prisma.vehicle.create({
+      data: {
+        vehicleVariantId: variantId,
+        name: name ?? null,
+        year: year ?? null,
       },
-    );
+    });
 
     revalidatePath("/kendaraan");
-    await logActivity(
-      "create",
-      "Vehicle",
-      vehicle.id,
-      customerVehicleId
-        ? `Membuat kendaraan + linkage pelanggan #${customerVehicleId}`
-        : "Membuat kendaraan",
-    );
+    await logActivity("create", "Vehicle", vehicle.id, "Membuat tipe kendaraan");
     return { success: true, id: vehicle.id };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVehicle]", getErrorMessage(e) || e);
     return {
       success: false,
-      error: getErrorMessage(e, "Gagal membuat kendaraan"),
+      error: getErrorMessage(e, "Gagal membuat tipe kendaraan"),
     };
   }
 }
@@ -443,37 +397,26 @@ export async function updateVehicle(id: number, formData: FormData) {
     const parsed = parseFormData(vehicleSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const { variantId, modelId, plateNo, year, color } = parsed.data;
-
-    let vehicleVariantId: number | null = null;
-    if (variantId) {
-      vehicleVariantId = variantId;
-    } else if (modelId) {
-      const variant = await prisma.vehicleVariant.findFirst({
-        where: { vehicleModelId: modelId },
-      });
-      if (variant) vehicleVariantId = variant.id;
-    }
+    const { variantId, name, year } = parsed.data;
 
     await prisma.vehicle.update({
       where: { id },
       data: {
-        plateNumber: plateNo,
-        vehicleVariantId,
+        vehicleVariantId: variantId,
+        name: name ?? null,
         year: year ?? null,
-        color: color ?? null,
       },
     });
 
     revalidatePath("/kendaraan");
-    await logActivity("update", "Vehicle", id, "Memperbarui kendaraan");
+    await logActivity("update", "Vehicle", id, "Memperbarui tipe kendaraan");
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateVehicle]", getErrorMessage(e) || e);
     return {
       success: false,
-      error: getErrorMessage(e, "Gagal memperbarui kendaraan"),
+      error: getErrorMessage(e, "Gagal memperbarui tipe kendaraan"),
     };
   }
 }
@@ -484,14 +427,15 @@ export async function deleteVehicle(id: number) {
   try {
     await requirePermission("delete_vehicles");
 
-    // Integrity guard: Vehicle → CustomerVehicle is onDelete: Cascade, and the
-    // customerVehicleId on Quotation/WorkOrder/SalesOrder/SalesInvoice/Project is
-    // nullable (SetNull). A raw delete would cascade-remove the ownership link AND
-    // silently NULL the vehicle reference on every historical document, erasing
-    // service-history linkage. Refuse if any dependent record exists (mirrors
-    // deleteRole's in-use guard).
+    // Integrity guard: Vehicle → CustomerVehicle is now onDelete: Restrict, and
+    // the customerVehicleId on Quotation/WorkOrder/SalesOrder/SalesInvoice/Project
+    // is nullable (SetNull). A raw delete would either be refused by the FK (when
+    // a link still exists) or, if we removed links first, silently NULL the
+    // vehicle reference on every historical document, erasing service-history
+    // linkage. Refuse if any dependent record exists (mirrors deleteRole's
+    // in-use guard) — or if any (non-deleted) customer still owns this type.
     const links = await prisma.customerVehicle.findMany({
-      where: { vehicleId: id },
+      where: { vehicleId: id, deletedAt: null },
       select: {
         id: true,
         _count: {
@@ -565,33 +509,29 @@ export async function createCustomerVehicle(formData: FormData) {
       variantId,
       vehicleId: formVehicleId,
       kendaraanId,
-      licensePlate,
-      year,
+      plateNumber,
       color,
-      vehicleType,
-      transmission,
+      year,
       chassisNumber,
       engineNumber,
       isActive,
       notes,
     } = parsed.data;
 
-    // Find or create Vehicle from variantId, then link to the customer — both in
-    // ONE transaction. Without the wrapper, a vehicle.create success followed by a
-    // customerVehicle.create failure orphans the freshly-created Vehicle row (no
-    // FK from Vehicle → CustomerVehicle), leaving a plate-holding ghost vehicle
-    // that belongs to no customer. Mirrors the atomic createVehicle fix.
+    // Find or create the catalog-type Vehicle from variantId, then create the
+    // ownership link (with the physical-unit attributes) — both in ONE
+    // transaction. Without the wrapper, a vehicle.create success followed by a
+    // customerVehicle.create failure orphans the freshly-created Vehicle row.
+    // Mirrors the atomic createVehicle fix.
     const customerVehicle = await prisma.$transaction(async (tx) => {
       let vehicleId: number;
 
       if (variantId) {
-        // Create a new Vehicle record linked to the variant
+        // Create a new catalog-type Vehicle linked to the variant.
         const vehicle = await tx.vehicle.create({
           data: {
             vehicleVariantId: variantId,
-            plateNumber: licensePlate ?? null,
             year: year ?? null,
-            color: color ?? null,
           },
         });
         vehicleId = vehicle.id;
@@ -603,12 +543,14 @@ export async function createCustomerVehicle(formData: FormData) {
         vehicleId = rawVehicleId;
       }
 
+      // Physical-unit attributes (plate/color/chassis/engine) live on the
+      // ownership link, not the catalog type.
       return tx.customerVehicle.create({
         data: {
           customerId,
           vehicleId,
-          vehicleType: vehicleType ?? null,
-          transmission: transmission ?? null,
+          plateNumber: plateNumber ?? null,
+          color: color ?? null,
           chassisNumber: chassisNumber ?? null,
           engineNumber: engineNumber ?? null,
           isActive: isActive ?? true,
@@ -647,24 +589,19 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
       variantId,
       vehicleId: formVehicleId,
       kendaraanId,
-      licensePlate,
-      year,
+      plateNumber,
       color,
-      vehicleType,
-      transmission,
+      year,
       chassisNumber,
       engineNumber,
       isActive,
       notes,
     } = parsed.data;
 
-    // Atomic update: Vehicle row + CustomerVehicle link, both in ONE transaction.
-    // Without the wrapper, a vehicle.update success followed by a customerVehicle
-    // .update failure would leave the linkage row pointing at an old field set
-    // (e.g. licensePlate mismatch) or, if the FK chain rejected, leave the
-    // vehicle mutated without the customer's linkage row being touched. The
-    // existing findUniqueOrThrow inside the tx (added below) plus a single
-    // $transaction make the pair atomic. Mirrors createVehicle / createCustomerVehicle.
+    // Atomic update: the catalog-type Vehicle row + the ownership link, both in
+    // ONE transaction. A vehicle.update success followed by a customerVehicle
+    // .update failure would otherwise leave the pair inconsistent (e.g. year
+    // moved on the type but the link still points at the old row).
     await prisma.$transaction(async (tx) => {
       const existing = await tx.customerVehicle.findUniqueOrThrow({
         where: { id },
@@ -673,14 +610,13 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
       let vehicleId: number;
 
       if (variantId) {
-        // Update the unit's Vehicle row (variant + identity) from the form.
+        // Update the catalog type's variant/year from the form. `name` is not
+        // edited here — it is a catalog label owned by /kendaraan.
         const updatedVehicle = await tx.vehicle.update({
           where: { id: existing.vehicleId },
           data: {
             vehicleVariantId: variantId,
-            plateNumber: licensePlate ?? null,
             year: year ?? null,
-            color: color ?? null,
           },
         });
         vehicleId = updatedVehicle.id;
@@ -690,25 +626,21 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
           throw new Error("vehicleId wajib diisi");
         }
         vehicleId = rawVehicleId;
-        // Plate/year/color live on the Vehicle for every path, not just the
-        // variant one — otherwise relinking to an existing Vehicle silently
-        // dropped the edited identity.
+        // Year is a catalog-type attribute, so keep it in sync on this path too
+        // — otherwise relinking to an existing type silently dropped the edit.
         await tx.vehicle.update({
           where: { id: vehicleId },
-          data: {
-            plateNumber: licensePlate ?? null,
-            year: year ?? null,
-            color: color ?? null,
-          },
+          data: { year: year ?? null },
         });
       }
 
+      // Physical-unit attributes (plate/color/chassis/engine) live on the link.
       await tx.customerVehicle.update({
         where: { id },
         data: {
           vehicleId,
-          vehicleType: vehicleType ?? null,
-          transmission: transmission ?? null,
+          plateNumber: plateNumber ?? null,
+          color: color ?? null,
           chassisNumber: chassisNumber ?? null,
           engineNumber: engineNumber ?? null,
           isActive: isActive ?? true,
@@ -782,13 +714,14 @@ export async function deleteCustomerVehicle(id: number) {
       };
     }
 
-    // Delete the linkage row AND its backing Vehicle row atomically. Every
-    // CustomerVehicle created from a variant gets its own dedicated Vehicle row
-    // (see createCustomerVehicle), and Vehicle -> CustomerVehicle is
-    // onDelete: Cascade — deleting only the linkage would leave that Vehicle row
-    // orphaned forever (no customer, invisible in every screen). A Vehicle MAY be
-    // shared by several CustomerVehicles, so only delete it when this is its last
-    // remaining owner; otherwise just drop the linkage and keep the shared row.
+    // Delete the linkage row AND its backing catalog-type Vehicle row atomically.
+    // Every CustomerVehicle created from a variant gets its own dedicated
+    // catalog Vehicle row (see createCustomerVehicle), and Vehicle → CustomerVehicle
+    // is onDelete: Restrict — deleting only the linkage would leave that Vehicle
+    // row orphaned forever (no customer, invisible in every screen), and the FK
+    // would block a later raw delete. A Vehicle MAY be shared by several
+    // CustomerVehicles, so only delete it when this is its last remaining owner;
+    // otherwise just drop the linkage and keep the shared row.
     await prisma.$transaction(async (tx) => {
       const otherOwners = await tx.customerVehicle.count({
         where: { vehicleId: vehicle.vehicleId, id: { not: id } },

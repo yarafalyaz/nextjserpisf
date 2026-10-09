@@ -53,8 +53,7 @@ type ActiveProject = {
   endDate: Date | null
   customer: { name: string }
   customerVehicle: {
-    vehicleType: string | null
-    vehicle: { plateNumber: string | null } | null
+    plateNumber: string | null
   } | null
   stages: { name: string; sortOrder: number; status: string }[]
 }
@@ -169,7 +168,7 @@ async function getDashboardData() {
         endDate: true,
         customer: { select: { name: true } },
         customerVehicle: {
-          select: { vehicleType: true, vehicle: { select: { plateNumber: true } } },
+          select: { plateNumber: true },
         },
         stages: {
           select: { name: true, sortOrder: true, status: true },
@@ -226,7 +225,7 @@ async function getDashboardData() {
     return {
       id: project.id,
       name: project.name,
-      plate: project.customerVehicle?.vehicle?.plateNumber || "-",
+      plate: project.customerVehicle?.plateNumber || "-",
       customer: project.customer?.name || "-",
       currentStage,
       progress,

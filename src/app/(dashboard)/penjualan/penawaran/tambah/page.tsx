@@ -52,7 +52,7 @@ export default async function CreateQuotationPage() {
   const vehicles = customerVehicles.map((cv) => ({
     id: cv.id,
     customerId: cv.customerId,
-    plateNumber: cv.vehicle?.plateNumber || "-",
+    plateNumber: cv.plateNumber || "-",
     brandName: cv.vehicle?.variant?.model?.brand?.name || "",
     modelName: cv.vehicle?.variant?.model?.name || "",
   }))

@@ -48,29 +48,29 @@ export const vehicleVariantSchema = z.object({
   transmission: optionalStr(100),
 })
 
-// ==================== Vehicle ====================
+// ==================== Vehicle (tipe katalog) ====================
+//
+// `Vehicle` is now the CATALOG TYPE master, sitting under `VehicleVariant`.
+// Physical-unit attributes (plate, color, chassis, engine) live on
+// `CustomerVehicle`, not here. A type must always reference a variant, plus an
+// optional human label and model year.
 
 export const vehicleSchema = z.object({
-  plateNo: requiredStr("Nomor plat wajib diisi", 20),
-  variantId: optionalId,
-  modelId: optionalId,
+  variantId: requiredId("Varian kendaraan"),
+  name: optionalStr(150),
   year: yearField,
-  color: optionalStr(50),
-  customerId: optionalId,
 })
 
-// ==================== Customer Vehicle ====================
+// ==================== Customer Vehicle (unit milik pelanggan) ====================
 
 export const customerVehicleSchema = z.object({
   customerId: requiredId("Pelanggan"),
   variantId: optionalId,
   vehicleId: optionalId,
   kendaraanId: optionalId,
-  licensePlate: optionalStr(20),
-  year: yearField,
+  plateNumber: optionalStr(20),
   color: optionalStr(50),
-  vehicleType: optionalStr(100),
-  transmission: optionalStr(100),
+  year: yearField,
   chassisNumber: optionalStr(100),
   engineNumber: optionalStr(100),
   isActive: optionalBool,

@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-// The registry reads identity through the Vehicle relation, so the fixture has
-// to create BOTH rows (Vehicle = physical unit, CustomerVehicle = ownership
-// link). Seeding it here keeps the spec self-contained: CI's seed creates a
-// customer but no customer vehicles, and relying on UI form filling (three
-// cascading comboboxes) would be far more brittle.
+// The registry reads identity from the CustomerVehicle (physical unit) plus the
+// catalog-type Vehicle. The fixture creates BOTH rows (Vehicle = catalog type,
+// CustomerVehicle = ownership link + physical-unit attributes). Seeding it here
+// keeps the spec self-contained: CI's seed creates a customer but no customer
+// vehicles, and relying on UI form filling (three cascading comboboxes) would be
+// far more brittle.
 const PLATE = "B 9999 E2E"
 const CHASSIS = "RANGKA-E2E-REGISTRY"
 const CUSTOMER_NAME = "E2E Registry Pelanggan"
@@ -27,16 +28,16 @@ test.describe("Kendaraan Pelanggan", () => {
     const vehicle = await prisma.vehicle.create({
       data: {
         vehicleVariantId: variant.id,
-        plateNumber: PLATE,
+        name: "E2E Registry Type",
         year: 2021,
-        color: "Merah E2E",
       },
     })
     await prisma.customerVehicle.create({
       data: {
         customerId: customer.id,
         vehicleId: vehicle.id,
-        vehicleType: "Truck",
+        plateNumber: PLATE,
+        color: "Merah E2E",
         chassisNumber: CHASSIS,
         engineNumber: "MESIN-E2E-REGISTRY",
         isActive: true,
@@ -48,10 +49,10 @@ test.describe("Kendaraan Pelanggan", () => {
 
   test.afterAll(async () => {
     const { prisma } = await import("@/lib/db/prisma")
-    // CustomerVehicle.vehicle is onDelete: Cascade, so removing the customer
-    // (or the vehicle) clears the link; delete both explicitly to be safe.
+    // CustomerVehicle.vehicle is onDelete: Restrict, so the link must be
+    // removed before the catalog-type Vehicle row can be deleted.
     await prisma.customerVehicle.deleteMany({ where: { chassisNumber: CHASSIS } })
-    await prisma.vehicle.deleteMany({ where: { plateNumber: PLATE } })
+    await prisma.vehicle.deleteMany({ where: { name: "E2E Registry Type" } })
     await prisma.customer.deleteMany({ where: { name: CUSTOMER_NAME } })
     await prisma.$disconnect()
   })

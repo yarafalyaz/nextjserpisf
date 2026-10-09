@@ -1389,7 +1389,7 @@ export async function createMaterialIssueFromWorkOrder(
 
       const miDocNo = await generateDocumentNumber("MI");
       const customerName = wo.customer?.name ?? "Unknown";
-      const licensePlate = wo.quotation?.customerVehicle?.vehicle?.plateNumber ?? "-";
+      const licensePlate = wo.quotation?.customerVehicle?.plateNumber ?? "-";
       const notes = `Pengeluaran material untuk WO ${wo.documentNo}\nPelanggan: ${customerName}\nPlat Nomor: ${licensePlate}`;
 
       const created = await tx.materialIssue.create({
@@ -1486,7 +1486,7 @@ export async function getWorkOrderWithCustomerInfo(workOrderId: number) {
         customerId: wo.customerId,
         customerName: wo.customer?.name ?? null,
         customerVehicleId: wo.customerVehicleId,
-        licensePlate: wo.quotation?.customerVehicle?.vehicle?.plateNumber ?? null,
+        licensePlate: wo.quotation?.customerVehicle?.plateNumber ?? null,
         vehicleName:
           wo.quotation?.customerVehicle?.vehicle?.variant?.name ?? null,
         projectId: wo.projectId,

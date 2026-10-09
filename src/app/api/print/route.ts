@@ -164,7 +164,7 @@ export async function GET(request: Request) {
           customerPhone: doc.customer.phone || "",
           customerEmail: doc.customer.email || "-",
           vehicleName,
-          plateNumber: doc.customerVehicle?.vehicle?.plateNumber || "-",
+          plateNumber: doc.customerVehicle?.plateNumber || "-",
           paymentMethod: paymentMethodText,
           shippingMethod: shippingMethodText,
           footerNotes: settings.quotationFooterNotes || "",

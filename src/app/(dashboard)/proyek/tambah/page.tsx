@@ -20,9 +20,9 @@ export default async function CreateProjectPage() {
       select: { id: true, name: true },
     }),
     prisma.customerVehicle.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       include: { vehicle: { include: { variant: { include: { model: { include: { brand: true } } } } } } },
-      orderBy: { vehicle: { plateNumber: "asc" } },
+      orderBy: { plateNumber: "asc" },
     }),
     peekNextDocumentNumber("PRJ"),
     prisma.costCenter.findMany({
@@ -34,7 +34,7 @@ export default async function CreateProjectPage() {
 
   const customerVehicles = customerVehiclesRaw.map((cv) => ({
     id: cv.id,
-    licensePlate: cv.vehicle?.plateNumber ?? null,
+    licensePlate: cv.plateNumber ?? null,
     vehicleName: [cv.vehicle.variant?.model?.brand?.name, cv.vehicle.variant?.model?.name, cv.vehicle.variant?.name].filter(Boolean).join(" ") || `Vehicle #${cv.vehicleId}`,
     customerId: cv.customerId,
   }))

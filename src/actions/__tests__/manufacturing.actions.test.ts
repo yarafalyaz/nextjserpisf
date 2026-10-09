@@ -1072,7 +1072,8 @@ describe("Work Order Actions", () => {
       customer: { name: "CUST" },
       quotation: {
         customerVehicle: {
-          vehicle: { plateNumber: "B 1", variant: { name: "V" } }
+          plateNumber: "B 1",
+          vehicle: { variant: { name: "V" } }
         }
       },
       project: { id: 9 },

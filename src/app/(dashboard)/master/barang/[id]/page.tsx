@@ -81,7 +81,7 @@ export default async function ItemDetailPage({
 
   const [purchaseOrders, projects, customers] = await Promise.all([
     allPoIds.length ? prisma.purchaseOrder.findMany({ where: { id: { in: allPoIds } }, include: { vendor: true } }) : [],
-    allProjectIds.length ? prisma.project.findMany({ where: { id: { in: allProjectIds } }, include: { customer: true, customerVehicle: { include: { vehicle: true } } } }) : [],
+    allProjectIds.length ? prisma.project.findMany({ where: { id: { in: allProjectIds } }, include: { customer: true, customerVehicle: true } }) : [],
     customerIdsFromSr.length ? prisma.customer.findMany({ where: { id: { in: customerIdsFromSr } }, select: { id: true, name: true } }) : [],
   ])
 
@@ -117,7 +117,7 @@ export default async function ItemDetailPage({
             const proj = projMap.get(mi.projectId)
             if (proj?.customer) {
               party = proj.customer.name
-              if (proj.customerVehicle) party += ` (${proj.customerVehicle.vehicle?.plateNumber || ''})`
+              if (proj.customerVehicle) party += ` (${proj.customerVehicle.plateNumber || ''})`
               partyLabel = "Customer"
             } else if (proj) {
               party = proj.name
@@ -129,7 +129,7 @@ export default async function ItemDetailPage({
               const proj = projMap.get(wo.projectId)
               if (proj?.customer) {
                 party = proj.customer.name
-                if (proj.customerVehicle) party += ` (${proj.customerVehicle.vehicle?.plateNumber || ''})`
+                if (proj.customerVehicle) party += ` (${proj.customerVehicle.plateNumber || ''})`
                 partyLabel = "Customer"
               }
             }

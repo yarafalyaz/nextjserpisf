@@ -102,11 +102,11 @@ describe("Vehicle Variant Actions", () => {
 
 describe("Vehicle Actions", () => {
   it("createVehicle succeeds", async () => {
-    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 }))
+    const res = await actions.createVehicle(fdMap({ variantId: 1, name: "Fortuner 2.4", year: 2023 }))
     expect(res?.success).toBe(true)
   })
   it("updateVehicle succeeds", async () => {
-    const res = await actions.updateVehicle(1, fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 }))
+    const res = await actions.updateVehicle(1, fdMap({ variantId: 1, name: "Fortuner 2.4", year: 2023 }))
     expect(res?.success).toBe(true)
   })
   it("deleteVehicle succeeds", async () => {
@@ -319,55 +319,7 @@ describe("Vehicle Actions Error Paths", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("sudah ada")
   })
-  it("updateVehicle finds fallback variant if variantId missing (line 298-302 branch)", async () => {
-    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 5 })
-    const res = await actions.updateVehicle(1, fdMap({ plateNo: "B1234XYZ", modelId: 1 }))
-    expect(res?.success).toBe(true)
-  })
-  it("createVehicle creates 'Standard' variant when no variant found (line 101-104 branch)", async () => {
-    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
-    mocks.prismaMock.vehicleVariant.create.mockResolvedValueOnce({ id: 99 })
-    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", modelId: 1 }))
-    expect(res?.success).toBe(true)
-  })
-  it("createVehicle links to customer when customerId provided (line 123 branch)", async () => {
-    mocks.prismaMock.customerVehicle.create.mockResolvedValueOnce({ id: 1 })
-    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1, customerId: 5 }))
-    expect(res?.success).toBe(true)
-  })
-
-  it("createVehicle wraps Vehicle + CustomerVehicle in a single $transaction (no orphan risk)", async () => {
-    // The $transaction mock invokes the callback with the prisma mock, so any
-    // tx.vehicle.create / tx.customerVehicle.create call proves the atomic
-    // wrapper is in place. Without it, the function would call prisma.vehicle
-    // .create / prisma.customerVehicle.create directly and a partial failure
-    // would orphan a Vehicle row.
-    mocks.prismaMock.customerVehicle.create.mockResolvedValueOnce({ id: 1 })
-    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1, customerId: 5 }))
-    expect(res?.success).toBe(true)
-    // Inside-tx calls routed through the prisma mock (which IS the tx mock here).
-    expect(mocks.prismaMock.vehicle.create).toHaveBeenCalledTimes(1)
-    expect(mocks.prismaMock.customerVehicle.create).toHaveBeenCalledTimes(1)
-    // $transaction must be invoked (function form, not array form) to wrap the pair.
-    const txCalls = mocks.prismaMock.$transaction.mock.calls.filter(
-      (c: any[]) => typeof c[0] === "function"
-    )
-    expect(txCalls.length).toBeGreaterThan(0)
-  })
-
-  it("createVehicle rolls back Vehicle when CustomerVehicle.create throws inside the tx", async () => {
-    mocks.prismaMock.customerVehicle.create.mockRejectedValueOnce(new Error("fk fail"))
-    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1, customerId: 5 }))
-    // The $transaction mock propagates the rejection as a rejection of the
-    // whole callback (it's not a real DB tx that would auto-rollback), so the
-    // outer catch turns it into success: false. Crucially, vehicle.create
-    // was attempted (then "rolled back" by the rejected tx) — but no commit
-    // happens. The test asserts the function surfaces the failure rather than
-    // returning success with an orphan Vehicle.
-    expect(res?.success).toBe(false)
-    expect(res?.error).toMatch(/fk fail/)
-  })
-  it("createVehicleVariant fails if duplicate name (line 187 branch)", async () => {
+  it("deleteVehicle refuses if has relation dependents (line 345 branch)", async () => {
     mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 2 })
     const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(false)
@@ -410,24 +362,24 @@ describe("Vehicle Actions Error Paths", () => {
     expect(res?.error).toBe("db err")
   })
   it("createVehicle fails validation", async () => {
-    const res = await actions.createVehicle(fdMap({ plateNo: "" }))
+    const res = await actions.createVehicle(fdMap({ name: "no variant" }))
     expect(res?.success).toBe(false)
   })
   it("createVehicle handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.vehicle.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 }))
+    const res = await actions.createVehicle(fdMap({ variantId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
   it("updateVehicle fails validation", async () => {
-    const res = await actions.updateVehicle(1, fdMap({ plateNo: "" }))
+    const res = await actions.updateVehicle(1, fdMap({ name: "no variant" }))
     expect(res?.success).toBe(false)
   })
   it("updateVehicle handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.vehicle.update.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.updateVehicle(1, fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 }))
+    const res = await actions.updateVehicle(1, fdMap({ variantId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
@@ -470,10 +422,14 @@ describe("Vehicle Actions Remaining Branches", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("sudah ada")
   })
-  it("createVehicle uses existing fallback variant (line 99 branch)", async () => {
-    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 42 })
-    const res = await actions.createVehicle(fdMap({ plateNo: "B1234XYZ", modelId: 1 }))
+  it("createVehicle stores name and year on the catalog type", async () => {
+    const res = await actions.createVehicle(fdMap({ variantId: 42, name: "Avanza 1.3 G", year: 2022 }))
     expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vehicle.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ vehicleVariantId: 42, name: "Avanza 1.3 G", year: 2022 }),
+      })
+    )
   })
   it("deleteVehicleVariant revalidates when variant exists (line 217 branch)", async () => {
     mocks.prismaMock.vehicleVariant.findUnique.mockResolvedValueOnce({ id: 1, vehicleModelId: 3 })
@@ -489,14 +445,14 @@ describe("Next.js redirect error handling", () => {
   const fnsToTest = [
     { name: "createVehicleBrand", fn: () => actions.createVehicleBrand(fdMap({ name: "Toyota" })) },
     { name: "createVehicleModel", fn: () => actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 })) },
-    { name: "createVehicle", fn: () => actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 })) },
+    { name: "createVehicle", fn: () => actions.createVehicle(fdMap({ variantId: 1 })) },
     { name: "deleteVehicleBrand", fn: () => actions.deleteVehicleBrand(1) },
     { name: "deleteVehicleModel", fn: () => actions.deleteVehicleModel(1) },
     { name: "createVehicleVariant", fn: () => actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 })) },
     { name: "deleteVehicleVariant", fn: () => actions.deleteVehicleVariant(1) },
     { name: "updateVehicleBrand", fn: () => actions.updateVehicleBrand(1, fdMap({ name: "Toyota" })) },
     { name: "updateVehicleModel", fn: () => actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 })) },
-    { name: "updateVehicle", fn: () => actions.updateVehicle(1, fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 })) },
+    { name: "updateVehicle", fn: () => actions.updateVehicle(1, fdMap({ variantId: 1 })) },
     { name: "deleteVehicle", fn: () => actions.deleteVehicle(1) },
     { name: "createCustomerVehicle", fn: () => actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1, vehicleId: 1 })) },
     { name: "updateCustomerVehicle", fn: () => actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 1, vehicleId: 1 })) },
