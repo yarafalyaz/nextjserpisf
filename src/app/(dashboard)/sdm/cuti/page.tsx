@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Cuti" }
 export default async function LeaveRequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string; halaman?: string; pageSize?: string }>
 }) {
   const user = await requirePermission("view_leave_requests")
   // Self-service scoping: karyawan hanya lihat cutinya sendiri, kepala_bengkel
@@ -25,6 +25,7 @@ export default async function LeaveRequestsPage({
   const scope = await getHrScope(user)
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -40,9 +41,12 @@ export default async function LeaveRequestsPage({
   const leaves = await prisma.leaveRequest.findMany({
     where,
     include: { employee: { select: { name: true } } },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
+
+  const total = await prisma.leaveRequest.count({ where })
 
   const data = toPlain(leaves)
 
@@ -83,6 +87,9 @@ export default async function LeaveRequestsPage({
 
       <LeaveTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         showActions={showActions}
         showEmployeeColumn={showEmployeeColumn}
         toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/cuti" />}

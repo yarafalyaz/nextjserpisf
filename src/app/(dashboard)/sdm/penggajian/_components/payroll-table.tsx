@@ -79,13 +79,16 @@ const columns = [
 
 interface PayrollTableProps {
   data: PayrollData[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
   showActions?: boolean
   showEmployeeColumn?: boolean
 }
 
-export function PayrollTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: PayrollTableProps) {
+export function PayrollTable({ data, total, page, pageSize, toolbar, filters, showActions = true, showEmployeeColumn = true }: PayrollTableProps) {
   const visibleColumns = useMemo(() => {
     let cols = columns
     if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
@@ -98,7 +101,7 @@ export function PayrollTable({ data, toolbar, filters, showActions = true, showE
       data={data}
       columns={visibleColumns}
       ariaLabel="Daftar penggajian"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={false}
       toolbar={toolbar}
       filters={filters}

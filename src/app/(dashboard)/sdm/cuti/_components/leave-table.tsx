@@ -100,13 +100,16 @@ const columns = [
 
 interface LeaveTableProps {
   data: LeaveRequest[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
   showActions?: boolean
   showEmployeeColumn?: boolean
 }
 
-export function LeaveTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: LeaveTableProps) {
+export function LeaveTable({ data, total, page, pageSize, toolbar, filters, showActions = true, showEmployeeColumn = true }: LeaveTableProps) {
   const visibleColumns = useMemo(() => {
     let cols = columns
     if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
@@ -119,7 +122,7 @@ export function LeaveTable({ data, toolbar, filters, showActions = true, showEmp
       data={data}
       columns={visibleColumns}
       ariaLabel="Daftar cuti"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

@@ -72,13 +72,16 @@ const columns = [
 
 interface OvertimeTableProps {
   data: OvertimeRequest[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
   showActions?: boolean
   showEmployeeColumn?: boolean
 }
 
-export function OvertimeTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: OvertimeTableProps) {
+export function OvertimeTable({ data, total, page, pageSize, toolbar, filters, showActions = true, showEmployeeColumn = true }: OvertimeTableProps) {
   const visibleColumns = useMemo(() => {
     let cols = columns
     if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
@@ -91,7 +94,7 @@ export function OvertimeTable({ data, toolbar, filters, showActions = true, show
       data={data}
       columns={visibleColumns}
       ariaLabel="Daftar lembur"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

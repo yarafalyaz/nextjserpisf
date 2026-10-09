@@ -47,6 +47,8 @@ export default async function OvertimePage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.overtimeRequest.count({ where })
+
   const data = toPlain(overtimes)
 
   const userRoles: string[] = user.roles ?? [];
@@ -81,6 +83,9 @@ export default async function OvertimePage({
 
       <OvertimeTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         showActions={showActions}
         showEmployeeColumn={showEmployeeColumn}
         toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/lembur" />}

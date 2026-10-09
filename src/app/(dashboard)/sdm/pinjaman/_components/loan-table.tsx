@@ -71,13 +71,16 @@ const columns = [
 
 interface LoanTableProps {
   data: LoanData[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
   showActions?: boolean
   showEmployeeColumn?: boolean
 }
 
-export function LoanTable({ data, toolbar, filters, showActions = true, showEmployeeColumn = true }: LoanTableProps) {
+export function LoanTable({ data, total, page, pageSize, toolbar, filters, showActions = true, showEmployeeColumn = true }: LoanTableProps) {
   const visibleColumns = useMemo(() => {
     let cols = columns
     if (!showActions) cols = cols.filter((c: any) => c.id !== "actions")
@@ -90,7 +93,7 @@ export function LoanTable({ data, toolbar, filters, showActions = true, showEmpl
       data={data}
       columns={visibleColumns}
       ariaLabel="Daftar pinjaman"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

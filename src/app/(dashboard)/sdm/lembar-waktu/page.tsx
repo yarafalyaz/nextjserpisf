@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -16,12 +16,13 @@ export const metadata: Metadata = { title: "Lembar Waktu" }
 export default async function TimesheetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   const user = await requirePermission("view_timesheets")
   const scope = await getHrScope(user)
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
 
   const where = {
     ...hrScopeWhere(scope),
@@ -35,9 +36,12 @@ export default async function TimesheetsPage({
   const timesheets = await prisma.timesheet.findMany({
     where,
     include: { employee: { select: { name: true } } },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { date: "desc" },
   })
+
+  const total = await prisma.timesheet.count({ where })
 
   const data = toPlain(timesheets)
 
@@ -60,7 +64,7 @@ export default async function TimesheetsPage({
         </CanCreate>
       </div>
 
-      <TimesheetTable data={data} showActions={showActions} />
+      <TimesheetTable data={data} total={total} page={page} pageSize={pageSize} showActions={showActions} />
     </div>
   )
 }

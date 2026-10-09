@@ -22,7 +22,7 @@ interface VehicleRow {
   } | null
 }
 
-export function VehicleTable({ data }: { data: VehicleRow[] }) {
+export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow[]; total: number; page: number; pageSize: number }) {
   const columns: ColumnDef<VehicleRow>[] = [
     {
       id: "plateNumber",
@@ -102,7 +102,7 @@ export function VehicleTable({ data }: { data: VehicleRow[] }) {
         data={data}
         columns={columns}
         ariaLabel="Daftar kendaraan"
-        pageSize={20}
+        serverPagination={{ total, page, pageSize }}
         selectable={true}
         searchColumn="plateNumber"
         searchPlaceholder="Cari plat nomor, warna, atau varian..."

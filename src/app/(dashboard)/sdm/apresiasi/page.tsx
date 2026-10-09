@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -17,11 +17,12 @@ export const metadata: Metadata = { title: "Apresiasi" }
 export default async function AppreciationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tipe?: string; cari?: string }>
+  searchParams: Promise<{ tipe?: string; cari?: string; halaman?: string; pageSize?: string }>
 }) {
   const user = await requirePermission("view_appreciations")
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
 
   const dbTypeParam = params.tipe ? indoToStatus[params.tipe] || params.tipe : undefined
   const where = {
@@ -36,9 +37,12 @@ export default async function AppreciationsPage({
   const appreciations = await prisma.appreciation.findMany({
     where,
     include: { employee: true },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { date: "desc" },
   })
+
+  const total = await prisma.appreciation.count({ where })
 
   const data = appreciations.map((a) => ({
     id: a.id,
@@ -79,6 +83,9 @@ export default async function AppreciationsPage({
 
       <AppreciationTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         showActions={showActions}
         toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/apresiasi" />}
         filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}

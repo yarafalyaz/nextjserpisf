@@ -83,6 +83,8 @@ export default async function PayrollPage({
     include: { employee: true },
   });
 
+  const total = await prisma.payroll.count({ where })
+
   const data = payrolls.map((p) => ({
     id: p.id,
     documentNo: p.documentNo,
@@ -146,6 +148,9 @@ export default async function PayrollPage({
 
       <PayrollTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         showActions={showActions}
         showEmployeeColumn={showEmployeeColumn}
         toolbar={

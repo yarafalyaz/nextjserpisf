@@ -1,4 +1,5 @@
 import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination";
 import { Pencil } from "lucide-react"
 export const dynamic = "force-dynamic"
 
@@ -13,21 +14,32 @@ import { CanCreate } from "@/components/auth/can-create"
 
 export const metadata: Metadata = { title: "Pengguna" }
 
-export default async function UsersPage() {
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("manage_users")
 
-  const [users, roles] = await Promise.all([
+  const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
+
+  const [users, roles, totalUsers] = await Promise.all([
     prisma.user.findMany({
       include: { roles: true },
       orderBy: { createdAt: "desc" },
-      take: MAX_LIST_ROWS,
+      take,
+      skip: (page - 1) * pageSize,
     }),
     prisma.role.findMany({
       include: { permissions: true },
       orderBy: { name: "asc" },
       take: MAX_LIST_ROWS,
     }),
+    prisma.user.count(),
   ])
+
+  const totalPages = Math.ceil(totalUsers / pageSize)
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,7 +60,7 @@ export default async function UsersPage() {
       {/* Users Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Pengguna ({users.length})</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Pengguna ({totalUsers})</h2>
         </div>
         <div className="overflow-x-auto">
           <DetailTable>
@@ -82,6 +94,26 @@ export default async function UsersPage() {
             </DetailTableBody>
           </DetailTable>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+            <span className="text-[0.8125rem] text-muted-foreground">
+              Hal {page} dari {totalPages} ({totalUsers} pengguna)
+            </span>
+            <div className="flex gap-1">
+              {page > 1 && (
+                <Link href={`/pengaturan/pengguna?halaman=${page - 1}`} className="button button--ghost button--sm">
+                  ← Sebelumnya
+                </Link>
+              )}
+              {page < totalPages && (
+                <Link href={`/pengaturan/pengguna?halaman=${page + 1}`} className="button button--ghost button--sm">
+                  Berikutnya →
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Roles */}
@@ -106,16 +138,6 @@ export default async function UsersPage() {
           </div>
         </div>
       </div>
-
-      {users.length >= MAX_LIST_ROWS && (
-        <p
-          role="status"
-          className="rounded-lg border border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
-        >
-          Menampilkan maksimal {MAX_LIST_ROWS} pengguna pertama. Masih ada pengguna lain yang tidak
-          ditampilkan — persempit pencarian untuk melihatnya.
-        </p>
-      )}
     </div>
   )
 }

@@ -109,15 +109,18 @@ const columns = [
 
 interface VehicleFitmentTableProps {
   data: VehicleFitmentData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function VehicleFitmentTable({ data }: VehicleFitmentTableProps) {
+export function VehicleFitmentTable({ data, total, page, pageSize }: VehicleFitmentTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar aturan fitment kendaraan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       onBulkDelete={(ids) => bulkDelete("vehicleFitmentRule", ids)}
     />

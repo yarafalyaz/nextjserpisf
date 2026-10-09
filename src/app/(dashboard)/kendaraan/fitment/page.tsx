@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -17,25 +17,31 @@ export const metadata: Metadata = { title: "Fitment Kendaraan" }
 export default async function VehicleFitmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; hasil?: string }>
+  searchParams: Promise<{ cari?: string; hasil?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_vehicle_fitments")
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
+
+  const where = {
+    ...(params.cari && {
+      OR: [
+        { source: { contains: params.cari } },
+        { notes: { contains: params.cari } },
+      ],
+    }),
+    ...(params.hasil && { result: params.hasil }),
+  }
 
   const rules = await prisma.vehicleFitmentRule.findMany({
-    where: {
-      ...(params.cari && {
-        OR: [
-          { source: { contains: params.cari } },
-          { notes: { contains: params.cari } },
-        ],
-      }),
-      ...(params.hasil && { result: params.hasil }),
-    },
+    where,
     orderBy: { createdAt: "desc" },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
   })
+
+  const total = await prisma.vehicleFitmentRule.count({ where })
 
   // Resolve display names for the scoped catalog references.
   const itemIds = [...new Set(rules.map((r) => r.itemId))]
@@ -96,7 +102,7 @@ export default async function VehicleFitmentsPage({
         ))}
       </div>
 
-      <VehicleFitmentTable data={tableData} />
+      <VehicleFitmentTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

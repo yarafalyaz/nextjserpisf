@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -18,12 +18,13 @@ export const metadata: Metadata = { title: "Pinjaman" }
 export default async function EmployeeLoansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string; halaman?: string; pageSize?: string }>
 }) {
   const user = await requirePermission("view_employee_loans")
   const scope = await getHrScope(user)
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -39,9 +40,12 @@ export default async function EmployeeLoansPage({
   const loans = await prisma.employeeLoan.findMany({
     where,
     include: { employee: true },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
+
+  const total = await prisma.employeeLoan.count({ where })
 
   const data = loans.map((l) => ({
     id: l.id,
@@ -87,6 +91,9 @@ export default async function EmployeeLoansPage({
 
       <LoanTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         showActions={showActions}
         showEmployeeColumn={showEmployeeColumn}
         toolbar={<AppSearchField placeholder="Cari nama karyawan..." action="/sdm/pinjaman" />}

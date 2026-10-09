@@ -77,12 +77,15 @@ const columns = [
 
 interface AppreciationTableProps {
   data: AppreciationData[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
   showActions?: boolean
 }
 
-export function AppreciationTable({ data, toolbar, filters, showActions = true }: AppreciationTableProps) {
+export function AppreciationTable({ data, total, page, pageSize, toolbar, filters, showActions = true }: AppreciationTableProps) {
   const visibleColumns = useMemo(() => {
     if (!showActions) return columns.filter((c: any) => c.id !== "actions")
     return columns
@@ -93,7 +96,7 @@ export function AppreciationTable({ data, toolbar, filters, showActions = true }
       data={data}
       columns={visibleColumns}
       ariaLabel="Daftar apresiasi karyawan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

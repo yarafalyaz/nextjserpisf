@@ -57,10 +57,13 @@ const columns = [
 
 interface TimesheetTableProps {
   data: Timesheet[]
+  total: number
+  page: number
+  pageSize: number
   showActions?: boolean
 }
 
-export function TimesheetTable({ data, showActions = true }: TimesheetTableProps) {
+export function TimesheetTable({ data, total, page, pageSize, showActions = true }: TimesheetTableProps) {
   const visibleColumns = useMemo(() => {
     if (!showActions) return columns.filter((c: any) => c.id !== "actions")
     return columns
@@ -71,7 +74,7 @@ export function TimesheetTable({ data, showActions = true }: TimesheetTableProps
       data={data}
       columns={visibleColumns}
       ariaLabel="Daftar lembar waktu"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="employeeName"
       searchPlaceholder="Cari nama karyawan..."
