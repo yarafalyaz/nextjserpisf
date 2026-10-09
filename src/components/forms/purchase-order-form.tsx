@@ -58,12 +58,14 @@ interface PurchaseOrderFormProps {
   defaultPrId?: number;
   purchaseRequests?: {
     id: number;
+    slug?: string | null;
     documentNo: string;
     title?: string | null;
     vendorId?: number | null;
   }[];
   preselectedPR?: {
     id: number;
+    slug?: string | null;
     documentNo: string;
     title?: string | null;
     vendorId?: number | null;
@@ -92,6 +94,7 @@ export function PurchaseOrderForm({
   const [isService, setIsService] = useState<boolean>((order as any)?.isService ?? false);
   const [linkedPR, setLinkedPR] = useState<{
     id: number;
+    slug?: string | null;
     documentNo: string;
     title?: string | null;
     vendorId?: number | null;
@@ -99,6 +102,7 @@ export function PurchaseOrderForm({
     preselectedPR
       ? {
           id: preselectedPR.id,
+          slug: preselectedPR.slug,
           documentNo: preselectedPR.documentNo,
           title: preselectedPR.title,
           vendorId: preselectedPR.vendorId,
@@ -179,7 +183,7 @@ export function PurchaseOrderForm({
     const pr = purchaseRequests?.find((p) => p.id === id);
     setLinkedPR(
       pr
-        ? { id: pr.id, documentNo: pr.documentNo, title: pr.title, vendorId: pr.vendorId }
+        ? { id: pr.id, slug: pr.slug, documentNo: pr.documentNo, title: pr.title, vendorId: pr.vendorId }
         : null,
     );
     // Suggest the PR's vendor as the PO vendor (still changeable).
@@ -274,7 +278,7 @@ export function PurchaseOrderForm({
                   <div className="flex flex-col">
                     <span className="text-xs text-muted-foreground">Terkait Permintaan</span>
                     <Link
-                      href={`/pembelian/permintaan/${linkedPR.id}`}
+                      href={`/pembelian/permintaan/${linkedPR.slug ?? linkedPR.id}`}
                       className="font-mono text-sm font-medium text-foreground hover:underline"
                     >
                       {linkedPR.documentNo}

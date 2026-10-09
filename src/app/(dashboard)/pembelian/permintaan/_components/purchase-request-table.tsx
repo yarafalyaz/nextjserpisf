@@ -8,6 +8,7 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePurchaseRequest } from "@/actions/purchase.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface PurchaseRequestItem {
   id: number
@@ -15,6 +16,7 @@ interface PurchaseRequestItem {
 
 interface PurchaseRequest {
   id: number
+  slug: string | null
   documentNo: string
   date: Date | string
   requestDate?: Date | string | null
@@ -28,7 +30,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/permintaan/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
+      <Link href={entityHref("/pembelian/permintaan", info.row.original)} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -67,7 +69,7 @@ const columns = [
       }
       return (
         <Link
-          href={`/pembelian/pesanan/tambah/${pr.id}`}
+          href={`/pembelian/pesanan/tambah/${pr.slug ?? pr.id}`}
           className="text-primary hover:underline font-medium"
         >
           Buat PO
@@ -81,7 +83,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/pembelian/permintaan/${info.row.original.id}`}
+        viewHref={entityHref("/pembelian/permintaan", info.row.original)}
         deleteAction={deletePurchaseRequest}
         deleteId={info.row.original.id}
         editPermission="edit_purchase_requests"

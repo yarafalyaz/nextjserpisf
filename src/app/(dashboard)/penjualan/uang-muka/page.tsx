@@ -57,6 +57,7 @@ export default async function DownPaymentsPage({
 
   const dps = rawDps.map((dp) => ({
     id: dp.id,
+    slug: dp.slug,
     quotation: dp.quotation,
     amount: Number(dp.amount),
     status: dp.status,

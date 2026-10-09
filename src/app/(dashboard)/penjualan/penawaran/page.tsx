@@ -50,6 +50,7 @@ export default async function QuotationsPage({
 
   const quotations = rawQuotations.map((q) => ({
     id: q.id,
+    slug: q.slug,
     documentNo: q.documentNo,
     customer: { name: q.customer.name },
     customerVehicle: q.customerVehicle?.plateNumber

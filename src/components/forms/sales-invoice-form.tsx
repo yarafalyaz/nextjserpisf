@@ -60,7 +60,7 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
         const result = invoice?.id ? await updateSalesInvoice(invoice.id, formData) : await createSalesInvoice(formData)
         if (result.success) {
           showSuccess(invoice?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-          router.push(`/penjualan/faktur/${result.id}`)
+          router.push(`/penjualan/faktur/${result.slug ?? result.id}`)
           router.refresh()
         } else {
           showError(result.error || "Gagal menyimpan data")

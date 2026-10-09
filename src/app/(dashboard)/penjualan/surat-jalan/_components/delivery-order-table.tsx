@@ -8,9 +8,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteDeliveryOrder } from "@/actions/sales.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface DeliveryOrder {
   id: number
+  slug: string | null
   documentNo: string
   doNumber?: string | null
   salesOrder: { documentNo: string; customer: { name: string } }
@@ -24,7 +26,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/surat-jalan/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/penjualan/surat-jalan", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),

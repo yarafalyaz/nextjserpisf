@@ -8,9 +8,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteQuotation } from "@/actions/sales.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface Quotation {
   id: number
+  slug: string | null
   documentNo: string
   customer: { name: string }
   customerVehicle: { licensePlate: string } | null
@@ -25,7 +27,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/penawaran/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/penjualan/penawaran", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -61,7 +63,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/penjualan/penawaran/${info.row.original.id}`}
+        viewHref={entityHref("/penjualan/penawaran", info.row.original)}
         deleteAction={deleteQuotation}
         deleteId={info.row.original.id}
         editPermission="edit_quotations"

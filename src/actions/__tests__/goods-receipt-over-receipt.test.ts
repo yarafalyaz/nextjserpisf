@@ -30,6 +30,7 @@ vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermi
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn().mockResolvedValue("GR-123") }))
+vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 
 describe("GoodsReceipt Over-receipt Guard", () => {
   it("accepts the draft for duplicate item IDs (over-receipt is capped at verification)", async () => {

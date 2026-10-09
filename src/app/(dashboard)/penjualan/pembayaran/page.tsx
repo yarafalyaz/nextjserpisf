@@ -46,6 +46,7 @@ export default async function SalesPaymentsPage({
   const pmMap = await getPaymentMethodMap()
   const payments = rawPayments.map((p) => ({
     id: p.id,
+    slug: p.slug,
     documentNo: p.documentNo,
     salesInvoice: p.salesInvoice,
     paymentDate: p.paymentDate,

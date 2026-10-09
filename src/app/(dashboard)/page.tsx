@@ -236,6 +236,7 @@ async function getDashboardData() {
 
   const invoiceRows = recentInvoices.map((invoice) => ({
     id: invoice.id,
+    slug: invoice.slug,
     documentNo: invoice.documentNo,
     customerName: invoice.customer.name,
     grandTotal: Number(invoice.grandTotal),

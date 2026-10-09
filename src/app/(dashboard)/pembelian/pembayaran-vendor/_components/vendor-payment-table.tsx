@@ -7,9 +7,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteVendorPayment } from "@/actions/purchase.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface VendorPayment {
   id: number
+  slug: string | null
   documentNo: string
   paymentDate: Date | string
   amount: number | string
@@ -23,7 +25,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/pembayaran-vendor/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
+      <Link href={entityHref("/pembelian/pembayaran-vendor", info.row.original)} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -51,7 +53,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/pembelian/pembayaran-vendor/${info.row.original.id}`}
+        viewHref={entityHref("/pembelian/pembayaran-vendor", info.row.original)}
         deleteAction={deleteVendorPayment}
         deleteId={info.row.original.id}
         editPermission="edit_vendor_payments"

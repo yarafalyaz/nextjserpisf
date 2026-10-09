@@ -65,6 +65,7 @@ vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn(as
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
 vi.mock("@/lib/sales/return-validation", () => ({ findOverReturn: vi.fn(() => null) }))
+vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 
 import { updateSalesInvoice } from "../sales.actions"
 
@@ -81,8 +82,10 @@ beforeEach(() => {
     invoiceItemDeleteManyMock, invoiceItemCreateManyMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 3 })
-  // First call: existing invoice (must be draft). Second call (inside tx): paidAmount.
+  // Pre-tx read: existing invoice for slug derivation. Then inside tx: existing
+  // invoice (must be draft), then the paidAmount lookup.
   invoiceFindUniqueOrThrowMock
+    .mockResolvedValueOnce({ id: 11, status: "draft", documentNo: "INV-11" })
     .mockResolvedValueOnce({ id: 11, status: "draft" })
     .mockResolvedValueOnce({ paidAmount: 0 })
   invoiceUpdateMock.mockResolvedValue({ id: 11 })

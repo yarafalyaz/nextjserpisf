@@ -46,6 +46,7 @@ vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMo
 vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: (...a: unknown[]) => logActivityMock(...a),
 }))
+vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 
 import { updateSalesPayment } from "../sales.actions"
 

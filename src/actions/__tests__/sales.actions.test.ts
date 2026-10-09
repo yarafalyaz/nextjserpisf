@@ -151,6 +151,8 @@ vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.generateDocNumMock(...a),
 }))
 
+vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
+
 vi.mock("@/lib/utils/safe-parse", async (importOriginal) => {
   const actual: any = await importOriginal()
   return {
@@ -1002,6 +1004,7 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
   })
   it("updateDeliveryOrder succeeds", async () => {
     mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ customerId: 1 })
+    mocks.prismaMock.deliveryOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "DO-1" })
     const res = await actions.updateDeliveryOrder(1, fdMap({ salesOrderId: "1", date: "2026-06-12" }))
     expect(res?.success).toBe(true)
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_delivery_orders")

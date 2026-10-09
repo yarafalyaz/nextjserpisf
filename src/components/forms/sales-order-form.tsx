@@ -58,7 +58,7 @@ export function SalesOrderForm({ customers, order, quotationId: _quotationId, de
         const result = order?.id ? await updateSalesOrder(order.id, formData) : await createSalesOrder(formData)
         if (result.success) {
           showSuccess(order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-          router.push(`/penjualan/pesanan/${result.id}`)
+          router.push(`/penjualan/pesanan/${result.slug ?? result.id}`)
           router.refresh()
         } else {
           showError(result.error || "Gagal menyimpan data")

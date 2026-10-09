@@ -24,6 +24,7 @@ import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service"
+import { nextSlug } from "@/lib/utils/slug-db"
 
 // ==================== QUOTATION ACTIONS ====================
 
@@ -36,6 +37,7 @@ export async function createQuotation(formData: FormData) {
   if (!data) throw new Error("Invalid quotation data")
 
   const documentNo = await generateDocumentNumber("QUO")
+  const slug = await nextSlug("quotation", documentNo)
 
   // Validate vehicle belongs to the selected customer
   if (data.customerVehicleId && data.customerId) {
@@ -95,6 +97,7 @@ export async function createQuotation(formData: FormData) {
     const q = await tx.quotation.create({
       data: {
         documentNo,
+        slug,
         // data arrives via safeJsonParse so IDs come in as strings; Prisma's
         // foreign-key fields expect number. Without the cast, a tampered/buggy
         // client submitting "1" makes the WHERE match nothing and silently
@@ -163,7 +166,7 @@ export async function createQuotation(formData: FormData) {
 
   await logActivity("create", "Quotation", quotation.id, `Membuat penawaran #${quotation.id}`)
   revalidatePath("/penjualan/penawaran")
-  return { success: true, id: quotation.id }
+  return { success: true, id: quotation.id, slug }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -382,6 +385,7 @@ export async function convertQuotationToOrder(quotationId: number) {
   }
 
   const documentNo = await generateDocumentNumber("SO")
+  const slug = await nextSlug("salesOrder", documentNo)
   const allItems = quotation.sections.flatMap((section) => section.items)
 
   const salesOrder = await prisma.$transaction(async (tx) => {
@@ -401,6 +405,7 @@ export async function convertQuotationToOrder(quotationId: number) {
     const so = await tx.salesOrder.create({
       data: {
         documentNo,
+        slug,
         customerId: quotation.customerId,
         quotationId: quotation.id,
         customerVehicleId: quotation.customerVehicleId,
@@ -461,6 +466,8 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
   })
+
+  const slug = await nextSlug("quotation", quotation.documentNo, { excludeId: quotationId })
 
   // Custom fabrication: the item list may change until the customer actually
   // pays. A converted quotation (DP confirmed → SO/invoice already created) is
@@ -546,6 +553,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     await tx.quotation.update({
       where: { id: quotationId },
       data: {
+        slug,
         // data arrives via safeJsonParse so IDs come in as strings; Prisma's
         // foreign-key fields expect number. Without the cast, a tampered/buggy
         // client submitting "1" makes the WHERE match nothing and silently
@@ -601,7 +609,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
 
   await logActivity("update", "Quotation", quotationId, `Memperbarui penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
-  return { success: true }
+  return { success: true, slug }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -621,6 +629,7 @@ export async function createDownPayment(formData: FormData) {
   const v = parsed.data
 
   const documentNo = await generateDocumentNumber("DP")
+  const slug = await nextSlug("downPayment", documentNo)
 
   let proofImage: string | null = null
   const proofFile = formData.get("proofImage")
@@ -684,6 +693,7 @@ export async function createDownPayment(formData: FormData) {
       const created = await tx.downPayment.create({
         data: {
           documentNo,
+          slug,
           quotationId,
           customerId: quotation.customerId,
           amount,
@@ -751,14 +761,16 @@ export async function createSalesOrder(formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
+  const documentNo = await generateDocumentNumber("SO")
+  const slug = await nextSlug("salesOrder", documentNo)
+
   const salesOrder = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
-
-    const documentNo = await generateDocumentNumber("SO")
 
     return tx.salesOrder.create({
       data: {
         documentNo,
+        slug,
         customerId: v.customerId,
         quotationId: v.quotationId ?? null,
         date: new Date(v.date),
@@ -772,7 +784,7 @@ export async function createSalesOrder(formData: FormData) {
 
   await logActivity("create", "SalesOrder", salesOrder.id, `Membuat sales order #${salesOrder.id}`)
   revalidatePath("/penjualan/pesanan")
-  return { success: true, id: salesOrder.id }
+  return { success: true, id: salesOrder.id, slug }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -897,14 +909,16 @@ export async function createSalesInvoice(formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
+  const documentNo = await generateDocumentNumber("INV")
+  const slug = await nextSlug("salesInvoice", documentNo)
+
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
-
-    const documentNo = await generateDocumentNumber("INV")
 
     return tx.salesInvoice.create({
       data: {
         documentNo,
+        slug,
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
         quotationId: v.quotationId ?? null,
@@ -926,7 +940,7 @@ export async function createSalesInvoice(formData: FormData) {
   await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur penjualan #${invoice.id}`)
   await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id));
   revalidatePath("/penjualan/faktur")
-  return { success: true, id: invoice.id }
+  return { success: true, id: invoice.id, slug }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -949,6 +963,7 @@ export async function createSalesPayment(formData: FormData) {
   const salesInvoiceId = v.salesInvoiceId
   const amount = v.amount
   const documentNo = await generateDocumentNumber("PAY")
+  const slug = await nextSlug("salesPayment", documentNo)
 
   // Atomic: lock invoice, validate remaining, create payment + recalc + attach
   // in one transaction. The attachment linkage was previously OUTSIDE the tx —
@@ -974,6 +989,7 @@ export async function createSalesPayment(formData: FormData) {
     const created = await tx.salesPayment.create({
       data: {
         documentNo,
+        slug,
         salesInvoiceId,
         customerId: invoice.customerId,
         amount,
@@ -1061,6 +1077,7 @@ export async function createSalesReturn(formData: FormData) {
   const v = parsed.data
 
   const documentNo = await generateDocumentNumber("SR")
+  const slug = await nextSlug("salesReturn", documentNo)
 
   const itemsJson = v.items
   const items = safeJsonParse<any[]>(itemsJson) ?? []
@@ -1138,6 +1155,7 @@ export async function createSalesReturn(formData: FormData) {
     return tx.salesReturn.create({
       data: {
         documentNo,
+        slug,
         salesInvoiceId: invoiceId,
         customerId: v.customerId,
         date: new Date(v.date),
@@ -1161,7 +1179,7 @@ export async function createSalesReturn(formData: FormData) {
   })
 
   // Notify admins
-  await notificationService.notifyAdmins('Retur Penjualan baru', `/penjualan/retur/${salesReturn.id}`)
+  await notificationService.notifyAdmins('Retur Penjualan baru', `/penjualan/retur/${slug ?? salesReturn.id}`)
 
   await logActivity("create", "SalesReturn", salesReturn.id, `Membuat retur penjualan #${salesReturn.id}`)
   revalidatePath("/penjualan/retur")
@@ -1185,6 +1203,7 @@ export async function createDeliveryOrder(formData: FormData) {
   const v = parsed.data
 
   const documentNo = await generateDocumentNumber("DO")
+  const slug = await nextSlug("deliveryOrder", documentNo)
   const salesOrderId = v.salesOrderId
   const salesOrder = await prisma.salesOrder.findUnique({
     where: { id: salesOrderId },
@@ -1194,6 +1213,7 @@ export async function createDeliveryOrder(formData: FormData) {
   const deliveryOrder = await prisma.deliveryOrder.create({
     data: {
       documentNo,
+      slug,
       doNumber: v.doNumber ?? null,
       customerId: salesOrder?.customerId ?? null,
       salesOrderId,
@@ -1407,6 +1427,9 @@ export async function updateSalesOrder(id: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
+  const existingForSlug = await prisma.salesOrder.findUniqueOrThrow({ where: { id }, select: { documentNo: true } })
+  const slug = await nextSlug("salesOrder", existingForSlug.documentNo, { excludeId: id })
+
   const itemsJson = v.items
   const items = itemsJson
     ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; description?: string | null }>>(itemsJson) ?? [])
@@ -1429,6 +1452,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
     const updated = await tx.salesOrder.update({
       where: { id },
       data: {
+        slug,
         customerId: v.customerId,
         quotationId: v.quotationId ?? null,
         date: new Date(v.date),
@@ -1484,7 +1508,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
 
   await logActivity("update", "SalesOrder", salesOrder.id, `Memperbarui sales order #${salesOrder.id}`)
   revalidatePath("/penjualan/pesanan")
-  return { success: true, id: salesOrder.id }
+  return { success: true, id: salesOrder.id, slug }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -1506,6 +1530,9 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
 
   const itemsJson = v.items
   const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null; description?: string | null }>>(itemsJson) ?? []) : null
+
+  const existingForSlug = await prisma.salesInvoice.findUniqueOrThrow({ where: { id }, select: { documentNo: true } })
+  const slug = await nextSlug("salesInvoice", existingForSlug.documentNo, { excludeId: id })
 
   const result = await prisma.$transaction(async (tx) => {
     if (typeof tx.$executeRaw === "function") {
@@ -1530,6 +1557,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
     const invoice = await tx.salesInvoice.update({
       where: { id },
       data: {
+        slug,
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
         quotationId: v.quotationId ?? null,
@@ -1648,7 +1676,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
 
   await logActivity("update", "SalesInvoice", result.id, `Memperbarui faktur penjualan #${result.id}`)
   revalidatePath("/penjualan/faktur")
-  return { success: true, id: result.id }
+  return { success: true, id: result.id, slug }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -1669,9 +1697,11 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   const v = parsed.data
 
   // Fetch old invoiceId before update to handle invoice reassignment
-  const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true } })
+  const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true, documentNo: true } })
   const newInvoiceId = v.salesInvoiceId
   const newAmount = v.amount
+
+  const slug = await nextSlug("salesPayment", oldPayment.documentNo, { excludeId: id })
 
   // Atomic: lock the target invoice and validate the edited amount against the
   // remaining balance (excluding THIS payment) — mirrors createSalesPayment.
@@ -1716,6 +1746,7 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     const updated = await tx.salesPayment.update({
       where: { id },
       data: {
+        slug,
         salesInvoiceId: newInvoiceId,
         amount: newAmount,
         paymentDate: new Date(v.paymentDate),
@@ -1785,12 +1816,14 @@ export async function updateSalesReturn(id: number, formData: FormData) {
 
   const existingReturn = await prisma.salesReturn.findUnique({
     where: { id },
-    select: { status: true },
+    select: { status: true, documentNo: true },
   })
   if (!existingReturn) throw new Error("Retur tidak ditemukan")
   if (existingReturn.status !== "draft") {
     throw new Error("Hanya retur berstatus draft yang dapat diedit")
   }
+
+  const slug = await nextSlug("salesReturn", existingReturn.documentNo, { excludeId: id })
 
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
   const itemsJson = input.items
@@ -1894,6 +1927,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
     return tx.salesReturn.update({
       where: { id },
       data: {
+        slug,
         salesInvoiceId: updInvoiceId,
         customerId: input.customerId,
         date: new Date(input.date),
@@ -1949,10 +1983,14 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
     select: { customerId: true },
   })
 
+  const existingForSlug = await prisma.deliveryOrder.findUniqueOrThrow({ where: { id }, select: { documentNo: true } })
+  const slug = await nextSlug("deliveryOrder", existingForSlug.documentNo, { excludeId: id })
+
   // Fix #2: Jangan generate documentNo baru
   const deliveryOrder = await prisma.deliveryOrder.update({
     where: { id },
     data: {
+      slug,
       doNumber: v.doNumber ?? null,
       customerId: salesOrder?.customerId ?? null,
       salesOrderId: v.salesOrderId,
@@ -2021,6 +2059,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
   if (existingDp.status !== "draft") {
     throw new Error("Hanya Down Payment draft yang bisa diubah")
   }
+  const slug = await nextSlug("downPayment", existingDp.documentNo, { excludeId: id })
   const quotationId = v.quotationId
   const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
   if (!["accepted", "approved", "converted"].includes(quotation.status)) {
@@ -2048,6 +2087,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
     }
 
     const data: any = {
+      slug,
       quotationId,
       customerId: quotation.customerId,
       amount,

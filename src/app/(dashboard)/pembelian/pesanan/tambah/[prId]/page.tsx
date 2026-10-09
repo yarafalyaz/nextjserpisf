@@ -1,6 +1,5 @@
 export const dynamic = "force-dynamic"
 
-import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
 import { renderCreatePurchaseOrder } from "../_render"
 
@@ -16,8 +15,6 @@ export default async function CreatePurchaseOrderFromRequestPage({
   await requirePermission("create_purchase_orders")
 
   const { prId } = await params
-  const numId = Number(prId)
-  if (Number.isNaN(numId)) notFound()
 
-  return renderCreatePurchaseOrder(numId)
+  return renderCreatePurchaseOrder(prId)
 }

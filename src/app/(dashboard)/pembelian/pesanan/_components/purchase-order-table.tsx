@@ -8,9 +8,11 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePurchaseOrder } from "@/actions/purchase.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface PurchaseOrder {
   id: number
+  slug: string | null
   documentNo: string
   date: Date | string
   grandTotal: number | string
@@ -24,7 +26,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/pembelian/pesanan/${info.row.original.id}`} className="text-foreground hover:underline font-medium font-mono">
+      <Link href={entityHref("/pembelian/pesanan", info.row.original)} className="text-foreground hover:underline font-medium font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -55,7 +57,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/pembelian/pesanan/${info.row.original.id}`}
+        viewHref={entityHref("/pembelian/pesanan", info.row.original)}
         deleteAction={deletePurchaseOrder}
         deleteId={info.row.original.id}
         editPermission="edit_purchase_orders"

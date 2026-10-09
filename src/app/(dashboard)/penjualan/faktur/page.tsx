@@ -31,6 +31,7 @@ export default async function InvoicesPage({
 
   const invoices = rawInvoices.map((inv) => ({
     id: inv.id,
+    slug: inv.slug,
     documentNo: inv.documentNo,
     date: inv.date,
     dueDate: inv.dueDate,

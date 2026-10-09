@@ -7,11 +7,13 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteDownPayment } from "@/actions/sales.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 import { statusLabel } from "@/lib/utils/status-labels"
 
 interface DownPayment {
   id: number
+  slug: string | null
   quotation: { documentNo: string; customer: { name: string } }
   amount: number | string
   status: string
@@ -25,7 +27,7 @@ const columns = [
     id: "quotationDocumentNo",
     header: "Penawaran",
     cell: (info) => (
-      <Link href={`/penjualan/uang-muka/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/penjualan/uang-muka", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),

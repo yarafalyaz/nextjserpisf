@@ -563,7 +563,7 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
     startTransition(async () => {
       try {
         const formData = new FormData()
-        let result: { success: boolean; id?: number; error?: string }
+        let result: { success: boolean; id?: number; slug?: string | null; error?: string }
         if (quotation?.id) {
           // Send the full section tree (same shape as create) so edited line
           // items/qty/prices are persisted and re-synced to linked SO/Invoice.
@@ -575,7 +575,7 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
         }
         if (result.success) {
           showSuccess(quotation?.id ? "Penawaran berhasil diperbarui" : "Penawaran berhasil dibuat")
-          router.push(`/penjualan/penawaran/${result.id || quotation?.id}`)
+          router.push(`/penjualan/penawaran/${result.slug ?? result.id ?? quotation?.id}`)
           router.refresh()
         } else {
           showError(result.error || "Gagal menyimpan data")

@@ -49,6 +49,7 @@ export default async function SalesOrdersPage({
 
   const orders = rawOrders.map((so) => ({
     id: so.id,
+    slug: so.slug,
     documentNo: so.documentNo,
     customer: so.customer,
     date: so.date,

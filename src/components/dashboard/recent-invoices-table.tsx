@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/shadcn/dropdown-menu"
 import { Input } from "@/components/ui/shadcn/input"
+import { entityHref } from "@/lib/utils/entity-url"
 import {
   Tabs,
   TabsList,
@@ -53,6 +54,7 @@ import {
 
 interface InvoiceRow {
   id: number
+  slug?: string | null
   documentNo: string
   customerName: string
   grandTotal: number
@@ -131,7 +133,7 @@ const columns: ErpColumnDef<InvoiceRow>[] = [
       </SortButton>
     ),
     cell: ({ row }) => (
-      <Link href={`/penjualan/faktur/${row.original.id}`} className="font-mono text-xs font-medium text-primary hover:underline">
+      <Link href={entityHref("/penjualan/faktur", row.original)} className="font-mono text-xs font-medium text-primary hover:underline">
         {row.original.documentNo}
       </Link>
     ),

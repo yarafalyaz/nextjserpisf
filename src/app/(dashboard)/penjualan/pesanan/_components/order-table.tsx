@@ -7,9 +7,11 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface SalesOrder {
   id: number
+  slug: string | null
   documentNo: string
   customer: { name: string }
   date: Date | string
@@ -23,7 +25,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/penjualan/pesanan/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/penjualan/pesanan", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -54,7 +56,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/penjualan/pesanan/${info.row.original.id}`}
+        viewHref={entityHref("/penjualan/pesanan", info.row.original)}
         editPermission="edit_sales_orders"
         deletePermission="delete_sales_orders"
       />

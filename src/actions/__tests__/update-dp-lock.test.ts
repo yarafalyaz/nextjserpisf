@@ -44,6 +44,7 @@ vi.mock("@/lib/services/quotation-sync.service", () => ({ resyncOnEdit: vi.fn() 
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn() }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
+vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 
 import { updateDownPayment } from "../sales.actions"
 

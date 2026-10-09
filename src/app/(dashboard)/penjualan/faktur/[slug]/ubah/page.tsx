@@ -1,0 +1,73 @@
+export const dynamic = "force-dynamic";
+
+import { prisma } from "@/lib/db/prisma";
+import { notFound } from "next/navigation";
+import { SalesInvoiceForm } from "@/components/forms/sales-invoice-form";
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+
+import type { Metadata } from "next";
+
+import { requirePermission } from "@/lib/auth/permissions";
+import { resolveEntity } from "@/lib/utils/resolve-entity";
+export const metadata: Metadata = { title: "Ubah Faktur" };
+
+export default async function EditPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  await requirePermission("edit_sales_invoices");
+
+  const { slug } = await params;
+
+  const data = await resolveEntity(
+    { segment: slug, fallbackWhere: {} },
+    {
+      bySlug: (s, where) => prisma.salesInvoice.findFirst({ where: { slug: s, ...where } }),
+      byId: (id, where) => prisma.salesInvoice.findUnique({ where: { id, ...where } }),
+    },
+  );
+
+  if (!data) notFound();
+
+  const invoice = {
+    id: data.id,
+    customerId: data.customerId,
+    salesOrderId: data.salesOrderId ?? null,
+    date: data.date.toISOString().split("T")[0],
+    dueDate: data.dueDate?.toISOString().split("T")[0] ?? null,
+    notes: data.notes ?? null,
+  };
+
+  const [customers, salesOrders] = await Promise.all([
+    prisma.customer.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+    }),
+    prisma.salesOrder.findMany({
+      where: { status: { in: ["draft", "confirmed"] } },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs
+        items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Penjualan", href: "/penjualan" },
+          { label: "Faktur", href: "/penjualan/faktur" },
+          { label: "Ubah" },
+        ]}
+      />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
+      </div>
+      <SalesInvoiceForm
+        invoice={invoice}
+        customers={customers}
+        salesOrders={salesOrders}
+      />
+    </div>
+  );
+}

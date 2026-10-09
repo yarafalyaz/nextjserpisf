@@ -24,6 +24,7 @@ import { onPurchaseOrderCreated } from "@/lib/hooks/purchase-order.hook";
 import { onPurchaseReturnProcessed as onPurchaseReturnStock } from "@/lib/hooks/purchase-return.hook";
 import { notificationService } from "@/lib/services/notification.service";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
+import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
@@ -169,6 +170,7 @@ export async function createPurchaseRequest(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("PR");
+    const slug = await nextSlug("purchaseRequest", documentNo);
     const requestedBy = v.requestedBy || Number(user.id);
     const items =
       safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
@@ -181,6 +183,7 @@ export async function createPurchaseRequest(formData: FormData) {
     const pr = await prisma.purchaseRequest.create({
       data: {
         documentNo,
+        slug,
         title: v.title ?? null,
         requestedBy,
         vendorId: v.vendorId ?? null,
@@ -210,7 +213,7 @@ export async function createPurchaseRequest(formData: FormData) {
     );
     await requestApprovalIfConfigured("PurchaseRequest", pr.id, Number(user.id));
     revalidatePath("/pembelian/permintaan");
-    return { success: true, id: pr.id };
+    return { success: true, id: pr.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createPurchaseRequest]", getErrorMessage(e) || e);
@@ -263,6 +266,7 @@ export async function createPurchaseOrder(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("PO");
+    const slug = await nextSlug("purchaseOrder", documentNo);
 
     const poItems = (
       safeJsonParse<
@@ -292,6 +296,7 @@ export async function createPurchaseOrder(formData: FormData) {
       const created = await tx.purchaseOrder.create({
         data: {
           documentNo,
+          slug,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
           workOrderId: v.workOrderId ?? null,
@@ -339,7 +344,7 @@ export async function createPurchaseOrder(formData: FormData) {
     try {
       await notificationService.notifyAdmins(
         "Pesanan Pembelian baru dibuat",
-        `/pembelian/pesanan/${po.id}`,
+        `/pembelian/pesanan/${slug ?? po.id}`,
       );
     } catch (err) {
       console.error("Gagal mengirim notifikasi admin:", err);
@@ -352,7 +357,7 @@ export async function createPurchaseOrder(formData: FormData) {
       `Membuat pesanan pembelian #${po.id}`,
     );
     revalidatePath("/pembelian/pesanan");
-    return { success: true, id: po.id };
+    return { success: true, id: po.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createPurchaseOrder]", getErrorMessage(e) || e);
@@ -451,11 +456,13 @@ export async function createServicePurchaseOrderFromWorkOrder(
       0,
     );
     const documentNo = await generateDocumentNumber("PO");
+    const slug = await nextSlug("purchaseOrder", documentNo);
 
     const po = await prisma.$transaction(async (tx) => {
       const created = await tx.purchaseOrder.create({
         data: {
           documentNo,
+          slug,
           vendorId,
           workOrderId,
           isService: true,
@@ -485,7 +492,7 @@ export async function createServicePurchaseOrderFromWorkOrder(
     try {
       await notificationService.notifyAdmins(
         "PO jasa dari perintah kerja dibuat",
-        `/pembelian/pesanan/${po.id}`,
+        `/pembelian/pesanan/${slug ?? po.id}`,
       );
     } catch (err) {
       console.error("Gagal mengirim notifikasi admin:", err);
@@ -499,7 +506,7 @@ export async function createServicePurchaseOrderFromWorkOrder(
     );
     revalidatePath("/pembelian/pesanan");
     revalidatePath(`/produksi/perintah-kerja/${workOrderId}`);
-    return { success: true, id: po.id, documentNo: po.documentNo };
+    return { success: true, id: po.id, documentNo: po.documentNo, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createServicePurchaseOrderFromWorkOrder]", getErrorMessage(e) || e);
@@ -626,6 +633,7 @@ export async function createGoodsReceipt(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("GR");
+    const slug = await nextSlug("goodsReceipt", documentNo);
     const items =
       safeJsonParse<
         {
@@ -707,6 +715,7 @@ export async function createGoodsReceipt(formData: FormData) {
       const createdGr = await tx.goodsReceipt.create({
         data: {
           documentNo,
+          slug,
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
           date: new Date(v.date),
@@ -785,7 +794,7 @@ export async function verifyGoodsReceipt(grId: number) {
     // Notify admins
     await notificationService.notifyAdmins(
       "Penerimaan Barang diterima",
-      `/pembelian/penerimaan/${grId}`,
+      `/pembelian/penerimaan/${gr.slug ?? grId}`,
     );
 
     await logActivity(
@@ -815,6 +824,7 @@ export async function createVendorBill(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("BILL");
+    const slug = await nextSlug("vendorBill", documentNo);
 
     // Lock the PO row, run the 3-way match, create the bill, and post its AP
     // journal atomically so two concurrent createVendorBill calls on the same PO
@@ -854,6 +864,7 @@ export async function createVendorBill(formData: FormData) {
       const created = await tx.vendorBill.create({
         data: {
           documentNo,
+          slug,
           vendorId: v.vendorId,
           purchaseOrderId: v.purchaseOrderId ?? null,
           date: new Date(v.date),
@@ -895,7 +906,7 @@ export async function createVendorBill(formData: FormData) {
       `Membuat tagihan vendor #${bill.id}`,
     );
     revalidatePath("/pembelian/tagihan");
-    return { success: true, id: bill.id };
+    return { success: true, id: bill.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVendorBill]", getErrorMessage(e) || e);
@@ -914,6 +925,7 @@ export async function createVendorPayment(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("VPAY");
+    const slug = await nextSlug("vendorPayment", documentNo);
 
     // A payment may target a specific bill (chosen via the "Bayar" button on a
     // bill). Validate it belongs to the vendor and is still open, so a stale
@@ -943,6 +955,7 @@ export async function createVendorPayment(formData: FormData) {
       const created = await tx.vendorPayment.create({
         data: {
           documentNo,
+          slug,
           vendorId: v.vendorId,
           amount: v.amount,
           paymentDate: new Date(v.paymentDate),
@@ -976,7 +989,7 @@ export async function createVendorPayment(formData: FormData) {
       `Membuat pembayaran vendor #${payment.id}`,
     );
     revalidatePath("/pembelian/pembayaran");
-    return { success: true, id: payment.id };
+    return { success: true, id: payment.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVendorPayment]", getErrorMessage(e) || e);
@@ -1225,6 +1238,7 @@ export async function createPurchaseReturn(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("PRET");
+    const slug = await nextSlug("purchaseReturn", documentNo);
 
     const items = safeJsonParse<any[]>(v.items ?? null) ?? [];
     const validPrItems = items.filter(
@@ -1320,6 +1334,7 @@ export async function createPurchaseReturn(formData: FormData) {
       return await tx.purchaseReturn.create({
         data: {
           documentNo,
+          slug,
           purchaseOrderId: v.purchaseOrderId,
           date: new Date(v.date),
           reason: v.reason ?? null,
@@ -1347,7 +1362,7 @@ export async function createPurchaseReturn(formData: FormData) {
       `Membuat retur pembelian #${purchaseReturn.id}`,
     );
     revalidatePath("/pembelian/retur");
-    return { success: true, id: purchaseReturn.id };
+    return { success: true, id: purchaseReturn.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createPurchaseReturn]", getErrorMessage(e) || e);
@@ -1785,6 +1800,8 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
       throw new Error("Hanya PR draft yang dapat diedit");
     }
 
+    const slug = await nextSlug("purchaseRequest", existingPr.documentNo, { excludeId: id });
+
     const requestedBy = v.requestedBy || Number(user.id);
     const items =
       safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
@@ -1806,6 +1823,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
       return tx.purchaseRequest.update({
         where: { id },
         data: {
+          slug,
           title: v.title ?? null,
           requestedBy,
           vendorId: v.vendorId ?? null,
@@ -1833,7 +1851,7 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
       `Memperbarui permintaan pembelian #${pr.id}`,
     );
     revalidatePath("/pembelian/permintaan");
-    return { success: true, id: pr.id };
+    return { success: true, id: pr.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updatePurchaseRequest]", getErrorMessage(e) || e);
@@ -1857,6 +1875,8 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
     if (existingPo.status !== "draft") {
       throw new Error("Hanya PO draft yang dapat diedit");
     }
+
+    const slug = await nextSlug("purchaseOrder", existingPo.documentNo, { excludeId: id });
 
     const poItems = (
       safeJsonParse<
@@ -1892,6 +1912,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       return tx.purchaseOrder.update({
         where: { id },
         data: {
+          slug,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
           date: new Date(v.date),
@@ -1938,7 +1959,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
     // Notify admins — external side-effect, must stay outside the tx.
     await notificationService.notifyAdmins(
       "Pesanan Pembelian baru dibuat",
-      `/pembelian/pesanan/${po.id}`,
+      `/pembelian/pesanan/${slug ?? po.id}`,
     );
 
     await logActivity(
@@ -1948,7 +1969,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       `Memperbarui pesanan pembelian #${po.id}`,
     );
     revalidatePath("/pembelian/pesanan");
-    return { success: true, id: po.id };
+    return { success: true, id: po.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updatePurchaseOrder]", getErrorMessage(e) || e);
@@ -1972,6 +1993,8 @@ export async function updateVendorBill(id: number, formData: FormData) {
     if (existingBill.status !== "draft") {
       throw new Error("Hanya tagihan draft yang dapat diedit");
     }
+
+    const slug = await nextSlug("vendorBill", existingBill.documentNo, { excludeId: id });
 
     // Lock the PO + re-run the 3-way match BEFORE persisting the edit, mirroring
     // createVendorBill/confirmVendorBill. Without this, a draft bill created small
@@ -2001,6 +2024,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       const updated = await tx.vendorBill.update({
         where: { id },
         data: {
+          slug,
           vendorId: v.vendorId,
           purchaseOrderId: v.purchaseOrderId ?? null,
           date: new Date(v.date),
@@ -2052,7 +2076,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       `Memperbarui tagihan vendor #${bill.id}`,
     );
     revalidatePath("/pembelian/tagihan");
-    return { success: true, id: bill.id };
+    return { success: true, id: bill.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateVendorBill]", getErrorMessage(e) || e);
@@ -2076,6 +2100,8 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
     if (existingGr.status !== "draft") {
       throw new Error("Hanya GR draft yang dapat diedit");
     }
+
+    const slug = await nextSlug("goodsReceipt", existingGr.documentNo, { excludeId: id });
 
     const items =
       safeJsonParse<
@@ -2143,6 +2169,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
       const updated = await tx.goodsReceipt.update({
         where: { id },
         data: {
+          slug,
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
           date: new Date(v.date),
@@ -2190,7 +2217,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
       `Memperbarui penerimaan barang #${gr.id}`,
     );
     revalidatePath("/pembelian/penerimaan");
-    return { success: true, id: gr.id };
+    return { success: true, id: gr.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateGoodsReceipt]", getErrorMessage(e) || e);
@@ -2214,6 +2241,8 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
     if (ret.status !== "draft") {
       throw new Error("Hanya retur draft yang dapat diedit");
     }
+
+    const slug = await nextSlug("purchaseReturn", ret.documentNo, { excludeId: id });
 
     const items = safeJsonParse<any[]>(v.items ?? null) ?? [];
     const validPrItems = items.filter(
@@ -2339,6 +2368,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       return tx.purchaseReturn.update({
         where: { id },
         data: {
+          slug,
           purchaseOrderId: v.purchaseOrderId,
           date: new Date(v.date),
           reason: v.reason ?? null,
@@ -2364,7 +2394,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       `Memperbarui retur pembelian #${purchaseReturn.id}`,
     );
     revalidatePath("/pembelian/retur");
-    return { success: true, id: purchaseReturn.id };
+    return { success: true, id: purchaseReturn.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updatePurchaseReturn]", getErrorMessage(e) || e);
@@ -2389,6 +2419,8 @@ export async function updateVendorPayment(id: number, formData: FormData) {
       throw new Error("Hanya pembayaran draft yang dapat diedit");
     }
 
+    const slug = await nextSlug("vendorPayment", existingPayment.documentNo, { excludeId: id });
+
     // ATOMICITY: payment update + attachment pointer update must commit
     // together. A failed attachment updateMany after a successful update would
     // leave the edited payment without its supporting documents linked — the
@@ -2398,6 +2430,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
       const updated = await tx.vendorPayment.update({
         where: { id },
         data: {
+          slug,
           vendorId: v.vendorId,
           amount: v.amount,
           paymentDate: new Date(v.paymentDate),
@@ -2435,7 +2468,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
       `Memperbarui pembayaran vendor #${payment.id}`,
     );
     revalidatePath("/pembelian/pembayaran-vendor");
-    return { success: true, id: payment.id };
+    return { success: true, id: payment.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateVendorPayment]", getErrorMessage(e) || e);
@@ -2487,7 +2520,7 @@ export async function voidVendorBill(id: number) {
       `Membatalkan tagihan vendor #${id}`,
     );
     revalidatePath("/pembelian/tagihan");
-    revalidatePath(`/pembelian/tagihan/${id}`);
+    revalidatePath(`/pembelian/tagihan/${bill.slug ?? id}`);
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

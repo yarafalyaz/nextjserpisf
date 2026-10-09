@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { PurchaseOrderForm } from "@/components/forms/purchase-order-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { resolveEntity } from "@/lib/utils/resolve-entity"
 
 /**
  * Shared server renderer for "Buat Pesanan Pembelian".
@@ -11,8 +12,9 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
  *   /pembelian/pesanan/tambah/[prId]    → create a PO for a specific PR
  *
  * Keeping the query + form wiring here avoids the two routes drifting apart.
+ * `prSegment` may be a PR slug (new links) or a numeric id (legacy/bookmarks).
  */
-export async function renderCreatePurchaseOrder(prId?: number) {
+export async function renderCreatePurchaseOrder(prSegment?: string) {
   const [vendors, items, approvedPRs, preselectedPR] = await Promise.all([
     prisma.vendor.findMany({
       where: { isActive: true, deletedAt: null },
@@ -28,19 +30,24 @@ export async function renderCreatePurchaseOrder(prId?: number) {
     prisma.purchaseRequest.findMany({
       where: { status: { in: ["approved", "partial_ordered"] } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, documentNo: true, title: true, vendorId: true },
+      select: { id: true, slug: true, documentNo: true, title: true, vendorId: true },
     }),
-    prId
-      ? prisma.purchaseRequest.findUnique({
-          where: { id: prId },
-          include: { items: true },
-        })
+    prSegment
+      ? resolveEntity(
+          { segment: prSegment, fallbackWhere: {} },
+          {
+            bySlug: (s, where) =>
+              prisma.purchaseRequest.findFirst({ where: { slug: s, ...where }, include: { items: true } }),
+            byId: (id, where) =>
+              prisma.purchaseRequest.findUnique({ where: { id, ...where }, include: { items: true } }),
+          },
+        )
       : Promise.resolve(null),
   ])
 
-  // A PR id was requested but does not exist → 404 rather than silently
+  // A PR was requested but does not exist → 404 rather than silently
   // falling back to an unlinked PO.
-  if (prId && !preselectedPR) notFound()
+  if (prSegment && !preselectedPR) notFound()
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,6 +72,7 @@ export async function renderCreatePurchaseOrder(prId?: number) {
             ? JSON.parse(
                 JSON.stringify({
                   id: preselectedPR.id,
+                  slug: preselectedPR.slug,
                   documentNo: preselectedPR.documentNo,
                   title: preselectedPR.title,
                   vendorId: preselectedPR.vendorId,
