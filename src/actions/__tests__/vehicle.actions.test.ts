@@ -181,6 +181,7 @@ describe("Customer Vehicle Actions", () => {
     mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
       id: 1,
       customerId: 1,
+      vehicleId: 9,
       _count: { workOrders: 0, quotations: 0, projects: 0 }
     })
     const res = await actions.deleteCustomerVehicle(1)
@@ -248,6 +249,30 @@ describe("Customer Vehicle Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("dokumen terkait")
     expect(mocks.prismaMock.customerVehicle.delete).not.toHaveBeenCalled()
+  })
+  // Bug: deleting only the CustomerVehicle linkage left its dedicated Vehicle row
+  // orphaned (no customer, invisible everywhere), because createCustomerVehicle
+  // always creates a 1:1 Vehicle for a variant-driven vehicle. The delete must
+  // remove the Vehicle too when this is its last owner, atomically.
+  it("deleteCustomerVehicle also deletes the backing Vehicle when it is the last owner", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
+      id: 1, customerId: 1, vehicleId: 9, _count: { workOrders: 0, quotations: 0, projects: 0 }
+    })
+    mocks.prismaMock.customerVehicle.count.mockResolvedValueOnce(0) // no other owners
+    const res = await actions.deleteCustomerVehicle(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customerVehicle.delete).toHaveBeenCalledWith({ where: { id: 1 } })
+    expect(mocks.prismaMock.vehicle.deleteMany).toHaveBeenCalledWith({ where: { id: 9 } })
+  })
+  it("deleteCustomerVehicle keeps a shared Vehicle when another CustomerVehicle still owns it", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({
+      id: 1, customerId: 1, vehicleId: 9, _count: { workOrders: 0, quotations: 0, projects: 0 }
+    })
+    mocks.prismaMock.customerVehicle.count.mockResolvedValueOnce(2) // shared
+    const res = await actions.deleteCustomerVehicle(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.customerVehicle.delete).toHaveBeenCalledWith({ where: { id: 1 } })
+    expect(mocks.prismaMock.vehicle.deleteMany).not.toHaveBeenCalled()
   })
 })
 

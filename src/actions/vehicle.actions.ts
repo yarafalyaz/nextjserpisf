@@ -743,6 +743,7 @@ export async function deleteCustomerVehicle(id: number) {
       where: { id },
       select: {
         customerId: true,
+        vehicleId: true,
         _count: {
           select: { workOrders: true, quotations: true, projects: true },
         },
@@ -781,8 +782,23 @@ export async function deleteCustomerVehicle(id: number) {
       };
     }
 
-    await prisma.customerVehicle.delete({
-      where: { id },
+    // Delete the linkage row AND its backing Vehicle row atomically. Every
+    // CustomerVehicle created from a variant gets its own dedicated Vehicle row
+    // (see createCustomerVehicle), and Vehicle -> CustomerVehicle is
+    // onDelete: Cascade — deleting only the linkage would leave that Vehicle row
+    // orphaned forever (no customer, invisible in every screen). A Vehicle MAY be
+    // shared by several CustomerVehicles, so only delete it when this is its last
+    // remaining owner; otherwise just drop the linkage and keep the shared row.
+    await prisma.$transaction(async (tx) => {
+      const otherOwners = await tx.customerVehicle.count({
+        where: { vehicleId: vehicle.vehicleId, id: { not: id } },
+      });
+
+      await tx.customerVehicle.delete({ where: { id } });
+
+      if (otherOwners === 0) {
+        await tx.vehicle.deleteMany({ where: { id: vehicle.vehicleId } });
+      }
     });
 
     revalidatePath(`/master/pelanggan/${vehicle.customerId}/kendaraan`);
