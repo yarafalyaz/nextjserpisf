@@ -64,6 +64,7 @@ of off-by-one-day bugs (report presets, the "today" default of every create form
 - Set `TRUSTED_PROXY=1` **only** when every request passes through a proxy/Cloudflare that overwrites client-IP headers; otherwise `getClientIp()` ignores them (spoofable headers must never mint a fresh rate-limit bucket).
 - Rate limits, CSP, and security headers live in `src/proxy.ts`. `/api/cron/*` is guarded by `CRON_SECRET`.
 - New server actions must call `requirePermission()`; dated documents must also call `assertPeriodOpen()`. Keep `src/__tests__/permission-seed-parity.test.ts` passing — it fails when code enforces a permission that `prisma/seed.ts` never creates.
+- The dev container's `node_modules` is an anonymous volume, so the Prisma Client baked into the image goes stale the moment `prisma/schema.prisma` changes — queries then fail at runtime with "The column X does not exist in the current database" even though the migration ran. `docker/entrypoint.dev.sh` re-runs `prisma generate` on every container start to prevent this. If you edit the schema, recreate the container (`docker compose up -d --force-recreate app`); after `docker compose build` the new entrypoint is baked in.
 
 ## Agent-Specific Instructions
 

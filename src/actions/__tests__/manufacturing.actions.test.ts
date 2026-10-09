@@ -1019,7 +1019,7 @@ describe("Work Order Actions", () => {
       ],
       product: { billOfMaterials: JSON.stringify([{ itemId: 1, qty: 2 }]) },
       customer: { name: "Customer A" },
-      quotation: { customerVehicle: { licensePlate: "B 1234 ABC" } }
+      quotation: { customerVehicle: { vehicle: { plateNumber: "B 1234 ABC" } } }
     } as any)
     const res = await actions.createMaterialIssueFromWorkOrder(1, 1)
     expect(res?.success).toBe(true)
