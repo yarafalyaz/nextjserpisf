@@ -1151,7 +1151,7 @@ async function main() {
       { name: "Box", symbol: "BOX" },
     ];
     for (const uom of unitsOfMeasure) {
-      const [existing] = await conn.query(
+      const existing = await conn.query(
         "SELECT id FROM unit_of_measures WHERE UPPER(symbol) = ? LIMIT 1",
         [uom.symbol],
       );

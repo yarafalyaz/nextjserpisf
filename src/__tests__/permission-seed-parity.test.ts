@@ -185,4 +185,23 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
     expect(APPROVAL_REFERENCE_PERMISSIONS.EmployeeLoan).toBe("approve_loans")
     expect(APPROVAL_REFERENCE_PERMISSIONS.EmployeeLoan).not.toBe("create_loans")
   })
+
+  it("seed.ts never destructures a row then treats it as a row list", () => {
+    // Regression: `const [existing] = await conn.query("SELECT id ...")` binds
+    // the FIRST ROW to `existing`. The mariadb driver returns the rows array
+    // (not [rows, fields]), so `existing.length` throws "Cannot read properties
+    // of undefined (reading 'length')" whenever the SELECT matches nothing -
+    // which crashed the UoM seeding with an empty unit_of_measures table and
+    // was misread as a seed hang. Existence checks must use the rows array.
+    const offenders = [...seedSource.matchAll(
+      /const\s+\[([A-Za-z0-9_]+)\]\s*=\s*await\s+conn\.query\(([\s\S]*?)\)/g,
+    )]
+      .filter(([, name]) => new RegExp(`${name}\\.length\\s*(?:[><=!]=|[<>])`).test(seedSource))
+      .map(([, name]) => name)
+
+    expect(
+      offenders,
+      `Destructure first row lalu pakai .length sebagai daftar baris: ${offenders.join(", ")}`,
+    ).toEqual([])
+  })
 })

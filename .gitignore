@@ -76,10 +76,8 @@ opencode.json
 
 # Ad-hoc one-off debug/diagnostic scripts (not part of the app)
 /scripts/tmp-*
-/scripts/check-categories.ts
-/scripts/check-counters.ts
-/scripts/check-draft-dps.ts
-/scripts/diag-currencies.ts
+/scripts/check-*
+/scripts/diag-*
 /search_oke.ts
 
 # Loose scratch assets at repo root (manuals, sample dumps — keep out of git)
