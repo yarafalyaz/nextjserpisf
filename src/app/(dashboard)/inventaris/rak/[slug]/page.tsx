@@ -14,7 +14,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Rak" }
 
 export default async function RackDetailPage({

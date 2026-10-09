@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref } from "@/lib/utils/entity-url"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { formatCurrency, formatDate, formatReferenceType } from "@/lib/utils/format"
 import Link from "next/link"
