@@ -2730,6 +2730,7 @@ model VehicleBrand {
   updatedAt DateTime       @updatedAt @map("updated_at")
   products  Product[]
   models    VehicleModel[]
+  fitmentRules VehicleFitmentRule[]
 
   @@index([createdAt])
   @@map("vehicle_brands")
@@ -2744,6 +2745,7 @@ model VehicleModel {
   products             Product[]
   brand                VehicleBrand          @relation(fields: [vehicleBrandId], references: [id])
   variants             VehicleVariant[]
+  fitmentRules         VehicleFitmentRule[]
 
   @@unique([vehicleBrandId, name], map: "vehicle_models_brand_name_unique")
   @@index([vehicleBrandId], map: "vehicle_models_vehicle_brand_id_fkey")
@@ -2761,6 +2763,7 @@ model VehicleVariant {
   updatedAt      DateTime     @updatedAt @map("updated_at")
   model          VehicleModel @relation(fields: [vehicleModelId], references: [id])
   vehicles       Vehicle[]
+  fitmentRules   VehicleFitmentRule[]
 
   @@index([vehicleModelId], map: "vehicle_variants_vehicle_model_id_fkey")
   @@index([createdAt])
@@ -3353,6 +3356,13 @@ model VehicleFitmentRule {
   updatedAt        DateTime        @updatedAt @map("updated_at")
   item             Item            @relation(fields: [itemId], references: [id], onDelete: Cascade)
   bomRevision      BomRevision?    @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
+  // Vehicle scope. These three were bare Int columns: a rule could point at a
+  // brand/model/variant that had since been deleted, with nothing stopping it.
+  // SetNull (not Cascade) so removing a catalog entry turns that scope
+  // dimension into a wildcard instead of silently deleting the fitment rule.
+  vehicleBrand     VehicleBrand?   @relation(fields: [vehicleBrandId], references: [id], onDelete: SetNull)
+  vehicleModel     VehicleModel?   @relation(fields: [vehicleModelId], references: [id], onDelete: SetNull)
+  vehicleVariant   VehicleVariant? @relation(fields: [vehicleVariantId], references: [id], onDelete: SetNull)
 
   @@index([itemId])
   @@index([bomRevisionId])
