@@ -40,12 +40,12 @@ describe("validations/vehicle.schemas", () => {
   it("vehicleBrandSchema rejects empty name", () => {
     expect(vehicleBrandSchema.safeParse({ name: "" }).success).toBe(false);
   });
-  it("vehicleModelSchema requires brandId", () => {
-    expect(vehicleModelSchema.safeParse({ name: "Avanza", brandId: 1 }).success).toBe(true);
+  it("vehicleModelSchema requires vehicleBrandId", () => {
+    expect(vehicleModelSchema.safeParse({ name: "Avanza", vehicleBrandId: 1 }).success).toBe(true);
     expect(vehicleModelSchema.safeParse({ name: "Avanza" }).success).toBe(false);
   });
-  it("vehicleVariantSchema requires modelId", () => {
-    expect(vehicleVariantSchema.safeParse({ name: "1.5 G", modelId: 1 }).success).toBe(true);
+  it("vehicleVariantSchema requires vehicleModelId", () => {
+    expect(vehicleVariantSchema.safeParse({ name: "1.5 G", vehicleModelId: 1 }).success).toBe(true);
     expect(vehicleVariantSchema.safeParse({ name: "1.5 G" }).success).toBe(false);
   });
   it("vehicleSchema requires plateNo", () => {

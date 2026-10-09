@@ -1549,7 +1549,6 @@ model Product {
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
   materials            ProductMaterial[]
-  productVehicleModels ProductVehicleModel[]
   productionOrders     ProductionOrder[]
   bomRevisions         BomRevision[]
   qcChecklists         QcChecklist[]
@@ -2742,7 +2741,6 @@ model VehicleModel {
   name                 String
   createdAt            DateTime              @default(now()) @map("created_at")
   updatedAt            DateTime              @updatedAt @map("updated_at")
-  productVehicleModels ProductVehicleModel[]
   products             Product[]
   brand                VehicleBrand          @relation(fields: [vehicleBrandId], references: [id])
   variants             VehicleVariant[]
@@ -3326,18 +3324,6 @@ model Task {
 }
 
 
-
-model ProductVehicleModel {
-  id             Int          @id @default(autoincrement())
-  productId      Int          @map("product_id")
-  vehicleModelId Int          @map("vehicle_model_id")
-  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  vehicleModel   VehicleModel @relation(fields: [vehicleModelId], references: [id], onDelete: Cascade)
-
-  @@unique([productId, vehicleModelId])
-  @@index([vehicleModelId], map: "product_vehicle_models_vehicle_model_id_fkey")
-  @@map("product_vehicle_models")
-}
 
 /// VEH-07 — Kompatibilitas part/BOM ke konfigurasi kendaraan.
 /// A fitment rule scopes an Item (SKU) — and optionally a specific BOM revision

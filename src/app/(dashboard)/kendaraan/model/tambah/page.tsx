@@ -9,8 +9,15 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Tambah Model Kendaraan" }
 
-export default async function CreateVehicleModelPage() {
+export default async function CreateVehicleModelPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ merek?: string }>
+}) {
   await requirePermission("create_vehicle_models")
+
+  const { merek } = await searchParams
+  const defaultBrandId = merek ? Number.parseInt(merek, 10) : undefined
 
   const brands = await prisma.vehicleBrand.findMany({
     orderBy: { name: "asc" },
@@ -28,7 +35,7 @@ export default async function CreateVehicleModelPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Model Kendaraan</h1>
       </div>
-      <VehicleModelForm brands={brands} />
+      <VehicleModelForm brands={brands} defaultBrandId={Number.isFinite(defaultBrandId) ? defaultBrandId : undefined} />
     </div>
   )
 }

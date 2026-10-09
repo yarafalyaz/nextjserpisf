@@ -11,6 +11,12 @@ const isDev = process.env.NODE_ENV === "development";
 
 const nextConfig: NextConfig = {
   ...(isDev ? { distDir: ".next-dev" } : {}),
+  // `next dev` rewrites tsconfig.json to also include its own distDir
+  // (`.next-dev/**`). The production build then type-checked that dev cache,
+  // so a half-written or stale generated file under `.next-dev` failed the
+  // build even though the source is fine. Point the build at a tsconfig that
+  // only pulls `.next` types.
+  typescript: { tsconfigPath: "tsconfig.build.json" },
   output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,

@@ -56,10 +56,10 @@ export async function createVehicleModel(formData: FormData) {
     const parsed = parseFormData(vehicleModelSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const { name, brandId } = parsed.data;
+    const { name, vehicleBrandId } = parsed.data;
 
     const duplicate = await prisma.vehicleModel.findFirst({
-      where: { vehicleBrandId: brandId, name },
+      where: { vehicleBrandId, name },
     });
     if (duplicate) {
       return {
@@ -71,7 +71,7 @@ export async function createVehicleModel(formData: FormData) {
     const model = await prisma.vehicleModel.create({
       data: {
         name,
-        vehicleBrandId: brandId,
+        vehicleBrandId,
       },
     });
 
@@ -283,10 +283,10 @@ export async function createVehicleVariant(formData: FormData) {
     const parsed = parseFormData(vehicleVariantSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const { name, modelId, drivetrain, transmission } = parsed.data;
+    const { name, vehicleModelId, drivetrain, transmission } = parsed.data;
 
     const duplicate = await prisma.vehicleVariant.findFirst({
-      where: { vehicleModelId: modelId, name },
+      where: { vehicleModelId, name },
     });
     if (duplicate) {
       return {
@@ -297,14 +297,14 @@ export async function createVehicleVariant(formData: FormData) {
 
     const variant = await prisma.vehicleVariant.create({
       data: {
-        vehicleModelId: modelId,
+        vehicleModelId,
         name,
         drivetrain: drivetrain ?? null,
         transmission: transmission ?? null,
       },
     });
 
-    revalidatePath(`/kendaraan/model/${modelId}/ubah`);
+    revalidatePath(`/kendaraan/model/${vehicleModelId}/ubah`);
     revalidatePath("/kendaraan/model");
     await logActivity(
       "create",
@@ -403,10 +403,10 @@ export async function updateVehicleModel(id: number, formData: FormData) {
     const parsed = parseFormData(vehicleModelSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const { name, brandId } = parsed.data;
+    const { name, vehicleBrandId } = parsed.data;
 
     const duplicate = await prisma.vehicleModel.findFirst({
-      where: { vehicleBrandId: brandId, name, NOT: { id } },
+      where: { vehicleBrandId, name, NOT: { id } },
     });
     if (duplicate) {
       return {
@@ -419,7 +419,7 @@ export async function updateVehicleModel(id: number, formData: FormData) {
       where: { id },
       data: {
         name,
-        vehicleBrandId: brandId,
+        vehicleBrandId,
       },
     });
 

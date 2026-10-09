@@ -31,7 +31,7 @@ export default async function VehicleModelDetailPage({
     where: { id: numId },
     include: {
       brand: true,
-      variants: true,
+      variants: { orderBy: { name: "asc" } },
     },
   })
 
@@ -69,27 +69,44 @@ export default async function VehicleModelDetailPage({
           label="Merek"
           value={<Link href={`/kendaraan/merek/${model.brand.id}`}>{model.brand.name}</Link>}
         />
+        <DetailField label="Jumlah Varian" value={String(model.variants.length)} />
         <DetailField label="Dibuat" value={formatDate(model.createdAt)} />
       </DetailCard>
 
       {/* Variants */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Varian</h2>
+        <div className="flex items-center justify-between gap-4 p-4 px-5 border-b border-default">
+          <div>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">Tipe / Varian</h2>
+            <p className="text-sm text-muted-foreground">
+              Tipe/varian model ini beserta penggerak dan transmisinya.
+            </p>
+          </div>
+          {canEdit && (
+            <Button href={`/kendaraan/model/${model.id}/ubah`} variant="secondary" size="sm">
+              Kelola Varian
+            </Button>
+          )}
         </div>
         <div className="p-4 px-5">
           {model.variants.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada varian</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+              Belum ada varian. Tambahkan lewat tombol “Kelola Varian”.
+            </p>
           ) : (
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Nama Varian</DetailTableTh>
+                <DetailTableTh>Penggerak</DetailTableTh>
+                <DetailTableTh>Transmisi</DetailTableTh>
                 <DetailTableTh>Dibuat</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {model.variants.map((variant) => (
                   <DetailTableRow key={variant.id}>
                     <DetailTableTd>{variant.name}</DetailTableTd>
+                    <DetailTableTd>{variant.drivetrain || "-"}</DetailTableTd>
+                    <DetailTableTd>{variant.transmission || "-"}</DetailTableTd>
                     <DetailTableTd>{formatDate(variant.createdAt)}</DetailTableTd>
                   </DetailTableRow>
                 ))}

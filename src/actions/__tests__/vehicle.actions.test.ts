@@ -76,11 +76,11 @@ describe("Vehicle Brand Actions", () => {
 
 describe("Vehicle Model Actions", () => {
   it("createVehicleModel succeeds", async () => {
-    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", brandId: 1 }))
+    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
     expect(res?.success).toBe(true)
   })
   it("updateVehicleModel succeeds", async () => {
-    const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", brandId: 1 }))
+    const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 }))
     expect(res?.success).toBe(true)
   })
   it("deleteVehicleModel succeeds", async () => {
@@ -91,7 +91,7 @@ describe("Vehicle Model Actions", () => {
 
 describe("Vehicle Variant Actions", () => {
   it("createVehicleVariant succeeds", async () => {
-    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", modelId: 1 }))
+    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(true)
   })
   it("deleteVehicleVariant succeeds", async () => {
@@ -309,13 +309,13 @@ describe("Vehicle Actions Error Paths", () => {
   it("createVehicleModel handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.vehicleModel.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", brandId: 1 }))
+    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
   it("updateVehicleModel fails if duplicate name", async () => {
     mocks.prismaMock.vehicleModel.findFirst.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", brandId: 1 }))
+    const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("sudah ada")
   })
@@ -369,7 +369,7 @@ describe("Vehicle Actions Error Paths", () => {
   })
   it("createVehicleVariant fails if duplicate name (line 187 branch)", async () => {
     mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", modelId: 1 }))
+    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("sudah ada")
   })
@@ -380,7 +380,7 @@ describe("Vehicle Actions Error Paths", () => {
   it("updateVehicleModel handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.vehicleModel.update.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", brandId: 1 }))
+    const res = await actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
@@ -398,7 +398,7 @@ describe("Vehicle Actions Error Paths", () => {
   it("createVehicleVariant handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.vehicleVariant.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", modelId: 1 }))
+    const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toBe("db err")
   })
@@ -466,7 +466,7 @@ describe("Vehicle Actions Remaining Branches", () => {
   })
   it("createVehicleModel fails if duplicate name (line 57)", async () => {
     mocks.prismaMock.vehicleModel.findFirst.mockResolvedValueOnce({ id: 2 })
-    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", brandId: 1 }))
+    const res = await actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("sudah ada")
   })
@@ -488,14 +488,14 @@ describe("Next.js redirect error handling", () => {
 
   const fnsToTest = [
     { name: "createVehicleBrand", fn: () => actions.createVehicleBrand(fdMap({ name: "Toyota" })) },
-    { name: "createVehicleModel", fn: () => actions.createVehicleModel(fdMap({ name: "Avanza", brandId: 1 })) },
+    { name: "createVehicleModel", fn: () => actions.createVehicleModel(fdMap({ name: "Avanza", vehicleBrandId: 1 })) },
     { name: "createVehicle", fn: () => actions.createVehicle(fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 })) },
     { name: "deleteVehicleBrand", fn: () => actions.deleteVehicleBrand(1) },
     { name: "deleteVehicleModel", fn: () => actions.deleteVehicleModel(1) },
-    { name: "createVehicleVariant", fn: () => actions.createVehicleVariant(fdMap({ name: "1.5 G", modelId: 1 })) },
+    { name: "createVehicleVariant", fn: () => actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 })) },
     { name: "deleteVehicleVariant", fn: () => actions.deleteVehicleVariant(1) },
     { name: "updateVehicleBrand", fn: () => actions.updateVehicleBrand(1, fdMap({ name: "Toyota" })) },
-    { name: "updateVehicleModel", fn: () => actions.updateVehicleModel(1, fdMap({ name: "Avanza", brandId: 1 })) },
+    { name: "updateVehicleModel", fn: () => actions.updateVehicleModel(1, fdMap({ name: "Avanza", vehicleBrandId: 1 })) },
     { name: "updateVehicle", fn: () => actions.updateVehicle(1, fdMap({ plateNo: "B1234XYZ", variantId: 1, modelId: 1 })) },
     { name: "deleteVehicle", fn: () => actions.deleteVehicle(1) },
     { name: "createCustomerVehicle", fn: () => actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 1, vehicleId: 1 })) },

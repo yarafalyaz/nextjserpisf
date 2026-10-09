@@ -47,7 +47,7 @@ export function VehicleVariantManager({ modelId, variants }: VehicleVariantManag
     if (!trimmed) return
     startTransition(async () => {
       const formData = new FormData()
-      formData.set("modelId", String(modelId))
+      formData.set("vehicleModelId", String(modelId))
       formData.set("name", trimmed)
       if (drivetrain) formData.set("drivetrain", drivetrain)
       if (transmission) formData.set("transmission", transmission)

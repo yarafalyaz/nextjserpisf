@@ -18,6 +18,8 @@ const columnHelper = createColumnHelper<VehicleBrandData>()
 const columns = [
   columnHelper.accessor("name", {
     header: "Nama Merek",
+    // Card headline on mobile.
+    meta: { mobilePrimary: true },
     cell: (info) => (
       <Link href={`/kendaraan/merek/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}

@@ -13,7 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Merek Kendaraan" }
 
 export default async function VehicleBrandDetailPage({
@@ -30,11 +30,16 @@ export default async function VehicleBrandDetailPage({
   const brand = await prisma.vehicleBrand.findUnique({
     where: { id: numId },
     include: {
-      models: true,
+      models: {
+        orderBy: { name: "asc" },
+        include: { _count: { select: { variants: true } } },
+      },
     },
   })
 
   if (!brand) notFound()
+
+  const canCreateModel = await hasPermission("create_vehicle_models")
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,29 +60,44 @@ export default async function VehicleBrandDetailPage({
         }
       />
 
-      <DetailCard columns={2}>
+      <DetailCard columns={3}>
         <DetailField label="Nama" value={brand.name} />
+        <DetailField label="Jumlah Model" value={String(brand.models.length)} />
         <DetailField label="Dibuat" value={formatDate(brand.createdAt)} />
       </DetailCard>
 
-      {/* Models */}
+      {/* Models → the second layer of the brand → model → variant flow */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Model</h2>
+        <div className="flex items-center justify-between gap-4 p-4 px-5 border-b border-default">
+          <div>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">Model</h2>
+            <p className="text-sm text-muted-foreground">
+              Model di bawah merek ini. Buka satu model untuk mengelola variannya.
+            </p>
+          </div>
+          {canCreateModel && (
+            <Button href={`/kendaraan/model/tambah?merek=${brand.id}`} variant="secondary" size="sm">
+              Tambah Model
+            </Button>
+          )}
         </div>
         <div className="p-4 px-5">
           {brand.models.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada model</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+              Belum ada model untuk merek ini.
+            </p>
           ) : (
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Nama Model</DetailTableTh>
+                <DetailTableTh>Jumlah Varian</DetailTableTh>
                 <DetailTableTh>Dibuat</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {brand.models.map((model) => (
                   <DetailTableRow key={model.id}>
                     <DetailTableTd><Link href={`/kendaraan/model/${model.id}`}>{model.name}</Link></DetailTableTd>
+                    <DetailTableTd>{model._count.variants}</DetailTableTd>
                     <DetailTableTd>{formatDate(model.createdAt)}</DetailTableTd>
                   </DetailTableRow>
                 ))}

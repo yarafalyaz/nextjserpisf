@@ -36,14 +36,14 @@ export const vehicleBrandSchema = z.object({
 
 export const vehicleModelSchema = z.object({
   name: requiredStr("Nama model wajib diisi"),
-  brandId: requiredId("Merek kendaraan"),
+  vehicleBrandId: requiredId("Merek kendaraan"),
 })
 
 // ==================== Vehicle Variant ====================
 
 export const vehicleVariantSchema = z.object({
   name: requiredStr("Nama varian wajib diisi"),
-  modelId: requiredId("Model kendaraan"),
+  vehicleModelId: requiredId("Model kendaraan"),
   drivetrain: optionalStr(100),
   transmission: optionalStr(100),
 })

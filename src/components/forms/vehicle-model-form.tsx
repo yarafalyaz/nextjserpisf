@@ -12,14 +12,20 @@ import { Button } from "@/components/ui/button"
 interface VehicleModelFormProps {
   brands: { id: number; name: string
 }[]
-  model?: { id: number; name: string; brandId?: number; vehicleBrandId?: number }
+  model?: { id: number; name: string; vehicleBrandId?: number }
+  /** Pre-select a brand (used when adding a model from a brand's detail page). */
+  defaultBrandId?: number
 }
 
-export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
+export function VehicleModelForm({ brands, model, defaultBrandId }: VehicleModelFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [brandId, setBrandId] = useState<string | null>(
-    model?.brandId || model?.vehicleBrandId ? String(model.brandId ?? model.vehicleBrandId) : null
+  const [vehicleBrandId, setVehicleBrandId] = useState<string | null>(
+    model?.vehicleBrandId
+      ? String(model.vehicleBrandId)
+      : defaultBrandId
+        ? String(defaultBrandId)
+        : null
   )
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -30,7 +36,13 @@ export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
         const result = model?.id ? await updateVehicleModel(model.id, formData) : await createVehicleModel(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(model?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
-        router.push("/kendaraan/model")
+        // On create with a known brand, continue to the new model's edit page so
+        // variants can be added right away (brand → model → variant flow).
+        if (!model?.id && result && "id" in result && result.id && defaultBrandId) {
+          router.push(`/kendaraan/model/${result.id}/ubah`)
+        } else {
+          router.push("/kendaraan/model")
+        }
         router.refresh()
       } catch (error) {
         showError(error instanceof Error ? error.message : "Gagal menyimpan data")
@@ -42,13 +54,13 @@ export function VehicleModelForm({ brands, model }: VehicleModelFormProps) {
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="brandId">Merek Kendaraan *</Label>
+          <Label htmlFor="vehicleBrandId">Merek Kendaraan *</Label>
           <Combobox
-            id="brandId"
-            name="brandId"
+            id="vehicleBrandId"
+            name="vehicleBrandId"
             options={brands.map((b) => ({ value: String(b.id), label: b.name }))}
-            value={brandId}
-            onChange={setBrandId}
+            value={vehicleBrandId}
+            onChange={setVehicleBrandId}
             placeholder="Cari merek..."
           />
         </div>

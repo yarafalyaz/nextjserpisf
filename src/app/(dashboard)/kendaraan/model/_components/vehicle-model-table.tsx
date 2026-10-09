@@ -19,6 +19,8 @@ const columnHelper = createColumnHelper<VehicleModelData>()
 const columns = [
   columnHelper.accessor("name", {
     header: "Nama Model",
+    // Card headline on mobile: the model name is the natural title.
+    meta: { mobilePrimary: true },
     cell: (info) => (
       <Link href={`/kendaraan/model/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
         {info.getValue()}
@@ -52,19 +54,22 @@ const columns = [
 
 interface VehicleModelTableProps {
   data: VehicleModelData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function VehicleModelTable({ data }: VehicleModelTableProps) {
+export function VehicleModelTable({ data, total, page, pageSize }: VehicleModelTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar model kendaraan"
-      pageSize={20}
       selectable={true}
-      searchColumn="name"
-      searchPlaceholder="Cari model..."
+      searchPlaceholder="Cari model atau merek..."
       onBulkDelete={(ids) => bulkDelete("vehicleModel", ids)}
+      serverPagination={{ total, page, pageSize }}
+      searchParam="cari"
     />
   )
 }
