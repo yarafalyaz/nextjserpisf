@@ -5,7 +5,6 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatCurrency, formatDate, formatReferenceType } from "@/lib/utils/format"
 import Link from "next/link"
-import Image from "next/image"
 import { notFound } from "next/navigation"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -16,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
+import { ItemImageLightbox } from "@/components/ui/item-image-lightbox"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 
 import type { Metadata } from "next"
@@ -238,14 +238,7 @@ export default async function ItemDetailPage({
                 {item.image && (
                   <DetailSection title="Gambar Barang">
                     <div className="flex justify-center">
-                      <Image
-                        src={item.image}
-                        alt={item.name}
-                        width={320}
-                        height={320}
-                        className="h-64 w-64 rounded-xl border border-default object-contain bg-surface"
-                        unoptimized
-                      />
+                      <ItemImageLightbox src={item.image} alt={item.name} />
                     </div>
                   </DetailSection>
                 )}
