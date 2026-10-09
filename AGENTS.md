@@ -65,6 +65,7 @@ of off-by-one-day bugs (report presets, the "today" default of every create form
 - Rate limits, CSP, and security headers live in `src/proxy.ts`. `/api/cron/*` is guarded by `CRON_SECRET`.
 - New server actions must call `requirePermission()`; dated documents must also call `assertPeriodOpen()`. Keep `src/__tests__/permission-seed-parity.test.ts` passing — it fails when code enforces a permission that `prisma/seed.ts` never creates.
 - The dev container's `node_modules` is an anonymous volume, so the Prisma Client baked into the image goes stale the moment `prisma/schema.prisma` changes — queries then fail at runtime with "The column X does not exist in the current database" even though the migration ran. `docker/entrypoint.dev.sh` re-runs `prisma generate` on every container start to prevent this. If you edit the schema, recreate the container (`docker compose up -d --force-recreate app`); after `docker compose build` the new entrypoint is baked in.
+- Dev and prod keep separate build caches: `next dev` writes to `.next-dev` (next.config.ts `distDir`), the production build uses `.next`. docker-compose mounts the anonymous volume at `/app/.next-dev`, **not** `/app/.next` — mounting the latter makes Docker apply a `deny delete` ACL to the host `.next`, and `next build` (which starts with `rm -rf .next`) then fails with "Permission denied". The production `next build` runs with `tsconfig.build.json` so it never type-checks the dev cache under `.next-dev`.
 
 ## Agent-Specific Instructions
 
