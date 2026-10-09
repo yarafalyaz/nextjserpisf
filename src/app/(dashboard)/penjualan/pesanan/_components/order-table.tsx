@@ -64,17 +64,20 @@ const columns = [
 
 interface OrderTableProps {
   data: SalesOrder[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function OrderTable({ data, toolbar, filters }: OrderTableProps) {
+export function OrderTable({ data, total, page, pageSize, toolbar, filters }: OrderTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar sales order"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

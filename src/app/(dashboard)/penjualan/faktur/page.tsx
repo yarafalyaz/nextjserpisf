@@ -40,6 +40,8 @@ export default async function InvoicesPage({
     customer: inv.customer,
   }))
 
+  const total = await prisma.salesInvoice.count()
+
   const tableData = toPlain(invoices)
 
   return (
@@ -52,7 +54,7 @@ export default async function InvoicesPage({
         </Link>
       </div>
 
-      <InvoiceTable data={tableData} />
+      <InvoiceTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

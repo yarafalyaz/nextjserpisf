@@ -73,17 +73,20 @@ const columns = [
 
 interface DeliveryOrderTableProps {
   data: DeliveryOrder[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function DeliveryOrderTable({ data, toolbar, filters }: DeliveryOrderTableProps) {
+export function DeliveryOrderTable({ data, total, page, pageSize, toolbar, filters }: DeliveryOrderTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar delivery order"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

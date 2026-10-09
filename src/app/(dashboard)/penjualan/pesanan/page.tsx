@@ -56,6 +56,8 @@ export default async function SalesOrdersPage({
     status: so.status,
   }))
 
+  const total = await prisma.salesOrder.count({ where })
+
   const tableData = toPlain(orders)
 
 
@@ -71,6 +73,9 @@ export default async function SalesOrdersPage({
 
       <OrderTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen atau pelanggan..." action="/penjualan/pesanan" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

@@ -67,17 +67,20 @@ const columns = [
 
 interface PurchaseReturnTableProps {
   data: PurchaseReturn[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function PurchaseReturnTable({ data, toolbar, filters }: PurchaseReturnTableProps) {
+export function PurchaseReturnTable({ data, total, page, pageSize, toolbar, filters }: PurchaseReturnTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar retur pembelian"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

@@ -73,17 +73,20 @@ const columns = [
 
 interface QuotationTableProps {
   data: Quotation[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function QuotationTable({ data, toolbar, filters }: QuotationTableProps) {
+export function QuotationTable({ data, total, page, pageSize, toolbar, filters }: QuotationTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar quotation"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

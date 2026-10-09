@@ -94,17 +94,20 @@ const columns = [
 
 interface GoodsReceiptTableProps {
   data: GoodsReceipt[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function GoodsReceiptTable({ data, toolbar, filters }: GoodsReceiptTableProps) {
+export function GoodsReceiptTable({ data, total, page, pageSize, toolbar, filters }: GoodsReceiptTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar goods receipt"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

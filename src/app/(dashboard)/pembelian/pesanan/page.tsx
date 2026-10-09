@@ -53,6 +53,8 @@ export default async function PurchaseOrdersPage({
     grandTotal: Number(o.grandTotal),
   }))
 
+  const total = await prisma.purchaseOrder.count({ where })
+
   const tableData = toPlain(orders)
 
   const statusOptions = ["", "draft", "approved", "ordered", "received", "cancelled"]
@@ -81,6 +83,9 @@ export default async function PurchaseOrdersPage({
 
       <PurchaseOrderTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen atau vendor..." action="/pembelian/pesanan" />}
         filters={
           <>

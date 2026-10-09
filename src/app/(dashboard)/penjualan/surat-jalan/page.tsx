@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -17,11 +17,12 @@ export const metadata: Metadata = { title: "Surat Jalan" }
 export default async function DeliveryOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string; status?: string }>
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_delivery_orders")
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -34,9 +35,12 @@ export default async function DeliveryOrdersPage({
   const orders = await prisma.deliveryOrder.findMany({
     where,
     include: { salesOrder: { include: { customer: true } } },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
   })
+
+  const total = await prisma.deliveryOrder.count({ where })
 
   const tableData = toPlain(orders)
 
@@ -53,6 +57,9 @@ export default async function DeliveryOrdersPage({
 
       <DeliveryOrderTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/penjualan/surat-jalan" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

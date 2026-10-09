@@ -104,17 +104,20 @@ const columns = [
 
 interface VendorBillTableProps {
   data: VendorBill[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function VendorBillTable({ data, toolbar, filters }: VendorBillTableProps) {
+export function VendorBillTable({ data, total, page, pageSize, toolbar, filters }: VendorBillTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar vendor bill"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

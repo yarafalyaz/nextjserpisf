@@ -63,6 +63,8 @@ export default async function DownPaymentsPage({
     createdAt: dp.createdAt,
   }));
 
+  const total = await prisma.downPayment.count({ where })
+
   const tableData = toPlain(dps);
 
   return (
@@ -80,6 +82,9 @@ export default async function DownPaymentsPage({
 
       <DownPaymentTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={
           <AppSearchField
             placeholder="Cari pelanggan atau penawaran..."

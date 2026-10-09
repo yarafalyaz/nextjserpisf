@@ -50,6 +50,8 @@ export default async function VendorPaymentsPage({
     paymentMethod: resolvePaymentMethodName(p.paymentMethod, pmMap),
   }))
 
+  const total = await prisma.vendorPayment.count({ where })
+
   const tableData = toPlain(payments)
 
 
@@ -67,7 +69,7 @@ export default async function VendorPaymentsPage({
         </Link>
       </div>
 
-      <VendorPaymentTable data={tableData} />
+      <VendorPaymentTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

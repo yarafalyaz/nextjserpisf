@@ -45,6 +45,8 @@ export default async function PurchaseReturnsPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.purchaseReturn.count({ where })
+
   const tableData = toPlain(returns)
 
 
@@ -64,6 +66,9 @@ export default async function PurchaseReturnsPage({
 
       <PurchaseReturnTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/retur" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

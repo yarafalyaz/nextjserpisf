@@ -66,15 +66,18 @@ const columns = [
 
 interface PaymentTableProps {
   data: SalesPayment[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function PaymentTable({ data }: PaymentTableProps) {
+export function PaymentTable({ data, total, page, pageSize }: PaymentTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar pembayaran sales"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. dokumen atau pelanggan..."

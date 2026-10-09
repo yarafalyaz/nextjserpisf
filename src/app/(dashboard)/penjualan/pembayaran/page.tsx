@@ -53,6 +53,8 @@ export default async function SalesPaymentsPage({
     amount: Number(p.amount),
   }))
 
+  const total = await prisma.salesPayment.count({ where })
+
   const tableData = toPlain(payments)
 
 
@@ -70,7 +72,7 @@ export default async function SalesPaymentsPage({
         </Link>
       </div>
 
-      <PaymentTable data={tableData} />
+      <PaymentTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

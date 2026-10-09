@@ -51,6 +51,8 @@ export default async function VendorBillsPage({
     grandTotal: Number(b.grandTotal),
   }))
 
+  const total = await prisma.vendorBill.count({ where })
+
   const tableData = toPlain(bills)
 
 
@@ -66,6 +68,9 @@ export default async function VendorBillsPage({
 
       <VendorBillTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen atau vendor..." action="/pembelian/tagihan" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

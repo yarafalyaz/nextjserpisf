@@ -67,17 +67,20 @@ const columns = [
 
 interface PurchaseOrderTableProps {
   data: PurchaseOrder[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function PurchaseOrderTable({ data, toolbar, filters }: PurchaseOrderTableProps) {
+export function PurchaseOrderTable({ data, total, page, pageSize, toolbar, filters }: PurchaseOrderTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar pesanan pembelian"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

@@ -63,15 +63,18 @@ const columns = [
 
 interface VendorPaymentTableProps {
   data: VendorPayment[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function VendorPaymentTable({ data }: VendorPaymentTableProps) {
+export function VendorPaymentTable({ data, total, page, pageSize }: VendorPaymentTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar pembayaran vendor"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. dokumen atau vendor..."

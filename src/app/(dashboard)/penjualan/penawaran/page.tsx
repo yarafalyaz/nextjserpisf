@@ -60,6 +60,8 @@ export default async function QuotationsPage({
     status: q.status,
   }))
 
+  const total = await prisma.quotation.count({ where })
+
   const tableData = toPlain(quotations)
 
   const statusChips = ["", "draft", "sent", "accepted", "converted", "cancelled"].map((dbStatus) => {
@@ -92,6 +94,9 @@ export default async function QuotationsPage({
 
       <QuotationTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen atau pelanggan..." action="/penjualan/penawaran" />}
         filters={
           <>

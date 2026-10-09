@@ -45,6 +45,8 @@ export default async function PurchaseRequestsPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.purchaseRequest.count({ where })
+
   const tableData = toPlain(requests)
 
 
@@ -60,6 +62,9 @@ export default async function PurchaseRequestsPage({
 
       <PurchaseRequestTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/permintaan" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

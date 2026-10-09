@@ -58,17 +58,20 @@ const columns = [
 
 interface ReturnTableProps {
   data: SalesReturn[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function ReturnTable({ data, toolbar, filters }: ReturnTableProps) {
+export function ReturnTable({ data, total, page, pageSize, toolbar, filters }: ReturnTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar retur penjualan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

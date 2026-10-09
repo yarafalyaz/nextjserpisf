@@ -45,6 +45,8 @@ export default async function GoodsReceiptsPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.goodsReceipt.count({ where })
+
   const tableData = toPlain(receipts)
 
 
@@ -60,6 +62,9 @@ export default async function GoodsReceiptsPage({
 
       <GoodsReceiptTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/pembelian/penerimaan" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

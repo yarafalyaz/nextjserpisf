@@ -45,6 +45,8 @@ export default async function SalesReturnsPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.salesReturn.count({ where })
+
   const tableData = toPlain(returns)
 
 
@@ -64,6 +66,9 @@ export default async function SalesReturnsPage({
 
       <ReturnTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/penjualan/retur" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

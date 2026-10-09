@@ -67,17 +67,20 @@ const columns = [
 
 interface DownPaymentTableProps {
   data: DownPayment[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function DownPaymentTable({ data, toolbar, filters }: DownPaymentTableProps) {
+export function DownPaymentTable({ data, total, page, pageSize, toolbar, filters }: DownPaymentTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar down payment"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

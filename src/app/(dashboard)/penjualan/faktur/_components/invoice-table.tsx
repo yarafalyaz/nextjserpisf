@@ -21,6 +21,9 @@ interface Invoice {
 
 interface InvoiceTableProps {
   data: Invoice[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 const columnHelper = createColumnHelper<Invoice>()
@@ -75,13 +78,13 @@ const columns = [
   }),
 ]
 
-export function InvoiceTable({ data }: InvoiceTableProps) {
+export function InvoiceTable({ data, total, page, pageSize }: InvoiceTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar invoice"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. dokumen atau pelanggan..."
