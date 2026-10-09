@@ -25,7 +25,10 @@ function collectCreateRoutes(): string[] {
   walk(appDir)
 
   return [...routes]
-    .filter((r) => !r.includes("[id]"))
+    // Skip routes whose base path still contains a dynamic segment (e.g.
+    // /master/pelanggan/[slug]/kendaraan): their "list" page is a nested
+    // detail view, not a standalone list+create surface.
+    .filter((r) => !r.includes("["))
     .sort((a, b) => a.localeCompare(b))
 }
 
