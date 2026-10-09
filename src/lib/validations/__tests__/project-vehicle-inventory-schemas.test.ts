@@ -48,12 +48,12 @@ describe("validations/vehicle.schemas", () => {
     expect(vehicleVariantSchema.safeParse({ name: "1.5 G", vehicleModelId: 1 }).success).toBe(true);
     expect(vehicleVariantSchema.safeParse({ name: "1.5 G" }).success).toBe(false);
   });
-  it("vehicleSchema requires plateNo", () => {
-    expect(vehicleSchema.safeParse({ plateNo: "B 1234 XYZ" }).success).toBe(true);
-    expect(vehicleSchema.safeParse({ plateNo: "" }).success).toBe(false);
+  it("vehicleSchema requires variantId", () => {
+    expect(vehicleSchema.safeParse({ variantId: 1 }).success).toBe(true);
+    expect(vehicleSchema.safeParse({}).success).toBe(false);
   });
   it("vehicleSchema rejects year before 1900", () => {
-    expect(vehicleSchema.safeParse({ plateNo: "B 1 X", year: 1899 }).success).toBe(false);
+    expect(vehicleSchema.safeParse({ variantId: 1, year: 1899 }).success).toBe(false);
   });
   it("customerVehicleSchema requires customerId", () => {
     expect(customerVehicleSchema.safeParse({ customerId: 1 }).success).toBe(true);
