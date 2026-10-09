@@ -196,3 +196,30 @@ sengaja tidak disentuh.
 pra-eksisting), `next build` sukses, E2E chromium **411 hijau** + quick-add,
 seluruh halaman laporan render tanpa kegagalan.
 
+### 6.9 Quick-add digulir ke seluruh modul (registry-driven)
+- Komponen generik `src/components/ui/quick-add-select.tsx` (`QuickAddSelect`):
+  Combobox + dialog yang dirender dari daftar field deklaratif; setelah aksi
+  server sukses memanggil `onCreated({ id, label })` sehingga pemanggil
+  menambahkan opsi baru dan memilihnya. Menambahkan `__quickAdd=1` ke FormData
+  agar aksi yang biasanya `redirect()` (`createTax`, `createBrand`) tetap
+  mengembalikan `{ success, id }` bila dipanggil inline.
+- Registry `src/lib/quick-add/registry.ts` mendefinisikan 17 entitas: kategori
+  pelanggan & barang, satuan, gudang, vendor, departemen, jabatan, bank, syarat
+  pembayaran, metode pembayaran/pengiriman, pajak, pusat biaya, merek, pelanggan,
+  karyawan, akun (judul + field wajib + aksi server).
+- Diterapkan ke **~45 form**: transaksi penjualan/pembelian/inventaris, HR
+  (karyawan, cuti, lembur, penggajian, timesheet, pinjaman), keuangan (jurnal,
+  anggaran, kas kecil, pengeluaran, pembayaran), proyek, aset, QC, serta master
+  (rak, merek, produk, item). Form pelanggan ikut dimigrasikan dari pola
+  hand-rolled ke registry ini.
+- **Sengaja tidak dikonversi**: picker bernilai `code` (metode pembayaran/
+  pengiriman — id tidak bisa dipakai), picker nomor dokumen (SO/PO/PR/faktur),
+  item/SKU, merek/model/varian kendaraan (tabel berbeda dari merek produk),
+  user/proyek/tugas/aset, enum statis, dan filter laporan read-only.
+- Regression guard: `src/lib/quick-add/__tests__/registry.test.ts` (52 kasus)
+  memastikan tiap entri punya judul, aksi, field `name` wajib, dan opsi default
+  untuk tiap field `select`.
+
+**Status akhir:** 3123 unit test lulus (207→208 file), `tsc` 0 error, `eslint`
+0 error, `next build` sukses, E2E chromium 412+ hijau.
+

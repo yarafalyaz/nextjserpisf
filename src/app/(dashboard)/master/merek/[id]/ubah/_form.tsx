@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
 import { X } from "lucide-react"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 
 interface BrandEditFormProps {
   brand: { id: number; name: string; description: string | null }
@@ -64,11 +65,19 @@ export function BrandEditForm({ brand, allCategories, initialCategories }: Brand
 
         <div className="flex flex-col gap-1.5">
           <Label>Kategori Barang</Label>
-          <Combobox
+          <QuickAddSelect
             options={availableCategories.map((c) => ({ value: String(c.id), label: c.name }))}
             value={null}
             onChange={addCategory}
             placeholder="Pilih kategori..."
+            title={QUICK_ADD.itemCategory.title}
+            fields={QUICK_ADD.itemCategory.fields}
+            action={QUICK_ADD.itemCategory.action}
+            onCreated={(created) => {
+              setSelectedCategories((prev) =>
+                prev.some((c) => c.id === created.id) ? prev : [...prev, { id: created.id, name: created.label }]
+              )
+            }}
           />
           {selectedCategories.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-1">

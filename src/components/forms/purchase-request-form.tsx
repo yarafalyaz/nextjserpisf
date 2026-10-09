@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import {
   FormCard,
   FormSection,
@@ -53,6 +55,8 @@ export function PurchaseRequestForm({
 }: PRFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [employeeOptions, setEmployeeOptions] = useState(employees);
+  const [vendorOptions, setVendorOptions] = useState(vendors ?? []);
   const [title, setTitle] = useState(request?.title || "");
   const [requestedBy, setRequestedBy] = useState<string>(
     request?.requestedBy ? String(request.requestedBy) : "",
@@ -148,30 +152,44 @@ export function PurchaseRequestForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="requestedBy">Pemohon</Label>
-            <Combobox
+            <QuickAddSelect
               id="requestedBy"
               name="requestedBy"
               value={requestedBy || null}
               onChange={(key) => setRequestedBy(key ?? "")}
               placeholder="Cari pemohon..."
-              options={employees.map((emp) => ({
+              options={employeeOptions.map((emp) => ({
                 value: String(emp.id),
                 label: emp.name,
               }))}
+              title={QUICK_ADD.employee.title}
+              fields={QUICK_ADD.employee.fields}
+              action={QUICK_ADD.employee.action}
+              onCreated={(created) => {
+                setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                setRequestedBy(String(created.id));
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="vendorId">Vendor yang Disarankan</Label>
-            <Combobox
+            <QuickAddSelect
               id="vendorId"
               name="vendorId"
               value={vendorId || null}
               onChange={(key) => setVendorId(key ?? "")}
               placeholder="Cari vendor (opsional)..."
-              options={(vendors ?? []).map((v) => ({
+              options={vendorOptions.map((v) => ({
                 value: String(v.id),
                 label: v.name,
               }))}
+              title={QUICK_ADD.vendor.title}
+              fields={QUICK_ADD.vendor.fields}
+              action={QUICK_ADD.vendor.action}
+              onCreated={(created) => {
+                setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                setVendorId(String(created.id));
+              }}
             />
             <p className="text-xs text-muted-foreground">
               Opsional. Dipakai untuk mengisi vendor saat permintaan ini dibuatkan pesanan pembelian.

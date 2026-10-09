@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 
 interface CustomerVehicleOption {
@@ -46,6 +48,9 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
 
   const [customerId, setCustomerId] = useState(project?.customerId ? String(project.customerId) : "")
   const [customerVehicleId, setCustomerVehicleId] = useState(project?.customerVehicleId ? String(project.customerVehicleId) : "")
+  const [customerOptions, setCustomerOptions] = useState(customers)
+  const [costCenterOptions, setCostCenterOptions] = useState(costCenters)
+  const [costCenterId, setCostCenterId] = useState(project?.costCenterId ? String(project.costCenterId) : "")
 
   // Filter vehicles by selected customer (reactive to customerId state)
   const filteredVehicles = customerId
@@ -81,13 +86,21 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="customerId">Pelanggan *</Label>
-          <Combobox
+          <QuickAddSelect
             id="customerId"
             name="customerId"
             value={customerId || null}
             onChange={(key) => { setCustomerId(key ?? ""); setCustomerVehicleId("") }}
             placeholder="Cari pelanggan..."
-            options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+            options={customerOptions.map((c) => ({ value: String(c.id), label: c.name }))}
+            title={QUICK_ADD.customer.title}
+            fields={QUICK_ADD.customer.fields}
+            action={QUICK_ADD.customer.action}
+            onCreated={(created) => {
+              setCustomerOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setCustomerId(String(created.id))
+              setCustomerVehicleId("")
+            }}
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -120,12 +133,20 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
         {costCenters.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="costCenterId">Pusat Biaya</Label>
-          <Combobox
+          <QuickAddSelect
             id="costCenterId"
             name="costCenterId"
-            options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
-            value={project?.costCenterId ? String(project.costCenterId) : null}
+            options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            value={costCenterId || null}
+            onChange={(key) => setCostCenterId(key ?? "")}
             placeholder="— Pilih pusat biaya —"
+            title={QUICK_ADD.costCenter.title}
+            fields={QUICK_ADD.costCenter.fields}
+            action={QUICK_ADD.costCenter.action}
+            onCreated={(created) => {
+              setCostCenterOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+              setCostCenterId(String(created.id))
+            }}
           />
         </div>
         )}

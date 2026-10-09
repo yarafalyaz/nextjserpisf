@@ -16,6 +16,8 @@ import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   FormCard,
@@ -86,6 +88,7 @@ export function PurchaseOrderForm({
 }: PurchaseOrderFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [vendorOptions, setVendorOptions] = useState(vendors);
   const [isService, setIsService] = useState<boolean>((order as any)?.isService ?? false);
   const [linkedPR, setLinkedPR] = useState<{
     id: number;
@@ -320,7 +323,7 @@ export function PurchaseOrderForm({
               control={control}
               rules={{}}
               render={({ field }) => (
-                <Combobox
+                <QuickAddSelect
                   id="vendorId"
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => {
@@ -329,10 +332,18 @@ export function PurchaseOrderForm({
                     applyVendorTerm(vid);
                   }}
                   placeholder="Cari vendor..."
-                  options={vendors.map((v) => ({
+                  options={vendorOptions.map((v) => ({
                     value: String(v.id),
                     label: v.name,
                   }))}
+                  title={QUICK_ADD.vendor.title}
+                  fields={QUICK_ADD.vendor.fields}
+                  action={QUICK_ADD.vendor.action}
+                  onCreated={(created) => {
+                    setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                    field.onChange(created.id);
+                    applyVendorTerm(created.id);
+                  }}
                 />
               )}
             />

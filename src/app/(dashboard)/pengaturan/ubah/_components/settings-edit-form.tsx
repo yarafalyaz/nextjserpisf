@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Switch } from "@/components/ui/shadcn/switch"
 import { FormSelect } from "@/components/ui/form-select"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { AppDatePicker } from "@/components/ui/date-picker"
@@ -162,7 +163,7 @@ interface AccountMappingSection {
   items: AccountMappingField[]
 }
 
-function AccountComboBox({ name, label, accounts, value, onChange }: { name: string; label: string; accounts: Account[]; value?: string; onChange?: (key: string) => void }) {
+function AccountComboBox({ name, label, accounts, value, onChange, onCreated }: { name: string; label: string; accounts: Account[]; value?: string; onChange?: (key: string) => void; onCreated: (created: { id: number; label: string }) => void }) {
   const options = [
     { value: "", label: "-- Tidak diset --" },
     ...accounts.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` })),
@@ -170,19 +171,26 @@ function AccountComboBox({ name, label, accounts, value, onChange }: { name: str
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={name}>{label}</Label>
-      <Combobox
+      <QuickAddSelect
         id={name}
         name={name}
         value={value || null}
         onChange={(v) => onChange?.(v ?? "")}
         placeholder="Cari akun..."
         options={options}
+        title={QUICK_ADD.account.title}
+        fields={QUICK_ADD.account.fields}
+        action={QUICK_ADD.account.action}
+        onCreated={(created) => {
+          onCreated(created)
+          onChange?.(String(created.id))
+        }}
       />
     </div>
   )
 }
 
-function MappingSectionCard({ title, items, accounts }: { title: string; items: AccountMappingField[]; accounts: Account[] }) {
+function MappingSectionCard({ title, items, accounts, onAccountCreated }: { title: string; items: AccountMappingField[]; accounts: Account[]; onAccountCreated: (created: { id: number; label: string }) => void }) {
   const mappedCount = items.filter((item) => Boolean(item.value)).length
 
   return (
@@ -202,6 +210,7 @@ function MappingSectionCard({ title, items, accounts }: { title: string; items: 
             accounts={accounts}
             value={item.value}
             onChange={item.onChange}
+            onCreated={onAccountCreated}
           />
         ))}
       </div>
@@ -271,6 +280,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [payrollJournalType, setPayrollJournalType] = useState(settings.payrollJournalTypeId ? String(settings.payrollJournalTypeId) : "")
   const [depreciationExpense, setDepreciationExpense] = useState(settings.depreciationExpenseAccountId ? String(settings.depreciationExpenseAccountId) : "")
   const [accumulatedDepreciation, setAccumulatedDepreciation] = useState(settings.accumulatedDepreciationAccountId ? String(settings.accumulatedDepreciationAccountId) : "")
+  const [accountOptions, setAccountOptions] = useState(accounts)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const signatureInputRef = useRef<HTMLInputElement>(null)
 
@@ -1057,7 +1067,15 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
 
             <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
               {mappingSections.map((mapSection) => (
-                <MappingSectionCard key={mapSection.title} title={mapSection.title} items={mapSection.items} accounts={accounts} />
+                <MappingSectionCard
+                  key={mapSection.title}
+                  title={mapSection.title}
+                  items={mapSection.items}
+                  accounts={accountOptions}
+                  onAccountCreated={(created) =>
+                    setAccountOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+                  }
+                />
               ))}
             </div>
           </div>

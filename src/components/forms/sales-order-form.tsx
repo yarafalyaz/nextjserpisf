@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -11,7 +11,8 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
@@ -35,6 +36,7 @@ interface SalesOrderFormProps {
 export function SalesOrderForm({ customers, order, quotationId: _quotationId, defaultCustomerId: _defaultCustomerId }: SalesOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [customerOptions, setCustomerOptions] = useState(customers)
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesOrderInput>({
     resolver: zodResolver(salesOrderSchema),
@@ -76,12 +78,19 @@ export function SalesOrderForm({ customers, order, quotationId: _quotationId, de
             name="customerId"
             control={control}
             render={({ field }) => (
-              <Combobox
+              <QuickAddSelect
                 id="customerId"
                 value={field.value ? String(field.value) : null}
                 onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                 placeholder="Cari pelanggan..."
-                options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+                options={customerOptions.map((c) => ({ value: String(c.id), label: c.name }))}
+                title={QUICK_ADD.customer.title}
+                fields={QUICK_ADD.customer.fields}
+                action={QUICK_ADD.customer.action}
+                onCreated={(created) => {
+                  setCustomerOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                  field.onChange(created.id)
+                }}
               />
             )}
           />

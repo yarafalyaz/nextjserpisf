@@ -4,7 +4,8 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { createServicePurchaseOrderFromWorkOrder } from "@/actions/purchase.actions"
 import { Button } from "@/components/ui/button"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { showSuccess, showError } from "@/lib/utils/toast"
 
 interface ServiceItem {
@@ -34,6 +35,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
 
   const firstItem = serviceItems[0]
   const [vendorId, setVendorId] = useState<string>(firstItem?.vendorId ? String(firstItem.vendorId) : "")
+  const [vendorOptions, setVendorOptions] = useState(vendors)
   const [force, setForce] = useState(false)
 
   if (serviceItems.length === 0) return null
@@ -84,11 +86,18 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
           <label className="text-sm font-medium text-foreground" htmlFor="service-po-vendor">
             Vendor Jasa *
           </label>
-          <Combobox
-            options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+          <QuickAddSelect
+            options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
             value={vendorId || null}
             onChange={(v) => setVendorId(v ?? "")}
             placeholder="Cari vendor..."
+            title={QUICK_ADD.vendor.title}
+            fields={QUICK_ADD.vendor.fields}
+            action={QUICK_ADD.vendor.action}
+            onCreated={(created) => {
+              setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setVendorId(String(created.id))
+            }}
           />
         </div>
 

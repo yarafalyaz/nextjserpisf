@@ -7,6 +7,8 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
@@ -40,10 +42,11 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId)
   const [rackId, setRackId] = useState(rackRow ? String(rackRow.rackId) : "")
   const [autoCode, setAutoCode] = useState("")
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
 
   const selectedWarehouse = useMemo(
-    () => warehouses.find((w) => String(w.id) === warehouseId),
-    [warehouses, warehouseId],
+    () => warehouseOptions.find((w) => String(w.id) === warehouseId),
+    [warehouseOptions, warehouseId],
   )
   const racks = selectedWarehouse?.racks ?? []
 
@@ -123,12 +126,20 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
             {/* Warehouse select */}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="warehouseId">Gudang *</Label>
-              <Combobox
+              <QuickAddSelect
                 id="warehouseId"
                 value={warehouseId || null}
                 onChange={handleWarehouseChange}
                 placeholder="Cari gudang..."
-                options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
+                title={QUICK_ADD.warehouse.title}
+                fields={QUICK_ADD.warehouse.fields}
+                action={QUICK_ADD.warehouse.action}
+                onCreated={(created) => {
+                  setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label, racks: [] }])
+                  setWarehouseId(String(created.id))
+                  setRackId("")
+                }}
               />
             </div>
 

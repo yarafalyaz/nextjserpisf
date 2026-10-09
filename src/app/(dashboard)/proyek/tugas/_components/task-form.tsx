@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 
 interface TaskFormProps {
@@ -39,6 +41,7 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
   const [isPending, startTransition] = useTransition()
   const [projectId, setProjectId] = useState<string | null>(task?.projectId ? String(task.projectId) : null)
   const [assignedTo, setAssignedTo] = useState<string | null>(task?.assignedTo ? String(task.assignedTo) : null)
+  const [employeeOptions, setEmployeeOptions] = useState(employees)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -89,13 +92,20 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="task-assigned">Ditugaskan Ke</Label>
-          <Combobox
+          <QuickAddSelect
             id="task-assigned"
             name="assignedTo"
             value={assignedTo}
             onChange={setAssignedTo}
             placeholder="Cari karyawan..."
-            options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+            options={employeeOptions.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+            title={QUICK_ADD.employee.title}
+            fields={QUICK_ADD.employee.fields}
+            action={QUICK_ADD.employee.action}
+            onCreated={(created) => {
+              setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setAssignedTo(String(created.id))
+            }}
           />
         </div>
         <div className="flex flex-col gap-1.5">

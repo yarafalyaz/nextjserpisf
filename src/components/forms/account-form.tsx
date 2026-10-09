@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 
 interface AccountFormProps {
@@ -22,6 +23,7 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [parentId, setParentId] = useState(account?.parentId ? String(account.parentId) : "")
+  const [accountOptions, setAccountOptions] = useState(accounts)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -72,12 +74,19 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Akun Induk (Opsional)</Label>
-          <Combobox
+          <QuickAddSelect
             name="parentId"
             value={parentId || null}
             onChange={(key) => setParentId(key ?? "")}
             placeholder="Cari akun..."
-            options={accounts.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
+            options={accountOptions.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
+            title={QUICK_ADD.account.title}
+            fields={QUICK_ADD.account.fields}
+            action={QUICK_ADD.account.action}
+            onCreated={(created) => {
+              setAccountOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+              setParentId(String(created.id))
+            }}
           />
         </div>
         <div className="flex flex-col gap-1.5">

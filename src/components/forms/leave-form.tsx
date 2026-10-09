@@ -12,7 +12,8 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 import { FormGrid, FormGroup } from "@/components/ui/form-layout"
 
@@ -46,6 +47,7 @@ export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
   const [employeeId, setEmployeeId] = useState<string | null>(
     leave?.employeeId ? String(leave.employeeId) : null
   )
+  const [employeeOptions, setEmployeeOptions] = useState(employees)
   const [leaveType, setLeaveType] = useState(leave?.leaveType ?? "annual")
   const [quota, setQuota] = useState<QuotaState | null>(null)
 
@@ -131,14 +133,21 @@ export function LeaveForm({ employees, leave, scopeKind }: LeaveFormProps) {
               <Label htmlFor="employeeId">
                 Karyawan <span className="text-destructive" aria-hidden="true">*</span>
               </Label>
-              <Combobox
+              <QuickAddSelect
                 id="employeeId"
                 name="employeeId"
                 required
-                options={employees.map((emp) => ({ value: String(emp.id), label: emp.name }))}
+                options={employeeOptions.map((emp) => ({ value: String(emp.id), label: emp.name }))}
                 value={employeeId}
                 onChange={setEmployeeId}
                 placeholder="Cari karyawan..."
+                title={QUICK_ADD.employee.title}
+                fields={QUICK_ADD.employee.fields}
+                action={QUICK_ADD.employee.action}
+                onCreated={(created) => {
+                  setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                  setEmployeeId(String(created.id))
+                }}
               />
             </FormGroup>
           )}

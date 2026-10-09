@@ -10,6 +10,8 @@ import {
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { AppDatePicker } from "@/components/ui/date-picker";
 import {
   FormCard,
@@ -204,6 +206,7 @@ export function GoodsReceiptForm({
 }: GRFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const initialPoId = receipt?.purchaseOrderId
     ? String(receipt.purchaseOrderId)
     : defaultPoId
@@ -374,15 +377,22 @@ export function GoodsReceiptForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="warehouseId">Gudang Tujuan (Bawaan) *</Label>
-            <Combobox
+            <QuickAddSelect
               id="warehouseId"
-              options={warehouses.map((w) => ({
+              options={warehouseOptions.map((w) => ({
                 value: String(w.id),
                 label: w.name,
               }))}
               value={warehouseId || null}
               onChange={(key) => setWarehouseId(key ? String(key) : "")}
               placeholder="Cari gudang..."
+              title={QUICK_ADD.warehouse.title}
+              fields={QUICK_ADD.warehouse.fields}
+              action={QUICK_ADD.warehouse.action}
+              onCreated={(created) => {
+                setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                setWarehouseId(String(created.id));
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -616,7 +626,7 @@ export function GoodsReceiptForm({
                             {formatCurrency(hppPerUnit)}
                           </td>
                           <td className="py-2.5 px-3">
-                            <Combobox
+                            <QuickAddSelect
                               value={row.warehouseId || null}
                               onChange={(key) =>
                                 updateItem(index, {
@@ -628,12 +638,22 @@ export function GoodsReceiptForm({
                                   rackRowId: "",
                                 })
                               }
-                              options={warehouses.map((w) => ({
+                              options={warehouseOptions.map((w) => ({
                                 value: String(w.id),
                                 label: w.name,
                               }))}
                               placeholder="— Bawaan —"
-                              className="w-full"
+                              title={QUICK_ADD.warehouse.title}
+                              fields={QUICK_ADD.warehouse.fields}
+                              action={QUICK_ADD.warehouse.action}
+                              onCreated={(created) => {
+                                setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                                updateItem(index, {
+                                  warehouseId: String(created.id),
+                                  rackId: "",
+                                  rackRowId: "",
+                                });
+                              }}
                             />
                           </td>
                           <td className="py-2.5 px-3">

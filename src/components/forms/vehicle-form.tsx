@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 
 interface Variant {
@@ -58,6 +60,7 @@ export function VehicleForm({ brands, models, variants, customers, vehicle }: Ve
     vehicle?.variantId ? String(vehicle.variantId) : null
   )
   const [customerId, setCustomerId] = useState<string | null>(vehicle?.customerId ? String(vehicle.customerId) : null)
+  const [customerOptions, setCustomerOptions] = useState(customers)
 
   // Cascade filters
   const filteredModels = useMemo(
@@ -148,13 +151,20 @@ export function VehicleForm({ brands, models, variants, customers, vehicle }: Ve
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="customerId">Pelanggan</Label>
-          <Combobox
+          <QuickAddSelect
             id="customerId"
             name="customerId"
-            options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+            options={customerOptions.map((c) => ({ value: String(c.id), label: c.name }))}
             value={customerId}
             onChange={setCustomerId}
             placeholder="Cari pelanggan..."
+            title={QUICK_ADD.customer.title}
+            fields={QUICK_ADD.customer.fields}
+            action={QUICK_ADD.customer.action}
+            onCreated={(created) => {
+              setCustomerOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setCustomerId(String(created.id))
+            }}
           />
         </div>
         <div className="flex flex-col gap-1.5">

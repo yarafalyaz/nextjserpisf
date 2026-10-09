@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   FormCard,
@@ -66,6 +68,7 @@ interface VendorBillFormProps {
 export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: VendorBillFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [vendorOptions, setVendorOptions] = useState(vendors);
   const [date, setDate] = useState(
     bill?.date || toLocalDateOnly(new Date()),
   );
@@ -187,10 +190,10 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="vendorId">Vendor *</Label>
-            <Combobox
+            <QuickAddSelect
               id="vendorId"
               name="vendorId"
-              options={vendors.map((v) => ({
+              options={vendorOptions.map((v) => ({
                 value: String(v.id),
                 label: v.name,
               }))}
@@ -212,6 +215,15 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
                 }
               }}
               placeholder="Cari vendor..."
+              title={QUICK_ADD.vendor.title}
+              fields={QUICK_ADD.vendor.fields}
+              action={QUICK_ADD.vendor.action}
+              onCreated={(created) => {
+                setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                const value = String(created.id);
+                setVendorId(value);
+                setPurchaseOrderId(null);
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">

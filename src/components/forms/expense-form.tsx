@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -33,6 +35,10 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
 
   const expenseAccounts = accounts.filter((a) => a.type === "EXPENSE")
   const assetAccounts = accounts.filter((a) => a.type === "ASSET")
+  const [expenseAccountOptions, setExpenseAccountOptions] = useState(expenseAccounts)
+  const [assetAccountOptions, setAssetAccountOptions] = useState(assetAccounts)
+  const [costCenterOptions, setCostCenterOptions] = useState(costCenters)
+  const [vendorOptions, setVendorOptions] = useState(vendors)
   const [costCenterId, setCostCenterId] = useState<string | null>(expense?.costCenterId ? String(expense.costCenterId) : null)
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ExpenseInput>({
@@ -91,12 +97,19 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
             render={({ field }) => (
               <>
                 <Label htmlFor="accountId">Akun Beban *</Label>
-                <Combobox
+                <QuickAddSelect
                   id="accountId"
-                  options={expenseAccounts.map((acc) => ({ value: String(acc.id), label: `${acc.code} - ${acc.name}` }))}
+                  options={expenseAccountOptions.map((acc) => ({ value: String(acc.id), label: acc.code ? `${acc.code} - ${acc.name}` : acc.name }))}
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                   placeholder="Cari akun beban..."
+                  title={QUICK_ADD.account.title}
+                  fields={QUICK_ADD.account.fields}
+                  action={QUICK_ADD.account.action}
+                  onCreated={(created) => {
+                    setExpenseAccountOptions((prev) => [...prev, { id: created.id, code: "", name: created.label, type: "EXPENSE" }])
+                    field.onChange(created.id)
+                  }}
                 />
               </>
             )}
@@ -111,12 +124,19 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
             render={({ field }) => (
               <>
                 <Label htmlFor="paidFromAccountId">Dibayar Dari</Label>
-                <Combobox
+                <QuickAddSelect
                   id="paidFromAccountId"
-                  options={assetAccounts.map((acc) => ({ value: String(acc.id), label: `${acc.code} - ${acc.name}` }))}
+                  options={assetAccountOptions.map((acc) => ({ value: String(acc.id), label: `${acc.code} - ${acc.name}` }))}
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                   placeholder="Cari akun kas/bank..."
+                  title={QUICK_ADD.account.title}
+                  fields={QUICK_ADD.account.fields}
+                  action={QUICK_ADD.account.action}
+                  onCreated={(created) => {
+                    setAssetAccountOptions((prev) => [...prev, { id: created.id, code: "", name: created.label, type: "ASSET" }])
+                    field.onChange(created.id)
+                  }}
                 />
               </>
             )}
@@ -162,13 +182,20 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
         {costCenters.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="costCenterId">Pusat Biaya</Label>
-            <Combobox
+            <QuickAddSelect
               id="costCenterId"
               name="costCenterId"
-              options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} - ${cc.name}` }))}
+              options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: cc.code ? `${cc.code} - ${cc.name}` : cc.name }))}
               value={costCenterId}
               onChange={setCostCenterId}
               placeholder="Cari pusat biaya..."
+              title={QUICK_ADD.costCenter.title}
+              fields={QUICK_ADD.costCenter.fields}
+              action={QUICK_ADD.costCenter.action}
+              onCreated={(created) => {
+                setCostCenterOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+                setCostCenterId(String(created.id))
+              }}
             />
           </div>
         )}
@@ -199,12 +226,19 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
             render={({ field }) => (
               <>
                 <Label htmlFor="vendorId">Vendor</Label>
-                <Combobox
+                <QuickAddSelect
                   id="vendorId"
-                  options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+                  options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                   placeholder="Cari vendor/toko..."
+                  title={QUICK_ADD.vendor.title}
+                  fields={QUICK_ADD.vendor.fields}
+                  action={QUICK_ADD.vendor.action}
+                  onCreated={(created) => {
+                    setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                    field.onChange(created.id)
+                  }}
                 />
               </>
             )}

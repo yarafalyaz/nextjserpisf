@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation";
-import { useTransition, type BaseSyntheticEvent } from "react";
+import { useState, useTransition, type BaseSyntheticEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { salesPaymentSchema, type SalesPaymentInput } from "@/lib/validators";
@@ -16,6 +16,8 @@ import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   FormCard,
@@ -56,6 +58,7 @@ export function PaymentForm({
 }: PaymentFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [accountOptions, setAccountOptions] = useState(accounts);
 
   const {
     register,
@@ -252,17 +255,27 @@ export function PaymentForm({
               render={({ field }) => (
                 <>
                   <Label htmlFor="accountId">Akun Kas/Bank</Label>
-                  <Combobox
+                  <QuickAddSelect
                     id="accountId"
-                    options={accounts.map((acc) => ({
+                    options={accountOptions.map((acc) => ({
                       value: String(acc.id),
-                      label: `${acc.code} - ${acc.name}`,
+                      label: acc.code ? `${acc.code} - ${acc.name}` : acc.name,
                     }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) =>
                       field.onChange(key ? Number(key) : undefined)
                     }
                     placeholder="Cari akun..."
+                    title={QUICK_ADD.account.title}
+                    fields={QUICK_ADD.account.fields}
+                    action={QUICK_ADD.account.action}
+                    onCreated={(created) => {
+                      setAccountOptions((prev) => [
+                        ...prev,
+                        { id: created.id, code: "", name: created.label },
+                      ]);
+                      field.onChange(created.id);
+                    }}
                   />
                 </>
               )}

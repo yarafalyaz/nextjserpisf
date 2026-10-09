@@ -1387,6 +1387,9 @@ export async function createTax(formData: FormData) {
 
     revalidatePath("/master/pajak");
     await logActivity("create", "Tax", tax.id, "Membuat pajak");
+    // Quick-add from another form must stay on its own page; only the
+    // full-page create form navigates back to the list afterwards.
+    if (formData.get("__quickAdd") === "1") return { success: true, id: tax.id };
     redirect("/master/pajak");
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -2142,6 +2145,9 @@ export async function createBrand(formData: FormData) {
 
     revalidatePath("/master/merek");
     await logActivity("create", "Brand", brand.id, "Membuat merek");
+    // Quick-add from another form must stay on its own page; only the
+    // full-page create form navigates back to the list afterwards.
+    if (formData.get("__quickAdd") === "1") return { success: true, id: brand.id };
     redirect("/master/merek");
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

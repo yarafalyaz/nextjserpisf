@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 
 interface Props {
   skfs: { id: number; code: string | null; name: string; unit: string }[]
@@ -19,6 +21,7 @@ export function AllocationRuleForm({ skfs, accounts, costCenters }: Props) {
   const router = useRouter()
   const [isPending, setIsPending] = useState(false)
   const [sourceAccountId, setSourceAccountId] = useState("")
+  const [accountOptions, setAccountOptions] = useState(accounts)
   const [skfId, setSkfId] = useState("")
   const [targetIds, setTargetIds] = useState<number[]>([])
 
@@ -51,11 +54,18 @@ export function AllocationRuleForm({ skfs, accounts, costCenters }: Props) {
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Akun Sumber *</Label>
-          <Combobox
-            options={accounts.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))}
+          <QuickAddSelect
+            options={accountOptions.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))}
             value={sourceAccountId}
             onChange={(v) => setSourceAccountId(v ?? "")}
             placeholder="Pilih akun..."
+            title={QUICK_ADD.account.title}
+            fields={QUICK_ADD.account.fields}
+            action={QUICK_ADD.account.action}
+            onCreated={(created) => {
+              setAccountOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+              setSourceAccountId(String(created.id))
+            }}
           />
           <input type="hidden" name="sourceAccountId" value={sourceAccountId} />
         </div>

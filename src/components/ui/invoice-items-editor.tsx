@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { updateSalesInvoice, updateSalesOrder } from "@/actions/sales.actions";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { formatCurrency } from "@/lib/utils/format";
 
@@ -77,6 +79,9 @@ export function InvoiceItemsEditor({
   const [editing, setEditing] = useState(false);
   const [discount, setDiscount] = useState(discountTotal);
   const [tax, setTax] = useState(taxRate);
+  // UoM codes created inline via quick-add, merged into the per-row option list
+  // so the new unit is selectable without a page reload.
+  const [extraUoms, setExtraUoms] = useState<string[]>([]);
 
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
   const taxAmount = Math.round(((subtotal - discount) * tax) / 100);
@@ -422,9 +427,10 @@ export function InvoiceItemsEditor({
               const conversions = selectedMeta?.uomConversions ?? [];
               const baseUom = selectedMeta?.unitOfMeasure;
               const uomOptions = baseUom
-                ? [baseUom, ...conversions.map((c) => c.code)]
+                ? [baseUom, ...conversions.map((c) => c.code), ...extraUoms]
                 : [];
-              const showUomSelect = uomOptions.length > 1;
+              const uniqueUomOptions = [...new Set(uomOptions)];
+              const showUomSelect = uniqueUomOptions.length > 1;
               const tracksSerial = selectedMeta?.trackSerial === true;
               const serialText = (item.serialNumbers ?? []).join("\n");
               const serialCount = item.serialNumbers?.length ?? 0;
@@ -448,8 +454,8 @@ export function InvoiceItemsEditor({
                             Satuan:
                           </span>
                           {showUomSelect ? (
-                            <Combobox
-                              options={uomOptions.map((code) => ({
+                            <QuickAddSelect
+                              options={uniqueUomOptions.map((code) => ({
                                 value: code,
                                 label: code,
                               }))}
@@ -458,7 +464,17 @@ export function InvoiceItemsEditor({
                                 updateItem(i, "uom", key ?? "")
                               }
                               placeholder="Cari satuan..."
-                              className="w-28"
+                              title={QUICK_ADD.uom.title}
+                              fields={QUICK_ADD.uom.fields}
+                              action={QUICK_ADD.uom.action}
+                              getLabel={(formData) =>
+                                String(formData.get("symbol") ?? "").trim() ||
+                                String(formData.get("name") ?? "").trim()
+                              }
+                              onCreated={(created) => {
+                                setExtraUoms((prev) => [...prev, created.label])
+                                updateItem(i, "uom", created.label)
+                              }}
                             />
                           ) : (
                             <span className="text-xs font-medium text-foreground">

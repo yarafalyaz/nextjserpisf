@@ -10,6 +10,8 @@ import { useState } from "react";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
@@ -48,8 +50,13 @@ export function MaterialIssueForm({
 }: MaterialIssueFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const [warehouseId, setWarehouseId] = useState(
     issue?.warehouseId ? String(issue.warehouseId) : "",
+  );
+  const [costCenterOptions, setCostCenterOptions] = useState(costCenters);
+  const [costCenterId, setCostCenterId] = useState(
+    issue?.costCenterId ? String(issue.costCenterId) : "",
   );
   const [miItems, setMiItems] = useState<MIItem[]>(
     issue?.items && issue.items.length > 0
@@ -113,26 +120,41 @@ export function MaterialIssueForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="warehouseId">Gudang *</Label>
-          <Combobox
+          <QuickAddSelect
             id="warehouseId"
-            options={warehouses.map((w) => ({
+            options={warehouseOptions.map((w) => ({
               value: String(w.id),
               label: w.name,
             }))}
             value={warehouseId || null}
             onChange={(key) => setWarehouseId(key ? String(key) : "")}
             placeholder="Cari gudang..."
+            title={QUICK_ADD.warehouse.title}
+            fields={QUICK_ADD.warehouse.fields}
+            action={QUICK_ADD.warehouse.action}
+            onCreated={(created) => {
+              setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+              setWarehouseId(String(created.id));
+            }}
           />
         </div>
         {costCenters.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="costCenterId">Pusat Biaya</Label>
-          <Combobox
+          <QuickAddSelect
             id="costCenterId"
             name="costCenterId"
-            options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
-            value={issue?.costCenterId ? String(issue.costCenterId) : null}
+            options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            value={costCenterId || null}
+            onChange={(key) => setCostCenterId(key ?? "")}
             placeholder="— Pilih pusat biaya —"
+            title={QUICK_ADD.costCenter.title}
+            fields={QUICK_ADD.costCenter.fields}
+            action={QUICK_ADD.costCenter.action}
+            onCreated={(created) => {
+              setCostCenterOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }]);
+              setCostCenterId(String(created.id));
+            }}
           />
         </div>
         )}

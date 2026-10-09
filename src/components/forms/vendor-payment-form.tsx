@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Upload, X, FileText } from "lucide-react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -53,6 +55,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
       ? String(payment.vendorId)
       : (preselectedBillId ? String(bills.find((b) => b.id === preselectedBillId)?.vendorId ?? "") : ""),
   )
+  const [vendorOptions, setVendorOptions] = useState(vendors)
   const [paymentMethod, setPaymentMethod] = useState("")
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [uploading, setUploading] = useState(false)
@@ -138,13 +141,20 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="vendorId">Vendor *</Label>
-            <Combobox
+            <QuickAddSelect
               id="vendorId"
               name="vendorId"
-              options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+              options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
               value={vendorId || null}
               onChange={(key) => setVendorId(key ?? "")}
               placeholder="Cari vendor..."
+              title={QUICK_ADD.vendor.title}
+              fields={QUICK_ADD.vendor.fields}
+              action={QUICK_ADD.vendor.action}
+              onCreated={(created) => {
+                setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                setVendorId(String(created.id))
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">

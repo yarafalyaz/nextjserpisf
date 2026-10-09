@@ -9,7 +9,8 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { CurrencyInput } from "@/components/ui/currency-input"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
@@ -39,6 +40,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
   )
   const [description, setDescription] = useState(journal?.description ?? "")
   const [date, setDate] = useState(journal?.date ?? toLocalDateOnly(new Date()))
+  const [accountOptions, setAccountOptions] = useState(accounts)
 
   function addEntry() { setEntries([...entries, { accountId: 0, debit: 0, credit: 0, memo: "" }]) }
   function removeEntry(i: number) { setEntries(entries.filter((_, idx) => idx !== i)) }
@@ -102,12 +104,18 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
             {entries.map((entry, i) => (
               <tr key={i}>
                 <td>
-                  <Combobox
+                  <QuickAddSelect
                     value={entry.accountId ? String(entry.accountId) : null}
                     onChange={(key) => updateEntry(i, "accountId", key ? Number(key) : 0)}
                     placeholder="Pilih Akun"
-                    className="w-full"
-                    options={accounts.map((a) => ({ value: String(a.id), label: `${a.code} - ${a.name}` }))}
+                    options={accountOptions.map((a) => ({ value: String(a.id), label: a.code ? `${a.code} - ${a.name}` : a.name }))}
+                    title={QUICK_ADD.account.title}
+                    fields={QUICK_ADD.account.fields}
+                    action={QUICK_ADD.account.action}
+                    onCreated={(created) => {
+                      setAccountOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+                      updateEntry(i, "accountId", created.id)
+                    }}
                   />
                 </td>
                 <td><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="form-input" /></td>

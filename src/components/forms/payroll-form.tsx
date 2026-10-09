@@ -8,7 +8,8 @@ import { processPayroll, getPayrollEstimation } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, Loader2 } from "lucide-react"
@@ -27,6 +28,11 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
 
   // Selection states for auto-calc trigger
   const [employeeId, setEmployeeId] = useState<number | null>(initialData?.employeeId || null)
+  const [employeeOptions, setEmployeeOptions] = useState(employees)
+  const [costCenterOptions, setCostCenterOptions] = useState(costCenters)
+  const [costCenterId, setCostCenterId] = useState(
+    initialData?.costCenterId ? String(initialData.costCenterId) : "",
+  )
   const [startDate, setStartDate] = useState<string>(initialData?.startDate ? new Date(initialData.startDate).toISOString().substring(0,10) : "")
   const [endDate, setEndDate] = useState<string>(initialData?.endDate ? new Date(initialData.endDate).toISOString().substring(0,10) : "")
 
@@ -135,13 +141,20 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
       <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="employeeId">Karyawan *</Label>
-          <Combobox
+          <QuickAddSelect
             id="employeeId"
             name="employeeId"
-            options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+            options={employeeOptions.map((e) => ({ value: String(e.id), label: e.name }))}
             value={employeeId ? String(employeeId) : null}
             onChange={(key) => setEmployeeId(key ? Number(key) : null)}
             placeholder="Pilih karyawan..."
+            title={QUICK_ADD.employee.title}
+            fields={QUICK_ADD.employee.fields}
+            action={QUICK_ADD.employee.action}
+            onCreated={(created) => {
+              setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setEmployeeId(created.id)
+            }}
           />
         </div>
 
@@ -172,12 +185,20 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="costCenterId">Pusat Biaya</Label>
-          <Combobox
+          <QuickAddSelect
             id="costCenterId"
             name="costCenterId"
-            options={costCenters.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
-            value={initialData?.costCenterId ? String(initialData.costCenterId) : null}
+            options={costCenterOptions.map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))}
+            value={costCenterId || null}
+            onChange={(key) => setCostCenterId(key ?? "")}
             placeholder="— Pilih pusat biaya —"
+            title={QUICK_ADD.costCenter.title}
+            fields={QUICK_ADD.costCenter.fields}
+            action={QUICK_ADD.costCenter.action}
+            onCreated={(created) => {
+              setCostCenterOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+              setCostCenterId(String(created.id))
+            }}
           />
         </div>
       </div>

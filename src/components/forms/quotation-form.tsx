@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition, useCallback, useMemo, useEffect } from "react"
+import { useTransition, useCallback, useMemo, useEffect, useState } from "react"
 import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { quotationSchema, type QuotationInput } from "@/lib/validators"
@@ -14,6 +14,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
@@ -498,6 +500,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
 export function QuotationForm({ customers, customerVehicles, items, products, generatedCode, paymentMethods = [], shippingMethods = [], quotation }: QuotationFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [customerOptions, setCustomerOptions] = useState(customers)
 
   const {
     register,
@@ -604,7 +607,7 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
             name="customerId"
             control={control}
             render={({ field }) => (
-              <Combobox
+              <QuickAddSelect
                 id="customerId"
                 value={field.value ? String(field.value) : null}
                 onChange={(key) => {
@@ -613,7 +616,15 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
                   setValue("customerVehicleId", undefined)
                 }}
                 placeholder="Cari pelanggan..."
-                options={customers.map((c) => ({ value: String(c.id), label: c.name }))}
+                options={customerOptions.map((c) => ({ value: String(c.id), label: c.name }))}
+                title={QUICK_ADD.customer.title}
+                fields={QUICK_ADD.customer.fields}
+                action={QUICK_ADD.customer.action}
+                onCreated={(created) => {
+                  setCustomerOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                  field.onChange(created.id)
+                  setValue("customerVehicleId", undefined)
+                }}
               />
             )}
           />

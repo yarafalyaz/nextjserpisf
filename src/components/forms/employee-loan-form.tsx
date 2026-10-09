@@ -7,7 +7,8 @@ import { createEmployeeLoan, updateEmployeeLoan } from "@/actions/hrm.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Textarea } from "@/components/ui/shadcn/textarea";
-import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   FormCard,
@@ -36,6 +37,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
   const [employeeId, setEmployeeId] = useState(
     loan ? String(loan.employeeId) : employees.length === 1 ? String(employees[0].id) : "",
   );
+  const [employeeOptions, setEmployeeOptions] = useState(employees);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -77,15 +79,22 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
           ) : (
             <div className="flex flex-col gap-1.5">
               <Label>Karyawan *</Label>
-              <Combobox
+              <QuickAddSelect
                 name="employeeId"
                 value={employeeId || null}
                 onChange={(key) => setEmployeeId(key ?? "")}
                 placeholder="Cari karyawan..."
-                options={employees.map((e) => ({
+                options={employeeOptions.map((e) => ({
                   value: String(e.id),
                   label: e.name,
                 }))}
+                title={QUICK_ADD.employee.title}
+                fields={QUICK_ADD.employee.fields}
+                action={QUICK_ADD.employee.action}
+                onCreated={(created) => {
+                  setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                  setEmployeeId(String(created.id));
+                }}
               />
             </div>
           )}

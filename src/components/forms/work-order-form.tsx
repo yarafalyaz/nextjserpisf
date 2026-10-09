@@ -7,6 +7,8 @@ import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import {
   FormCard,
   FormSection,
@@ -70,6 +72,7 @@ export function WorkOrderForm({
       ? String(_defaultCustomerId)
       : null,
   );
+  const [customerOptions, setCustomerOptions] = useState(customers);
   const [woItems, setWoItems] = useState(
     workOrder?.items && workOrder.items.length > 0
       ? workOrder.items.map((it) => ({
@@ -140,16 +143,23 @@ export function WorkOrderForm({
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="customerId">Pelanggan *</Label>
-            <Combobox
+            <QuickAddSelect
               id="customerId"
               name="customerId"
-              options={customers.map((c) => ({
+              options={customerOptions.map((c) => ({
                 value: String(c.id),
                 label: c.name,
               }))}
               value={customerId}
               onChange={setCustomerId}
               placeholder="Cari pelanggan..."
+              title={QUICK_ADD.customer.title}
+              fields={QUICK_ADD.customer.fields}
+              action={QUICK_ADD.customer.action}
+              onCreated={(created) => {
+                setCustomerOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                setCustomerId(String(created.id));
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">

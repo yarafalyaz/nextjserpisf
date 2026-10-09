@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Switch } from "@/components/ui/shadcn/switch"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Upload, X, AlertCircle } from "lucide-react"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
@@ -77,6 +79,13 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
   )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isEdit = !!item
+
+  // Local option lists for the quick-add selects, so a record created inline
+  // appears (and gets selected) without a page reload.
+  const [brandOptions, setBrandOptions] = useState(brands)
+  const [categoryOptions, setCategoryOptions] = useState(categories)
+  const [vendorOptions, setVendorOptions] = useState(vendors)
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
 
   function addUom() {
     setUomConversions([...uomConversions, { code: "", factorToBase: "" }])
@@ -284,12 +293,19 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               render={({ field }) => (
                 <>
                   <Label htmlFor="brandId">Merek *</Label>
-                  <Combobox
+                  <QuickAddSelect
                     id="brandId"
-                    options={brands.map((b) => ({ value: String(b.id), label: b.name }))}
+                    options={brandOptions.map((b) => ({ value: String(b.id), label: b.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari merek..."
+                    title={QUICK_ADD.brand.title}
+                    fields={QUICK_ADD.brand.fields}
+                    action={QUICK_ADD.brand.action}
+                    onCreated={(created) => {
+                      setBrandOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                      field.onChange(created.id)
+                    }}
                   />
                   {errors.brandId && <span className="text-xs text-danger mt-1">{errors.brandId.message}</span>}
                 </>
@@ -303,12 +319,19 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               render={({ field }) => (
                 <>
                   <Label htmlFor="categoryId">Kategori *</Label>
-                  <Combobox
+                  <QuickAddSelect
                     id="categoryId"
-                    options={categories.map((c) => ({ value: String(c.id), label: c.name }))}
+                    options={categoryOptions.map((c) => ({ value: String(c.id), label: c.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari kategori..."
+                    title={QUICK_ADD.itemCategory.title}
+                    fields={QUICK_ADD.itemCategory.fields}
+                    action={QUICK_ADD.itemCategory.action}
+                    onCreated={(created) => {
+                      setCategoryOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                      field.onChange(created.id)
+                    }}
                   />
                   {errors.categoryId && <span className="text-xs text-danger mt-1">{errors.categoryId.message}</span>}
                 </>
@@ -322,12 +345,19 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               render={({ field }) => (
                 <>
                   <Label htmlFor="vendorId">Vendor *</Label>
-                  <Combobox
+                  <QuickAddSelect
                     id="vendorId"
-                    options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+                    options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari vendor..."
+                    title={QUICK_ADD.vendor.title}
+                    fields={QUICK_ADD.vendor.fields}
+                    action={QUICK_ADD.vendor.action}
+                    onCreated={(created) => {
+                      setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                      field.onChange(created.id)
+                    }}
                   />
                   {errors.vendorId && <span className="text-xs text-danger mt-1">{errors.vendorId.message}</span>}
                 </>
@@ -415,9 +445,9 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
               render={({ field }) => (
                 <>
                   <Label htmlFor="defaultWarehouseId">Gudang Bawaan *</Label>
-                  <Combobox
+                  <QuickAddSelect
                     id="defaultWarehouseId"
-                    options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                    options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => {
                       field.onChange(key ? Number(key) : undefined)
@@ -425,6 +455,15 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                       setValue("defaultRackRowId", undefined)
                     }}
                     placeholder="Cari gudang..."
+                    title={QUICK_ADD.warehouse.title}
+                    fields={QUICK_ADD.warehouse.fields}
+                    action={QUICK_ADD.warehouse.action}
+                    onCreated={(created) => {
+                      setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                      field.onChange(created.id)
+                      setValue("defaultRackId", undefined as any)
+                      setValue("defaultRackRowId", undefined)
+                    }}
                   />
                   {errors.defaultWarehouseId && <span className="text-xs text-danger mt-1">{errors.defaultWarehouseId.message}</span>}
                 </>

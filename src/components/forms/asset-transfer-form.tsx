@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import {
   FormCard,
   FormSection,
@@ -50,6 +52,7 @@ export function AssetTransferForm({
   const [toEmployeeId, setToEmployeeId] = useState(
     transfer?.toEmployeeId ? String(transfer.toEmployeeId) : "",
   );
+  const [employeeOptions, setEmployeeOptions] = useState(employees);
 
   const selectedAsset = assets.find((a) => a.id === Number(assetId));
 
@@ -136,28 +139,42 @@ export function AssetTransferForm({
             <>
               <div className="flex flex-col gap-1.5">
                 <Label>Dari Karyawan</Label>
-                <Combobox
+                <QuickAddSelect
                   name="fromEmployeeId"
                   value={fromEmployeeId || null}
                   onChange={(key) => setFromEmployeeId(key ?? "")}
                   placeholder="Cari karyawan..."
-                  options={employees.map((emp) => ({
+                  options={employeeOptions.map((emp) => ({
                     value: String(emp.id),
                     label: emp.name,
                   }))}
+                  title={QUICK_ADD.employee.title}
+                  fields={QUICK_ADD.employee.fields}
+                  action={QUICK_ADD.employee.action}
+                  onCreated={(created) => {
+                    setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                    setFromEmployeeId(String(created.id));
+                  }}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Ke Karyawan</Label>
-                <Combobox
+                <QuickAddSelect
                   name="toEmployeeId"
                   value={toEmployeeId || null}
                   onChange={(key) => setToEmployeeId(key ?? "")}
                   placeholder="Cari karyawan..."
-                  options={employees.map((emp) => ({
+                  options={employeeOptions.map((emp) => ({
                     value: String(emp.id),
                     label: emp.name,
                   }))}
+                  title={QUICK_ADD.employee.title}
+                  fields={QUICK_ADD.employee.fields}
+                  action={QUICK_ADD.employee.action}
+                  onCreated={(created) => {
+                    setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                    setToEmployeeId(String(created.id));
+                  }}
                 />
               </div>
             </>

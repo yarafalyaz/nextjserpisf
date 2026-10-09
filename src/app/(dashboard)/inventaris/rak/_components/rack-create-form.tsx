@@ -6,7 +6,8 @@ import { createRack, getNextRackCode } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 
@@ -25,6 +26,7 @@ export function RackCreateForm({ enableAutoCode, warehouses }: RackCreateFormPro
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const [warehouseId, setWarehouseId] = useState(searchParams.get("warehouseId") || "")
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
   const [autoCode, setAutoCode] = useState("")
 
   // Fetch next code when warehouse changes
@@ -85,12 +87,20 @@ export function RackCreateForm({ enableAutoCode, warehouses }: RackCreateFormPro
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="warehouseIdSelect">Gudang *</Label>
-          <Combobox
+          <QuickAddSelect
             id="warehouseIdSelect"
             value={warehouseId || null}
             onChange={handleWarehouseChange}
             placeholder="Cari gudang..."
-            options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+            options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
+            title={QUICK_ADD.warehouse.title}
+            fields={QUICK_ADD.warehouse.fields}
+            action={QUICK_ADD.warehouse.action}
+            onCreated={(created) => {
+              setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setAutoCode("")
+              setWarehouseId(String(created.id))
+            }}
           />
         </div>
       </div>

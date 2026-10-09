@@ -34,6 +34,14 @@ vi.mock("@/actions/sales.actions", () => ({
   updateSalesInvoice: vi.fn().mockResolvedValue({ success: true })
 }))
 
+// QuickAddSelect resolves its target via the registry, which statically imports
+// server actions (next-auth/next-server). Stub it so this unit test stays pure.
+vi.mock("@/lib/quick-add/registry", () => ({
+  QUICK_ADD: new Proxy({}, {
+    get: () => ({ title: "Stub", fields: [], action: vi.fn() }),
+  }),
+}))
+
 const availableItems = [
   { id: 1, name: "Keyboard", sku: "KBD-01", price: 500000, unitOfMeasure: "pcs", trackSerial: true },
   { id: 2, name: "Mouse", sku: "MOU-01", price: 250000, unitOfMeasure: "pcs", trackSerial: false },

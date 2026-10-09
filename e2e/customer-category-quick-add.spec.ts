@@ -30,9 +30,9 @@ test.describe("Quick add kategori pelanggan", () => {
 
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()
-    await dialog.locator("#quickAddCategoryName").fill(CATEGORY_NAME)
-    await dialog.locator("#quickAddCategoryDp").fill("20")
-    await dialog.locator("#submit-quick-category").click()
+    await dialog.locator("#quick-add-name").fill(CATEGORY_NAME)
+    await dialog.locator("#quick-add-downPaymentPercent").fill("20")
+    await dialog.locator("#quick-add-submit").click()
 
     // Dialog closes and the new category is selected on the trigger.
     await expect(dialog).toBeHidden()

@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -21,6 +23,7 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
     overtime?.employeeId ? String(overtime.employeeId) : employees.length === 1 ? String(employees[0].id) : null
   )
   const [projectId, setProjectId] = useState<string | null>(overtime?.projectId ? String(overtime.projectId) : null)
+  const [employeeOptions, setEmployeeOptions] = useState(employees)
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -53,13 +56,20 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
           ) : (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="employeeId">Karyawan *</Label>
-              <Combobox
+              <QuickAddSelect
                 id="employeeId"
                 name="employeeId"
-                options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+                options={employeeOptions.map((e) => ({ value: String(e.id), label: e.name }))}
                 value={employeeId}
                 onChange={setEmployeeId}
                 placeholder="Cari karyawan..."
+                title={QUICK_ADD.employee.title}
+                fields={QUICK_ADD.employee.fields}
+                action={QUICK_ADD.employee.action}
+                onCreated={(created) => {
+                  setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                  setEmployeeId(String(created.id))
+                }}
               />
             </div>
           )}

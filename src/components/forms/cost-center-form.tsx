@@ -1,14 +1,15 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/button"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 
 interface CostCenterItem {
   id: number
@@ -25,9 +26,12 @@ export function CostCenterForm({
 } = {}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [parentId, setParentId] = useState(costCenter?.parentId ? String(costCenter.parentId) : "")
+  const [parentOptionsState, setParentOptionsState] = useState(
+    costCenters.filter((cc) => (costCenter ? cc.id !== costCenter.id : true)),
+  )
 
-  const parentOptions = costCenters
-    .filter((cc) => costCenter ? cc.id !== costCenter.id : true)
+  const parentOptions = parentOptionsState
     .map((cc) => ({ value: String(cc.id), label: `${cc.code} — ${cc.name}` }))
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -60,16 +64,20 @@ export function CostCenterForm({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="parentId">Induk</Label>
-          <Combobox
+          <QuickAddSelect
             id="parentId"
             name="parentId"
             options={parentOptions}
-            value={costCenter?.parentId ? String(costCenter.parentId) : null}
-            onChange={(v) => {
-              const input = document.querySelector<HTMLInputElement>(`input[name="parentId"]`)
-              if (input) input.value = v || ""
-            }}
+            value={parentId || null}
+            onChange={(v) => setParentId(v ?? "")}
             placeholder="— Pilih induk —"
+            title={QUICK_ADD.costCenter.title}
+            fields={QUICK_ADD.costCenter.fields}
+            action={QUICK_ADD.costCenter.action}
+            onCreated={(created) => {
+              setParentOptionsState((prev) => [...prev, { id: created.id, code: "", name: created.label }])
+              setParentId(String(created.id))
+            }}
           />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">

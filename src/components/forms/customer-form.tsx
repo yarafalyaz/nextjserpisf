@@ -5,7 +5,7 @@ import { useTransition, useState, type FormEvent } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { customerSchema, type CustomerInput } from "@/lib/validators"
-import { createCustomer, updateCustomer, createCustomerCategory } from "@/actions/master.actions"
+import { createCustomer, updateCustomer } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -14,15 +14,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
-import { Combobox } from "@/components/ui/combobox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/shadcn/dialog"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 
 interface CustomerFormProps {
   customer?: {
@@ -55,11 +48,8 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
   // Quick-add state for "Kategori Pelanggan": the option list is local so a
   // newly created category appears (and gets selected) without a page reload.
   const [categoryOptions, setCategoryOptions] = useState(categories)
-  const [quickAddOpen, setQuickAddOpen] = useState(false)
-  const [quickAddName, setQuickAddName] = useState("")
-  const [quickAddPending, startQuickAdd] = useTransition()
 
-  const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<CustomerInput>({
+  const { register, handleSubmit, control, formState: { errors } } = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
     defaultValues: {
       name: customer?.name || "",
@@ -104,33 +94,6 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
     })
   }
 
-  /**
-   * Creates a customer category inline and selects it on the customer being
-   * edited. The action returns the new id, so the fresh option can be appended
-   * and chosen without a round-trip through the kategori-pelanggan page.
-   */
-  function onQuickAddCategory(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const form = e.currentTarget
-    const formData = new FormData(form)
-    startQuickAdd(async () => {
-      try {
-        const result = await createCustomerCategory(formData)
-        if (!result || !result.success || !result.id) {
-          showError(result?.error || "Gagal menambah kategori pelanggan")
-          return
-        }
-        const name = String(formData.get("name") ?? "").trim()
-        setCategoryOptions((prev) => [...prev, { id: result.id!, name }])
-        setValue("customerCategoryId", result.id, { shouldValidate: true })
-        showSuccess("Kategori pelanggan berhasil ditambahkan")
-        setQuickAddOpen(false)
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal menambah kategori pelanggan")
-      }
-    })
-  }
-
   return (
     <>
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -146,14 +109,17 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
                 name="customerCategoryId"
                 control={control}
                 render={({ field }) => (
-                  <Combobox
+                  <QuickAddSelect
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : null)}
                     placeholder="Pilih kategori..."
                     options={categoryOptions.map((c) => ({ value: String(c.id), label: c.name }))}
-                    onCreateNew={(search) => {
-                      setQuickAddName(search)
-                      setQuickAddOpen(true)
+                    title={QUICK_ADD.customerCategory.title}
+                    fields={QUICK_ADD.customerCategory.fields}
+                    action={QUICK_ADD.customerCategory.action}
+                    onCreated={(created) => {
+                      setCategoryOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                      field.onChange(created.id)
                     }}
                   />
                 )}
@@ -217,54 +183,6 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
           </FormActions>
         </FormCard>
       </form>
-
-      {/* Quick-add lives OUTSIDE the customer <form>: nesting <form> is invalid
-          HTML and would make the dialog's submit bubble into the customer save. */}
-      <Dialog open={quickAddOpen} onOpenChange={(next) => { if (!quickAddPending) setQuickAddOpen(next) }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tambah Kategori Pelanggan</DialogTitle>
-            <DialogDescription>
-              Kategori baru langsung dipilih pada pelanggan ini setelah disimpan.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={onQuickAddCategory} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="quickAddCategoryName">Nama Kategori *</Label>
-              <Input
-                id="quickAddCategoryName"
-                name="name"
-                placeholder="mis. DP 20%"
-                required
-                defaultValue={quickAddName}
-                autoFocus
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="quickAddCategoryDp">Persentase Uang Muka (DP) (%) *</Label>
-              <Input
-                id="quickAddCategoryDp"
-                name="downPaymentPercent"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                placeholder="0"
-                required
-                defaultValue="0"
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" onPress={() => setQuickAddOpen(false)} isDisabled={quickAddPending}>
-                Batal
-              </Button>
-              <Button type="submit" variant="primary" isDisabled={quickAddPending} id="submit-quick-category">
-                {quickAddPending ? "Menyimpan..." : "Simpan"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { AppTimePicker } from "@/components/ui/time-picker";
 import {
   FormCard,
@@ -49,6 +51,7 @@ export function TimesheetForm({
   const [employeeId, setEmployeeId] = useState<string | null>(
     timesheet ? String(timesheet.employeeId) : null,
   );
+  const [employeeOptions, setEmployeeOptions] = useState(employees);
   const [projectId, setProjectId] = useState<string | null>(
     timesheet?.projectId ? String(timesheet.projectId) : null,
   );
@@ -129,16 +132,23 @@ export function TimesheetForm({
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="employeeId">Karyawan *</Label>
-            <Combobox
+            <QuickAddSelect
               id="employeeId"
               name="employeeId"
-              options={employees.map((e) => ({
+              options={employeeOptions.map((e) => ({
                 value: String(e.id),
                 label: e.name,
               }))}
               value={employeeId}
               onChange={setEmployeeId}
               placeholder="Cari karyawan..."
+              title={QUICK_ADD.employee.title}
+              fields={QUICK_ADD.employee.fields}
+              action={QUICK_ADD.employee.action}
+              onCreated={(created) => {
+                setEmployeeOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                setEmployeeId(String(created.id));
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">

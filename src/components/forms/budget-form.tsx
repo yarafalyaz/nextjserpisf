@@ -6,7 +6,8 @@ import { AppDatePicker } from "@/components/ui/date-picker";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
-import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import {
   FormCard,
@@ -43,9 +44,11 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
   const [accountId, setAccountId] = useState(
     budget?.accountId ? String(budget.accountId) : "",
   );
+  const [accountOptions, setAccountOptions] = useState(accounts);
   const [costCenterId, setCostCenterId] = useState(
     budget?.costCenterId ? String(budget.costCenterId) : "",
   );
+  const [costCenterOptions, setCostCenterOptions] = useState(costCenters);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -90,28 +93,48 @@ export function BudgetForm({ accounts, costCenters, budget }: BudgetFormProps) {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Akun *</Label>
-            <Combobox
+            <QuickAddSelect
               name="accountId"
               value={accountId || null}
               onChange={(key) => setAccountId(key ?? "")}
               placeholder="Cari akun..."
-              options={accounts.map((a) => ({
+              options={accountOptions.map((a) => ({
                 value: String(a.id),
-                label: `${a.code} - ${a.name}`,
+                label: a.code ? `${a.code} - ${a.name}` : a.name,
               }))}
+              title={QUICK_ADD.account.title}
+              fields={QUICK_ADD.account.fields}
+              action={QUICK_ADD.account.action}
+              onCreated={(created) => {
+                setAccountOptions((prev) => [
+                  ...prev,
+                  { id: created.id, code: "", name: created.label },
+                ]);
+                setAccountId(String(created.id));
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Pusat Biaya</Label>
-            <Combobox
+            <QuickAddSelect
               name="costCenterId"
               value={costCenterId || null}
               onChange={(key) => setCostCenterId(key ?? "")}
               placeholder="Cari pusat biaya..."
-              options={costCenters.map((cc) => ({
+              options={costCenterOptions.map((cc) => ({
                 value: String(cc.id),
-                label: `${cc.code} - ${cc.name}`,
+                label: cc.code ? `${cc.code} - ${cc.name}` : cc.name,
               }))}
+              title={QUICK_ADD.costCenter.title}
+              fields={QUICK_ADD.costCenter.fields}
+              action={QUICK_ADD.costCenter.action}
+              onCreated={(created) => {
+                setCostCenterOptions((prev) => [
+                  ...prev,
+                  { id: created.id, code: "", name: created.label },
+                ]);
+                setCostCenterId(String(created.id));
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">

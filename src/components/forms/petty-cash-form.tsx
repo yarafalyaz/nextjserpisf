@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
@@ -24,13 +26,15 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
   const [projectId, setProjectId] = useState<string | null>(pettyCash?.projectId ? String(pettyCash.projectId) : null)
   const [vendorId, setVendorId] = useState<string | null>(pettyCash?.vendorId ? String(pettyCash.vendorId) : null)
   const [categoryId, setCategoryId] = useState<string | null>(pettyCash?.categoryId ? String(pettyCash.categoryId) : null)
-  const assetAccounts = accounts.filter((a) => a.type === "ASSET")
-  const expenseAccounts = accounts.filter((a) => a.type === "EXPENSE")
+  const [accountList, setAccountList] = useState(accounts)
+  const [vendorOptions, setVendorOptions] = useState(vendors)
+  const assetAccounts = accountList.filter((a) => a.type === "ASSET")
+  const expenseAccounts = accountList.filter((a) => a.type === "EXPENSE")
   const filteredOptions = useMemo(() => {
     if (type === "IN") {
-      return assetAccounts.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))
+      return assetAccounts.map((a) => ({ value: String(a.id), label: a.code ? `${a.code} — ${a.name}` : a.name }))
     }
-    return expenseAccounts.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))
+    return expenseAccounts.map((a) => ({ value: String(a.id), label: a.code ? `${a.code} — ${a.name}` : a.name }))
   }, [type, assetAccounts, expenseAccounts])
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -80,13 +84,20 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="accountId">Akun Sumber (IN) / Beban (OUT)</Label>
-            <Combobox
+            <QuickAddSelect
               id="accountId"
               name="accountId"
               options={filteredOptions}
               value={accountId}
               onChange={setAccountId}
               placeholder={type === "IN" ? "Cari akun kas/bank..." : "Cari akun beban..."}
+              title={QUICK_ADD.account.title}
+              fields={QUICK_ADD.account.fields}
+              action={QUICK_ADD.account.action}
+              onCreated={(created) => {
+                setAccountList((prev) => [...prev, { id: created.id, code: "", name: created.label, type: type === "IN" ? "ASSET" : "EXPENSE" }])
+                setAccountId(String(created.id))
+              }}
             />
           </div>
         </FormSection>
@@ -111,13 +122,20 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="vendorId">Vendor</Label>
-              <Combobox
+              <QuickAddSelect
                 id="vendorId"
                 name="vendorId"
-                options={vendors.map((v) => ({ value: String(v.id), label: v.name }))}
+                options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
                 value={vendorId}
                 onChange={setVendorId}
                 placeholder="Cari vendor/toko..."
+                title={QUICK_ADD.vendor.title}
+                fields={QUICK_ADD.vendor.fields}
+                action={QUICK_ADD.vendor.action}
+                onCreated={(created) => {
+                  setVendorOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                  setVendorId(String(created.id))
+                }}
               />
             </div>
             <div className="flex flex-col gap-1.5">

@@ -10,6 +10,8 @@ import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Textarea } from "@/components/ui/shadcn/textarea";
 import { Combobox } from "@/components/ui/combobox";
+import { QuickAddSelect } from "@/components/ui/quick-add-select";
+import { QUICK_ADD } from "@/lib/quick-add/registry";
 import {
   FormCard,
   FormSection,
@@ -62,6 +64,7 @@ export function StockAdjustmentForm({
 }: AdjustmentFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const [warehouseId, setWarehouseId] = useState(
     adjustment?.warehouseId ? String(adjustment.warehouseId) : "",
   );
@@ -154,15 +157,22 @@ export function StockAdjustmentForm({
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="warehouseId">Gudang *</Label>
-            <Combobox
+            <QuickAddSelect
               id="warehouseId"
               value={warehouseId || null}
               onChange={(key) => setWarehouseId(key ?? "")}
               placeholder="Cari gudang..."
-              options={warehouses.map((w) => ({
+              options={warehouseOptions.map((w) => ({
                 value: String(w.id),
                 label: w.name,
               }))}
+              title={QUICK_ADD.warehouse.title}
+              fields={QUICK_ADD.warehouse.fields}
+              action={QUICK_ADD.warehouse.action}
+              onCreated={(created) => {
+                setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }]);
+                setWarehouseId(String(created.id));
+              }}
             />
           </div>
           <div className="flex flex-col gap-1.5">

@@ -6,7 +6,8 @@ import { updateRack } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
-import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 
 interface Props {
@@ -21,6 +22,7 @@ export function RackEditForm({ id, code, name, warehouseId, warehouses }: Props)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [whId, setWhId] = useState(String(warehouseId))
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -49,12 +51,19 @@ export function RackEditForm({ id, code, name, warehouseId, warehouses }: Props)
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="warehouseIdSelect">Gudang *</Label>
-          <Combobox
+          <QuickAddSelect
             id="warehouseIdSelect"
             value={whId || null}
             onChange={(key) => setWhId(key ?? "")}
             placeholder="Cari gudang..."
-            options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+            options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
+            title={QUICK_ADD.warehouse.title}
+            fields={QUICK_ADD.warehouse.fields}
+            action={QUICK_ADD.warehouse.action}
+            onCreated={(created) => {
+              setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setWhId(String(created.id))
+            }}
           />
         </div>
       </div>

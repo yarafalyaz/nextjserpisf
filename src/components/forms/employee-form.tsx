@@ -13,11 +13,12 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
-import { Combobox } from "@/components/ui/combobox"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface EmployeeFormProps {
@@ -60,6 +61,11 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
   const canOfferLogin = !isEdit || !employee?.hasLoginAccount
   const [createLogin, setCreateLogin] = useState(false)
   const [loginRoleIds, setLoginRoleIds] = useState<string[]>(employee?.roleIds || [])
+
+  // Local option lists so a quick-added department/position shows up and gets
+  // selected without a page reload.
+  const [departmentOptions, setDepartmentOptions] = useState(departments)
+  const [positionOptions, setPositionOptions] = useState(positions)
 
   const roleOptions = roles.map((r) => ({
     id: String(r.id),
@@ -220,11 +226,18 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
               render={({ field }) => (
                 <>
                   <Label>Departemen</Label>
-                  <Combobox
+                  <QuickAddSelect
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari departemen..."
-                    options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+                    options={departmentOptions.map((d) => ({ value: String(d.id), label: d.name }))}
+                    title={QUICK_ADD.department.title}
+                    fields={QUICK_ADD.department.fields}
+                    action={QUICK_ADD.department.action}
+                    onCreated={(created) => {
+                      setDepartmentOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                      field.onChange(created.id)
+                    }}
                   />
                 </>
               )}
@@ -237,11 +250,18 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
               render={({ field }) => (
                 <>
                   <Label>Jabatan</Label>
-                  <Combobox
+                  <QuickAddSelect
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                     placeholder="Cari jabatan..."
-                    options={positions.map((p) => ({ value: String(p.id), label: p.name }))}
+                    options={positionOptions.map((p) => ({ value: String(p.id), label: p.name }))}
+                    title={QUICK_ADD.position.title}
+                    fields={QUICK_ADD.position.fields}
+                    action={QUICK_ADD.position.action}
+                    onCreated={(created) => {
+                      setPositionOptions((prev) => [...prev, { id: created.id, name: created.label }])
+                      field.onChange(created.id)
+                    }}
                   />
                 </>
               )}

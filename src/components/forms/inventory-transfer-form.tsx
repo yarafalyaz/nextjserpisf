@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
+import { QuickAddSelect } from "@/components/ui/quick-add-select"
+import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -24,6 +26,7 @@ interface TransferItem { itemId: number; qty: number }
 export function InventoryTransferForm({ warehouses, items, transfer }: TransferFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
   const [sourceId, setSourceId] = useState(transfer?.sourceWarehouseId ? String(transfer.sourceWarehouseId) : "")
   const [destId, setDestId] = useState(transfer?.destinationWarehouseId ? String(transfer.destinationWarehouseId) : "")
   const [notes, setNotes] = useState(transfer?.notes ?? "")
@@ -75,22 +78,36 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="sourceWarehouseId">Dari Gudang *</Label>
-          <Combobox
+          <QuickAddSelect
             id="sourceWarehouseId"
-            options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+            options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
             value={sourceId || null}
             onChange={(key) => setSourceId(key ? String(key) : "")}
             placeholder="Cari gudang asal..."
+            title={QUICK_ADD.warehouse.title}
+            fields={QUICK_ADD.warehouse.fields}
+            action={QUICK_ADD.warehouse.action}
+            onCreated={(created) => {
+              setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setSourceId(String(created.id))
+            }}
           />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="destinationWarehouseId">Ke Gudang *</Label>
-          <Combobox
+          <QuickAddSelect
             id="destinationWarehouseId"
-            options={warehouses.filter((w) => String(w.id) !== sourceId).map((w) => ({ value: String(w.id), label: w.name }))}
+            options={warehouseOptions.filter((w) => String(w.id) !== sourceId).map((w) => ({ value: String(w.id), label: w.name }))}
             value={destId || null}
             onChange={(key) => setDestId(key ? String(key) : "")}
             placeholder="Cari gudang tujuan..."
+            title={QUICK_ADD.warehouse.title}
+            fields={QUICK_ADD.warehouse.fields}
+            action={QUICK_ADD.warehouse.action}
+            onCreated={(created) => {
+              setWarehouseOptions((prev) => [...prev, { id: created.id, name: created.label }])
+              setDestId(String(created.id))
+            }}
           />
         </div>
       </div>
