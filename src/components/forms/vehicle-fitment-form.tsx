@@ -9,6 +9,7 @@ import { Combobox } from "@/components/ui/combobox"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { DRIVETRAIN_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle"
 import {
   createVehicleFitment,
   updateVehicleFitment,
@@ -162,11 +163,23 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="drivetrain">Penggerak</Label>
-            <Input id="drivetrain" value={drivetrain} onChange={(e) => setDrivetrain(e.target.value)} placeholder="mis. 4WD" />
+            <Combobox
+              id="drivetrain"
+              options={DRIVETRAIN_OPTIONS}
+              value={drivetrain || null}
+              onChange={(v) => setDrivetrain(v ?? "")}
+              placeholder="Pilih..."
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="transmission">Transmisi</Label>
-            <Input id="transmission" value={transmission} onChange={(e) => setTransmission(e.target.value)} placeholder="mis. Manual" />
+            <Combobox
+              id="transmission"
+              options={TRANSMISSION_OPTIONS}
+              value={transmission || null}
+              onChange={(v) => setTransmission(v ?? "")}
+              placeholder="Pilih..."
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="result">Hasil *</Label>

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Combobox } from "@/components/ui/combobox"
 import { showError } from "@/lib/utils/toast"
+import { DRIVETRAIN_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle"
 import { checkVehicleFitment } from "@/actions/vehicle-fitment.actions"
 
 interface Option {
@@ -119,11 +120,21 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Penggerak</Label>
-            <Input value={drivetrain} onChange={(e) => setDrivetrain(e.target.value)} placeholder="mis. 4WD" />
+            <Combobox
+              options={DRIVETRAIN_OPTIONS}
+              value={drivetrain || null}
+              onChange={(v) => setDrivetrain(v ?? "")}
+              placeholder="Pilih..."
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Transmisi</Label>
-            <Input value={transmission} onChange={(e) => setTransmission(e.target.value)} placeholder="mis. Manual" />
+            <Combobox
+              options={TRANSMISSION_OPTIONS}
+              value={transmission || null}
+              onChange={(v) => setTransmission(v ?? "")}
+              placeholder="Pilih..."
+            />
           </div>
         </div>
 

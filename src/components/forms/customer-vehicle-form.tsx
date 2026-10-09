@@ -7,6 +7,7 @@ import {
   updateCustomerVehicle,
 } from "@/actions/vehicle.actions";
 import { showSuccess, showError } from "@/lib/utils/toast";
+import { TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
 import { Textarea } from "@/components/ui/shadcn/textarea";
@@ -224,11 +225,7 @@ export function CustomerVehicleForm({
               name="transmission"
               defaultValue={vehicle?.transmission || undefined}
               placeholder="Pilih Transmisi"
-              options={[
-                { value: "manual", label: "Manual" },
-                { value: "automatic", label: "Otomatis" },
-                { value: "cvt", label: "CVT" },
-              ]}
+              options={TRANSMISSION_OPTIONS}
             />
           </div>
 

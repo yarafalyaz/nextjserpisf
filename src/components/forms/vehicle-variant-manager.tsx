@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/shadcn/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Combobox } from "@/components/ui/combobox"
+import { DRIVETRAIN_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/constants/vehicle"
 
 interface Variant {
   id: number
@@ -21,18 +22,6 @@ interface VehicleVariantManagerProps {
   modelId: number
   variants: Variant[]
 }
-
-const DRIVETRAIN_OPTIONS = [
-  { value: "4x2", label: "4x2" },
-  { value: "4x4", label: "4x4" },
-  { value: "AWD", label: "AWD" },
-]
-
-const TRANSMISSION_OPTIONS = [
-  { value: "AT", label: "AT (Otomatis)" },
-  { value: "MT", label: "MT (Manual)" },
-  { value: "CVT", label: "CVT" },
-]
 
 export function VehicleVariantManager({ modelId, variants }: VehicleVariantManagerProps) {
   const router = useRouter()
