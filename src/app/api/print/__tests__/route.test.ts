@@ -159,9 +159,8 @@ describe("GET /api/print", () => {
         notes: "n",
         customer: { name: "Cust", address: null, street: "St", phone: "08", email: "cust@gmail.com" },
         customerVehicle: {
-          licensePlate: "B 123",
           vehicle: {
-            plateNumber: "X",
+            plateNumber: "B 123",
             variant: { model: { name: "Avanza", brand: { name: "Toyota" } } },
           },
         },

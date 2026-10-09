@@ -113,15 +113,15 @@ export default async function CustomerVehicleDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plat Nomor</span>
-            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{cv.licensePlate || cv.vehicle?.plateNumber || "-"}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium font-mono">{cv.vehicle?.plateNumber || "-"}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tahun</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{cv.year || cv.vehicle?.year || "-"}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{cv.vehicle?.year || "-"}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Warna</span>
-            <span className="text-[0.9375rem] text-foreground font-medium">{cv.color || cv.vehicle?.color || "-"}</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{cv.vehicle?.color || "-"}</span>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tipe Kendaraan</span>

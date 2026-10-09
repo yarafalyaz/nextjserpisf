@@ -612,9 +612,6 @@ export async function createCustomerVehicle(formData: FormData) {
         data: {
           customerId,
           vehicleId,
-          licensePlate: licensePlate ?? null,
-          year: year ?? null,
-          color: color ?? null,
           vehicleType: vehicleType ?? null,
           transmission: transmission ?? null,
           chassisNumber: chassisNumber ?? null,
@@ -681,7 +678,7 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
       let vehicleId: number;
 
       if (variantId) {
-        // Update existing vehicle record
+        // Update the unit's Vehicle row (variant + identity) from the form.
         const updatedVehicle = await tx.vehicle.update({
           where: { id: existing.vehicleId },
           data: {
@@ -698,15 +695,23 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
           throw new Error("vehicleId wajib diisi");
         }
         vehicleId = rawVehicleId;
+        // Plate/year/color live on the Vehicle for every path, not just the
+        // variant one — otherwise relinking to an existing Vehicle silently
+        // dropped the edited identity.
+        await tx.vehicle.update({
+          where: { id: vehicleId },
+          data: {
+            plateNumber: licensePlate ?? null,
+            year: year ?? null,
+            color: color ?? null,
+          },
+        });
       }
 
       await tx.customerVehicle.update({
         where: { id },
         data: {
           vehicleId,
-          licensePlate: licensePlate ?? null,
-          year: year ?? null,
-          color: color ?? null,
           vehicleType: vehicleType ?? null,
           transmission: transmission ?? null,
           chassisNumber: chassisNumber ?? null,

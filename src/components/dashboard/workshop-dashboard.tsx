@@ -48,7 +48,7 @@ async function getWorkshopData() {
           endDate: true,
           customer: { select: { name: true } },
           customerVehicle: {
-            select: { licensePlate: true, vehicleType: true },
+            select: { vehicleType: true, vehicle: { select: { plateNumber: true } } },
           },
           stages: {
             select: { name: true, sortOrder: true, status: true },
@@ -79,7 +79,7 @@ async function getWorkshopData() {
     return {
       id: project.id,
       name: project.name,
-      plate: project.customerVehicle?.licensePlate || "-",
+      plate: project.customerVehicle?.vehicle?.plateNumber || "-",
       customer: project.customer?.name || "-",
       currentStage,
       progress,

@@ -71,7 +71,7 @@ export default async function ProjectPnLPage({
   const projects = activeProjectIds.length
     ? await prisma.project.findMany({
         where: { id: { in: activeProjectIds } },
-        include: { customer: { select: { name: true } }, customerVehicle: { select: { licensePlate: true } } },
+        include: { customer: { select: { name: true } }, customerVehicle: { select: { vehicle: { select: { plateNumber: true } } } } },
         orderBy: { createdAt: 'desc' },
       })
     : []
@@ -83,7 +83,7 @@ export default async function ProjectPnLPage({
     const totalCost = cogs + expense
     const profit = revenue - totalCost
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0
-    const vehicle = project.customerVehicle?.licensePlate || "-"
+    const vehicle = project.customerVehicle?.vehicle?.plateNumber || "-"
     return { id: project.id, documentNo: project.documentNo || '-', name: project.name, customer: project.customer.name,
       vehicle, status: project.status, revenue, cogs, expense, totalCost, profit, margin }
   })

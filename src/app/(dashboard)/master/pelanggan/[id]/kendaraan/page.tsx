@@ -88,11 +88,11 @@ export default async function CustomerVehiclesPage({
               <DetailTableBody>
                 {vehicles.map((cv) => (
                   <DetailTableRow key={cv.id}>
-                    <DetailTableTd className="font-mono">{cv.licensePlate || cv.vehicle?.plateNumber || "-"}</DetailTableTd>
+                    <DetailTableTd className="font-mono">{cv.vehicle?.plateNumber || "-"}</DetailTableTd>
                     <DetailTableTd>{cv.vehicle?.variant?.model?.brand?.name || "-"}</DetailTableTd>
                     <DetailTableTd>{cv.vehicle?.variant?.model?.name || "-"} {cv.vehicle?.variant?.name ? `(${cv.vehicle.variant.name})` : ""}</DetailTableTd>
-                    <DetailTableTd>{cv.year || cv.vehicle?.year || "-"}</DetailTableTd>
-                    <DetailTableTd>{cv.color || cv.vehicle?.color || "-"}</DetailTableTd>
+                    <DetailTableTd>{cv.vehicle?.year || "-"}</DetailTableTd>
+                    <DetailTableTd>{cv.vehicle?.color || "-"}</DetailTableTd>
                     <DetailTableTd><StatusChip status={cv.isActive ? "active" : "inactive"} /></DetailTableTd>
                     <DetailTableTd>
                       <div className="flex items-center gap-1">

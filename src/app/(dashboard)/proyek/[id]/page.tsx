@@ -166,9 +166,9 @@ export default async function ProjectDetailPage({
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-muted-foreground">Profil Mobil Target</span>
-            {project.customerVehicle?.licensePlate && (
+            {project.customerVehicle?.vehicle?.plateNumber && (
               <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-md border border-foreground bg-foreground text-background shadow-sm">
-                {project.customerVehicle.licensePlate}
+                {project.customerVehicle.vehicle.plateNumber}
               </span>
             )}
           </div>
@@ -181,10 +181,10 @@ export default async function ProjectDetailPage({
                 ].filter(Boolean).join(" ") || "Mobil Pelanggan"}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Varian: {project.customerVehicle.vehicle.variant?.name || "-"} | Tahun: {project.customerVehicle.year || "-"}
+                Varian: {project.customerVehicle.vehicle.variant?.name || "-"} | Tahun: {project.customerVehicle.vehicle.year || "-"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Warna: <span className="inline-block size-2 rounded-full border border-default" style={{ backgroundColor: project.customerVehicle.color || "#000" }} /> {project.customerVehicle.color || "-"}
+                Warna: <span className="inline-block size-2 rounded-full border border-default" style={{ backgroundColor: project.customerVehicle.vehicle.color || "#000" }} /> {project.customerVehicle.vehicle.color || "-"}
               </p>
             </div>
           ) : (
@@ -251,7 +251,7 @@ export default async function ProjectDetailPage({
                 {project.customerVehicle && (
                   <DetailField
                     label="Kendaraan"
-                    value={`${project.customerVehicle.licensePlate || "-"} — ${[project.customerVehicle.vehicle.variant?.model?.brand?.name, project.customerVehicle.vehicle.variant?.model?.name, project.customerVehicle.vehicle.variant?.name].filter(Boolean).join(" ") || "-"}`}
+                    value={`${project.customerVehicle.vehicle?.plateNumber || "-"} — ${[project.customerVehicle.vehicle.variant?.model?.brand?.name, project.customerVehicle.vehicle.variant?.model?.name, project.customerVehicle.vehicle.variant?.name].filter(Boolean).join(" ") || "-"}`}
                   />
                 )}
                 {workOrder && (

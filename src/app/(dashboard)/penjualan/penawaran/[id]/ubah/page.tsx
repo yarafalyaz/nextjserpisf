@@ -100,7 +100,7 @@ export default async function EditQuotationPage({
     return {
       id: customerVehicle.id,
       customerId: customerVehicle.customerId,
-      plateNumber: customerVehicle.licensePlate || vehicle?.plateNumber || "-",
+      plateNumber: vehicle?.plateNumber || "-",
       brandName: model?.brand?.name || "",
       modelName: model?.name || "",
     }

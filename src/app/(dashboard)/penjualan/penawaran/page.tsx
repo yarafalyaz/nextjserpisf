@@ -42,7 +42,7 @@ export default async function QuotationsPage({
 
   const rawQuotations = await prisma.quotation.findMany({
     where,
-    include: { customer: true, customerVehicle: true },
+    include: { customer: true, customerVehicle: { include: { vehicle: true } } },
     take,
     skip: (page - 1) * pageSize,
     orderBy: { createdAt: "desc" },
@@ -52,8 +52,8 @@ export default async function QuotationsPage({
     id: q.id,
     documentNo: q.documentNo,
     customer: { name: q.customer.name },
-    customerVehicle: q.customerVehicle?.licensePlate
-      ? { licensePlate: q.customerVehicle.licensePlate }
+    customerVehicle: q.customerVehicle?.vehicle?.plateNumber
+      ? { licensePlate: q.customerVehicle.vehicle.plateNumber }
       : null,
     date: q.date,
     grandTotal: Number(q.grandTotal),

@@ -2789,9 +2789,6 @@ model CustomerVehicle {
   id            Int         @id @default(autoincrement())
   customerId    Int         @map("customer_id")
   vehicleId     Int         @map("vehicle_id")
-  licensePlate  String?     @map("license_plate")
-  year          Int?
-  color         String?
   vehicleType   String?     @map("vehicle_type")
   transmission  String?
   chassisNumber String?     @map("chassis_number")

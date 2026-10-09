@@ -44,7 +44,7 @@ export default async function WorkOrderDetailPage({
     include: {
       customer: true,
       quotation: true,
-      customerVehicle: { select: { id: true, licensePlate: true, vehicle: { select: { plateNumber: true, variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+      customerVehicle: { select: { id: true, vehicle: { select: { plateNumber: true, variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
       project: { select: { id: true, name: true } },
       bomRevision: { select: { id: true, revisionNo: true } },
       items: true,
@@ -187,7 +187,7 @@ export default async function WorkOrderDetailPage({
                   wo.customerVehicle.vehicle?.variant?.model?.brand?.name,
                   wo.customerVehicle.vehicle?.variant?.model?.name,
                   wo.customerVehicle.vehicle?.variant?.name,
-                  wo.customerVehicle.licensePlate ?? wo.customerVehicle.vehicle?.plateNumber,
+                  wo.customerVehicle.vehicle?.plateNumber,
                 ].filter(Boolean).join(" · ") || `Kendaraan #${wo.customerVehicle.id}`}
               </Link>
             }
