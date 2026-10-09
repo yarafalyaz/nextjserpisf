@@ -57,15 +57,18 @@ const columns = [
 
 interface AssetTransferTableProps {
   data: AssetTransferData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function AssetTransferTable({ data }: AssetTransferTableProps) {
+export function AssetTransferTable({ data, total, page, pageSize }: AssetTransferTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar transfer aset"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="assetName"
       searchPlaceholder="Cari nama aset..."

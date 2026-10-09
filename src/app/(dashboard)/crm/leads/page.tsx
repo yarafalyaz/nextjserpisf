@@ -48,6 +48,8 @@ export default async function LeadsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.lead.count({ where })
+
   const data = toPlain(leads)
 
   const statusChips = ["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((dbStatus) => {
@@ -81,6 +83,9 @@ export default async function LeadsPage({
 
       <LeadTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari nama, email, atau perusahaan..." action="/crm/leads" />}
         filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
       />

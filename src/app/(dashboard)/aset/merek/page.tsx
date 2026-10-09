@@ -40,6 +40,8 @@ export default async function AssetBrandsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.assetBrand.count({ where })
+
   const tableData = toPlain(brands)
 
 
@@ -59,7 +61,7 @@ export default async function AssetBrandsPage({
         </CanCreate>
       </div>
 
-      <AssetBrandTable data={tableData} />
+      <AssetBrandTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

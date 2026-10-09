@@ -39,6 +39,8 @@ export default async function AssetTransfersPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.assetTransfer.count({ where })
+
   const data = toPlain(transfers)
 
   return (
@@ -55,7 +57,7 @@ export default async function AssetTransfersPage({
         </Link>
       </div>
 
-      <AssetTransferTable data={data} />
+      <AssetTransferTable data={data} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

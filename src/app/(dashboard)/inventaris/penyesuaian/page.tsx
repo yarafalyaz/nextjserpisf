@@ -45,6 +45,8 @@ export default async function StockAdjustmentsPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.stockAdjustment.count({ where })
+
   const tableData = toPlain(adjustments)
 
   const statusChips = ["", "draft", "processed"].map((dbStatus) => {
@@ -72,6 +74,9 @@ export default async function StockAdjustmentsPage({
 
       <AdjustmentTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/penyesuaian" />}
         filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />

@@ -39,6 +39,8 @@ export default async function RacksPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.rack.count({ where })
+
   const tableData = toPlain(racks)
 
 
@@ -56,7 +58,7 @@ export default async function RacksPage({
         </Link>
       </div>
 
-      <RackTable data={tableData} />
+      <RackTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

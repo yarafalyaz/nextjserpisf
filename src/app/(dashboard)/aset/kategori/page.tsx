@@ -39,6 +39,8 @@ export default async function AssetCategoriesPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.assetCategory.count({ where })
+
   const data = categories.map((cat) => ({
     id: cat.id,
     name: cat.name,
@@ -62,7 +64,7 @@ export default async function AssetCategoriesPage({
         </CanCreate>
       </div>
 
-      <AssetCategoryTable data={data} />
+      <AssetCategoryTable data={data} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

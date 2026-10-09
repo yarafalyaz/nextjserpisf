@@ -47,6 +47,8 @@ export default async function StockMovesPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.stockMove.count({ where })
+
   const tableData = toPlain(rawMoves)
 
   const dampakFilter = (() => {
@@ -83,6 +85,9 @@ export default async function StockMovesPage({
 
       <StockMoveTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen, item, atau gudang..." action="/inventaris/mutasi-stok" />}
         filters={<div className="flex gap-1.5 flex-wrap">{dampakFilter}</div>}
       />

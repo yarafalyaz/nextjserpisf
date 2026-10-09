@@ -57,15 +57,18 @@ const columns = [
 
 interface AssetCategoryTableProps {
   data: AssetCategoryData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function AssetCategoryTable({ data }: AssetCategoryTableProps) {
+export function AssetCategoryTable({ data, total, page, pageSize }: AssetCategoryTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar kategori aset"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama kategori..."

@@ -85,17 +85,20 @@ const columns = [
 
 interface AdjustmentTableProps {
   data: StockAdjustment[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function AdjustmentTable({ data, toolbar, filters }: AdjustmentTableProps) {
+export function AdjustmentTable({ data, total, page, pageSize, toolbar, filters }: AdjustmentTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar penyesuaian stok"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

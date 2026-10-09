@@ -45,6 +45,8 @@ export default async function MaterialIssuesPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.materialIssue.count({ where })
+
   const tableData = toPlain(issues)
 
   const statusChips = ["", "draft", "issued"].map((dbStatus) => {
@@ -72,6 +74,9 @@ export default async function MaterialIssuesPage({
 
       <MaterialIssueTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/pengeluaran-material" />}
         filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />

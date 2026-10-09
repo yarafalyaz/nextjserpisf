@@ -45,6 +45,8 @@ export default async function InventoryTransfersPage({
     orderBy: { createdAt: "desc" },
   })
 
+  const total = await prisma.inventoryTransfer.count({ where })
+
   const tableData = toPlain(transfers)
 
   const statusChips = ["", "draft", "in_transit", "completed"].map((dbStatus) => {
@@ -76,6 +78,9 @@ export default async function InventoryTransfersPage({
 
       <TransferTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari no. dokumen..." action="/inventaris/transfer" />}
         filters={<div className="flex gap-1.5 flex-wrap">{statusChips}</div>}
       />

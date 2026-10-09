@@ -60,17 +60,20 @@ const columns = [
 
 interface TicketTableProps {
   data: TicketData[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function TicketTable({ data, toolbar, filters }: TicketTableProps) {
+export function TicketTable({ data, total, page, pageSize, toolbar, filters }: TicketTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar tiket dukungan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={false}
       toolbar={toolbar}
       filters={filters}

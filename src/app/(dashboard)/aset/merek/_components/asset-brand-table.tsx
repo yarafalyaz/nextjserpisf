@@ -47,15 +47,18 @@ const columns = [
 
 interface AssetBrandTableProps {
   data: AssetBrandData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function AssetBrandTable({ data }: AssetBrandTableProps) {
+export function AssetBrandTable({ data, total, page, pageSize }: AssetBrandTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar brand aset"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama merek..."

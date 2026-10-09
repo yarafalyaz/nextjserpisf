@@ -70,15 +70,18 @@ const columns = [
 
 interface RackRowTableProps {
   data: RackRowData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function RackRowTable({ data }: RackRowTableProps) {
+export function RackRowTable({ data, total, page, pageSize }: RackRowTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar baris rak"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode baris rak..."

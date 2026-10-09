@@ -74,17 +74,20 @@ const columns = [
 
 interface MaterialIssueTableProps {
   data: MaterialIssue[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function MaterialIssueTable({ data, toolbar, filters }: MaterialIssueTableProps) {
+export function MaterialIssueTable({ data, total, page, pageSize, toolbar, filters }: MaterialIssueTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar pengeluaran material"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

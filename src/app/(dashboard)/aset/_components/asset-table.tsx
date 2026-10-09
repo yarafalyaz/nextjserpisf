@@ -23,8 +23,14 @@ interface AssetRow {
 
 export function AssetTable({
   data,
+  total,
+  page,
+  pageSize,
 }: {
   data: AssetRow[]
+  total: number
+  page: number
+  pageSize: number
 }) {
   const columns: ColumnDef<AssetRow>[] = [
     {
@@ -145,7 +151,7 @@ export function AssetTable({
       data={data}
       columns={columns}
       ariaLabel="Daftar aset"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="code"
       searchPlaceholder="Cari nama, kode, atau lokasi..."

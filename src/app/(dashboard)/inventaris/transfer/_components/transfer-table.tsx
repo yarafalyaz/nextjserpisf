@@ -70,17 +70,20 @@ const columns = [
 
 interface TransferTableProps {
   data: InventoryTransfer[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function TransferTable({ data, toolbar, filters }: TransferTableProps) {
+export function TransferTable({ data, total, page, pageSize, toolbar, filters }: TransferTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar transfer inventaris"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

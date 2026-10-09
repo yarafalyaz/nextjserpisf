@@ -48,6 +48,8 @@ export default async function TicketsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.crmTicket.count({ where })
+
   const data = toPlain(tickets)
 
   const statusChips = ["", "open", "in_progress", "resolved", "closed"].map((dbStatus) => {
@@ -79,6 +81,9 @@ export default async function TicketsPage({
 
       <TicketTable
         data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari subjek atau pelanggan..." action="/crm/tickets" />}
         filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>}
       />

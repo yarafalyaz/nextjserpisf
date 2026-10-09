@@ -58,15 +58,18 @@ const columns = [
 
 interface RackTableProps {
   data: Rack[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function RackTable({ data }: RackTableProps) {
+export function RackTable({ data, total, page, pageSize }: RackTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar rak"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama rak..."

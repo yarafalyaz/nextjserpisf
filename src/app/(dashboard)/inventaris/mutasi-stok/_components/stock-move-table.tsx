@@ -87,17 +87,20 @@ const columns = [
 
 interface StockMoveTableProps {
   data: StockMove[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function StockMoveTable({ data, toolbar, filters }: StockMoveTableProps) {
+export function StockMoveTable({ data, total, page, pageSize, toolbar, filters }: StockMoveTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar mutasi stok"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={false}
       toolbar={toolbar}
       filters={filters}
