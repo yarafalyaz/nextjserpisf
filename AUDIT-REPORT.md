@@ -169,7 +169,17 @@ sengaja tidak disentuh.
 - Spec baru `customer-vehicle-registry.spec.ts` memverifikasi `/kendaraan/pelanggan`
   (list + cari plat/rangka) — bukti E2E untuk 6.1 & 6.2.
 
+### 6.7 Fixture QC + seed E2E (`cb5e8e27`)
+- `e2e/crud-surface.spec.ts` menemukan sendiri semua rute `*/tambah` dan
+  menuntut form terlihat. `/produksi/qc/inspeksi/tambah` hanya merender
+  `QcInspectionForm` bila ada checklist **released**; jika tidak, ia menampilkan
+  empty state yang sah. Tidak ada seed yang membuat checklist → rute ini **gagal
+  di setiap lingkungan** sejak modul QC mendarat (`693390ee`), laten di CI.
+- `scripts/seed-remaining-e2e.ts` (sudah dijalankan CI sebelum shard E2E) kini
+  men-seed satu checklist released `E2E-QC-01` + 2 item secara idempoten.
+
 **Status akhir:** 3071 unit test lulus, `tsc` 0 error, `eslint` 0 error (33 warning
-pra-eksisting), `next build` sukses, spek E2E vehicle + registri hijau, seluruh
-halaman laporan render tanpa kegagalan.
+pra-eksisting), `next build` sukses, E2E chromium **407→411 hijau**
+(vehicle + registri + crud-surface + proyek/penjualan), seluruh halaman laporan
+render tanpa kegagalan.
 
