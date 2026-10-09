@@ -24,7 +24,12 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-      - /app/.next
+      # Dev writes to `.next-dev` (see next.config.ts). Mount that as the
+      # anonymous volume so the container's Turbopack cache never touches the
+      # host's prod `.next` — the old `/app/.next` mount made Docker apply a
+      # `deny delete` ACL to the host dir, so a host `next build` (which starts
+      # with `rm -rf .next`) failed with "Permission denied".
+      - /app/.next-dev
       - ./public/uploads:/app/public/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"

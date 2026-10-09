@@ -10,8 +10,11 @@ RUN apk add --no-cache \
     su-exec && \
     addgroup --system --gid 501 nodejs && \
     adduser --system --uid 501 -G nodejs nextjs && \
-    mkdir -p /app/.next /app/node_modules && \
-    chown -R nextjs:nodejs /app/.next /app/node_modules
+# Dev writes to `.next-dev` (next.config.ts distDir); create both that and
+# `.next` so the anonymous volume mounts inherit `nextjs` ownership and the
+# non-root dev server can write its Turbopack cache.
+    mkdir -p /app/.next /app/.next-dev /app/node_modules && \
+    chown -R nextjs:nodejs /app/.next /app/.next-dev /app/node_modules
 
 COPY package.json package-lock.json ./
 RUN npm install
