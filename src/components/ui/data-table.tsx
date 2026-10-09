@@ -54,10 +54,11 @@ import { MAX_LIST_ROWS } from "@/lib/constants/list-rows"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { buildSearchParamsString, buildServerSearchUrl } from "@/components/ui/data-table-utils"
+import { isActionsColumnId, TableMobileCards } from "@/components/ui/table-mobile-cards"
 
 /** Heuristic: is this an actions/buttons column (kept visible on mobile)? */
 function isActionsColumn(id: string): boolean {
-  return /aksi|action|opsi|menu/i.test(id)
+  return isActionsColumnId(id)
 }
 
 /** Server-side pagination state (1-based). */
@@ -390,8 +391,8 @@ export function DataTable<TData extends { id: number | string }>({
           </div>
         )}
 
-        {/* Table */}
-        <div className="overflow-hidden rounded-md border">
+        {/* Table (desktop) */}
+        <div className="hidden overflow-hidden rounded-md border md:block">
           <div className="overflow-x-auto">
             <Table aria-label={ariaLabel}>
               <TableHeader>
@@ -485,6 +486,25 @@ export function DataTable<TData extends { id: number | string }>({
             <p
               role="status"
               className="border-t border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
+            >
+              Menampilkan maksimal {MAX_LIST_ROWS} baris pertama. Masih ada data lain yang tidak
+              ditampilkan — persempit pencarian atau filter untuk melihatnya.
+            </p>
+          )}
+        </div>
+
+        {/* Cards (mobile): avoids the horizontal scroll the collapsed table
+            would otherwise require. Same visible columns, one card per row. */}
+        <div className="md:hidden">
+          <TableMobileCards
+            rows={table.getRowModel().rows}
+            selectable={selectable}
+            ariaLabel={ariaLabel}
+          />
+          {data.length >= MAX_LIST_ROWS && (
+            <p
+              role="status"
+              className="mt-2 rounded-md border border-default bg-warning-subtle px-4 py-2 text-xs text-warning-subtle-foreground"
             >
               Menampilkan maksimal {MAX_LIST_ROWS} baris pertama. Masih ada data lain yang tidak
               ditampilkan — persempit pencarian atau filter untuk melihatnya.
