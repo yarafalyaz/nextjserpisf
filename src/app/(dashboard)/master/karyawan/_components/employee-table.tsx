@@ -87,15 +87,18 @@ const columns = [
 
 interface EmployeeTableProps {
   data: Employee[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function EmployeeTable({ data }: EmployeeTableProps) {
+export function EmployeeTable({ data, total, page, pageSize }: EmployeeTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar karyawan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama, NIP, atau telepon..."

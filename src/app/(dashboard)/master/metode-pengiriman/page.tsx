@@ -37,6 +37,7 @@ export default async function ShippingMethodsPage({
 
   const rows = await prisma.shippingMethod.findMany({ where, orderBy: { name: "asc" }, take,
     skip: (page - 1) * pageSize })
+  const total = await prisma.shippingMethod.count({ where })
   const tableData = toPlain(rows)
 
   return (
@@ -51,7 +52,7 @@ export default async function ShippingMethodsPage({
         </CanCreate>
       </div>
 
-      <ShippingMethodTable data={tableData} />
+      <ShippingMethodTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

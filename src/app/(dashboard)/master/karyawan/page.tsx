@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -16,11 +16,12 @@ export const metadata: Metadata = { title: "Karyawan" }
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_employees")
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
 
   const where = {
     deletedAt: null,
@@ -45,8 +46,11 @@ export default async function EmployeesPage({
       },
     },
     orderBy: { name: "asc" },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
   })
+
+  const total = await prisma.employee.count({ where })
 
   const tableData = toPlain(employees)
 
@@ -63,7 +67,7 @@ export default async function EmployeesPage({
         </CanCreate>
       </div>
 
-      <EmployeeTable data={tableData} />
+      <EmployeeTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

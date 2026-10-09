@@ -53,13 +53,13 @@ const columns = [
   }),
 ]
 
-export function ShippingMethodTable({ data }: { data: ShippingMethod[] }) {
+export function ShippingMethodTable({ data, total, page, pageSize }: { data: ShippingMethod[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar metode pengiriman"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."

@@ -60,13 +60,13 @@ const columns = [
   }),
 ]
 
-export function CategoryTable({ data }: { data: CategoryRow[] }) {
+export function CategoryTable({ data, total, page, pageSize }: { data: CategoryRow[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Kategori pengeluaran"
-      pageSize={50}
+      serverPagination={{ total, page, pageSize }}
       onBulkDelete={(ids) => bulkDelete("expenseCategory", ids)}
     />
   )

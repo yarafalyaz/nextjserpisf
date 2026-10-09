@@ -60,15 +60,18 @@ const columns = [
 
 interface PaymentTermTableProps {
   data: PaymentTerm[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function PaymentTermTable({ data }: PaymentTermTableProps) {
+export function PaymentTermTable({ data, total, page, pageSize }: PaymentTermTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar termin pembayaran"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="code"
       searchPlaceholder="Cari nama atau kode termin..."

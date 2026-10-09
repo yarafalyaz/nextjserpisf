@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import Link from "next/link"
 import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CategoryTable } from "./_components/category-table"
 
@@ -10,12 +11,23 @@ import { requirePermission } from "@/lib/auth/permissions"
 
 export const metadata: Metadata = { title: "Kategori Pengeluaran" }
 
-export default async function ExpenseCategoryPage() {
+export default async function ExpenseCategoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("manage_expense_categories")
+
+  const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
 
   const categories = await prisma.expenseCategory.findMany({
     orderBy: { sortOrder: "asc" },
+    take,
+    skip: (page - 1) * pageSize,
   })
+
+  const total = await prisma.expenseCategory.count()
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,7 +48,7 @@ export default async function ExpenseCategoryPage() {
         </Link>
       </div>
 
-      <CategoryTable data={categories} />
+      <CategoryTable data={categories} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

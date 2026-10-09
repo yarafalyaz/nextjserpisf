@@ -49,6 +49,8 @@ export default async function TaxesPage({
     rate: Number(t.rate),
   }))
 
+  const total = await prisma.tax.count({ where })
+
   const tableData = toPlain(taxes)
 
 
@@ -64,7 +66,7 @@ export default async function TaxesPage({
         </CanCreate>
       </div>
 
-      <TaxTable data={tableData} />
+      <TaxTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

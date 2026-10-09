@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -16,11 +16,12 @@ export const metadata: Metadata = { title: "Bank" }
 export default async function BanksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_banks")
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -34,8 +35,11 @@ export default async function BanksPage({
   const banks = await prisma.bank.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    take: MAX_LIST_ROWS,
+    take,
+    skip: (page - 1) * pageSize,
   })
+
+  const total = await prisma.bank.count({ where })
 
   const tableData = toPlain(banks)
 
@@ -52,7 +56,7 @@ export default async function BanksPage({
         </CanCreate>
       </div>
 
-      <BankTable data={tableData} />
+      <BankTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

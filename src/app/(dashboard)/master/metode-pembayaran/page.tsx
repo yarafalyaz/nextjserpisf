@@ -1,4 +1,4 @@
-import { MAX_LIST_ROWS } from "@/lib/constants/list-rows";
+import { parsePagination } from "@/lib/utils/pagination"
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
@@ -16,11 +16,12 @@ export const metadata: Metadata = { title: "Metode Pembayaran" }
 export default async function PaymentMethodsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_payment_methods")
 
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
 
   const where = {
     ...(params.cari && {
@@ -31,7 +32,10 @@ export default async function PaymentMethodsPage({
     }),
   }
 
-  const rows = await prisma.paymentMethod.findMany({ where, orderBy: { name: "asc" }, take: MAX_LIST_ROWS })
+  const rows = await prisma.paymentMethod.findMany({ where, orderBy: { name: "asc" }, take,
+    skip: (page - 1) * pageSize })
+  const total = await prisma.paymentMethod.count({ where })
+
   const tableData = toPlain(rows)
 
   return (
@@ -46,7 +50,7 @@ export default async function PaymentMethodsPage({
         </CanCreate>
       </div>
 
-      <PaymentMethodTable data={tableData} />
+      <PaymentMethodTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

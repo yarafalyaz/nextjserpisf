@@ -128,17 +128,20 @@ const columns = [
 
 interface ItemTableProps {
   data: Item[]
+  total: number
+  page: number
+  pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
 }
 
-export function ItemTable({ data, toolbar, filters }: ItemTableProps) {
+export function ItemTable({ data, total, page, pageSize, toolbar, filters }: ItemTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar item"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
       filters={filters}

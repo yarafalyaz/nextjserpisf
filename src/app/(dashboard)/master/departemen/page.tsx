@@ -43,6 +43,8 @@ export default async function DepartmentsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.department.count({ where })
+
   const tableData = toPlain(departments)
 
 
@@ -58,7 +60,7 @@ export default async function DepartmentsPage({
         </CanCreate>
       </div>
 
-      <DepartmentTable data={tableData} />
+      <DepartmentTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

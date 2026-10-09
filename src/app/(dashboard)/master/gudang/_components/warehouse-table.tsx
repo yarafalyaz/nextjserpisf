@@ -57,15 +57,18 @@ const columns = [
 
 interface WarehouseTableProps {
   data: Warehouse[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function WarehouseTable({ data }: WarehouseTableProps) {
+export function WarehouseTable({ data, total, page, pageSize }: WarehouseTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar gudang"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."

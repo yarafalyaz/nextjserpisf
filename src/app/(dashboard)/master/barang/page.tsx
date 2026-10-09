@@ -50,6 +50,8 @@ export default async function ItemsPage({
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
   ])
 
+  const total = await prisma.item.count({ where })
+
   const items = rawItems.map((item) => ({
     id: item.id,
     sku: item.sku,
@@ -81,6 +83,9 @@ export default async function ItemsPage({
 
       <ItemTable
         data={tableData}
+        total={total}
+        page={page}
+        pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari SKU atau nama item..." action="/master/barang" />}
         filters={
           <form className="flex gap-2" action="/master/barang">

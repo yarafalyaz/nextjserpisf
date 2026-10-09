@@ -45,6 +45,8 @@ export default async function WarehousesPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.warehouse.count({ where })
+
   const tableData = toPlain(warehouses)
 
 
@@ -60,7 +62,7 @@ export default async function WarehousesPage({
         )}
       </div>
 
-      <WarehouseTable data={tableData} />
+      <WarehouseTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

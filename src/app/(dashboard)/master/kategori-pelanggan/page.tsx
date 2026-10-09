@@ -39,6 +39,8 @@ export default async function CustomerCategoriesPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.customerCategory.count({ where })
+
   const tableData = categories.map((c) => ({
     id: c.id,
     name: c.name,
@@ -57,7 +59,7 @@ export default async function CustomerCategoriesPage({
         </CanCreate>
       </div>
 
-      <CustomerCategoryTable data={tableData} />
+      <CustomerCategoryTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

@@ -46,15 +46,18 @@ const columns = [
 
 interface TaxTableProps {
   data: Tax[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function TaxTable({ data }: TaxTableProps) {
+export function TaxTable({ data, total, page, pageSize }: TaxTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar pajak"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama pajak..."

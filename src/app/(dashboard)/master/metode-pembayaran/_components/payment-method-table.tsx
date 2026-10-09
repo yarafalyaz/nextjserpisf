@@ -53,13 +53,13 @@ const columns = [
   }),
 ]
 
-export function PaymentMethodTable({ data }: { data: PaymentMethod[] }) {
+export function PaymentMethodTable({ data, total, page, pageSize }: { data: PaymentMethod[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar metode pembayaran"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."

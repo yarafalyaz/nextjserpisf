@@ -30,6 +30,8 @@ export default async function PositionsPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.position.count()
+
   const tableData = toPlain(positions)
 
 
@@ -45,7 +47,7 @@ export default async function PositionsPage({
         </CanCreate>
       </div>
 
-      <PositionTable data={tableData} />
+      <PositionTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

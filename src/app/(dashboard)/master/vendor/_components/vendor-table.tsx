@@ -60,15 +60,18 @@ const columns = [
 
 interface VendorTableProps {
   data: Vendor[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function VendorTable({ data }: VendorTableProps) {
+export function VendorTable({ data, total, page, pageSize }: VendorTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar vendor"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau telepon vendor..."

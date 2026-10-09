@@ -21,7 +21,7 @@ export default async function TaxGroupsPage({
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
 
-  const [taxGroups, allTaxes] = await Promise.all([
+  const [taxGroups, allTaxes, total] = await Promise.all([
     prisma.taxGroup.findMany({
       include: { taxes: true },
       orderBy: { createdAt: "desc" },
@@ -31,6 +31,7 @@ export default async function TaxGroupsPage({
     // deletedAt guard covers rows soft-deleted before the delete path started
     // clearing isActive as well.
     prisma.tax.findMany({ where: { isActive: true, deletedAt: null } }),
+    prisma.taxGroup.count(),
   ])
 
   const taxMap = new Map(allTaxes.map((t) => [t.id, t.name]))
@@ -59,7 +60,7 @@ export default async function TaxGroupsPage({
         </Link>
       </div>
 
-      <TaxGroupTable data={tableData} />
+      <TaxGroupTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

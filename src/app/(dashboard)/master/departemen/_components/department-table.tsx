@@ -52,19 +52,22 @@ const columns = [
 
 interface DepartmentTableProps {
   data: Department[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function DepartmentTable({ data }: DepartmentTableProps) {
+export function DepartmentTable({ data, total, page, pageSize }: DepartmentTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar departemen"
-      pageSize={20}
       selectable={true}
-      searchColumn="name"
       searchPlaceholder="Cari nama atau kode..."
       onBulkDelete={(ids) => bulkDelete("department", ids)}
+      serverPagination={{ total, page, pageSize }}
+      searchParam="cari"
     />
   )
 }

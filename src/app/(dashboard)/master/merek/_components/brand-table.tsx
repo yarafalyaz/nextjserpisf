@@ -69,15 +69,18 @@ const columns = [
 
 interface BrandTableProps {
   data: Brand[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function BrandTable({ data }: BrandTableProps) {
+export function BrandTable({ data, total, page, pageSize }: BrandTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar brand"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama merek..."

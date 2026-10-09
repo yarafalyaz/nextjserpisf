@@ -46,15 +46,18 @@ const columns = [
 
 interface ItemCategoryTableProps {
   data: ItemCategory[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function ItemCategoryTable({ data }: ItemCategoryTableProps) {
+export function ItemCategoryTable({ data, total, page, pageSize }: ItemCategoryTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar kategori item"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama kategori..."

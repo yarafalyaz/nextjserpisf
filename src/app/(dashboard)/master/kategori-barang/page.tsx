@@ -39,6 +39,8 @@ export default async function ItemCategoriesPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.itemCategory.count({ where })
+
   const tableData = toPlain(categories)
 
 
@@ -54,7 +56,7 @@ export default async function ItemCategoriesPage({
         </CanCreate>
       </div>
 
-      <ItemCategoryTable data={tableData} />
+      <ItemCategoryTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

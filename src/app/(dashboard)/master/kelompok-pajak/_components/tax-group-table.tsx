@@ -39,15 +39,18 @@ const columns = [
 
 interface TaxGroupTableProps {
   data: TaxGroup[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function TaxGroupTable({ data }: TaxGroupTableProps) {
+export function TaxGroupTable({ data, total, page, pageSize }: TaxGroupTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar grup pajak"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama grup pajak..."

@@ -44,15 +44,18 @@ const columns = [
 
 interface BarcodeTableProps {
   data: Barcode[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function BarcodeTable({ data }: BarcodeTableProps) {
+export function BarcodeTable({ data, total, page, pageSize }: BarcodeTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar barcode"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="barcode"
       searchPlaceholder="Cari barcode..."

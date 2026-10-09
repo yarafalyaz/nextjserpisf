@@ -46,15 +46,18 @@ const columns = [
 
 interface BankTableProps {
   data: Bank[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function BankTable({ data }: BankTableProps) {
+export function BankTable({ data, total, page, pageSize }: BankTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar bank"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama atau kode bank..."

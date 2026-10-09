@@ -30,6 +30,8 @@ export default async function BarcodesPage({
     skip: (page - 1) * pageSize,
   })
 
+  const total = await prisma.barcode.count()
+
   const tableData = toPlain(barcodes)
 
   return (
@@ -48,7 +50,7 @@ export default async function BarcodesPage({
         </CanCreate>
       </div>
 
-      <BarcodeTable data={tableData} />
+      <BarcodeTable data={tableData} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

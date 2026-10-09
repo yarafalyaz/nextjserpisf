@@ -47,15 +47,18 @@ const columns = [
 
 interface PositionTableProps {
   data: Position[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function PositionTable({ data }: PositionTableProps) {
+export function PositionTable({ data, total, page, pageSize }: PositionTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar jabatan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama jabatan..."

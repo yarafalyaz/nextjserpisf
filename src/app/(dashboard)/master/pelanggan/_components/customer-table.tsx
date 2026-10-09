@@ -60,15 +60,18 @@ const columns = [
 
 interface CustomerTableProps {
   data: Customer[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function CustomerTable({ data }: CustomerTableProps) {
+export function CustomerTable({ data, total, page, pageSize }: CustomerTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar customer"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari nama, kode, atau telepon..."
