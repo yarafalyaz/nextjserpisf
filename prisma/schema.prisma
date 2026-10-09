@@ -2772,17 +2772,18 @@ model VehicleVariant {
 
 model Vehicle {
   id               Int               @id @default(autoincrement())
-  vehicleVariantId Int?              @map("vehicle_variant_id")
-  plateNumber      String?           @map("plate_number")
+  vehicleVariantId Int               @map("vehicle_variant_id")
+  name             String?
   year             Int?
-  color            String?
+  deletedAt        DateTime?         @map("deleted_at")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
   customerVehicles CustomerVehicle[]
-  variant          VehicleVariant?   @relation(fields: [vehicleVariantId], references: [id])
+  variant          VehicleVariant    @relation(fields: [vehicleVariantId], references: [id], onDelete: Restrict)
 
   @@index([vehicleVariantId], map: "vehicles_vehicle_variant_id_fkey")
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("vehicles")
 }
 
@@ -2790,16 +2791,17 @@ model CustomerVehicle {
   id            Int         @id @default(autoincrement())
   customerId    Int         @map("customer_id")
   vehicleId     Int         @map("vehicle_id")
-  vehicleType   String?     @map("vehicle_type")
-  transmission  String?
+  plateNumber   String?     @map("plate_number")
+  color         String?     @map("color")
   chassisNumber String?     @map("chassis_number")
   engineNumber  String?     @map("engine_number")
   isActive      Boolean     @default(true) @map("is_active")
   notes         String?     @db.Text
+  deletedAt     DateTime?   @map("deleted_at")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
   customer      Customer    @relation(fields: [customerId], references: [id])
-  vehicle       Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   projects      Project[]
   quotations    Quotation[]
   workOrders    WorkOrder[]
@@ -2807,6 +2809,7 @@ model CustomerVehicle {
   @@index([customerId], map: "customer_vehicles_customer_id_fkey")
   @@index([vehicleId], map: "customer_vehicles_vehicle_id_fkey")
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("customer_vehicles")
 }
 
