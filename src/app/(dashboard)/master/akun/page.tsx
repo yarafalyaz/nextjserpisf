@@ -101,7 +101,7 @@ export default async function AccountsPage({
                       <DetailTableTd className="font-mono">{acc.code}</DetailTableTd>
                       <DetailTableTd>{acc.name}</DetailTableTd>
                       <DetailTableTd>
-                        <Link href={`/master/akun/${acc.id}/ubah`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
+                        <Link href={`/master/akun/${acc.slug ?? acc.id}/ubah`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
                       </DetailTableTd>
                     </DetailTableRow>
                   ))}

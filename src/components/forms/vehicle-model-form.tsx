@@ -39,9 +39,10 @@ export function VehicleModelForm({ brands, model, defaultBrandId }: VehicleModel
         // On create with a known brand, continue to the new model's edit page so
         // variants can be added right away (brand → model → variant flow).
         if (!model?.id && result && "id" in result && result.id && defaultBrandId) {
-          router.push(`/kendaraan/model/${result.id}/ubah`)
+          const key = "slug" in result && result.slug ? result.slug : String(result.id)
+          router.push(`/kendaraan/model/${key}/ubah`)
         } else {
-          router.push("/kendaraan/model")
+          router.push("/kendaraan/merek")
         }
         router.refresh()
       } catch (error) {

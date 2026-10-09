@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
+import { openCombobox } from "./utils/combobox"
 
 
 test.beforeEach(async ({}, testInfo) => {
@@ -44,20 +44,37 @@ test.describe("Kendaraan Model CRUD", () => {
     await page.locator("#name").fill(name)
     await page.getByRole("button", { name: /^Simpan$/ }).first().click()
 
-    await page.waitForURL("**/kendaraan/model", { timeout: 20000 })
-    await page.goto(`/kendaraan/model?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
+    // After a successful save the form redirects (to the new model's edit page
+    // when a default brand was supplied, otherwise back to the catalog). Wait
+    // for ANY navigation off the "tambah" page, then verify via the catalog.
+    await page.waitForURL((url) => !url.pathname.endsWith("/kendaraan/model/tambah"), {
+      timeout: 20000,
+    })
+
+    // Verify by searching the model name: the catalog matches brands whose
+    // MODELS contain the term (see merek/page.tsx), so the owning brand row
+    // appears even though only brand names are displayed.
+    await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(name)
+    await expect(page.locator("body")).toContainText(brandName)
 
-    // ─── UPDATE via detail → edit button ──────────────────────
-    const detailLink = page.locator(`a[href^="/kendaraan/model/"]`).filter({ hasText: name }).first()
-    await expect(detailLink).toBeVisible({ timeout: 30000 })
-    const href = await detailLink.getAttribute("href")
-    const idMatch = href?.match(/\/kendaraan\/model\/(\d+)/)
-    if (!idMatch) throw new Error("Could not parse model ID from detail link")
-    const id = idMatch[1]
+    // ─── UPDATE via model detail → edit ────────────────────────
+    // Resolve the model id from its detail link (reachable from the brand detail).
+    await page.goto(`/kendaraan/merek?cari=${encodeURIComponent(brandName)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
+    const brandLink = page.locator(`a[href^="/kendaraan/merek/"]`).filter({ hasText: brandName }).first()
+    await expect(brandLink).toBeVisible({ timeout: 30000 })
+    const brandHref = await brandLink.getAttribute("href")
+    if (!brandHref) throw new Error("Could not resolve brand detail href")
 
-    await page.goto(`/kendaraan/model/${id}/ubah`, { waitUntil: "domcontentloaded" })
+    await page.goto(brandHref, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
+    const modelLink = page.locator(`a[href^="/kendaraan/model/"]`).filter({ hasText: name }).first()
+    await expect(modelLink).toBeVisible({ timeout: 30000 })
+    const href = await modelLink.getAttribute("href")
+    if (!href) throw new Error("Could not resolve model detail href")
+
+    await page.goto(`${href}/ubah`, { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     const nameInput = page.getByPlaceholder('Contoh: Avanza').first()
     await expect(nameInput).toBeVisible({ timeout: 30000 })
@@ -73,21 +90,25 @@ test.describe("Kendaraan Model CRUD", () => {
     await editBrandInput.press("Enter")
     await page.getByRole("button", { name: /^Update$|^Perbarui$/ }).first().click()
 
-    await page.waitForURL("**/kendaraan/model", { timeout: 20000 })
-    await page.goto(`/kendaraan/model?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
+    await page.waitForURL("**/kendaraan/merek", { timeout: 20000 })
+    await page.goto(brandHref, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)
 
-    // ─── DELETE via ActionDropdown ────────────────────────────
-    const updatedRow = page.locator("tr").filter({ hasText: updated })
-    await expect(updatedRow).toBeVisible({ timeout: 30000 })
-    await updatedRow.locator("button[aria-label='Buka menu aksi']").click()
-    await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
-    await page.locator("button").filter({ hasText: "Hapus" }).last().click()
+    // ─── DELETE MODEL via the brand detail's model table → detail page ──
+    const updatedModelLink = page.locator(`a[href^="/kendaraan/model/"]`).filter({ hasText: updated }).first()
+    await expect(updatedModelLink).toBeVisible({ timeout: 30000 })
+    const updatedHref = await updatedModelLink.getAttribute("href")
+    if (!updatedHref) throw new Error("Could not resolve updated model href")
+    await page.goto(updatedHref, { waitUntil: "domcontentloaded" })
+    await page.waitForLoadState("networkidle")
+    await page.getByRole("button", { name: "Hapus" }).first().click()
+    const dialog = page.getByRole("alertdialog")
+    await expect(dialog).toBeVisible({ timeout: 10000 })
+    await dialog.getByRole("button", { name: "Hapus" }).click()
+    await page.waitForTimeout(2000)
 
-    // Wait for delete to complete
-    await expect(updatedRow).toHaveCount(0, { timeout: 10000 })
-    await page.goto(`/kendaraan/model?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
+    await page.goto(brandHref, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(updated)
 

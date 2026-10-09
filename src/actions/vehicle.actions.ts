@@ -13,6 +13,7 @@ import {
   vehicleSchema,
   customerVehicleSchema,
 } from "@/lib/validations/vehicle.schemas";
+import { nextSlug } from "@/lib/utils/slug-db";
 
 // ==================== VEHICLE BRAND ACTIONS ====================
 
@@ -26,6 +27,7 @@ export async function createVehicleBrand(formData: FormData) {
     const vehicleBrand = await prisma.vehicleBrand.create({
       data: {
         name: parsed.data.name,
+        slug: await nextSlug("vehicleBrand", parsed.data.name),
       },
     });
 
@@ -72,17 +74,19 @@ export async function createVehicleModel(formData: FormData) {
       data: {
         name,
         vehicleBrandId,
+        slug: await nextSlug("vehicleModel", name),
       },
     });
 
     revalidatePath("/kendaraan/model");
+    revalidatePath("/kendaraan/merek");
     await logActivity(
       "create",
       "VehicleModel",
       model.id,
       "Membuat model kendaraan",
     );
-    return { success: true, id: model.id };
+    return { success: true, id: model.id, slug: model.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVehicleModel]", getErrorMessage(e) || e);
@@ -113,6 +117,7 @@ export async function createVehicle(formData: FormData) {
         vehicleVariantId: variantId,
         name: name ?? null,
         year: year ?? null,
+        slug: await nextSlug("vehicle", name ?? "vehicle"),
       },
     });
 
@@ -206,6 +211,7 @@ export async function deleteVehicleModel(id: number) {
     await prisma.vehicleModel.delete({ where: { id } });
 
     revalidatePath("/kendaraan/model");
+    revalidatePath("/kendaraan/merek");
     await logActivity(
       "delete",
       "VehicleModel",
@@ -255,6 +261,7 @@ export async function createVehicleVariant(formData: FormData) {
 
     revalidatePath(`/kendaraan/model/${vehicleModelId}/ubah`);
     revalidatePath("/kendaraan/model");
+    revalidatePath("/kendaraan/merek");
     await logActivity(
       "create",
       "VehicleVariant",
@@ -293,6 +300,7 @@ export async function deleteVehicleVariant(id: number) {
     if (variant)
       revalidatePath(`/kendaraan/model/${variant.vehicleModelId}/ubah`);
     revalidatePath("/kendaraan/model");
+    revalidatePath("/kendaraan/merek");
     await logActivity(
       "delete",
       "VehicleVariant",
@@ -324,6 +332,9 @@ export async function updateVehicleBrand(id: number, formData: FormData) {
       where: { id },
       data: {
         name: parsed.data.name,
+        slug: await nextSlug("vehicleBrand", parsed.data.name, {
+          excludeId: id,
+        }),
       },
     });
 
@@ -369,10 +380,12 @@ export async function updateVehicleModel(id: number, formData: FormData) {
       data: {
         name,
         vehicleBrandId,
+        slug: await nextSlug("vehicleModel", name, { excludeId: id }),
       },
     });
 
     revalidatePath("/kendaraan/model");
+    revalidatePath("/kendaraan/merek");
     await logActivity(
       "update",
       "VehicleModel",
@@ -405,6 +418,7 @@ export async function updateVehicle(id: number, formData: FormData) {
         vehicleVariantId: variantId,
         name: name ?? null,
         year: year ?? null,
+        slug: await nextSlug("vehicle", name ?? "vehicle", { excludeId: id }),
       },
     });
 

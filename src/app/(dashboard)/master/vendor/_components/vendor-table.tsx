@@ -7,10 +7,12 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { deleteVendor } from "@/actions/master.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Vendor {
   id: number
   name: string
+  slug: string | null
   phone: string | null
   city: string | null
   isActive: boolean
@@ -22,7 +24,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/vendor/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/master/vendor", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -47,8 +49,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/master/vendor/${info.row.original.id}`}
-        editHref={`/master/vendor/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/master/vendor", info.row.original)}
+        editHref={entityEditHref("/master/vendor", info.row.original)}
         deleteAction={deleteVendor}
         deleteId={info.row.original.id}
         editPermission="edit_vendors"

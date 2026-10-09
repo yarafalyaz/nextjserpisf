@@ -12,14 +12,12 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 import { CanCreate } from "@/components/auth/can-create"
 
-export const metadata: Metadata = { title: "Merek Kendaraan" }
+export const metadata: Metadata = { title: "Merek & Model Kendaraan" }
 
-export default async function VehicleBrandsPage({
+export default async function VehicleCatalogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cari?: string 
-  halaman?: string
-  pageSize?: string}>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_vehicle_brands")
 
@@ -27,11 +25,16 @@ export default async function VehicleBrandsPage({
 
   const { page, pageSize, take } = parsePagination(params)
 
-  const where = {
-    ...(params.cari && {
-      name: { contains: params.cari },
-    }),
-  }
+  // Search across brand name AND model name: operators think "Toyota" or
+  // "Avanza" interchangeably, so a model hit surfaces the owning brand row.
+  const where = params.cari
+    ? {
+        OR: [
+          { name: { contains: params.cari } },
+          { models: { some: { name: { contains: params.cari } } } },
+        ],
+      }
+    : {}
 
   const brands = await prisma.vehicleBrand.findMany({
     where,
@@ -47,16 +50,24 @@ export default async function VehicleBrandsPage({
 
   const tableData = toPlain(brands)
 
-
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Kendaraan",href:"/kendaraan"},{label:"Merek"}]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Kendaraan", href: "/kendaraan" }, { label: "Merek & Model" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Merek Kendaraan</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Merek &amp; Model Kendaraan</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Katalog merek kendaraan. Buka satu merek untuk melihat dan mengelola model serta variannya.
+          </p>
+        </div>
         <CanCreate permission="create_vehicle_brands">
-          <Link href="/kendaraan/merek/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-brand-btn">
-          <Car size={16} /> Tambah Merek
-        </Link>
+          <Link
+            href="/kendaraan/merek/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-brand-btn"
+          >
+            <Car size={16} /> Tambah Merek
+          </Link>
         </CanCreate>
       </div>
 

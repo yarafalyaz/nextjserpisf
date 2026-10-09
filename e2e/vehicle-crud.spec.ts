@@ -1,5 +1,8 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
+import {
+  selectFirstComboboxOption,
+} from "./utils/combobox"
 
 
 test.beforeEach(async ({}, testInfo) => {
@@ -15,51 +18,63 @@ async function waitForHydration(page: Page) {
 
 test.describe("Kendaraan CRUD", () => {
   test("create → update → delete", async ({ page }, testInfo) => {
-    // Unique per run: `plate` must not collide with rows left by earlier runs
-    // (the previous `${ts}`-slice trick yielded a constant "-0-0" suffix, so
-    // every run reused "D-0-0E2E" and the delete assertion found an old row).
+    // The master `Kendaraan` is now a CATALOG TYPE (variant + name + year), not a
+    // physical unit. Plate/color live on the customer-owned unit, so this spec
+    // exercises the catalog form: pick Merek → Model → Varian, then a unique
+    // Nama Tipe to locate the row (search filters on name too).
     const run = String(Date.now()).slice(-6) + String(testInfo.parallelIndex)
-    const plate = `B${run}E2E`
-    const updatedPlate = `D${run}E2E`
-    const color = `Hitam E2E ${run}`
-    const updatedColor = `Putih E2E ${run}`
+    const typeName = `Tipe E2E ${run}`
+    const updatedTypeName = `Tipe E2E U${run}`
 
     await page.goto("/kendaraan/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await page.locator("#plateNo").first().fill(plate)
+
+    // Cascading comboboxes: brand enables model, model enables variant.
+    const brandPicked = await selectFirstComboboxOption(page, {
+      placeholder: "Cari merek...",
+    })
+    if (!brandPicked) test.skip(true, "no vehicle brand seeded")
+
+    const modelPicked = await selectFirstComboboxOption(page, {
+      placeholder: "Cari model...",
+    })
+    if (!modelPicked) test.skip(true, "no vehicle model seeded")
+
+    const variantPicked = await selectFirstComboboxOption(page, {
+      placeholder: "Cari tipe/varian...",
+    })
+    if (!variantPicked) test.skip(true, "no vehicle variant seeded")
+
+    await page.locator("#name").first().fill(typeName)
     await page.locator("#year").first().fill("2024")
-    await page.locator("#color").first().fill(color)
     await page.locator("#submit-vehicle").first().click()
 
     await page.waitForURL("**/kendaraan", { timeout: 20000 })
-    await page.goto(`/kendaraan?cari=${encodeURIComponent(plate)}`, { waitUntil: "domcontentloaded" })
+    await page.goto(`/kendaraan?cari=${encodeURIComponent(typeName)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(plate)
+    await expect(page.locator("body")).toContainText(typeName)
 
-    const detailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: plate }).first()
+    const detailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: typeName }).first()
     await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
-    const idMatch = href?.match(/\/kendaraan\/(\d+)/)
-    if (!idMatch) throw new Error("Could not parse vehicle ID from detail link")
-    const id = idMatch[1]
+    if (!href) throw new Error("Could not resolve vehicle detail href")
 
-    await page.goto(`/kendaraan/${id}/ubah`, { waitUntil: "domcontentloaded" })
+    await page.goto(`${href}/ubah`, { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await page.locator("#plateNo").first().fill(updatedPlate)
+    // On edit the cascades are pre-filled; only the label changes.
+    await page.locator("#name").first().fill(updatedTypeName)
     await page.locator("#year").first().fill("2025")
-    await page.locator("#color").first().fill(updatedColor)
     await page.locator("#submit-vehicle").first().click()
 
     await page.waitForURL("**/kendaraan", { timeout: 20000 })
-    await page.goto(`/kendaraan?cari=${encodeURIComponent(updatedPlate)}`, { waitUntil: "domcontentloaded" })
+    await page.goto(`/kendaraan?cari=${encodeURIComponent(updatedTypeName)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText(updatedPlate)
-    await expect(page.locator("body")).toContainText(updatedColor)
+    await expect(page.locator("body")).toContainText(updatedTypeName)
 
-    const updatedRow = page.locator("tr").filter({ hasText: updatedPlate }).first()
+    const updatedRow = page.locator("tr").filter({ hasText: updatedTypeName }).first()
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
-    const updatedDetailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: updatedPlate }).first()
+    const updatedDetailLink = page.locator(`a[href^="/kendaraan/"]`).filter({ hasText: updatedTypeName }).first()
     await expect(updatedDetailLink).toBeVisible({ timeout: 30000 })
     await updatedDetailLink.click()
     await page.waitForLoadState("networkidle")
@@ -80,8 +95,8 @@ test.describe("Kendaraan CRUD", () => {
 
     // deleteVehicle action hanya revalidatePath tanpa redirect; tunggu transition lalu cek list terfilter
     await page.waitForTimeout(2000)
-    await page.goto(`/kendaraan?cari=${encodeURIComponent(updatedPlate)}`, { waitUntil: "domcontentloaded" })
+    await page.goto(`/kendaraan?cari=${encodeURIComponent(updatedTypeName)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).not.toContainText(updatedPlate)
+    await expect(page.locator("body")).not.toContainText(updatedTypeName)
   })
 })

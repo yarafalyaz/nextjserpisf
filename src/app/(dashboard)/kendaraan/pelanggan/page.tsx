@@ -5,7 +5,10 @@ import { prisma } from "@/lib/db/prisma"
 import { requireAnyPermission } from "@/lib/auth/permissions"
 import { parsePagination } from "@/lib/utils/pagination"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { CanCreate } from "@/components/auth/can-create"
 import { CustomerVehicleTable } from "./_components/customer-vehicle-table"
+import Link from "next/link"
+import { Car } from "lucide-react"
 
 import type { Metadata } from "next"
 
@@ -83,6 +86,15 @@ export default async function CustomerVehiclesPage({
           <h1 className="text-2xl font-bold text-foreground">Kendaraan Pelanggan</h1>
           <p className="text-sm text-muted-foreground mt-1">Daftar semua unit kendaraan pelanggan — cari berdasarkan plat, rangka, mesin, model, atau nama pelanggan.</p>
         </div>
+        <CanCreate permission="create_customers">
+          <Link
+            href="/kendaraan/pelanggan/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            id="create-customer-vehicle-btn"
+          >
+            <Car size={16} /> Tambah Kendaraan Pelanggan
+          </Link>
+        </CanCreate>
       </div>
 
       <CustomerVehicleTable

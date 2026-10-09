@@ -9,11 +9,13 @@ import { deleteEmployee } from "@/actions/master.actions"
 import { getInitials } from "@/lib/utils/format"
 import { Avatar, AvatarFallback } from "@/components/ui/shadcn/avatar"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Employee {
   id: number
   employeeNo: string
   name: string
+  slug: string | null
   department: { name: string } | null
   position: { name: string } | null
   phone: string | null
@@ -33,7 +35,7 @@ const columns = [
         <Avatar size="sm" className="bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400">
           <AvatarFallback className="bg-transparent text-inherit">{getInitials(info.getValue())}</AvatarFallback>
         </Avatar>
-        <Link href={`/master/karyawan/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+        <Link href={entityHref("/master/karyawan", info.row.original)} className="text-foreground hover:underline font-medium">
           {info.getValue()}
         </Link>
       </div>
@@ -74,8 +76,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/master/karyawan/${info.row.original.id}`}
-        editHref={`/master/karyawan/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/master/karyawan", info.row.original)}
+        editHref={entityEditHref("/master/karyawan", info.row.original)}
         deleteAction={deleteEmployee}
         deleteId={info.row.original.id}
         editPermission="edit_employees"

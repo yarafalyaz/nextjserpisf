@@ -38,7 +38,7 @@ export default async function DepartmentsPage({
   const departments = await prisma.department.findMany({
     where,
     orderBy: { createdAt: "desc" },
-    select: { id: true, code: true, name: true, description: true },
+    select: { id: true, slug: true, code: true, name: true, description: true },
     take,
     skip: (page - 1) * pageSize,
   })

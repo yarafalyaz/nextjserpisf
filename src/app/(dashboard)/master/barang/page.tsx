@@ -54,6 +54,7 @@ export default async function ItemsPage({
 
   const items = rawItems.map((item) => ({
     id: item.id,
+    slug: item.slug,
     sku: item.sku,
     name: item.name,
     image: item.image,

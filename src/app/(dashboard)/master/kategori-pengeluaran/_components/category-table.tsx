@@ -6,10 +6,12 @@ import { createColumnHelper } from "@/lib/table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteExpenseCategory } from "@/actions/expense-category.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface CategoryRow {
   id: number
   name: string
+  slug: string | null
   label: string
   sortOrder: number
   isActive: boolean
@@ -21,7 +23,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/kategori-pengeluaran/${info.row.original.id}`} className="font-mono text-xs text-foreground hover:underline">
+      <Link href={entityHref("/master/kategori-pengeluaran", info.row.original)} className="font-mono text-xs text-foreground hover:underline">
         {info.getValue()}
       </Link>
     ),
@@ -49,8 +51,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/master/kategori-pengeluaran/${info.row.original.id}`}
-        editHref={`/master/kategori-pengeluaran/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/master/kategori-pengeluaran", info.row.original)}
+        editHref={entityEditHref("/master/kategori-pengeluaran", info.row.original)}
         deleteAction={deleteExpenseCategory as unknown as (id: number) => Promise<{ success: boolean; error?: string }>}
         deleteId={info.row.original.id}
         editPermission="manage_expense_categories"

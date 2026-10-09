@@ -4,10 +4,12 @@ import { Pencil } from "lucide-react"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 
 interface VehicleRow {
   id: number
+  slug?: string | null
   name?: string | null
   year?: number | null
   variant?: {
@@ -28,7 +30,7 @@ export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow
       accessorKey: "name",
       header: "Tipe Kendaraan",
       cell: ({ row }) => (
-        <Link href={`/kendaraan/${row.original.id}`} className="font-medium text-foreground hover:underline">
+        <Link href={entityHref("/kendaraan", row.original)} className="font-medium text-foreground hover:underline">
           {row.original.name ?? row.original.variant?.name ?? "-"}
         </Link>
       ),
@@ -68,7 +70,7 @@ export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow
       cell: ({ row }) => (
         <div className="flex items-center gap-1 justify-end">
           <Link
-            href={`/kendaraan/${row.original.id}`}
+            href={entityHref("/kendaraan", row.original)}
             className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >

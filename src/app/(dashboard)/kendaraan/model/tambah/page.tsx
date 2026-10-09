@@ -29,8 +29,8 @@ export default async function CreateVehicleModelPage({
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "Kendaraan", href: "/kendaraan" },
-  { label: "Model", href: "/kendaraan/model" },
-  { label: "Tambah" },
+  { label: "Merek & Model", href: "/kendaraan/merek" },
+  { label: "Tambah Model" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Model Kendaraan</h1>

@@ -5,10 +5,12 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteCustomerCategory } from "@/actions/master.actions"
+import { entityEditHref } from "@/lib/utils/entity-url"
 
 interface CustomerCategory {
   id: number
   name: string
+  slug: string | null
   downPaymentPercent: number
 }
 
@@ -33,7 +35,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        editHref={`/master/kategori-pelanggan/${info.row.original.id}/ubah`}
+        editHref={entityEditHref("/master/kategori-pelanggan", info.row.original)}
         deleteAction={deleteCustomerCategory}
         deleteId={info.row.original.id}
         editPermission="edit_customers"

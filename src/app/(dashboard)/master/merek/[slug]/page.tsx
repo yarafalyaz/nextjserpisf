@@ -1,0 +1,124 @@
+export const dynamic = "force-dynamic"
+
+import { prisma } from "@/lib/db/prisma"
+import Link from "next/link"
+import { notFound } from "next/navigation"
+import { formatDate } from "@/lib/utils/format"
+import { Pencil } from "lucide-react"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+
+import type { Metadata } from "next"
+
+import { requirePermission } from "@/lib/auth/permissions"
+import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+export const metadata: Metadata = { title: "Merek Kendaraan" }
+
+export default async function BrandDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  await requirePermission("view_brands")
+
+  const { slug } = await params
+
+  const brand = await resolveEntity(
+    { segment: slug },
+    {
+      bySlug: (s) =>
+        prisma.brand.findFirst({
+          where: { slug: s },
+          include: {
+            items: { take: 20, orderBy: { createdAt: "desc" }, select: { id: true, sku: true, name: true, slug: true } },
+            categories: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+          },
+        }),
+      byId: (id) =>
+        prisma.brand.findUnique({
+          where: { id },
+          include: {
+            items: { take: 20, orderBy: { createdAt: "desc" }, select: { id: true, sku: true, name: true, slug: true } },
+            categories: { select: { id: true, name: true }, orderBy: { name: "asc" } },
+          },
+        }),
+    },
+  )
+
+  if (!brand) notFound()
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[
+        { label: "Dasbor", href: "/" },
+        { label: "Master Data", href: "/master" },
+        { label: "Merek", href: "/master/merek" },
+        { label: "Detail" },
+      ]} />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h1 className="text-2xl font-bold text-foreground">{brand.name}</h1>
+        <div className="flex gap-2">
+          <Link href={entityEditHref("/master/merek", brand)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Ubah</Link>
+          <Link href="/master/merek" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
+        </div>
+      </div>
+
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nama Merek</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{brand.name}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Jumlah Item</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{brand.items.length}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dibuat</span>
+            <span className="text-[0.9375rem] text-foreground font-medium">{formatDate(brand.createdAt)}</span>
+          </div>
+        </div>
+        {brand.categories.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-default flex flex-col gap-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Kategori Barang</span>
+            <div className="flex flex-wrap gap-1.5">
+              {brand.categories.map((cat) => (
+                <span
+                  key={cat.id}
+                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                >
+                  {cat.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {brand.items.length > 0 && (
+        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">Item dengan Merek ini</h2>
+          </div>
+          <div className="p-4 px-5">
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>SKU</DetailTableTh>
+                <DetailTableTh>Nama Item</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {brand.items.map((item) => (
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd className="font-mono">{item.sku}</DetailTableTd>
+                    <DetailTableTd><Link href={entityHref("/master/barang", item)} className="text-primary hover:underline">{item.name}</Link></DetailTableTd>
+                  </DetailTableRow>
+                ))}
+              </DetailTableBody>
+            </DetailTable>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

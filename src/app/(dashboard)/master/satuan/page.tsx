@@ -87,7 +87,7 @@ export default async function UomPage({
                     <DetailTableTd>{u.category ?? "-"}</DetailTableTd>
                     <DetailTableTd>
                       <Link
-                        href={`/master/satuan/${u.id}`}
+                        href={`/master/satuan/${u.slug ?? u.id}`}
                         className="button button--ghost button--sm"
                       >
                         Detail

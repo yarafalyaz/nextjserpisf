@@ -43,6 +43,7 @@ export default async function CustomerCategoriesPage({
 
   const tableData = categories.map((c) => ({
     id: c.id,
+    slug: c.slug,
     name: c.name,
     downPaymentPercent: Number(c.downPaymentPercent),
   }))

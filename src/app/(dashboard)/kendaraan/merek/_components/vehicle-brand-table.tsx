@@ -6,10 +6,12 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteVehicleBrand } from "@/actions/vehicle.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface VehicleBrandData {
   id: number
   name: string
+  slug: string | null
   _count: { models: number }
 }
 
@@ -21,7 +23,7 @@ const columns = [
     // Card headline on mobile.
     meta: { mobilePrimary: true },
     cell: (info) => (
-      <Link href={`/kendaraan/merek/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/kendaraan/merek", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -36,8 +38,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/kendaraan/merek/${info.row.original.id}`}
-        editHref={`/kendaraan/merek/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/kendaraan/merek", info.row.original)}
+        editHref={entityEditHref("/kendaraan/merek", info.row.original)}
         deleteAction={deleteVehicleBrand}
         deleteId={info.row.original.id}
         editPermission="edit_vehicle_brands"

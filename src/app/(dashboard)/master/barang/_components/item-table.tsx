@@ -9,11 +9,13 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteItem } from "@/actions/master.actions"
 import { formatCurrency } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Item {
   id: number
   sku: string
   name: string
+  slug: string | null
   image: string | null
   category: { name: string } | null
   warehouse: { name: string } | null
@@ -46,7 +48,7 @@ const columns = [
           )}
         </span>
         <div className="min-w-0">
-          <Link href={`/master/barang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+          <Link href={entityHref("/master/barang", info.row.original)} className="text-foreground hover:underline font-medium">
             {info.getValue()}
           </Link>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -115,8 +117,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/master/barang/${info.row.original.id}`}
-        editHref={`/master/barang/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/master/barang", info.row.original)}
+        editHref={entityEditHref("/master/barang", info.row.original)}
         deleteAction={deleteItem}
         deleteId={info.row.original.id}
         editPermission="edit_items"

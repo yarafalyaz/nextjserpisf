@@ -10,6 +10,7 @@ const bcryptHashMock = vi.fn()
 const userFindUniqueMock = vi.fn()
 const userUpdateMock = vi.fn()
 const employeeFindUniqueMock = vi.fn()
+const employeeFindFirstMock = vi.fn()
 const employeeDeleteMock = vi.fn()
 const employeeUpdateMock = vi.fn()
 const txUserCreateMock = vi.fn()
@@ -48,6 +49,7 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     employee: {
       findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a),
+      findFirst: (...a: unknown[]) => employeeFindFirstMock(...a),
       delete: (...a: unknown[]) => employeeDeleteMock(...a),
       update: (...a: unknown[]) => employeeUpdateMock(...a),
     },
@@ -79,6 +81,8 @@ beforeEach(() => {
   generateDocMock.mockResolvedValue("EMP-0001")
   bcryptHashMock.mockResolvedValue("hashed-pw")
   logActivityMock.mockResolvedValue(undefined)
+  // nextSlug() probes for a free slug via findFirst → null means it's free.
+  employeeFindFirstMock.mockResolvedValue(null)
   // $transaction runs the callback with a tx stub
   transactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) =>
     cb({

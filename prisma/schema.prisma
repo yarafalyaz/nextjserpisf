@@ -7,17 +7,17 @@ datasource db {
 }
 
 model User {
-  id            Int            @id @default(autoincrement())
-  name          String
-  email         String         @unique
-  password      String
-  avatar        String?        @db.Text
-  isActive      Boolean        @default(true) @map("is_active")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
-  journals      Journal[]
-  notifications Notification[]
-  roles         Role[]         @relation("UserRoles")
+  id             Int             @id @default(autoincrement())
+  name           String
+  email          String          @unique
+  password       String
+  avatar         String?         @db.Text
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  journals       Journal[]
+  notifications  Notification[]
+  roles          Role[]          @relation("UserRoles")
   employee       Employee[]
   userWarehouses UserWarehouse[]
 
@@ -26,13 +26,14 @@ model User {
 }
 
 model Role {
-  id          Int          @id @default(autoincrement())
-  name        String       @unique
-  guardName   String       @default("web") @map("guard_name")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  permissions Permission[] @relation("RolePermissions")
-  users       User[]       @relation("UserRoles")
+  slug         String?            @unique
+  id           Int                @id @default(autoincrement())
+  name         String             @unique
+  guardName    String             @default("web") @map("guard_name")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  permissions  Permission[]       @relation("RolePermissions")
+  users        User[]             @relation("UserRoles")
   moduleAccess RoleModuleAccess[]
 
   @@index([createdAt])
@@ -43,15 +44,15 @@ model Role {
 /// permission checklist. Each Module groups a set of ModuleActions.
 model Module {
   id        Int      @id @default(autoincrement())
-  key       String   @unique           // e.g. "inventory", "sales", "master.brands"
-  name      String                     // "Inventaris", "Penjualan"
+  key       String   @unique // e.g. "inventory", "sales", "master.brands"
+  name      String // "Inventaris", "Penjualan"
   parentKey String?  @map("parent_key") // hierarchy (e.g. "master" → "master.brands")
-  route     String?                    // "/inventaris" (for top-level nav)
-  icon      String?                    // "Package" (lucide icon name)
+  route     String? // "/inventaris" (for top-level nav)
+  icon      String? // "Package" (lucide icon name)
   order     Int      @default(0)
-  isActive  Boolean  @default(true)   @map("is_active")
-  createdAt DateTime @default(now())   @map("created_at")
-  updatedAt DateTime @updatedAt        @map("updated_at")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   actions ModuleAction[]
   access  RoleModuleAccess[]
@@ -65,14 +66,14 @@ model Module {
 /// `permissionKey` maps to the legacy permission name so existing can() checks
 /// keep working unchanged.
 model ModuleAction {
-  id            Int      @id @default(autoincrement())
-  moduleId      Int      @map("module_id")
-  key           String                       // "view" | "create" | "update" | "delete" | "approve"
-  permissionKey String   @map("permission_key") // e.g. "view_inventory"
-  label         String                       // "Lihat", "Buat", ...
-  order         Int      @default(0)
+  id            Int    @id @default(autoincrement())
+  moduleId      Int    @map("module_id")
+  key           String // "view" | "create" | "update" | "delete" | "approve"
+  permissionKey String @map("permission_key") // e.g. "view_inventory"
+  label         String // "Lihat", "Buat", ...
+  order         Int    @default(0)
 
-  module Module              @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  module Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   access RoleModuleAccess[]
 
   @@unique([moduleId, key])
@@ -88,7 +89,7 @@ model RoleModuleAccess {
   moduleActionId Int      @map("module_action_id")
   allowed        Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt        @map("updated_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   role   Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
   module Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
@@ -196,41 +197,41 @@ model SystemSetting {
   maxLatePenaltyMinutes        Int       @default(120) @map("max_late_penalty_minutes")
   payrollCutoffDay             Int       @default(25) @map("payroll_cutoff_day")
 
-  quotationFooterNotes          String? @map("quotation_footer_notes") @db.Text
-  quotationSignatureName        String? @map("quotation_signature_name")
-  quotationSignatureImage       String? @map("quotation_signature_image")
-  salesReceivableAccountId      Int?    @map("sales_receivable_account_id")
-  salesRevenueAccountId         Int?    @map("sales_revenue_account_id")
-  salesTaxAccountId             Int?    @map("sales_tax_account_id")
-  salesReturnAccountId          Int?    @map("sales_return_account_id")
-  salesAccountId                Int?    @map("sales_account_id")
-  purchasePayableAccountId      Int?    @map("purchase_payable_account_id")
-  purchaseInventoryAccountId    Int?    @map("purchase_inventory_account_id")
-  purchaseTaxAccountId          Int?    @map("purchase_tax_account_id")
-  purchaseExpenseAccountId      Int?    @map("purchase_expense_account_id")
-  purchaseDiscountAccountId     Int?    @map("purchase_discount_account_id")
-  purchaseShippingAccountId     Int?    @map("purchase_shipping_account_id")
-  purchaseAdminFeeAccountId     Int?    @map("purchase_admin_fee_account_id")
-  purchaseReturnAccountId       Int?    @map("purchase_return_account_id")
-  inventoryAccountId            Int?    @map("inventory_account_id")
-  inventoryAdjustmentAccountId  Int?    @map("inventory_adjustment_account_id")
-  stockAdjustmentAccountId      Int?    @map("stock_adjustment_account_id")
-  cogsAccountId                 Int?    @map("cogs_account_id")
-  wipAccountId                  Int?    @map("wip_account_id")
-  materialExpenseAccountId      Int?    @map("material_expense_account_id")
-  materialIssueExpenseAccountId Int?    @map("material_issue_expense_account_id")
-  pettyCashAccountId            Int?    @map("petty_cash_account_id")
-  cashBankAccountId             Int?    @map("cash_bank_account_id")
-  generalExpenseAccountId       Int?    @map("general_expense_account_id")
-  defaultCashAccountId          Int?    @map("default_cash_account_id")
-  salaryExpenseAccountId        Int?    @map("salary_expense_account_id")
-  salariesPayableAccountId      Int?    @map("salaries_payable_account_id")
-  payrollBankAccountId          Int?    @map("payroll_bank_account_id")
-  employeeReceivableAccountId   Int?    @map("employee_receivable_account_id")
-  payrollJournalTypeId          Int?    @map("payroll_journal_type_id")
-  depreciationExpenseAccountId     Int?  @map("depreciation_expense_account_id")
-  accumulatedDepreciationAccountId Int? @map("accumulated_depreciation_account_id")
-  defaultProjectStages          String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
+  quotationFooterNotes             String? @map("quotation_footer_notes") @db.Text
+  quotationSignatureName           String? @map("quotation_signature_name")
+  quotationSignatureImage          String? @map("quotation_signature_image")
+  salesReceivableAccountId         Int?    @map("sales_receivable_account_id")
+  salesRevenueAccountId            Int?    @map("sales_revenue_account_id")
+  salesTaxAccountId                Int?    @map("sales_tax_account_id")
+  salesReturnAccountId             Int?    @map("sales_return_account_id")
+  salesAccountId                   Int?    @map("sales_account_id")
+  purchasePayableAccountId         Int?    @map("purchase_payable_account_id")
+  purchaseInventoryAccountId       Int?    @map("purchase_inventory_account_id")
+  purchaseTaxAccountId             Int?    @map("purchase_tax_account_id")
+  purchaseExpenseAccountId         Int?    @map("purchase_expense_account_id")
+  purchaseDiscountAccountId        Int?    @map("purchase_discount_account_id")
+  purchaseShippingAccountId        Int?    @map("purchase_shipping_account_id")
+  purchaseAdminFeeAccountId        Int?    @map("purchase_admin_fee_account_id")
+  purchaseReturnAccountId          Int?    @map("purchase_return_account_id")
+  inventoryAccountId               Int?    @map("inventory_account_id")
+  inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
+  stockAdjustmentAccountId         Int?    @map("stock_adjustment_account_id")
+  cogsAccountId                    Int?    @map("cogs_account_id")
+  wipAccountId                     Int?    @map("wip_account_id")
+  materialExpenseAccountId         Int?    @map("material_expense_account_id")
+  materialIssueExpenseAccountId    Int?    @map("material_issue_expense_account_id")
+  pettyCashAccountId               Int?    @map("petty_cash_account_id")
+  cashBankAccountId                Int?    @map("cash_bank_account_id")
+  generalExpenseAccountId          Int?    @map("general_expense_account_id")
+  defaultCashAccountId             Int?    @map("default_cash_account_id")
+  salaryExpenseAccountId           Int?    @map("salary_expense_account_id")
+  salariesPayableAccountId         Int?    @map("salaries_payable_account_id")
+  payrollBankAccountId             Int?    @map("payroll_bank_account_id")
+  employeeReceivableAccountId      Int?    @map("employee_receivable_account_id")
+  payrollJournalTypeId             Int?    @map("payroll_journal_type_id")
+  depreciationExpenseAccountId     Int?    @map("depreciation_expense_account_id")
+  accumulatedDepreciationAccountId Int?    @map("accumulated_depreciation_account_id")
+  defaultProjectStages             String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -275,36 +276,37 @@ model Notification {
 }
 
 model Customer {
-  id               Int               @id @default(autoincrement())
-  street           String?           @map("street") @db.Text
-  village          String?           @map("village")
-  district         String?           @map("district")
-  province         String?           @map("province")
-  postalCode       String?           @map("postal_code")
-  name             String
-  email            String?
-  phone            String?
-  address          String?           @db.Text
-  city             String?
-  gender           String?           @map("gender")
-  taxId            String?           @map("tax_id")
-  code             String?           @unique @map("code")
-  creditLimit      Decimal           @default(0.00) @map("credit_limit") @db.Decimal(15, 2)
-  contactPerson    String?           @map("contact_person")
-  isActive         Boolean           @default(true) @map("is_active")
-  deletedAt        DateTime?         @map("deleted_at")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
-  customerVehicles CustomerVehicle[]
-  downPayments     DownPayment[]
-  projects         Project[]
-  quotations       Quotation[]
-  salesInvoices    SalesInvoice[]
-  salesReturns     SalesReturn[]
-  salesOrders      SalesOrder[]
-  workOrders       WorkOrder[]
+  slug               String?           @unique
+  id                 Int               @id @default(autoincrement())
+  street             String?           @map("street") @db.Text
+  village            String?           @map("village")
+  district           String?           @map("district")
+  province           String?           @map("province")
+  postalCode         String?           @map("postal_code")
+  name               String
+  email              String?
+  phone              String?
+  address            String?           @db.Text
+  city               String?
+  gender             String?           @map("gender")
+  taxId              String?           @map("tax_id")
+  code               String?           @unique @map("code")
+  creditLimit        Decimal           @default(0.00) @map("credit_limit") @db.Decimal(15, 2)
+  contactPerson      String?           @map("contact_person")
+  isActive           Boolean           @default(true) @map("is_active")
+  deletedAt          DateTime?         @map("deleted_at")
+  createdBy          Int?              @map("created_by")
+  updatedBy          Int?              @map("updated_by")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  customerVehicles   CustomerVehicle[]
+  downPayments       DownPayment[]
+  projects           Project[]
+  quotations         Quotation[]
+  salesInvoices      SalesInvoice[]
+  salesReturns       SalesReturn[]
+  salesOrders        SalesOrder[]
+  workOrders         WorkOrder[]
   customerCategoryId Int?              @map("customer_category_id")
   customerCategory   CustomerCategory? @relation(fields: [customerCategoryId], references: [id])
 
@@ -316,6 +318,7 @@ model Customer {
 }
 
 model CustomerCategory {
+  slug               String?    @unique
   id                 Int        @id @default(autoincrement())
   name               String     @unique
   downPaymentPercent Decimal    @default(0.00) @map("down_payment_percent") @db.Decimal(5, 2)
@@ -330,31 +333,32 @@ model CustomerCategory {
 }
 
 model Vendor {
-  id                Int             @id @default(autoincrement())
-  photo             String?         @map("photo")
-  street            String?         @map("street") @db.Text
-  province          String?         @map("province")
-  postalCode        String?         @map("postal_code")
-  bankName          String?         @map("bank_name")
-  bankAccountNumber String?         @map("bank_account_number")
-  bankAccountHolder String?         @map("bank_account_holder")
-  districtVendor    String?         @map("district")
-  villageVendor     String?         @map("village")
+  slug              String?           @unique
+  id                Int               @id @default(autoincrement())
+  photo             String?           @map("photo")
+  street            String?           @map("street") @db.Text
+  province          String?           @map("province")
+  postalCode        String?           @map("postal_code")
+  bankName          String?           @map("bank_name")
+  bankAccountNumber String?           @map("bank_account_number")
+  bankAccountHolder String?           @map("bank_account_holder")
+  districtVendor    String?           @map("district")
+  villageVendor     String?           @map("village")
   name              String
-  code              String?         @unique
+  code              String?           @unique
   email             String?
   phone             String?
-  address           String?         @db.Text
+  address           String?           @db.Text
   city              String?
   npwp              String?
-  contactPerson     String?         @map("contact_person")
-  paymentTermId     Int?            @map("payment_term_id")
-  isActive          Boolean         @default(true) @map("is_active")
-  deletedAt         DateTime?       @map("deleted_at")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
+  contactPerson     String?           @map("contact_person")
+  paymentTermId     Int?              @map("payment_term_id")
+  isActive          Boolean           @default(true) @map("is_active")
+  deletedAt         DateTime?         @map("deleted_at")
+  createdBy         Int?              @map("created_by")
+  updatedBy         Int?              @map("updated_by")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
   items             Item[]
   purchaseOrders    PurchaseOrder[]
   purchaseRequests  PurchaseRequest[]
@@ -363,7 +367,7 @@ model Vendor {
   productionCosts   ProductionCost[]
   expenses          Expense[]
   pettyCash         PettyCash[]
-  paymentTerm       PaymentTerm?    @relation(fields: [paymentTermId], references: [id])
+  paymentTerm       PaymentTerm?      @relation(fields: [paymentTermId], references: [id])
 
   @@index([paymentTermId], map: "vendors_payment_term_id_fkey")
   @@index([isActive, deletedAt])
@@ -372,11 +376,12 @@ model Vendor {
 }
 
 model Brand {
+  slug        String?        @unique
   id          Int            @id @default(autoincrement())
   name        String         @unique
   description String?        @db.Text
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy   Int?           @map("created_by")
+  updatedBy   Int?           @map("updated_by")
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
   items       Item[]
@@ -387,19 +392,20 @@ model Brand {
 }
 
 model ItemCategory {
-  id          Int            @id @default(autoincrement())
-  name        String         @unique
-  description String?
-  parentId    Int?           @map("parent_id")
-  costingMethod String       @default("average") @map("costing_method")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
-  parent      ItemCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
-  children    ItemCategory[] @relation("CategoryTree")
-  items       Item[]
-  brands      Brand[]        @relation("BrandCategories")
+  slug          String?        @unique
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  description   String?
+  parentId      Int?           @map("parent_id")
+  costingMethod String         @default("average") @map("costing_method")
+  createdBy     Int?           @map("created_by")
+  updatedBy     Int?           @map("updated_by")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  parent        ItemCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children      ItemCategory[] @relation("CategoryTree")
+  items         Item[]
+  brands        Brand[]        @relation("BrandCategories")
 
   @@index([parentId], map: "item_categories_parent_id_fkey")
   @@index([createdAt])
@@ -407,48 +413,49 @@ model ItemCategory {
 }
 
 model Item {
-  id                 Int                 @id @default(autoincrement())
-  sku                String              @unique
-  name               String
-  description        String?             @db.Text
-  image              String?             @db.Text
-  categoryId         Int?                @map("category_id")
-  brandId            Int?                @map("brand_id")
-  vendorId           Int?                @map("vendor_id")
-  defaultWarehouseId Int?                @map("default_warehouse_id")
-  defaultRackId      Int?                @map("default_rack_id")
-  defaultRackRowId   Int?                @map("default_rack_row_id")
-  unitOfMeasure      String              @default("PCS") @map("unit_of_measure")
-  qtyOnHand          Decimal             @default(0.00) @map("qty_on_hand") @db.Decimal(15, 2)
-  minStock           Decimal             @default(0.00) @map("min_stock") @db.Decimal(15, 2)
-  cost               Decimal             @default(0.00) @db.Decimal(15, 2)
-  price              Decimal             @default(0.00) @db.Decimal(15, 2)
-  standardCost       Decimal             @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
-  costingMethod      String              @default("average") @map("costing_method")
-  purchasePrice      Decimal             @default(0.00) @map("purchase_price") @db.Decimal(15, 2)
-  isProduct          Boolean             @default(false) @map("is_product")
-  isService          Boolean             @default(false) @map("is_service")
-  trackBatch         Boolean             @default(false) @map("track_batch")
-  trackSerial        Boolean             @default(false) @map("track_serial")
-  isActive           Boolean             @default(true) @map("is_active")
-  deletedAt          DateTime?           @map("deleted_at")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  barcodes           Barcode[]
-  deliveryOrderItems DeliveryOrderItem[]
-  inventoryLayers    InventoryLayer[]
-  itemBatches        ItemBatch[]
-  itemSerials        ItemSerial[]
-  brand              Brand?              @relation(fields: [brandId], references: [id])
-  category           ItemCategory?       @relation(fields: [categoryId], references: [id])
-  rack               Rack?               @relation(fields: [defaultRackId], references: [id], onDelete: SetNull)
-  rackRow            RackRow?            @relation(fields: [defaultRackRowId], references: [id], onDelete: SetNull)
-  warehouse          Warehouse?          @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
-  vendor             Vendor?             @relation(fields: [vendorId], references: [id])
-  stockMoves         StockMove[]
-  manufacturedProducts Product[]          @relation("ProductInventoryItem")
-  uomConversions     UomConversion[]
-  fitmentRules       VehicleFitmentRule[]
+  id                   Int                  @id @default(autoincrement())
+  slug                 String?              @unique
+  sku                  String               @unique
+  name                 String
+  description          String?              @db.Text
+  image                String?              @db.Text
+  categoryId           Int?                 @map("category_id")
+  brandId              Int?                 @map("brand_id")
+  vendorId             Int?                 @map("vendor_id")
+  defaultWarehouseId   Int?                 @map("default_warehouse_id")
+  defaultRackId        Int?                 @map("default_rack_id")
+  defaultRackRowId     Int?                 @map("default_rack_row_id")
+  unitOfMeasure        String               @default("PCS") @map("unit_of_measure")
+  qtyOnHand            Decimal              @default(0.00) @map("qty_on_hand") @db.Decimal(15, 2)
+  minStock             Decimal              @default(0.00) @map("min_stock") @db.Decimal(15, 2)
+  cost                 Decimal              @default(0.00) @db.Decimal(15, 2)
+  price                Decimal              @default(0.00) @db.Decimal(15, 2)
+  standardCost         Decimal              @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
+  costingMethod        String               @default("average") @map("costing_method")
+  purchasePrice        Decimal              @default(0.00) @map("purchase_price") @db.Decimal(15, 2)
+  isProduct            Boolean              @default(false) @map("is_product")
+  isService            Boolean              @default(false) @map("is_service")
+  trackBatch           Boolean              @default(false) @map("track_batch")
+  trackSerial          Boolean              @default(false) @map("track_serial")
+  isActive             Boolean              @default(true) @map("is_active")
+  deletedAt            DateTime?            @map("deleted_at")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  barcodes             Barcode[]
+  deliveryOrderItems   DeliveryOrderItem[]
+  inventoryLayers      InventoryLayer[]
+  itemBatches          ItemBatch[]
+  itemSerials          ItemSerial[]
+  brand                Brand?               @relation(fields: [brandId], references: [id])
+  category             ItemCategory?        @relation(fields: [categoryId], references: [id])
+  rack                 Rack?                @relation(fields: [defaultRackId], references: [id], onDelete: SetNull)
+  rackRow              RackRow?             @relation(fields: [defaultRackRowId], references: [id], onDelete: SetNull)
+  warehouse            Warehouse?           @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
+  vendor               Vendor?              @relation(fields: [vendorId], references: [id])
+  stockMoves           StockMove[]
+  manufacturedProducts Product[]            @relation("ProductInventoryItem")
+  uomConversions       UomConversion[]
+  fitmentRules         VehicleFitmentRule[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -463,6 +470,7 @@ model Item {
 }
 
 model Warehouse {
+  slug             String?             @unique
   id               Int                 @id @default(autoincrement())
   name             String
   code             String              @unique
@@ -490,6 +498,7 @@ model Warehouse {
 }
 
 model Rack {
+  slug        String?   @unique
   id          Int       @id @default(autoincrement())
   warehouseId Int       @map("warehouse_id")
   name        String
@@ -507,6 +516,7 @@ model Rack {
 }
 
 model RackRow {
+  slug      String?  @unique
   id        Int      @id @default(autoincrement())
   rackId    Int      @map("rack_id")
   code      String?  @map("code")
@@ -523,12 +533,13 @@ model RackRow {
 }
 
 model Department {
+  slug          String?             @unique
   id            Int                 @id @default(autoincrement())
   name          String              @unique
   code          String?             @unique
   description   String?
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy     Int?                @map("created_by")
+  updatedBy     Int?                @map("updated_by")
   createdAt     DateTime            @default(now()) @map("created_at")
   updatedAt     DateTime            @updatedAt @map("updated_at")
   holidays      DepartmentHoliday[]
@@ -541,13 +552,14 @@ model Department {
 }
 
 model Position {
+  slug         String?     @unique
   id           Int         @id @default(autoincrement())
   name         String
   code         String?     @unique
   description  String?     @db.Text
   departmentId Int?        @map("department_id")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy    Int?        @map("created_by")
+  updatedBy    Int?        @map("updated_by")
   createdAt    DateTime    @default(now()) @map("created_at")
   updatedAt    DateTime    @updatedAt @map("updated_at")
   employees    Employee[]
@@ -559,6 +571,7 @@ model Position {
 }
 
 model Employee {
+  slug                String?           @unique
   id                  Int               @id @default(autoincrement())
   userId              Int?              @map("user_id")
   idNumber            String?           @map("id_number")
@@ -613,20 +626,21 @@ model Employee {
 }
 
 model Account {
-  id             Int            @id @default(autoincrement())
-  code           String         @unique
-  name           String
-  type           AccountType
-  parentId       Int?           @map("parent_id")
-  normalBalance  String?        @map("normal_balance")
-  description    String?        @db.Text
-  isActive       Boolean        @default(true) @map("is_active")
-  deletedAt      DateTime?      @map("deleted_at")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  parent         Account?       @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children       Account[]      @relation("AccountTree")
-  journalEntries JournalEntry[]
+  slug            String?          @unique
+  id              Int              @id @default(autoincrement())
+  code            String           @unique
+  name            String
+  type            AccountType
+  parentId        Int?             @map("parent_id")
+  normalBalance   String?          @map("normal_balance")
+  description     String?          @db.Text
+  isActive        Boolean          @default(true) @map("is_active")
+  deletedAt       DateTime?        @map("deleted_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  parent          Account?         @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children        Account[]        @relation("AccountTree")
+  journalEntries  JournalEntry[]
   allocationRules AllocationRule[]
 
   @@index([parentId], map: "accounts_parent_id_fkey")
@@ -636,13 +650,14 @@ model Account {
 }
 
 model PaymentTerm {
+  slug      String?  @unique
   id        Int      @id @default(autoincrement())
   name      String
   code      String   @unique
   days      Int      @default(0)
   isActive  Boolean  @default(true) @map("is_active")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy Int?     @map("created_by")
+  updatedBy Int?     @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   vendors   Vendor[]
@@ -652,12 +667,13 @@ model PaymentTerm {
 }
 
 model PaymentMethod {
+  slug      String?  @unique
   id        Int      @id @default(autoincrement())
   code      String   @unique
   name      String
   isActive  Boolean  @default(true) @map("is_active")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy Int?     @map("created_by")
+  updatedBy Int?     @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -666,12 +682,13 @@ model PaymentMethod {
 }
 
 model ShippingMethod {
+  slug      String?  @unique
   id        Int      @id @default(autoincrement())
   code      String   @unique
   name      String
   isActive  Boolean  @default(true) @map("is_active")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy Int?     @map("created_by")
+  updatedBy Int?     @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -681,6 +698,7 @@ model ShippingMethod {
 }
 
 model Quotation {
+  slug              String?            @unique
   id                Int                @id @default(autoincrement())
   revisionNumber    Int                @default(0) @map("revision_number")
   projectId         Int?               @map("project_id")
@@ -776,6 +794,7 @@ model QuotationHistory {
 }
 
 model DownPayment {
+  slug          String?   @unique
   id            Int       @id @default(autoincrement())
   documentNo    String    @unique @map("document_no")
   quotationId   Int       @map("quotation_id")
@@ -801,6 +820,7 @@ model DownPayment {
 }
 
 model SalesOrder {
+  slug              String?          @unique
   id                Int              @id @default(autoincrement())
   customerVehicleId Int?             @map("customer_vehicle_id")
   totalAmount       Decimal          @default(0.00) @map("total_amount") @db.Decimal(15, 2)
@@ -852,6 +872,7 @@ model SalesOrderItem {
 }
 
 model SalesInvoice {
+  slug              String?            @unique
   id                Int                @id @default(autoincrement())
   customerVehicleId Int?               @map("customer_vehicle_id")
   projectId         Int?               @map("project_id")
@@ -917,6 +938,7 @@ model SalesInvoiceItem {
 }
 
 model SalesPayment {
+  slug           String?      @unique
   id             Int          @id @default(autoincrement())
   documentNo     String       @unique @map("document_no")
   customerId     Int?         @map("customer_id")
@@ -941,6 +963,7 @@ model SalesPayment {
 }
 
 model SalesReturn {
+  slug           String?           @unique
   id             Int               @id @default(autoincrement())
   documentNo     String            @unique @map("document_no")
   salesInvoiceId Int?              @map("sales_invoice_id")
@@ -978,6 +1001,7 @@ model SalesReturnItem {
 }
 
 model PurchaseRequest {
+  slug            String?               @unique
   id              Int                   @id @default(autoincrement())
   documentNo      String                @unique @map("document_no")
   title           String?               @map("title")
@@ -1023,6 +1047,7 @@ model PurchaseRequestItem {
 }
 
 model PurchaseOrder {
+  slug              String?             @unique
   id                Int                 @id @default(autoincrement())
   paymentStatus     String              @default("unpaid") @map("payment_status")
   paymentTerm       String?             @map("payment_term")
@@ -1085,6 +1110,7 @@ model PurchaseOrderItem {
 }
 
 model GoodsReceipt {
+  slug            String?            @unique
   id              Int                @id @default(autoincrement())
   documentNo      String             @unique @map("document_no")
   purchaseOrderId Int                @map("purchase_order_id")
@@ -1145,6 +1171,7 @@ model GoodsReceiptItem {
 }
 
 model PurchaseReturn {
+  slug            String?              @unique
   id              Int                  @id @default(autoincrement())
   documentNo      String               @unique @map("document_no")
   purchaseOrderId Int                  @map("purchase_order_id")
@@ -1179,34 +1206,35 @@ model PurchaseReturnItem {
 }
 
 model VendorBill {
-  id                  Int              @id @default(autoincrement())
-  goodsReceiptId      Int?             @map("goods_receipt_id")
-  vendorInvoiceNumber String?          @map("vendor_invoice_number")
-  discountAmount      Decimal          @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
-  balanceDue          Decimal          @default(0.00) @map("balance_due") @db.Decimal(15, 2)
-  terms               String?          @map("terms") @db.Text
-  costCenterId        Int?             @map("cost_center_id")
-  approvedBy          Int?             @map("approved_by")
-  approvedAt          DateTime?        @map("approved_at")
-  deletedAt           DateTime?        @map("deleted_at")
-  notes               String?          @db.Text
-  documentNo          String           @unique @map("document_no")
-  vendorId            Int              @map("vendor_id")
-  purchaseOrderId     Int?             @map("purchase_order_id")
+  slug                String?                   @unique
+  id                  Int                       @id @default(autoincrement())
+  goodsReceiptId      Int?                      @map("goods_receipt_id")
+  vendorInvoiceNumber String?                   @map("vendor_invoice_number")
+  discountAmount      Decimal                   @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
+  balanceDue          Decimal                   @default(0.00) @map("balance_due") @db.Decimal(15, 2)
+  terms               String?                   @map("terms") @db.Text
+  costCenterId        Int?                      @map("cost_center_id")
+  approvedBy          Int?                      @map("approved_by")
+  approvedAt          DateTime?                 @map("approved_at")
+  deletedAt           DateTime?                 @map("deleted_at")
+  notes               String?                   @db.Text
+  documentNo          String                    @unique @map("document_no")
+  vendorId            Int                       @map("vendor_id")
+  purchaseOrderId     Int?                      @map("purchase_order_id")
   date                DateTime
-  dueDate             DateTime?        @map("due_date")
-  subtotal            Decimal          @default(0.00) @db.Decimal(15, 2)
-  tax                 Decimal          @default(0.00) @db.Decimal(15, 2)
-  grandTotal          Decimal          @default(0.00) @map("grand_total") @db.Decimal(15, 2)
-  paidAmount          Decimal          @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
-  status              String           @default("draft")
-  createdBy           Int?             @map("created_by")
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
+  dueDate             DateTime?                 @map("due_date")
+  subtotal            Decimal                   @default(0.00) @db.Decimal(15, 2)
+  tax                 Decimal                   @default(0.00) @db.Decimal(15, 2)
+  grandTotal          Decimal                   @default(0.00) @map("grand_total") @db.Decimal(15, 2)
+  paidAmount          Decimal                   @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
+  status              String                    @default("draft")
+  createdBy           Int?                      @map("created_by")
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
   items               VendorBillItem[]
-  purchaseOrder       PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
-  goodsReceipt        GoodsReceipt?    @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
-  vendor              Vendor           @relation(fields: [vendorId], references: [id])
+  purchaseOrder       PurchaseOrder?            @relation(fields: [purchaseOrderId], references: [id])
+  goodsReceipt        GoodsReceipt?             @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
+  vendor              Vendor                    @relation(fields: [vendorId], references: [id])
   allocations         VendorPaymentAllocation[]
   vendorPayments      VendorPayment[]
 
@@ -1251,6 +1279,7 @@ model VendorBillItem {
 }
 
 model VendorPayment {
+  slug            String?                   @unique
   id              Int                       @id @default(autoincrement())
   referenceNumber String?                   @map("reference_number")
   bankId          Int?                      @map("bank_id")
@@ -1308,6 +1337,7 @@ model VendorPaymentAllocation {
 }
 
 model DeliveryOrder {
+  slug               String?             @unique
   id                 Int                 @id @default(autoincrement())
   doNumber           String?             @map("do_number")
   customerId         Int?                @map("customer_id")
@@ -1344,6 +1374,7 @@ model DeliveryOrder {
 }
 
 model StockMove {
+  slug            String?          @unique
   id              Int              @id @default(autoincrement())
   documentNo      String           @unique @map("document_no")
   date            DateTime?        @map("transaction_date")
@@ -1405,6 +1436,7 @@ model InventoryLayer {
 }
 
 model StockAdjustment {
+  slug        String?               @unique
   id          Int                   @id @default(autoincrement())
   documentNo  String                @unique @map("document_no")
   warehouseId Int                   @map("warehouse_id")
@@ -1454,6 +1486,7 @@ model StockAdjustmentItem {
 }
 
 model InventoryTransfer {
+  slug                   String?                 @unique
   id                     Int                     @id @default(autoincrement())
   documentNo             String                  @unique @map("document_no")
   sourceWarehouseId      Int                     @map("source_warehouse_id")
@@ -1496,21 +1529,22 @@ model InventoryTransferItem {
 }
 
 model MaterialIssue {
-  id          Int                 @id @default(autoincrement())
-  documentNo  String              @unique @map("document_no")
-  warehouseId Int                 @map("warehouse_id")
-  projectId   Int?                @map("project_id")
-  workOrderId Int?                @map("work_order_id")
-  date        DateTime
-  notes       String?             @db.Text
-  status      String              @default("draft")
-  createdBy   Int?                @map("created_by")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
-  items       MaterialIssueItem[]
-  warehouse   Warehouse           @relation(fields: [warehouseId], references: [id])
-  costCenter  CostCenter?         @relation(fields: [costCenterId], references: [id])
-  costCenterId Int?               @map("cost_center_id")
+  slug         String?             @unique
+  id           Int                 @id @default(autoincrement())
+  documentNo   String              @unique @map("document_no")
+  warehouseId  Int                 @map("warehouse_id")
+  projectId    Int?                @map("project_id")
+  workOrderId  Int?                @map("work_order_id")
+  date         DateTime
+  notes        String?             @db.Text
+  status       String              @default("draft")
+  createdBy    Int?                @map("created_by")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  items        MaterialIssueItem[]
+  warehouse    Warehouse           @relation(fields: [warehouseId], references: [id])
+  costCenter   CostCenter?         @relation(fields: [costCenterId], references: [id])
+  costCenterId Int?                @map("cost_center_id")
 
   @@index([warehouseId], map: "material_issues_warehouse_id_fkey")
   @@index([status], map: "idx_material_issues_status")
@@ -1537,24 +1571,25 @@ model MaterialIssueItem {
 }
 
 model Product {
-  id                   Int                   @id @default(autoincrement())
-  code                 String?               @unique
-  name                 String
-  sku                  String?               @unique
-  description          String?               @db.Text
-  standardCost         Decimal               @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
-  inventoryItemId      Int?                  @unique @map("inventory_item_id")
-  vehicleBrandId       Int?                  @map("vehicle_brand_id")
-  vehicleModelId       Int?                  @map("vehicle_model_id")
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
-  materials            ProductMaterial[]
-  productionOrders     ProductionOrder[]
-  bomRevisions         BomRevision[]
-  qcChecklists         QcChecklist[]
-  inventoryItem        Item?                 @relation("ProductInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
-  vehicleBrand         VehicleBrand?         @relation(fields: [vehicleBrandId], references: [id], onDelete: SetNull)
-  vehicleModel         VehicleModel?         @relation(fields: [vehicleModelId], references: [id], onDelete: SetNull)
+  slug             String?           @unique
+  id               Int               @id @default(autoincrement())
+  code             String?           @unique
+  name             String
+  sku              String?           @unique
+  description      String?           @db.Text
+  standardCost     Decimal           @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
+  inventoryItemId  Int?              @unique @map("inventory_item_id")
+  vehicleBrandId   Int?              @map("vehicle_brand_id")
+  vehicleModelId   Int?              @map("vehicle_model_id")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  materials        ProductMaterial[]
+  productionOrders ProductionOrder[]
+  bomRevisions     BomRevision[]
+  qcChecklists     QcChecklist[]
+  inventoryItem    Item?             @relation("ProductInventoryItem", fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  vehicleBrand     VehicleBrand?     @relation(fields: [vehicleBrandId], references: [id], onDelete: SetNull)
+  vehicleModel     VehicleModel?     @relation(fields: [vehicleModelId], references: [id], onDelete: SetNull)
 
   @@index([vehicleBrandId], map: "products_vehicle_brand_id_fkey")
   @@index([vehicleModelId], map: "products_vehicle_model_id_fkey")
@@ -1581,22 +1616,23 @@ model ProductMaterial {
 /// mutated — a new revision is created instead. Status: draft → released →
 /// superseded (the previous released revision is marked superseded on release).
 model BomRevision {
-  id            Int                  @id @default(autoincrement())
-  productId     Int                  @map("product_id")
-  revisionNo    Int                  @map("revision_no")
-  status        String               @default("draft")
-  effectiveDate DateTime             @map("effective_date")
-  notes         String?              @db.Text
-  releasedAt    DateTime?            @map("released_at")
-  releasedBy    Int?                 @map("released_by")
-  createdBy     Int?                 @map("created_by")
-  createdAt     DateTime             @default(now()) @map("created_at")
-  updatedAt     DateTime             @updatedAt @map("updated_at")
-  product       Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
-  materials     BomRevisionMaterial[]
+  slug             String?               @unique
+  id               Int                   @id @default(autoincrement())
+  productId        Int                   @map("product_id")
+  revisionNo       Int                   @map("revision_no")
+  status           String                @default("draft")
+  effectiveDate    DateTime              @map("effective_date")
+  notes            String?               @db.Text
+  releasedAt       DateTime?             @map("released_at")
+  releasedBy       Int?                  @map("released_by")
+  createdBy        Int?                  @map("created_by")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+  product          Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  materials        BomRevisionMaterial[]
   productionOrders ProductionOrder[]
-  workOrders    WorkOrder[]
-  fitmentRules  VehicleFitmentRule[]
+  workOrders       WorkOrder[]
+  fitmentRules     VehicleFitmentRule[]
 
   @@unique([productId, revisionNo], map: "bom_revisions_product_revision_unique")
   @@index([productId], map: "bom_revisions_product_id_fkey")
@@ -1619,6 +1655,7 @@ model BomRevisionMaterial {
 }
 
 model ProductionOrder {
+  slug              String?                   @unique
   id                Int                       @id @default(autoincrement())
   documentNo        String                    @unique @map("document_no")
   productId         Int                       @map("product_id")
@@ -1697,7 +1734,7 @@ model ProductionGenealogy {
   completedAt       DateTime                      @map("completed_at")
   createdAt         DateTime                      @default(now()) @map("created_at")
   materials         ProductionGenealogyMaterial[]
-  productionOrder   ProductionOrder              @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  productionOrder   ProductionOrder               @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
 
   @@unique([productionOrderId], map: "production_genealogy_production_order_id_unique")
   @@index([outputItemId], map: "production_genealogy_output_item_id_fkey")
@@ -1708,15 +1745,15 @@ model ProductionGenealogy {
 }
 
 model ProductionGenealogyMaterial {
-  id                Int                  @id @default(autoincrement())
-  genealogyId       Int                  @map("genealogy_id")
-  itemId            Int                  @map("item_id")
-  qty               Decimal              @db.Decimal(15, 2)
-  unitCost          Decimal              @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
-  totalCost         Decimal              @default(0.00) @map("total_cost") @db.Decimal(15, 2)
-  serialNumbers     Json?                @map("serial_numbers")
-  batchNumber       String?              @map("batch_number")
-  genealogy         ProductionGenealogy  @relation(fields: [genealogyId], references: [id], onDelete: Cascade)
+  id            Int                 @id @default(autoincrement())
+  genealogyId   Int                 @map("genealogy_id")
+  itemId        Int                 @map("item_id")
+  qty           Decimal             @db.Decimal(15, 2)
+  unitCost      Decimal             @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
+  totalCost     Decimal             @default(0.00) @map("total_cost") @db.Decimal(15, 2)
+  serialNumbers Json?               @map("serial_numbers")
+  batchNumber   String?             @map("batch_number")
+  genealogy     ProductionGenealogy @relation(fields: [genealogyId], references: [id], onDelete: Cascade)
 
   @@index([genealogyId], map: "production_genealogy_materials_genealogy_id_fkey")
   @@index([itemId])
@@ -1728,6 +1765,7 @@ model ProductionGenealogyMaterial {
 /// `incoming` (GRN receipt QC), `in_process` (during fabrication) and `final`
 /// (pre-handover, FAB-13).
 model QcChecklist {
+  slug          String?           @unique
   id            Int               @id @default(autoincrement())
   code          String?           @unique
   name          String
@@ -1754,16 +1792,16 @@ model QcChecklist {
 }
 
 model QcChecklistItem {
-  id           Int         @id @default(autoincrement())
-  checklistId  Int         @map("checklist_id")
-  sortOrder    Int         @default(0) @map("sort_order")
-  itemName     String      @map("item_name")
-  method       String      @default("visual")
-  spec         String?
-  isRequired   Boolean     @default(true) @map("is_required")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  checklist    QcChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  results      QcInspectionResult[]
+  id          Int                  @id @default(autoincrement())
+  checklistId Int                  @map("checklist_id")
+  sortOrder   Int                  @default(0) @map("sort_order")
+  itemName    String               @map("item_name")
+  method      String               @default("visual")
+  spec        String?
+  isRequired  Boolean              @default(true) @map("is_required")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  checklist   QcChecklist          @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  results     QcInspectionResult[]
 
   @@index([checklistId], map: "qc_checklist_items_checklist_id_fkey")
   @@index([createdAt])
@@ -1773,21 +1811,22 @@ model QcChecklistItem {
 /// One inspection event against a document (work order / production order /
 /// goods receipt) using a checklist version. Status: draft → passed / failed.
 model QcInspection {
-  id             Int                  @id @default(autoincrement())
-  documentNo     String               @unique @map("document_no")
-  checklistId    Int                  @map("checklist_id")
-  inspectionType String               @map("inspection_type")
-  referenceType  String               @map("reference_type")
-  referenceId    Int                  @map("reference_id")
-  status         String               @default("draft")
-  inspectorId    Int?                 @map("inspector_id")
-  inspectedAt    DateTime?            @map("inspected_at")
-  notes          String?              @db.Text
-  createdBy      Int?                 @map("created_by")
-  createdAt      DateTime             @default(now()) @map("created_at")
-  updatedAt      DateTime             @updatedAt @map("updated_at")
-  checklist      QcChecklist          @relation(fields: [checklistId], references: [id])
-  results        QcInspectionResult[]
+  slug            String?              @unique
+  id              Int                  @id @default(autoincrement())
+  documentNo      String               @unique @map("document_no")
+  checklistId     Int                  @map("checklist_id")
+  inspectionType  String               @map("inspection_type")
+  referenceType   String               @map("reference_type")
+  referenceId     Int                  @map("reference_id")
+  status          String               @default("draft")
+  inspectorId     Int?                 @map("inspector_id")
+  inspectedAt     DateTime?            @map("inspected_at")
+  notes           String?              @db.Text
+  createdBy       Int?                 @map("created_by")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  checklist       QcChecklist          @relation(fields: [checklistId], references: [id])
+  results         QcInspectionResult[]
   nonconformances Nonconformance[]
 
   @@index([checklistId], map: "qc_inspections_checklist_id_fkey")
@@ -1800,13 +1839,13 @@ model QcInspection {
 }
 
 model QcInspectionResult {
-  id              Int           @id @default(autoincrement())
-  inspectionId    Int           @map("inspection_id")
-  checklistItemId Int           @map("checklist_item_id")
-  result          String        @default("na")
-  measuredValue   String?       @map("measured_value")
-  notes           String?       @db.Text
-  inspection      QcInspection  @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  id              Int             @id @default(autoincrement())
+  inspectionId    Int             @map("inspection_id")
+  checklistItemId Int             @map("checklist_item_id")
+  result          String          @default("na")
+  measuredValue   String?         @map("measured_value")
+  notes           String?         @db.Text
+  inspection      QcInspection    @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
   checklistItem   QcChecklistItem @relation(fields: [checklistItemId], references: [id])
 
   @@index([inspectionId], map: "qc_inspection_results_inspection_id_fkey")
@@ -1817,25 +1856,26 @@ model QcInspectionResult {
 /// Nonconformance / rework record (PRD FAB-11). A failing inspection raises one
 /// or more NCRs; an open NCR blocks handover until closed by an authorized party.
 model Nonconformance {
-  id                Int           @id @default(autoincrement())
-  documentNo        String        @unique @map("document_no")
-  inspectionId      Int?          @map("inspection_id")
-  referenceType     String        @map("reference_type")
-  referenceId       Int           @map("reference_id")
-  defectDescription String        @map("defect_description") @db.Text
-  cause             String?       @db.Text
-  responsibility    String        @default("internal")
-  severity          String        @default("minor")
-  status            String        @default("open")
-  reworkCost        Decimal       @default(0.00) @map("rework_cost") @db.Decimal(15, 2)
-  reworkHours       Decimal       @default(0.00) @map("rework_hours") @db.Decimal(10, 2)
-  resolution        String?       @db.Text
-  closedBy          Int?          @map("closed_by")
-  closedAt          DateTime?     @map("closed_at")
-  createdBy         Int?          @map("created_by")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
-  inspection        QcInspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  slug              String?          @unique
+  id                Int              @id @default(autoincrement())
+  documentNo        String           @unique @map("document_no")
+  inspectionId      Int?             @map("inspection_id")
+  referenceType     String           @map("reference_type")
+  referenceId       Int              @map("reference_id")
+  defectDescription String           @map("defect_description") @db.Text
+  cause             String?          @db.Text
+  responsibility    String           @default("internal")
+  severity          String           @default("minor")
+  status            String           @default("open")
+  reworkCost        Decimal          @default(0.00) @map("rework_cost") @db.Decimal(15, 2)
+  reworkHours       Decimal          @default(0.00) @map("rework_hours") @db.Decimal(10, 2)
+  resolution        String?          @db.Text
+  closedBy          Int?             @map("closed_by")
+  closedAt          DateTime?        @map("closed_at")
+  createdBy         Int?             @map("created_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  inspection        QcInspection?    @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
   productionCosts   ProductionCost[]
 
   @@index([inspectionId], map: "nonconformances_inspection_id_fkey")
@@ -1896,30 +1936,31 @@ model ProductionCost {
 }
 
 model WorkOrder {
-  id                Int              @id @default(autoincrement())
-  customerVehicleId Int?             @map("customer_vehicle_id")
-  startDate         DateTime?        @map("start_date")
-  endDate           DateTime?        @map("end_date")
-  documentNo        String           @unique @map("document_no")
-  quotationId       Int?             @map("quotation_id")
-  projectId         Int?             @map("project_id")
-  bomRevisionId     Int?             @map("bom_revision_id")
-  customerId        Int              @map("customer_id")
+  slug              String?           @unique
+  id                Int               @id @default(autoincrement())
+  customerVehicleId Int?              @map("customer_vehicle_id")
+  startDate         DateTime?         @map("start_date")
+  endDate           DateTime?         @map("end_date")
+  documentNo        String            @unique @map("document_no")
+  quotationId       Int?              @map("quotation_id")
+  projectId         Int?              @map("project_id")
+  bomRevisionId     Int?              @map("bom_revision_id")
+  customerId        Int               @map("customer_id")
   date              DateTime
-  notes             String?          @db.Text
-  status            String           @default("draft")
-  createdBy         Int?             @map("created_by")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
+  notes             String?           @db.Text
+  status            String            @default("draft")
+  createdBy         Int?              @map("created_by")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
   items             WorkOrderItem[]
   costs             ProductionCost[]
   purchaseOrders    PurchaseOrder[]
   productionOrders  ProductionOrder[]
-  customer          Customer         @relation(fields: [customerId], references: [id])
-  customerVehicle   CustomerVehicle? @relation(fields: [customerVehicleId], references: [id])
-  quotation         Quotation?       @relation(fields: [quotationId], references: [id])
-  project           Project?         @relation(fields: [projectId], references: [id])
-  bomRevision       BomRevision?     @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
+  customer          Customer          @relation(fields: [customerId], references: [id])
+  customerVehicle   CustomerVehicle?  @relation(fields: [customerVehicleId], references: [id])
+  quotation         Quotation?        @relation(fields: [quotationId], references: [id])
+  project           Project?          @relation(fields: [projectId], references: [id])
+  bomRevision       BomRevision?      @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -1946,8 +1987,6 @@ model WorkOrderItem {
   @@index([itemId])
   @@map("work_order_items")
 }
-
-
 
 // Keep legacy attendance tables available to payroll and prevent db push from
 // dropping their data while the attendance UI is absent.
@@ -2026,6 +2065,7 @@ model DepartmentHoliday {
 }
 
 model LeaveRequest {
+  slug            String?  @unique
   id              Int      @id @default(autoincrement())
   employeeId      Int      @map("employee_id")
   type            String
@@ -2047,6 +2087,7 @@ model LeaveRequest {
 }
 
 model OvertimeRequest {
+  slug                 String?   @unique
   id                   Int       @id @default(autoincrement())
   employeeId           Int       @map("employee_id")
   projectId            Int?      @map("project_id")
@@ -2078,38 +2119,39 @@ model OvertimeRequest {
 }
 
 model Payroll {
-  id                     Int       @id @default(autoincrement())
-  documentNo             String    @unique @map("document_no")
-  employeeId             Int?      @map("employee_id")
+  slug                   String?     @unique
+  id                     Int         @id @default(autoincrement())
+  documentNo             String      @unique @map("document_no")
+  employeeId             Int?        @map("employee_id")
   period                 String
-  type                   String    @default("REGULAR")
-  startDate              DateTime  @map("start_date")
-  endDate                DateTime  @map("end_date")
-  baseSalary             Decimal   @default(0.00) @map("base_salary") @db.Decimal(15, 2)
-  allowances             Decimal   @default(0.00) @db.Decimal(15, 2)
-  deductions             Decimal   @default(0.00) @db.Decimal(15, 2)
-  overtimeTotal          Decimal   @default(0.00) @map("overtime_total") @db.Decimal(15, 2)
-  appreciationTotal      Decimal   @default(0.00) @map("appreciation_total") @db.Decimal(15, 2)
-  loanDeduction          Decimal   @default(0.00) @map("loan_deduction") @db.Decimal(15, 2)
-  lateDeduction          Decimal   @default(0.00) @map("late_deduction") @db.Decimal(15, 2)
-  grossSalary            Decimal   @default(0.00) @map("gross_salary") @db.Decimal(15, 2)
-  bpjsHealthEmployee     Decimal   @default(0.00) @map("bpjs_health_employee") @db.Decimal(15, 2)
-  bpjsEmploymentEmployee Decimal   @default(0.00) @map("bpjs_employment_employee") @db.Decimal(15, 2)
-  pph21                  Decimal   @default(0.00) @map("pph21") @db.Decimal(15, 2)
-  lateMinutes            Int       @default(0) @map("late_minutes")
-  workingDays            Int       @default(0) @map("working_days")
-  presentDays            Int       @default(0) @map("present_days")
-  absentDays             Int       @default(0) @map("absent_days")
-  absentDeduction        Decimal   @default(0.00) @map("absent_deduction") @db.Decimal(15, 2)
-  netSalary              Decimal   @default(0.00) @map("net_salary") @db.Decimal(15, 2)
-  totalAmount            Decimal   @default(0.00) @map("total_amount") @db.Decimal(15, 2)
-  paymentDate            DateTime? @map("payment_date")
-  status                 String    @default("draft")
-  approvedBy             Int?      @map("approved_by")
-  createdBy              Int?      @map("created_by")
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
-  employee               Employee?  @relation(fields: [employeeId], references: [id])
+  type                   String      @default("REGULAR")
+  startDate              DateTime    @map("start_date")
+  endDate                DateTime    @map("end_date")
+  baseSalary             Decimal     @default(0.00) @map("base_salary") @db.Decimal(15, 2)
+  allowances             Decimal     @default(0.00) @db.Decimal(15, 2)
+  deductions             Decimal     @default(0.00) @db.Decimal(15, 2)
+  overtimeTotal          Decimal     @default(0.00) @map("overtime_total") @db.Decimal(15, 2)
+  appreciationTotal      Decimal     @default(0.00) @map("appreciation_total") @db.Decimal(15, 2)
+  loanDeduction          Decimal     @default(0.00) @map("loan_deduction") @db.Decimal(15, 2)
+  lateDeduction          Decimal     @default(0.00) @map("late_deduction") @db.Decimal(15, 2)
+  grossSalary            Decimal     @default(0.00) @map("gross_salary") @db.Decimal(15, 2)
+  bpjsHealthEmployee     Decimal     @default(0.00) @map("bpjs_health_employee") @db.Decimal(15, 2)
+  bpjsEmploymentEmployee Decimal     @default(0.00) @map("bpjs_employment_employee") @db.Decimal(15, 2)
+  pph21                  Decimal     @default(0.00) @map("pph21") @db.Decimal(15, 2)
+  lateMinutes            Int         @default(0) @map("late_minutes")
+  workingDays            Int         @default(0) @map("working_days")
+  presentDays            Int         @default(0) @map("present_days")
+  absentDays             Int         @default(0) @map("absent_days")
+  absentDeduction        Decimal     @default(0.00) @map("absent_deduction") @db.Decimal(15, 2)
+  netSalary              Decimal     @default(0.00) @map("net_salary") @db.Decimal(15, 2)
+  totalAmount            Decimal     @default(0.00) @map("total_amount") @db.Decimal(15, 2)
+  paymentDate            DateTime?   @map("payment_date")
+  status                 String      @default("draft")
+  approvedBy             Int?        @map("approved_by")
+  createdBy              Int?        @map("created_by")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+  employee               Employee?   @relation(fields: [employeeId], references: [id])
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
   costCenterId           Int?        @map("cost_center_id")
 
@@ -2123,9 +2165,8 @@ model Payroll {
   @@map("payrolls")
 }
 
-
-
 model EmployeeLoan {
+  slug               String?  @unique
   id                 Int      @id @default(autoincrement())
   employeeId         Int      @map("employee_id")
   loanDate           DateTime @map("loan_date")
@@ -2149,6 +2190,7 @@ model EmployeeLoan {
 }
 
 model Timesheet {
+  slug        String?  @unique
   id          Int      @id @default(autoincrement())
   employeeId  Int      @map("employee_id")
   projectId   Int      @map("project_id")
@@ -2172,6 +2214,7 @@ model Timesheet {
 }
 
 model Journal {
+  slug            String?        @unique
   id              Int            @id @default(autoincrement())
   journalNumber   String         @unique @map("journal_number")
   transactionDate DateTime       @map("transaction_date")
@@ -2219,13 +2262,14 @@ model JournalEntry {
 }
 
 model ExpenseCategory {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
+  slug      String?     @unique
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
   label     String
-  sortOrder Int      @default(0) @map("sort_order")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  sortOrder Int         @default(0) @map("sort_order")
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
   expenses  Expense[]
   pettyCash PettyCash[]
 
@@ -2235,6 +2279,7 @@ model ExpenseCategory {
 }
 
 model Expense {
+  slug              String?          @unique
   id                Int              @id @default(autoincrement())
   documentNo        String           @unique @map("document_no")
   employeeId        Int?             @map("employee_id")
@@ -2274,27 +2319,28 @@ model Expense {
 }
 
 model PettyCash {
-  id               Int       @id @default(autoincrement())
-  documentNo       String    @unique @map("document_no")
+  slug             String?          @unique
+  id               Int              @id @default(autoincrement())
+  documentNo       String           @unique @map("document_no")
   type             String
-  amount           Decimal   @db.Decimal(15, 2)
-  balanceBefore    Decimal   @default(0.00) @map("balance_before") @db.Decimal(15, 2)
-  balanceAfter     Decimal   @default(0.00) @map("balance_after") @db.Decimal(15, 2)
+  amount           Decimal          @db.Decimal(15, 2)
+  balanceBefore    Decimal          @default(0.00) @map("balance_before") @db.Decimal(15, 2)
+  balanceAfter     Decimal          @default(0.00) @map("balance_after") @db.Decimal(15, 2)
   date             DateTime
-  transactionDate  DateTime? @map("transaction_date")
-  accountId        Int?      @map("account_id")
-  sourceAccountId  Int?      @map("source_account_id")
-  expenseAccountId Int?      @map("expense_account_id")
-  referenceNo      String?   @map("reference_no")
-  description      String?   @db.Text
+  transactionDate  DateTime?        @map("transaction_date")
+  accountId        Int?             @map("account_id")
+  sourceAccountId  Int?             @map("source_account_id")
+  expenseAccountId Int?             @map("expense_account_id")
+  referenceNo      String?          @map("reference_no")
+  description      String?          @db.Text
   // Pola Jurnal Operasional: Deskripsi · Nama Project · Vendor · Kategori.
   // Project = untuk siapa/pekerjaan apa, Vendor = dari/dibayar ke siapa.
-  projectId        Int?      @map("project_id")
-  vendorId         Int?      @map("vendor_id")
-  categoryId       Int?      @map("category_id")
-  createdBy        Int?      @map("created_by")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  projectId        Int?             @map("project_id")
+  vendorId         Int?             @map("vendor_id")
+  categoryId       Int?             @map("category_id")
+  createdBy        Int?             @map("created_by")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
   project          Project?         @relation(fields: [projectId], references: [id])
   vendor           Vendor?          @relation(fields: [vendorId], references: [id])
   category         ExpenseCategory? @relation(fields: [categoryId], references: [id])
@@ -2311,6 +2357,7 @@ model PettyCash {
 }
 
 model Budget {
+  slug         String?  @unique
   id           Int      @id @default(autoincrement())
   name         String
   accountId    Int      @map("account_id")
@@ -2330,22 +2377,23 @@ model Budget {
 }
 
 model CostCenter {
-  id             Int        @id @default(autoincrement())
-  code           String     @unique
-  name           String
-  description    String?    @db.Text
-  isActive       Boolean    @default(true) @map("is_active")
-  departmentId   Int?       @map("department_id")
-  profitCenterId Int?       @map("profit_center_id")
-  parentId       Int?       @map("parent_id")
-  parent         CostCenter?  @relation("CostCenterTree", fields: [parentId], references: [id])
-  children       CostCenter[] @relation("CostCenterTree")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
-  skfValues      SkfValue[]
-  payrolls       Payroll[]
-  materialIssues MaterialIssue[]
-  projects      Project[]
+  slug              String?                @unique
+  id                Int                    @id @default(autoincrement())
+  code              String                 @unique
+  name              String
+  description       String?                @db.Text
+  isActive          Boolean                @default(true) @map("is_active")
+  departmentId      Int?                   @map("department_id")
+  profitCenterId    Int?                   @map("profit_center_id")
+  parentId          Int?                   @map("parent_id")
+  parent            CostCenter?            @relation("CostCenterTree", fields: [parentId], references: [id])
+  children          CostCenter[]           @relation("CostCenterTree")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  skfValues         SkfValue[]
+  payrolls          Payroll[]
+  materialIssues    MaterialIssue[]
+  projects          Project[]
   allocationTargets AllocationRuleTarget[]
 
   @@index([departmentId])
@@ -2368,6 +2416,7 @@ model ProfitCenter {
 }
 
 model BankStatement {
+  slug           String?             @unique
   id             Int                 @id @default(autoincrement())
   accountId      Int                 @map("account_id")
   bankId         Int?                @map("bank_id")
@@ -2422,6 +2471,7 @@ model BankStatementLine {
 }
 
 model BankReconciliation {
+  slug                 String?                  @unique
   id                   Int                      @id @default(autoincrement())
   reconciliationNumber String?                  @unique @map("reconciliation_number")
   accountId            Int                      @map("account_id")
@@ -2483,6 +2533,7 @@ model BankReconciliationItem {
 }
 
 model Lead {
+  slug              String?        @unique
   id                Int            @id @default(autoincrement())
   leadNumber        String?        @unique @map("lead_number")
   name              String
@@ -2539,6 +2590,7 @@ model LeadActivity {
 }
 
 model CrmTicket {
+  slug            String?            @unique
   id              Int                @id @default(autoincrement())
   ticketNumber    String?            @unique @map("ticket_number")
   subject         String
@@ -2588,6 +2640,7 @@ model CrmTicketComment {
 }
 
 model AssetCategory {
+  slug                             String?  @unique
   id                               Int      @id @default(autoincrement())
   name                             String
   code                             String?
@@ -2621,6 +2674,7 @@ model AssetGroup {
 }
 
 model AssetBrand {
+  slug      String?           @unique
   id        Int               @id @default(autoincrement())
   name      String
   createdAt DateTime          @default(now()) @map("created_at")
@@ -2645,6 +2699,7 @@ model AssetBrandModel {
 }
 
 model Asset {
+  slug               String?         @unique
   id                 Int             @id @default(autoincrement())
   photo              String?         @map("photo")
   serialNumber       String?         @map("serial_number")
@@ -2702,6 +2757,7 @@ model AssetHistory {
 }
 
 model AssetTransfer {
+  slug           String?  @unique
   id             Int      @id @default(autoincrement())
   assetId        Int      @map("asset_id")
   fromLocation   String?  @map("from_location")
@@ -2724,12 +2780,13 @@ model AssetTransfer {
 }
 
 model VehicleBrand {
-  id        Int            @id @default(autoincrement())
-  name      String
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
-  products  Product[]
-  models    VehicleModel[]
+  slug         String?              @unique
+  id           Int                  @id @default(autoincrement())
+  name         String
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+  products     Product[]
+  models       VehicleModel[]
   fitmentRules VehicleFitmentRule[]
 
   @@index([createdAt])
@@ -2737,15 +2794,16 @@ model VehicleBrand {
 }
 
 model VehicleModel {
-  id                   Int                   @id @default(autoincrement())
-  vehicleBrandId       Int                   @map("vehicle_brand_id")
-  name                 String
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
-  products             Product[]
-  brand                VehicleBrand          @relation(fields: [vehicleBrandId], references: [id])
-  variants             VehicleVariant[]
-  fitmentRules         VehicleFitmentRule[]
+  slug           String?              @unique
+  id             Int                  @id @default(autoincrement())
+  vehicleBrandId Int                  @map("vehicle_brand_id")
+  name           String
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  products       Product[]
+  brand          VehicleBrand         @relation(fields: [vehicleBrandId], references: [id])
+  variants       VehicleVariant[]
+  fitmentRules   VehicleFitmentRule[]
 
   @@unique([vehicleBrandId, name], map: "vehicle_models_brand_name_unique")
   @@index([vehicleBrandId], map: "vehicle_models_vehicle_brand_id_fkey")
@@ -2754,14 +2812,14 @@ model VehicleModel {
 }
 
 model VehicleVariant {
-  id             Int          @id @default(autoincrement())
-  vehicleModelId Int          @map("vehicle_model_id")
+  id             Int                  @id @default(autoincrement())
+  vehicleModelId Int                  @map("vehicle_model_id")
   name           String
-  drivetrain     String?      @map("drivetrain")
-  transmission   String?      @map("transmission")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  model          VehicleModel @relation(fields: [vehicleModelId], references: [id])
+  drivetrain     String?              @map("drivetrain")
+  transmission   String?              @map("transmission")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  model          VehicleModel         @relation(fields: [vehicleModelId], references: [id])
   vehicles       Vehicle[]
   fitmentRules   VehicleFitmentRule[]
 
@@ -2771,6 +2829,7 @@ model VehicleVariant {
 }
 
 model Vehicle {
+  slug             String?           @unique
   id               Int               @id @default(autoincrement())
   vehicleVariantId Int               @map("vehicle_variant_id")
   name             String?
@@ -2814,6 +2873,7 @@ model CustomerVehicle {
 }
 
 model Project {
+  slug              String?           @unique
   id                Int               @id @default(autoincrement())
   documentNo        String?           @unique @map("document_no")
   name              String
@@ -2838,8 +2898,8 @@ model Project {
   timesheets        Timesheet[]
   workOrders        WorkOrder[]
   pettyCash         PettyCash[]
-  costCenter        CostCenter?   @relation(fields: [costCenterId], references: [id])
-  costCenterId      Int?          @map("cost_center_id")
+  costCenter        CostCenter?       @relation(fields: [costCenterId], references: [id])
+  costCenterId      Int?              @map("cost_center_id")
 
   @@index([customerId], map: "projects_customer_id_fkey")
   @@index([customerVehicleId], map: "projects_customer_vehicle_id_fkey")
@@ -2916,6 +2976,7 @@ model ProjectLog {
 }
 
 model ApprovalWorkflow {
+  slug        String?                @unique
   id          Int                    @id @default(autoincrement())
   name        String
   code        String?
@@ -2958,6 +3019,7 @@ model ApprovalWorkflowStep {
 }
 
 model Approval {
+  slug            String?           @unique
   id              Int               @id @default(autoincrement())
   workflowId      Int               @map("workflow_id")
   referenceType   String            @map("reference_type")
@@ -3000,14 +3062,15 @@ model ApprovalHistory {
 }
 
 model Bank {
+  slug      String?  @unique
   id        Int      @id @default(autoincrement())
   name      String
   code      String   @unique
   type      String   @default("bank")
   accountId Int?     @map("account_id")
   isActive  Boolean  @default(true) @map("is_active")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy Int?     @map("created_by")
+  updatedBy Int?     @map("updated_by")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -3017,6 +3080,7 @@ model Bank {
 }
 
 model Tax {
+  slug          String?   @unique
   id            Int       @id @default(autoincrement())
   name          String
   code          String?
@@ -3032,8 +3096,8 @@ model Tax {
   displayOrder  Int       @default(0) @map("display_order")
   isActive      Boolean   @default(true) @map("is_active")
   deletedAt     DateTime? @map("deleted_at")
-  createdBy      Int?      @map("created_by")
-  updatedBy      Int?      @map("updated_by")
+  createdBy     Int?      @map("created_by")
+  updatedBy     Int?      @map("updated_by")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -3042,11 +3106,8 @@ model Tax {
   @@map("taxes")
 }
 
-
-
-
-
 model Barcode {
+  slug      String?  @unique
   id        Int      @id @default(autoincrement())
   barcode   String   @unique
   itemId    Int      @map("item_id")
@@ -3061,6 +3122,7 @@ model Barcode {
 }
 
 model TaxGroup {
+  slug      String?       @unique
   id        Int           @id @default(autoincrement())
   name      String
   createdAt DateTime      @default(now()) @map("created_at")
@@ -3082,16 +3144,17 @@ model TaxGroupTax {
 }
 
 model StatisticalKeyFigure {
-  id        Int        @id @default(autoincrement())
-  name      String
-  code      String?
-  unit      String
-  type      String?
-  value     Decimal    @default(0.00) @db.Decimal(15, 2)
-  isActive  Boolean    @default(true) @map("is_active")
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
-  skfValues SkfValue[]
+  slug            String?          @unique
+  id              Int              @id @default(autoincrement())
+  name            String
+  code            String?
+  unit            String
+  type            String?
+  value           Decimal          @default(0.00) @db.Decimal(15, 2)
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  skfValues       SkfValue[]
   allocationRules AllocationRule[]
 
   @@index([createdAt])
@@ -3099,17 +3162,18 @@ model StatisticalKeyFigure {
 }
 
 model AllocationRule {
-  id             Int                     @id @default(autoincrement())
-  name           String
+  slug            String?                @unique
+  id              Int                    @id @default(autoincrement())
+  name            String
   sourceAccountId Int                    @map("source_account_id")
-  skfId          Int                     @map("skf_id")
-  description    String?                 @db.Text
-  isActive       Boolean                 @default(true) @map("is_active")
-  createdAt      DateTime                @default(now()) @map("created_at")
-  updatedAt      DateTime                @updatedAt @map("updated_at")
-  sourceAccount  Account                 @relation(fields: [sourceAccountId], references: [id])
-  skf            StatisticalKeyFigure    @relation(fields: [skfId], references: [id])
-  targets        AllocationRuleTarget[]
+  skfId           Int                    @map("skf_id")
+  description     String?                @db.Text
+  isActive        Boolean                @default(true) @map("is_active")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  sourceAccount   Account                @relation(fields: [sourceAccountId], references: [id])
+  skf             StatisticalKeyFigure   @relation(fields: [skfId], references: [id])
+  targets         AllocationRuleTarget[]
 
   @@index([sourceAccountId])
   @@index([skfId])
@@ -3252,8 +3316,6 @@ model UomConversion {
   @@map("uom_conversions")
 }
 
-
-
 model SkfValue {
   id                     Int                  @id @default(autoincrement())
   statisticalKeyFigureId Int                  @map("statistical_key_figure_id")
@@ -3276,6 +3338,7 @@ model SkfValue {
 }
 
 model UnitOfMeasure {
+  slug             String?  @unique
   id               Int      @id @default(autoincrement())
   name             String
   symbol           String
@@ -3292,6 +3355,7 @@ model UnitOfMeasure {
 }
 
 model Appreciation {
+  slug       String?  @unique
   id         Int      @id @default(autoincrement())
   employeeId Int      @map("employee_id")
   date       DateTime
@@ -3308,6 +3372,7 @@ model Appreciation {
 }
 
 model Task {
+  slug        String?     @unique
   id          Int         @id @default(autoincrement())
   projectId   Int         @map("project_id")
   name        String
@@ -3329,8 +3394,6 @@ model Task {
   @@map("tasks")
 }
 
-
-
 /// VEH-07 — Kompatibilitas part/BOM ke konfigurasi kendaraan.
 /// A fitment rule scopes an Item (SKU) — and optionally a specific BOM revision
 /// — to a vehicle configuration (brand/model/variant + year range + drivetrain +
@@ -3339,6 +3402,7 @@ model Task {
 /// rule; when none matches, the result is `unknown` so downstream flows can
 /// require technical verification before releasing work/components.
 model VehicleFitmentRule {
+  slug             String?         @unique
   id               Int             @id @default(autoincrement())
   itemId           Int             @map("item_id")
   bomRevisionId    Int?            @map("bom_revision_id")

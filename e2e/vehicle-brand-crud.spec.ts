@@ -33,11 +33,9 @@ test.describe("Kendaraan Merek CRUD", () => {
     const detailLink = page.locator(`a[href^="/kendaraan/merek/"]`).filter({ hasText: name }).first()
     await expect(detailLink).toBeVisible({ timeout: 30000 })
     const href = await detailLink.getAttribute("href")
-    const idMatch = href?.match(/\/kendaraan\/merek\/(\d+)/)
-    if (!idMatch) throw new Error("Could not parse brand ID from detail link")
-    const id = idMatch[1]
+    if (!href) throw new Error("Could not resolve brand detail href")
 
-    await page.goto(`/kendaraan/merek/${id}/ubah`, { waitUntil: "domcontentloaded" })
+    await page.goto(`${href}/ubah`, { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
     await page.locator("input[name='name']").first().fill(updated)
     await expect(page.locator("input[name='name']").first()).toHaveValue(updated)

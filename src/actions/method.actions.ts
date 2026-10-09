@@ -14,6 +14,7 @@ import {
   createShippingMethodSchema,
   updateShippingMethodSchema,
 } from "@/lib/validations/method.schemas"
+import { nextSlug } from "@/lib/utils/slug-db"
 
 // ==================== PAYMENT METHOD ====================
 
@@ -33,12 +34,13 @@ export async function createPaymentMethod(formData: FormData) {
       data: {
         code,
         name: parsed.data.name,
+        slug: await nextSlug("paymentMethod", parsed.data.name),
         isActive: parsed.data.isActive ?? false,
       },
     })
     await logActivity("create", "PaymentMethod", row.id, "Membuat metode pembayaran")
     revalidatePath("/master/metode-pembayaran")
-    return { success: true, id: row.id }
+    return { success: true, id: row.id, slug: row.slug }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createPaymentMethod]", getErrorMessage(e) || e)
@@ -58,6 +60,7 @@ export async function updatePaymentMethod(id: number, formData: FormData) {
       data: {
         code: parsed.data.code,
         name: parsed.data.name,
+        slug: await nextSlug("paymentMethod", parsed.data.name, { excludeId: id }),
         isActive: parsed.data.isActive ?? false,
       },
     })
@@ -103,12 +106,13 @@ export async function createShippingMethod(formData: FormData) {
       data: {
         code,
         name: parsed.data.name,
+        slug: await nextSlug("shippingMethod", parsed.data.name),
         isActive: parsed.data.isActive ?? false,
       },
     })
     await logActivity("create", "ShippingMethod", row.id, "Membuat metode pengiriman")
     revalidatePath("/master/metode-pengiriman")
-    return { success: true, id: row.id }
+    return { success: true, id: row.id, slug: row.slug }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createShippingMethod]", getErrorMessage(e) || e)
@@ -128,6 +132,7 @@ export async function updateShippingMethod(id: number, formData: FormData) {
       data: {
         code: parsed.data.code,
         name: parsed.data.name,
+        slug: await nextSlug("shippingMethod", parsed.data.name, { excludeId: id }),
         isActive: parsed.data.isActive ?? false,
       },
     })

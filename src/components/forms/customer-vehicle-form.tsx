@@ -45,15 +45,22 @@ interface VehicleData {
 }
 
 interface CustomerVehicleFormProps {
-  customerId: number;
+  /** Pinned owner. When omitted, a customer picker is shown instead. */
+  customerId?: number;
   brands: Brand[];
+  customers?: { id: number; name: string }[];
   vehicle?: VehicleData;
+  /** Where to navigate after a successful save. Defaults to the pinned
+   * customer's vehicle list (or the registry when adding without a pin). */
+  redirectTo?: string;
 }
 
 export function CustomerVehicleForm({
   customerId,
   brands,
+  customers,
   vehicle,
+  redirectTo,
 }: CustomerVehicleFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -67,7 +74,13 @@ export function CustomerVehicleForm({
   const [selectedVariantId, setSelectedVariantId] = useState<number | null>(
     vehicle?.variantId || null,
   );
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(
+    customerId ?? null,
+  );
   const [isActive, setIsActive] = useState(vehicle?.isActive ?? true);
+
+  // A picker is shown only when the owner is not pinned (standalone "add" flow).
+  const showCustomerPicker = customerId == null;
 
   const models = useMemo(() => {
     if (!selectedBrandId) return [];
@@ -87,7 +100,13 @@ export function CustomerVehicleForm({
       try {
         const form = e.currentTarget;
         const formData = new FormData(form);
-        formData.set("customerId", String(customerId));
+
+        const ownerId = customerId ?? selectedCustomerId;
+        if (!ownerId) {
+          showError("Pilih pelanggan terlebih dahulu");
+          return;
+        }
+        formData.set("customerId", String(ownerId));
         formData.set("isActive", isActive ? "true" : "false");
 
         if (!selectedVariantId) {
@@ -109,7 +128,7 @@ export function CustomerVehicleForm({
             ? "Kendaraan berhasil diperbarui"
             : "Kendaraan berhasil ditambahkan",
         );
-        router.push(`/master/pelanggan/${customerId}/kendaraan`);
+        router.push(redirectTo ?? `/master/pelanggan/${ownerId}/kendaraan`);
         router.refresh();
       } catch (error) {
         showError(
@@ -122,6 +141,23 @@ export function CustomerVehicleForm({
   return (
     <form onSubmit={handleSubmit}>
       <FormCard>
+        {showCustomerPicker && (
+          <FormSection title="Pemilik">
+            <div className="flex flex-col gap-1.5">
+              <Label>Pelanggan *</Label>
+              <Combobox
+                id="customerId"
+                value={selectedCustomerId ? String(selectedCustomerId) : null}
+                onChange={(key) => setSelectedCustomerId(key ? Number(key) : null)}
+                placeholder="Cari pelanggan..."
+                options={(customers ?? []).map((c) => ({
+                  value: String(c.id),
+                  label: c.name,
+                }))}
+              />
+            </div>
+          </FormSection>
+        )}
         <FormSection title="Informasi Kendaraan">
           <div className="flex flex-col gap-1.5">
             <Label>Merek Kendaraan *</Label>

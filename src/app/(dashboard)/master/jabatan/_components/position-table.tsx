@@ -6,10 +6,12 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePosition } from "@/actions/master.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Position {
   id: number
   name: string
+  slug: string | null
   department: { name: string } | null
 }
 
@@ -19,7 +21,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/jabatan/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/master/jabatan", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -35,7 +37,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        editHref={`/master/jabatan/${info.row.original.id}/ubah`}
+        editHref={entityEditHref("/master/jabatan", info.row.original)}
         deleteAction={deletePosition}
         deleteId={info.row.original.id}
         editPermission="edit_positions"

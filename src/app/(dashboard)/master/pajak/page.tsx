@@ -45,6 +45,7 @@ export default async function TaxesPage({
 
   const taxes = rawTaxes.map((t) => ({
     id: t.id,
+    slug: t.slug,
     name: t.name,
     rate: Number(t.rate),
   }))

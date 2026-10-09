@@ -31,6 +31,7 @@ import {
 } from "@/lib/validations/crm.schemas";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
+import { nextSlug } from "@/lib/utils/slug-db";
 
 /**
  * Privilege-escalation guard for Employee → User creation/sync flows.
@@ -152,6 +153,7 @@ export async function createCustomer(formData: FormData) {
     const customer = await prisma.customer.create({
       data: {
         name: v.name,
+        slug: await nextSlug("customer", v.name),
         email: v.email ?? null,
         phone: v.phone ?? null,
         address: v.address ?? null,
@@ -173,7 +175,7 @@ export async function createCustomer(formData: FormData) {
 
     revalidatePath("/master/pelanggan");
     await logActivity("create", "Customer", customer.id, "Membuat pelanggan");
-    return { success: true, id: customer.id };
+    return { success: true, id: customer.id, slug: customer.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createCustomer]", getErrorMessage(e) || e);
@@ -193,6 +195,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       where: { id: customerId },
       data: {
         name: v.name,
+        slug: await nextSlug("customer", v.name, { excludeId: customerId }),
         email: v.email ?? null,
         phone: v.phone ?? null,
         address: v.address ?? null,
@@ -267,6 +270,7 @@ export async function createVendor(formData: FormData) {
     const vendor = await prisma.vendor.create({
       data: {
         name: v.name,
+        slug: await nextSlug("vendor", v.name),
         code,
         email: v.email ?? null,
         phone: v.phone ?? null,
@@ -290,7 +294,7 @@ export async function createVendor(formData: FormData) {
 
     revalidatePath("/master/vendor");
     await logActivity("create", "Vendor", vendor.id, "Membuat vendor");
-    return { success: true, id: vendor.id };
+    return { success: true, id: vendor.id, slug: vendor.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createVendor]", getErrorMessage(e) || e);
@@ -310,6 +314,7 @@ export async function updateVendor(vendorId: number, formData: FormData) {
       where: { id: vendorId },
       data: {
         name: v.name,
+        slug: await nextSlug("vendor", v.name, { excludeId: vendorId }),
         email: v.email ?? null,
         phone: v.phone ?? null,
         address: v.address ?? null,
@@ -388,6 +393,7 @@ export async function createItem(formData: FormData) {
         data: {
           sku,
           name: v.name,
+          slug: await nextSlug("item", v.name),
           description: v.description ?? null,
           image: v.image ?? null,
           categoryId: v.categoryId ?? null,
@@ -433,7 +439,7 @@ export async function createItem(formData: FormData) {
 
     revalidatePath("/master/barang");
     await logActivity("create", "Item", item.id, "Membuat barang");
-    return { success: true, id: item.id };
+    return { success: true, id: item.id, slug: item.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createItem]", getErrorMessage(e) || e);
@@ -472,6 +478,7 @@ export async function updateItem(itemId: number, formData: FormData) {
         data: {
           sku: v.sku || undefined,
           name: v.name,
+          slug: await nextSlug("item", v.name, { excludeId: itemId }),
           description: v.description ?? null,
           image: v.image ?? null,
           categoryId: v.categoryId ?? null,
@@ -577,6 +584,7 @@ export async function createWarehouse(formData: FormData) {
     const warehouse = await prisma.warehouse.create({
       data: {
         name: v.name,
+        slug: await nextSlug("warehouse", v.name),
         code,
         address: v.address ?? null,
         isActive: true,
@@ -585,7 +593,7 @@ export async function createWarehouse(formData: FormData) {
 
     revalidatePath("/master/gudang");
     await logActivity("create", "Warehouse", warehouse.id, "Membuat gudang");
-    return { success: true, id: warehouse.id };
+    return { success: true, id: warehouse.id, slug: warehouse.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createWarehouse]", getErrorMessage(e) || e);
@@ -605,6 +613,7 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
       where: { id: warehouseId },
       data: {
         name: v.name,
+        slug: await nextSlug("warehouse", v.name, { excludeId: warehouseId }),
         code: v.code ?? "",
         address: v.address ?? null,
       },
@@ -727,10 +736,19 @@ export async function createEmployee(formData: FormData) {
           },
         });
         return tx.employee.create({
-          data: { ...employeeData, userId: user.id },
+          data: {
+            ...employeeData,
+            userId: user.id,
+            slug: await nextSlug("employee", employeeData.name),
+          },
         });
       }
-      return tx.employee.create({ data: employeeData });
+      return tx.employee.create({
+        data: {
+          ...employeeData,
+          slug: await nextSlug("employee", employeeData.name),
+        },
+      });
     });
 
     revalidatePath("/master/karyawan");
@@ -740,7 +758,7 @@ export async function createEmployee(formData: FormData) {
       employee.id,
       wantsLogin ? "Membuat karyawan + akun login" : "Membuat karyawan",
     );
-    return { success: true, id: employee.id };
+    return { success: true, id: employee.id, slug: employee.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createEmployee]", getErrorMessage(e) || e);
@@ -849,6 +867,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
 
     const updateData = {
       name: requireString(formData.get("name"), "name"),
+      slug: await nextSlug("employee", requireString(formData.get("name"), "name"), { excludeId: employeeId }),
       email: email,
       phone: formData.get("phone") as string | null,
       gender: (formData.get("gender") as string | null) || null,
@@ -951,6 +970,7 @@ export async function createAccount(formData: FormData) {
       data: {
         code,
         name: v.name,
+        slug: await nextSlug("account", v.name),
         type: v.type,
         parentId: v.parentId ?? null,
         description: v.description ?? null,
@@ -961,7 +981,7 @@ export async function createAccount(formData: FormData) {
 
     revalidatePath("/master/akun");
     await logActivity("create", "Account", account.id, "Membuat akun");
-    return { success: true, id: account.id };
+    return { success: true, id: account.id, slug: account.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createAccount]", getErrorMessage(e) || e);
@@ -978,6 +998,7 @@ export async function createItemCategory(formData: FormData) {
     const category = await prisma.itemCategory.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("itemCategory", requireString(formData.get("name"), "name")),
         description: formData.get("description") as string | null,
         parentId: safeNumber(formData.get("parentId")),
         costingMethod: (formData.get("costingMethod") as string) || "average",
@@ -992,7 +1013,7 @@ export async function createItemCategory(formData: FormData) {
       category.id,
       "Membuat kategori barang",
     );
-    return { success: true, id: category.id };
+    return { success: true, id: category.id, slug: category.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createItemCategory]", getErrorMessage(e) || e);
@@ -1014,6 +1035,11 @@ export async function updateItemCategory(id: number, formData: FormData) {
     // "average" on every save — silently changing HPP valuation for its items.
     const data: Record<string, unknown> = {
       name: requireString(formData.get("name"), "name"),
+      slug: await nextSlug(
+        "itemCategory",
+        requireString(formData.get("name"), "name"),
+        { excludeId: id },
+      ),
       description: formData.get("description") as string | null,
     };
     if (formData.has("parentId")) {
@@ -1060,6 +1086,7 @@ export async function createDepartment(formData: FormData) {
     const department = await prisma.department.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("department", requireString(formData.get("name"), "name")),
         code,
         description: formData.get("description") as string | null,
       },
@@ -1072,7 +1099,7 @@ export async function createDepartment(formData: FormData) {
       department.id,
       "Membuat departemen",
     );
-    return { success: true, id: department.id };
+    return { success: true, id: department.id, slug: department.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createDepartment]", getErrorMessage(e) || e);
@@ -1088,6 +1115,7 @@ export async function updateDepartment(id: number, formData: FormData) {
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("department", requireString(formData.get("name"), "name"), { excludeId: id }),
         code: formData.get("code") as string | null,
         description: formData.get("description") as string | null,
       },
@@ -1121,6 +1149,7 @@ export async function createPosition(formData: FormData) {
         const position = await prisma.position.create({
           data: {
             name: requireString(formData.get("name"), "name"),
+            slug: await nextSlug("position", requireString(formData.get("name"), "name")),
             code,
             departmentId: safeId(formData.get("departmentId")),
             description: (formData.get("description") as string) || null,
@@ -1129,7 +1158,7 @@ export async function createPosition(formData: FormData) {
 
         revalidatePath("/master/karyawan");
         await logActivity("create", "Position", position.id, "Membuat jabatan");
-        return { success: true, id: position.id };
+        return { success: true, id: position.id, slug: position.slug };
       } catch (createErr: unknown) {
         const err = createErr as {
           code?: string;
@@ -1165,6 +1194,7 @@ export async function updatePosition(id: number, formData: FormData) {
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("position", requireString(formData.get("name"), "name"), { excludeId: id }),
         departmentId: safeId(formData.get("departmentId")),
         description: (formData.get("description") as string) || null,
       },
@@ -1310,6 +1340,7 @@ export async function createBank(formData: FormData) {
     const bank = await prisma.bank.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("bank", requireString(formData.get("name"), "name")),
         code: formData.get("code") as string,
         accountId: safeId(formData.get("accountId")),
         type: (formData.get("type") as string) || "bank",
@@ -1320,7 +1351,7 @@ export async function createBank(formData: FormData) {
 
     revalidatePath("/master/bank");
     await logActivity("create", "Bank", bank.id, "Membuat bank");
-    return { success: true, id: bank.id };
+    return { success: true, id: bank.id, slug: bank.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createBank]", getErrorMessage(e) || e);
@@ -1336,6 +1367,7 @@ export async function updateBank(id: number, formData: FormData) {
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("bank", requireString(formData.get("name"), "name"), { excludeId: id }),
         code: formData.get("code") as string,
         accountId: safeId(formData.get("accountId")),
         type: (formData.get("type") as string) || "bank",
@@ -1367,6 +1399,7 @@ export async function createTax(formData: FormData) {
     const tax = await prisma.tax.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("tax", requireString(formData.get("name"), "name")),
         rate: clampTaxRate(safeNumber(formData.get("rate")) ?? 0),
         code: (formData.get("code") as string) || undefined,
         description: (formData.get("description") as string) || undefined,
@@ -1389,7 +1422,7 @@ export async function createTax(formData: FormData) {
     await logActivity("create", "Tax", tax.id, "Membuat pajak");
     // Quick-add from another form must stay on its own page; only the
     // full-page create form navigates back to the list afterwards.
-    if (formData.get("__quickAdd") === "1") return { success: true, id: tax.id };
+    if (formData.get("__quickAdd") === "1") return { success: true, id: tax.id, slug: tax.slug };
     redirect("/master/pajak");
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -1410,6 +1443,7 @@ export async function updateTax(id: number, formData: FormData) {
     // parentId preservation fixes.
     const data: Prisma.TaxUpdateInput = {
       name: requireString(formData.get("name"), "name"),
+      slug: await nextSlug("tax", requireString(formData.get("name"), "name"), { excludeId: id }),
       rate: clampTaxRate(safeNumber(formData.get("rate")) ?? 0),
       code: (formData.get("code") as string) || undefined,
       description: (formData.get("description") as string) || undefined,
@@ -1490,6 +1524,7 @@ export async function createBarcode(formData: FormData) {
     const barcodeEntry = await prisma.barcode.create({
       data: {
         barcode: requireString(formData.get("barcode"), "barcode"),
+        slug: await nextSlug("barcode", requireString(formData.get("barcode"), "barcode")),
         itemId: requireNumber(formData.get("itemId"), "itemId"),
         type: (formData.get("type") as string) || "EAN13",
       },
@@ -1497,7 +1532,7 @@ export async function createBarcode(formData: FormData) {
 
     revalidatePath("/master/barcode");
     await logActivity("create", "Barcode", barcodeEntry.id, "Membuat barcode");
-    return { success: true, id: barcodeEntry.id };
+    return { success: true, id: barcodeEntry.id, slug: barcodeEntry.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createBarcode]", getErrorMessage(e) || e);
@@ -1512,6 +1547,7 @@ export async function updateBarcode(id: number, formData: FormData) {
       where: { id },
       data: {
         barcode: requireString(formData.get("barcode"), "barcode"),
+        slug: await nextSlug("barcode", requireString(formData.get("barcode"), "barcode"), { excludeId: id }),
         itemId: requireNumber(formData.get("itemId"), "itemId"),
         type: (formData.get("type") as string) || "EAN13",
       },
@@ -1538,6 +1574,7 @@ export async function createTaxGroup(formData: FormData) {
     const taxGroup = await prisma.taxGroup.create({
       data: {
         name,
+        slug: await nextSlug("taxGroup", name),
         taxes: {
           create: taxIds.map((taxId) => ({ taxId })),
         },
@@ -1551,7 +1588,7 @@ export async function createTaxGroup(formData: FormData) {
       taxGroup.id,
       "Membuat kelompok pajak",
     );
-    return { success: true, id: taxGroup.id };
+    return { success: true, id: taxGroup.id, slug: taxGroup.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createTaxGroup]", getErrorMessage(e) || e);
@@ -1570,6 +1607,7 @@ export async function updateTaxGroup(id: number, formData: FormData) {
         where: { id },
         data: {
           name,
+          slug: await nextSlug("taxGroup", name, { excludeId: id }),
           taxes: { create: taxIds.map((taxId) => ({ taxId })) },
         },
       }),
@@ -1656,6 +1694,7 @@ export async function createPaymentTerm(formData: FormData) {
     const paymentTerm = await prisma.paymentTerm.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("paymentTerm", requireString(formData.get("name"), "name")),
         code: formData.get("code") as string,
         days: safeNumber(formData.get("days")) ?? 0,
         isActive: true,
@@ -1670,7 +1709,7 @@ export async function createPaymentTerm(formData: FormData) {
       paymentTerm.id,
       "Membuat syarat pembayaran",
     );
-    return { success: true, id: paymentTerm.id };
+    return { success: true, id: paymentTerm.id, slug: paymentTerm.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createPaymentTerm]", getErrorMessage(e) || e);
@@ -1686,6 +1725,7 @@ export async function updatePaymentTerm(id: number, formData: FormData) {
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("paymentTerm", requireString(formData.get("name"), "name"), { excludeId: id }),
         code: formData.get("code") as string,
         days: safeNumber(formData.get("days")) ?? 0,
       },
@@ -2103,6 +2143,7 @@ export async function updateAccount(id: number, formData: FormData) {
       data: {
         code: finalCode,
         name: v.name,
+        slug: await nextSlug("account", v.name, { excludeId: id }),
         type: v.type,
         parentId: v.parentId ?? null,
         description: v.description ?? null,
@@ -2135,6 +2176,7 @@ export async function createBrand(formData: FormData) {
     const brand = await prisma.brand.create({
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("brand", requireString(formData.get("name"), "name")),
         description: (formData.get("description") as string) || null,
         categories: categoryIds.length > 0
           ? { connect: categoryIds.map((id) => ({ id })) }
@@ -2147,7 +2189,7 @@ export async function createBrand(formData: FormData) {
     await logActivity("create", "Brand", brand.id, "Membuat merek");
     // Quick-add from another form must stay on its own page; only the
     // full-page create form navigates back to the list afterwards.
-    if (formData.get("__quickAdd") === "1") return { success: true, id: brand.id };
+    if (formData.get("__quickAdd") === "1") return { success: true, id: brand.id, slug: brand.slug };
     redirect("/master/merek");
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
@@ -2172,6 +2214,7 @@ export async function updateBrand(id: number, formData: FormData) {
       where: { id },
       data: {
         name: requireString(formData.get("name"), "name"),
+        slug: await nextSlug("brand", requireString(formData.get("name"), "name"), { excludeId: id }),
         description: (formData.get("description") as string) || null,
         // `set` replaces all existing relations with the new list
         categories: { set: categoryIds.map((cid) => ({ id: cid })) },
@@ -2218,11 +2261,16 @@ export async function createUom(formData: FormData) {
     if (!symbol) return { success: false, error: "Simbol wajib diisi" };
 
     const uom = await prisma.unitOfMeasure.create({
-      data: { name, symbol, isActive: true },
+      data: {
+        name,
+        slug: await nextSlug("unitOfMeasure", name),
+        symbol,
+        isActive: true,
+      },
     });
     await logActivity("create", "UnitOfMeasure", uom.id, "Membuat satuan");
     revalidatePath("/master/satuan");
-    return { success: true, id: uom.id };
+    return { success: true, id: uom.id, slug: uom.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createUom]", getErrorMessage(e) || e);
@@ -2240,7 +2288,11 @@ export async function updateUom(id: number, formData: FormData) {
 
     await prisma.unitOfMeasure.update({
       where: { id },
-      data: { name, symbol },
+      data: {
+        name,
+        slug: await nextSlug("unitOfMeasure", name, { excludeId: id }),
+        symbol,
+      },
     });
     await logActivity("update", "UnitOfMeasure", id, "Memperbarui satuan");
     revalidatePath("/master/satuan");
@@ -2303,6 +2355,7 @@ export async function createCustomerCategory(formData: FormData) {
     const category = await prisma.customerCategory.create({
       data: {
         name: v.name,
+        slug: await nextSlug("customerCategory", v.name),
         downPaymentPercent: v.downPaymentPercent ?? 0,
         isActive: true,
       },
@@ -2310,7 +2363,7 @@ export async function createCustomerCategory(formData: FormData) {
 
     revalidatePath("/master/kategori-pelanggan");
     await logActivity("create", "CustomerCategory", category.id, "Membuat kategori pelanggan");
-    return { success: true, id: category.id };
+    return { success: true, id: category.id, slug: category.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createCustomerCategory]", getErrorMessage(e) || e);
@@ -2330,6 +2383,7 @@ export async function updateCustomerCategory(id: number, formData: FormData) {
       where: { id },
       data: {
         name: v.name,
+        slug: await nextSlug("customerCategory", v.name, { excludeId: id }),
         downPaymentPercent: v.downPaymentPercent ?? 0,
       },
     });

@@ -6,11 +6,13 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePaymentMethod } from "@/actions/method.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityEditHref } from "@/lib/utils/entity-url"
 
 interface PaymentMethod {
   id: number
   code: string
   name: string
+  slug: string | null
   isActive: boolean
 }
 
@@ -20,7 +22,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/master/metode-pembayaran/${info.row.original.id}/ubah`} className="text-foreground hover:underline font-medium">
+      <Link href={entityEditHref("/master/metode-pembayaran", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -43,7 +45,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        editHref={`/master/metode-pembayaran/${info.row.original.id}/ubah`}
+        editHref={entityEditHref("/master/metode-pembayaran", info.row.original)}
         deleteAction={deletePaymentMethod}
         deleteId={info.row.original.id}
         editPermission="edit_payment_methods"
