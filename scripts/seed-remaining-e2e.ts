@@ -253,6 +253,41 @@ async function main() {
   assert(expenseJournal?.entries.length === 2, "Expense journal tidak lengkap");
   console.log(`5. Expense: ${expense.documentNo} ✓ (approval journal created)`);
 
+  // 6. Released QC checklist. /produksi/qc/inspeksi/tambah renders the form only
+  // when a released checklist exists, otherwise it shows a "belum ada checklist"
+  // empty state. e2e/crud-surface.spec.ts auto-discovers every */tambah route and
+  // asserts a visible form, so without this fixture that page fails in every
+  // environment (no other seed creates a checklist). Upsert on the unique code
+  // keeps re-runs safe.
+  const checklist = await prisma.qcChecklist.upsert({
+    where: { code: "E2E-QC-01" },
+    update: { status: "released", isActive: true, releasedAt: new Date("2026-05-28") },
+    create: {
+      code: "E2E-QC-01",
+      name: "E2E Checklist Inspeksi",
+      checklistType: "incoming",
+      status: "released",
+      isActive: true,
+      releasedAt: new Date("2026-05-28"),
+      releasedBy: userId,
+      createdBy: userId,
+    },
+  });
+  // Items have no natural key, so create them only on first run (the upsert
+  // above touches just the parent row).
+  const existingItems = await prisma.qcChecklistItem.count({ where: { checklistId: checklist.id } });
+  if (existingItems === 0) {
+    await prisma.qcChecklistItem.createMany({
+      data: [
+        { checklistId: checklist.id, sortOrder: 1, itemName: "Pemeriksaan visual", method: "visual", isRequired: true },
+        { checklistId: checklist.id, sortOrder: 2, itemName: "Ukuran dimensi", method: "measurement", spec: "±0.5mm", isRequired: true },
+      ],
+    });
+  }
+  const checklistItems = await prisma.qcChecklistItem.count({ where: { checklistId: checklist.id } });
+  assert(checklistItems >= 1, "QC checklist items tidak tersimpan");
+  console.log(`6. QC Checklist: ${checklist.code} ✓ (${checklistItems} item, released)`);
+
   console.log("\n=== REMAINING CORE FLOWS E2E COMPLETE ===");
 }
 
