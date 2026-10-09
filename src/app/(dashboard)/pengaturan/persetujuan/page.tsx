@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
@@ -14,11 +15,12 @@ export const metadata: Metadata = { title: "Persetujuan" }
 export default async function ApprovalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>
+  searchParams: Promise<{ status?: string; halaman?: string; pageSize?: string }>
 }) {
   // This list spans approvals from every module and exposes request metadata.
   await requirePermission("approve_workflows")
   const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
 
   const where = {
@@ -29,8 +31,11 @@ export default async function ApprovalsPage({
     where,
     include: { workflow: true },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take,
+    skip: (page - 1) * pageSize,
   })
+
+  const total = await prisma.approval.count({ where })
 
   const data = approvals.map((a) => ({
     id: a.id,
@@ -66,7 +71,7 @@ export default async function ApprovalsPage({
         <h1 className="text-2xl font-bold text-foreground">Alur Persetujuan</h1>
       </div>
 
-      <ApprovalTable data={data} filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>} />
+      <ApprovalTable data={data} total={total} page={page} pageSize={pageSize} filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>} />
     </div>
   )
 }

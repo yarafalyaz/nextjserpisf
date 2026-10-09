@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { WorkflowTable } from "./_components/workflow-table"
@@ -10,12 +11,23 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Workflow" }
 
-export default async function WorkflowPage() {
+export default async function WorkflowPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+}) {
   await requirePermission("manage_settings")
 
+  const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
+
+  const where = { deletedAt: null }
+
   const workflows = await prisma.approvalWorkflow.findMany({
-    where: { deletedAt: null },
+    where,
     orderBy: { name: "asc" },
+    take,
+    skip: (page - 1) * pageSize,
     select: {
       id: true,
       name: true,
@@ -24,6 +36,8 @@ export default async function WorkflowPage() {
       _count: { select: { steps: true } },
     },
   })
+
+  const total = await prisma.approvalWorkflow.count({ where })
 
   const data = workflows.map((wf) => ({
     id: wf.id,
@@ -50,7 +64,7 @@ export default async function WorkflowPage() {
         </Link>
       </div>
 
-      <WorkflowTable data={data} />
+      <WorkflowTable data={data} total={total} page={page} pageSize={pageSize} />
     </div>
   )
 }

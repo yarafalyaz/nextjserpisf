@@ -73,13 +73,13 @@ const columns = [
   }),
 ]
 
-export function WorkflowTable({ data }: { data: WorkflowRow[] }) {
+export function WorkflowTable({ data, total, page, pageSize }: { data: WorkflowRow[]; total: number; page: number; pageSize: number }) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar alur persetujuan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={false}
       searchColumn="name"
       searchPlaceholder="Cari nama workflow..."

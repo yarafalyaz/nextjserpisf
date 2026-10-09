@@ -49,15 +49,18 @@ const columns = [
 
 interface VehicleBrandTableProps {
   data: VehicleBrandData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function VehicleBrandTable({ data }: VehicleBrandTableProps) {
+export function VehicleBrandTable({ data, total, page, pageSize }: VehicleBrandTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar merek kendaraan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari merek..."

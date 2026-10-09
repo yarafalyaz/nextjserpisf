@@ -65,16 +65,19 @@ const columns = [
 
 interface ApprovalTableProps {
   data: ApprovalData[]
+  total: number
+  page: number
+  pageSize: number
   filters?: React.ReactNode
 }
 
-export function ApprovalTable({ data, filters }: ApprovalTableProps) {
+export function ApprovalTable({ data, total, page, pageSize, filters }: ApprovalTableProps) {
   return (
     <DataTable
       data={data}
       columns={columns}
       ariaLabel="Daftar persetujuan"
-      pageSize={20}
+      serverPagination={{ total, page, pageSize }}
       filters={filters}
       onBulkDelete={(ids) => bulkDelete("approval", ids)}
     />

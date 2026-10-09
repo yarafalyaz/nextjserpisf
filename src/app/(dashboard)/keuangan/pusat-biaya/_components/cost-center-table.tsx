@@ -68,16 +68,19 @@ function flattenTree(nodes: CostCenterData[], depth = 0): CostCenterData[] {
 
 interface CostCenterTableProps {
   data: CostCenterData[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function CostCenterTable({ data }: CostCenterTableProps) {
+export function CostCenterTable({ data, total, page, pageSize }: CostCenterTableProps) {
   const flatData = flattenTree(data)
   return (
     <DataTable
       data={flatData}
       columns={columns}
       ariaLabel="Daftar cost center"
-      pageSize={50}
+      serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"
       searchPlaceholder="Cari kode atau nama..."
