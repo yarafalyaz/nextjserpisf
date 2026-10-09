@@ -5,9 +5,11 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import { QcChecklistActions } from "./qc-checklist-actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 export interface QcChecklistRow {
   id: number
+  slug: string | null
   code: string | null
   name: string
   checklistType: string
@@ -30,7 +32,7 @@ const columns = [
     header: "Nama",
     cell: (info) => (
       <Link
-        href={`/produksi/qc/checklist/${info.row.original.id}`}
+        href={entityHref("/produksi/qc/checklist", info.row.original)}
         className="text-foreground hover:underline font-medium"
       >
         {info.getValue()}

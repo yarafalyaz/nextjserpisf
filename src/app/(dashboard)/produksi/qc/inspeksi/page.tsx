@@ -33,6 +33,7 @@ export default async function QcInspectionsPage({
     select: {
       id: true,
       documentNo: true,
+      slug: true,
       inspectionType: true,
       referenceType: true,
       referenceId: true,
@@ -50,6 +51,7 @@ export default async function QcInspectionsPage({
   const tableData = inspections.map((i) => ({
     id: i.id,
     documentNo: i.documentNo,
+    slug: i.slug,
     inspectionType: i.inspectionType,
     referenceType: i.referenceType,
     referenceId: i.referenceId,

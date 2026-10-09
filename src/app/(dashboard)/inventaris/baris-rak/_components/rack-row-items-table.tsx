@@ -3,11 +3,13 @@
 import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface RowItem {
   id: number
   sku: string
   name: string
+  slug: string | null
   unitOfMeasure: string
   rackRowQty: number
   qtyOnHand: number
@@ -25,7 +27,7 @@ const columns = [
     // The item name (linked) is the card's headline; the SKU becomes a detail line.
     meta: { mobilePrimary: true },
     cell: (info) => (
-      <Link href={`/master/barang/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/master/barang", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),

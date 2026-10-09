@@ -8,10 +8,12 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { deleteWorkOrder } from "@/actions/manufacturing.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface WorkOrder {
   id: number
   documentNo: string
+  slug: string | null
   status: string
   customer: { name: string }
   date: Date | string
@@ -23,7 +25,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. WO",
     cell: (info) => (
-      <Link href={`/produksi/perintah-kerja/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/produksi/perintah-kerja", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -49,7 +51,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/produksi/perintah-kerja/${info.row.original.id}`}
+        viewHref={entityHref("/produksi/perintah-kerja", info.row.original)}
         deleteAction={deleteWorkOrder}
         deleteId={info.row.original.id}
         editPermission="edit_work_orders"

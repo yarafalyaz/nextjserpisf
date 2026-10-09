@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteRack } from "@/actions/inventory.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Warehouse {
   name: string
@@ -18,6 +19,7 @@ interface RackRow {
 interface Rack {
   id: number
   name: string
+  slug: string | null
   warehouse: Warehouse
   rows: RackRow[]
 }
@@ -28,7 +30,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/inventaris/rak/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/inventaris/rak", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -47,8 +49,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/inventaris/rak/${info.row.original.id}`}
-        editHref={`/inventaris/rak/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/inventaris/rak", info.row.original)}
+        editHref={entityEditHref("/inventaris/rak", info.row.original)}
         deleteAction={deleteRack}
         deleteId={info.row.original.id}
       />

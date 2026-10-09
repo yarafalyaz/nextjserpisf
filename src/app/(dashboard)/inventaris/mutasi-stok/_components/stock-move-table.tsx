@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate, formatReferenceType } from "@/lib/utils/format"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface Item {
   name: string
@@ -18,6 +19,7 @@ interface Warehouse {
 interface StockMove {
   id: number
   documentNo: string
+  slug: string | null
   createdAt: Date | string
   item: Item
   warehouse: Warehouse | null
@@ -33,7 +35,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/inventaris/mutasi-stok/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/inventaris/mutasi-stok", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -79,7 +81,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/inventaris/mutasi-stok/${info.row.original.id}`}
+        viewHref={entityHref("/inventaris/mutasi-stok", info.row.original)}
       />
     ),
   }),

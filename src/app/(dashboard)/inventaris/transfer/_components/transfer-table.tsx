@@ -8,6 +8,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { deleteInventoryTransfer } from "@/actions/inventory.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface Warehouse {
   name: string
@@ -16,6 +17,7 @@ interface Warehouse {
 interface InventoryTransfer {
   id: number
   documentNo: string
+  slug: string | null
   sourceWarehouse: Warehouse
   destinationWarehouse: Warehouse
   date: string | Date
@@ -28,7 +30,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/inventaris/transfer/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/inventaris/transfer", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -58,7 +60,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/inventaris/transfer/${info.row.original.id}`}
+        viewHref={entityHref("/inventaris/transfer", info.row.original)}
         deleteAction={deleteInventoryTransfer}
         deleteId={info.row.original.id}
         editPermission="edit_inventory_transfers"

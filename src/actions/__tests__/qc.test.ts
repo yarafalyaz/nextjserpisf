@@ -51,12 +51,17 @@ vi.mock("@/lib/db/prisma", () => {
       create: (...a: unknown[]) => qcChecklistCreateMock(...a),
       updateMany: (...a: unknown[]) => qcChecklistUpdateManyMock(...a),
       delete: (...a: unknown[]) => qcChecklistDeleteMock(...a),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
-    qcInspection: { create: (...a: unknown[]) => qcInspectionCreateMock(...a) },
+    qcInspection: {
+      create: (...a: unknown[]) => qcInspectionCreateMock(...a),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     nonconformance: {
       findUnique: (...a: unknown[]) => nonconformanceFindUniqueMock(...a),
       create: (...a: unknown[]) => nonconformanceCreateMock(...a),
       update: (...a: unknown[]) => nonconformanceUpdateMock(...a),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     workOrder: {
       findUniqueOrThrow: vi.fn().mockResolvedValue({

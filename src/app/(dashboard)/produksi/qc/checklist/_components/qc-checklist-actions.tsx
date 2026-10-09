@@ -17,6 +17,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { useSession } from "next-auth/react"
 import { deleteQcChecklist, releaseQcChecklist } from "@/actions/qc.actions"
 import type { QcChecklistRow } from "./qc-checklist-table"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 /**
  * Row actions for a QC checklist: view, edit (draft only), release (draft only),
@@ -66,13 +67,13 @@ export function QcChecklistActions({ checklist }: { checklist: QcChecklistRow })
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel>Aksi</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => router.push(`/produksi/qc/checklist/${checklist.id}`)}>
+          <DropdownMenuItem onSelect={() => router.push(entityHref("/produksi/qc/checklist", checklist))}>
             <Eye className="size-4 text-muted-foreground" aria-hidden="true" />
             Lihat Detail
           </DropdownMenuItem>
           {isDraft && (
             <>
-              <DropdownMenuItem onSelect={() => router.push(`/produksi/qc/checklist/${checklist.id}/ubah`)}>
+              <DropdownMenuItem onSelect={() => router.push(entityEditHref("/produksi/qc/checklist", checklist))}>
                 <Pencil className="size-4 text-muted-foreground" aria-hidden="true" />
                 Ubah
               </DropdownMenuItem>

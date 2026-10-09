@@ -6,14 +6,17 @@ import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate } from "@/lib/utils/format"
 import { BomRevisionActions } from "./bom-revision-actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 export interface BomRevisionRow {
   id: number
+  slug: string | null
   revisionNo: number
   status: string
   effectiveDate: string
   productId: number
   productName: string
+  productSlug: string | null
   materialsCount: number
 }
 
@@ -25,7 +28,7 @@ const columns = [
     header: "Revisi",
     cell: (info) => (
       <Link
-        href={`/produksi/bom-revisi/${info.row.original.id}`}
+        href={entityHref("/produksi/bom-revisi", info.row.original)}
         className="text-foreground hover:underline font-medium font-mono"
       >
         Rev {info.row.original.revisionNo}
@@ -35,7 +38,7 @@ const columns = [
   columnHelper.accessor("productName", {
     header: "Produk",
     cell: (info) => (
-      <Link href={`/produksi/products/${info.row.original.productId}`} className="hover:underline">
+      <Link href={entityHref("/produksi/products", { id: info.row.original.productId, slug: info.row.original.productSlug })} className="hover:underline">
         {info.getValue()}
       </Link>
     ),

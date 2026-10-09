@@ -5,10 +5,12 @@ import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate } from "@/lib/utils/format"
+import { entityHref } from "@/lib/utils/entity-url"
 
 export interface NonconformanceRow {
   id: number
   documentNo: string
+  slug: string | null
   referenceType: string
   referenceId: number
   severity: string
@@ -30,7 +32,7 @@ const columns = [
     header: "No. NCR",
     cell: (info) => (
       <Link
-        href={`/produksi/qc/ncr/${info.row.original.id}`}
+        href={entityHref("/produksi/qc/ncr", info.row.original)}
         className="text-foreground hover:underline font-medium font-mono"
       >
         {info.getValue()}

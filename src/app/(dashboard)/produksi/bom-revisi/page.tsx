@@ -32,11 +32,12 @@ export default async function BomRevisionsPage({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      slug: true,
       revisionNo: true,
       status: true,
       effectiveDate: true,
       createdAt: true,
-      product: { select: { id: true, name: true } },
+      product: { select: { id: true, name: true, slug: true } },
       _count: { select: { materials: true } },
     },
     take,
@@ -47,11 +48,13 @@ export default async function BomRevisionsPage({
 
   const tableData = revisions.map((r) => ({
     id: r.id,
+    slug: r.slug,
     revisionNo: r.revisionNo,
     status: r.status,
     effectiveDate: r.effectiveDate.toISOString(),
     productId: r.product.id,
     productName: r.product.name,
+    productSlug: r.product.slug,
     materialsCount: r._count.materials,
   }))
 

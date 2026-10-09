@@ -8,6 +8,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { deleteStockAdjustment } from "@/actions/inventory.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface AdjustmentItem {
   id: number
@@ -20,6 +21,7 @@ interface Warehouse {
 interface StockAdjustment {
   id: number
   documentNo: string
+  slug: string | null
   warehouse: Warehouse
   date: string | Date
   reason: string | null
@@ -33,7 +35,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/inventaris/penyesuaian/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/inventaris/penyesuaian", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -73,7 +75,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/inventaris/penyesuaian/${info.row.original.id}`}
+        viewHref={entityHref("/inventaris/penyesuaian", info.row.original)}
         deleteAction={deleteStockAdjustment}
         deleteId={info.row.original.id}
         editPermission="edit_stock_adjustments"

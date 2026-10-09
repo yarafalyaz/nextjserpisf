@@ -40,6 +40,7 @@ export default async function ProductsPage({
     select: {
       id: true,
       name: true,
+      slug: true,
       _count: { select: { materials: true } },
     },
     take,
@@ -51,6 +52,7 @@ export default async function ProductsPage({
   const tableData = products.map((p) => ({
     id: p.id,
     name: p.name,
+    slug: p.slug,
     materialsCount: p._count.materials,
   }))
 

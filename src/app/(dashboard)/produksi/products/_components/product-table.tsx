@@ -6,10 +6,12 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteProduct } from "@/actions/manufacturing.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface Product {
   id: number
   name: string
+  slug: string | null
   materialsCount: number
 }
 
@@ -19,7 +21,7 @@ const columns = [
   columnHelper.accessor("name", {
     header: "Nama",
     cell: (info) => (
-      <Link href={`/produksi/products/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/produksi/products", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -34,8 +36,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/produksi/products/${info.row.original.id}`}
-        editHref={`/produksi/products/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/produksi/products", info.row.original)}
+        editHref={entityEditHref("/produksi/products", info.row.original)}
         deleteAction={deleteProduct}
         deleteId={info.row.original.id}
       />

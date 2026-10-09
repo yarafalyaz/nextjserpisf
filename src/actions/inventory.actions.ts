@@ -24,6 +24,7 @@ import {
   rackSchema,
   rackRowSchema,
 } from "@/lib/validations/inventory.schemas";
+import { nextSlug } from "@/lib/utils/slug-db";
 
 type WarehouseActionUser = { id: number | string; roles: string[] };
 
@@ -128,6 +129,7 @@ export async function createStockAdjustment(formData: FormData) {
     const adjustment = await prisma.stockAdjustment.create({
       data: {
         documentNo,
+        slug: await nextSlug("stockAdjustment", documentNo),
         warehouseId: v.warehouseId,
         date: new Date(v.date),
         reason: v.reason ?? null,
@@ -164,7 +166,7 @@ export async function createStockAdjustment(formData: FormData) {
       `Membuat penyesuaian stok #${adjustment.id}`,
     );
     revalidatePath("/inventaris/penyesuaian");
-    return { success: true, id: adjustment.id };
+    return { success: true, id: adjustment.id, slug: adjustment.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createStockAdjustment]", getErrorMessage(e) || e);
@@ -270,6 +272,7 @@ export async function createInventoryTransfer(formData: FormData) {
     const transfer = await prisma.inventoryTransfer.create({
       data: {
         documentNo,
+        slug: await nextSlug("inventoryTransfer", documentNo),
         sourceWarehouseId: v.sourceWarehouseId,
         destinationWarehouseId: v.destinationWarehouseId,
         date: new Date(v.date),
@@ -292,7 +295,7 @@ export async function createInventoryTransfer(formData: FormData) {
       `Membuat transfer inventaris #${transfer.id}`,
     );
     revalidatePath("/inventaris/transfer");
-    return { success: true, id: transfer.id };
+    return { success: true, id: transfer.id, slug: transfer.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createInventoryTransfer]", getErrorMessage(e) || e);
@@ -475,6 +478,7 @@ export async function createMaterialIssue(formData: FormData) {
     const issue = await prisma.materialIssue.create({
       data: {
         documentNo,
+        slug: await nextSlug("materialIssue", documentNo),
         warehouseId: v.warehouseId,
         projectId: v.projectId ?? null,
         workOrderId: v.workOrderId ?? null,
@@ -500,7 +504,7 @@ export async function createMaterialIssue(formData: FormData) {
       `Membuat pengeluaran material #${issue.id}`,
     );
     revalidatePath("/inventaris/pengeluaran-material");
-    return { success: true, id: issue.id };
+    return { success: true, id: issue.id, slug: issue.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createMaterialIssue]", getErrorMessage(e) || e);
@@ -608,6 +612,7 @@ export async function createWorkOrder(formData: FormData) {
     const wo = await prisma.workOrder.create({
       data: {
         documentNo,
+        slug: await nextSlug("workOrder", documentNo),
         quotationId: v.quotationId ?? null,
         projectId: v.projectId ?? null,
         customerId: v.customerId,
@@ -640,7 +645,7 @@ export async function createWorkOrder(formData: FormData) {
       `Membuat perintah kerja #${wo.id}`,
     );
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true, id: wo.id };
+    return { success: true, id: wo.id, slug: wo.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createWorkOrder]", getErrorMessage(e) || e);
@@ -695,6 +700,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       const claim = await tx.workOrder.updateMany({
         where: { id, status: { in: ["draft", "pending"] } },
         data: {
+          slug: await nextSlug("workOrder", wo.documentNo, { excludeId: id }),
           customerId: v.customerId,
           quotationId: v.quotationId ?? null,
           projectId: v.projectId ?? null,
@@ -858,13 +864,14 @@ export async function createRack(formData: FormData) {
       data: {
         code,
         name: v.name,
+        slug: await nextSlug("rack", v.name),
         warehouseId: v.warehouseId,
       },
     });
 
     await logActivity("create", "Rack", rack.id, `Membuat rak #${rack.id}`);
     revalidatePath("/inventaris/rak");
-    return { success: true, id: rack.id };
+    return { success: true, id: rack.id, slug: rack.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createRack]", getErrorMessage(e) || e);
@@ -886,18 +893,19 @@ export async function updateRack(id: number, formData: FormData) {
     await assertRackIdInScope(user, id);
     await assertWarehouseIdInScope(user, v.warehouseId);
 
-    await prisma.rack.update({
+    const rack = await prisma.rack.update({
       where: { id },
       data: {
         code: v.code ?? "",
         name: v.name,
+        slug: await nextSlug("rack", v.name, { excludeId: id }),
         warehouseId: v.warehouseId,
       },
     });
 
     await logActivity("update", "Rack", id, `Memperbarui rak #${id}`);
     revalidatePath("/inventaris/rak");
-    return { success: true, id };
+    return { success: true, id, slug: rack.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateRack]", getErrorMessage(e) || e);
@@ -1097,6 +1105,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
       return tx.stockAdjustment.update({
         where: { id },
         data: {
+          slug: await nextSlug("stockAdjustment", adj.documentNo, { excludeId: id }),
           warehouseId,
           date: new Date(v.date),
           reason: v.reason ?? null,
@@ -1136,7 +1145,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
       `Memperbarui penyesuaian stok #${adjustment.id}`,
     );
     revalidatePath("/inventaris/penyesuaian");
-    return { success: true, id: adjustment.id };
+    return { success: true, id: adjustment.id, slug: adjustment.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateStockAdjustment]", getErrorMessage(e) || e);
@@ -1188,6 +1197,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
       return tx.materialIssue.update({
         where: { id },
         data: {
+          slug: await nextSlug("materialIssue", mi.documentNo, { excludeId: id }),
           warehouseId: v.warehouseId,
           projectId: v.projectId ?? null,
           workOrderId: v.workOrderId ?? null,
@@ -1211,7 +1221,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
       `Memperbarui pengeluaran material #${issue.id}`,
     );
     revalidatePath("/inventaris/pengeluaran-material");
-    return { success: true, id: issue.id };
+    return { success: true, id: issue.id, slug: issue.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateMaterialIssue]", getErrorMessage(e) || e);
@@ -1265,6 +1275,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
       return tx.inventoryTransfer.update({
         where: { id },
         data: {
+          slug: await nextSlug("inventoryTransfer", tf.documentNo, { excludeId: id }),
           sourceWarehouseId: v.sourceWarehouseId,
           destinationWarehouseId: v.destinationWarehouseId,
           date: new Date(v.date),
@@ -1286,7 +1297,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
       `Memperbarui transfer inventaris #${transfer.id}`,
     );
     revalidatePath("/inventaris/transfer");
-    return { success: true, id: transfer.id };
+    return { success: true, id: transfer.id, slug: transfer.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateInventoryTransfer]", getErrorMessage(e) || e);
@@ -1336,6 +1347,7 @@ export async function createRackRow(formData: FormData) {
         rackId: v.rackId,
         code,
         name: v.name,
+        slug: await nextSlug("rackRow", code ?? v.name),
       },
     });
 
@@ -1346,7 +1358,7 @@ export async function createRackRow(formData: FormData) {
       `Membuat baris rak #${rackRow.id}`,
     );
     revalidatePath("/inventaris/baris-rak");
-    return { success: true, id: rackRow.id };
+    return { success: true, id: rackRow.id, slug: rackRow.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createRackRow]", getErrorMessage(e) || e);
@@ -1369,18 +1381,19 @@ export async function updateRackRow(id: number, formData: FormData) {
     await assertRackRowIdInScope(user, id);
     await assertRackIdInScope(user, v.rackId);
 
-    await prisma.rackRow.update({
+    const rackRow = await prisma.rackRow.update({
       where: { id },
       data: {
         rackId: v.rackId,
         code: v.code ?? null,
         name: v.name,
+        slug: await nextSlug("rackRow", v.code ?? v.name, { excludeId: id }),
       },
     });
 
     await logActivity("update", "RackRow", id, `Memperbarui baris rak #${id}`);
     revalidatePath("/inventaris/baris-rak");
-    return { success: true };
+    return { success: true, id, slug: rackRow.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateRackRow]", getErrorMessage(e) || e);

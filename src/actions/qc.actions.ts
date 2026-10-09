@@ -18,6 +18,7 @@ import {
 } from "@/lib/validations/qc.schemas"
 import { raiseNonconformanceFromInspection } from "@/lib/services/qc.service"
 import { syncReworkCostToOrder } from "@/lib/services/production-cost.service"
+import { nextSlug } from "@/lib/utils/slug-db"
 
 // ==================== QC CHECKLIST ACTIONS ====================
 
@@ -49,6 +50,7 @@ export async function createQcChecklist(formData: FormData) {
       data: {
         code,
         name: v.name,
+        slug: await nextSlug("qcChecklist", v.name),
         checklistType: v.checklistType,
         productId: v.productId ?? null,
         version: 1,
@@ -68,7 +70,7 @@ export async function createQcChecklist(formData: FormData) {
 
     await logActivity("create", "QcChecklist", checklist.id, `Membuat checklist QC #${checklist.id}`)
     revalidatePath("/produksi/qc/checklist")
-    return { success: true, id: checklist.id }
+    return { success: true, id: checklist.id, slug: checklist.slug }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createQcChecklist]", getErrorMessage(e) || e)
@@ -110,6 +112,7 @@ export async function updateQcChecklist(id: number, formData: FormData) {
         data: {
           code: v.code ?? null,
           name: v.name,
+          slug: await nextSlug("qcChecklist", v.name, { excludeId: id }),
           checklistType: v.checklistType,
           productId: v.productId ?? null,
           items: {
@@ -253,6 +256,7 @@ export async function createQcInspection(formData: FormData) {
       const inspection = await tx.qcInspection.create({
         data: {
           documentNo,
+          slug: await nextSlug("qcInspection", documentNo),
           checklistId: v.checklistId,
           inspectionType: v.inspectionType,
           referenceType: v.referenceType,
@@ -294,7 +298,7 @@ export async function createQcInspection(formData: FormData) {
     revalidatePath("/produksi/qc/inspeksi")
     revalidatePath("/produksi/qc/ncr")
     revalidatePath("/produksi/qc")
-    return { success: true, id: inspection.id, status, raisedNcrIds }
+    return { success: true, id: inspection.id, slug: inspection.slug, status, raisedNcrIds }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createQcInspection]", getErrorMessage(e) || e)
@@ -329,6 +333,7 @@ export async function createNonconformance(formData: FormData) {
     const ncr = await prisma.nonconformance.create({
       data: {
         documentNo,
+        slug: await nextSlug("nonconformance", documentNo),
         inspectionId: v.inspectionId ?? null,
         referenceType: v.referenceType,
         referenceId: v.referenceId,
@@ -344,7 +349,7 @@ export async function createNonconformance(formData: FormData) {
     await logActivity("create", "Nonconformance", ncr.id, `Membuat NCR ${documentNo}`)
     revalidatePath("/produksi/qc/ncr")
     revalidatePath("/produksi/qc")
-    return { success: true, id: ncr.id }
+    return { success: true, id: ncr.id, slug: ncr.slug }
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createNonconformance]", getErrorMessage(e) || e)

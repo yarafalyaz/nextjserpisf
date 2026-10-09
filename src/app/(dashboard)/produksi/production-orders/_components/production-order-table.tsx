@@ -8,10 +8,12 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { deleteProductionOrder } from "@/actions/manufacturing.actions"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface ProductionOrder {
   id: number
   documentNo: string
+  slug: string | null
   product: { name: string }
   quantity: number | string
   createdAt: Date | string
@@ -24,7 +26,7 @@ const columns = [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
-      <Link href={`/produksi/production-orders/${info.row.original.id}`} className="text-foreground hover:underline font-mono">
+      <Link href={entityHref("/produksi/production-orders", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}
       </Link>
     ),
@@ -54,7 +56,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/produksi/production-orders/${info.row.original.id}`}
+        viewHref={entityHref("/produksi/production-orders", info.row.original)}
         deleteAction={deleteProductionOrder}
         deleteId={info.row.original.id}
       />

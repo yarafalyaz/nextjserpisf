@@ -32,6 +32,7 @@ export default async function QcChecklistsPage({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
+      slug: true,
       code: true,
       name: true,
       checklistType: true,
@@ -47,6 +48,7 @@ export default async function QcChecklistsPage({
 
   const tableData = checklists.map((c) => ({
     id: c.id,
+    slug: c.slug,
     code: c.code,
     name: c.name,
     checklistType: c.checklistType,

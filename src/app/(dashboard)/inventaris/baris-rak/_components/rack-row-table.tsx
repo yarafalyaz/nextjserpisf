@@ -7,11 +7,13 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteRackRow } from "@/actions/inventory.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { formatDate } from "@/lib/utils/format"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 interface RackRowData {
   id: number
   code: string | null
   name: string
+  slug: string | null
   createdAt: string
   rack: {
     name: string
@@ -35,7 +37,7 @@ const columns = [
     // The row name (linked) is the card's headline; the code becomes a detail line.
     meta: { mobilePrimary: true },
     cell: (info) => (
-      <Link href={`/inventaris/baris-rak/${info.row.original.id}`} className="text-foreground hover:underline font-medium">
+      <Link href={entityHref("/inventaris/baris-rak", info.row.original)} className="text-foreground hover:underline font-medium">
         {info.getValue()}
       </Link>
     ),
@@ -59,8 +61,8 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        viewHref={`/inventaris/baris-rak/${info.row.original.id}`}
-        editHref={`/inventaris/baris-rak/${info.row.original.id}/ubah`}
+        viewHref={entityHref("/inventaris/baris-rak", info.row.original)}
+        editHref={entityEditHref("/inventaris/baris-rak", info.row.original)}
         deleteAction={deleteRackRow}
         deleteId={info.row.original.id}
       />

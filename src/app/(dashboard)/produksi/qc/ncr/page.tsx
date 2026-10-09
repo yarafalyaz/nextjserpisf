@@ -33,6 +33,7 @@ export default async function NonconformancesPage({
     select: {
       id: true,
       documentNo: true,
+      slug: true,
       referenceType: true,
       referenceId: true,
       severity: true,
@@ -49,6 +50,7 @@ export default async function NonconformancesPage({
   const tableData = rows.map((r) => ({
     id: r.id,
     documentNo: r.documentNo,
+    slug: r.slug,
     referenceType: r.referenceType,
     referenceId: r.referenceId,
     severity: r.severity,

@@ -43,7 +43,10 @@ vi.mock("@/lib/db/prisma", () => {
   const prisma: Record<string, unknown> = {
     product: { findUniqueOrThrow: (...a: unknown[]) => productFindUniqueOrThrowMock(...a) },
     item: { findMany: (...a: unknown[]) => itemFindManyMock(...a) },
-    productionOrder: { create: (...a: unknown[]) => productionOrderCreateMock(...a) },
+    productionOrder: {
+      create: (...a: unknown[]) => productionOrderCreateMock(...a),
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     productMaterial: { findMany: (...a: unknown[]) => productMaterialFindManyMock(...a) },
     bomRevision: {
       findFirst: (...a: unknown[]) => bomRevisionFindFirstMock(...a),

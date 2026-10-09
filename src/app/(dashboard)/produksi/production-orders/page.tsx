@@ -51,6 +51,7 @@ export default async function ProductionOrdersPage({
     orders.map((o) => ({
       id: o.id,
       documentNo: o.documentNo,
+      slug: o.slug,
       product: { name: o.product.name },
       quantity: Number(o.qty),
       createdAt: o.createdAt,

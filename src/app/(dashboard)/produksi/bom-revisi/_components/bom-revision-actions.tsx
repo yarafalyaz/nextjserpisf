@@ -17,6 +17,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { useSession } from "next-auth/react"
 import { deleteBomRevision, releaseBomRevision } from "@/actions/manufacturing.actions"
 import type { BomRevisionRow } from "./bom-revision-table"
+import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 /**
  * Row actions for a BOM revision: view detail, edit (draft only), release
@@ -73,13 +74,13 @@ export function BomRevisionActions({ revision }: { revision: BomRevisionRow }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel>Aksi</DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => router.push(`/produksi/bom-revisi/${revision.id}`)}>
+          <DropdownMenuItem onSelect={() => router.push(entityHref("/produksi/bom-revisi", revision))}>
             <Eye className="size-4 text-muted-foreground" aria-hidden="true" />
             Lihat Detail
           </DropdownMenuItem>
           {isDraft && (
             <>
-              <DropdownMenuItem onSelect={() => router.push(`/produksi/bom-revisi/${revision.id}/ubah`)}>
+              <DropdownMenuItem onSelect={() => router.push(entityEditHref("/produksi/bom-revisi", revision))}>
                 <Pencil className="size-4 text-muted-foreground" aria-hidden="true" />
                 Ubah
               </DropdownMenuItem>

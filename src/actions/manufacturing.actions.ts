@@ -26,6 +26,7 @@ import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo"
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-scope";
+import { nextSlug } from "@/lib/utils/slug-db";
 import { Prisma } from "@prisma/client";
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
@@ -83,6 +84,7 @@ export async function createProduct(formData: FormData) {
       data: {
         name: v.name,
         code,
+        slug: await nextSlug("product", v.name),
         description: v.description ?? null,
         vehicleBrandId: v.vehicleBrandId,
         vehicleModelId: v.vehicleModelId,
@@ -103,7 +105,7 @@ export async function createProduct(formData: FormData) {
       `Membuat produk #${product.id}`,
     );
     revalidatePath("/produksi/products");
-    return { success: true, id: product.id };
+    return { success: true, id: product.id, slug: product.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createProduct]", getErrorMessage(e) || e);
@@ -151,6 +153,7 @@ export async function updateProduct(id: number, formData: FormData) {
         where: { id },
         data: {
           name: v.name,
+          slug: await nextSlug("product", v.name, { excludeId: id }),
           code: v.code ?? null,
           description: v.description ?? null,
           vehicleBrandId: v.vehicleBrandId,
@@ -263,6 +266,7 @@ export async function createBomRevision(formData: FormData) {
         data: {
           productId: v.productId,
           revisionNo: nextNo,
+          slug: await nextSlug("bomRevision", String(nextNo)),
           status: "draft",
           effectiveDate: v.effectiveDate ? new Date(v.effectiveDate) : new Date(),
           notes: v.notes ?? null,
@@ -282,7 +286,7 @@ export async function createBomRevision(formData: FormData) {
     );
     revalidatePath("/produksi/bom-revisi");
     revalidatePath(`/produksi/products/${v.productId}`);
-    return { success: true, id: revision.id };
+    return { success: true, id: revision.id, slug: revision.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createBomRevision]", getErrorMessage(e) || e);
@@ -492,6 +496,7 @@ export async function createProductionOrder(formData: FormData) {
     const productionOrder = await prisma.productionOrder.create({
       data: {
         documentNo,
+        slug: await nextSlug("productionOrder", documentNo),
         productId: v.productId,
         bomRevisionId: effectiveBom.revisionId,
         workOrderId: v.workOrderId ? Number(v.workOrderId) : null,
@@ -520,7 +525,7 @@ export async function createProductionOrder(formData: FormData) {
       `Membuat perintah produksi #${productionOrder.id}`,
     );
     revalidatePath("/produksi/production-orders");
-    return { success: true, id: productionOrder.id };
+    return { success: true, id: productionOrder.id, slug: productionOrder.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createProductionOrder]", getErrorMessage(e) || e);
@@ -1621,6 +1626,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       : [];
     const updBomCostMap = new Map(updBomItems.map((i) => [i.id, Number(i.standardCost)]));
     const updProductStdCost = Number(product.standardCost);
+    const poDocumentNo = po.documentNo;
 
     const productionOrder = await prisma.$transaction(async (tx) => {
       // Lock + re-check status INSIDE the transaction. The pre-check above is a
@@ -1641,6 +1647,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       const po = await tx.productionOrder.update({
         where: { id },
         data: {
+          slug: await nextSlug("productionOrder", poDocumentNo, { excludeId: id }),
           productId: v.productId,
           qty: v.qty,
           workOrderId: v.workOrderId ? Number(v.workOrderId) : null,
@@ -1677,7 +1684,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       `Memperbarui perintah produksi #${productionOrder.id}`,
     );
     revalidatePath("/produksi/production-orders");
-    return { success: true, id: productionOrder.id };
+    return { success: true, id: productionOrder.id, slug: productionOrder.slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateProductionOrder]", getErrorMessage(e) || e);
