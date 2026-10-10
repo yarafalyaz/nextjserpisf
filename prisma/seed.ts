@@ -589,6 +589,7 @@ async function main() {
       "view_attendance",
       "view_work_schedules",
       "view_leave_requests",
+      "create_leave_requests",
       "view_overtime",
       "view_payroll",
       "view_timesheets",
