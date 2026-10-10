@@ -9,12 +9,12 @@ setup("authenticate", async ({ page }) => {
   if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
   // Must match the accounts created by prisma/seed.ts (admin@erp.yarasoft.net /
-  // demo1234). The previous defaults (admin@yaraerp.app / password123) matched no
+  // Yara1234). The previous defaults (admin@yaraerp.app / password123) matched no
   // seeded user, so the auth state was never created: CI threw here and the whole
   // e2e job failed before running a single spec, while locally an EMPTY auth state
   // was written and every protected-page test passed vacuously.
   const email = process.env.E2E_EMAIL || "admin@erp.yarasoft.net";
-  const password = process.env.E2E_PASSWORD || "demo1234";
+  const password = process.env.E2E_PASSWORD || "Yara1234";
 
   await page.goto("/login");
 

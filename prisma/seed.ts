@@ -910,7 +910,7 @@ async function main() {
 
     // === SEED 9 DEMO USERS AND EMPLOYEES ===
     console.log("🌱 Seeding demo users and employees...");
-    const DEMO_PASSWORD_HASH = "$2b$12$/V3/9lxsoHgIJKxD9TbQCu05dcR/UKyOoJNpAhMKlJBiLn1cXwEa."; // 'demo1234'
+    const DEMO_PASSWORD_HASH = "$2b$12$sFW/aCo/PeREiRgcDO4CSuU8ZhgoTQ4ZxWTS94vNNhuTYpb6dO3bW"; // 'Yara1234'
 
     const demoUsers = [
       {
@@ -924,7 +924,7 @@ async function main() {
       },
       {
         name: "Dewi Admin",
-        email: "admin.dewi@erp.yarasoft.net",
+        email: "admin.dewi@isf.co.id",
         roleName: "admin",
         employeeNo: "EMP-00002",
         departmentName: "Kantor",
@@ -933,7 +933,7 @@ async function main() {
       },
       {
         name: "Siti Staff",
-        email: "staff@erp.yarasoft.net",
+        email: "staff@isf.co.id",
         roleName: "staff",
         employeeNo: "EMP-00003",
         departmentName: "Kantor",
@@ -942,7 +942,7 @@ async function main() {
       },
       {
         name: "Gani GA",
-        email: "ga@erp.yarasoft.net",
+        email: "ga@isf.co.id",
         roleName: "ga",
         employeeNo: "EMP-00004",
         departmentName: "Kantor",
@@ -951,7 +951,7 @@ async function main() {
       },
       {
         name: "Bambang Kabeng",
-        email: "kabeng@erp.yarasoft.net",
+        email: "kabeng@isf.co.id",
         roleName: "kepala_bengkel",
         employeeNo: "EMP-00005",
         departmentName: "Lapangan",
@@ -960,7 +960,7 @@ async function main() {
       },
       {
         name: "Karyawan Demo",
-        email: "karyawan@erp.yarasoft.net",
+        email: "karyawan@isf.co.id",
         roleName: "karyawan",
         employeeNo: "EMP-00006",
         departmentName: "Lapangan",
@@ -969,7 +969,7 @@ async function main() {
       },
       {
         name: "Putri Purchasing",
-        email: "pembelian@erp.yarasoft.net",
+        email: "pembelian@isf.co.id",
         roleName: "purchasing",
         employeeNo: "EMP-00007",
         departmentName: "Kantor",
@@ -978,7 +978,7 @@ async function main() {
       },
       {
         name: "Wawan Warehouse",
-        email: "gudang@erp.yarasoft.net",
+        email: "gudang@isf.co.id",
         roleName: "warehouse",
         employeeNo: "EMP-00008",
         departmentName: "Lapangan",
@@ -987,7 +987,7 @@ async function main() {
       },
       {
         name: "Fani Finance",
-        email: "keuangan@erp.yarasoft.net",
+        email: "keuangan@isf.co.id",
         roleName: "finance",
         employeeNo: "EMP-00009",
         departmentName: "Kantor",
