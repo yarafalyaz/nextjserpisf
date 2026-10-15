@@ -98,6 +98,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Entri</h3>
           <Button type="button" onPress={addEntry} variant="secondary" size="sm">+ Tambah Baris</Button>
         </div>
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
           <thead><tr><th>Akun</th><th>Debit</th><th>Kredit</th><th>Memo</th><th></th></tr></thead>
           <tbody>
@@ -121,7 +122,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
                 <td><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="form-input" /></td>
                 <td><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="form-input" /></td>
                 <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
-                <td>{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} variant="danger-soft" size="sm">×</Button>}</td>
+                <td>{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} aria-label={`Hapus baris ${i + 1}`} variant="danger-soft" size="sm">×</Button>}</td>
               </tr>
             ))}
           </tbody>
@@ -135,6 +136,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
 
       <FormAttachmentUpload referenceType="journal" />

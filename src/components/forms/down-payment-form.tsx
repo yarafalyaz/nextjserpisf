@@ -187,6 +187,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
                 <div className="flex flex-col gap-3">
                   <h5 className="font-medium text-foreground text-xs">Daftar Item:</h5>
                   <div className="max-h-60 overflow-y-auto border border-default rounded-lg bg-surface">
+                    <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-default/20 border-b border-default text-muted-foreground font-medium">
@@ -213,6 +214,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 </div>
               )}

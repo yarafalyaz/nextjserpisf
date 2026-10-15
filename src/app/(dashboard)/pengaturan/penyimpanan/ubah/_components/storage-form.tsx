@@ -64,7 +64,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
           <CardDescription>Pilih ke mana file upload disimpan.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Penyimpanan berkas">
             {driverOptions.map((opt) => {
               const Icon = opt.icon
               const active = selectedDriver === opt.value
@@ -72,6 +72,8 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
                 <button
                   key={opt.value}
                   type="button"
+                  role="radio"
+                  aria-checked={active}
                   onClick={() => setSelectedDriver(opt.value)}
                   className={`flex items-start gap-3 rounded-lg border p-4 text-left transition-colors ${
                     active ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card hover:bg-accent"

@@ -16,7 +16,7 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 interface SalesReturnFormProps {
   invoices: { id: number; documentNo: string
 }[]
-  returnData?: { id: number; salesInvoiceId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
+  returnData?: { id: number; customerId?: number; salesInvoiceId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
   customers: { id: number; name: string }[]
   items: { id: number; sku: string; name: string }[]
 }
@@ -31,7 +31,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
   const [salesInvoiceId, setSalesInvoiceId] = useState(returnData?.salesInvoiceId ? String(returnData.salesInvoiceId) : "")
-  const [customerId, setCustomerId] = useState("")
+  const [customerId, setCustomerId] = useState(returnData?.customerId ? String(returnData.customerId) : "")
   const [customerOptions, setCustomerOptions] = useState(customers)
   // Seed returnItems from returnData on edit so updating a return doesn't
   // silently wipe all existing line items to a single empty row.
@@ -133,6 +133,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
           <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
         </div>
 
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
           <thead>
             <tr>
@@ -165,13 +166,14 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                 </td>
                 <td>
                   {returnItems.length > 1 && (
-                    <Button type="button" onPress={() => removeItem(index)} variant="danger-soft" size="sm">×</Button>
+                    <Button type="button" onPress={() => removeItem(index)} aria-label={`Hapus baris ${index + 1}`} variant="danger-soft" size="sm">×</Button>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

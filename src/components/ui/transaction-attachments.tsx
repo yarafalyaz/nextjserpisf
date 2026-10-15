@@ -44,6 +44,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -56,9 +57,13 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
       if (res.ok) {
         const data = await res.json()
         setAttachments(data)
+      } else {
+        setLoadFailed(true)
       }
     } catch {
-      // silently fail
+      // Kegagalan muat tidak boleh tampil sebagai "belum ada lampiran" — user bisa
+      // menyimpulkan tidak ada bukti padahal datanya gagal diambil.
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
@@ -170,6 +175,11 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
 
       {loading ? (
         <div className="attachment-loading" aria-hidden="true">Memuat lampiran...</div>
+      ) : loadFailed ? (
+        <div className="attachment-empty" role="status">
+          <FileText className="size-8 text-muted-foreground" aria-hidden="true" />
+          <span>Gagal memuat lampiran</span>
+        </div>
       ) : attachments.length === 0 ? (
         <div className="attachment-empty" role="status">
           <FileText className="size-8 text-muted-foreground" aria-hidden="true" />

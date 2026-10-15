@@ -415,7 +415,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="size-7"
+                  className="size-10"
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
                   aria-label="Halaman sebelumnya"
@@ -425,7 +425,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="size-7"
+                  className="size-10"
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
                   aria-label="Halaman berikutnya"

@@ -57,7 +57,14 @@ export function NotificationDropdown() {
   }
 
   async function markAsRead(id: number) {
-    await fetch(`/api/notifications/${id}/read`, { method: "POST" })
+    try {
+      const res = await fetch(`/api/notifications/${id}/read`, { method: "POST" })
+      // Hanya tandai lokal kalau server menyimpannya; kalau tidak, badge "belum
+      // dibaca" turun sendiri padahal notifikasi masih belum terbaca.
+      if (!res.ok) return
+    } catch {
+      return
+    }
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
     setUnreadCount(prev => Math.max(0, prev - 1))
   }
@@ -94,7 +101,7 @@ export function NotificationDropdown() {
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-surface rounded-xl border border-default shadow-xl z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-[min(20rem,calc(100vw-2rem))] bg-surface rounded-xl border border-default shadow-xl z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-default">
             <h3 className="text-sm font-semibold text-foreground">Notifikasi</h3>
             {unreadCount > 0 && (
@@ -114,9 +121,11 @@ export function NotificationDropdown() {
               </div>
             ) : (
               notifications.slice(0, 5).map((notif) => (
-                <div
+                <button
                   key={notif.id}
-                  className={`flex gap-3 px-4 py-3 border-b border-default last:border-0 hover:bg-surface-secondary transition-colors cursor-pointer ${!notif.readAt ? "bg-primary/5" : ""}`}
+                  type="button"
+                  aria-disabled={notif.readAt ? true : undefined}
+                  className={`w-full text-left flex gap-3 px-4 py-3 border-b border-default last:border-0 hover:bg-surface-secondary transition-colors cursor-pointer ${!notif.readAt ? "bg-primary/5" : ""}`}
                   onClick={() => !notif.readAt && markAsRead(notif.id)}
                 >
                   <div className="flex-1 min-w-0">
@@ -129,7 +138,7 @@ export function NotificationDropdown() {
                   {!notif.readAt && (
                     <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-primary" />
                   )}
-                </div>
+                </button>
               ))
             )}
           </div>

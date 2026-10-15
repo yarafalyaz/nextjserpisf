@@ -62,7 +62,10 @@ export function WorkOrderForm({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [date, setDate] = useState(toLocalDateOnly(new Date()));
+  // Saat mengedit, tanggal harus di-seed dari dokumen lama: sebelumnya selalu
+  // "hari ini", sehingga menyimpan ulang perintah kerja back-date memindahkan
+  // dokumen (dan angka laporannya) ke periode berjalan.
+  const [date, setDate] = useState(workOrder?.date ?? toLocalDateOnly(new Date()));
   const [startDate, setStartDate] = useState(workOrder?.startDate ?? defaultStartDate);
   const [endDate, setEndDate] = useState(workOrder?.endDate ?? defaultEndDate);
   const [customerId, setCustomerId] = useState<string | null>(
@@ -314,6 +317,7 @@ export function WorkOrderForm({
                           <Button
                               type="button"
                               onPress={() => removeItem(i)}
+                              aria-label={`Hapus baris ${i + 1}`}
                               className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             ×

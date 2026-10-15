@@ -10,6 +10,8 @@ import { Download, Eye } from "lucide-react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Combobox } from "@/components/ui/combobox"
 import { DetailDrawer } from "@/components/activity-log/detail-drawer"
+import Link from "next/link"
+import { activityEntityHref } from "@/lib/utils/activity-href"
 
 interface LogRow {
   id: number
@@ -18,6 +20,10 @@ interface LogRow {
   action: string
   modelType: string
   modelId: number | null
+  /** Label manusiawi entitas (nomor dokumen / kode / nama), hasil resolusi server. */
+  refLabel?: string | null
+  /** true bila entitas dilacak tetapi recordnya sudah tidak ada (terhapus). */
+  refMissing?: boolean
   description: string
   createdAt: string
   ipAddress: string
@@ -64,6 +70,8 @@ const modelLabel: Record<string, string> = {
   ItemCategory: "Kategori Barang",
   Brand: "Merek",
   Warehouse: "Gudang",
+  Rack: "Rak",
+  RackRow: "Baris Rak",
   Employee: "Karyawan",
   Department: "Departemen",
   Position: "Jabatan",
@@ -96,7 +104,6 @@ const modelLabel: Record<string, string> = {
   Journal: "Jurnal",
   Expense: "Biaya",
   PettyCash: "Kas Kecil",
-  Budget: "Anggaran",
   CostCenter: "Pusat Biaya",
   Asset: "Aset",
   AssetCategory: "Kategori Aset",
@@ -197,11 +204,35 @@ export function ActivityLogTable({
     {
       accessorKey: "modelId",
       header: "ID",
-      cell: ({ row }) => (
-        <span className="font-mono text-xs text-muted-foreground">
-          {row.original.modelId ? `#${row.original.modelId}` : "-"}
-        </span>
-      ),
+      cell: ({ row }) => {
+        if (!row.original.modelId) {
+          return <span className="font-mono text-xs text-muted-foreground">-</span>
+        }
+        // Nomor dokumen/kode entitas bila bisa diresolusi; id mentah hanya
+        // fallback. Bila entitasnya dilacak tetapi recordnya tidak ada lagi,
+        // tandai "dihapus" supaya "#16" tidak terbaca sebagai kesalahan tampilan.
+        const label = row.original.refLabel ?? `#${row.original.modelId}`
+        const href = activityEntityHref(row.original.modelType, row.original.modelId)
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            {href ? (
+              <Link href={href} className="font-mono text-xs text-primary hover:underline">
+                {label}
+              </Link>
+            ) : (
+              <span className="font-mono text-xs text-muted-foreground">{label}</span>
+            )}
+            {row.original.refMissing && (
+              <span
+                className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                title="Data ini sudah tidak ada (terhapus)"
+              >
+                dihapus
+              </span>
+            )}
+          </span>
+        )
+      },
     },
     {
       accessorKey: "description",
@@ -231,7 +262,8 @@ export function ActivityLogTable({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 p-0"
+            className="size-10 p-0"
+            aria-label="Lihat rincian perubahan"
             onClick={() => setDetailRow(row.original)}
           >
             <Eye className="h-3.5 w-3.5" />

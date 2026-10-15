@@ -72,7 +72,7 @@ export default async function ItemsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Master Data", href: "/master" }, { label: "Item" }]} />
+      <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Data Master", href: "/master" }, { label: "Barang" }]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Barang</h1>
         {canCreate && (
@@ -89,7 +89,7 @@ export default async function ItemsPage({
         pageSize={pageSize}
         toolbar={<AppSearchField placeholder="Cari SKU atau nama item..." action="/master/barang" />}
         filters={
-          <form className="flex gap-2" action="/master/barang">
+          <form className="flex gap-2 flex-wrap" action="/master/barang">
             <FormSelect
               name="category"
               defaultValue={params.category || ""}

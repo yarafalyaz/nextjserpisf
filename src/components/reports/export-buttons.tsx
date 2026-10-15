@@ -1,12 +1,12 @@
 
 'use client'
 
+import { useState } from 'react'
 import { FileDown, Printer, FileText } from 'lucide-react'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { companyAddressOneLine } from "@/lib/utils/company-address"
 
 /**
  * Helper: fetch system settings from a JSON endpoint for the PDF letterhead.
@@ -15,6 +15,10 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 interface Settings {
   companyName: string
   companyAddress: string | null
+  companyVillage: string | null
+  companyDistrict: string | null
+  companyCity: string | null
+  companyProvince: string | null
   companyPhone: string | null
   companyEmail: string | null
   companyWebsite: string | null
@@ -22,8 +26,10 @@ interface Settings {
   companyPostalCode: string | null
 }
 const DEFAULT_SETTINGS: Settings = {
-  companyName: 'Perusahaan', companyAddress: null, companyPhone: null,
-  companyEmail: null, companyWebsite: null, companyLogo: null, companyPostalCode: null,
+  companyName: 'Perusahaan', companyAddress: null, companyVillage: null,
+  companyDistrict: null, companyCity: null, companyProvince: null,
+  companyPhone: null, companyEmail: null, companyWebsite: null, companyLogo: null,
+  companyPostalCode: null,
 }
 
 async function fetchSettings(): Promise<Settings> {
@@ -46,12 +52,61 @@ const C = {
   altRow: [248, 249, 250] as [number, number, number],
 }
 
-export function ExportButtons({ title }: { title: string }) {
+/** Membuka PDF hasil engine di tab baru; `unduh` memaksa unduhan berkas. */
+function openPdf(href: string, download: boolean) {
+  const url = new URL(href, window.location.origin)
+  if (download) url.searchParams.set("unduh", "1")
+  window.open(url.toString(), "_blank", "noopener,noreferrer")
+}
+
+/**
+ * jsPDF + autoTable berat dan hanya dibutuhkan saat tombol PDF ditekan, jadi
+ * dimuat di sini agar tidak ikut bundel awal halaman laporan.
+ */
+async function loadPdfLibs() {
+  try {
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ])
+    return { jsPDF, autoTable }
+  } catch {
+    showError('Gagal memuat modul PDF')
+    return null
+  }
+}
+
+export function ExportButtons({ title, pdfHref }: { title: string; pdfHref?: string }) {
+  // Ekspor PDF/CSV membangun dokumen di main thread (impor jsPDF + tabel). Tanpa
+  // penjaga ini tombol tetap bisa diklik saat proses berjalan: UI tampak hang dan
+  // klik berulang membuka banyak tab/unduhan.
+  const [isExporting, setIsExporting] = useState(false)
+
   const handlePrint = () => {
+    // Laporan yang sudah punya PDF server-side dicetak dari penampil PDF — yang
+    // tercetak adalah berkas PDF-nya, bukan halaman HTML aplikasi.
+    if (pdfHref) {
+      openPdf(pdfHref, false)
+      return
+    }
     window.print()
   }
 
   const handleExportCSV = () => {
+    if (isExporting) return
+    setIsExporting(true)
+    // Ditunda satu tick supaya status pending sempat ter-render sebelum
+    // pembentukan CSV (sinkron) memblokir main thread.
+    window.setTimeout(() => {
+      try {
+        exportCsv()
+      } finally {
+        setIsExporting(false)
+      }
+    }, 0)
+  }
+
+  const exportCsv = () => {
     const tables = document.querySelectorAll('[data-report-table]')
     if (tables.length === 0) {
       showError('Tidak ada data untuk di-export')
@@ -85,6 +140,21 @@ export function ExportButtons({ title }: { title: string }) {
   }
 
   const handleExportPDF = async () => {
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      await exportPdf()
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const exportPdf = async () => {
+    if (pdfHref) {
+      openPdf(pdfHref, true)
+      return
+    }
+
     const tables = document.querySelectorAll('[data-report-table]')
     if (tables.length === 0) {
       showError('Tidak ada data untuk di-export')
@@ -92,6 +162,9 @@ export function ExportButtons({ title }: { title: string }) {
     }
 
     const settings = await fetchSettings()
+    const libs = await loadPdfLibs()
+    if (!libs) return
+    const { jsPDF, autoTable } = libs
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
     const pw = doc.internal.pageSize.getWidth()
     const ph = doc.internal.pageSize.getHeight()
@@ -123,14 +196,16 @@ export function ExportButtons({ title }: { title: string }) {
     doc.setTextColor(...C.primary)
     doc.text(settings.companyName, lm, top + 7)
 
-    const addrParts = [settings.companyAddress, settings.companyPostalCode].filter(Boolean)
+    const address = companyAddressOneLine(settings)
     const contactParts = [settings.companyPhone ? `Telp: ${settings.companyPhone}` : null, settings.companyEmail || null].filter(Boolean)
-    const metaLine = [addrParts.join(', '), contactParts.join('  |  ')].filter(Boolean).join('  •  ')
+    const metaLine = [address, contactParts.join('  |  ')].filter(Boolean).join('  •  ')
     if (metaLine) {
       doc.setFontSize(7.5)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(...C.light)
-      doc.text(metaLine, lm, top + 13)
+      // Alamat kini memuat wilayah (desa/kecamatan/kota/provinsi) sehingga bisa
+      // lebih panjang dari lebar kolom kiri — dibungkus agar tidak melimpah.
+      doc.text(doc.splitTextToSize(metaLine, pw - lm - rm - 45), lm, top + 13)
     }
 
     // Logo (right side)
@@ -262,7 +337,7 @@ export function ExportButtons({ title }: { title: string }) {
   return (
     <div
       role="group"
-      aria-label="Export dokumen"
+      aria-label="Ekspor dokumen"
       className="flex items-center gap-2 print:hidden"
     >
       <Button
@@ -272,6 +347,7 @@ export function ExportButtons({ title }: { title: string }) {
         variant="secondary"
         size="sm"
         className="gap-1.5"
+        isPending={isExporting}
       >
         <FileText size={16} aria-hidden="true" />
         PDF
@@ -283,6 +359,7 @@ export function ExportButtons({ title }: { title: string }) {
         variant="secondary"
         size="sm"
         className="gap-1.5"
+        isPending={isExporting}
       >
         <FileDown size={16} aria-hidden="true" />
         CSV

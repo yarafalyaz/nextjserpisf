@@ -73,7 +73,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-lg rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
+      <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-xl border border-default bg-surface p-5 shadow-lg flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-semibold text-foreground">Buat PO Jasa/Subkontrak</h2>
           <p className="text-xs text-muted-foreground">
@@ -106,7 +106,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
             <thead>
               <tr className="text-muted-foreground text-xs">
                 <th className="text-left font-medium">Item Jasa</th>
-                <th className="text-right font-medium">Qty</th>
+                <th className="text-right font-medium">Kuantitas</th>
                 <th className="text-right font-medium">Biaya/Unit</th>
               </tr>
             </thead>

@@ -163,7 +163,7 @@ export default async function PayrollPage({
         filters={
           <>
             <div className="flex gap-2 flex-wrap items-center">
-              <form className="flex gap-2" action="/sdm/penggajian">
+              <form className="flex gap-2 flex-wrap" action="/sdm/penggajian">
                 <FormSelect
                   name="bulan"
                   defaultValue={params.bulan ?? ""}

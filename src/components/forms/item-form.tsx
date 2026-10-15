@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { useTransition, useMemo, useState, useRef } from "react"
 import { useForm, Controller, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { itemSchema, type ItemInput } from "@/lib/validators"
+import { itemSchema, type ItemInput } from "@/lib/validations/form.schemas"
 import { createItem, updateItem } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -612,7 +612,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                           </div>
                         </td>
                         <td className="py-2 px-2 text-center">
-                          <Button type="button" onPress={() => removeUom(i)} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
+                          <Button type="button" onPress={() => removeUom(i)} aria-label={`Hapus konversi satuan ${i + 1}`} className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all">×</Button>
                         </td>
                       </tr>
                     ))}

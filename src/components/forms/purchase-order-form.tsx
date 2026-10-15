@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { purchaseOrderSchema, type PurchaseOrderInput } from "@/lib/validators";
+import { purchaseOrderSchema, type PurchaseOrderInput } from "@/lib/validations/form.schemas"
 import {
   createPurchaseOrder,
   updatePurchaseOrder,
@@ -41,6 +41,11 @@ interface PurchaseOrderFormProps {
     paymentTerm?: string | null;
     shippingCost?: number;
     serviceFee?: number;
+    // Keduanya dikelola form ini (ada inputnya), jadi halaman Ubah wajib
+    // mengirim nilai lamanya — kalau tidak, submit menulis `?? null` dan
+    // tautan Permintaan Pembelian serta Perkiraan Pengiriman hilang senyap.
+    purchaseRequestId?: number | null;
+    expectedDate?: string | null;
     items?: Array<{
       itemId: number;
       qty: number;
@@ -156,7 +161,8 @@ export function PurchaseOrderForm({
         })(),
       shippingCost: order?.shippingCost ?? 0,
       serviceFee: (order as any)?.serviceFee ?? 0,
-      purchaseRequestId: defaultPrId,
+      purchaseRequestId: order?.purchaseRequestId ?? defaultPrId,
+      expectedDate: order?.expectedDate ?? "",
     },
   });
 
@@ -503,6 +509,7 @@ export function PurchaseOrderForm({
               </Button>
             </div>
 
+            <div className="overflow-x-auto">
             <table
               className="w-full border-collapse"
               style={{ fontSize: "0.8125rem" }}
@@ -577,6 +584,7 @@ export function PurchaseOrderForm({
                         <Button
                           type="button"
                           onPress={() => removeItem(index)}
+                          aria-label={`Hapus baris ${index + 1}`}
                           variant="danger-soft"
                           size="sm"
                         >
@@ -599,6 +607,7 @@ export function PurchaseOrderForm({
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
         </FormSection>
 

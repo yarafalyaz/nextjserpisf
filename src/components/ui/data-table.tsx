@@ -65,7 +65,7 @@ function isActionsColumn(id: string): boolean {
 export interface ServerPagination {
   /** Current 1-based page number. */
   page: number
-  /** Number of rows per page. */
+  /** Number of rows per halaman. */
   pageSize: number
   /** Total number of rows matching the query. */
   total: number
@@ -576,7 +576,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="hidden size-8 lg:flex"
+                className="hidden size-10 lg:flex"
                 onClick={isServer ? handleServerFirstPage : () => table.setPageIndex(0)}
                 disabled={pageIndex <= 0}
               >
@@ -586,7 +586,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-8"
+                className="size-10"
                 onClick={isServer ? handleServerPreviousPage : () => table.previousPage()}
                 disabled={pageIndex <= 0}
               >
@@ -596,7 +596,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-8"
+                className="size-10"
                 onClick={isServer ? handleServerNextPage : () => table.nextPage()}
                 disabled={pageIndex >= pageCount - 1}
               >
@@ -606,7 +606,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="hidden size-8 lg:flex"
+                className="hidden size-10 lg:flex"
                 onClick={isServer ? handleServerLastPage : () => table.setPageIndex(pageCount - 1)}
                 disabled={pageIndex >= pageCount - 1}
               >

@@ -317,6 +317,7 @@ export function PurchaseRequestForm({
                           <Button
                             type="button"
                             onPress={() => removeItem(i)}
+                            aria-label={`Hapus baris ${i + 1}`}
                             className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             <Trash2 size={14} />

@@ -87,7 +87,19 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       <form onSubmit={onSubmitProfile} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <div className="profile-top">
-          <div className="profile-avatar-upload" onClick={() => fileInputRef.current?.click()}>
+          <div
+            className="profile-avatar-upload"
+            role="button"
+            tabIndex={0}
+            aria-label="Ubah avatar"
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                fileInputRef.current?.click()
+              }
+            }}
+          >
             {avatarUrl ? (
               <Image
                 src={avatarUrl}

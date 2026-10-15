@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { useTransition, useCallback, useMemo, useEffect, useState } from "react"
 import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { quotationSchema, type QuotationInput } from "@/lib/validators"
+import { quotationSchema, type QuotationInput } from "@/lib/validations/form.schemas"
 import { createQuotation, updateQuotation } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -406,6 +406,7 @@ function SectionItemRow({
           <Button
             type="button"
             onPress={onRemove}
+            aria-label="Hapus item"
             variant="danger-soft" size="sm"
           >
             ×
@@ -553,11 +554,20 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
 
   const selectedCustomerId = watch("customerId")
 
-  // Filter vehicles by selected customer
+  // Kendaraan milik pelanggan yang dipilih. Disimpan sebagai state supaya kendaraan
+  // yang baru dibuat lewat quick-add bisa langsung dipilih tanpa memuat ulang halaman.
+  const [vehicleOptions, setVehicleOptions] = useState(() =>
+    customerVehicles.map((v) => ({
+      id: v.id,
+      customerId: v.customerId,
+      label: `${v.plateNumber} - ${v.brandName} ${v.modelName}`.replace(/^ - | - $/g, "").trim(),
+    })),
+  )
+
   const filteredVehicles = useMemo(() => {
     if (!selectedCustomerId) return []
-    return customerVehicles.filter((v) => v.customerId === selectedCustomerId)
-  }, [selectedCustomerId, customerVehicles])
+    return vehicleOptions.filter((v) => v.customerId === selectedCustomerId)
+  }, [selectedCustomerId, vehicleOptions])
 
   function onSubmit(data: QuotationInput) {
     startTransition(async () => {
@@ -638,13 +648,27 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
             name="customerVehicleId"
             control={control}
             render={({ field }) => (
-              <Combobox
+              <QuickAddSelect
                 id="customerVehicleId"
                 value={field.value ? String(field.value) : null}
                 onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                 disabled={!selectedCustomerId}
                 placeholder={selectedCustomerId ? "Pilih kendaraan..." : "Pilih pelanggan dulu"}
-                options={filteredVehicles.map((v) => ({ value: String(v.id), label: `${v.plateNumber} - ${v.brandName} ${v.modelName}`.trim() }))}
+                options={filteredVehicles.map((v) => ({ value: String(v.id), label: v.label }))}
+                title={QUICK_ADD.customerVehicle.title}
+                fields={QUICK_ADD.customerVehicle.fields}
+                action={QUICK_ADD.customerVehicle.action}
+                getLabel={QUICK_ADD.customerVehicle.getLabel}
+                // Kendaraan selalu milik pelanggan yang sedang dipilih di dokumen.
+                extraValues={{ customerId: selectedCustomerId }}
+                onCreated={(created) => {
+                  if (!selectedCustomerId) return
+                  setVehicleOptions((prev) => [
+                    ...prev,
+                    { id: created.id, customerId: selectedCustomerId, label: created.label },
+                  ])
+                  field.onChange(created.id)
+                }}
               />
             )}
           />

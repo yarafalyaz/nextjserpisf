@@ -79,11 +79,22 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
     }
   }
 
-  function handleRemoveFile(id: number) {
+  async function handleRemoveFile(id: number) {
+    const previous = uploadedFiles
     const newFiles = uploadedFiles.filter((f) => f.id !== id)
     setUploadedFiles(newFiles)
     onAttachmentsChange?.(newFiles.map((f) => f.id))
-    fetch(`/api/upload/attachments/${id}`, { method: "DELETE" }).catch(() => {})
+
+    // Dihapus dari UI hanya kalau server benar-benar menghapusnya; kalau tidak,
+    // berkas tetap ada di server (yatim) sementara user mengira sudah terhapus.
+    try {
+      const res = await fetch(`/api/upload/attachments/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Gagal menghapus lampiran")
+    } catch {
+      setUploadedFiles(previous)
+      onAttachmentsChange?.(previous.map((f) => f.id))
+      showError("Gagal menghapus lampiran")
+    }
   }
 
   return (

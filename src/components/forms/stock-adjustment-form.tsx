@@ -116,7 +116,7 @@ export function StockAdjustmentForm({
       try {
         const formData = new FormData();
         formData.append("warehouseId", warehouseId);
-        formData.append("date", toLocalDateOnly(new Date()));
+        formData.append("date", adjustment?.date ?? toLocalDateOnly(new Date()));
         formData.append("items", JSON.stringify(adjItems.map((item) => ({
           ...item,
           serialNumbers: item.serialNumbers.split(/[\n,]/).map((value) => value.trim()).filter(Boolean),
@@ -318,6 +318,7 @@ export function StockAdjustmentForm({
                           <Button
                             type="button"
                             onPress={() => removeItem(i)}
+                            aria-label={`Hapus baris ${i + 1}`}
                             className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             ×

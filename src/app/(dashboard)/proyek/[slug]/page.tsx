@@ -189,7 +189,7 @@ export default async function ProjectDetailPage({
                 Varian: {project.customerVehicle.vehicle.variant?.name || "-"} | Tahun: {project.customerVehicle.vehicle.year || "-"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Warna: <span className="inline-block size-2 rounded-full border border-default" style={{ backgroundColor: project.customerVehicle.color || "#000" }} /> {project.customerVehicle.color || "-"}
+                Warna: <span className="inline-block size-2 rounded-full border border-default" style={{ backgroundColor: project.customerVehicle.color || "var(--muted-foreground)" }} /> {project.customerVehicle.color || "-"}
               </p>
             </div>
           ) : (

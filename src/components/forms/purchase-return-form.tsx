@@ -109,6 +109,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
           <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
         </div>
 
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
           <thead>
             <tr>
@@ -141,13 +142,14 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
                 </td>
                 <td>
                   {returnItems.length > 1 && (
-                    <Button type="button" onPress={() => removeItem(index)} variant="danger-soft" size="sm">×</Button>
+                    <Button type="button" onPress={() => removeItem(index)} aria-label={`Hapus baris ${index + 1}`} variant="danger-soft" size="sm">×</Button>
                   )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

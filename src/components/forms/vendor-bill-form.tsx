@@ -39,10 +39,14 @@ interface VendorBillFormProps {
     isService: boolean;
     grandTotal: number;
   }[];
+  /** Jenis pemotongan PPh (PPh 23, PPh 4(2), …) beserta tarifnya. */
+  withholdingTypes?: { id: number; name: string; rate: number }[];
   bill?: {
     id: number;
     vendorId: number;
     purchaseOrderId?: number | null;
+    withholdingTypeId?: number | null;
+    withholdingAmount?: number | null;
     date: string;
     dueDate?: string | null;
     notes?: string | null;
@@ -65,7 +69,7 @@ interface VendorBillFormProps {
   }[];
 }
 
-export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: VendorBillFormProps) {
+export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdingTypes = [], bill }: VendorBillFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [vendorOptions, setVendorOptions] = useState(vendors);
@@ -78,6 +82,12 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
   );
   const [purchaseOrderId, setPurchaseOrderId] = useState<string | null>(
     bill?.purchaseOrderId ? String(bill.purchaseOrderId) : null,
+  );
+  const [withholdingTypeId, setWithholdingTypeId] = useState<string | null>(
+    bill?.withholdingTypeId ? String(bill.withholdingTypeId) : null,
+  );
+  const [withholdingAmount, setWithholdingAmount] = useState<number>(
+    bill?.withholdingAmount ?? 0,
   );
   // POs offered for settlement: only the selected vendor's POs (keeps the bill
   // and PO vendor consistent) — service POs are included and tagged "Jasa".
@@ -152,6 +162,17 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
     return sum + afterDisc * (item.taxPercent / 100);
   }, 0);
   const grandTotal = subtotal - totalDiscount + totalTax;
+  // Base for PPh withholding is the pre-tax amount (DPP).
+  const dpp = subtotal - totalDiscount;
+  const netPayable = grandTotal - withholdingAmount;
+
+  function applyWithholdingRate(key: string | null) {
+    setWithholdingTypeId(key);
+    const selected = withholdingTypes.find((t) => String(t.id) === key);
+    setWithholdingAmount(
+      selected ? Math.round(dpp * (selected.rate / 100) * 100) / 100 : 0,
+    );
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -161,6 +182,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
         formData.set("subtotal", String(subtotal));
         formData.set("tax", String(totalTax));
         formData.set("grandTotal", String(grandTotal));
+        formData.set("withholdingAmount", String(withholdingAmount || 0));
         formData.set("items", JSON.stringify(billItems));
         const { createVendorBill, updateVendorBill } =
           await import("@/actions/purchase.actions");
@@ -436,6 +458,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
                           <Button
                             type="button"
                             onPress={() => removeItem(idx)}
+                            aria-label={`Hapus baris ${idx + 1}`}
                             className="p-1.5 rounded-md text-danger hover:bg-danger/10 transition-all"
                           >
                             <Trash2 size={14} />
@@ -501,6 +524,37 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], bill }: Ve
                 </tfoot>
               </table>
             </div>
+          </div>
+        </FormSection>
+
+        <FormSection title="Pemotongan PPh (Opsional)" columns={2}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="withholdingTypeId">Jenis PPh</Label>
+            <Combobox
+              id="withholdingTypeId"
+              value={withholdingTypeId}
+              onChange={(key) => applyWithholdingRate(key)}
+              placeholder="Tanpa pemotongan"
+              options={withholdingTypes.map((t) => ({
+                value: String(t.id),
+                label: `${t.name} (${t.rate}%)`,
+              }))}
+            />
+            <input type="hidden" name="withholdingTypeId" value={withholdingTypeId ?? ""} />
+            <span className="text-xs text-muted-foreground">
+              Dasar pemotongan: DPP {dpp.toLocaleString("id-ID")}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="withholdingAmount">Nilai PPh Dipotong</Label>
+            <CurrencyInput
+              id="withholdingAmount"
+              value={withholdingAmount}
+              onChange={(value) => setWithholdingAmount(value)}
+            />
+            <span className="text-xs text-muted-foreground">
+              Dibayarkan ke vendor: {netPayable.toLocaleString("id-ID")} (total − PPh)
+            </span>
           </div>
         </FormSection>
 
