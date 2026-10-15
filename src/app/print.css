@@ -31,14 +31,16 @@
     transform: none !important;
   }
 
-  /* Tables */
-  table {
+  /* Tables — legacy boxed style, scoped so it never leaks into the document
+     statements (.stmt), which draw horizontal rules only. */
+  table:not(.stmt) {
     width: 100% !important;
     border-collapse: collapse;
     font-size: 10pt;
   }
 
-  th, td {
+  table:not(.stmt) th,
+  table:not(.stmt) td {
     border: 1px solid #ccc !important;
     padding: 4px 8px !important;
   }
@@ -53,16 +55,29 @@
   .page-break-after { page-break-after: always; }
   .no-break { page-break-inside: avoid; }
 
-  /* KPI cards in print */
-  .grid {
-    display: flex !important;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+  /* Hapus dulu: `.grid { display: flex !important }` pernah ditulis di sini
+     untuk "KPI cards in print", padahal `.grid` adalah utility Tailwind — akibatnya
+     SETIAP grid di seluruh aplikasi berubah jadi flexbox saat dicetak, dan
+     `print:hidden` (yang menulis display:none tanpa !important) selalu kalah
+     sehingga elemen yang seharusnya tak dicetak tetap ikut tercetak.
+     Kartu ringkasan laporan sudah flex lewat kelasnya sendiri (.report-kpi-card). */
 
   /* Colors for print */
   .text-success { color: #16a34a !important; }
   .text-danger { color: #dc2626 !important; }
   .text-warning { color: #ca8a04 !important; }
   .text-muted { color: #666 !important; }
+
+  /* Cetak dari tema gelap. `html.dark` membawa `color-scheme: dark` dan token
+     teks yang terang (`--text-primary: #f1f5f9`), sehingga halaman non-dokumen
+     tercetak nyaris putih di atas kertas putih. Saat dicetak, tema gelap
+     dipaksa jadi tinta hitam dan skema warna browser dikembalikan ke terang. */
+  html.dark {
+    color-scheme: light;
+  }
+
+  html.dark body,
+  html.dark body * {
+    color: #000 !important;
+  }
 }

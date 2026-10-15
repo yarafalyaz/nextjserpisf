@@ -72,6 +72,8 @@
   --color-accent-foreground: var(--accent-fg);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -113,6 +115,11 @@
 
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
+
+  /* Success/warning surfaces use dark ink in dark mode (--success/--warning
+     become light there), mirroring --destructive-foreground. */
+  --success-foreground: #ffffff;
+  --warning-foreground: #ffffff;
 
   --border: #e2e8f0;
   --input: #e2e8f0;
@@ -156,6 +163,9 @@ html.dark {
 
   --destructive: #f87171;
   --destructive-foreground: #0f172a;
+
+  --success-foreground: #0f172a;
+  --warning-foreground: #0f172a;
 
   --border: #2d3548;
   --input: #2d3548;
@@ -2398,13 +2408,12 @@ html.dark [cmdk-group-heading] {
 }
 
 /* ==================== REPORT LETTERHEAD (screen + print) ==================== */
+/* Kop dokumen: blok identitas perusahaan rata tengah, garis, judul, periode.
+   Isi statemennya sendiri memakai kelas `.doc-*` yang sama dengan ReportSheet. */
 .report-letterhead {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 16px;
-  margin-bottom: 8px;
-  border-bottom: 2px solid var(--border, #e5e7eb);
+  margin-bottom: 14px;
 }
 
 .report-letterhead-company {
@@ -2495,8 +2504,7 @@ html.dark [cmdk-group-heading] {
 
   /* Report letterhead: formal centered header, black-on-white. */
   .report-letterhead {
-    border-bottom: 2px solid #000 !important;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
 
   .report-letterhead-company {
@@ -2557,8 +2565,10 @@ html.dark [cmdk-group-heading] {
     box-shadow: none !important;
   }
 
-  /* Statement tables: crisp ruled lines, repeating header on page breaks. */
-  table {
+  /* Statement tables: crisp ruled lines, repeating header on page breaks.
+   * Scoped to NON-statement tables: the document statements (.stmt) draw only
+   * horizontal rules, so the legacy boxed-grid style must not leak into them. */
+  table:not(.stmt) {
     width: 100% !important;
     border-collapse: collapse !important;
     font-size: 10pt;
@@ -2577,14 +2587,14 @@ html.dark [cmdk-group-heading] {
     page-break-inside: avoid;
   }
 
-  th {
+  table:not(.stmt) th {
     border-bottom: 1px solid #000 !important;
     background: #f2f2f2 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  td {
+  table:not(.stmt) td {
     border-bottom: 1px solid #e0e0e0 !important;
   }
 
@@ -2617,7 +2627,7 @@ html.dark [cmdk-group-heading] {
 .report-narration p {
   font-size: 0.8125rem;
   line-height: 1.65;
-  color: var(--text-secondary, #475569);
+  color: var(--muted-foreground, #475569);
   margin: 0;
 }
 
@@ -2663,4 +2673,215 @@ html.dark [cmdk-group-heading] {
   background: var(--bg-card, #1e293b);
   color: var(--text-primary, #f1f5f9);
   border-color: var(--border-color, #334155);
+}
+
+/* ==================== REPORT DOCUMENT (lembar laporan + tabel pernyataan) ====================
+ * Laporan keuangan dirender sebagai DOKUMEN: satu lembar berukuran A4 dengan kop
+ * tengah, judul, periode, lalu tabel pernyataan bergaris horizontal saja — bukan
+ * kartu-kartu dashboard.
+ *
+ * Palet dokumen memakai token tema (--card/--foreground/--muted-foreground/
+ * --border) sehingga **ikut dark mode** — sebelumnya nilainya hardcoded putih +
+ * tinta gelap, jadi saat tema gelap aktif teks terang jatuh di atas lembar putih
+ * dan nyaris tak terbaca. Saat DICETAK tetap dipaksa hitam-putih (lihat @media print).
+ */
+.report-sheet,
+.app-content > div:has(.report-letterhead) {
+  --doc-paper: var(--card, #ffffff);
+  --doc-ink: var(--card-foreground, #111827);
+  --doc-muted: var(--muted-foreground, #6b7280);
+  --doc-rule: var(--border, #111827);
+}
+
+.report-sheet {
+  background: var(--doc-paper);
+  color: var(--doc-ink);
+  width: 100%;
+  max-width: 210mm;
+  margin-inline: auto;
+  padding: 14mm 12mm;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 10px 30px -18px rgb(16 24 40 / 25%);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- kop dokumen ---- */
+.doc-head { text-align: center; }
+.doc-company { font-size: 12.5pt; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+.doc-lines { margin-top: 2px; font-size: 8.5pt; color: var(--doc-muted); line-height: 1.45; }
+.doc-logo { height: 46px; width: auto; object-fit: contain; margin-bottom: 4px; }
+.doc-rule { border: 0; border-top: 1.5px solid var(--doc-rule); margin: 10px 0; }
+.doc-title { font-size: 13pt; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.doc-subtitle { font-size: 9pt; color: var(--doc-muted); }
+.doc-meta { display: flex; justify-content: space-between; gap: 16px; font-size: 8.5pt; color: var(--doc-muted); margin-top: 2px; }
+.doc-period { font-size: 9pt; font-weight: 600; color: var(--doc-ink); }
+
+/* ---- tabel pernyataan: hanya garis horizontal, angka rata kanan ---- */
+.stmt { width: 100%; border-collapse: collapse; font-size: 10pt; }
+.stmt thead th {
+  padding: 3px 8px 4px;
+  border-bottom: 1px solid var(--doc-rule);
+  font-size: 8.5pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+}
+.stmt thead th.num { text-align: right; }
+.stmt tbody td { padding: 2px 8px; vertical-align: top; }
+.stmt tbody td.num { text-align: right; white-space: nowrap; }
+.stmt thead th:first-child,
+.stmt tbody td:first-child { padding-inline-start: 0; }
+.stmt thead th:last-child,
+.stmt tbody td:last-child { padding-inline-end: 0; }
+.stmt tbody tr.group td { padding-top: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.stmt tbody tr.subtotal td { border-top: 1px solid #9ca3af; padding-top: 3px; font-weight: 700; }
+.stmt tbody tr.total td { border-top: 1px solid var(--doc-rule); border-bottom: 3px double var(--doc-rule); padding: 3px 0; font-weight: 700; }
+.stmt tbody tr.grand td { border-top: 3px double var(--doc-rule); padding-top: 4px; font-weight: 700; font-size: 10.5pt; }
+.stmt tbody tr.row-parent td { font-weight: 600; }
+.stmt .indent-1 { padding-left: 16px; }
+.stmt .indent-2 { padding-left: 32px; }
+.stmt .indent-3 { padding-left: 48px; }
+.stmt .col-code { width: 68px; color: var(--doc-muted); }
+.stmt .muted { color: var(--doc-muted); }
+.stmt-empty { padding: 14px 0; text-align: center; color: var(--doc-muted); font-size: 9pt; }
+
+/* ---- bagian laporan & ringkasan angka (tanpa kartu/warna blok) ---- */
+.report-section { margin-bottom: 16px; }
+.report-section-heading { margin-bottom: 6px; }
+.report-section-title {
+  margin: 0;
+  font-size: 10.5pt;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--doc-ink, #111827);
+}
+.report-section-desc { margin: 2px 0 0; font-size: 8.5pt; color: var(--doc-muted, #6b7280); }
+
+.report-kpi-card {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0 6px 10px;
+  border-left: 2px solid var(--border, #e5e7eb);
+}
+.report-kpi-content { display: flex; flex-direction: column; }
+.report-kpi-label { margin: 0; font-size: 8pt; letter-spacing: 0.04em; text-transform: uppercase; color: var(--doc-muted, #6b7280); }
+.report-kpi-value { margin: 0; font-size: 11pt; font-weight: 700; font-variant-numeric: tabular-nums; }
+.report-kpi-icon { display: none; }
+
+/* ---- kaki dokumen ---- */
+.doc-foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; padding-top: 6px; border-top: 1px solid var(--border, #e5e7eb); font-size: 7.5pt; color: var(--doc-muted); }
+.doc-foot-sig { display: flex; justify-content: flex-end; gap: 56px; margin-top: 30px; font-size: 8.5pt; }
+.doc-foot-sig > div { min-width: 130px; text-align: center; }
+.doc-foot-sig .sig-line { margin-top: 44px; border-top: 1px solid var(--doc-muted); padding-top: 3px; }
+
+/* ---- kerangka lembar: setiap halaman laporan memakai kop (ReportLetterhead)
+   otomatis dibingkai sebagai lembar dokumen, tanpa perlu mengubah tiap halaman.
+   Lebar 297mm karena laporan operasional punya banyak kolom (A4 landscape).
+   Palet --doc-* diwarisi dari aturan di atas, jadi ikut tema terang/gelap. */
+@media screen {
+  .app-content > div:has(.report-letterhead) {
+    background: var(--doc-paper);
+    color: var(--doc-ink);
+    max-width: 297mm;
+    margin-inline: auto;
+    padding: 12mm;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 10px 30px -18px rgb(16 24 40 / 22%);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Footer "Dicetak oleh" yang berulang di SETIAP halaman cetak (position: fixed
+   diulang per halaman oleh Chrome), dipasang sekali di ReportLetterhead. */
+.doc-print-footer { display: none; }
+
+/* Laporan bertabel lebar (yang memakai kop laporan) dicetak lanskap supaya kolom
+   tidak terpotong; pernyataan keuangan (ReportSheet) tetap portrait A4. */
+@page report-wide { size: A4 landscape; }
+
+@media print {
+  .doc-print-footer {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-top: 1px solid #d1d5db;
+    padding-top: 3px;
+    font-size: 7.5pt;
+    color: #555;
+  }
+}
+
+@media print {
+  /* Narasi adalah bantuan di layar; kertas laporan tetap bersih tanpa paragraf. */
+  .report-narration { display: none !important; }
+  /* Laporan berkop → kertas lanskap (kolom lebar). */
+  .app-content > div:has(.report-letterhead) { page: report-wide; }
+  /* Kertas selalu hitam-putih, apa pun tema layar yang sedang aktif. */
+  .report-sheet,
+  .app-content > div:has(.report-letterhead) {
+    --doc-paper: #ffffff;
+    --doc-ink: #000000;
+    --doc-muted: #333333;
+    --doc-rule: #000000;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .report-kpi-card { border-left: 0; padding-left: 0; }
+  .report-section-title { color: #000 !important; }
+  .report-section-desc { color: #333 !important; }
+  .report-sheet {
+    /* `margin-inline: auto` (screen) makes this flex item shrink-to-fit on
+       paper; zeroing it lets the sheet fill the printable width. */
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .report-sheet,
+  .report-sheet * { color: #000 !important; }
+  .doc-lines,
+  .doc-meta,
+  .doc-subtitle,
+  .col-code,
+  .stmt .muted { color: #333 !important; }
+  .doc-rule { border-top-color: #000 !important; }
+  .doc-company { font-size: 12pt; }
+  .doc-title { font-size: 14pt; }
+  .stmt { font-size: 9.5pt; }
+  .stmt thead { display: table-header-group; }
+  .stmt tr { break-inside: avoid; page-break-inside: avoid; }
+  .doc-foot { border-top-color: #d1d5db !important; }
+
+  /* Statements: horizontal rules only — no cell boxes, no grey header band. */
+  .stmt th,
+  .stmt td {
+    border-top: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    background: transparent !important;
+    padding: 2px 8px !important;
+  }
+  .stmt thead th { padding: 3px 8px 4px !important; }
+  .stmt thead th:first-child,
+  .stmt tbody td:first-child { padding-inline-start: 0 !important; }
+  .stmt thead th:last-child,
+  .stmt tbody td:last-child { padding-inline-end: 0 !important; }
+  .stmt thead th { border-bottom: 1px solid #000 !important; }
+  .stmt tbody tr.subtotal td { border-top: 1px solid #9ca3af !important; }
+  .stmt tbody tr.total td {
+    border-top: 1px solid #000 !important;
+    border-bottom: 3px double #000 !important;
+  }
+  .stmt tbody tr.grand td { border-top: 3px double #000 !important; }
 }

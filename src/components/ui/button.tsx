@@ -77,7 +77,7 @@ export function Button({
   const shadSize = isIconOnly ? "icon" : (sizeMap[size] ?? "default")
 
   const variantClass = variant === "success"
-    ? "bg-success text-white hover:bg-success/90 focus-visible:ring-success/20 dark:bg-success/60 dark:focus-visible:ring-success/40"
+    ? "bg-success text-success-foreground hover:bg-success/90 focus-visible:ring-success/20 dark:bg-success/60 dark:focus-visible:ring-success/40"
     : ""
 
   if (href) {

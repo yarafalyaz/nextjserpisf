@@ -55,7 +55,7 @@ const variantConfig: Record<
   },
   warning: {
     confirmClass:
-      "bg-warning text-white hover:bg-warning/90 focus-visible:ring-warning/30 dark:focus-visible:ring-warning/40",
+      "bg-warning text-warning-foreground hover:bg-warning/90 focus-visible:ring-warning/30 dark:focus-visible:ring-warning/40",
     mediaClass: "bg-warning/15 text-warning",
     Icon: TriangleAlert,
   },
@@ -73,7 +73,7 @@ const variantConfig: Record<
   },
   success: {
     confirmClass:
-      "bg-success text-white hover:bg-success-600 focus-visible:ring-success/30",
+      "bg-success text-success-foreground hover:bg-success-600 focus-visible:ring-success/30",
     mediaClass: "bg-success/10 text-success",
     Icon: CheckCircle2,
   },

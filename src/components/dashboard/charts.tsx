@@ -418,6 +418,7 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             <button
               type="button"
               onClick={() => setActiveSeries("all")}
+              aria-pressed={activeSeries === "all"}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
                 activeSeries === "all"
                   ? "bg-primary text-primary-foreground shadow-sm"
@@ -431,9 +432,10 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
               onClick={() =>
                 setActiveSeries((prev) => (prev === "lunas" ? "all" : "lunas"))
               }
+              aria-pressed={showLunas && activeSeries !== "all"}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
                 showLunas && activeSeries !== "all"
-                  ? "bg-[var(--chart-2)] text-white shadow-sm"
+                  ? "bg-[var(--chart-2)] text-background shadow-sm"
                   : activeSeries === "all"
                   ? "bg-[var(--chart-2)]/15 text-[var(--chart-2)] border border-[var(--chart-2)]/30"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -447,9 +449,10 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
               onClick={() =>
                 setActiveSeries((prev) => (prev === "tagihan" ? "all" : "tagihan"))
               }
+              aria-pressed={showTagihan && activeSeries !== "all"}
               className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition-colors ${
                 showTagihan && activeSeries !== "all"
-                  ? "bg-[var(--chart-1)] text-white shadow-sm"
+                  ? "bg-[var(--chart-1)] text-background shadow-sm"
                   : activeSeries === "all"
                   ? "bg-[var(--chart-1)]/15 text-[var(--chart-1)] border border-[var(--chart-1)]/30"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"

@@ -28,7 +28,7 @@ export function ApprovePayrollButton({ payrollId }: { payrollId: number }) {
 
   return (
     <>
-      <PageHeaderButton onPress={() => setIsOpen(true)} className="bg-success text-white hover:bg-success-600 transition-colors">
+      <PageHeaderButton onPress={() => setIsOpen(true)} className="bg-success text-success-foreground hover:bg-success-600 transition-colors">
         <CheckCircle size={14} /> Finalisasi (Approve)
       </PageHeaderButton>
 

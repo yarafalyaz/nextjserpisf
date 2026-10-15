@@ -189,9 +189,9 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                   <span
                     className={cn(
                       "absolute -left-[35px] top-1.5 size-6 rounded-full border-2 transition-all flex items-center justify-center shadow-sm z-10",
-                      isCompleted ? "bg-success border-success text-white" :
-                      isSkipped ? "bg-warning border-warning text-white" :
-                      isActive ? "bg-primary border-primary animate-pulse text-white" :
+                      isCompleted ? "bg-success border-success text-success-foreground" :
+                      isSkipped ? "bg-warning border-warning text-warning-foreground" :
+                      isActive ? "bg-primary border-primary animate-pulse text-primary-foreground" :
                       "bg-surface border-default-hover text-muted-foreground"
                     )}
                   >
@@ -297,7 +297,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                               size="sm"
                               isDisabled={isPending || !eligible}
                               onClick={() => handleActionClick(stage, "completed")}
-                              className="w-full sm:w-auto bg-success hover:bg-success/90 border-success text-white shadow-sm"
+                              className="w-full sm:w-auto bg-success hover:bg-success/90 border-success text-success-foreground shadow-sm"
                             >
                               <Check className="size-3 mr-1.5 stroke-[3]" /> Selesaikan
                             </Button>

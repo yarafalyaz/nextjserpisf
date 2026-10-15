@@ -13,10 +13,11 @@ import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteSalesInvoice, voidSalesInvoice } from "@/actions/sales.actions"
+import { deleteSalesInvoice, postInvoice, voidSalesInvoice } from "@/actions/sales.actions"
 import { VoidButton } from "@/components/ui/void-button"
 import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
+import { ProcessButton } from "@/components/ui/process-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -115,7 +116,7 @@ export default async function InvoiceDetailPage({
           <>
             <Button href={entityEditHref("/penjualan/faktur", invoice)} variant="primary">Ubah</Button>
             {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-              <Button href={`/penjualan/pembayaran/tambah?invoiceId=${invoice.id}`} variant="primary" className="bg-[var(--color-success)] text-white">
+              <Button href={`/penjualan/pembayaran/tambah?invoiceId=${invoice.id}`} variant="primary" className="bg-success text-success-foreground">
                 Terima Pembayaran
               </Button>
             )}
@@ -123,6 +124,16 @@ export default async function InvoiceDetailPage({
               <Button href={`/penjualan/surat-jalan/tambah?fakturPenjualanId=${invoice.id}`} variant="primary">+ Surat Jalan</Button>
             )}
             <PrintButton documentType="invoice" documentId={invoice.id} />
+            {["draft", "approved"].includes(invoice.status) && (
+              <ProcessButton
+                id={invoice.id}
+                action={postInvoice}
+                label="Posting"
+                confirmTitle="Posting faktur ini?"
+                confirmBody="Faktur akan berstatus terposting: piutang diakui di jurnal dan stok barang berkurang sesuai item. Pastikan data sudah benar."
+                successMessage="Faktur berhasil diposting"
+              />
+            )}
             {invoice.status !== "draft" && invoice.status !== "cancelled" && (
               <VoidButton id={invoice.id} action={voidSalesInvoice} />
             )}
