@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { DeleteButton } from "@/components/ui/delete-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { deleteRole } from "@/actions/roles.actions"
@@ -16,7 +16,7 @@ import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Peran" }
 
 export default async function RolesPage() {
-  await requirePermission("manage_settings")
+  await requirePermission("manage_roles")
 
   const roles = await prisma.role.findMany({
     include: { permissions: true, users: true },
@@ -75,14 +75,7 @@ export default async function RolesPage() {
                         <Link href={entityEditHref("/pengaturan/peran", role)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">
                           Ubah
                         </Link>
-                        <form action={async () => {
-                          "use server"
-                          await deleteRole(role.id)
-                        }}>
-                          <Button type="submit" variant="danger" size="sm" className="border border-danger/30">
-                            Hapus
-                          </Button>
-                        </form>
+                        <DeleteButton id={role.id} action={deleteRole} />
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>

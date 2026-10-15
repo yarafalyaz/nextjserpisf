@@ -80,8 +80,28 @@ beforeEach(() => {
 })
 
 describe("createRole validation", () => {
-  it("throws error when schema validation fails", async () => {
-    await expect(createRole(fd({}))).rejects.toThrow()
+  it("mengembalikan pesan error (bukan melempar) saat validasi skema gagal", async () => {
+    // Kontrak form: kegagalan yang bisa diperbaiki pengguna dikembalikan sebagai
+    // { success: false, error } supaya tampil inline dan isian form tidak hilang.
+    const result = await createRole(fd({}))
+    expect(result).toMatchObject({ success: false })
+    expect((result as { error: string }).error).toBeTruthy()
+    expect(roleCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("menolak nama peran yang dicadangkan sistem", async () => {
+    // Tanpa penjagaan ini, pemegang pengelolaan peran bisa membuat ulang role
+    // bernama "super_admin"/"admin" dan langsung mendapat akses lintas-cakupan.
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    await expect(createRole(fd({ name: "super_admin" }))).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/dicadangkan/),
+    })
+    await expect(createRole(fd({ name: "logistics" }))).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/dicadangkan/),
+    })
+    expect(roleCreateMock).not.toHaveBeenCalled()
   })
 })
 
@@ -91,7 +111,10 @@ describe("createRole least-privilege guard", () => {
     permissionFindManyMock.mockResolvedValue([{ name: "manage_users" }])
     await expect(
       createRole(fd({ name: "Sneaky", permissions: ["5"] })),
-    ).rejects.toThrow(/tidak Anda miliki/)
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/tidak Anda miliki/),
+    })
     expect(roleCreateMock).not.toHaveBeenCalled()
   })
 
@@ -125,8 +148,11 @@ describe("createRole least-privilege guard", () => {
 })
 
 describe("updateRole validation", () => {
-  it("throws error when schema validation fails", async () => {
-    await expect(updateRole(3, fd({}))).rejects.toThrow()
+  it("mengembalikan pesan error (bukan melempar) saat validasi skema gagal", async () => {
+    const result = await updateRole(3, fd({}))
+    expect(result).toMatchObject({ success: false })
+    expect((result as { error: string }).error).toBeTruthy()
+    expect(roleUpdateMock).not.toHaveBeenCalled()
   })
 })
 
@@ -135,7 +161,10 @@ describe("updateRole least-privilege guard", () => {
     permissionFindManyMock.mockResolvedValue([{ name: "approve_workflows" }])
     await expect(
       updateRole(3, fd({ name: "Sneaky", permissions: ["7"] })),
-    ).rejects.toThrow(/tidak Anda miliki/)
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/tidak Anda miliki/),
+    })
     expect(roleUpdateMock).not.toHaveBeenCalled()
   })
 
@@ -150,6 +179,38 @@ describe("updateRole least-privilege guard", () => {
       updateRole(3, fd({ name: "Viewer", permissions: ["9"] })),
     ).rejects.toThrow("NEXT_REDIRECT")
     expect(roleUpdateMock).toHaveBeenCalled()
+  })
+})
+
+describe("updateRole slug", () => {
+  const allowAll = () => {
+    requirePermissionMock.mockResolvedValue({
+      id: "1",
+      roles: ["admin"],
+      permissions: ["manage_settings", "view_items"],
+    })
+    permissionFindManyMock.mockResolvedValue([{ name: "view_items" }])
+  }
+
+  it("tidak menghitung ulang slug saat hanya daftar izin yang berubah", async () => {
+    allowAll()
+    roleFindUniqueMock.mockResolvedValue({ name: "Viewer" })
+    await expect(
+      updateRole(3, fd({ name: "Viewer", permissions: ["9"] })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    const data = roleUpdateMock.mock.calls.at(-1)?.[0]?.data
+    // Regresi: menyimpan izin dari matriks tidak boleh mengubah URL peran.
+    expect(data.slug).toBeUndefined()
+    expect(data.permissions.set).toEqual([{ id: 9 }])
+  })
+
+  it("menghitung ulang slug saat nama peran benar-benar berubah", async () => {
+    allowAll()
+    roleFindUniqueMock.mockResolvedValue({ name: "Lama" })
+    await expect(
+      updateRole(3, fd({ name: "Baru", permissions: ["9"] })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+    expect(roleUpdateMock.mock.calls.at(-1)?.[0]?.data.slug).toBe("baru")
   })
 })
 
@@ -198,7 +259,10 @@ describe("super_admin role protection", () => {
     })
     await expect(
       updateRole(1, fd({ name: "still-super" })),
-    ).rejects.toThrow(/super_admin/i)
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringMatching(/super_admin/i),
+    })
     expect(roleUpdateMock).not.toHaveBeenCalled()
   })
 

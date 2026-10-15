@@ -2,10 +2,12 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { permissionGroupLabel, permissionLabel } from "@/lib/auth/permission-labels"
 import { updateRole } from "@/actions/roles.actions"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { ActionForm } from "@/components/ui/action-form"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -16,7 +18,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Ubah Peran" }
 
 export default async function EditRolePage({ params }: { params: Promise<{ slug: string }> }) {
-  await requirePermission("manage_settings")
+  await requirePermission("manage_roles")
   const { slug } = await params
 
   const [role, allPermissions] = await Promise.all([
@@ -57,7 +59,7 @@ export default async function EditRolePage({ params }: { params: Promise<{ slug:
         <h1 className="text-2xl font-bold text-foreground">Ubah Peran: {role.name}</h1>
       </div>
 
-      <form action={updateRoleWithId} className="flex flex-col gap-6">
+      <ActionForm action={updateRoleWithId} className="flex flex-col gap-6">
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden p-6">
           <div className="flex flex-col gap-4 max-w-md">
             <div className="flex flex-col gap-1.5">
@@ -79,7 +81,7 @@ export default async function EditRolePage({ params }: { params: Promise<{ slug:
           <div className="flex flex-col gap-5">
             {Object.entries(grouped).map(([prefix, perms]) => (
               <div key={prefix}>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 capitalize">{prefix}</h3>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{permissionGroupLabel(prefix)}</h3>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
                   {perms.map((perm) => (
                     <label key={perm.id} htmlFor={`perm-${perm.id}`} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-default hover:bg-surface-secondary transition-all cursor-pointer">
@@ -89,7 +91,7 @@ export default async function EditRolePage({ params }: { params: Promise<{ slug:
                         value={String(perm.id)}
                         defaultChecked={assignedIds.has(perm.id)}
                       />
-                      <span className="text-sm text-foreground">{perm.name}</span>
+                      <span className="text-sm text-foreground">{permissionLabel(perm.name)}</span>
                     </label>
                   ))}
                 </div>
@@ -99,14 +101,14 @@ export default async function EditRolePage({ params }: { params: Promise<{ slug:
         </div>
 
         <div className="flex items-center gap-3">
-          <Button type="submit" variant="primary">
+          <SubmitButton variant="primary" pendingLabel="Menyimpan...">
             Perbarui Peran
-          </Button>
+          </SubmitButton>
           <Link href={entityHref("/pengaturan/peran", role)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default transition-all hover:bg-surface-secondary">
             Batal
           </Link>
         </div>
-      </form>
+      </ActionForm>
     </div>
   )
 }

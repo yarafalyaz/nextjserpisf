@@ -3,6 +3,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { isReservedRoleName } from "@/lib/auth/role-names"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
@@ -10,8 +11,17 @@ import { parseFormData } from "@/lib/validations/parse-form"
 import { createRoleSchema, updateRoleSchema } from "@/lib/validations/roles.schemas"
 import { nextSlug } from "@/lib/utils/slug-db"
 
+// Kontrak galat modul ini sengaja dibagi dua:
+//  - `createRole`/`updateRole` dipakai form halaman, jadi kegagalan yang bisa
+//    diperbaiki pengguna (validasi, nama dicadangkan, izin di luar miliknya)
+//    DIKEMBALIKAN sebagai { success: false, error } agar pesannya tampil inline
+//    dan isian form tidak hilang.
+//  - `deleteRole` dipanggil dari komponen klien (DeleteButton) yang sudah
+//    menampilkan toast untuk error yang dilempar.
+// Galat tak terduga di keduanya tetap dilempar ke error boundary.
+
 // Least-privilege guard: a non-super-admin must not attach a permission they
-// don't already hold. Without this, a manage_settings holder could mint/modify
+// don't already hold. Without this, a manage_roles holder could mint/modify
 // a role carrying manage_users / approve_workflows / etc. and escalate beyond
 // their own permission set (a privesc that bypasses the super_admin-name check,
 // since the role need not be named super_admin). super_admin bypasses.
@@ -34,21 +44,31 @@ async function assertCanGrantPermissions(
   return null
 }
 
-export async function createRole(formData: FormData) {
+/** Kegagalan yang bisa diperbaiki pengguna, dikembalikan ke form (lihat catatan di atas). */
+export type RoleFormError = { success: false; error: string }
+
+export async function createRole(formData: FormData): Promise<RoleFormError> {
   try {
-  const actor = await requirePermission("manage_settings")
+  // Sama dengan aturan di proxy.ts + halaman /pengaturan/peran: izin `manage_roles`
+  // (super_admin bypass). Dulu action-nya `manage_settings`, sehingga pemegang izin itu
+  // bisa memanggilnya langsung padahal halaman peran tertutup untuknya.
+  const actor = await requirePermission("manage_roles")
 
   const parsed = parseFormData(createRoleSchema, formData)
   if (!parsed.success) {
-    throw new Error(parsed.error)
+    return { success: false, error: parsed.error }
   }
 
   const { name } = parsed.data
+  // Nama role istimewa hanya boleh datang dari seeder/installer.
+  if (isReservedRoleName(name)) {
+    return { success: false, error: `Nama peran "${name}" dicadangkan sistem dan tidak dapat dibuat.` }
+  }
   const permissionIds = formData.getAll("permissions").map((id) => Number(id)).filter(Boolean)
 
   const grantErr = await assertCanGrantPermissions(actor, permissionIds)
   if (grantErr) {
-    throw new Error(grantErr)
+    return { success: false, error: grantErr }
   }
 
   const role = await prisma.role.create({
@@ -73,13 +93,13 @@ export async function createRole(formData: FormData) {
   }
 }
 
-export async function updateRole(id: number, formData: FormData) {
+export async function updateRole(id: number, formData: FormData): Promise<RoleFormError> {
   try {
-  const actor = await requirePermission("manage_settings")
+  const actor = await requirePermission("manage_roles")
 
   const parsed = parseFormData(updateRoleSchema, formData)
   if (!parsed.success) {
-    throw new Error(parsed.error)
+    return { success: false, error: parsed.error }
   }
 
   const { name } = parsed.data
@@ -92,19 +112,31 @@ export async function updateRole(id: number, formData: FormData) {
   // not edits to the all-powerful role itself).
   const existing = await prisma.role.findUnique({ where: { id }, select: { name: true } })
   if (existing?.name === "super_admin" && !actor.roles.includes("super_admin")) {
-    throw new Error("Hanya super_admin yang dapat mengubah peran super_admin")
+    return { success: false, error: "Hanya super_admin yang dapat mengubah peran super_admin" }
+  }
+
+  // Nama istimewa hanya boleh datang dari seeder/installer — tapi MENJAGA nama yang
+  // sudah dipakai (mis. mengubah daftar izin role `super_admin`) tetap harus bisa,
+  // kalau tidak seluruh hak akses role bawaan jadi tidak bisa diatur.
+  if (name.trim().toLowerCase() !== (existing?.name ?? "").trim().toLowerCase() && isReservedRoleName(name)) {
+    return { success: false, error: `Nama peran "${name}" dicadangkan sistem dan tidak dapat dipakai.` }
   }
 
   const grantErr = await assertCanGrantPermissions(actor, permissionIds)
   if (grantErr) {
-    throw new Error(grantErr)
+    return { success: false, error: grantErr }
   }
+
+  // Slug hanya dihitung ulang saat NAMA berubah: menyimpan daftar izin saja (mis. dari
+  // matriks) tidak boleh mengubah URL peran — kalau tidak, tautan/bookmark lama mati
+  // dan slug yang sudah tertulis di dokumen ikut berubah tanpa alasan.
+  const nameChanged = name.trim() !== (existing?.name ?? name.trim())
 
   await prisma.role.update({
     where: { id },
     data: {
       name: name.trim(),
-      slug: await nextSlug("role", name.trim(), { excludeId: id }),
+      ...(nameChanged ? { slug: await nextSlug("role", name.trim(), { excludeId: id }) } : {}),
       permissions: {
         set: permissionIds.map((pid) => ({ id: pid })),
       },
@@ -124,7 +156,7 @@ export async function updateRole(id: number, formData: FormData) {
 
 export async function deleteRole(id: number) {
   try {
-  await requirePermission("manage_settings")
+  await requirePermission("manage_roles")
 
   const role = await prisma.role.findUnique({
     where: { id },

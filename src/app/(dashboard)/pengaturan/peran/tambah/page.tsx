@@ -2,8 +2,11 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { permissionGroupLabel, permissionLabel } from "@/lib/auth/permission-labels"
 import { createRole } from "@/actions/roles.actions"
 import { Button } from "@/components/ui/button"
+import { ActionForm } from "@/components/ui/action-form"
+import { SubmitButton } from "@/components/ui/submit-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 
@@ -12,7 +15,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Tambah Peran" }
 
 export default async function CreateRolePage() {
-  await requirePermission("manage_settings")
+  await requirePermission("manage_roles")
 
   const permissions = await prisma.permission.findMany({
     orderBy: { name: "asc" },
@@ -38,7 +41,7 @@ export default async function CreateRolePage() {
         <h1 className="text-2xl font-bold text-foreground">Tambah Peran</h1>
       </div>
 
-      <form action={createRole} className="flex flex-col gap-6">
+      <ActionForm action={createRole} className="flex flex-col gap-6">
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden p-6">
           <div className="flex flex-col gap-4 max-w-md">
             <div className="flex flex-col gap-1.5">
@@ -60,12 +63,12 @@ export default async function CreateRolePage() {
           <div className="flex flex-col gap-5">
             {Object.entries(grouped).map(([prefix, perms]) => (
               <div key={prefix}>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 capitalize">{prefix}</h3>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{permissionGroupLabel(prefix)}</h3>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
                   {perms.map((perm) => (
                     <label key={perm.id} htmlFor={`perm-${perm.id}`} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-default hover:bg-surface-secondary transition-all cursor-pointer">
                       <Checkbox id={`perm-${perm.id}`} name="permissions" value={String(perm.id)} />
-                      <span className="text-sm text-foreground">{perm.name}</span>
+                      <span className="text-sm text-foreground">{permissionLabel(perm.name)}</span>
                     </label>
                   ))}
                 </div>
@@ -75,14 +78,14 @@ export default async function CreateRolePage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button type="submit" variant="primary">
+          <SubmitButton variant="primary" pendingLabel="Menyimpan...">
             Simpan Peran
-          </Button>
+          </SubmitButton>
           <Button href="/pengaturan/peran" variant="secondary">
             Batal
           </Button>
         </div>
-      </form>
+      </ActionForm>
     </div>
   )
 }

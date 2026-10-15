@@ -16,7 +16,7 @@ import {
 import { approveStep, rejectStep } from "@/actions/approval.actions";
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval";
 import { statusLabel } from "@/lib/utils/status-labels";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 
 import type { Metadata } from "next";
@@ -128,7 +128,7 @@ export default async function ApprovalDetailPage({
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${isActive ? "border-primary bg-primary/5" : isDone ? "border-success/30 bg-success/5" : "border-default"}`}
               >
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isActive ? "bg-primary text-primary-foreground" : isDone ? "bg-success text-white" : "bg-default text-muted-foreground"}`}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isActive ? "bg-primary text-primary-foreground" : isDone ? "bg-success text-success-foreground" : "bg-default text-muted-foreground"}`}
                 >
                   {step.stepOrder}
                 </div>
@@ -181,20 +181,20 @@ export default async function ApprovalDetailPage({
               />
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                type="submit"
+              <SubmitButton
                 formAction={approveWithId}
                 variant="success"
+                pendingLabel="Memproses..."
               >
                 Setujui
-              </Button>
-              <Button
-                type="submit"
+              </SubmitButton>
+              <SubmitButton
                 formAction={rejectWithId}
                 variant="danger"
+                pendingLabel="Memproses..."
               >
                 Tolak
-              </Button>
+              </SubmitButton>
             </div>
           </form>
         </div>
