@@ -15,6 +15,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { Pencil } from "lucide-react"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { ASSET_HISTORY_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 
 import type { Metadata } from "next"
 
@@ -103,7 +104,7 @@ export default async function AssetDetailPage({
                 {asset.histories.map((h) => (
                   <DetailTableRow key={h.id}>
                     <DetailTableTd>{formatDate(h.date)}</DetailTableTd>
-                    <DetailTableTd><span className="inline-flex px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground capitalize">{h.type}</span></DetailTableTd>
+                    <DetailTableTd><span className="inline-flex px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground">{labelFrom(ASSET_HISTORY_TYPE_LABELS, h.type)}</span></DetailTableTd>
                     <DetailTableTd>{h.description || "-"}</DetailTableTd>
                     <DetailTableTd align="right">{h.amount ? formatCurrency(Number(h.amount)) : "-"}</DetailTableTd>
                   </DetailTableRow>

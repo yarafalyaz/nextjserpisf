@@ -17,6 +17,7 @@ import { DetailCard, DetailField, DetailSection } from "@/components/ui/detail-c
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { LEAVE_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 
 import type { Metadata } from "next"
 
@@ -81,7 +82,7 @@ export default async function EmployeeDetailPage({
         title={employee.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Karyawan", href: "/master/karyawan" },
           { label: "Detail" },
         ]}
@@ -104,7 +105,7 @@ export default async function EmployeeDetailPage({
               <>
                 <DetailCard>
                   <DetailField label="NIP" value={employee.employeeNo} mono />
-                  <DetailField label="Department" value={employee.department?.name || "-"} />
+                  <DetailField label="Departemen" value={employee.department?.name || "-"} />
                   <DetailField label="Jabatan" value={employee.position?.name || "-"} />
                   <DetailField label="Email" value={employee.email || "-"} />
                   <DetailField label="Telepon" value={employee.phone || "-"} />
@@ -196,7 +197,7 @@ export default async function EmployeeDetailPage({
                       <DetailTableBody>
                         {employee.leaveRequests.map((lr) => (
                           <DetailTableRow key={lr.id}>
-                            <DetailTableTd>{lr.type}</DetailTableTd>
+                            <DetailTableTd>{labelFrom(LEAVE_TYPE_LABELS, lr.type)}</DetailTableTd>
                             <DetailTableTd>{formatDate(lr.startDate)}</DetailTableTd>
                             <DetailTableTd>{formatDate(lr.endDate)}</DetailTableTd>
                             <DetailTableTd><StatusChip status={lr.status} /></DetailTableTd>

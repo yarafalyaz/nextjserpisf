@@ -13,6 +13,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref } from "@/lib/utils/entity-url"
+import { SEVERITY_LABELS, labelFrom } from "@/lib/utils/status-labels"
 
 export const metadata: Metadata = { title: "Detail Inspeksi QC" }
 
@@ -69,7 +70,7 @@ export default async function QcInspectionDetailPage({
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Manufaktur", href: "/produksi" },
-          { label: "Quality Control", href: "/produksi/qc" },
+          { label: "Pengendalian Mutu", href: "/produksi/qc" },
           { label: "Inspeksi", href: "/produksi/qc/inspeksi" },
           { label: "Detail" },
         ]}
@@ -132,7 +133,7 @@ export default async function QcInspectionDetailPage({
             <DetailTableHead>
               <DetailTableTh>No. NCR</DetailTableTh>
               <DetailTableTh>Status</DetailTableTh>
-              <DetailTableTh>Severity</DetailTableTh>
+              <DetailTableTh>Tingkat Keparahan</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {inspection.nonconformances.map((n) => (
@@ -141,7 +142,7 @@ export default async function QcInspectionDetailPage({
                     <Link href={entityHref("/produksi/qc/ncr", n)}>{n.documentNo}</Link>
                   </DetailTableTd>
                   <DetailTableTd><StatusChip status={n.status} /></DetailTableTd>
-                  <DetailTableTd>{n.severity}</DetailTableTd>
+                  <DetailTableTd>{labelFrom(SEVERITY_LABELS, n.severity)}</DetailTableTd>
                 </DetailTableRow>
               ))}
             </DetailTableBody>

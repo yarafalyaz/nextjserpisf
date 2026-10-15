@@ -15,6 +15,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { LEAD_ACTIVITY_TYPE_LABELS, labelFrom, statusLabel } from "@/lib/utils/status-labels"
 
 import type { Metadata } from "next"
 
@@ -76,7 +77,7 @@ export default async function LeadDetailPage({
         tabs={[
           {
             id: "info",
-            label: "Info",
+            label: "Informasi",
             content: (
               <DetailCard>
                 <DetailField label="Nama" value={lead.name} />
@@ -114,10 +115,10 @@ export default async function LeadDetailPage({
                       <DetailTableBody>
                         {lead.activities.map((activity) => (
                           <DetailTableRow key={activity.id}>
-                            <DetailTableTd>{activity.type}</DetailTableTd>
+                            <DetailTableTd>{labelFrom(LEAD_ACTIVITY_TYPE_LABELS, activity.type)}</DetailTableTd>
                             <DetailTableTd>
                               {activity.type === "status_change"
-                                ? `${activity.oldStatus ?? "-"} → ${activity.newStatus ?? "-"}`
+                                ? `${statusLabel(activity.oldStatus)} → ${statusLabel(activity.newStatus)}`
                                 : (activity.subject || "-")}
                             </DetailTableTd>
                             <DetailTableTd>{activity.description || activity.notes || "-"}</DetailTableTd>

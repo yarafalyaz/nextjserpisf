@@ -1,4 +1,4 @@
-// Centralized Indonesian status labels
+// Centralized Indonesian labels for DB/internal values
 // Keys = DB/internal values, Values = Indonesian display labels
 
 export const STATUS_LABELS: Record<string, string> = {
@@ -74,10 +74,55 @@ export const STATUS_LABELS: Record<string, string> = {
   overtime: "Lembur",
 };
 
-export function statusLabel(status: string | null | undefined): string {
-  if (!status) return "-";
-  return STATUS_LABELS[status] ?? STATUS_LABELS[status.toLowerCase()] ?? status;
+/** Label a value from any of the maps below; unknown values stay visible. */
+export function labelFrom(
+  labels: Record<string, string>,
+  value: string | null | undefined,
+): string {
+  if (!value) return "-"
+  return labels[value] ?? labels[value.toLowerCase()] ?? value
 }
+
+export function statusLabel(status: string | null | undefined): string {
+  if (!status) return "-"
+  return STATUS_LABELS[status] ?? STATUS_LABELS[status.toLowerCase()] ?? status
+}
+
+/** `LeaveRequest.type` → label Indonesia (juga sumber opsi di formulir cuti). */
+export const LEAVE_TYPE_LABELS: Record<string, string> = {
+  annual: "Cuti Tahunan",
+  sick: "Sakit",
+  personal: "Keperluan Pribadi",
+  maternity: "Cuti Melahirkan",
+  unpaid: "Tanpa Gaji",
+};
+
+/** `AssetHistory.type` → label Indonesia. */
+export const ASSET_HISTORY_TYPE_LABELS: Record<string, string> = {
+  depreciation: "Penyusutan",
+  disposal: "Pelepasan",
+};
+
+/** `LeadActivity.type` → label Indonesia. */
+export const LEAD_ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  note: "Catatan",
+  call: "Telepon",
+  email: "Surel",
+  meeting: "Rapat",
+  task: "Tugas",
+  status_change: "Perubahan Status",
+  conversion: "Konversi",
+};
+
+/** Jenis aktivitas prospek yang bisa dipilih pengguna (form input). */
+export const LEAD_ACTIVITY_TYPE_OPTIONS = ["note", "call", "email", "meeting", "task"] as const;
+
+/** `Nonconformance.severity` → label Indonesia. */
+export const SEVERITY_LABELS: Record<string, string> = {
+  minor: "Ringan",
+  major: "Sedang",
+  critical: "Kritis",
+};
 
 export const statusToIndo: Record<string, string> = {
   draft: "konsep",

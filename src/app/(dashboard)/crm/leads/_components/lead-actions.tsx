@@ -11,6 +11,7 @@ import { FormSelect } from "@/components/ui/form-select"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { convertLead, addLeadActivity } from "@/actions/crm.actions"
+import { LEAD_ACTIVITY_TYPE_LABELS, LEAD_ACTIVITY_TYPE_OPTIONS } from "@/lib/utils/status-labels"
 
 /** Convert-to-customer button. Shown only when the lead is convertible + not yet converted. */
 export function ConvertLeadButton({ leadId, canConvert }: { leadId: number; canConvert: boolean }) {
@@ -86,13 +87,10 @@ export function AddLeadActivityForm({ leadId }: { leadId: number }) {
           id="activityType"
           value={type}
           onValueChange={setType}
-          options={[
-            { value: "note", label: "Catatan" },
-            { value: "call", label: "Telepon" },
-            { value: "email", label: "Email" },
-            { value: "meeting", label: "Rapat" },
-            { value: "task", label: "Tugas" },
-          ]}
+          options={LEAD_ACTIVITY_TYPE_OPTIONS.map((value) => ({
+            value,
+            label: LEAD_ACTIVITY_TYPE_LABELS[value],
+          }))}
         />
       </div>
       <div className="flex flex-col gap-1.5 sm:flex-1">

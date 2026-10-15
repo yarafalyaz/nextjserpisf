@@ -12,6 +12,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { FormSelect } from "@/components/ui/form-select"
+import { LEAVE_TYPE_LABELS } from "@/lib/utils/status-labels"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
@@ -24,13 +25,10 @@ interface LeaveFormProps {
   leave?: { id: number; employeeId: number; leaveType: string; startDate: string; endDate: string; reason?: string | null }
 }
 
-const leaveTypes = [
-  { id: "annual", name: "Cuti Tahunan" },
-  { id: "sick", name: "Sakit" },
-  { id: "personal", name: "Keperluan Pribadi" },
-  { id: "maternity", name: "Cuti Melahirkan" },
-  { id: "unpaid", name: "Tanpa Gaji" },
-]
+const leaveTypes = ["annual", "sick", "personal", "maternity", "unpaid"].map((id) => ({
+  id,
+  name: LEAVE_TYPE_LABELS[id],
+}))
 
 interface QuotaState {
   forEmployee: string

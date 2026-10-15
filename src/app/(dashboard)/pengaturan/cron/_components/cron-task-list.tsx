@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/utils/format"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { statusLabel } from "@/lib/utils/status-labels"
 
 type TaskStatus = {
   key: string
@@ -118,7 +119,7 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
                   <DetailTableTd className="whitespace-nowrap">{formatDate(log.ranAt)}</DetailTableTd>
                   <DetailTableTd className="font-mono text-xs">{log.task}</DetailTableTd>
                   <DetailTableTd>
-                    <Badge variant={log.status === "success" ? "default" : "destructive"}>{log.status}</Badge>
+                    <Badge variant={log.status === "success" ? "default" : "destructive"}>{statusLabel(log.status)}</Badge>
                   </DetailTableTd>
                   <DetailTableTd className="text-muted-foreground">{log.duration !== null ? `${log.duration}ms` : "-"}</DetailTableTd>
                   <DetailTableTd className="text-muted-foreground max-w-xs truncate">{log.message || "-"}</DetailTableTd>

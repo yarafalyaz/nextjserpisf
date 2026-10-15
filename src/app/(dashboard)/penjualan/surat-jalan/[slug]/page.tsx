@@ -14,6 +14,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
+import { statusLabel } from "@/lib/utils/status-labels";
 export const metadata: Metadata = { title: "Surat Jalan" };
 
 export default async function DeliveryOrderDetailPage({
@@ -63,7 +64,7 @@ export default async function DeliveryOrderDetailPage({
         </h1>
         <div className="flex gap-2 items-center">
           <span className={`status-badge status-${deliveryOrder.status}`}>
-            {deliveryOrder.status}
+            {statusLabel(deliveryOrder.status)}
           </span>
           <div className="flex gap-2">
             <Link
@@ -72,7 +73,7 @@ export default async function DeliveryOrderDetailPage({
             >
               Ubah
             </Link>
-            <PrintButton />
+            <PrintButton documentType="delivery-order" documentId={deliveryOrder.id} />
             <DeleteButton id={deliveryOrder.id} action={deleteDeliveryOrder} />
             <Link
               href="/penjualan/surat-jalan"
