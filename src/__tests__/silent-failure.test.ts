@@ -80,9 +80,22 @@ describe("kegagalan senyap: tidak ada catch kosong di kode produksi", () => {
     expect({ catchKosong: pelanggar.sort() }).toEqual({ catchKosong: [] })
   })
 
-  it("pengecualian menunjuk berkas yang benar-benar ada (daftar tidak membusuk)", () => {
-    const hilang = Object.keys(ALLOWED).filter((f) => !fs.existsSync(path.join(ROOT, f)))
-    expect({ pengecualianHilang: hilang }).toEqual({ pengecualianHilang: [] })
+  it("pengecualian catch-kosong tidak membusuk (berkas ada DAN pelanggarannya masih ada)", () => {
+    const takTerpakai = Object.keys(ALLOWED).filter((relative) => {
+      const full = path.join(ROOT, relative)
+      if (!fs.existsSync(full)) return true
+      // Salinan tanpa flag `g`: regex ber-`g` stateful pada `.test()` (lastIndex
+      // berpindah), yang membuat pemeriksaan ini berbohong — pelajaran yang sama
+      // seperti daftar promise di bawah.
+      //
+      // Mengapa juga menuntut pelanggarannya masih ada: pengecualian di sini bersifat
+      // PER-BERKAS. Bila pelanggaran aslinya diperbaiki, entri yang dibiarkan akan terus
+      // mengizinkan pelanggaran BARU di berkas yang sama — jadi perbaikan harus memaksa
+      // penghapusan entri ini.
+      const pola = new RegExp(EMPTY_CATCH.source)
+      return !pola.test(fs.readFileSync(full, "utf8"))
+    })
+    expect({ pengecualianTakTerpakai: takTerpakai }).toEqual({ pengecualianTakTerpakai: [] })
   })
 })
 
