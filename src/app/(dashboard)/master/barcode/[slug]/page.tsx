@@ -36,7 +36,7 @@ export default async function DetailPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Barcode", href: "/master/barcode" },
           { label: "Detail" },
         ]}

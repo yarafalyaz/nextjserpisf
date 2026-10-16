@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 
 import type { Metadata } from "next"
 
@@ -71,7 +71,7 @@ export default async function CustomerDetailPage({
         title={customer.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Pelanggan", href: "/master/pelanggan" },
           { label: "Detail" },
         ]}
@@ -123,7 +123,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.quotations.map((q) => (
                           <DetailTableRow key={q.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/penjualan/penawaran/${q.id}`}>{q.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/penawaran", q)}>{q.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(q.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(q.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={q.status} /></DetailTableTd>
@@ -160,7 +160,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.salesInvoices.map((inv) => (
                           <DetailTableRow key={inv.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/penjualan/faktur/${inv.id}`}>{inv.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={entityHref("/penjualan/faktur", inv)}>{inv.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(inv.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(inv.grandTotal))}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(inv.paidAmount))}</DetailTableTd>
@@ -197,7 +197,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.projects.map((p) => (
                           <DetailTableRow key={p.id}>
-                            <DetailTableTd><Link href={`/proyek/${p.id}`}>{p.name}</Link></DetailTableTd>
+                            <DetailTableTd><Link href={entityHref("/proyek", p)}>{p.name}</Link></DetailTableTd>
                             <DetailTableTd><StatusChip status={p.status} /></DetailTableTd>
                             <DetailTableTd>{p.startDate ? formatDate(p.startDate) : "-"}</DetailTableTd>
                             <DetailTableTd>{p.endDate ? formatDate(p.endDate) : "-"}</DetailTableTd>
@@ -217,7 +217,7 @@ export default async function CustomerDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Kendaraan</h2>
-                  <Link href={`/master/pelanggan/${customer.slug ?? customer.id}/kendaraan`} className="text-[0.8125rem] text-primary font-medium hover:underline">Kelola Kendaraan →</Link>
+                  <Link href={`${entityHref("/master/pelanggan", customer)}/kendaraan`} className="text-[0.8125rem] text-primary font-medium hover:underline">Kelola Kendaraan →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {customer.customerVehicles.length === 0 ? (

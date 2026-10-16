@@ -59,7 +59,7 @@ export default async function CustomerVehiclesPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
-        { label: "Master Data", href: "/master" },
+        { label: "Data Master", href: "/master" },
         { label: "Pelanggan", href: "/master/pelanggan" },
         { label: customer.name, href: `/master/pelanggan/${customerKey}` },
         { label: "Kendaraan" },
@@ -101,10 +101,10 @@ export default async function CustomerVehiclesPage({
                     <DetailTableTd><StatusChip status={cv.isActive ? "active" : "inactive"} /></DetailTableTd>
                     <DetailTableTd>
                       <div className="flex items-center gap-1">
-                        <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
+                        <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
                           <Eye size={14} />
                         </Link>
-                        <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Ubah">
+                        <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Ubah">
                           <Pencil size={14} />
                         </Link>
                         <DeleteButton id={cv.id} action={deleteCustomerVehicle} />

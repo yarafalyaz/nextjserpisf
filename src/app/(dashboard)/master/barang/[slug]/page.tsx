@@ -222,7 +222,7 @@ export default async function ItemDetailPage({
         title={item.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Item", href: "/master/barang" },
           { label: "Detail" },
         ]}
@@ -253,7 +253,7 @@ export default async function ItemDetailPage({
         tabs={[
           {
             id: "info",
-            label: "Info",
+            label: "Informasi",
             content: (
               <>
                 {item.image && (
@@ -364,8 +364,8 @@ export default async function ItemDetailPage({
                   <DetailTable>
                     <DetailTableHead>
                       <DetailTableTh>Masuk</DetailTableTh>
-                      <DetailTableTh align="right">Qty In</DetailTableTh>
-                      <DetailTableTh align="right">Qty Out</DetailTableTh>
+                      <DetailTableTh align="right">Kuantitas In</DetailTableTh>
+                      <DetailTableTh align="right">Kuantitas Out</DetailTableTh>
                       <DetailTableTh align="right">Sisa</DetailTableTh>
                       <DetailTableTh align="right">Unit Cost</DetailTableTh>
                     </DetailTableHead>

@@ -58,7 +58,7 @@ export default async function PositionDetailPage({
         title={position.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Jabatan", href: "/master/jabatan" },
           { label: "Detail" },
         ]}

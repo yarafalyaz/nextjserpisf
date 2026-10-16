@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
+import { entityHref } from "@/lib/utils/entity-url";
 import { parsePagination } from "@/lib/utils/pagination";
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
 import {
@@ -44,7 +45,7 @@ export default async function UomPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Satuan" },
         ]}
       />
@@ -87,7 +88,7 @@ export default async function UomPage({
                     <DetailTableTd>{u.category ?? "-"}</DetailTableTd>
                     <DetailTableTd>
                       <Link
-                        href={`/master/satuan/${u.slug ?? u.id}`}
+                        href={entityHref("/master/satuan", u)}
                         className="button button--ghost button--sm"
                       >
                         Detail

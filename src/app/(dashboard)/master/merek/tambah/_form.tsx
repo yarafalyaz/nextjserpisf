@@ -58,7 +58,7 @@ export default function CreateBrandForm({ categories }: CreateBrandFormProps) {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
-        { label: "Master Data", href: "/master" },
+        { label: "Data Master", href: "/master" },
         { label: "Merek", href: "/master/merek" },
         { label: "Buat" },
       ]} />

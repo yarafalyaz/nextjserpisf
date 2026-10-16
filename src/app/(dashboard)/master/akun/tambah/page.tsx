@@ -26,8 +26,8 @@ export default async function CreateAccountPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Master Data", href: "/master" },
-  { label: "Akun", href: "/master/akun" },
+  { label: "Data Master", href: "/master" },
+  { label: "Akun (COA)", href: "/master/akun" },
   { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

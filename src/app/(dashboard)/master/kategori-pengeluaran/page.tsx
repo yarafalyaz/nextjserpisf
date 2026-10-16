@@ -34,7 +34,7 @@ export default async function ExpenseCategoryPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Kategori Pengeluaran" },
         ]}
       />

@@ -34,7 +34,7 @@ export default async function EditPaymentTermPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Master Data", href: "/master" },
+  { label: "Data Master", href: "/master" },
   { label: "Termin Pembayaran", href: "/master/syarat-pembayaran" },
   { label: "Ubah" },
 ]} />

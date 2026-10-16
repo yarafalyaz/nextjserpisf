@@ -27,7 +27,7 @@ export default async function CreateEmployeePage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Master Data", href: "/master" },
+  { label: "Data Master", href: "/master" },
   { label: "Karyawan", href: "/master/karyawan" },
   { label: "Buat" },
 ]} />

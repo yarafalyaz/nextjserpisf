@@ -33,7 +33,7 @@ export default async function EditItemCategoryPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Master Data", href: "/master" },
+  { label: "Data Master", href: "/master" },
   { label: "Kategori Barang", href: "/master/kategori-barang" },
   { label: "Ubah" },
 ]} />

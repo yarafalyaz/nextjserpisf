@@ -32,7 +32,7 @@ export default async function EditPaymentMethodPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
-        { label: "Master Data", href: "/master" },
+        { label: "Data Master", href: "/master" },
         { label: "Metode Pembayaran", href: "/master/metode-pembayaran" },
         { label: "Ubah" },
       ]} />

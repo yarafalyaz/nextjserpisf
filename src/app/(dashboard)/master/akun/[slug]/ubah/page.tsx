@@ -41,8 +41,8 @@ export default async function EditAccountPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
-          { label: "Akun", href: "/master/akun" },
+          { label: "Data Master", href: "/master" },
+          { label: "Akun (COA)", href: "/master/akun" },
           { label: "Ubah" },
         ]}
       />

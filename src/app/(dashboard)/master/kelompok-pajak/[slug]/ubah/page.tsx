@@ -34,8 +34,8 @@ export default async function EditTaxGroupPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
-        { label: "Master Data", href: "/master" },
-        { label: "Kelompok Pajak", href: "/master/kelompok-pajak" },
+        { label: "Data Master", href: "/master" },
+        { label: "Grup Pajak", href: "/master/kelompok-pajak" },
         { label: "Ubah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

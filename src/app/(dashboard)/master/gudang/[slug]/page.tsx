@@ -63,7 +63,7 @@ export default async function WarehouseDetailPage({
         title={warehouse.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Gudang", href: "/master/gudang" },
           { label: "Detail" },
         ]}
@@ -80,7 +80,7 @@ export default async function WarehouseDetailPage({
         tabs={[
           {
             id: "info",
-            label: "Info",
+            label: "Informasi",
             content: (
               <>
                 <DetailCard>

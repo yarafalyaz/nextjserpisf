@@ -33,7 +33,7 @@ export default async function EditExpenseCategoryPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Kategori Pengeluaran", href: "/master/kategori-pengeluaran" },
           { label: category.label, href: entityHref("/master/kategori-pengeluaran", category) },
           { label: "Ubah" },

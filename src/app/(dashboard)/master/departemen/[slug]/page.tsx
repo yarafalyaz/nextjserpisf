@@ -58,7 +58,7 @@ export default async function DepartmentDetailPage({
         title={department.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Departemen", href: "/master/departemen" },
           { label: "Detail" },
         ]}

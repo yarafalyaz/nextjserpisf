@@ -40,7 +40,7 @@ export default async function BankDetailPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Master Data", href: "/master" },
+  { label: "Data Master", href: "/master" },
   { label: "Bank", href: "/master/bank" },
   { label: "Detail" },
 ]} />

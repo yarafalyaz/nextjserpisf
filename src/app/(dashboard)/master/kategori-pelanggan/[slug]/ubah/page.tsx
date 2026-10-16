@@ -34,7 +34,7 @@ export default async function EditCustomerCategoryPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Kategori Pelanggan", href: "/master/kategori-pelanggan" },
           { label: "Ubah" },
         ]}

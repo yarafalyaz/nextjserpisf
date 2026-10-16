@@ -35,7 +35,7 @@ export default async function ExpenseCategoryDetailPage({
         title={`Detail Kategori`}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Kategori Pengeluaran", href: "/master/kategori-pengeluaran" },
           { label: category.label },
         ]}

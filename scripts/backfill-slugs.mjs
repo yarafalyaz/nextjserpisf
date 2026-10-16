@@ -26,7 +26,7 @@ const TABLE_SOURCES = {
   accounts: "name", banks: "name", barcodes: "barcode", departments: "name",
   warehouses: "name", positions: "name", employees: "name",
   items: "name",
-  item_categories: "name", customer_categories: "name",
+  item_categories: "name", customer_categories: "name", item_groups: "name",
   expense_categories: "name", tax_groups: "name", brands: "name",
   payment_methods: "name", shipping_methods: "name", taxes: "name",
   customers: "name", unit_of_measures: "name", payment_terms: "name",
@@ -47,6 +47,10 @@ const TABLE_SOURCES = {
   budgets: "name", statistical_key_figures: "name", journals: "journal_number",
   petty_cash: "document_no", bank_statements: "reference", expenses: "document_no",
   cost_centers: "name", bank_reconciliations: "reconciliation_number",
+  bank_transfers: "document_no",
+  purchase_advances: "document_no",
+  tax_payments: "document_no",
+  invoice_exchanges: "document_no",
   allocation_rules: "name", approval_workflows: "name", approvals: "reference_type",
   // inventaris
   rack_rows: "code", stock_moves: "document_no", material_issues: "document_no",
@@ -66,7 +70,10 @@ const TABLE_SOURCES = {
   // crm
   leads: "name", crm_tickets: "subject",
   // pengaturan
-  roles: "name",
+  roles: "name", users: "name",
+  withholding_tax_types: "name", recurring_transactions: "name",
+  // kendaraan milik pelanggan (sub-resource) — pelat nomor paling terbaca
+  customer_vehicles: "plate_number",
 }
 
 function sql(query) {

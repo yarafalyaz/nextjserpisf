@@ -36,8 +36,8 @@ export default async function DetailPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
-          { label: "Kelompok Pajak", href: "/master/kelompok-pajak" },
+          { label: "Data Master", href: "/master" },
+          { label: "Grup Pajak", href: "/master/kelompok-pajak" },
           { label: "Detail" },
         ]}
       />

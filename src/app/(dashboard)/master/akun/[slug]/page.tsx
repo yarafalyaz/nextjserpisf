@@ -38,7 +38,7 @@ export default async function DetailPage({
         title="Detail Akun"
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Akun", href: "/master/akun" },
           { label: "Detail" },
         ]}

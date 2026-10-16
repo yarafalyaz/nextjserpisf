@@ -5,9 +5,12 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { entityEditHref } from "@/lib/utils/entity-url"
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
+import { buildStatementRows, DEFAULT_STATEMENT_OPTIONS } from "@/lib/reports/statement-display"
+import { accountGroupLabel } from "@/lib/utils/account-groups"
 
 import type { Metadata } from "next"
 import { CanCreate } from "@/components/auth/can-create"
@@ -47,6 +50,10 @@ export default async function AccountsPage({
     return acc
   }, {} as Record<string, typeof accounts>)
 
+  // Opsi pohon: semua akun tampil (termasuk bersaldo nol) dan induk tidak
+  // membawa saldo — daftar master bukan laporan saldo.
+  const treeOptions = { ...DEFAULT_STATEMENT_OPTIONS, showZeroBalance: true, showParentBalance: false }
+
   const typeLabels: Record<string, string> = {
     ASSET: "Aset",
     LIABILITY: "Kewajiban",
@@ -59,8 +66,8 @@ export default async function AccountsPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Master Data", href: "/master" },
-  { label: "Akun" },
+  { label: "Data Master", href: "/master" },
+  { label: "Akun (COA)" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Bagan Akun</h1>
@@ -77,16 +84,32 @@ export default async function AccountsPage({
         <AppSearchField placeholder="Cari kode atau nama akun..." action="/master/akun" />
       </div>
 
-      {Object.entries(typeLabels).map(([type, label]) => (
+      {Object.entries(typeLabels).map(([type, label]) => {
+        const group = grouped[type] ?? []
+        const byId = new Map(group.map((account) => [account.id, account]))
+        // Akun induk ditampilkan lebih dulu dengan anaknya ter-indentasi, seperti
+        // bagan akun Accurate (bukan daftar datar).
+        const rows = buildStatementRows(
+          group.map((account) => ({
+            id: account.id,
+            code: account.code,
+            name: account.name,
+            parentId: account.parentId,
+            ownBalance: 0,
+          })),
+          treeOptions,
+        )
+
+        return (
         <div key={type} className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">{label}</h2>
             <span className="text-muted-foreground text-[0.8125rem]">
-              {grouped[type]?.length || 0} akun
+              {group.length} akun
             </span>
           </div>
           <div className="p-4 px-5">
-            {!grouped[type] || grouped[type].length === 0 ? (
+            {group.length === 0 ? (
               <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada akun {label.toLowerCase()}</p>
             ) : (
               <DetailTable>
@@ -96,21 +119,40 @@ export default async function AccountsPage({
                   <DetailTableTh>Aksi</DetailTableTh>
                 </DetailTableHead>
                 <DetailTableBody>
-                  {grouped[type].map((acc) => (
-                    <DetailTableRow key={acc.id}>
-                      <DetailTableTd className="font-mono">{acc.code}</DetailTableTd>
-                      <DetailTableTd>{acc.name}</DetailTableTd>
-                      <DetailTableTd>
-                        <Link href={`/master/akun/${acc.slug ?? acc.id}/ubah`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
-                      </DetailTableTd>
-                    </DetailTableRow>
-                  ))}
+                  {rows.map((row) => {
+                    const acc = byId.get(row.id)
+                    if (!acc) return null
+                    return (
+                      <DetailTableRow key={row.id} className={row.hasChildren ? "font-semibold" : undefined}>
+                        <DetailTableTd className="font-mono">{acc.code}</DetailTableTd>
+                        <DetailTableTd>
+                          <span style={{ paddingLeft: `${row.level * 1.25}rem` }}>{acc.name}</span>
+                          {accountGroupLabel(acc.reportGroup) &&
+                          accountGroupLabel(acc.reportGroup) !== acc.name ? (
+                            // Label Indonesia (mis. "Kas & Bank"); kode Accurate-nya
+                            // tetap tersedia lewat tooltip. Dilewati bila sama dengan
+                            // nama akunnya sendiri (akun induk grup) supaya tidak mubazir.
+                            <span
+                              className="ml-2 rounded border border-default px-1.5 py-0.5 text-[0.6875rem] font-normal text-muted-foreground"
+                              title={acc.reportGroup ?? undefined}
+                            >
+                              {accountGroupLabel(acc.reportGroup)}
+                            </span>
+                          ) : null}
+                        </DetailTableTd>
+                        <DetailTableTd>
+                          <Link href={entityEditHref("/master/akun", acc)} className="button button--ghost button--sm"><Pencil size={14} /></Link>
+                        </DetailTableTd>
+                      </DetailTableRow>
+                    )
+                  })}
                 </DetailTableBody>
               </DetailTable>
             )}
           </div>
         </div>
-      ))}
+        )
+      })}
 
       {accounts.length >= MAX_LIST_ROWS && (
         <p

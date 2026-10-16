@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Tambah Barang" }
 export default async function CreateItemPage() {
   await requirePermission("create_items")
 
-  const [categories, brands, vendors, warehouses, racks, rackRows, generatedCode, unitOptions] = await Promise.all([
+  const [categories, brands, vendors, warehouses, racks, rackRows, generatedCode, unitOptions, groups] = await Promise.all([
     prisma.itemCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.brand.findMany({ orderBy: { name: "asc" } }),
     prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -24,6 +24,7 @@ export default async function CreateItemPage() {
     peekNextDocumentNumber("ITM", "simple"),
     // Master satuan → the "Satuan" dropdown (previously a hard-coded list).
     prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
+    prisma.itemGroup.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ])
   const settings = await getSystemSettings()
   const enableAutoCode = settings.enableAutoItemCode !== false
@@ -33,8 +34,8 @@ export default async function CreateItemPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Master Data", href: "/master" },
-  { label: "Item", href: "/master/barang" },
+  { label: "Data Master", href: "/master" },
+  { label: "Barang", href: "/master/barang" },
   { label: "Buat" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -42,6 +43,7 @@ export default async function CreateItemPage() {
       </div>
       <ItemForm
         categories={categories}
+        groups={groups}
         brands={brands}
         vendors={vendors}
         warehouses={warehouses}

@@ -40,7 +40,7 @@ export default async function UomDetailPage({
         title={`Detail Satuan`}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data" },
+          { label: "Data Master" },
           { label: "Satuan", href: "/master/satuan" },
           { label: "Detail" },
         ]}

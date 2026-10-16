@@ -75,7 +75,7 @@ export default async function VendorDetailPage({
         title={vendor.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Vendor", href: "/master/vendor" },
           { label: "Detail" },
         ]}
@@ -127,7 +127,7 @@ export default async function VendorDetailPage({
                       <DetailTableBody>
                         {vendor.purchaseOrders.map((po) => (
                           <DetailTableRow key={po.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${po.id}`}>{po.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", po)}>{po.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(po.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(po.grandTotal))}</DetailTableTd>
                             <DetailTableTd><StatusChip status={po.status} /></DetailTableTd>
@@ -142,7 +142,7 @@ export default async function VendorDetailPage({
           },
           {
             id: "goods-receipts",
-            label: `Goods Receipts (${goodsReceipts.length})`,
+            label: `Penerimaan Barang (${goodsReceipts.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -166,7 +166,7 @@ export default async function VendorDetailPage({
                           <DetailTableRow key={gr.id}>
                             <DetailTableTd className="font-mono">{gr.documentNo}</DetailTableTd>
                             <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
-                            <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${gr.purchaseOrder.id}`}>{gr.purchaseOrder.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", gr.purchaseOrder)}>{gr.purchaseOrder.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{gr.warehouse?.name || "-"}</DetailTableTd>
                             <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
                           </DetailTableRow>
@@ -203,7 +203,7 @@ export default async function VendorDetailPage({
                           <DetailTableRow key={pr.id}>
                             <DetailTableTd className="font-mono">{pr.documentNo}</DetailTableTd>
                             <DetailTableTd>{formatDate(pr.date)}</DetailTableTd>
-                            <DetailTableTd className="font-mono"><Link href={`/pembelian/pesanan/${pr.purchaseOrder.id}`}>{pr.purchaseOrder.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/pesanan", pr.purchaseOrder)}>{pr.purchaseOrder.documentNo}</Link></DetailTableTd>
                             <DetailTableTd><StatusChip status={pr.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
@@ -238,7 +238,7 @@ export default async function VendorDetailPage({
                       <DetailTableBody>
                         {vendor.vendorBills.map((bill) => (
                           <DetailTableRow key={bill.id}>
-                            <DetailTableTd className="font-mono"><Link href={`/pembelian/tagihan/${bill.id}`}>{bill.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/tagihan", bill)}>{bill.documentNo}</Link></DetailTableTd>
                             <DetailTableTd>{formatDate(bill.date)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(bill.grandTotal))}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(bill.paidAmount))}</DetailTableTd>

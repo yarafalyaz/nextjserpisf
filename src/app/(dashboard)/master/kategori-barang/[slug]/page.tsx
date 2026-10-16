@@ -62,7 +62,7 @@ export default async function ItemCategoryDetailPage({
         title={category.name}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
-          { label: "Master Data", href: "/master" },
+          { label: "Data Master", href: "/master" },
           { label: "Kategori Barang", href: "/master/kategori-barang" },
           { label: "Detail" },
         ]}

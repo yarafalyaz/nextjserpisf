@@ -12,7 +12,7 @@ export default function CreateUomPage() {
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
-        { label: "Master Data" },
+        { label: "Data Master", href: "/master" },
         { label: "Satuan", href: "/master/satuan" },
         { label: "Buat" },
       ]} />
