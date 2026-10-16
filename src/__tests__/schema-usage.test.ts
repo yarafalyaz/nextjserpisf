@@ -23,7 +23,7 @@ import { describe, expect, it } from "vitest"
  * dan menambal kolom yang sudah ada di daftar juga memerahkan tes (dulu `updatedBy` —
  * kini sudah ditulis) — supaya daftarnya tidak membusuk.
  */
-const KNOWN_UNUSED = [
+const KNOWN_UNUSED: string[] = [
   // Catatan: `*.updatedBy` dan kolom penaut rekonsiliasi yang duplikat TIDAK ada lagi di
   // daftar ini — keduanya sudah ditutup (updatedBy kini benar-benar ditulis; kolom
   // duplikat sudah dibuang). Ringkasan temuan yang sudah ditutup: docs/AUDIT-SCHEMA.md §0.
@@ -31,7 +31,6 @@ const KNOWN_UNUSED = [
   // Skalar tanpa rujukan — mayoritas adalah hook fitur yang halamannya SUDAH ada
   // (alur persetujuan, hari libur, lembur, pajak, permintaan pembelian), jadi keputusannya
   // per fitur: implementasikan atau buang. Lihat docs/AUDIT-SCHEMA.md §3.
-  "UnitOfMeasure.conversionFactor",
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
