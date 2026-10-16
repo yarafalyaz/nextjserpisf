@@ -17,7 +17,7 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
     "db:migrate": "npx prisma migrate dev",
-    "db:check-migrations": "node scripts/check-migrations.mjs",
+    "db:check-migrations": "node scripts/verify-migrations.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
