@@ -203,10 +203,23 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
 
 ## Keputusan yang menunggu
 
-1. **Higienitas kode: 17 nama aksi tanpa pemanggil UI** — hapus atau biarkan. Setelah
-   koreksi §5, **gerbang dokumennya terbukti berfungsi** (rute status generik
-   `/api/workflow`), jadi ini murni soal higienitas. Menghapusnya kini **berisik**:
-   penjaga `wired-transition-actions` memerah dan menyebut entri basi yang harus dibuang.
+1. **Higienitas kode: 17 aksi tanpa pemanggil UI** — diperiksa isinya, dan terbagi **dua
+   kelompok** yang konsekuensinya berbeda:
+   - **(a) 8 aksi murni membalik status** (`confirmSalesOrder`, `processSalesOrder`,
+     `completeSalesOrder`, `approvePurchaseRequest`, `approvePurchaseOrder`,
+     `markPurchaseOrderOrdered`, `approveLeave`, `rejectLeave`): hanya `update`/`updateMany`
+     pada kolom status, tanpa menulis kolom lain. Statusnya digantikan rute generik
+     `/api/workflow` (yang menetapkan `approved`) → **hapus = aman**, sekaligus tak lagi
+     memelihara rantai status yang tak bisa dicapai UI.
+   - **(b) 9 aksi berperilaku nyata** — bukan kode mati, melainkan **fitur yang belum punya
+     UI**: `reviseQuotation` (menyimpan `revisionNumber` + `dataSnapshot` = versi penawaran),
+     `send/accept/rejectQuotation` + `cancelPurchaseOrder` + `processPurchaseReturn` (lewat
+     helper alur status), `deleteSalesOrder`, `markExpensePaid` (**memposting jurnal** dan
+     menulis `balanceBefore`/`balanceAfter`), dan `updateProductionCost` (**punya unit test
+     sendiri**). Menghapus kelompok ini = **menghilangkan kemampuan** → keputusan produk,
+     bukan higienitas.
+   Menghapus apa pun di daftar ini kini **berisik**: penjaga `wired-transition-actions`
+   memerah dan menyebut entri basi yang harus dibuang dari daftarnya.
 2. ~~**Seed memalsukan status** (§5e)~~ — **sudah ditutup** (lihat §5e).
 3. **Skema tak terpakai** — `QcInspectionResult`, `ProductionGenealogyMaterial`, dan 11 kolom §3
    (mayoritas hook fitur yang halamannya sudah ada) → implementasikan atau buang. Catatan:
