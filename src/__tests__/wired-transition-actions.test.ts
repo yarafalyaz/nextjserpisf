@@ -82,21 +82,6 @@ const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string
     reason: "tak ada padanan di rute status generik (revisi bukan approve/reject)",
   },
   {
-    action: "approvePurchaseRequest",
-    definedIn: "src/actions/purchase.actions.ts",
-    reason: "usang: menyetujui PR sudah terjangkau lewat rute status generik (/api/workflow)",
-  },
-  {
-    action: "approvePurchaseOrder",
-    definedIn: "src/actions/purchase.actions.ts",
-    reason: "usang: tombol Setujui di halaman detail PO memakai rute status generik (terbukti di browser)",
-  },
-  {
-    action: "markPurchaseOrderOrdered",
-    definedIn: "src/actions/purchase.actions.ts",
-    reason: "approved→ordered; tak diperlukan untuk penerimaan — gerbangnya menerima 'approved'",
-  },
-  {
     action: "cancelPurchaseOrder",
     definedIn: "src/actions/purchase.actions.ts",
     reason: "tak ada tombol batal di UI PO",

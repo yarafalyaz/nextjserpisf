@@ -222,40 +222,6 @@ export async function createPurchaseRequest(formData: FormData) {
   }
 }
 
-export async function approvePurchaseRequest(prId: number) {
-  try {
-    const user = await requirePermission("approve_purchase_requests");
-
-    const pr = await prisma.purchaseRequest.findUniqueOrThrow({
-      where: { id: prId },
-    });
-
-    if (pr.status !== "draft") {
-      throw new Error("PR hanya bisa di-approve dari status draft");
-    }
-
-    await prisma.purchaseRequest.update({
-      where: { id: prId },
-      data: { status: "approved", approvedBy: Number(user.id) },
-    });
-
-    await logActivity(
-      "approve",
-      "PurchaseRequest",
-      prId,
-      `Menyetujui permintaan pembelian #${prId}`,
-    );
-    revalidatePath("/pembelian/permintaan");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[approvePurchaseRequest]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-// ==================== PURCHASE ORDER ACTIONS ====================
-
 export async function createPurchaseOrder(formData: FormData) {
   try {
     const user = await requirePermission("create_purchase_orders");
@@ -511,73 +477,6 @@ export async function createServicePurchaseOrderFromWorkOrder(
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createServicePurchaseOrderFromWorkOrder]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function approvePurchaseOrder(poId: number) {  try {
-    const user = await requirePermission("approve_purchase_orders");
-
-    const po = await prisma.purchaseOrder.findUniqueOrThrow({
-      where: { id: poId },
-    });
-
-    if (po.status !== "draft") {
-      throw new Error("PO hanya bisa di-approve dari status draft");
-    }
-
-    await prisma.purchaseOrder.update({
-      where: { id: poId },
-      data: { status: "approved", approvedBy: Number(user.id) },
-    });
-
-    await logActivity(
-      "approve",
-      "PurchaseOrder",
-      poId,
-      `Menyetujui pesanan pembelian #${poId}`,
-    );
-    revalidatePath("/pembelian/pesanan");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[approvePurchaseOrder]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function markPurchaseOrderOrdered(poId: number) {
-  try {
-    await requirePermission("edit_purchase_orders");
-
-    const po = await prisma.purchaseOrder.findUniqueOrThrow({
-      where: { id: poId },
-    });
-
-    if (po.status !== "approved") {
-      throw new Error("PO hanya bisa ditandai ordered dari status approved");
-    }
-
-    // If a PurchaseOrder approval workflow is configured, it must be fully
-    // approved before the PO can be sent to the vendor (no-op if not configured).
-    await assertApproved("PurchaseOrder", poId);
-
-    await prisma.purchaseOrder.update({
-      where: { id: poId },
-      data: { status: "ordered" },
-    });
-
-    await logActivity(
-      "mark",
-      "PurchaseOrder",
-      poId,
-      `Menandai pesanan pembelian #${poId} ordered`,
-    );
-    revalidatePath("/pembelian/pesanan");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[markPurchaseOrderOrdered]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

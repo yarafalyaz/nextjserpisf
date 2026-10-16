@@ -230,10 +230,6 @@ describe("Purchase Request Actions", () => {
     expect(arg.data.vendorId).toBe(9)
   })
 
-  it("approvePurchaseRequest succeeds", async () => {
-    const res = await actions.approvePurchaseRequest(1)
-    expect(res?.success).toBe(true)
-  })
 
   it("deletePurchaseRequest succeeds", async () => {
     const res = await actions.deletePurchaseRequest(1)
@@ -388,16 +384,7 @@ describe("Purchase Order Actions", () => {
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_purchase_orders")
   })
 
-  it("approvePurchaseOrder succeeds", async () => {
-    const res = await actions.approvePurchaseOrder(1)
-    expect(res?.success).toBe(true)
-  })
 
-  it("markPurchaseOrderOrdered succeeds", async () => {
-    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
-    const res = await actions.markPurchaseOrderOrdered(1)
-    expect(res?.success).toBe(true)
-  })
 
   it("cancelPurchaseOrder succeeds", async () => {
     const res = await actions.cancelPurchaseOrder(1)
@@ -880,15 +867,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     try { await (actions as any).createPurchaseRequest(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
-  it("approvePurchaseRequest handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).approvePurchaseRequest(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
   it("createPurchaseOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
@@ -896,24 +874,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createPurchaseOrder(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("approvePurchaseOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).approvePurchaseOrder(arg1, arg2); } catch {} 
-    // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
-  })
-  it("markPurchaseOrderOrdered handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).markPurchaseOrderOrdered(arg1, arg2); } catch {} 
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("cancelPurchaseOrder handles error globally", async () => {
@@ -1169,12 +1129,6 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.success).toBe(true)
   })
 
-  it("approvePurchaseRequest fails if status not draft", async () => {
-    mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved" })
-    const res = await actions.approvePurchaseRequest(1)
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("hanya bisa di-approve dari status draft")
-  })
 
   it("createPurchaseOrder filters items with itemId <= 0 or qty <= 0", async () => {
     const res = await actions.createPurchaseOrder(fdMap({
@@ -1184,19 +1138,7 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.success).toBe(true)
   })
 
-  it("approvePurchaseOrder fails if status not draft", async () => {
-    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved" })
-    const res = await actions.approvePurchaseOrder(1)
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("hanya bisa di-approve dari status draft")
-  })
 
-  it("markPurchaseOrderOrdered fails if status not approved", async () => {
-    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
-    const res = await actions.markPurchaseOrderOrdered(1)
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("hanya bisa ditandai ordered dari status approved")
-  })
 
   it("cancelPurchaseOrder fails if status received or cancelled", async () => {
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "received" })
@@ -1511,10 +1453,7 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
     const redirectErr = { digest: "NEXT_REDIRECT_TEST" }
     const actionsList = [
       () => actions.createPurchaseRequest(fdMap({})),
-      () => actions.approvePurchaseRequest(1),
       () => actions.createPurchaseOrder(fdMap({})),
-      () => actions.approvePurchaseOrder(1),
-      () => actions.markPurchaseOrderOrdered(1),
       () => actions.cancelPurchaseOrder(1),
       () => actions.createGoodsReceipt(fdMap({})),
       () => actions.verifyGoodsReceipt(1),
