@@ -312,6 +312,18 @@ Tujuh sisanya kini **sudah diukur per modul** (aksi apa yang disambungkan UI + a
 | `cancelPurchaseOrder` | `deletePurchaseOrder` | hanya "Ubah" | tak ada jalan membatalkan PO (menghapus tersedia) → sambungkan atau buang |
 | `processPurchaseReturn` | `deletePurchaseReturn` | hanya "Ubah"; `StatusActions` = 0 | tak ada jalan memproses retur (padahal efeknya stok + GL) → sambungkan atau buang |
 | `updateProductionCost` | — | bagian biaya produksi **read-only** (`production-cost-section.tsx`) | biaya produksi tak bisa diisi/diubah dari UI (aksinya punya unit test) → sambungkan atau buang |
+
+**Kualifikasi penting (setelah diperiksa lagi)**: klaim "tiga aksi penawaran paling aman dibuang"
+tidak sepenuhnya berdiri. Membuang aksinya memang **tidak memblokir apa pun** — efeknya tetap
+tercapai lewat rute generik, dan halaman detail **menerima** `approved`
+(`["accepted", "approved"].includes(quotation.status)`). **Tetapi UI-nya masih menawarkan filter**
+untuk status itu (`statusChips = ["", "draft", "sent", "accepted", "converted", "cancelled"]`),
+jadi setelah aksinya dibuang **filter itu menjadi mati** — tak akan pernah cocok.
+
+**Kesimpulan yang konsisten untuk kesembilannya**: tidak ada satu pun yang bisa "dibuang begitu saja";
+selalu ada **jejak UI yang menunggunya** (tombol, filter, label, atau bagian riwayat). Jadi pilihannya
+selalu salah satu dari dua, per fitur: **sambungkan**, atau **buang aksi beserta jejak UI-nya**. Itu
+keputusan produk — dan itulah kenapa kelompok ini terpisah dari (1a), yang benar-benar higienitas.
 Tujuh sisanya **belum diukur per halaman**: `deleteSalesOrder`, `send`/`accept`/`rejectQuotation`,
 `cancelPurchaseOrder`, `processPurchaseReturn`, `updateProductionCost`.
 
