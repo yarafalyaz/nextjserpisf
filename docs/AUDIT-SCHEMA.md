@@ -166,6 +166,14 @@ yang menuntutnya.
 
 ### §5e. Kenapa kelas ini lolos dari 1000+ tes: seed memalsukan status — **SUDAH DITUTUP**
 
+**Sisa yang diperiksa (agar klaim "sudah ditutup" tidak menggantung).** Setelah dua perbaikan di
+atas, seed masih menulis beberapa status langsung — dan **semuanya keadaan yang bisa dicapai
+aplikasi**: `salesOrder: draft`, `deliveryOrder: draft`, `salesInvoice: posted` (via `postInvoice`
+yang tersambung), `vendorBill: draft` (bisa diposting lewat `confirmVendorBill`), `journal: DRAFT`
+(kini bisa diposting lewat tombol Posting), dan `expense: approved` (lewat aksi persetujuan
+pengeluaran yang **memang tersambung**). Jadi tidak ada lagi status **tak terjangkau** yang
+dipalsukan seed.
+
 `scripts/seed-remaining-e2e.ts` dulu membuat entitas **langsung pada status yang tak bisa dicapai
 UI**: `salesOrder.create({ status: "confirmed" })` dan `journal` yang di-`update` jadi `POSTED`
 secara manual. Lingkungan ber-seed — dev maupun E2E — karena itu **menyembunyikan** gerbang §5d.
