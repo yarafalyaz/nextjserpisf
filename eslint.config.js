@@ -35,6 +35,10 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // `next dev` writes here instead of `.next` (see next.config.ts `distDir`).
+    // ESLint's flat config does not read .gitignore, so without this line a dev
+    // machine that has run `next dev` fails `npm run lint` on build output.
+    ".next-dev/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

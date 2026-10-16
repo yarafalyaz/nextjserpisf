@@ -78,7 +78,11 @@ async function main() {
       subtotal: 300000,
       grandTotal: 300000,
       totalAmount: 300000,
-      status: "confirmed",
+      // `draft` — sama seperti yang dihasilkan UI. Menuliskan "confirmed" di sini akan
+      // MEMALSUKAN status yang tak bisa dicapai aplikasi (lihat docs/AUDIT-SCHEMA.md §5)
+      // dan menyembunyikan gerbang buntu dari tes. Diukur: tak ada spec yang butuh itu —
+      // tak ada spec yang membuat surat jalan, jadi status palsu ini tak memberi manfaat.
+      status: "draft",
       items: { create: [{ itemId: item.id, qty: 2, unitPrice: 150000, total: 300000 }] },
     },
     include: { items: true },
@@ -156,6 +160,26 @@ async function main() {
   assert(salesPaymentJournal?.entries.length === 2, "Sales Payment journal tidak lengkap");
   console.log(`2. Sales Payment: ${salesPayment.documentNo} ✓ (invoice paid + journal 2 entries)`);
 
+  // ─── 2b. Sales Invoice KEDUA — sengaja TIDAK dibayar ─────────────────
+  // Dipakai spec "tukar faktur". Form tukar faktur memang menolak faktur lunas
+  // (menyaring sisa > 0), dan faktur bernilai tidak bisa dibuat lewat UI karena
+  // form faktur penjualan belum punya baris item — jadi prasyaratnya disediakan di sini.
+  const unpaidInvoice = await prisma.salesInvoice.create({
+    data: {
+      documentNo: await generateDocumentNumber("INV"),
+      customerId: customer.id,
+      salesOrderId: salesOrder.id,
+      date: new Date("2026-05-29"),
+      subtotal: 125000,
+      grandTotal: 125000,
+      totalAmount: 125000,
+      status: "posted",
+      paymentStatus: "unpaid",
+      items: { create: [{ itemId: item.id, qty: 1, unitPrice: 125000, total: 125000 }] },
+    },
+  });
+  console.log(`2b. Sales Invoice belum lunas: ${unpaidInvoice.documentNo} ✓ (prasyarat spec tukar faktur)`);
+
   // ─── 3. Vendor Bill + Payment ────────────────────────────────────────
   const bill = await prisma.vendorBill.create({
     data: {
@@ -217,11 +241,42 @@ async function main() {
   const totalDebit = manualJournal.entries.reduce((sum: number, entry: { debit: unknown; credit: unknown }) => sum + Number(entry.debit), 0);
   const totalCredit = manualJournal.entries.reduce((sum: number, entry: { debit: unknown; credit: unknown }) => sum + Number(entry.credit), 0);
   assert(totalDebit === totalCredit, "Manual journal tidak balance");
+  // DIBIARKAN `draft` (dulu dipaksa `POSTED` di sini). Mem-postnya langsung MEMALSUKAN
+  // efek `postJournal` — aksi yang dulu tak tersambung ke UI (docs/AUDIT-SCHEMA.md §5).
+  // `postJournal` kini tersambung dan spec `operational-crud` mem-post jurnal draft lewat
+  // UI, jadi fabrikasi ini tak diperlukan. Diukur: un-posting tak memerahkan tes mana pun,
+  // dan asersi `totalDebit > 0` di spec neraca-saldo tetap lolos (cakupan tidak hampa —
+  // laporan tetap berisi posting otomatis dari hook).
   await prisma.journal.update({
     where: { id: manualJournal.id },
-    data: { status: "POSTED", totalDebit, totalCredit },
+    data: { status: "DRAFT", totalDebit, totalCredit },
   });
-  console.log(`4. Manual Journal: ${manualJournal.journalNumber} ✓ (balanced + posted)`);
+  console.log(`4. Manual Journal: ${manualJournal.journalNumber} ✓ (balanced + draft)`);
+
+  // ─── 4b. Jurnal manual DRAFT (menunggu posting) ──────────────────────
+  // Dipakai spec posting jurnal. Di atas, seed mem-POSTED jurnal secara manual — meniru
+  // efek `postJournal` alih-alih memanggilnya, karena aksi itu lama tak tersambung ke UI.
+  const draftJournal = await prisma.journal.create({
+    data: {
+      journalNumber: await generateDocumentNumber("JRN"),
+      transactionDate: new Date(),
+      // Sengaja bertanggal HARI INI: spec "proses akhir bulan" mengunci periode sampai
+      // akhir bulan lalu, sehingga jurnal bertanggal masa lalu akan ditolak `assertPeriodOpen`.
+      description: "E2E jurnal manual menunggu posting",
+      type: "MANUAL",
+      status: "DRAFT",
+      totalDebit: 250000,
+      totalCredit: 250000,
+      createdBy: userId,
+      entries: {
+        create: [
+          { accountId: expenseAccount.id, debit: 250000, credit: 0, memo: "E2E draft" },
+          { accountId: cash.id, debit: 0, credit: 250000, memo: "E2E draft" },
+        ],
+      },
+    },
+  });
+  console.log(`4b. Jurnal manual DRAFT: ${draftJournal.journalNumber} ✓ (untuk spec posting)`);
 
   // ─── 5. Expense Approval ─────────────────────────────────────────────
   // Expense.category is a relation to ExpenseCategory (categoryId) now; passing
@@ -288,6 +343,61 @@ async function main() {
   assert(checklistItems >= 1, "QC checklist items tidak tersimpan");
   console.log(`6. QC Checklist: ${checklist.code} ✓ (${checklistItems} item, released)`);
 
+  // Asset — the crud-surface sweep walks /aset, and with an empty asset list
+  // there is no row to open: the desktop run "passes" by matching a nav link
+  // while the mobile run times out (the sidebar is collapsed). One row keeps
+  // that route genuinely covered on both viewports.
+  const asset = await prisma.asset.upsert({
+    where: { code: "E2E-AST-01" },
+    update: {},
+    create: {
+      code: "E2E-AST-01",
+      name: "Aset E2E — Unit Uji",
+      purchaseCost: 1000000,
+      currentValue: 1000000,
+      status: "active",
+    },
+  });
+  console.log(`7. Asset: ${asset.code} ✓`);
+
+  // Warehouse + rack — `inventory-rack-row-crud` skips itself when the selected
+  // warehouse has no rack ("Tidak ada data rak ..."), which silently dropped
+  // /inventaris/baris-rak from coverage: the test was skipped on chromium as well
+  // as mobile. One rack keeps the desktop flow actually running.
+  const e2eWarehouse = await prisma.warehouse.upsert({
+    where: { code: "E2E-WH-01" },
+    update: {},
+    create: { code: "E2E-WH-01", name: "Gudang E2E" },
+  });
+  const e2eRack = await prisma.rack.upsert({
+    where: { warehouseId_code: { warehouseId: e2eWarehouse.id, code: "E2E-RK-01" } },
+    update: {},
+    create: { warehouseId: e2eWarehouse.id, code: "E2E-RK-01", name: "Rak E2E" },
+  });
+  console.log(`8. Warehouse+Rack: ${e2eWarehouse.code} / ${e2eRack.code} ✓`);
+
+
+  // ─── Kendaraan: merek/model/varian khusus E2E ────────────────────────
+  // Tanpa ini, dropdown merek di form kendaraan hanya berisi merek buatan spec lain,
+  // sehingga spec kendaraan memilih merek milik spec lain → merek itu jadi punya
+  // referensi → aksi hapus merek menolak (memang benar) → spec merek gagal dan
+  // menyisakan data yang meracuni run berikutnya. (Lihat e2e/vehicle-crud.spec.ts.)
+  const e2eBrand = await prisma.vehicleBrand.upsert({
+    where: { slug: "e2e-kendaraan" },
+    update: {},
+    create: { slug: "e2e-kendaraan", name: "E2E Kendaraan" },
+  });
+  const e2eModel = await prisma.vehicleModel.upsert({
+    where: { slug: "e2e-kendaraan-model" },
+    update: { vehicleBrandId: e2eBrand.id },
+    create: { slug: "e2e-kendaraan-model", name: "E2E Model", vehicleBrandId: e2eBrand.id },
+  });
+  const e2eVariant = await prisma.vehicleVariant.findFirst({
+    where: { vehicleModelId: e2eModel.id, name: "E2E Varian" },
+  }) ?? await prisma.vehicleVariant.create({
+    data: { vehicleModelId: e2eModel.id, name: "E2E Varian", drivetrain: "FWD", transmission: "Manual" },
+  });
+  console.log(`10. Kendaraan: ${e2eBrand.name} / ${e2eModel.name} / ${e2eVariant.name} ✓`);
   console.log("\n=== REMAINING CORE FLOWS E2E COMPLETE ===");
 }
 

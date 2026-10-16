@@ -76,7 +76,11 @@ jobs:
       - run: npx prisma generate
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx prisma db push
+      # `migrate deploy`, bukan `db push`: rantai migrasi sudah diverifikasi bisa
+      # mereproduksi skema dari DB kosong (drift 0). Dengan ini ketidaksesuaian skema vs
+      # migrasi GAGAL KERAS, bukan tertutupi — konsekuensinya setiap perubahan skema
+      # wajib menyertakan migrasinya.
+      - run: npx prisma migrate deploy
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npx tsx prisma/seed.ts
@@ -147,7 +151,11 @@ jobs:
       - run: npx prisma generate
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx prisma db push
+      # `migrate deploy`, bukan `db push`: rantai migrasi sudah diverifikasi bisa
+      # mereproduksi skema dari DB kosong (drift 0). Dengan ini ketidaksesuaian skema vs
+      # migrasi GAGAL KERAS, bukan tertutupi — konsekuensinya setiap perubahan skema
+      # wajib menyertakan migrasinya.
+      - run: npx prisma migrate deploy
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: npx tsx prisma/seed.ts
