@@ -14,7 +14,7 @@ import type { Metadata } from "next"
 
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 
 export const metadata: Metadata = { title: "Fitment Kendaraan" }
 
@@ -51,11 +51,11 @@ export default async function VehicleFitmentDetailPage({
   if (!rule) notFound()
 
   const [item, brand, model, variant, bomRevision] = await Promise.all([
-    prisma.item.findUnique({ where: { id: rule.itemId }, select: { id: true, sku: true, name: true } }),
+    prisma.item.findUnique({ where: { id: rule.itemId }, select: { id: true, slug: true, sku: true, name: true } }),
     rule.vehicleBrandId != null ? prisma.vehicleBrand.findUnique({ where: { id: rule.vehicleBrandId }, select: { id: true, name: true } }) : null,
     rule.vehicleModelId != null ? prisma.vehicleModel.findUnique({ where: { id: rule.vehicleModelId }, select: { id: true, name: true } }) : null,
     rule.vehicleVariantId != null ? prisma.vehicleVariant.findUnique({ where: { id: rule.vehicleVariantId }, select: { id: true, name: true } }) : null,
-    rule.bomRevisionId != null ? prisma.bomRevision.findUnique({ where: { id: rule.bomRevisionId }, select: { id: true, revisionNo: true } }) : null,
+    rule.bomRevisionId != null ? prisma.bomRevision.findUnique({ where: { id: rule.bomRevisionId }, select: { id: true, slug: true, revisionNo: true } }) : null,
   ])
 
   const canEdit = await hasPermission("edit_vehicle_fitments")
@@ -92,7 +92,7 @@ export default async function VehicleFitmentDetailPage({
           label="Item / SKU"
           value={
             item ? (
-              <Link href={`/master/barang/${item.id}`} className="hover:underline">
+              <Link href={entityHref("/master/barang", item)} className="hover:underline">
                 <span className="font-mono text-xs text-muted-foreground mr-1.5">{item.sku}</span>
                 {item.name}
               </Link>
@@ -103,7 +103,7 @@ export default async function VehicleFitmentDetailPage({
           label="Revisi BOM"
           value={
             bomRevision ? (
-              <Link href={`/produksi/bom-revisi/${bomRevision.id}`} className="hover:underline">
+              <Link href={entityHref("/produksi/bom-revisi", bomRevision)} className="hover:underline">
                 Rev. {bomRevision.revisionNo}
               </Link>
             ) : "Semua revisi"

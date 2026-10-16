@@ -73,7 +73,7 @@ export default async function LeaveBalancePage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "SDM", href: "/sdm/cuti" },
+          { label: "Cuti", href: "/sdm/cuti" },
           { label: "Cuti", href: "/sdm/cuti" },
           { label: "Saldo Cuti" },
         ]}

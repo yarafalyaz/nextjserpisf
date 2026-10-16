@@ -67,7 +67,7 @@ export default async function PurchaseReturnDetailPage({
         actions={
           <>
             <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary">Ubah</Button>
-            <PrintButton />
+            <PrintButton documentType="purchase-return" documentId={purchaseReturn.id} />
             <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
             <BackButton href="/pembelian/retur" />
           </>

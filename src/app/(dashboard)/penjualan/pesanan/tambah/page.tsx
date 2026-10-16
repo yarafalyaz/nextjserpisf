@@ -18,11 +18,13 @@ export default async function CreateSalesOrderPage({
   const params = await searchParams
   const quotationId = params.quotationId ? Number(params.quotationId) : undefined
 
-  const customers = await prisma.customer.findMany({
-    where: { isActive: true, deletedAt: null },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  })
+  const [customers] = await Promise.all([
+    prisma.customer.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ])
 
   // Pre-fill from quotation if provided
   let quotation = null
@@ -35,7 +37,7 @@ export default async function CreateSalesOrderPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Pesanan",href:"/penjualan/pesanan"},{label:"Tambah"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{ label: "Pesanan Penjualan", href: "/penjualan/pesanan" },{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Pesanan Penjualan</h1>
       </div>

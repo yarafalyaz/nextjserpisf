@@ -4,8 +4,9 @@ import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { deleteJournal } from "@/actions/finance.actions"
+import { deleteJournal, postJournal } from "@/actions/finance.actions"
 import { formatDate, formatReferenceType } from "@/lib/utils/format"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -15,6 +16,7 @@ interface JournalData {
   journalNumber: string
   transactionDate: string
   referenceType: string | null
+  status: string
   description: string | null
   _count?: { entries: number }
 }
@@ -53,6 +55,10 @@ const columns = [
     header: "Baris",
     cell: (info) => info.row.original._count?.entries ?? 0,
   }),
+  columnHelper.accessor("status", {
+    header: "Status",
+    cell: (info) => <span className="text-sm">{statusLabel(info.getValue())}</span>,
+  }),
   columnHelper.display({
     id: "actions",
     header: "Aksi",
@@ -64,6 +70,17 @@ const columns = [
         deleteId={info.row.original.id}
         editPermission="edit_journals"
         deletePermission="delete_journals"
+        // Jurnal manual dibuat DRAFT dan hanya `postJournal` yang mempostingnya; tanpa
+        // tombol ini jurnal tak pernah masuk pembukuan (laporan membaca POSTED/REVERSED).
+        // Status di DB huruf besar ("DRAFT"), jadi perbandingannya tidak case-sensitive.
+        processAction={
+          info.row.original.status?.toUpperCase() === "DRAFT" ? postJournal : undefined
+        }
+        processLabel="Posting"
+        processConfirmTitle="Posting jurnal ini?"
+        processConfirmBody="Jurnal akan berstatus terposting sehingga masuk ke laporan keuangan (buku besar, neraca, laba rugi). Pastikan akun dan nominalnya sudah benar."
+        processSuccessMessage="Jurnal berhasil diposting"
+        processPermission="post_journals"
       />
     ),
   }),

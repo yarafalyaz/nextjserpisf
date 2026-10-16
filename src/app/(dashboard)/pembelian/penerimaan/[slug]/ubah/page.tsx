@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
 export const metadata: Metadata = { title: "Ubah Penerimaan Barang" };
 
 export default async function EditPage({
@@ -31,6 +32,10 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+
+  // Batas gudang sama dengan lampiran, cetak, dan halaman detail — form ini
+  // memuat nilai dokumen, jadi tidak boleh lebih longgar.
+  if (!(await canViewWarehouseScopedDocument("goods_receipt", data.id))) notFound();
 
   const receipt = {
     id: data.id,

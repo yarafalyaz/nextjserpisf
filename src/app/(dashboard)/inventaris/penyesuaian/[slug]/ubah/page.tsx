@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
 export const metadata: Metadata = { title: "Ubah Penyesuaian Stok" };
 
 export default async function EditPage({
@@ -61,8 +62,15 @@ export default async function EditPage({
 
   if (!data) notFound();
 
+  // Batas gudang sama dengan lampiran, cetak, dan halaman detail — form ini
+  // memuat nilai dokumen, jadi tidak boleh lebih longgar.
+  if (!(await canViewWarehouseScopedDocument("stock_adjustment", data.id))) notFound();
+
   const adjustment = {
     ...data,
+    // Sama seperti transfer: normalisasi Date → "YYYY-MM-DD" agar tanggal asli
+    // yang dikirim form tidak tertimpa "hari ini".
+    date: data.date.toISOString().split("T")[0],
     items: data.items.map((it) => ({
       itemId: it.itemId,
       currentQty: Number(it.systemQty),

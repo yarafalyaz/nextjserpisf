@@ -59,7 +59,7 @@ export default async function CustomerVehiclesPage({
     prisma.customerVehicle.findMany({
       where,
       include: {
-        customer: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true, slug: true } },
         vehicle: {
           include: {
             variant: {

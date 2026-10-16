@@ -17,14 +17,14 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Production Orders" }
+export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
   params,
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const user = await requirePermission("view_production")
+  const user = await requirePermission("view_production_orders")
   const canManageCosts =
     user.roles.includes("super_admin") || user.permissions.includes("manage_production_costs")
 
@@ -234,8 +234,8 @@ export default async function ProductionOrderDetailPage({
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh align="right">Qty Rencana</DetailTableTh>
-                <DetailTableTh align="right">Qty Aktual</DetailTableTh>
+                <DetailTableTh align="right">Kuantitas Rencana</DetailTableTh>
+                <DetailTableTh align="right">Kuantitas Aktual</DetailTableTh>
                 <DetailTableTh align="right">Biaya Standar</DetailTableTh>
                 <DetailTableTh align="right">Biaya Aktual</DetailTableTh>
               </DetailTableHead>
@@ -282,7 +282,7 @@ export default async function ProductionOrderDetailPage({
                   <span className="text-[0.9375rem] text-foreground font-medium">{order.product.name}</span>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Qty</span>
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Kuantitas</span>
                   <span className="text-[0.9375rem] text-foreground font-medium">{Number(order.genealogy.outputQty)}</span>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -316,7 +316,7 @@ export default async function ProductionOrderDetailPage({
                   <DetailTable>
                     <DetailTableHead>
                       <DetailTableTh>Barang</DetailTableTh>
-                      <DetailTableTh align="right">Qty</DetailTableTh>
+                      <DetailTableTh align="right">Kuantitas</DetailTableTh>
                       <DetailTableTh>Lot/Serial</DetailTableTh>
                       <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
                       <DetailTableTh align="right">Total</DetailTableTh>

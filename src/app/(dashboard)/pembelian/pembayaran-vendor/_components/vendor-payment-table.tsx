@@ -4,8 +4,9 @@ import { createColumnHelper } from "@/lib/table"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { deleteVendorPayment } from "@/actions/purchase.actions"
+import { confirmVendorPayment, deleteVendorPayment } from "@/actions/purchase.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -16,6 +17,7 @@ interface VendorPayment {
   paymentDate: Date | string
   amount: number | string
   paymentMethod: string
+  status: string
   vendor: { name: string }
 }
 
@@ -47,6 +49,10 @@ const columns = [
     header: "Metode",
     cell: (info) => info.getValue(),
   }),
+  columnHelper.accessor("status", {
+    header: "Status",
+    cell: (info) => <span className="text-sm">{statusLabel(info.getValue())}</span>,
+  }),
   columnHelper.display({
     id: "actions",
     header: "Aksi",
@@ -58,6 +64,14 @@ const columns = [
         deleteId={info.row.original.id}
         editPermission="edit_vendor_payments"
         deletePermission="delete_vendor_payments"
+        // Konfirmasi hanya masuk akal dari draft; aksinya sendiri juga memeriksa ini dan
+        // memposting jurnal + mengalokasikan ke tagihan terbuka.
+        processAction={info.row.original.status === "draft" ? confirmVendorPayment : undefined}
+        processLabel="Konfirmasi & Posting"
+        processConfirmTitle="Konfirmasi pembayaran ini?"
+        processConfirmBody="Jurnal kas/bank akan diposting dan pembayaran dialokasikan ke tagihan vendor yang masih terbuka (tertua lebih dulu). Tindakan ini tidak bisa dibatalkan."
+        processSuccessMessage="Pembayaran dikonfirmasi & diposting"
+        processPermission="approve_vendor_payments"
       />
     ),
   }),

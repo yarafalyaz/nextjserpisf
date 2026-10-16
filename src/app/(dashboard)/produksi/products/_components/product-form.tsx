@@ -76,11 +76,11 @@ export function ProductForm({
     fetch("/api/vehicle-brands")
       .then((r) => r.json())
       .then((d) => setVehicleBrands(d.data ?? []))
-      .catch(() => setVehicleBrands([]))
+      .catch(() => { setVehicleBrands([]); showError("Gagal memuat daftar merek") })
     fetch("/api/vehicle-models")
       .then((r) => r.json())
       .then((d) => setVehicleModels(d.data ?? []))
-      .catch(() => setVehicleModels([]))
+      .catch(() => { setVehicleModels([]); showError("Gagal memuat daftar model") })
   }, [])
 
   const filteredModels = useMemo(() => {

@@ -1,0 +1,107 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { useState, useTransition } from "react"
+import { Lock, LockOpen } from "lucide-react"
+
+import { closeAccountingPeriod, reopenAccountingPeriod } from "@/actions/period-close.actions"
+import { Button } from "@/components/ui/shadcn/button"
+import { Input } from "@/components/ui/shadcn/input"
+import { Label } from "@/components/ui/shadcn/label"
+import { showError, showSuccess } from "@/lib/utils/toast"
+
+export interface PeriodClosePanelProps {
+  monthKey: string
+  monthLabel: string
+  /** Tanggal akhir bulan (YYYY-MM-DD) yang akan dipasang sebagai kunci. */
+  monthEnd: string
+  currentLockDate: string | null
+  /** Kunci yang berlaku sudah mencakup/melebihi bulan ini. */
+  alreadyClosed: boolean
+}
+
+export function PeriodClosePanel({
+  monthKey,
+  monthLabel,
+  monthEnd,
+  currentLockDate,
+  alreadyClosed,
+}: PeriodClosePanelProps) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [busy, setBusy] = useState<"close" | "reopen" | null>(null)
+
+  function changeMonth(value: string) {
+    if (!/^\d{4}-\d{2}$/.test(value)) return
+    router.push(`/pengaturan/proses-akhir-bulan?periode=${value}`)
+  }
+
+  function handleClose() {
+    if (!window.confirm(`Kunci periode sampai ${monthLabel}? Setelah dikunci, jurnal bertanggal pada/sebelum tanggal itu tidak bisa diposting atau diubah.`)) return
+    setBusy("close")
+    startTransition(async () => {
+      const formData = new FormData()
+      formData.set("date", monthEnd)
+      const result = await closeAccountingPeriod(formData)
+      setBusy(null)
+      if (result.success) {
+        showSuccess(result.message ?? "Periode dikunci.")
+        router.refresh()
+      } else {
+        showError(result.error ?? "Gagal mengunci periode.")
+      }
+    })
+  }
+
+  function handleReopen() {
+    if (!window.confirm("Buka kunci periode? Jurnal pada periode yang tadinya terkunci akan bisa diubah lagi.")) return
+    setBusy("reopen")
+    startTransition(async () => {
+      const result = await reopenAccountingPeriod()
+      setBusy(null)
+      if (result.success) {
+        showSuccess(result.message ?? "Kunci periode dibuka.")
+        router.refresh()
+      } else {
+        showError(result.error ?? "Gagal membuka kunci periode.")
+      }
+    })
+  }
+
+  const disabled = isPending
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2 sm:max-w-xs">
+        <Label htmlFor="periode">Bulan yang ditutup</Label>
+        <Input
+          id="periode"
+          type="month"
+          value={monthKey}
+          onChange={(event) => changeMonth(event.target.value)}
+          disabled={disabled}
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={handleClose} disabled={disabled || alreadyClosed}>
+          <Lock className="size-4" />
+          {busy === "close" ? "Mengunci…" : `Kunci sampai ${monthEnd}`}
+        </Button>
+        {currentLockDate ? (
+          <Button variant="outline" onClick={handleReopen} disabled={disabled}>
+            <LockOpen className="size-4" />
+            {busy === "reopen" ? "Membuka…" : "Buka kunci periode"}
+          </Button>
+        ) : null}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {currentLockDate
+          ? `Kunci periode berlaku sampai ${currentLockDate}.`
+          : "Periode belum pernah dikunci."}
+        {alreadyClosed ? " Bulan ini sudah tercakup kunci yang berlaku, jadi menutupnya lagi tidak mengubah apa pun." : ""}
+      </p>
+    </div>
+  )
+}

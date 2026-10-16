@@ -34,7 +34,7 @@ export default async function EditLeadPage({
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "CRM", href: "/crm" },
-  { label: "Leads", href: "/crm/leads" },
+  { label: "Prospek", href: "/crm/leads" },
   { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

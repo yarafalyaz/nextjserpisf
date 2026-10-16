@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
 export const metadata: Metadata = { title: "Ubah Pengeluaran Material" };
 
 export default async function EditPage({
@@ -38,6 +39,10 @@ export default async function EditPage({
   );
 
   if (!data) notFound();
+
+  // Batas gudang sama dengan lampiran, cetak, dan halaman detail — form ini
+  // memuat nilai dokumen, jadi tidak boleh lebih longgar.
+  if (!(await canViewWarehouseScopedDocument("material_issue", data.id))) notFound();
 
   const [warehouses, items, costCenters] = await Promise.all([
     prisma.warehouse.findMany({ orderBy: { name: "asc" } }),
@@ -68,7 +73,7 @@ export default async function EditPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Inventaris", href: "/inventaris/pengeluaran-material" },
+          { label: "Pengeluaran Material", href: "/inventaris/pengeluaran-material" },
           { label: "Ubah" },
         ]}
       />
@@ -76,7 +81,10 @@ export default async function EditPage({
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
       <MaterialIssueForm
-        issue={data as any}
+        // `date` Prisma berupa Date sedangkan form bertipe string dan mengirimnya
+        // saat submit — tanpa normalisasi ini pengeluaran material back-date
+        // berpindah ke tanggal hari ini saat disimpan ulang.
+        issue={{ ...data, date: data.date.toISOString().split("T")[0] } as any}
         warehouses={warehouses as any}
         costCenters={JSON.parse(JSON.stringify(costCenters))}
         items={items as any}

@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { postInvoice } from "@/actions/sales.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface Invoice {
@@ -75,6 +76,15 @@ const columns = [
       <ActionDropdown
         viewHref={entityHref("/penjualan/faktur", info.row.original)}
         deletePermission="delete_sales_invoices"
+        deleteId={info.row.original.id}
+        processAction={
+          ["draft", "approved"].includes(info.row.original.status) ? postInvoice : undefined
+        }
+        processLabel="Posting"
+        processPermission="post_sales_invoices"
+        processConfirmTitle="Posting faktur ini?"
+        processConfirmBody="Faktur akan berstatus terposting: piutang diakui di jurnal dan stok barang berkurang sesuai item. Pastikan data sudah benar."
+        processSuccessMessage="Faktur berhasil diposting"
       />
     ),
   }),

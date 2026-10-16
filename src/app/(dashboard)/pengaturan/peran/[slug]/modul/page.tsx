@@ -1,68 +1,88 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ICON_MAP } from "@/lib/auth/modules"
-import { toggleModuleAccess } from "@/actions/module-access.actions"
-import { ChevronRight, Check, X } from "lucide-react"
-import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityHref } from "@/lib/utils/entity-url"
-
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Modul Peran" }
+import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { entityHref } from "@/lib/utils/entity-url"
+import { updateRole } from "@/actions/roles.actions"
+import { buildPermissionMatrix } from "@/lib/auth/permission-matrix"
+import { PermissionMatrix } from "./_components/permission-matrix"
 
-export default async function RoleModulesPage({
+export const metadata: Metadata = { title: "Izin Peran" }
+
+/**
+ * Matriks izin per peran: baris = entitas, kolom = verba aksi.
+ *
+ * Menulis ke `Role.permissions` lewat `updateRole` — store yang sama dengan halaman
+ * daftar (`/ubah`), jadi hanya ada SATU tempat yang menentukan akses efektif.
+ * Sebelumnya halaman ini hanya menulis tabel `role_module_access` yang tidak pernah
+ * dibaca jalur penegakan, sehingga centangannya tidak berpengaruh apa pun.
+ */
+export default async function RolePermissionsPage({
   params,
 }: {
   params: Promise<{ slug: string }>
 }) {
-  await requirePermission("manage_settings")
+  await requirePermission("manage_roles")
   const { slug } = await params
 
   const role = await resolveEntity(
     { segment: slug, fallbackWhere: {} },
     {
-      bySlug: (s) => prisma.role.findFirst({ where: { slug: s }, include: { users: true } }),
-      byId: (id) => prisma.role.findUnique({ where: { id }, include: { users: true } }),
+      bySlug: (s) =>
+        prisma.role.findFirst({
+          where: { slug: s },
+          include: { users: true, permissions: true },
+        }),
+      byId: (id) =>
+        prisma.role.findUnique({
+          where: { id },
+          include: { users: true, permissions: true },
+        }),
     },
   )
   if (!role) notFound()
 
-  const roleId = role.id
   const roleBaseHref = entityHref("/pengaturan/peran", role)
 
-  // Fetch all modules with their actions + the role's existing access.
-  // Use `select` to exclude DateTime fields — Prisma 7 + Turbopack RSC
-  // serializer hits a `toISOString` RangeError on Date columns.
-  const modules = await prisma.module.findMany({
-    orderBy: { order: "asc" },
-    select: {
-      id: true,
-      key: true,
-      name: true,
-      parentKey: true,
-      route: true,
-      icon: true,
-      order: true,
-      actions: {
-        orderBy: { order: "asc" },
-        select: { id: true, key: true, permissionKey: true, label: true, order: true },
+  // Katalog dari DB (hasil seed `MODULES`) supaya UI tidak pernah menampilkan izin yang
+  // tidak dikenal penegakan. `select` tanpa kolom DateTime — Prisma 7 + Turbopack RSC
+  // melempar RangeError pada serialisasi Date.
+  const [modules, permissions] = await Promise.all([
+    prisma.module.findMany({
+      orderBy: { order: "asc" },
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        route: true,
+        icon: true,
+        actions: {
+          orderBy: { order: "asc" },
+          select: { id: true, key: true, resource: true, permissionKey: true, label: true },
+        },
       },
-    },
-  })
-  const accessRows = await prisma.roleModuleAccess.findMany({
-    where: { roleId },
-    select: { moduleActionId: true, allowed: true },
-  })
-  // Build a quick lookup map: `${moduleActionId}` -> allowed
-  const accessMap = new Map<number, boolean>()
-  for (const row of accessRows) {
-    accessMap.set(row.moduleActionId, row.allowed)
-  }
+    }),
+    prisma.permission.findMany({ select: { id: true, name: true } }),
+  ])
+
+  const permissionIdByName = new Map(permissions.map((p) => [p.name, p.id]))
+  const checkedPermissionIds = role.permissions.map((p) => p.id)
+  const { matrix, missingPermissionKeys } = buildPermissionMatrix(
+    modules.map((mod) => ({
+      key: mod.key,
+      name: mod.name,
+      route: mod.route,
+      icon: mod.icon,
+      actions: mod.actions,
+    })),
+    permissionIdByName,
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,109 +91,36 @@ export default async function RoleModulesPage({
           { label: "Dasbor", href: "/" },
           { label: "Pengaturan", href: "/pengaturan" },
           { label: "Peran", href: "/pengaturan/peran" },
-          { label: role.name },
-          { label: "Modul" },
+          { label: role.name, href: roleBaseHref },
+          { label: "Izin" },
         ]}
       />
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground capitalize">
-            Modul & Hak Akses — {role.name}
+          <h1 className="text-2xl font-bold capitalize text-foreground">
+            Izin — {role.name}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Centang modul & aksi yang diizinkan untuk peran ini. Perubahan
-            langsung berlaku untuk {role.users.length} pengguna.
+          <p className="mt-1 text-sm text-muted-foreground">
+            Matriks izin yang berlaku untuk peran ini. Perubahan langsung memengaruhi{" "}
+            {role.users.length} pengguna setelah disimpan.
           </p>
         </div>
         <Link
           href={roleBaseHref}
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-default transition-all hover:bg-surface-secondary"
+          className="inline-flex items-center justify-center rounded-lg border border-default px-4 py-2 text-sm font-medium transition-all hover:bg-surface-secondary"
         >
-          <ChevronRight className="size-4 rotate-180" />
           Kembali
         </Link>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="divide-y divide-default">
-          {modules.map((mod) => {
-            const Icon = mod.icon ? ICON_MAP[mod.icon] : null
-            return (
-              <div key={mod.id} className="p-4 lg:p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  {Icon && <Icon className="size-5 text-primary" />}
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">
-                    {mod.name}
-                  </h2>
-                  {mod.route && (
-                    <code className="text-xs text-muted-foreground font-mono">
-                      {mod.route}
-                    </code>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                  {mod.actions.map((action) => {
-                    const allowed = accessMap.get(action.id) ?? false
-                    return (
-                      <form
-                        key={action.id}
-                        action={toggleModuleAccess}
-                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-default bg-background hover:bg-surface-secondary transition-colors"
-                      >
-                        <input type="hidden" name="roleId" value={roleId} />
-                        <input
-                          type="hidden"
-                          name="moduleActionId"
-                          value={action.id}
-                        />
-                        <input
-                          type="hidden"
-                          name="allowed"
-                          value={allowed ? "0" : "1"}
-                        />
-                        <input
-                          type="hidden"
-                          name="returnTo"
-                          value={`${roleBaseHref}/modul`}
-                        />
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className="text-sm font-medium text-foreground truncate">
-                            {action.label}
-                          </span>
-                          <span className="text-xs text-muted-foreground font-mono truncate">
-                            {action.permissionKey}
-                          </span>
-                        </div>
-                        <button
-                          type="submit"
-                          aria-label={allowed ? "Cabut" : "Izinkan"}
-                          className={cn(
-                            "size-8 shrink-0 rounded-md flex items-center justify-center transition-all",
-                            allowed
-                              ? "bg-primary/15 text-primary hover:bg-danger/15 hover:text-danger"
-                              : "bg-surface-secondary text-muted-foreground hover:bg-primary/15 hover:text-primary",
-                          )}
-                        >
-                          {allowed ? (
-                            <Check className="size-4" />
-                          ) : (
-                            <X className="size-4" />
-                          )}
-                        </button>
-                      </form>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <PermissionMatrix
+        action={updateRole.bind(null, role.id)}
+        roleName={role.name}
+        modules={matrix}
+        checkedPermissionIds={checkedPermissionIds}
+        missingPermissionKeys={missingPermissionKeys}
+      />
     </div>
   )
-}
-
-function cn(...classes: (string | false | null | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
 }

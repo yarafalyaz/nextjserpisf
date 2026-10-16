@@ -25,7 +25,7 @@ const columnHelper = createColumnHelper<TaskData>()
 const columns = [
   columnHelper.display({
     id: "no",
-    header: "No",
+    header: "No.",
     // A row counter is meaningless on a phone card; keep it desktop-only.
     meta: { mobile: false },
     cell: (info) => info.row.index + 1,

@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     const session = await auth();
     if (!session?.user) return apiError("UNAUTHORIZED", "Tidak terotorisasi");
 
+    // Izin sama dengan halaman /pengaturan/log-aktivitas (lihat sensitive-routes.ts).
     if (!(await hasPermission("manage_settings"))) {
       return apiError(
         "FORBIDDEN",

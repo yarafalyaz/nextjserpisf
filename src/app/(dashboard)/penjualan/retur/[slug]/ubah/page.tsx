@@ -23,18 +23,26 @@ export default async function EditPage({
   const data = await resolveEntity(
     { segment: slug, fallbackWhere: {} },
     {
-      bySlug: (s, where) => prisma.salesReturn.findFirst({ where: { slug: s, ...where } }),
-      byId: (id, where) => prisma.salesReturn.findUnique({ where: { id, ...where } }),
+      bySlug: (s, where) =>
+        prisma.salesReturn.findFirst({ where: { slug: s, ...where }, include: { items: true } }),
+      byId: (id, where) =>
+        prisma.salesReturn.findUnique({ where: { id, ...where }, include: { items: true } }),
     },
   );
 
   if (!data) notFound();
 
+  // `customerId` dan `items` wajib ikut dikirim. Tanpa keduanya form jatuh ke satu
+  // baris kosong dan simpan akan menghapus seluruh item retur (aksi menghapus lalu
+  // menulis ulang dari daftar yang sudah tersaring kosong), sekaligus gagal karena
+  // customerId wajib di skema.
   const returnData = {
     id: data.id,
+    customerId: data.customerId,
     salesInvoiceId: data.salesInvoiceId ?? 0,
     date: data.date.toISOString().split("T")[0],
     reason: data.reason,
+    items: data.items.map((it) => ({ itemId: it.itemId, qty: Number(it.qty) })),
   };
 
   const [invoices, customers, items] = await Promise.all([

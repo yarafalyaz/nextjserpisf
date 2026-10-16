@@ -19,7 +19,7 @@ export default async function RackRowsPage({
   halaman?: string
   pageSize?: string}>
 }) {
-  await requirePermission("view_inventory")
+  await requirePermission("view_racks")
 
   const params = await searchParams
 

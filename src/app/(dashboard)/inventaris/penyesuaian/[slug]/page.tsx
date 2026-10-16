@@ -16,6 +16,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Penyesuaian Stok" }
 
@@ -51,6 +52,10 @@ export default async function StockAdjustmentDetailPage({
   )
 
   if (!adjustment) notFound()
+
+  // Batas gudang: penjagaan yang SAMA dengan lampiran & cetak
+  // (lib/auth/document-scope) — dokumen gudang lain tidak boleh dibaca.
+  if (!(await canViewWarehouseScopedDocument("stock_adjustment", adjustment.id))) notFound()
 
   // Fetch item names dynamically
   const itemIds = adjustment.items.map((i) => i.itemId)
@@ -152,8 +157,8 @@ export default async function StockAdjustmentDetailPage({
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Nama Barang</DetailTableTh>
-                <DetailTableTh align="right">Qty Sistem</DetailTableTh>
-                <DetailTableTh align="right">Qty Aktual</DetailTableTh>
+                <DetailTableTh align="right">Kuantitas Sistem</DetailTableTh>
+                <DetailTableTh align="right">Kuantitas Aktual</DetailTableTh>
                 <DetailTableTh align="right">Selisih</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>

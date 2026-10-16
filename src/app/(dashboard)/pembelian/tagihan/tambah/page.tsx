@@ -19,7 +19,7 @@ export default async function CreateVendorBillPage({
   const params = await searchParams
   const preselectedPoId = params.poId ? Number(params.poId) : null
 
-  const [vendors, items, purchaseOrders] = await Promise.all([
+  const [vendors, items, purchaseOrders, withholdingTypes] = await Promise.all([
     prisma.vendor.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -41,6 +41,11 @@ export default async function CreateVendorBillPage({
         grandTotal: true,
       },
     }),
+    prisma.withholdingTaxType.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { code: "asc" },
+      select: { id: true, name: true, rate: true },
+    }),
   ])
 
   // Pre-fill provider + PO when arriving from a PO's "Buat Tagihan" shortcut.
@@ -50,7 +55,7 @@ export default async function CreateVendorBillPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{label:"Tagihan",href:"/pembelian/tagihan"},{label:"Tambah"}]} />
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{ label: "Tagihan Vendor", href: "/pembelian/tagihan" },{label:"Tambah"}]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Tagihan Vendor</h1>
       </div>
@@ -64,6 +69,7 @@ export default async function CreateVendorBillPage({
           isService: po.isService,
           grandTotal: Number(po.grandTotal),
         }))}
+        withholdingTypes={withholdingTypes.map((t) => ({ id: t.id, name: t.name, rate: Number(t.rate) }))}
         bill={
           preselectedPo
             ? {

@@ -8,6 +8,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { Combobox } from "@/components/ui/combobox"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
@@ -138,15 +139,11 @@ export function BomRevisionForm({
           </p>
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="effectiveDate">Tanggal Berlaku</Label>
-          <Input
-            id="effectiveDate"
-            name="effectiveDate"
-            type="date"
-            defaultValue={revision?.effectiveDate ? revision.effectiveDate.slice(0, 10) : ""}
-          />
-        </div>
+        <AppDatePicker
+          label="Tanggal Berlaku"
+          name="effectiveDate"
+          defaultValue={revision?.effectiveDate ? revision.effectiveDate.slice(0, 10) : ""}
+        />
 
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="notes">Catatan</Label>

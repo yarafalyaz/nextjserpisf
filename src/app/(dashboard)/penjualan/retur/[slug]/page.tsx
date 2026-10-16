@@ -4,9 +4,10 @@ import { prisma } from "@/lib/db/prisma"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deleteSalesReturn } from "@/actions/sales.actions"
+import { completeSalesReturn, deleteSalesReturn } from "@/actions/sales.actions"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PrintButton } from "@/components/ui/print-button"
+import { ProcessButton } from "@/components/ui/process-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -64,7 +65,17 @@ export default async function SalesReturnDetailPage({
         actions={
           <>
             <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary">Ubah</Button>
-            <PrintButton />
+            <PrintButton documentType="sales-return" documentId={salesReturn.id} />
+            {salesReturn.status !== "completed" && (
+              <ProcessButton
+                id={salesReturn.id}
+                action={completeSalesReturn}
+                label="Selesaikan"
+                confirmTitle="Selesaikan retur ini?"
+                confirmBody="Barang retur akan masuk kembali ke stok dan jurnal retur penjualan diposting. Pastikan retur sudah benar."
+                successMessage="Retur berhasil diselesaikan"
+              />
+            )}
             <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
             <BackButton href="/penjualan/retur" />
           </>

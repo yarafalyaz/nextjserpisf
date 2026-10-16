@@ -15,6 +15,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Pengeluaran Material" }
 
@@ -50,6 +51,10 @@ export default async function MaterialIssueDetailPage({
   )
 
   if (!issue) notFound()
+
+  // Batas gudang: penjagaan yang SAMA dengan lampiran & cetak
+  // (lib/auth/document-scope) — dokumen gudang lain tidak boleh dibaca.
+  if (!(await canViewWarehouseScopedDocument("material_issue", issue.id))) notFound()
 
   // Fetch item names dynamically
   const itemIds = issue.items.map((i) => i.itemId)

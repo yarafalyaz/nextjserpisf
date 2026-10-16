@@ -65,7 +65,7 @@ export default async function ProductDetailPage({
 
   const materialItems = await prisma.item.findMany({
     where: { id: { in: product.materials.map((m) => m.itemId) } },
-    select: { id: true, sku: true, name: true, unitOfMeasure: true },
+    select: { id: true, slug: true, sku: true, name: true, unitOfMeasure: true },
   })
   const itemMap = new Map(materialItems.map((it) => [it.id, it]))
 
@@ -134,7 +134,7 @@ export default async function ProductDetailPage({
                   <DetailTableRow key={mat.id}>
                     <DetailTableTd>
                       {it ? (
-                        <Link href={`/master/barang/${it.id}`} className="hover:underline">
+                        <Link href={entityHref("/master/barang", it)} className="hover:underline">
                           <span className="font-mono text-muted-foreground">{it.sku}</span> — {it.name}
                         </Link>
                       ) : (

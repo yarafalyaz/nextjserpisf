@@ -91,7 +91,7 @@ export default async function PurchaseOrderDetailPage({
                 {po.isService ? "Buat Tagihan Jasa" : "Buat Tagihan"}
               </Button>
             )}
-            <PrintButton />
+            <PrintButton documentType="purchase-order" documentId={po.id} />
             <DeleteButton id={po.id} action={deletePurchaseOrder} />
             <BackButton href="/pembelian/pesanan" />
           </>
@@ -99,7 +99,7 @@ export default async function PurchaseOrderDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Purchase order detail tabs"
+        ariaLabel="Tab detail pesanan pembelian"
         tabs={[
           {
             id: "info",

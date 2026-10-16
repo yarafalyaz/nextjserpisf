@@ -25,7 +25,7 @@ export default async function CreateNonconformancePage() {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Manufaktur", href: "/produksi" },
-          { label: "Quality Control", href: "/produksi/qc" },
+          { label: "Pengendalian Mutu", href: "/produksi/qc" },
           { label: "NCR", href: "/produksi/qc/ncr" },
           { label: "Buat" },
         ]}

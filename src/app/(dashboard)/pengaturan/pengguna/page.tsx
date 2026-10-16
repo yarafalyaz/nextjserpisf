@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
+import { entityHref } from "@/lib/utils/entity-url"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
@@ -87,7 +88,7 @@ export default async function UsersPage({
                     </span>
                   </DetailTableTd>
                   <DetailTableTd>
-                    <Link href={`/pengaturan/pengguna/${user.id}`} className="button button--ghost button--sm"><Pencil size={14} /></Link>
+                    <Link href={entityHref("/pengaturan/pengguna", user)} className="button button--ghost button--sm"><Pencil size={14} /></Link>
                   </DetailTableTd>
                 </DetailTableRow>
               ))}

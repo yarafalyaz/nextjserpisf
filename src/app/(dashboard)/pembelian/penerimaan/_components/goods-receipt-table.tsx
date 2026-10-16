@@ -108,7 +108,7 @@ export function GoodsReceiptTable({ data, total, page, pageSize, toolbar, filter
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar goods receipt"
+      ariaLabel="Daftar penerimaan barang"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

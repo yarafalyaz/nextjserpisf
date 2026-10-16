@@ -26,7 +26,7 @@ export default async function CreateProductPage() {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Manufaktur", href: "/produksi" },
-          { label: "Produk", href: "/produksi/products" },
+          { label: "Produk (BOM)", href: "/produksi/products" },
           { label: "Tambah" },
         ]}
       />

@@ -92,7 +92,7 @@ export default async function DownPaymentDetailPage({
                 + Perintah Kerja
               </Button>
             )}
-            <PrintButton />
+            <PrintButton documentType="down-payment" documentId={dp.id} />
             {dp.status === "draft" && (
               <DeleteButton id={dp.id} action={deleteDownPayment} />
             )}

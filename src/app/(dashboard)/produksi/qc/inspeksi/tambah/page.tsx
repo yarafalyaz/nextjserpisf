@@ -33,7 +33,7 @@ export default async function CreateQcInspectionPage() {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Manufaktur", href: "/produksi" },
-          { label: "Quality Control", href: "/produksi/qc" },
+          { label: "Pengendalian Mutu", href: "/produksi/qc" },
           { label: "Inspeksi", href: "/produksi/qc/inspeksi" },
           { label: "Catat" },
         ]}

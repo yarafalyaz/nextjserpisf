@@ -73,7 +73,7 @@ export default async function QcChecklistDetailPage({
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Manufaktur", href: "/produksi" },
-          { label: "Quality Control", href: "/produksi/qc" },
+          { label: "Pengendalian Mutu", href: "/produksi/qc" },
           { label: "Checklist", href: "/produksi/qc/checklist" },
           { label: "Detail" },
         ]}

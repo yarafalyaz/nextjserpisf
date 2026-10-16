@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/auth"
 import { redirect } from "next/navigation"
+import { isInstalled } from "@/lib/setup/install-state"
 import { SessionProvider } from "next-auth/react"
 import { AppSidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
@@ -25,6 +26,11 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
+  // First run: nothing is set up yet, so send the operator to the wizard.
+  if (!(await isInstalled())) {
+    redirect("/setup")
+  }
+
   const session = await auth()
 
   if (!session?.user) {

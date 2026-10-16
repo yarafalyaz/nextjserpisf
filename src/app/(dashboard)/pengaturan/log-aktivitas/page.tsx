@@ -8,6 +8,8 @@ import { StatsCards } from "@/components/activity-log/stats-cards"
 import { Suspense } from "react"
 import { ActivityLogController } from "./_components/activity-log-controller"
 import { ClearLogButton } from "./_components/clear-log-button"
+import { resolveActivityReferenceLabels } from "@/lib/services/activity-reference.service"
+import { applyReferenceLabel, isTrackedActivityReference } from "@/lib/utils/activity-href"
 
 import type { Metadata } from "next"
 
@@ -129,25 +131,44 @@ export default async function ActivityLogPage({
     : []
   const rowUserMap = new Map(rowUsers.map((u) => [u.id, u.name]))
 
-  const rows = logs.map((log) => ({
-    id: log.id,
-    userId: log.userId,
-    userName: log.userId ? (rowUserMap.get(log.userId) ?? "Pengguna") : "Sistem",
-    action: log.action,
-    modelType: log.modelType,
-    modelId: log.modelId,
-    description: log.description ?? "-",
-    createdAt: log.createdAt.toLocaleString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-    ipAddress: log.ipAddress ?? "-",
-    oldValues: log.oldValues,
-    newValues: log.newValues,
-  }))
+  // Label manusiawi (nomor dokumen / kode / nama) untuk entitas yang dirujuk
+  // baris di halaman ini — satu query per tipe model, bukan per baris.
+  const refLabels = await resolveActivityReferenceLabels(
+    logs.map((log) => ({ modelType: log.modelType, modelId: log.modelId })),
+  )
+
+  const rows = logs.map((log) => {
+    const refLabel =
+      log.modelId != null ? (refLabels.get(`${log.modelType}:${log.modelId}`) ?? null) : null
+    // Jenis entitas yang labelnya seharusnya bisa diresolusi tetapi tidak ketemu
+    // berarti recordnya sudah dihapus — tandai agar id mentah tidak terbaca
+    // sebagai kesalahan tampilan.
+    const refMissing =
+      refLabel === null && log.modelId != null && isTrackedActivityReference(log.modelType)
+    return {
+      id: log.id,
+      userId: log.userId,
+      userName: log.userId ? (rowUserMap.get(log.userId) ?? "Pengguna") : "Sistem",
+      action: log.action,
+      modelType: log.modelType,
+      modelId: log.modelId,
+      refLabel,
+      refMissing,
+      // Deskripsi menyematkan id mentah ("… #16"); tampilkan nomor dokumennya
+      // supaya entri log jelas dibaca.
+      description: applyReferenceLabel(log.description ?? "-", log.modelId, refLabel),
+      createdAt: log.createdAt.toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      ipAddress: log.ipAddress ?? "-",
+      oldValues: log.oldValues,
+      newValues: log.newValues,
+    }
+  })
 
   return (
     <div className="flex flex-col gap-6 px-4 lg:px-6">
@@ -187,7 +208,7 @@ export default async function ActivityLogPage({
             tone: activeUsersCount > 0 ? "good" : "default",
           },
           {
-            label: "Total Data",
+            label: "Jumlah Data",
             value: total.toLocaleString("id-ID"),
             hint: `${modelTypes.length} model dilacak`,
           },

@@ -59,7 +59,7 @@ export default async function EditPage({
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
-          { label: "Pengeluaran", href: "/keuangan/pengeluaran" },
+          { label: "Biaya", href: "/keuangan/pengeluaran" },
           { label: "Ubah" },
         ]}
       />

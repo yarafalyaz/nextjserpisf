@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { completeSalesReturn } from "@/actions/sales.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface SalesReturn {
@@ -53,6 +54,15 @@ const columns = [
         viewHref={entityHref("/penjualan/retur", info.row.original)}
         editPermission="edit_sales_returns"
         deletePermission="delete_sales_returns"
+        deleteId={info.row.original.id}
+        processAction={
+          info.row.original.status !== "completed" ? completeSalesReturn : undefined
+        }
+        processLabel="Selesaikan"
+        processPermission="edit_sales_returns"
+        processConfirmTitle="Selesaikan retur ini?"
+        processConfirmBody="Barang retur akan masuk kembali ke stok dan jurnal retur penjualan diposting. Pastikan retur sudah benar."
+        processSuccessMessage="Retur berhasil diselesaikan"
       />
     ),
   }),

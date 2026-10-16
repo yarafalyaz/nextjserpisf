@@ -30,10 +30,12 @@ export default async function EditPage({
 
   if (!data) notFound();
 
-  const customers = await prisma.customer.findMany({
-    where: { deletedAt: null },
-    orderBy: { name: "asc" },
-  });
+  const [customers] = await Promise.all([
+    prisma.customer.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,7 +43,7 @@ export default async function EditPage({
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Penjualan", href: "/penjualan" },
-          { label: "Pesanan", href: "/penjualan/pesanan" },
+          { label: "Pesanan Penjualan", href: "/penjualan/pesanan" },
           { label: "Ubah" },
         ]}
       />
@@ -52,7 +54,11 @@ export default async function EditPage({
         order={{
           id: data.id,
           customerId: data.customerId,
+          // Tautan penawaran & tanggal pengiriman harus ikut: form mengirim ulang
+          // kedua field ini, jadi tanpa dimuat nilainya akan terhapus saat simpan.
+          quotationId: data.quotationId,
           date: data.date.toISOString().split("T")[0],
+          deliveryDate: data.deliveryDate ? data.deliveryDate.toISOString().split("T")[0] : null,
           notes: data.notes,
         }}
         customers={customers}

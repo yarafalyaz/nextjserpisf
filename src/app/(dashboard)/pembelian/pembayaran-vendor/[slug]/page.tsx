@@ -69,7 +69,7 @@ export default async function VendorPaymentDetailPage({
         actions={
           <>
             <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
-            <PrintButton />
+            <PrintButton documentType="vendor-payment" documentId={payment.id} />
             <DeleteButton id={payment.id} action={deleteVendorPayment} />
             <BackButton href="/pembelian/pembayaran-vendor" />
           </>

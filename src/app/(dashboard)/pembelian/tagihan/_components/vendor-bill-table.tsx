@@ -5,7 +5,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import Link from "next/link"
 import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
-import { deleteVendorBill } from "@/actions/purchase.actions"
+import { deleteVendorBill, confirmVendorBill } from "@/actions/purchase.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
@@ -99,6 +99,14 @@ const columns = [
         deleteId={info.row.original.id}
         editPermission="edit_vendor_bills"
         deletePermission="delete_vendor_bills"
+        processAction={
+          info.row.original.status === "draft" ? confirmVendorBill : undefined
+        }
+        processLabel="Posting"
+        processPermission="approve_vendor_bills"
+        processConfirmTitle="Posting tagihan ini?"
+        processConfirmBody="Tagihan akan berstatus terposting sehingga utang usaha diakui dan muncul di laporan Umur Hutang / Total Hutang. Pastikan data sudah benar."
+        processSuccessMessage="Tagihan berhasil diposting"
       />
     ),
   }),

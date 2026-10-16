@@ -55,7 +55,7 @@ export async function renderCreatePurchaseOrder(prSegment?: string) {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Pembelian", href: "/pembelian" },
-          { label: "Pesanan", href: "/pembelian/pesanan" },
+          { label: "Pesanan Pembelian", href: "/pembelian/pesanan" },
           { label: "Tambah" },
         ]}
       />

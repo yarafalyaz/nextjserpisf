@@ -10,6 +10,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
 export const metadata: Metadata = { title: "Ubah Transfer Stok" };
 
 export default async function EditPage({
@@ -39,8 +40,16 @@ export default async function EditPage({
 
   if (!data) notFound();
 
+  // Batas gudang sama dengan lampiran, cetak, dan halaman detail — form ini
+  // memuat nilai dokumen, jadi tidak boleh lebih longgar.
+  if (!(await canViewWarehouseScopedDocument("inventory_transfer", data.id))) notFound();
+
   const transfer = {
     ...data,
+    // Prisma mengembalikan `date` sebagai Date, sedangkan form bertipe string dan
+    // memakainya saat submit. Normalisasi ini juga yang membuat penyimpanan ulang
+    // transfer back-date tidak memindahkannya ke tanggal hari ini.
+    date: data.date.toISOString().split("T")[0],
     items: data.items.map((it) => ({ itemId: it.itemId, qty: Number(it.qty) })),
   };
 
@@ -72,7 +81,7 @@ export default async function EditPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Inventaris", href: "/inventaris/transfer" },
+          { label: "Transfer", href: "/inventaris/transfer" },
           { label: "Ubah" },
         ]}
       />

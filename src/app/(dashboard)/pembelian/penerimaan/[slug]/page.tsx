@@ -24,6 +24,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 export const metadata: Metadata = { title: "Penerimaan Barang" };
 
@@ -62,6 +63,10 @@ export default async function GoodsReceiptDetailPage({
 
   if (!receipt) notFound();
 
+  // Batas gudang: penjagaan yang SAMA dengan lampiran & cetak
+  // (lib/auth/document-scope) — dokumen gudang lain tidak boleh dibaca.
+  if (!(await canViewWarehouseScopedDocument("goods_receipt", receipt.id))) notFound();
+
   // Load warehouses for per-item display
   const [warehouses, racks, rackRows, receiptItems] = await Promise.all([
     prisma.warehouse.findMany({
@@ -84,8 +89,22 @@ export default async function GoodsReceiptDetailPage({
   // books — a receipt stuck in draft has none.
   const journal = await prisma.journal.findFirst({
     where: { referenceType: "GoodsReceipt", referenceId: receipt.id },
-    select: { id: true, journalNumber: true, totalDebit: true, status: true },
+    select: { id: true, slug: true, journalNumber: true, totalDebit: true, status: true },
   });
+
+  // GoodsReceiptItem.stockMoveId hanya FK skalar (tanpa relasi), jadi slug mutasi
+  // stok diambil sekali untuk seluruh baris agar tautannya menuju halaman detail
+  // — sebelumnya tautan memakai `?id=`, yang tidak dibaca halaman tujuan.
+  const stockMoveIds = receipt.items
+    .map((item) => item.stockMoveId)
+    .filter((id): id is number => id != null);
+  const stockMoves = stockMoveIds.length
+    ? await prisma.stockMove.findMany({
+        where: { id: { in: stockMoveIds } },
+        select: { id: true, slug: true },
+      })
+    : [];
+  const stockMoveSlugById = new Map(stockMoves.map((move) => [move.id, move.slug]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -119,7 +138,7 @@ export default async function GoodsReceiptDetailPage({
                 <DeleteButton id={receipt.id} action={deleteGoodsReceipt} />
               </>
             )}
-            <PrintButton />
+            <PrintButton documentType="goods-receipt" documentId={receipt.id} />
             <BackButton href="/pembelian/penerimaan" />
           </>
         }
@@ -278,8 +297,8 @@ export default async function GoodsReceiptDetailPage({
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>Barang</DetailTableTh>
-                <DetailTableTh align="right">Qty Dipesan</DetailTableTh>
-                <DetailTableTh align="right">Qty Diterima</DetailTableTh>
+                <DetailTableTh align="right">Kuantitas Dipesan</DetailTableTh>
+                <DetailTableTh align="right">Kuantitas Diterima</DetailTableTh>
                 <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
                 <DetailTableTh>Gudang</DetailTableTh>
                 <DetailTableTh>Rak / Baris</DetailTableTh>
@@ -340,7 +359,10 @@ export default async function GoodsReceiptDetailPage({
                       <DetailTableTd>
                         {item.stockMoveId ? (
                           <Link
-                            href={`/inventaris/mutasi-stok?id=${item.stockMoveId}`}
+                            href={entityHref("/inventaris/mutasi-stok", {
+                              id: item.stockMoveId,
+                              slug: stockMoveSlugById.get(item.stockMoveId) ?? null,
+                            })}
                             className="text-primary hover:underline"
                           >
                             SM-{item.stockMoveId}
@@ -375,7 +397,7 @@ export default async function GoodsReceiptDetailPage({
               </span>
               <span className="text-[0.9375rem] font-medium">
                 <Link
-                  href={`/keuangan/jurnal/${journal.id}`}
+                  href={entityHref("/keuangan/jurnal", journal)}
                   className="text-primary hover:underline font-mono"
                 >
                   {journal.journalNumber}

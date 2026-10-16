@@ -1,78 +1,27 @@
 export const dynamic = "force-dynamic"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { ChevronRight } from "lucide-react"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import {
-  Building2,
-  SlidersHorizontal,
-  Hash,
-  Clock,
-  FileText,
-  Wallet,
-  Users,
-  Workflow,
-  Shield,
-  Activity,
-  ChevronRight,
-  Timer,
-  Cloud,
-  DatabaseBackup,
-} from "lucide-react"
+import { requireAnyPermission } from "@/lib/auth/permissions"
+import { SETTINGS_SECTIONS, settingsPermissions } from "@/components/layout/settings-sections"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Pengaturan" }
 
 
-const settingsNav = [
-  {
-    heading: "Umum",
-    items: [
-      { href: "/pengaturan/perusahaan", label: "Perusahaan", desc: "Identitas, alamat, logo perusahaan", icon: Building2 },
-      { href: "/pengaturan/preferensi", label: "Preferensi", desc: "Mata uang, periode fiskal, metode HPP", icon: SlidersHorizontal },
-      { href: "/pengaturan/penomoran", label: "Penomoran Dokumen", desc: "Prefix & format nomor otomatis", icon: Hash },
-      { href: "/pengaturan/penawaran", label: "Penawaran", desc: "Tanda tangan & catatan kaki", icon: FileText },
-    ],
-  },
-  {
-    heading: "Akuntansi",
-    items: [
-      { href: "/pengaturan/mapping-akun", label: "Mapping Akun", desc: "Pemetaan akun untuk jurnal otomatis", icon: Wallet },
-    ],
-  },
-  {
-    heading: "SDM",
-    items: [
-      { href: "/pengaturan/lembur-kehadiran", label: "Lembur & Kehadiran", desc: "Parameter lembur, radius absensi", icon: Clock },
-    ],
-  },
-  {
-    heading: "Akses & Keamanan",
-    items: [
-      { href: "/pengaturan/pengguna", label: "Pengguna", desc: "Kelola akun pengguna sistem", icon: Users },
-      { href: "/pengaturan/peran", label: "Peran & Hak Akses", desc: "Kontrol hak akses berbasis peran", icon: Shield },
-      { href: "/pengaturan/log-aktivitas", label: "Log Aktivitas", desc: "Audit trail perubahan data", icon: Activity },
-    ],
-  },
-  {
-    heading: "Otomasi",
-    items: [
-      { href: "/pengaturan/workflow", label: "Alur Persetujuan", desc: "Alur persetujuan dokumen", icon: Workflow },
-      { href: "/pengaturan/cron", label: "Jadwal Tugas", desc: "Cron job otomatisasi sistem", icon: Timer },
-    ],
-  },
-  {
-    heading: "Sistem",
-    items: [
-      { href: "/pengaturan/penyimpanan", label: "Penyimpanan & CDN", desc: "Penyimpanan lokal / Cloudflare R2", icon: Cloud },
-      { href: "/pengaturan/database", label: "Cadangan & Pemulihan", desc: "Cadangkan & pulihkan database", icon: DatabaseBackup },
-    ],
-  },
-]
 
 export default async function SettingsPage() {
-  await requirePermission("manage_settings")
+  // Izin hub = gabungan izin kartunya (any-of): pemegang `approve_workflows` atau
+  // `manage_users` juga berhak membuka hub ini dan melihat kartu yang relevan saja.
+  const user = await requireAnyPermission(settingsPermissions())
+  const held = new Set(user.permissions)
+  const isSuperAdmin = user.roles.includes("super_admin")
+  const groups = SETTINGS_SECTIONS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => isSuperAdmin || held.has(item.permission)),
+  })).filter((group) => group.items.length > 0)
 
   return (
     <div className="flex flex-col gap-6 px-4 lg:px-6">
@@ -86,7 +35,7 @@ export default async function SettingsPage() {
       </div>
 
       <div className="space-y-8">
-        {settingsNav.map((group) => (
+        {groups.map((group) => (
           <div key={group.heading}>
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group.heading}</h2>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">

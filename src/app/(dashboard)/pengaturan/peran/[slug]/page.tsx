@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { permissionGroupLabel, permissionLabel } from "@/lib/auth/permission-labels"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -14,7 +15,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Peran" }
 
 export default async function RoleDetailPage({ params }: { params: Promise<{ slug: string }> }) {
-  await requirePermission("manage_settings")
+  await requirePermission("manage_roles")
   const { slug } = await params
 
   const role = await resolveEntity(
@@ -83,11 +84,11 @@ export default async function RoleDetailPage({ params }: { params: Promise<{ slu
           <div className="flex flex-col gap-4">
             {Object.entries(grouped).map(([prefix, perms]) => (
               <div key={prefix}>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 capitalize">{prefix}</h3>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{permissionGroupLabel(prefix)}</h3>
                 <div className="flex flex-wrap gap-2">
                   {perms.map((perm) => (
                     <span key={perm.id} className="px-3 py-1 rounded-full text-xs font-medium border border-default bg-background text-muted-foreground">
-                      {perm.name}
+                      {permissionLabel(perm.name)}
                     </span>
                   ))}
                 </div>

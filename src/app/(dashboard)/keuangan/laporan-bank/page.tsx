@@ -40,7 +40,7 @@ export default async function BankStatementsPage({
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "Keuangan", href: "/keuangan" },
-  { label: "Laporan Bank" },
+  { label: "Rekening Koran" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Laporan Bank</h1>

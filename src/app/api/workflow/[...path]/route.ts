@@ -19,15 +19,19 @@ import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
  * APPROVAL_REFERENCE_PERMISSIONS[modelType] so the status-button route and
  * approveStep/rejectStep (the detail-page flow) can never drift apart.
  */
-const MODULE_MAP: Record<string, { model: string; modelType: string; revalidate: string }> = {
+const MODULE_MAP: Record<string, { model: string; modelType: string; revalidate: string; hasCreatedBy?: boolean }> = {
   "penjualan/penawaran": { model: "quotation", modelType: "Quotation", revalidate: "/penjualan/penawaran" },
   "penjualan/pesanan": { model: "salesOrder", modelType: "SalesOrder", revalidate: "/penjualan/pesanan" },
   "penjualan/faktur": { model: "salesInvoice", modelType: "SalesInvoice", revalidate: "/penjualan/faktur" },
   "pembelian/permintaan": { model: "purchaseRequest", modelType: "PurchaseRequest", revalidate: "/pembelian/permintaan" },
   "pembelian/pesanan": { model: "purchaseOrder", modelType: "PurchaseOrder", revalidate: "/pembelian/pesanan" },
   "pembelian/tagihan": { model: "vendorBill", modelType: "VendorBill", revalidate: "/pembelian/tagihan" },
-  "sdm/cuti": { model: "leaveRequest", modelType: "LeaveRequest", revalidate: "/sdm/cuti" },
-  "sdm/lembur": { model: "overtimeRequest", modelType: "OvertimeRequest", revalidate: "/sdm/lembur" },
+  // Cuti & Lembur TIDAK punya kolom `createdBy` (pemiliknya karyawan, lewat
+  // employeeId). Meminta kolom itu ke Prisma melempar validation error sehingga
+  // tombol Setujui selalu 500 — flag ini yang mencegahnya, dan dijaga oleh
+  // src/__tests__/approval-initiator-parity.test.ts.
+  "sdm/cuti": { model: "leaveRequest", modelType: "LeaveRequest", revalidate: "/sdm/cuti", hasCreatedBy: false },
+  "sdm/lembur": { model: "overtimeRequest", modelType: "OvertimeRequest", revalidate: "/sdm/lembur", hasCreatedBy: false },
   // EmployeeLoan approval/disbursement used to be gated by "create_loans",
   // which let whoever raised a loan also approve + disburse it. The dedicated
   // "approve_loans" permission (see approval-permissions.ts) separates them.
@@ -107,8 +111,16 @@ export async function POST(
 
         if (!approval) {
           const delegate = prisma[config.model as keyof typeof prisma] as any
-          const doc = await delegate.findUnique({ where: { id }, select: { createdBy: true } })
-          const docCreatedBy = doc?.createdBy ? Number(doc.createdBy) : Number(session.user.id)
+          // Kolom `createdBy` hanya ditanyakan pada model yang punya; model lain
+          // memakai pemanggil sebagai inisiator (lihat MODULE_MAP).
+          const docCreatedBy =
+            config.hasCreatedBy === false
+              ? Number(session.user.id)
+              : await delegate
+                  .findUnique({ where: { id }, select: { createdBy: true } })
+                  .then((doc: { createdBy?: number | null } | null) =>
+                    doc?.createdBy ? Number(doc.createdBy) : Number(session.user.id),
+                  )
           await requestApprovalIfConfigured(modelType, id, docCreatedBy)
           approval = await prisma.approval.findFirst({
             where: { referenceType: modelType, referenceId: id },
@@ -225,6 +237,9 @@ export async function POST(
     if (error instanceof Error && "code" in error && (error as { code?: string }).code === "P2025") {
       return apiError("NOT_FOUND", "Data tidak ditemukan")
     }
-    return apiError("INTERNAL_ERROR", error instanceof Error ? error.message : "Failed to update status")
+    // Jangan kirim `error.message` ke klien: pesan Prisma memuat dump skema
+    // (nama model + seluruh daftar kolomnya). Catat di server, balas generik.
+    console.error("[api/workflow] gagal memperbarui status:", error)
+    return apiError("INTERNAL_ERROR", "Gagal memperbarui status")
   }
 }

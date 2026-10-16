@@ -16,6 +16,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Transfer Stok" }
 
@@ -53,6 +54,10 @@ export default async function InventoryTransferDetailPage({
   )
 
   if (!transfer) notFound()
+
+  // Batas gudang: penjagaan yang SAMA dengan lampiran & cetak
+  // (lib/auth/document-scope) — transfer menyentuh dua gudang, keduanya dicek.
+  if (!(await canViewWarehouseScopedDocument("inventory_transfer", transfer.id))) notFound()
 
   // Fetch item names dynamically
   const itemIds = transfer.items.map((i) => i.itemId)

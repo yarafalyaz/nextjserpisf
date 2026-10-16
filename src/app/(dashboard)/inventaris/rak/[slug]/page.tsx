@@ -22,7 +22,7 @@ export default async function RackDetailPage({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  await requirePermission("view_inventory")
+  await requirePermission("view_racks")
 
   const { slug } = await params
 

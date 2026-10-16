@@ -62,6 +62,8 @@ export default async function EditPage({
     id: data.id,
     vendorId: data.vendorId,
     purchaseOrderId: data.purchaseOrderId,
+    withholdingTypeId: data.withholdingTypeId,
+    withholdingAmount: Number(data.withholdingAmount ?? 0),
     date: data.date.toISOString().split("T")[0],
     dueDate: data.dueDate?.toISOString().split("T")[0] ?? null,
     notes: data.notes,
@@ -76,8 +78,13 @@ export default async function EditPage({
     })),
   };
 
-  const [vendors, items] = await Promise.all([
+  const [vendors, withholdingTypes, items] = await Promise.all([
     prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
+    prisma.withholdingTaxType.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: { code: "asc" },
+      select: { id: true, name: true, rate: true },
+    }),
     prisma.item
       .findMany({
         where: { isActive: true, deletedAt: null },
@@ -99,14 +106,14 @@ export default async function EditPage({
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Pembelian", href: "/pembelian" },
-          { label: "Tagihan", href: "/pembelian/tagihan" },
+          { label: "Tagihan Vendor", href: "/pembelian/tagihan" },
           { label: "Ubah" },
         ]}
       />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <VendorBillForm bill={bill} vendors={vendors} items={items} />
+      <VendorBillForm bill={bill} vendors={vendors} items={items} withholdingTypes={withholdingTypes.map((t) => ({ id: t.id, name: t.name, rate: Number(t.rate) }))} />
     </div>
   );
 }

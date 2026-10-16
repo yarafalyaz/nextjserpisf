@@ -8,6 +8,7 @@ import {
   hasCompleteDepreciationAccounts,
 } from "@/lib/finance/depreciation-accounts"
 import { apiError } from "@/lib/api-response"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
 
 /**
@@ -70,6 +71,11 @@ export async function GET(request: Request) {
 
     const periodStart = new Date(year, month - 1, 1)
     const periodEndExclusive = new Date(year, month, 1)
+
+    // Fail-closed bila periode akuntansi sudah ditutup: jurnal penyusutan bertanggal
+    // awal periode, jadi menjalankannya untuk periode tertutup harus menolak (bukan
+    // diam-diam melewatkan aset — itu akan tampak seperti "tidak ada penyusutan").
+    await assertPeriodOpen(periodStart)
 
     // N+1 elimination: instead of one assetHistory.findFirst per asset to check
     // "already depreciated this period", fetch ALL of this period's depreciation

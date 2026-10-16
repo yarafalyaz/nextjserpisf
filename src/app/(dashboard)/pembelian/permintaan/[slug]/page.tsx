@@ -75,7 +75,7 @@ export default async function PurchaseRequestDetailPage({
               </Button>
             )}
             <Button href={entityEditHref("/pembelian/permintaan", request)} variant="primary">Ubah</Button>
-            <PrintButton />
+            <PrintButton documentType="purchase-request" documentId={request.id} />
             <DeleteButton id={request.id} action={deletePurchaseRequest} />
             <BackButton href="/pembelian/permintaan" />
           </>

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { DeliveryOrderForm } from "@/components/forms/delivery-order-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert"
 
 import type { Metadata } from "next"
 
@@ -33,6 +34,18 @@ export default async function CreateDeliveryOrderPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Surat Jalan</h1>
       </div>
+      {formData.length === 0 && (
+        // Tanpa ini halaman hanya menampilkan pemilih pesanan yang kosong — buntu senyap.
+        <Alert>
+          <AlertTitle>Belum ada pesanan penjualan yang bisa dikirim</AlertTitle>
+          <AlertDescription>
+            Surat jalan hanya bisa dibuat dari Pesanan Penjualan berstatus{" "}
+            <strong>Disetujui</strong> atau <strong>Dikonfirmasi</strong>. Pesanan yang baru
+            dibuat selalu berstatus konsep — setujui dulu lewat tombol{}
+            <strong>Setujui</strong> di halaman detail pesanan.
+          </AlertDescription>
+        </Alert>
+      )}
       <DeliveryOrderForm salesOrders={formData} />
     </div>
   )

@@ -38,6 +38,12 @@ export default async function EditPage({
     paymentDate: data.paymentDate.toISOString().split("T")[0],
     paymentMethod: data.paymentMethod ?? "",
     notes: data.notes ?? "",
+    withholdingTypeId: data.withholdingTypeId ?? undefined,
+    withholdingAmount: Number(data.withholdingAmount ?? 0),
+    withholdingCertificateNo: data.withholdingCertificateNo ?? "",
+    withholdingDate: data.withholdingDate
+      ? data.withholdingDate.toISOString().split("T")[0]
+      : "",
   };
 
   const [invoices, accounts] = await Promise.all([
@@ -52,6 +58,11 @@ export default async function EditPage({
     }),
   ]);
   const paymentMethods = await getActivePaymentMethods();
+  const withholdingTypes = await prisma.withholdingTaxType.findMany({
+    where: { isActive: true, deletedAt: null },
+    select: { id: true, code: true, name: true, rate: true },
+    orderBy: { code: "asc" },
+  });
 
   const invoiceOptions = invoices.map((inv) => ({
     id: inv.id,
@@ -66,7 +77,7 @@ export default async function EditPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Penjualan", href: "/penjualan/pembayaran" },
+          { label: "Pembayaran", href: "/penjualan/pembayaran" },
           { label: "Ubah" },
         ]}
       />
@@ -78,6 +89,7 @@ export default async function EditPage({
         invoices={invoiceOptions}
         accounts={accounts}
         paymentMethods={paymentMethods}
+        withholdingTypes={withholdingTypes.map((type) => ({ ...type, rate: Number(type.rate) }))}
       />
     </div>
   );

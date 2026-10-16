@@ -61,7 +61,7 @@ export default async function NonconformanceDetailPage({
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Manufaktur", href: "/produksi" },
-          { label: "Quality Control", href: "/produksi/qc" },
+          { label: "Pengendalian Mutu", href: "/produksi/qc" },
           { label: "NCR", href: "/produksi/qc/ncr" },
           { label: "Detail" },
         ]}

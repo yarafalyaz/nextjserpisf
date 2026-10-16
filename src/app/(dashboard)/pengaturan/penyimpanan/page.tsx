@@ -108,7 +108,7 @@ export default async function StorageSettingsPage() {
               <Separator />
               <h4 className="text-sm font-semibold text-foreground">Kredensial Cloudflare R2</h4>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Account ID" value={settings?.r2AccountId} mono />
+                <Field label="ID Akun" value={settings?.r2AccountId} mono />
                 <Field label="Bucket" value={settings?.r2Bucket} mono />
                 <Field label="Access Key ID" value={settings?.r2AccessKeyId} mono />
                 <Field label="Secret Access Key" value={maskSecret(settings?.r2SecretAccessKey)} mono />

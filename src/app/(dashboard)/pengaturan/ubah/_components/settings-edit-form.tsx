@@ -15,7 +15,7 @@ import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppTimePicker } from "@/components/ui/time-picker"
 import { updateSystemSettings } from "@/actions/settings.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
-import { resolveInventoryAccounts } from "@/lib/utils/account-automap"
+import { resolveAllAccountMappings } from "@/lib/utils/account-automap"
 import { Button } from "@/components/ui/button"
 import { SafeImage } from "@/components/ui/safe-image"
 import { Plus, Trash2 } from "lucide-react"
@@ -376,57 +376,45 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const mappingProgress = totalCount > 0 ? Math.round((mappedCount / totalCount) * 100) : 0
 
   const handleAutoMap = () => {
-    const normalize = (value: string) => value.toLowerCase().replace(/[&()/-]/g, " ").replace(/\s+/g, " ").trim()
-
-    const findAccount = (keywordGroups: string[][]) => {
-      for (const keywords of keywordGroups) {
-        const match = accounts.find((account) => {
-          const haystack = normalize(`${account.code} ${account.name}`)
-          return keywords.every((keyword) => haystack.includes(normalize(keyword)))
-        })
-        if (match) return String(match.id)
-      }
-      return ""
+    // Single source of truth for the rules: src/lib/utils/account-automap.ts —
+    // the same function runs during first-run install.
+    const mapping = resolveAllAccountMappings(accounts)
+    const setters: Record<string, (value: string) => void> = {
+      salesReceivableAccountId: setSalesReceivable,
+      salesRevenueAccountId: setSalesRevenue,
+      salesTaxAccountId: setSalesTax,
+      salesReturnAccountId: setSalesReturn,
+      salesAccountId: setSalesAcc,
+      purchasePayableAccountId: setPurchasePayable,
+      purchaseInventoryAccountId: setPurchaseInventory,
+      purchaseTaxAccountId: setPurchaseTax,
+      purchaseExpenseAccountId: setPurchaseExpense,
+      purchaseDiscountAccountId: setPurchaseDiscount,
+      purchaseShippingAccountId: setPurchaseShipping,
+      purchaseAdminFeeAccountId: setPurchaseAdminFee,
+      purchaseReturnAccountId: setPurchaseReturn,
+      inventoryAccountId: setInventoryAcc,
+      inventoryAdjustmentAccountId: setInventoryAdjustment,
+      stockAdjustmentAccountId: setStockAdjustmentAcc,
+      cogsAccountId: setCogsAcc,
+      wipAccountId: setWipAcc,
+      materialExpenseAccountId: setMaterialExpense,
+      materialIssueExpenseAccountId: setMaterialIssueExpense,
+      pettyCashAccountId: setPettyCashAcc,
+      cashBankAccountId: setCashBankAcc,
+      generalExpenseAccountId: setGeneralExpense,
+      defaultCashAccountId: setDefaultCash,
+      salaryExpenseAccountId: setSalaryExpense,
+      salariesPayableAccountId: setSalariesPayable,
+      payrollBankAccountId: setPayrollBank,
+      employeeReceivableAccountId: setEmployeeReceivable,
+      payrollJournalTypeId: setPayrollJournalType,
+      depreciationExpenseAccountId: setDepreciationExpense,
+      accumulatedDepreciationAccountId: setAccumulatedDepreciation,
     }
-
-    // Resolve Persediaan + clearing together so they never collapse onto the
-    // same account (that would make the GR journal net to zero). See
-    // resolveInventoryAccounts for the rule + tests.
-    const { inventoryAccountId, purchaseInventoryAccountId } = resolveInventoryAccounts(accounts)
-
-    setSalesReceivable(findAccount([["piutang", "usaha"], ["piutang", "dagang"], ["receivable"]]))
-    setSalesRevenue(findAccount([["pendapatan", "penjualan"], ["revenue"], ["penjualan"]]))
-    setSalesTax(findAccount([["ppn", "keluaran"], ["ppn", "keluar"], ["tax", "out"]]))
-    setSalesReturn(findAccount([["retur", "penjualan"], ["sales", "return"]]))
-    setSalesAcc(findAccount([["pendapatan", "penjualan"], ["akun", "penjualan"], ["sales", "account"], ["penjualan"]]))
-
-    setPurchasePayable(findAccount([["hutang", "usaha"], ["utang", "usaha"], ["hutang", "dagang"], ["payable"]]))
-    setPurchaseInventory(purchaseInventoryAccountId)
-    setPurchaseTax(findAccount([["ppn", "masukan"], ["ppn", "masuk"], ["tax", "in"]]))
-    setPurchaseExpense(findAccount([["beban", "pembelian"], ["purchase", "expense"]]))
-    setPurchaseDiscount(findAccount([["diskon", "pembelian"], ["purchase", "discount"]]))
-    setPurchaseShipping(findAccount([["ongkos", "kirim"], ["shipping"], ["ongkir"]]))
-    setPurchaseAdminFee(findAccount([["admin", "bank"], ["admin", "transfer"], ["beban", "admin"], ["bank", "fee"]]))
-    setPurchaseReturn(findAccount([["retur", "pembelian"], ["purchase", "return"]]))
-
-    setInventoryAcc(inventoryAccountId)
-    setInventoryAdjustment(findAccount([["penyesuaian", "persediaan"], ["inventory", "adj"]]))
-    setStockAdjustmentAcc(findAccount([["penyesuaian", "persediaan"], ["inventory", "adj"], ["stock", "adjustment"]]))
-    setCogsAcc(findAccount([["harga", "pokok", "penjualan"], ["hpp"], ["cogs"]]))
-    setWipAcc(findAccount([["barang", "dalam", "proses"], ["wip"], ["work", "progress"]]))
-    setMaterialExpense(findAccount([["beban", "material"], ["material", "expense"]]))
-    setMaterialIssueExpense(findAccount([["beban", "material"], ["material", "issue"], ["consumables"]]))
-
-    setPettyCashAcc(findAccount([["kas", "kecil"], ["petty", "cash"]]))
-    setCashBankAcc(findAccount([["kas", "bank"], ["bank"], ["kas", "utama"], ["kas"]]))
-    setGeneralExpense(findAccount([["beban", "umum"], ["administrasi"], ["general", "expense"]]))
-    setDefaultCash(findAccount([["kas", "utama"], ["kas", "bank"], ["bank"], ["kas"]]))
-
-    setSalaryExpense(findAccount([["beban", "gaji"], ["salary", "expense"]]))
-    setSalariesPayable(findAccount([["hutang", "gaji"], ["utang", "gaji"], ["salaries", "payable"]]))
-    setPayrollBank(findAccount([["bank"], ["kas", "bank"], ["kas", "utama"]]))
-    setEmployeeReceivable(findAccount([["piutang", "karyawan"], ["employee", "receivable"]]))
-    setPayrollJournalType(findAccount([["beban", "gaji"], ["hutang", "gaji"], ["jurnal", "payroll"], ["payroll", "journal"]]))
+    for (const [key, value] of Object.entries(mapping)) {
+      setters[key]?.(value)
+    }
   }
 
   const handleGetLocation = () => {

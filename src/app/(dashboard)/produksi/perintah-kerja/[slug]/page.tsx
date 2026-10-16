@@ -48,8 +48,8 @@ export default async function WorkOrderDetailPage({
           include: {
             customer: true,
             quotation: true,
-            customerVehicle: { select: { id: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true } },
+            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+            project: { select: { id: true, name: true, slug: true } },
             bomRevision: { select: { id: true, revisionNo: true, slug: true } },
             items: true,
             purchaseOrders: {
@@ -67,8 +67,8 @@ export default async function WorkOrderDetailPage({
           include: {
             customer: true,
             quotation: true,
-            customerVehicle: { select: { id: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true } },
+            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+            project: { select: { id: true, name: true, slug: true } },
             bomRevision: { select: { id: true, revisionNo: true, slug: true } },
             items: true,
             purchaseOrders: {
@@ -180,7 +180,7 @@ export default async function WorkOrderDetailPage({
         <DetailField
           label="Pelanggan"
           value={
-            <Link href={`/master/pelanggan/${wo.customerId}`}>
+            <Link href={entityHref("/master/pelanggan", wo.customer)}>
               {wo.customer.name}
             </Link>
           }
@@ -207,7 +207,7 @@ export default async function WorkOrderDetailPage({
           <DetailField
             label="Kendaraan"
             value={
-              <Link href={`/master/pelanggan/${wo.customerId}/kendaraan/${wo.customerVehicle.id}`} className="hover:underline">
+              <Link href={`${entityHref("/master/pelanggan", wo.customer)}/kendaraan/${wo.customerVehicle.slug ?? wo.customerVehicle.id}`} className="hover:underline">
                 {[
                   wo.customerVehicle.vehicle?.variant?.model?.brand?.name,
                   wo.customerVehicle.vehicle?.variant?.model?.name,
@@ -221,7 +221,7 @@ export default async function WorkOrderDetailPage({
         {wo.project && (
           <DetailField
             label="Proyek"
-            value={<Link href={`/proyek/${wo.project.id}`} className="hover:underline">{wo.project.name}</Link>}
+            value={<Link href={entityHref("/proyek", wo.project)} className="hover:underline">{wo.project.name}</Link>}
           />
         )}
         {wo.bomRevision && (
@@ -267,7 +267,7 @@ export default async function WorkOrderDetailPage({
                 <DetailTable>
                   <DetailTableHead>
                     <DetailTableTh>No. Dokumen</DetailTableTh>
-                    <DetailTableTh align="right">Qty</DetailTableTh>
+                    <DetailTableTh align="right">Kuantitas</DetailTableTh>
                     <DetailTableTh>Status</DetailTableTh>
                   </DetailTableHead>
                   <DetailTableBody>

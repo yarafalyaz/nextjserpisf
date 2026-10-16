@@ -47,7 +47,7 @@ export default async function EditProductPage({
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
         { label: "Manufaktur", href: "/produksi" },
-        { label: "Produk", href: "/produksi/products" },
+        { label: "Produk (BOM)", href: "/produksi/products" },
         { label: "Ubah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

@@ -5,16 +5,18 @@ import { Eye } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"
+import { entityHref } from "@/lib/utils/entity-url"
 
 interface CustomerVehicleRow {
   id: number
+  slug: string | null
   customerId: number
   isActive: boolean
   plateNumber?: string | null
   color?: string | null
   chassisNumber?: string | null
   engineNumber?: string | null
-  customer: { id: number; name: string }
+  customer: { id: number; name: string; slug: string | null }
   vehicle?: {
     year?: number | null
     variant?: {
@@ -44,7 +46,7 @@ export function CustomerVehicleTable({
       header: "Plat Nomor",
       cell: ({ row }) => (
         <Link
-          href={`/master/pelanggan/${row.original.customerId}/kendaraan/${row.original.id}`}
+          href={`${entityHref("/master/pelanggan", row.original.customer)}/kendaraan/${row.original.slug ?? row.original.id}`}
           className="font-medium font-mono text-foreground hover:underline"
         >
           {row.original.plateNumber ?? "-"}
@@ -57,7 +59,7 @@ export function CustomerVehicleTable({
       header: "Pelanggan",
       cell: ({ row }) => (
         <Link
-          href={`/master/pelanggan/${row.original.customerId}`}
+          href={entityHref("/master/pelanggan", row.original.customer)}
           className="text-foreground hover:underline"
         >
           {row.original.customer?.name ?? "-"}
@@ -108,7 +110,7 @@ export function CustomerVehicleTable({
       cell: ({ row }) => (
         <div className="flex items-center gap-1 justify-end">
           <Link
-            href={`/master/pelanggan/${row.original.customerId}/kendaraan/${row.original.id}`}
+            href={`${entityHref("/master/pelanggan", row.original.customer)}/kendaraan/${row.original.slug ?? row.original.id}`}
             className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >

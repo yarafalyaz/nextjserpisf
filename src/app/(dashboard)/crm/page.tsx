@@ -1,24 +1,16 @@
-import { Target, Ticket } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ModuleGrid, type ModuleItem } from "@/components/ui/module-grid"
+import { ModuleGrid } from "@/components/ui/module-grid"
+import { moduleItemsForGroup, groupPermissions } from "@/components/layout/module-cards"
 import { requireAnyPermission } from "@/lib/auth/permissions"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "CRM" }
 
-const crmModules: ModuleItem[] = [
-  { label: "Prospek (Leads)", href: "/crm/leads", icon: Target, desc: "Kelola prospek pelanggan", permission: "view_leads" },
-  { label: "Tiket", href: "/crm/tickets", icon: Ticket, desc: "Tiket bantuan pelanggan", permission: "view_tickets" },
-]
 
-const CRM_PERMISSIONS = [
-  "view_leads",
-  "view_tickets",
-]
 
 export default async function CrmPage() {
-  const user = await requireAnyPermission(CRM_PERMISSIONS)
+  const user = await requireAnyPermission(groupPermissions("/crm"))
   const isSuperAdmin = user.roles.includes("super_admin")
 
   return (
@@ -30,7 +22,7 @@ export default async function CrmPage() {
       <ModuleGrid
         ariaLabel="Modul CRM"
         headingId="crm-heading"
-        items={crmModules}
+        items={moduleItemsForGroup("/crm")}
         userPermissions={user.permissions}
         isSuperAdmin={isSuperAdmin}
       />

@@ -15,7 +15,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Kendaraan" }
 
 export default async function VehicleDetailPage({
@@ -107,7 +107,7 @@ export default async function VehicleDetailPage({
               <DetailTableBody>
                 {vehicle.customerVehicles.map((cv) => (
                   <DetailTableRow key={cv.id}>
-                    <DetailTableTd><Link href={`/master/pelanggan/${cv.customer.id}`}>{cv.customer.name}</Link></DetailTableTd>
+                    <DetailTableTd><Link href={entityHref("/master/pelanggan", cv.customer)}>{cv.customer.name}</Link></DetailTableTd>
                     <DetailTableTd>{formatDate(cv.createdAt)}</DetailTableTd>
                   </DetailTableRow>
                 ))}

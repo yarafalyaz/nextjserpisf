@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { GoodsReceiptForm } from "@/components/forms/goods-receipt-form"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert"
 
 import type { Metadata } from "next"
 
@@ -137,6 +138,20 @@ export default async function CreateGoodsReceiptPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Penerimaan Barang</h1>
       </div>
+      {purchaseOrderOptions.length === 0 && (
+        // Tanpa pesan ini halaman hanya menampilkan pemilih PO yang kosong: pengguna
+        // buntu tanpa tahu sebabnya (dan sebabnya memang tak bisa ditebak dari layar).
+        <Alert>
+          <AlertTitle>Belum ada PO yang bisa diterima</AlertTitle>
+          <AlertDescription>
+            Penerimaan hanya bisa dibuat dari Pesanan Pembelian berstatus{" "}
+            <strong>Disetujui</strong> atau <strong>Dipesan</strong> — PO baru selalu lahir
+            berstatus konsep. Setujui PO lebih dulu di halaman Pesanan Pembelian, atau
+            konfigurasi alur persetujuan <code>PurchaseOrder</code> di Pengaturan → Alur
+            Persetujuan agar PO otomatis disetujui.
+          </AlertDescription>
+        </Alert>
+      )}
       <GoodsReceiptForm
         purchaseOrders={JSON.parse(JSON.stringify(purchaseOrderOptions))}
         warehouses={warehouses}

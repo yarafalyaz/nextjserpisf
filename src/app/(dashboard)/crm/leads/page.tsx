@@ -70,7 +70,7 @@ export default async function LeadsPage({
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "CRM", href: "/crm" },
-  { label: "Leads" },
+  { label: "Prospek" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Prospek</h1>

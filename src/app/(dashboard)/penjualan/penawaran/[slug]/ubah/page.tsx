@@ -142,7 +142,7 @@ export default async function EditQuotationPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Penjualan", href: "/penjualan/penawaran" },
+  { label: "Penawaran", href: "/penjualan/penawaran" },
   { label: "Penawaran", href: "/penjualan/penawaran" },
   { label: "Ubah" },
 ]} />

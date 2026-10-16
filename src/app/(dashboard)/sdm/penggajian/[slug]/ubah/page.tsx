@@ -47,7 +47,7 @@ export default async function EditPayrollPage({
           actions={<BackButton href={entityHref("/sdm/penggajian", payroll)} />}
         />
         <div className="p-6 bg-danger/10 border border-danger/20 rounded-xl text-danger">
-          Hanya penggajian dengan status <strong>Draft</strong> yang dapat
+          Hanya penggajian dengan status <strong>Draf</strong> yang dapat
           diubah.
         </div>
       </div>

@@ -94,7 +94,7 @@ export default async function ExpenseDetailPage({
             >
               <Pencil size={14} /> Ubah
             </Button>
-            <PrintButton />
+            <PrintButton documentType="expense" documentId={expense.id} />
             <DeleteButton id={expense.id} action={deleteExpense} />
             <BackButton href="/keuangan/pengeluaran" />
           </>

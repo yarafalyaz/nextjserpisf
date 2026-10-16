@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs";
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert";
 import { DownPaymentForm } from "@/components/forms/down-payment-form";
 import { getActivePaymentMethods } from "@/lib/services/method.service";
 
@@ -102,7 +103,7 @@ export default async function CreateDownPaymentPage({
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Penjualan", href: "/penjualan/pesanan" },
+          { label: "Penjualan", href: "/penjualan" },
           { label: "Uang Muka", href: "/penjualan/uang-muka" },
           { label: "Tambah" },
         ]}
@@ -110,6 +111,17 @@ export default async function CreateDownPaymentPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Uang Muka</h1>
       </div>
+      {quotations.length === 0 && (
+        <Alert>
+          <AlertTitle>Belum ada penawaran yang bisa dipakai</AlertTitle>
+          <AlertDescription>
+            Uang muka penjualan hanya bisa dibuat dari Penawaran berstatus{" "}
+            <strong>Diterima</strong> atau <strong>Disetujui</strong>. Penawaran yang baru
+            dibuat selalu berstatus konsep — setujui dulu lewat tombol{}
+            <strong>Setujui</strong> di halaman detail penawaran.
+          </AlertDescription>
+        </Alert>
+      )}
       <DownPaymentForm
         customers={customers}
         quotations={quotations}

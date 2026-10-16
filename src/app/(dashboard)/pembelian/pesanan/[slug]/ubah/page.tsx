@@ -52,6 +52,8 @@ export default async function EditPage({
     date: data.date.toISOString().split("T")[0],
     notes: data.notes,
     paymentTerm: data.paymentTerm,
+    purchaseRequestId: data.purchaseRequestId,
+    expectedDate: data.expectedDate ? data.expectedDate.toISOString().split("T")[0] : null,
     shippingCost: Number(data.shippingCost),
     serviceFee: Number(data.serviceFee),
     items: data.items.map((it) => ({
@@ -89,7 +91,7 @@ export default async function EditPage({
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Pembelian", href: "/pembelian" },
-          { label: "Pesanan", href: "/pembelian/pesanan" },
+          { label: "Pesanan Pembelian", href: "/pembelian/pesanan" },
           { label: "Ubah" },
         ]}
       />

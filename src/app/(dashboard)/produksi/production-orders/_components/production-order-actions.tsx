@@ -193,7 +193,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="issueQty">Qty</Label>
+            <Label htmlFor="issueQty">Kuantitas</Label>
             <Input id="issueQty" type="number" min="0" step="0.01" value={issueQty} onChange={(e) => setIssueQty(e.target.value)} placeholder="0" />
           </div>
         </div>

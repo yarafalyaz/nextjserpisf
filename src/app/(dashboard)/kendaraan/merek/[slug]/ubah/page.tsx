@@ -36,7 +36,7 @@ export default async function EditPage({
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Kendaraan", href: "/kendaraan" },
-          { label: "Merek", href: "/kendaraan/merek" },
+          { label: "Merek & Model", href: "/kendaraan/merek" },
           { label: "Ubah" },
         ]}
       />

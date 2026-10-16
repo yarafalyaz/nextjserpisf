@@ -18,7 +18,7 @@ export default async function CreatePaymentPage({
   await requirePermission("create_sales_payments")
   const params = await searchParams
 
-  const [invoices, accounts, paymentMethods] = await Promise.all([
+  const [invoices, accounts, paymentMethods, withholdingTypes] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { status: { in: ["posted", "partial"] } },
       include: { customer: true },
@@ -29,6 +29,12 @@ export default async function CreatePaymentPage({
       orderBy: { code: "asc" },
     }),
     getActivePaymentMethods(),
+    // Jenis PPh untuk potongan sisi penjualan (opsional di form).
+    prisma.withholdingTaxType.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: { id: true, code: true, name: true, rate: true },
+      orderBy: { code: "asc" },
+    }),
   ])
 
   return (
@@ -47,6 +53,7 @@ export default async function CreatePaymentPage({
         accounts={accounts}
         defaultInvoiceId={params.invoiceId ? Number(params.invoiceId) : undefined}
         paymentMethods={paymentMethods}
+        withholdingTypes={withholdingTypes.map((type) => ({ ...type, rate: Number(type.rate) }))}
       />
     </div>
   )

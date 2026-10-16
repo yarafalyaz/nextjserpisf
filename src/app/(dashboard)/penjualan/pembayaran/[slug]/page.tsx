@@ -74,7 +74,7 @@ export default async function SalesPaymentDetailPage({
             >
               Ubah
             </Button>
-            <PrintButton />
+            <PrintButton documentType="sales-payment" documentId={payment.id} />
             <DeleteButton id={payment.id} action={deleteSalesPayment} />
             <BackButton href="/penjualan/pembayaran" />
           </>

@@ -1,20 +1,15 @@
 export const dynamic = "force-dynamic"
 
-import { ClipboardCheck, ListChecks, AlertTriangle } from "lucide-react"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { ModuleGrid, type ModuleItem } from "@/components/ui/module-grid"
+import { ModuleGrid } from "@/components/ui/module-grid"
+import { QC_SECTIONS } from "@/components/layout/qc-sections"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Quality Control" }
+export const metadata: Metadata = { title: "Pengendalian Mutu" }
 
-const qcModules: ModuleItem[] = [
-  { label: "Checklist QC", href: "/produksi/qc/checklist", icon: ListChecks, desc: "Master checklist inspeksi ber-versi", permission: "view_qc" },
-  { label: "Inspeksi", href: "/produksi/qc/inspeksi", icon: ClipboardCheck, desc: "Catatan inspeksi penerimaan/proses/akhir", permission: "view_qc" },
-  { label: "Nonconformance (NCR)", href: "/produksi/qc/ncr", icon: AlertTriangle, desc: "Cacat, rework, dan penyelesaian", permission: "view_qc" },
-]
 
 export default async function QcPage() {
   const user = await requirePermission("view_qc")
@@ -38,11 +33,11 @@ export default async function QcPage() {
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Manufaktur", href: "/produksi" },
-          { label: "Quality Control" },
+          { label: "Pengendalian Mutu" },
         ]}
       />
       <h1 id="qc-heading" className="text-2xl font-bold text-foreground">
-        Quality Control
+        Pengendalian Mutu
       </h1>
       <p className="text-sm text-muted-foreground -mt-4">
         Checklist inspeksi ber-versi, hasil inspeksi per dokumen, dan nonconformance (NCR) yang memblokir serah terima sampai diselesaikan.
@@ -58,9 +53,9 @@ export default async function QcPage() {
       </div>
 
       <ModuleGrid
-        ariaLabel="Modul Quality Control"
+        ariaLabel="Modul Pengendalian Mutu"
         headingId="qc-heading"
-        items={qcModules}
+        items={QC_SECTIONS}
         userPermissions={user.permissions}
         isSuperAdmin={isSuperAdmin}
       />
