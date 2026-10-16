@@ -59,7 +59,7 @@ const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string
   {
     action: "confirmSalesOrder",
     definedIn: "src/actions/sales.actions.ts",
-    reason: "rantai status SO (draft→confirmed→processing→completed) tanpa tombol",
+    reason: "rantai draft→confirmed→processing→completed tak punya tombol; rute status generik\n      menetapkan 'approved' (dipakai gerbang surat jalan), bukan rantai ini",
   },
   {
     action: "processSalesOrder",
@@ -99,17 +99,17 @@ const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string
   {
     action: "approvePurchaseRequest",
     definedIn: "src/actions/purchase.actions.ts",
-    reason: "BERDAMPAK: hanya ini + approval-workflow yang menyetujui PO; penerimaan barang menuntut PO approved/ordered, dan seed tak membuat workflow",
+    reason: "usang: menyetujui PR sudah terjangkau lewat rute status generik (/api/workflow)",
   },
   {
     action: "approvePurchaseOrder",
     definedIn: "src/actions/purchase.actions.ts",
-    reason: "BERDAMPAK: idem — approvePurchaseOrder",
+    reason: "usang: tombol Setujui di halaman detail PO memakai rute status generik (terbukti di browser)",
   },
   {
     action: "markPurchaseOrderOrdered",
     definedIn: "src/actions/purchase.actions.ts",
-    reason: "approved→ordered; tanpa ini PO approved pun tak bisa lanjut ke penerimaan",
+    reason: "approved→ordered; tak diperlukan untuk penerimaan — gerbangnya menerima 'approved'",
   },
   {
     action: "cancelPurchaseOrder",
@@ -138,7 +138,7 @@ const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string
   },
   {
     action: "updateProductionCost",
-    definedIn: "src/actions/manufacturing.actions.ts",
+    definedIn: "src/actions/production-cost.actions.ts",
     reason: "biaya produksi tak bisa diubah setelah dibuat; dampak belum ditelusuri",
   },
 ]
@@ -205,6 +205,15 @@ describe("aksi transisi tanpa pemanggil UI terdaftar & tetap tak tersambung", ()
         refs.map((f) => path.relative(repoRoot, f)),
         `${action} sudah tersambung — hapus dari ALLOWED_UNWIRED dan pindahkan ke REQUIRED_CALLERS`,
       ).toHaveLength(0)
+
+      // Arah ketiga: aksinya sendiri harus MASIH ADA. Tanpa ini, menghapus aksi
+      // meninggalkan entri basi yang lolos diam-diam (klaim docstring di atas
+      // menyebut "atau menghapusnya" — kini benar-benar diperiksa).
+      const sumber = fs.readFileSync(path.join(repoRoot, definedIn), "utf8")
+      expect(
+        new RegExp(`export async function ${action}\\b`).test(sumber),
+        `${action} tidak lagi ada di ${definedIn} — hapus entri ini dari ALLOWED_UNWIRED`,
+      ).toBe(true)
     })
   }
 })
